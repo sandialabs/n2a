@@ -21,6 +21,7 @@ import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 
 import java.awt.Dimension;
 import java.awt.FontMetrics;
+import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
@@ -433,11 +434,19 @@ public class PanelEquationTree extends JScrollPane
 
     public Dimension getPreferredSize ()
     {
+        // Set row count so tree will request a reasonable size during processing of super.getPreferredSize()
         int rc = tree.getRowCount ();
         rc = Math.min (rc, 20);  // The default from openjdk source code for JTree
         rc = Math.max (rc, 6);   // An arbitrary lower limit
         tree.setVisibleRowCount (rc);
-        return super.getPreferredSize ();
+
+        Dimension result = super.getPreferredSize ();
+
+        // If tree is empty, it could collapse to very small width. Keep this from getting smaller than cell editor preferred size.
+        Insets insets = tree.getInsets ();
+        result.width = Math.max (result.width, 100 + EquationTreeCellEditor.offsetPerLevel + insets.left + insets.right);
+
+        return result;
     }
 
     /**

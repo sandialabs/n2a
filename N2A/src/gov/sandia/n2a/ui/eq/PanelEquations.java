@@ -571,7 +571,7 @@ public class PanelEquations extends JPanel
         itemAddVariable.setActionCommand ("Variable");
         itemAddVariable.addActionListener (listenerAdd);
 
-        JMenuItem itemAddEquation = new JMenuItem ("Add Equation", ImageUtil.getImage ("equation.png"));
+        JMenuItem itemAddEquation = new JMenuItem ("Add Equation", ImageUtil.getImage ("assign.png"));
         itemAddEquation.setActionCommand ("Equation");
         itemAddEquation.addActionListener (listenerAdd);
 
@@ -1177,8 +1177,15 @@ public class PanelEquations extends JPanel
                     break;
             }
             AppData.state.set (FilteredTreeModel.filterLevel, "PanelModel", "filter");
-            if (viewTree) panelEquationTree.updateFilterLevel ();
-            else          panelEquationGraph.updateFilterLevel ();
+            if (viewTree)
+            {
+                panelEquationTree.updateFilterLevel ();
+            }
+            else
+            {
+                if (panelParent.isVisible ()) panelParent.panelEquations.updateFilterLevel ();
+                panelEquationGraph.updateFilterLevel ();
+            }
         }
     };
 

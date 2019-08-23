@@ -113,10 +113,8 @@ public class NodeVariable extends NodeContainer
     }
 
     /**
-        Ensures that a variable either has multiple equations or a one-line expression,
-        but not both.
-        This method is independent of any given NodeVariable so it can be used at
-        various points in processing.
+        Ensures that a variable either has multiple equations or a one-line expression, but not both.
+        This method is independent of any given NodeVariable so it can be used at various points in processing.
     **/
     public static void enforceOneLine (MNode source)
     {
@@ -314,10 +312,35 @@ public class NodeVariable extends NodeContainer
 
         if (type.equals ("Equation"))
         {
-            // Determine if pasting over an existing equation
             if (data != null)
             {
                 String key = data.key ();  // includes @
+
+                // Determine if pasting over empty variable (no equations of any type except a naked combiner)
+                Variable.ParsedValue existing = new Variable.ParsedValue (source.get ());
+                boolean hasEquations =  ! existing.condition.isEmpty ()  ||  ! existing.expression.isEmpty ();
+                if (! hasEquations)
+                {
+                    Enumeration<?> children = children ();  // unfiltered
+                    while (children.hasMoreElements ())
+                    {
+                        Object c = children.nextElement ();
+                        if (c instanceof NodeEquation)
+                        {
+                            hasEquations = true;
+                            break;
+                        }
+                    }
+                }
+                if (! hasEquations)  // no equations, or possibly a naked combiner
+                {
+                    String value = existing.combiner + data.get () + key;
+                    if (value.endsWith ("@")) value = value.substring (0, value.length () - 1);
+                    PanelModel.instance.undoManager.add (new ChangeVariable (this, source.key (), value));
+                    return null;  // Don't edit anything
+                }
+
+                // Determine if pasting over an existing equation
                 NodeBase existingEquation = child (key);
                 if (existingEquation != null)
                 {
@@ -463,7 +486,9 @@ public class NodeVariable extends NodeContainer
         NodeBase nodeAfter = parent.child (nameAfter);
         if (nodeAfter != null)
         {
-            if (! (nodeAfter instanceof NodeVariable)  ||  (nodeAfter != this  &&  nodeAfter.source.isFromTopDocument ()  &&  ! newlyCreated))
+            boolean revoked = nodeAfter.source.get ().equals ("$kill");
+            if (   ! (nodeAfter instanceof NodeVariable)
+                || (nodeAfter != this  &&  nodeAfter.source.isFromTopDocument ()  &&  ! newlyCreated  &&  ! revoked))
             {
                 nameAfter = nameBefore;
                 nodeAfter = this;

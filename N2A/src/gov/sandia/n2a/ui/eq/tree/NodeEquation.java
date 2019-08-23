@@ -146,9 +146,11 @@ public class NodeEquation extends NodeBase
         if (! piecesBefore.condition.equals (piecesAfter.condition))
         {
             MPart partAfter = (MPart) parent.source.child ("@" + piecesAfter.condition);
-            if (partAfter != null  &&  partAfter.isFromTopDocument ())  // Can't overwrite another top-document node
+            if (partAfter != null  &&  partAfter.isFromTopDocument ())  // Can't overwrite another top-document node, unless it is a revocation ...
             {
-                piecesAfter.condition = piecesBefore.condition;
+                String value = partAfter.get ();
+                boolean revoked =  value.isEmpty ()  ||  value.startsWith ("$kill");
+                if (! revoked) piecesAfter.condition = piecesBefore.condition;  // reject key change
             }
         }
 

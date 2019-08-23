@@ -448,8 +448,11 @@ public class GraphNode extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("shift ctrl LEFT"),  "moveLeft");
             inputMap.put (KeyStroke.getKeyStroke ("shift ctrl RIGHT"), "moveRight");
             inputMap.put (KeyStroke.getKeyStroke ("shift DELETE"),     "cut");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl X"),           "cut");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl INSERT"),      "copy");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl C"),           "copy");
             inputMap.put (KeyStroke.getKeyStroke ("shift INSERT"),     "paste");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl V"),           "paste");
             inputMap.put (KeyStroke.getKeyStroke ("INSERT"),           "add");
             inputMap.put (KeyStroke.getKeyStroke ("DELETE"),           "delete");
             inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),       "delete");

@@ -775,25 +775,46 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
+    public static class UnresolvedVariable
+    {
+        public String name;
+        public String referencedBy;
+
+        public UnresolvedVariable (String name, String referencedBy)
+        {
+            this.name         = name;
+            this.referencedBy = referencedBy;
+        }
+
+        public static String pad (String name, int width)
+        {
+            String result = "";
+            for (int i = name.length (); i < width; i++) result += " ";
+            return name + result;
+        }
+    }
+
     /**
         Attach the appropriate Variable to each AccessVariable operator.
         Depends on results of: resolveLHS() -- to create indirect variables and thus avoid unnecessary failure of resolution
     **/
     public void resolveRHS () throws Exception
     {
-        LinkedList<String> unresolved = new LinkedList<String> ();
+        LinkedList<UnresolvedVariable> unresolved = new LinkedList<UnresolvedVariable> ();
         resolveRHS (unresolved);
         if (unresolved.size () > 0)
         {
+            int width = 0;
+            for (UnresolvedVariable uv : unresolved) width = Math.max (width, uv.name.length ());
             PrintStream ps = Backend.err.get ();
             ps.println ("Unresolved variables:");
-            ps.println ("  (name)\t(referenced by)");
-            for (String v : unresolved) ps.println ("  " + v);
+            ps.println ("  " + UnresolvedVariable.pad ("(name)", width) + "\t(referenced by)");
+            for (UnresolvedVariable uv : unresolved) ps.println ("  " + UnresolvedVariable.pad (uv.name, width) + "\t" + uv.referencedBy);
             throw new Backend.AbortRun ();
         }
     }
 
-    public void resolveRHS (LinkedList<String> unresolved)
+    public void resolveRHS (LinkedList<UnresolvedVariable> unresolved)
     {
         for (EquationSet s : parts)
         {
@@ -803,7 +824,7 @@ public class EquationSet implements Comparable<EquationSet>
         class Resolver extends Transformer
         {
             public Variable from;
-            public LinkedList<String> unresolved;
+            public LinkedList<UnresolvedVariable> unresolved;
 
             public String fromName ()
             {
@@ -822,7 +843,7 @@ public class EquationSet implements Comparable<EquationSet>
                     EquationSet dest = resolveEquationSet (query, false);
                     if (dest == null)
                     {
-                        unresolved.add (av.name + "\t" + fromName ());
+                        unresolved.add (new UnresolvedVariable (av.name, fromName ()));
                     }
                     else
                     {
@@ -859,7 +880,7 @@ public class EquationSet implements Comparable<EquationSet>
                             }
                             else
                             {
-                                unresolved.add (av.name + "\t" + fromName ());
+                                unresolved.add (new UnresolvedVariable (av.name, fromName ()));
                             }
                         }
                         else
@@ -912,7 +933,7 @@ public class EquationSet implements Comparable<EquationSet>
                         }
                         else
                         {
-                            unresolved.add (partName + "\t" + fromName ());
+                            unresolved.add (new UnresolvedVariable (partName, fromName ()));
                         }
                     }
                     return split;
@@ -921,11 +942,11 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
         Resolver resolver = new Resolver ();
+        resolver.unresolved = unresolved;
     
         for (Variable v : variables)
         {
             resolver.from = v;
-            resolver.unresolved = unresolved;
             v.transform (resolver);
         }
     }
