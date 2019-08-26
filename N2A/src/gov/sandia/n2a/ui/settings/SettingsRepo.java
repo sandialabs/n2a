@@ -1850,7 +1850,8 @@ public class SettingsRepo extends JScrollPane implements Settings
                 }
             }
 
-            // Complex case: construct custom dialog
+            // Complex case
+            //   Construct custom dialog
             JPanel panel = new JPanel (new GridBagLayout ());
             GridBagConstraints gbc = new GridBagConstraints
             (
@@ -1859,7 +1860,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 new Insets (0, 0, 0, 0),
                 0, 0
             );
-            JTextField[] texts = new JTextField[items.length];
+            JTextField fields[] = new JTextField[items.length];
             for (int i = 0; i < items.length; i++)
             {
                 CredentialItem item = items[i];
@@ -1878,9 +1879,9 @@ public class SettingsRepo extends JScrollPane implements Settings
                     String lastValue = null;
                     if (git != null) lastValue = git.credentials.get (prompt);
                     if (lastValue == null) lastValue = "";
-                    if (item.isValueSecure ()) texts[i] = new JPasswordField (lastValue, 20);
-                    else                       texts[i] = new JTextField     (lastValue, 20);
-                    panel.add (texts[i], gbc);
+                    if (item.isValueSecure ()) fields[i] = new JPasswordField (lastValue, 20);
+                    else                       fields[i] = new JTextField     (lastValue, 20);
+                    panel.add (fields[i], gbc);
                 }
                 else if (item instanceof CredentialItem.InformationalMessage)
                 {
@@ -1897,13 +1898,34 @@ public class SettingsRepo extends JScrollPane implements Settings
                 gbc.gridy++;
             }
 
-            int result = JOptionPane.showConfirmDialog (MainFrame.instance, panel, title, JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
-            if (result != JOptionPane.OK_OPTION) return false;
+            //   Show dialog
+            JOptionPane dialog = new JOptionPane (panel, JOptionPane.QUESTION_MESSAGE, JOptionPane.OK_CANCEL_OPTION)
+            {
+                public void selectInitialValue ()
+                {
+                    // Select the first blank text field
+                    for (JTextField f : fields)
+                    {
+                        String value = "";
+                        if (f instanceof JPasswordField) value = new String (((JPasswordField) f).getPassword ());
+                        else                             value = f.getText ();
+                        if (value.isEmpty ())
+                        {
+                            f.requestFocusInWindow ();
+                            break;
+                        }
+                    }
+                }
+            };
+            dialog.createDialog (MainFrame.instance, title).setVisible (true);
+            Object result = dialog.getValue ();
+            if (result == null  ||  (Integer) result != JOptionPane.OK_OPTION) return false;
 
+            //   Apply results
             for (int i = 0; i < items.length; i++)
             {
                 CredentialItem item = items[i];
-                JTextField f = texts[i];
+                JTextField f = fields[i];
 
                 String value = "";
                 if (f instanceof JPasswordField) value = new String (((JPasswordField) f).getPassword ());
