@@ -21,6 +21,8 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.FontMetrics;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.datatransfer.DataFlavor;
@@ -40,6 +42,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.EventObject;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -60,6 +63,7 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPasswordField;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
@@ -90,7 +94,7 @@ import org.eclipse.jgit.api.PullCommand;
 import org.eclipse.jgit.api.PushCommand;
 import org.eclipse.jgit.api.RemoteSetUrlCommand;
 import org.eclipse.jgit.api.RmCommand;
-import org.eclipse.jgit.awtui.AwtCredentialsProvider;
+import org.eclipse.jgit.errors.UnsupportedCredentialItem;
 import org.eclipse.jgit.internal.storage.file.FileRepository;
 import org.eclipse.jgit.lib.BranchConfig;
 import org.eclipse.jgit.lib.BranchTrackingStatus;
@@ -103,6 +107,10 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
+import org.eclipse.jgit.transport.ChainingCredentialsProvider;
+import org.eclipse.jgit.transport.CredentialItem;
+import org.eclipse.jgit.transport.CredentialsProvider;
+import org.eclipse.jgit.transport.NetRCCredentialsProvider;
 import org.eclipse.jgit.transport.RemoteConfig;
 import org.eclipse.jgit.transport.URIish;
 import org.eclipse.jgit.treewalk.FileTreeIterator;
@@ -516,8 +524,8 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
         });
 
-        // Use JGit utility class to preset username/password prompt for remote access.
-        AwtCredentialsProvider.install ();
+        // Use JGit utility class to present username/password prompt for remote access.
+        CredentialsProvider.setDefault (new ChainingCredentialsProvider (new NetRCCredentialsProvider (), new CredentialCache (), new CredentialDialog ()));
 
 
         Lay.BLtg (panel,
@@ -647,9 +655,9 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public class RepoTableModel extends AbstractTableModel
     {
-        List<MNode>      repos    = new ArrayList<MNode> ();
-        List<GitWrapper> gitRepos = new ArrayList<GitWrapper> ();
-        int              primaryRow;
+        public List<MNode>      repos    = new ArrayList<MNode> ();
+        public List<GitWrapper> gitRepos = new ArrayList<GitWrapper> ();
+        public int              primaryRow;
 
         public RepoTableModel ()
         {
@@ -1059,16 +1067,17 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public class GitWrapper implements AutoCloseable
     {
-        public Path         gitDir;
-        public Repository   gitRepo;
-        public Git          git;
-        public StoredConfig config;
-        public String       head;
-        public RemoteConfig remote;
-        public int          ahead;
-        public int          behind;
-        public IndexDiff    diff;
-        public String       message;
+        public Path               gitDir;
+        public Repository         gitRepo;
+        public Git                git;
+        public StoredConfig       config;
+        public String             head;
+        public RemoteConfig       remote;
+        public int                ahead;
+        public int                behind;
+        public IndexDiff          diff;
+        public String             message;
+        public Map<String,String> credentials;
 
         public GitWrapper (Path gitDir)
         {
@@ -1139,8 +1148,8 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
 
             RemoteSetUrlCommand command = git.remoteSetUrl ();
-            command.setName (remoteName);
-            command.setUri (valueURI);
+            command.setRemoteName (remoteName);
+            command.setRemoteUri (valueURI);
             try {remote = command.call ();}
             catch (Exception e) {}
         }
@@ -1449,9 +1458,9 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public class GitTableModel extends AbstractTableModel
     {
-        GitWrapper  current;
-        MNode       repo;
-        List<Delta> deltas = new ArrayList<Delta> ();
+        public GitWrapper  current;
+        public MNode       repo;
+        public List<Delta> deltas = new ArrayList<Delta> ();
 
         public synchronized void setCurrent (int repoIndex)
         {
@@ -1762,6 +1771,238 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
 
             return this;
+        }
+    }
+
+    public class CredentialDialog extends CredentialsProvider
+    {
+        public boolean isInteractive ()
+        {
+            return true;
+        }
+
+        public boolean supports (CredentialItem... items)
+        {
+            for (CredentialItem i : items)
+            {
+                if (i instanceof CredentialItem.StringType)           continue;
+                if (i instanceof CredentialItem.CharArrayType)        continue;
+                if (i instanceof CredentialItem.YesNoType)            continue;
+                if (i instanceof CredentialItem.InformationalMessage) continue;
+                return false;
+            }
+            return true;
+        }
+
+        public boolean get (URIish uri, CredentialItem... items) throws UnsupportedCredentialItem
+        {
+            if (items.length == 0) return true;
+
+            // Retrieve git wrapper associated with the URI, so we can remember user responses
+            String title = uri.toString ();
+            GitWrapper git = null;
+            MNode mrepo = null;
+            for (int i = 0; i < repoModel.gitRepos.size (); i++)
+            {
+                GitWrapper g = repoModel.gitRepos.get (i);
+                String u = g.getURL ();
+                if (u != null  &&  u.equals (title))
+                {
+                    git = g;
+                    mrepo = repoModel.repos.get (i);
+                    if (git.credentials == null)
+                    {
+                        git.credentials = new HashMap<String,String> ();
+                        MNode mcred = mrepo.child ("credentials");
+                        if (mcred != null) for (MNode c : mcred) git.credentials.put (c.key (), c.get ());
+                    }
+                    break;
+                }
+            }
+
+            // Simple cases
+            if (items.length == 1)
+            {
+                CredentialItem item = items[0];
+                String prompt = item.getPromptText ();
+
+                if (item instanceof CredentialItem.InformationalMessage)
+                {
+                    JOptionPane.showMessageDialog (MainFrame.instance, prompt, title, JOptionPane.INFORMATION_MESSAGE);
+                    return true;
+                }
+                if (item instanceof CredentialItem.YesNoType)
+                {
+                    CredentialItem.YesNoType yn = (CredentialItem.YesNoType) item;
+                    int result = JOptionPane.showConfirmDialog (MainFrame.instance, prompt, title, JOptionPane.YES_NO_OPTION);
+                    if (result == JOptionPane.YES_OPTION  ||  result == JOptionPane.NO_OPTION)
+                    {
+                        boolean value =  result == JOptionPane.YES_OPTION;
+                        yn.setValue (value);
+                        if (git != null)
+                        {
+                            git.credentials.put (prompt, value ? "1" : "0");
+                            mrepo.set (value, "credentials", prompt);
+                        }
+                        return true;
+                    }
+                    return false;
+                }
+            }
+
+            // Complex case: construct custom dialog
+            JPanel panel = new JPanel (new GridBagLayout ());
+            GridBagConstraints gbc = new GridBagConstraints
+            (
+                0, 0, 1, 1, 1, 1,
+                GridBagConstraints.NORTHWEST, GridBagConstraints.NONE,
+                new Insets (0, 0, 0, 0),
+                0, 0
+            );
+            JTextField[] texts = new JTextField[items.length];
+            for (int i = 0; i < items.length; i++)
+            {
+                CredentialItem item = items[i];
+                String prompt = item.getPromptText ();
+
+                if (item instanceof CredentialItem.StringType  ||  item instanceof CredentialItem.CharArrayType)
+                {
+                    gbc.gridx     = 0;
+                    gbc.fill      = GridBagConstraints.NONE;
+                    gbc.gridwidth = GridBagConstraints.RELATIVE;
+                    panel.add (new JLabel (prompt), gbc);
+
+                    gbc.gridx     = 1;
+                    gbc.fill      = GridBagConstraints.HORIZONTAL;
+                    gbc.gridwidth = GridBagConstraints.RELATIVE;
+                    String lastValue = null;
+                    if (git != null) lastValue = git.credentials.get (prompt);
+                    if (lastValue == null) lastValue = "";
+                    if (item.isValueSecure ()) texts[i] = new JPasswordField (lastValue, 20);
+                    else                       texts[i] = new JTextField     (lastValue, 20);
+                    panel.add (texts[i], gbc);
+                }
+                else if (item instanceof CredentialItem.InformationalMessage)
+                {
+                    gbc.gridx     = 0;
+                    gbc.fill      = GridBagConstraints.NONE;
+                    gbc.gridwidth = GridBagConstraints.REMAINDER;
+                    panel.add (new JLabel (item.getPromptText ()), gbc);
+                }
+                else
+                {
+                    throw new UnsupportedCredentialItem (uri, prompt);
+                }
+
+                gbc.gridy++;
+            }
+
+            int result = JOptionPane.showConfirmDialog (MainFrame.instance, panel, title, JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (result != JOptionPane.OK_OPTION) return false;
+
+            for (int i = 0; i < items.length; i++)
+            {
+                CredentialItem item = items[i];
+                JTextField f = texts[i];
+
+                String value = "";
+                if (f instanceof JPasswordField) value = new String (((JPasswordField) f).getPassword ());
+                else                             value = f.getText ();
+
+                if (item instanceof CredentialItem.StringType)
+                {
+                    CredentialItem.StringType st = (CredentialItem.StringType) item;
+                    st.setValue (value);
+                }
+                else if (item instanceof CredentialItem.CharArrayType)
+                {
+                    CredentialItem.CharArrayType cat = (CredentialItem.CharArrayType) item;
+                    cat.setValueNoCopy (value.toCharArray ());
+                }
+
+                if (git == null) continue;
+                String prompt = item.getPromptText ();
+                git.credentials.put (prompt, value);
+                if (! item.isValueSecure ()) mrepo.set (value, "credentials", prompt);
+            }
+            return true;
+        }
+    }
+
+    public class CredentialCache extends CredentialsProvider
+    {
+        public boolean isInteractive ()
+        {
+            return false;
+        }
+
+        public boolean supports (CredentialItem... items)
+        {
+            for (CredentialItem i : items)
+            {
+                if (i instanceof CredentialItem.StringType)    continue;
+                if (i instanceof CredentialItem.CharArrayType) continue;
+                if (i instanceof CredentialItem.YesNoType)     continue;
+                return false;
+            }
+            return true;
+        }
+
+        public boolean get (URIish uri, CredentialItem... items) throws UnsupportedCredentialItem
+        {
+            if (items.length == 0) return true;
+
+            // Retrieve git wrapper associated with the URI, so we can remember user responses
+            String title = uri.toString ();
+            GitWrapper git = null;
+            MNode mrepo = null;
+            for (int i = 0; i < repoModel.gitRepos.size (); i++)
+            {
+                GitWrapper g = repoModel.gitRepos.get (i);
+                String u = g.getURL ();
+                if (u != null  &&  u.equals (title))
+                {
+                    git = g;
+                    mrepo = repoModel.repos.get (i);
+                    if (git.credentials == null)
+                    {
+                        git.credentials = new HashMap<String,String> ();
+                        MNode mcred = mrepo.child ("credentials");
+                        if (mcred != null) for (MNode c : mcred) git.credentials.put (c.key (), c.get ());
+                    }
+                    break;
+                }
+            }
+            if (git == null) return false;
+
+            for (int i = 0; i < items.length; i++)
+            {
+                CredentialItem item = items[i];
+                String prompt = item.getPromptText ();
+                String value = git.credentials.get (prompt);
+                if (value == null) return false;
+
+                if (item instanceof CredentialItem.StringType)
+                {
+                    CredentialItem.StringType st = (CredentialItem.StringType) item;
+                    st.setValue (value);
+                }
+                else if (item instanceof CredentialItem.CharArrayType)
+                {
+                    CredentialItem.CharArrayType cat = (CredentialItem.CharArrayType) item;
+                    cat.setValueNoCopy (value.toCharArray ());
+                }
+                else if (item instanceof CredentialItem.YesNoType)
+                {
+                    CredentialItem.YesNoType yn = (CredentialItem.YesNoType) item;
+                    yn.setValue (value.equals ("1"));
+                }
+                else
+                {
+                    throw new UnsupportedCredentialItem (uri, prompt);
+                }
+            }
+            return true;
         }
     }
 }

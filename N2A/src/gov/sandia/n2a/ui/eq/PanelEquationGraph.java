@@ -135,6 +135,7 @@ public class PanelEquationGraph extends JScrollPane
         if (gn == null  &&  graphPanel.getComponentCount () > 0)
         {
             Component c = PanelModel.instance.getFocusTraversalPolicy ().getFirstComponent (graphPanel);
+            if (c == null) return;  // This can happen if the Models tab isn't currently visible, for example when working in Settings:Repositories and a reload is triggered.
             c = c.getParent ();
             if (! (c instanceof GraphNode)) c = c.getParent ();
             if (   c instanceof GraphNode ) gn = (GraphNode) c;
