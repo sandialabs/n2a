@@ -88,11 +88,13 @@ public class SettingsAbout extends JPanel implements Settings
         content.append (loadResource ("si-units"));
         addLicense (licenses, "Units of Measurement", content.toString ());
 
-        addLicense     (licenses, "JFreeChart", loadResource ("jfreechart"));
-        addLicense     (licenses, "JSch",       loadResource ("jsch"));
-        addLicense     (licenses, "JGit",       loadResource ("jgit"));
-        addLicense     (licenses, "SLF4J",      loadResource ("slf4j"));
-        addLicenseHTML (licenses, "Eclipse",    loadResource ("eclipse"));
+        addLicense     (licenses, "JFreeChart",    loadResource ("jfreechart"));
+        addLicense     (licenses, "JSch",          loadResource ("jsch"));
+        addLicense     (licenses, "JZlib",         loadResource ("jzlib"));
+        addLicense     (licenses, "JGit",          loadResource ("jgit"));
+        addLicenseHTML (licenses, "Bouncy Castle", loadResource ("bouncycastle"));
+        addLicense     (licenses, "SLF4J",         loadResource ("slf4j"));
+        addLicenseHTML (licenses, "Eclipse",       loadResource ("eclipse"));
 
         Lay.BLtg (this,
             "N", Lay.lb (ImageUtil.getImage ("n2a-splash.png")),
