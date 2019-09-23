@@ -271,8 +271,7 @@ public class EquationSet implements Comparable<EquationSet>
                                 // Determine dummy variable name
                                 String dummy = "x0";
                                 int suffix = 1;
-                                while (find (new Variable (dummy)) != null) dummy = "x" + suffix++;
-                                while (source.child (dummy) != null) dummy = "x" + suffix++;
+                                while (find (new Variable (dummy)) != null  ||  source.child (dummy) != null) dummy = "x" + suffix++;
 
                                 // Create output expression
                                 Variable o = new Variable (this, new MVolatile ("output(" + v.nameString () + ")", dummy));
