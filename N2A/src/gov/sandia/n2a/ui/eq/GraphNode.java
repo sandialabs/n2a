@@ -59,13 +59,11 @@ public class GraphNode extends JPanel
     protected GraphPanel          parent;
     public    NodePart            node;
     protected TitleRenderer       title;
-    protected TitleEditorListener titleEditorListener = new TitleEditorListener ();
     public    boolean             open;
-    protected boolean             titleFocused;
+    protected boolean             titleFocused        = true;  // sans any other knowledge, title should be selected first
     protected JPanel              panelTitle;
     protected Component           hr                  = Box.createVerticalStrut (border.t + 1);
     public    PanelEquationTree   panelEquations;
-    protected Component           editingComponent;
     protected ResizeListener      resizeListener      = new ResizeListener ();
     protected List<GraphEdge>     edgesOut            = new ArrayList<GraphEdge> ();
     protected List<GraphEdge>     edgesIn             = new ArrayList<GraphEdge> ();
@@ -82,13 +80,12 @@ public class GraphNode extends JPanel
         node.fakeRoot (true);
         panelEquations = new PanelEquationTree (container, node, true);
 
-        open         = node.source.getBoolean ("$metadata", "gui", "bounds", "open");
-        titleFocused = true;  // sans any other knowledge, title should be selected first
+        open = node.source.getBoolean ("$metadata", "gui", "bounds", "open");
 
         title = new TitleRenderer ();
         title.getTreeCellRendererComponent (panelEquations.tree, node, false, open, false, -1, false);  // Configure JLabel with info from node.
-        title.setFocusable (true);
-        title.setRequestFocusEnabled (true);
+        title.setFocusable (true);            // make focusable in general
+        title.setRequestFocusEnabled (true);  // make focusable by mouse
 
         panelTitle = Lay.BL ("N", title);
         panelTitle.setOpaque (false);
@@ -117,9 +114,15 @@ public class GraphNode extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (editingComponent != null) container.editor.cancelCellEditing ();
+                if (title.editingComponent != null) container.editor.cancelCellEditing ();
             }
         });
+    }
+
+    public Component getTitleFocus ()
+    {
+        if (titleFocused) return title;
+        return panelEquations.tree;
     }
 
     public void takeFocus ()
@@ -173,10 +176,10 @@ public class GraphNode extends JPanel
         }
         else
         {
-            if (! open) setOpen (true);
+            setOpen (true);
             panelEquations.tree.scrollRowToVisible (0);
             panelEquations.tree.setSelectionRow (0);
-            panelEquations.tree.requestFocusInWindow ();
+            panelEquations.takeFocus ();
         }
     }
 
@@ -200,7 +203,7 @@ public class GraphNode extends JPanel
         else
         {
             titleFocused = true;
-            title.requestFocusInWindow ();
+            if (panelEquations.tree.isFocusOwner ()) title.requestFocusInWindow ();
 
             panelTitle.remove (hr);
             remove (panelEquations);  // assume that equation tree does not have focus
@@ -428,8 +431,10 @@ public class GraphNode extends JPanel
         parent.repaint (paintRegion);
     }
 
-    public class TitleRenderer extends EquationTreeCellRenderer
+    public class TitleRenderer extends EquationTreeCellRenderer implements CellEditorListener
     {
+        protected Component editingComponent;
+
         public TitleRenderer ()
         {
             setTransferHandler (container.transferHandler);
@@ -473,6 +478,7 @@ public class GraphNode extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
+                    if (! open) toggleOpen ();  // because switchFocus() does not change metadata "open" flag
                     switchFocus (false);
                 }
             });
@@ -668,10 +674,10 @@ public class GraphNode extends JPanel
         public void startEditing ()
         {
             if (container.editor.editingNode != null) container.editor.stopCellEditing ();  // Edit could be in progress on another node title or on any tree, including our own.
-            container.editor.addCellEditorListener (titleEditorListener);
+            container.editor.addCellEditorListener (this);
             editingComponent = container.editor.getTitleEditorComponent (panelEquations.tree, node, open);
-            panelTitle.add (editingComponent, BorderLayout.NORTH, 0);  // displaces this title renderer from the layout manager's north slot
-            setVisible (false);  // hide this title renderer
+            panelTitle.add (editingComponent, BorderLayout.NORTH, 0);  // displaces this renderer from the layout manager's north slot
+            setVisible (false);  // hide this renderer
 
             GraphNode.this.setSize (GraphNode.this.getPreferredSize ());
             GraphNode.this.validate ();
@@ -682,26 +688,23 @@ public class GraphNode extends JPanel
 
         public void completeEditing (boolean canceled)
         {
-            container.editor.removeCellEditorListener (titleEditorListener);
+            container.editor.removeCellEditorListener (this);
             if (! canceled) node.setUserObject (container.editor.getCellEditorValue ());
 
             setVisible (true);
-            panelTitle.getLayout ().addLayoutComponent (BorderLayout.NORTH, this);  // restore this title renderer to the layout manger's north slot
-            panelTitle.remove (editingComponent);  // triggers shift of focus back to this title renderer
+            panelTitle.getLayout ().addLayoutComponent (BorderLayout.NORTH, this);  // restore this renderer to the layout manger's north slot
+            panelTitle.remove (editingComponent);  // triggers shift of focus back to this renderer
             editingComponent = null;
         }
-    };
 
-    public class TitleEditorListener implements CellEditorListener
-    {
         public void editingStopped (ChangeEvent e)
         {
-            title.completeEditing (false);
+            completeEditing (false);
         }
 
         public void editingCanceled (ChangeEvent e)
         {
-            title.completeEditing (true);
+            completeEditing (true);
         }
     }
 

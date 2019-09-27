@@ -24,6 +24,8 @@ import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
@@ -39,9 +41,12 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
 
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
+import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
@@ -50,10 +55,13 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JTree;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.border.AbstractBorder;
+import javax.swing.event.CellEditorListener;
+import javax.swing.event.ChangeEvent;
 import javax.swing.event.MouseInputAdapter;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
@@ -83,6 +91,7 @@ import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 import gov.sandia.n2a.ui.eq.undo.Outsource;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun;
+import sun.swing.SwingUtilities2;
 
 @SuppressWarnings("serial")
 public class PanelEquations extends JPanel
@@ -91,11 +100,12 @@ public class PanelEquations extends JPanel
     public NodePart root;
     public NodePart part;     // The node that contains the current graph. Can be root or a deeper node (via drill-down).
     public boolean  locked;
-    public boolean  viewTree; // Show original tree view, rather than graph view.
+    public boolean  viewTree; // Show old-style tree view, rather than graph view.
 
     protected PanelGraph               panelGraph;
     protected JPanel                   panelBreadcrumb;
-    protected BreadcrumbRenderer       breadcrumbRenderer     = new BreadcrumbRenderer ();
+    public    BreadcrumbRenderer       breadcrumbRenderer     = new BreadcrumbRenderer ();
+    protected boolean                  titleFocused           = true;
     public    PanelEquationGraph       panelEquationGraph;
     public    GraphParent              panelParent;
     public    PanelEquationTree        panelEquationTree;  // To display root as a tree.
@@ -137,6 +147,18 @@ public class PanelEquations extends JPanel
 
     public PanelEquations ()
     {
+        InputMap inputMap = getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        inputMap.put (KeyStroke.getKeyStroke ("ESCAPE"), "cancel");
+
+        ActionMap actionMap = getActionMap ();
+        actionMap.put ("cancel", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                if (breadcrumbRenderer.editingComponent != null) editor.cancelCellEditing ();
+            }
+        });
+
         transferHandler = new TransferHandler ()
         {
             public boolean canImport (TransferSupport xfer)
@@ -502,7 +524,7 @@ public class PanelEquations extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                setView (! viewTree);
+                setViewTree (! viewTree);
             }
         });
 
@@ -527,8 +549,10 @@ public class PanelEquations extends JPanel
         panelBreadcrumb = Lay.BL ("C", breadcrumbRenderer);
         panelBreadcrumb.setBorder (new RoundedTopBorder (5));
         panelBreadcrumb.setOpaque (false);
+
         panelParent        = new GraphParent (this);
         panelEquationGraph = new PanelEquationGraph (this);
+
         panelGraph = new PanelGraph ();
         panelGraph.add (panelParent);
         panelGraph.add (panelBreadcrumb,    BorderLayout.NORTH);
@@ -697,42 +721,6 @@ public class PanelEquations extends JPanel
         }
     }
 
-    public void setView (boolean viewTree)
-    {
-        if (this.viewTree == viewTree) return;
-
-        this.viewTree = viewTree;
-        if (viewTree)
-        {
-            AppData.state.set ("tree", "PanelModel", "view");
-
-            buttonView.setIcon (iconViewGraph);
-            buttonView.setToolTipText ("Edit Graph");
-
-            remove (panelGraph);
-            panelGraph.clear ();
-            add (panelEquationTree, BorderLayout.CENTER);
-        }
-        else
-        {
-            AppData.state.set ("graph", "PanelModel", "view");
-
-            buttonView.setIcon (iconViewTree);
-            buttonView.setToolTipText ("Edit Tree");
-
-            remove (panelEquationTree);
-            panelEquationTree.clear ();
-            add (panelGraph, BorderLayout.CENTER);
-        }
-        validate ();
-        repaint ();
-
-        // Update part, in order to populate appropriate panel.
-        NodePart p = part;
-        part = null;  // force update to run
-        loadPart (p);
-    }
-
     public void loadPart (NodePart part)
     {
         if (this.part == part) return;
@@ -775,6 +763,42 @@ public class PanelEquations extends JPanel
         repaint ();
     }
 
+    public void setViewTree (boolean value)
+    {
+        if (viewTree == value) return;
+        viewTree = value;
+
+        if (viewTree)
+        {
+            AppData.state.set ("tree", "PanelModel", "view");
+
+            buttonView.setIcon (iconViewGraph);
+            buttonView.setToolTipText ("Edit Graph");
+
+            remove (panelGraph);
+            panelGraph.clear ();
+            add (panelEquationTree, BorderLayout.CENTER);
+        }
+        else
+        {
+            AppData.state.set ("graph", "PanelModel", "view");
+
+            buttonView.setIcon (iconViewTree);
+            buttonView.setToolTipText ("Edit Tree");
+
+            remove (panelEquationTree);
+            panelEquationTree.clear ();
+            add (panelGraph, BorderLayout.CENTER);
+        }
+        validate ();
+        repaint ();
+
+        // Update part, in order to populate appropriate panel.
+        NodePart p = part;
+        part = null;  // force update to run
+        loadPart (p);
+    }
+
     public void updateLock ()
     {
         locked = ! AppData.models.isWriteable (record);
@@ -813,7 +837,8 @@ public class PanelEquations extends JPanel
             {
                 if (active == panelParent.panelEquations)
                 {
-                    fce.subpart = null;
+                    fce.subpart = "";
+                    fce.titleFocused = titleFocused;
                 }
                 else
                 {
@@ -863,6 +888,32 @@ public class PanelEquations extends JPanel
     {
         if (viewTree) panelEquationTree .takeFocus ();
         else          panelGraph        .takeFocus ();
+    }
+
+    /**
+        Moves focus between title and parent panel.
+        If focus is somewhere else, pulls it to one of these two.
+    **/
+    public void switchFocus (boolean ontoTitle)
+    {
+        titleFocused = ontoTitle;
+        if (ontoTitle)
+        {
+            breadcrumbRenderer.requestFocusInWindow ();
+        }
+        else
+        {
+            panelParent.setOpen (true);
+            panelParent.panelEquations.tree.scrollRowToVisible (0);
+            panelParent.panelEquations.tree.setSelectionRow (0);
+            panelParent.takeFocus ();
+        }
+    }
+
+    public Component getTitleFocus ()
+    {
+    	if (titleFocused) return breadcrumbRenderer;
+    	return panelParent.panelEquations.tree;
     }
 
     public boolean isEditing ()
@@ -1225,34 +1276,131 @@ public class PanelEquations extends JPanel
         }
     }
 
-    public class BreadcrumbRenderer extends EquationTreeCellRenderer
+    /**
+        Compare with GraphNode.TitleRenderer
+    **/
+    public class BreadcrumbRenderer extends EquationTreeCellRenderer implements CellEditorListener
     {
         protected List<NodePart> parts   = new ArrayList<NodePart> ();
         protected List<Integer>  offsets = new ArrayList<Integer> ();
-        protected int            index;
+        protected Component      editingComponent;
 
         public BreadcrumbRenderer ()
         {
-            setOpaque (false);
             setText (noModel);
             setIcon (null);
+            setFocusable (false);
+            setTransferHandler (transferHandler);
+
+            InputMap inputMap = getInputMap ();
+            inputMap.put (KeyStroke.getKeyStroke ("UP"),               "close");
+            inputMap.put (KeyStroke.getKeyStroke ("DOWN"),             "selectNext");
+            inputMap.put (KeyStroke.getKeyStroke ("LEFT"),             "close");
+            inputMap.put (KeyStroke.getKeyStroke ("RIGHT"),            "selectChild");
+            inputMap.put (KeyStroke.getKeyStroke ("shift DELETE"),     "cut");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl X"),           "cut");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl INSERT"),      "copy");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl C"),           "copy");
+            inputMap.put (KeyStroke.getKeyStroke ("shift INSERT"),     "paste");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl V"),           "paste");
+            inputMap.put (KeyStroke.getKeyStroke ("INSERT"),           "add");
+            inputMap.put (KeyStroke.getKeyStroke ("DELETE"),           "delete");
+            inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),       "delete");
+            inputMap.put (KeyStroke.getKeyStroke ("ENTER"),            "startEditing");
+            inputMap.put (KeyStroke.getKeyStroke ("F2"),               "startEditing");
+            inputMap.put (KeyStroke.getKeyStroke ("shift SPACE"),      "drillUp");
+
+            ActionMap actionMap = getActionMap ();
+            actionMap.put ("close", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    if (panelParent.isVisible ()) panelParent.toggleOpen ();
+                }
+            });
+            actionMap.put ("selectNext", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    if (! panelParent.isVisible ()) panelParent.toggleOpen ();  // because switchFocus() does not set metadata "parent" open flag
+                    switchFocus (false);
+                }
+            });
+            actionMap.put ("selectChild", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    if (panelParent.isVisible ()) switchFocus (false);
+                    else                          panelParent.toggleOpen ();
+                }
+            });
+            actionMap.put ("cut",   TransferHandler.getCutAction ());
+            actionMap.put ("copy",  TransferHandler.getCopyAction ());
+            actionMap.put ("paste", TransferHandler.getPasteAction ());
+            actionMap.put ("add", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    if (panelParent.isVisible ())  // parent is open
+                    {
+                    	// Add a NodeVariable under part
+                        panelParent.panelEquations.addAtSelected ("");  // No selection should be active in panelParent.panelEquations, so this should apply to its root.
+                    }
+                    else  // parent is closed
+                    {
+                    	// Add a subpart in the graph
+                        NodePart editMe = (NodePart) part.add ("Part", null, null, null);
+                        if (editMe == null) return;
+                        EventQueue.invokeLater (new Runnable ()
+                        {
+                            public void run ()
+                            {
+                                editMe.graph.title.startEditing ();
+                            }
+                        });
+                    }
+                }
+            });
+            actionMap.put ("delete", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    part.delete (null, false);
+                }
+            });
+            actionMap.put ("startEditing", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    if (! locked) startEditing ();
+                }
+            });
+            actionMap.put ("drillUp", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    drillUp ();
+                }
+            });
 
             addMouseListener (new MouseInputAdapter ()
             {
                 public void mouseClicked (MouseEvent me)
                 {
                     int x = me.getX ();
+                    int y = me.getY ();
                     int clicks = me.getClickCount ();
 
                     if (SwingUtilities.isLeftMouseButton (me))
                     {
-                        if (clicks == 1)  // Open/close
+                        if (clicks == 1)
                         {
-                            if (x < getIconWidth ())
+                            if (x < getIconWidth ())  // Open/close
                             {
                                 panelParent.toggleOpen ();
+                                switchFocus (true);
                             }
-                            else
+                            else  // Drill up to specific path element.
                             {
                                 x -= getTextOffset ();
                                 int last = offsets.size () - 1;
@@ -1262,10 +1410,38 @@ public class PanelEquations extends JPanel
                                     drill (parts.get (i));
                                     return;
                                 }
-                                drill (parts.get (last));
+
+                                // Click was on last path element (which may be only path element), so take focus.
+                                if (isFocusOwner ()) startEditing ();
+                                else                 switchFocus (true);
                             }
                         }
                     }
+                    else if (SwingUtilities.isRightMouseButton (me))
+                    {
+                        if (clicks == 1)  // Show popup menu
+                        {
+                            switchFocus (true);
+                            menuPopup.show (breadcrumbRenderer, x, y);
+                        }
+                    }
+                }
+            });
+
+            addFocusListener (new FocusListener ()
+            {
+                public void focusGained (FocusEvent e)
+                {
+                    hasFocus = true;
+                    selected = true;
+                    panelBreadcrumb.repaint ();
+                }
+
+                public void focusLost (FocusEvent e)
+                {
+                    hasFocus = false;
+                    selected = false;
+                    panelBreadcrumb.repaint ();
                 }
             });
         }
@@ -1282,71 +1458,71 @@ public class PanelEquations extends JPanel
 
         public void update ()
         {
-            index = parts.indexOf (part);
-            if (index < 0)
+            parts.clear ();
+            NodePart p = part;
+            while (p != null)
             {
-                parts.clear ();
-                NodePart p = part;
-                while (p != null)
-                {
-                    parts.add (0, p);
-                    p = (NodePart) p.getTrueParent ();
-                }
-                index = parts.size () - 1;
+                parts.add (0, p);
+                p = (NodePart) p.getTrueParent ();
             }
-
-            int last = parts.size () - 1;
-            if (last < 0)
+            if (parts.isEmpty ())
             {
                 setText (noModel);
                 setIcon (null);
+                setFocusable (false);
                 return;
             }
 
             String text = "";
             offsets.clear ();
             FontMetrics fm = getFontMetrics (getFont ());
-            for (int i = 0; i <= last; i++)
+            NodePart first = parts.get (0);
+            for (NodePart b : parts)
             {
-                NodePart b = parts.get (i);
-                if (i > 0) text += ".";
+                if (b != first) text += ".";
                 text += b.source.key ();
                 offsets.add (fm.stringWidth (text));
-                if (i == index) setIcon (b.getIcon (true));
             }
             setText (text);
+            setIcon (part.getIcon (true));
+            setFocusable (true);
         }
 
-        public void paint (Graphics g)
+        /**
+            Follows example of openjdk javax.swing.plaf.basic.BasicTreeUI.startEditing()
+        **/
+        public void startEditing ()
         {
-            // paint highlight
-            if (parts.size () > 1)
-            {
-                int x0 = 0;
-                if (index > 0) x0 = offsets.get (index - 1) + getFontMetrics (getFont ()).stringWidth (".");
-                int x1 = offsets.get (index);
-                int x = x0 + getTextOffset () - 1;
-                int w = x1 - x0 + 2;
-                int h = getHeight ();
-                g.setColor (getBackgroundSelectionColor ());
-                g.fillRect (x, 0, w, h);
-            }
+            if (editor.editingNode != null) editor.stopCellEditing ();  // Edit could be in progress on a node title or on any tree, including our own.
+            editor.addCellEditorListener (this);
+            editingComponent = editor.getTitleEditorComponent (panelParent.panelEquations.tree, part, panelParent.isVisible ());
+            panelBreadcrumb.add (editingComponent, BorderLayout.CENTER, 0);  // displaces this renderer from the layout manager's center slot
+            setVisible (false);  // hide this renderer
 
-            // paint text and icon
-            super.paint (g);
+            panelBreadcrumb.validate ();
+            panelBreadcrumb.repaint ();
+            SwingUtilities2.compositeRequestFocus (editingComponent);  // editingComponent is really a container, so we shift focus to the first focusable child of editingComponent
         }
 
-        // Force superclass not to paint background, so highlight will show through.
-        // Both getBackgroundNonSelectionColor() and getBackground() must return null for this to work properly.
-
-        public Color getBackgroundNonSelectionColor ()
+        public void completeEditing (boolean canceled)
         {
-            return null;
+            editor.removeCellEditorListener (this);
+            if (! canceled) part.setUserObject (editor.getCellEditorValue ());
+
+            setVisible (true);
+            panelBreadcrumb.getLayout ().addLayoutComponent (BorderLayout.CENTER, this);  // restore this renderer to the layout manger's center slot
+            panelBreadcrumb.remove (editingComponent);  // triggers shift of focus back to this renderer
+            editingComponent = null;
         }
 
-        public Color getBackground ()
+        public void editingStopped (ChangeEvent e)
         {
-            return null;
+            completeEditing (false);
+        }
+
+        public void editingCanceled (ChangeEvent e)
+        {
+            completeEditing (true);
         }
     };
 
@@ -1379,29 +1555,7 @@ public class PanelEquations extends JPanel
             panelParent.loadPart ();
 
             breadcrumbRenderer.update ();
-
-            // Decide whether to open the parent tree
-            boolean parentOpen = part.source.getBoolean ("$metadata", "gui", "bounds", "parent");
-            if (! parentOpen)
-            {
-                // Determine if part has any sub-parts
-                boolean hasChild = false;
-                Enumeration<?> e = part.children ();  // Unfiltered, so sub-parts will be included.
-                while (e.hasMoreElements ())
-                {
-                    Object o = e.nextElement ();
-                    if (o instanceof NodePart)
-                    {
-                        hasChild = true;
-                        break;
-                    }
-                }
-                if (! hasChild) parentOpen = true;
-
-                FocusCacheEntry fce = getFocus (part);
-                if (fce != null  &&  fce.subpart == null) parentOpen = true;
-            }
-            panelParent.setOpen (parentOpen);
+            panelParent.setOpen (part.source.getBoolean ("$metadata", "gui", "bounds", "parent")  ||  panelEquationGraph.isEmpty ());
 
             validate ();  // In case breadcrumbRenderer changes shape.
         }
@@ -1417,18 +1571,34 @@ public class PanelEquations extends JPanel
 
         public void takeFocus ()
         {
-            FocusCacheEntry fce = getFocus (part);
-            if (fce != null  &&  fce.subpart == null) panelParent       .takeFocus ();
-            else                                      panelEquationGraph.takeFocus (fce);
+            FocusCacheEntry fce = createFocus (part);
+            if (fce.subpart.isEmpty ())  // focus parent
+            {
+                // Do the same job as switchFocus(), but do not force tree to select first row.
+                titleFocused = fce.titleFocused;
+                if (titleFocused)
+                {
+                    breadcrumbRenderer.requestFocusInWindow ();
+                }
+                else
+                {
+                    panelParent.setOpen (true);
+                    panelParent.takeFocus ();
+                }
+            }
+            else  // focus a child
+            {
+                panelEquationGraph.takeFocus (fce);
+            }
         }
     }
 
     public static class FocusCacheEntry
     {
-        boolean    titleFocused; // state of GraphNode.titleFocused when this part is the root
-        StoredPath sp;           // of tree when this part is the root
-        Point      position;     // of viewport for graph
-        String     subpart = ""; // Name of graph node (sub-part) whose tree has keyboard focus. If null, then parent node has focus.
+        boolean    titleFocused = true; // state of GraphNode.titleFocused or PanelEquations.titleFocused, whichever was set most recently
+        StoredPath sp;                  // path state of tree, whether as parent or as child
+        Point      position;            // when parent: offset of viewport
+        String     subpart      = "";   // when parent: name of child which has keyboard focus. If empty, then the parent itself has focus.
     }
 
     /**
@@ -1447,7 +1617,7 @@ public class PanelEquations extends JPanel
             saveFocus ();
             if (viewTree)
             {
-                if (panelEquationTree.root != null) path = panelEquationTree.root.getKeyPath ();
+                if (panelEquationTree.root != null) path = panelEquationTree.root.getKeyPath ();  // which should simply be the model name
                 asParent = true;
             }
             else if (active == null)
@@ -1458,7 +1628,7 @@ public class PanelEquations extends JPanel
             else
             {
                 path = active.root.getKeyPath ();
-                asParent =  active.root == part;  // Implies that PanelEquations.open is true.
+                asParent =  active.root == part;
             }
         }
 
@@ -1490,12 +1660,12 @@ public class PanelEquations extends JPanel
                 end = depth;
                 // Hack focus cache to restore open state of parent tree.
                 FocusCacheEntry fce = createFocus (path.toArray ());
-                fce.subpart = null;
+                fce.subpart = "";
             }
             else
             {
                 end = depth - 1;
-                // Hack focus cache to focus correct subpart.
+                // Hack focus cache to focus correct child.
                 if (end > 0)
                 {
                     FocusCacheEntry fce = createFocus (path.subList (0, end).toArray ());

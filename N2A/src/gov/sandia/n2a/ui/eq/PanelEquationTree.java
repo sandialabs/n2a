@@ -163,7 +163,7 @@ public class PanelEquationTree extends JScrollPane
                     }
                     if (container.panelParent.panelEquations == PanelEquationTree.this)
                     {
-                        container.panelParent.toggleOpen ();
+                        container.switchFocus (true);
                         return;
                     }
                 }
@@ -184,7 +184,7 @@ public class PanelEquationTree extends JScrollPane
                     }
                     if (container.panelParent.panelEquations == PanelEquationTree.this)
                     {
-                        container.panelParent.toggleOpen ();
+                        container.switchFocus (true);
                         return;
                     }
                 }
@@ -291,7 +291,15 @@ public class PanelEquationTree extends JScrollPane
                 {
                     if (clicks == 1)
                     {
-                        if (root != null  &&  root.graph != null) root.graph.titleFocused = false;
+                        // When we grab focus via a direct click, need to note the title is no longer focused.
+                        if (root == null) return;
+                        if (root.graph != null)
+                        {
+                            root.graph.titleFocused = false;
+                            return;
+                        }
+                        PanelEquations pe = PanelModel.instance.panelEquations;
+                        if (PanelEquationTree.this == pe.panelParent.panelEquations) pe.titleFocused = false;
                     }
                     else if (clicks == 2)  // Drill down on parts, or edit any other node type.
                     {
@@ -502,7 +510,17 @@ public class PanelEquationTree extends JScrollPane
         fce.sp = saveFocus (fce.sp);
         tree.clearSelection ();
 
-        if (root.graph != null)
+        // Auto-close graph node when it loses focus, if it was auto-opened.
+        if (root.graph == null)
+        {
+            PanelEquations pe = PanelModel.instance.panelEquations;
+            if (this == pe.panelParent.panelEquations)
+            {
+                boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "parent");
+                if (! open) pe.panelParent.setOpen (false);
+            }
+        }
+        else
         {
             boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "open");
             if (! open) root.graph.setOpen (false);
@@ -555,7 +573,7 @@ public class PanelEquationTree extends JScrollPane
     {
         if (container.locked) return;
         NodeBase selected = getSelected ();
-        if (selected == null) return;  // empty tree; could create new model here, but better to do that from search list
+        if (selected == null) return;  // empty tree (should only occur in tree view); could create new model here, but better to do that from search list
         NodeBase editMe = selected.add (type, tree, null, null);
         if (editMe != null)
         {
@@ -770,10 +788,13 @@ public class PanelEquationTree extends JScrollPane
 
         TreePath selectedPath = new TreePath (c.getPath ());
         GraphNode gn = pet.root.graph;
-        boolean selectTitle =  c == pet.root  &&  gn != null;
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        boolean selectTitle =  c == pet.root  &&  (gn != null  ||  pet == pe.panelParent.panelEquations);
         if (setSelection  &&  ! selectTitle)
         {
-            if (gn != null) gn.switchFocus (false);  // make tree visible
+            // make tree visible
+            if (gn == null) pe.panelParent.setOpen (true);
+            else            gn.setOpen (true);
             pet.tree.scrollPathToVisible (selectedPath);
         }
         if (lastChange == path.length)
@@ -785,8 +806,18 @@ public class PanelEquationTree extends JScrollPane
         }
         if (setSelection)
         {
-            if (selectTitle) gn.switchFocus (true);
-            else             pet.tree.setSelectionPath (selectedPath);
+            if (selectTitle)
+            {
+                if (gn == null) pe.switchFocus (true);
+                else            gn.switchFocus (true);
+            }
+            else
+            {
+                pet.tree.setSelectionPath (selectedPath);
+                FocusCacheEntry fce = pe.createFocus (pet.root);
+                fce.titleFocused = false;  // so pet.takeFocus() does not claw focus onto title
+                pet.takeFocus ();
+            }
         }
     }
 

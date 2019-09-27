@@ -119,10 +119,7 @@ public class PanelEquationGraph extends JScrollPane
                 focus.x = Math.min (focus.x, Math.max (0, graphPanel.layout.bounds.width  - extent.width));
                 focus.y = Math.min (focus.y, Math.max (0, graphPanel.layout.bounds.height - extent.height));
             }
-            if (fce.subpart != null)
-            {
-                gn = graphPanel.findNode (fce.subpart);
-            }
+            gn = graphPanel.findNode (fce.subpart);
         }
 
         // Restore the viewport position, but only if the viewport has changed content.
@@ -132,6 +129,7 @@ public class PanelEquationGraph extends JScrollPane
         Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ();
         if (! isAncestorOf (focusOwner)) vp.setViewPosition (focus);
 
+        // Select first node to focus, if one wasn't specified by focus cache.
         if (gn == null  &&  graphPanel.getComponentCount () > 0)
         {
             Component c = PanelModel.instance.getFocusTraversalPolicy ().getFirstComponent (graphPanel);
@@ -140,8 +138,11 @@ public class PanelEquationGraph extends JScrollPane
             if (! (c instanceof GraphNode)) c = c.getParent ();
             if (   c instanceof GraphNode ) gn = (GraphNode) c;
         }
+
         if (gn != null)
         {
+            fce = container.createFocus (gn.node);
+            gn.titleFocused = fce.titleFocused;
             gn.takeFocus ();  // possibly change the viewport position set above
         }
     }

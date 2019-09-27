@@ -19,6 +19,7 @@ import javax.swing.ActionMap;
 import javax.swing.InputMap;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
+import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.LayoutFocusTraversalPolicy;
 import javax.swing.undo.CannotRedoException;
@@ -30,6 +31,7 @@ import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Importer;
 import gov.sandia.n2a.ui.UndoManager;
+import gov.sandia.n2a.ui.eq.PanelEquations.BreadcrumbRenderer;
 
 @SuppressWarnings("serial")
 public class PanelModel extends JPanel implements MNodeListener
@@ -45,7 +47,13 @@ public class PanelModel extends JPanel implements MNodeListener
 
     public class GraphFocusTraversalPolicy extends LayoutFocusTraversalPolicy
     {
-        public Component getComponentAfter (Container aContainer, Component aComponent)
+    	public GraphNode getGraphNode (Component g)
+    	{
+            while (g != null  &&  ! (g instanceof GraphNode)) g = g.getParent ();
+            return (GraphNode) g;
+    	}
+
+    	public Component getComponentAfter (Container aContainer, Component aComponent)
         {
             if (aComponent == panelEquations.editor.editingContainer)
             {
@@ -63,25 +71,25 @@ public class PanelModel extends JPanel implements MNodeListener
 
             Component result = super.getComponentAfter (aContainer, aComponent);
 
-            Component g0 = aComponent.getParent ();
-            Component g1 = result.getParent ();
-            while (g0 != null  &&  ! (g0 instanceof GraphNode)) g0 = g0.getParent ();
-            while (g1 != null  &&  ! (g1 instanceof GraphNode)) g1 = g1.getParent ();
+            // Handle GraphNode behavior: only one of title or tree should receive keyboard focus at any given time
+            GraphNode g1 = getGraphNode (result);
             if (g1 != null)  // result is inside a GraphNode
             {
+                GraphNode g0 = getGraphNode (aComponent);
                 if (g1 == g0)  // Need to escape from the current GraphNode
                 {
                     result = super.getComponentAfter (aContainer, result);
-                    g1 = result.getParent ();
-                    while (g1 != null  &&  ! (g1 instanceof GraphNode)) g1 = g1.getParent ();
+                    g1 = getGraphNode (result);
                 }
-                if (g1 != null)
-                {
-                    GraphNode g = (GraphNode) g1;
-                    if (g.titleFocused) result = g.title;
-                    else                result = g.panelEquations.tree;
-                }
+                if (g1 != null) result = g1.getTitleFocus ();
+                return result;
             }
+
+            // Handle parent node behavior
+            BreadcrumbRenderer title = instance.panelEquations.breadcrumbRenderer;
+            JTree              tree  = instance.panelEquations.panelParent.panelEquations.tree;
+        	if (aComponent == title  &&  result == tree) return super.getComponentAfter (aContainer, result);
+            if (result == title)                         return panelEquations.getTitleFocus ();
 
             return result;
         }
@@ -90,25 +98,23 @@ public class PanelModel extends JPanel implements MNodeListener
         {
             Component result = super.getComponentBefore (aContainer, aComponent);
 
-            Component g0 = aComponent.getParent ();
-            Component g1 = result.getParent ();
-            while (g0 != null  &&  ! (g0 instanceof GraphNode)) g0 = g0.getParent ();
-            while (g1 != null  &&  ! (g1 instanceof GraphNode)) g1 = g1.getParent ();
+            GraphNode g1 = getGraphNode (result);
             if (g1 != null)
             {
+                GraphNode g0 = getGraphNode (aComponent);
                 if (g1 == g0)
                 {
                     result = super.getComponentBefore (aContainer, result);
-                    g1 = result.getParent ();
-                    while (g1 != null  &&  ! (g1 instanceof GraphNode)) g1 = g1.getParent ();
+                    g1 = getGraphNode (result);
                 }
-                if (g1 != null)
-                {
-                    GraphNode g = (GraphNode) g1;
-                    if (g.titleFocused) result = g.title;
-                    else                result = g.panelEquations.tree;
-                }
+                if (g1 != null) result = g1.getTitleFocus ();
+                return result;
             }
+
+            BreadcrumbRenderer title = instance.panelEquations.breadcrumbRenderer;
+            JTree              tree  = instance.panelEquations.panelParent.panelEquations.tree;
+        	if (aComponent == tree  &&  result == title) return super.getComponentBefore (aContainer, result);
+            if (result == tree)                          return panelEquations.getTitleFocus ();
 
             return result;
         }

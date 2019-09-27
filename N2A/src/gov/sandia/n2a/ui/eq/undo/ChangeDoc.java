@@ -24,9 +24,9 @@ public class ChangeDoc extends Undoable
         this.before = before;
         this.after  = after;
 
-        PanelModel mep = PanelModel.instance;
-        fromSearchPanel = mep.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on equation tree
-        wasShowing      = mep.panelEquations.record != null  &&  mep.panelEquations.record.key ().equals (before);
+        PanelModel pm = PanelModel.instance;
+        fromSearchPanel = pm.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on equation panel
+        wasShowing      = pm.panelEquations.record != null  &&  pm.panelEquations.record.key ().equals (before);
     }
 
     public void undo ()
@@ -61,9 +61,9 @@ public class ChangeDoc extends Undoable
         if (wasShowing)
         {
             container.load (doc);  // lazy; only loads if not already loaded
+            container.root.setUserObject ();  // In case it was already loaded, ensure that doc name is updated. 
             if (container.viewTree)
             {
-                container.root.setUserObject ();  // In case it was already loaded, ensure that doc name is updated. 
                 container.panelEquationTree.model.nodeChanged (container.root);
                 container.panelEquationTree.tree.setSelectionRow (0);
             }
@@ -72,7 +72,7 @@ public class ChangeDoc extends Undoable
         pm.panelSearch.list.repaint ();
 
         if (fromSearchPanel) pm.panelSearch.list.requestFocusInWindow ();
-        else if (wasShowing) container.takeFocus ();
+        else if (wasShowing) container.breadcrumbRenderer.requestFocusInWindow ();
         // else we don't care where focus is
     }
 }

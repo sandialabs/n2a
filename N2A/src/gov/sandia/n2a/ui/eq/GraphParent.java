@@ -63,17 +63,18 @@ public class GraphParent extends JPanel
         if (! container.locked) part.source.set (nextOpen, "$metadata", "gui", "bounds", "parent");
     }
 
-    public void setOpen (boolean open)
+    public void setOpen (boolean value)
     {
-        if (open)
+    	if (value == isVisible ()) return;
+    	if (value)
         {
             setVisible (true);
             setSize (getPreferredSize ());
-            panelEquations.takeFocus ();
         }
         else
         {
-            if (panelEquations.tree.hasFocus ()) panelEquations.tree.transferFocus ();
+            container.titleFocused = true;
+            if (panelEquations.tree.isFocusOwner ()) container.breadcrumbRenderer.requestFocusInWindow ();
             setVisible (false);
         }
     }

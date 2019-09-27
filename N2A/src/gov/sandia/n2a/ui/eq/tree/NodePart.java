@@ -216,7 +216,7 @@ public class NodePart extends NodeContainer
     public Font getPlainFont (Font base)
     {
         float size = base.getSize2D ();
-        if (parent == null  &&  trueParent == null) size *= 2;
+        if (PanelModel.instance.panelEquations.viewTree  &&  isTrueRoot ()) size *= 2;
         return base.deriveFont (Font.PLAIN, size);
     }
 
@@ -224,7 +224,7 @@ public class NodePart extends NodeContainer
     public Font getStyledFont (Font base)
     {
         float size = base.getSize2D ();
-        if (parent == null  &&  trueParent == null) size *= 2;
+        if (PanelModel.instance.panelEquations.viewTree  &&  isTrueRoot ()) size *= 2;
         return base.deriveFont (Font.BOLD, size);
     }
 

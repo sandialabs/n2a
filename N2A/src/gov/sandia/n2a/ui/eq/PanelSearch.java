@@ -83,7 +83,7 @@ public class PanelSearch extends JPanel
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"), "delete");
         inputMap.put (KeyStroke.getKeyStroke ("SPACE"),      "select");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "edit");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "select");
         inputMap.put (KeyStroke.getKeyStroke ("F2"),         "edit");
 
         ActionMap actionMap = list.getActionMap ();
@@ -135,6 +135,8 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
+            	Holder h = list.getSelectedValue ();
+            	if (h == null  ||  ! AppData.models.isWriteable (h.doc)) return;
                 nameEditor = new NameEditor (); 
                 list.add (nameEditor);
                 nameEditor.requestFocusInWindow ();
