@@ -967,6 +967,7 @@ public class PanelEquations extends JPanel
                 // After load(doc), active is null.
                 // PanelEquationTree focusGained() will set active, but won't be called before the test below.
                 if (viewTree) active = panelEquationTree;
+                else          active = panelParent.panelEquations;
             }
             else
             {
@@ -1432,6 +1433,7 @@ public class PanelEquations extends JPanel
             {
                 public void focusGained (FocusEvent e)
                 {
+                    active = panelParent.panelEquations;
                     hasFocus = true;
                     selected = true;
                     panelBreadcrumb.repaint ();

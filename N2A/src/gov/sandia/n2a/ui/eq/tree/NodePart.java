@@ -29,6 +29,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
+import gov.sandia.n2a.ui.eq.GraphParent;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
@@ -501,21 +502,31 @@ public class NodePart extends NodeContainer
             boolean graphClosed =  graph != null  &&  ! graph.open;
             boolean collapsed   = tree.isCollapsed (new TreePath (getPath ()));
             boolean hasChildren = ((FilteredTreeModel) tree.getModel ()).getChildCount (this) > 0;
-            if (graphClosed  ||  (collapsed  &&  hasChildren))  // The node is deliberately closed to indicate user intent.
+            if (graphClosed  ||  collapsed  &&  hasChildren)  // The node is deliberately closed to indicate user intent.
             {
                 if (type.isEmpty ()) type = "Part";
                 if (graphClosed)
                 {
                     tree = null;  // Create a peer graph node.
-                    if (location == null)
+                    if (location == null  &&  graph != null)
                     {
-                        GraphPanel gp = (GraphPanel) graph.getParent ();
+                        GraphPanel graphArea = (GraphPanel) graph.getParent ();
                         location = graph.getLocation ();
-                        location.x += 100 - gp.offset.x;
-                        location.y += 100 - gp.offset.y;
+                        location.x += 100 - graphArea.offset.x;
+                        location.y += 100 - graphArea.offset.y;
                     }
                 }
                 return ((NodePart) getTrueParent ()).add (type, tree, data, location);
+            }
+
+            GraphParent parentPanel = PanelModel.instance.panelEquations.panelParent;
+            JTree parentTree = parentPanel.panelEquations.tree;
+            if (tree == parentTree  &&  ! parentPanel.isVisible ())  // parent node is closed
+            {
+                // Can only add a Part
+                if (type.isEmpty ()) type = "Part";
+                if (! type.equals ("Part")) return null;
+                // If type is Part, then fall through, since we will be adding new part as a child of this node.
             }
         }
 

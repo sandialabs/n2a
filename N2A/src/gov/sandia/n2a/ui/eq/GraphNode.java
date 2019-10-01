@@ -600,6 +600,7 @@ public class GraphNode extends JPanel
                     {
                         if (clicks == 1)  // Show popup menu
                         {
+                            switchFocus (true);
                             container.menuPopup.show (title, x, y);
                             return;
                         }

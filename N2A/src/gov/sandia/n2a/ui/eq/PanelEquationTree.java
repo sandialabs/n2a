@@ -271,6 +271,19 @@ public class PanelEquationTree extends JScrollPane
                 if (! tree.isFocusOwner ()) tree.requestFocusInWindow ();
             }
 
+            public void switchToTree ()
+            {
+                // When we grab focus via a direct click, need to note the title is no longer focused.
+                if (root == null) return;
+                if (root.graph != null)
+                {
+                    root.graph.titleFocused = false;
+                    return;
+                }
+                PanelEquations pe = PanelModel.instance.panelEquations;
+                if (PanelEquationTree.this == pe.panelParent.panelEquations) pe.titleFocused = false;
+            }
+
             public void mouseClicked (MouseEvent e)
             {
                 int x = e.getX ();
@@ -291,15 +304,7 @@ public class PanelEquationTree extends JScrollPane
                 {
                     if (clicks == 1)
                     {
-                        // When we grab focus via a direct click, need to note the title is no longer focused.
-                        if (root == null) return;
-                        if (root.graph != null)
-                        {
-                            root.graph.titleFocused = false;
-                            return;
-                        }
-                        PanelEquations pe = PanelModel.instance.panelEquations;
-                        if (PanelEquationTree.this == pe.panelParent.panelEquations) pe.titleFocused = false;
+                        switchToTree ();
                     }
                     else if (clicks == 2)  // Drill down on parts, or edit any other node type.
                     {
@@ -329,7 +334,9 @@ public class PanelEquationTree extends JScrollPane
                     {
                         if (path != null)
                         {
+                            switchToTree ();
                             tree.setSelectionPath (path);
+                            takeFocus ();
                             container.menuPopup.show (tree, x, y);
                         }
                     }
