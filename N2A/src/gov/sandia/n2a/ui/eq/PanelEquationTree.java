@@ -76,13 +76,7 @@ public class PanelEquationTree extends JScrollPane
             public void startEditingAtPath (TreePath path)
             {
                 super.startEditingAtPath (path);
-
-                // Ensure that graph node is big enough to edit name without activating scroll bars.
-                GraphNode gn = root.graph;
-                if (gn == null) return;
-                Point     p = gn.getLocation ();
-                Dimension d = gn.getPreferredSize ();
-                root.graph.animate (new Rectangle (p, d));
+                animate ();  // Ensure that graph node is big enough to edit name without activating scroll bars.
             }
 
             public String getToolTipText (MouseEvent e)

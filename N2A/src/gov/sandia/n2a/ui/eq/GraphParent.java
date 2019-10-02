@@ -126,7 +126,8 @@ public class GraphParent extends JPanel
 
     public void animate ()
     {
-        animate (getPreferredSize ());
+        Dimension next = getPreferredSize ();
+        if (getSize () != next) animate (next);
     }
 
     /**
