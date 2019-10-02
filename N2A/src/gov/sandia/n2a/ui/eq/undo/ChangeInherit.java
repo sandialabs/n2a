@@ -69,15 +69,19 @@ public class ChangeInherit extends Undoable
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
+        if (! pe.viewTree  &&  parent == pe.part)
+        {
+            peg.loadPart ();
+            peg.repaint ();
+        }
         parent.filter (FilteredTreeModel.filterLevel);
-
-        if (parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
+        if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child ("$inherit").getPath ();
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
         pet.animate ();
-        if (grandparent != null  &&  grandparent == pe.part)
+        if (! pe.viewTree  &&  grandparent == pe.part)
         {
             peg.reconnect ();
             peg.repaint ();

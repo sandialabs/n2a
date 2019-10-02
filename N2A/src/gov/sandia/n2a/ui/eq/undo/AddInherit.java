@@ -64,13 +64,18 @@ public class AddInherit extends Undoable
         parent.build ();  // Handles all cases (complete deletion or exposed hidden node)
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
+        if (! pe.viewTree  &&  parent == pe.part)
+        {
+            peg.loadPart ();  // safely disconnects old nodes, even though parent has been rebuilt with new nodes
+            peg.repaint ();
+        }
         parent.filter (FilteredTreeModel.filterLevel);
-        if (parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
+        if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
 
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath, index);
         pet.animate ();
-        if (grandparent != null  &&  grandparent == pe.part)
+        if (! pe.viewTree  &&  grandparent == pe.part)
         {
             peg.reconnect ();
             peg.repaint ();
@@ -99,6 +104,11 @@ public class AddInherit extends Undoable
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
+        if (! pe.viewTree  &&  parent == pe.part)
+        {
+            peg.loadPart ();
+            peg.repaint ();
+        }
         parent.filter (FilteredTreeModel.filterLevel);
         model.nodeStructureChanged (parent);  // Since $inherit is being added, parent will almost certainly become visible, if it's not already.
 
@@ -106,7 +116,7 @@ public class AddInherit extends Undoable
         pet.updateOrder (createdPath);
         pet.updateVisibility (createdPath);
         pet.animate ();
-        if (grandparent != null  &&  grandparent == pe.part)
+        if (! pe.viewTree  &&  grandparent == pe.part)
         {
             peg.reconnect ();
             peg.repaint ();

@@ -736,7 +736,7 @@ public class NodePart extends NodeContainer
     public PanelEquationTree getTree ()
     {
         if (pet   != null) return pet;
-        if (graph != null) return graph.panelEquations;  // Graph nodes don't set "pet", because their tree is single-use only, so they don't need to call loadPart().
+        if (graph != null) return graph.panelEquations;  // Graph nodes don't set "pet". Their tree is single-use only, so they don't call PanelEquationTree.loadPart() or PanelEquationTree.clear(), which are where pet is managed.
         if (parent == null) return null;  // True root. If this were instead a fake root, then at least one of {pet, graph} would be non-null.
         return ((NodeBase) parent).getTree ();
     }
