@@ -331,7 +331,7 @@ public class PanelEquationTree extends JScrollPane
                             else  // any other node type
                             {
                                 tree.setSelectionPath (path);
-                                tree.startEditingAtPath (path);
+                                tree.startEditingAtPath (path);  // won't edit if tree is locked
                                 return;
                             }
                         }
@@ -482,7 +482,7 @@ public class PanelEquationTree extends JScrollPane
     {
         if (root == null) return;
         if (root.graph != null) root.graph.animate ();
-        else if (root == container.part  &&  container.panelParent.isVisible ()) container.panelParent.animate ();
+        else if (root == container.part) container.panelParent.animate ();
     }
 
     /**
@@ -490,6 +490,7 @@ public class PanelEquationTree extends JScrollPane
     **/
     public void loadPart (NodePart part)
     {
+        tree.setEditable (! container.locked);
         if (part == root) return;
         if (root != null) root.pet = null;
 
@@ -575,6 +576,7 @@ public class PanelEquationTree extends JScrollPane
         root.filter (FilteredTreeModel.filterLevel);
         StoredPath path = new StoredPath (tree);
         model.reload (root);
+        animate ();
         path.restore (tree);
     }
 

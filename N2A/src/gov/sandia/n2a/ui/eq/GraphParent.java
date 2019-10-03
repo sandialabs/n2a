@@ -78,7 +78,7 @@ public class GraphParent extends JPanel
             setVisible (false);
         }
     	boolean focused = container.breadcrumbRenderer.isFocusOwner ();
-        container.breadcrumbRenderer.getTreeCellRendererComponent (panelEquations.tree, container.part, focused, value, false, -1, focused);
+        container.breadcrumbRenderer.getTreeCellRendererComponent (focused);
     }
 
     public void loadPart ()
@@ -88,6 +88,7 @@ public class GraphParent extends JPanel
         part = container.part;
         part.fakeRoot (true);
         panelEquations.loadPart (part);
+        animate ();
     }
 
     public void clear ()
@@ -128,6 +129,7 @@ public class GraphParent extends JPanel
 
     public void animate ()
     {
+        if (! isVisible ()) return;
         Dimension next = getPreferredSize ();
         if (getSize () != next) animate (next);
     }
@@ -155,7 +157,7 @@ public class GraphParent extends JPanel
 
         public void mouseMoved (MouseEvent me)
         {
-            if (PanelModel.instance.panelEquations.locked) return;
+            if (container.locked) return;
             if (start == null) setCursor (Cursor.getPredefinedCursor (border.getCursor (me)));
         }
 
@@ -167,7 +169,7 @@ public class GraphParent extends JPanel
 
         public void mousePressed (MouseEvent me)
         {
-            if (PanelModel.instance.panelEquations.locked) return;
+            if (container.locked) return;
             if (! SwingUtilities.isLeftMouseButton (me)) return;
 
             // All mouse event coordinates are relative to the bounds of this component.

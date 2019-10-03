@@ -1286,11 +1286,14 @@ public class PanelEquations extends JPanel
     {
         protected List<NodePart> parts   = new ArrayList<NodePart> ();
         protected List<Integer>  offsets = new ArrayList<Integer> ();
+        protected String         text    = noModel;
         protected Component      editingComponent;
 
         public BreadcrumbRenderer ()
         {
-            setText (noModel);
+            Font baseFont = UIManager.getFont ("Tree.font");
+            setFont (baseFont.deriveFont (Font.BOLD));
+            setText (text);
             setIcon (null);
             setFocusable (false);
             setTransferHandler (transferHandler);
@@ -1344,6 +1347,7 @@ public class PanelEquations extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
+                    if (locked) return;
                     if (panelParent.isVisible ())  // parent is open
                     {
                     	// Add a NodeVariable under part
@@ -1368,14 +1372,14 @@ public class PanelEquations extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    part.delete (null, false);
+                    if (! locked) part.delete (null, false);
                 }
             });
             actionMap.put ("startEditing", new AbstractAction ()
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (! locked) startEditing ();
+                    startEditing ();  // guards against modifying a locked part
                 }
             });
             actionMap.put ("drillUp", new AbstractAction ()
@@ -1435,26 +1439,24 @@ public class PanelEquations extends JPanel
                 public void focusGained (FocusEvent e)
                 {
                     active = panelParent.panelEquations;
-                    getTreeCellRendererComponent (panelParent.panelEquations.tree, part, true, panelParent.isVisible (), false, -1, true);
+                    getTreeCellRendererComponent (true);
                     panelBreadcrumb.repaint ();
                 }
 
                 public void focusLost (FocusEvent e)
                 {
-                    getTreeCellRendererComponent (panelParent.panelEquations.tree, part, false, panelParent.isVisible (), false, -1, false);
+                    getTreeCellRendererComponent (false);
                     panelBreadcrumb.repaint ();
                 }
             });
         }
 
-        public void updateUI ()
+        public void getTreeCellRendererComponent (boolean focused)
         {
-            super.updateUI ();
-
-            setForeground (EquationTreeCellRenderer.colorOverride);
-
+            getTreeCellRendererComponent (panelParent.panelEquations.tree, part, focused, panelParent.isVisible (), false, -1, focused);
             Font baseFont = UIManager.getFont ("Tree.font");
             setFont (baseFont.deriveFont (Font.BOLD));
+            setText (text);
         }
 
         public void update ()
@@ -1474,7 +1476,7 @@ public class PanelEquations extends JPanel
                 return;
             }
 
-            String text = "";
+            text = "";
             offsets.clear ();
             FontMetrics fm = getFontMetrics (getFont ());
             NodePart first = parts.get (0);
@@ -1485,7 +1487,7 @@ public class PanelEquations extends JPanel
                 offsets.add (fm.stringWidth (text));
             }
             setText (text);
-            setIcon (part.getIcon (true));
+            setIcon (part.getIcon (panelParent.isVisible ()));
             setFocusable (true);
         }
 
@@ -1494,6 +1496,8 @@ public class PanelEquations extends JPanel
         **/
         public void startEditing ()
         {
+            if (locked) return;
+
             if (editor.editingNode != null) editor.stopCellEditing ();  // Edit could be in progress on a node title or on any tree, including our own.
             editor.addCellEditorListener (this);
             editingComponent = editor.getTitleEditorComponent (panelParent.panelEquations.tree, part, panelParent.isVisible ());

@@ -253,6 +253,8 @@ public class GraphNode extends JPanel
 
     public void nudge (ActionEvent e, int dx, int dy)
     {
+        if (container.locked) return;
+
         int step = 1;
         if ((e.getModifiers () & ActionEvent.CTRL_MASK) != 0) step = 10;
 
@@ -497,7 +499,7 @@ public class GraphNode extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    nudge (e, 0, -1);
+                    nudge (e, 0, -1);  // guards against modifying a locked part
                 }
             });
             actionMap.put ("moveDown", new AbstractAction ()
@@ -542,7 +544,7 @@ public class GraphNode extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (! container.locked) startEditing ();
+                    startEditing ();  // guards against modifying a locked part
                 }
             });
             actionMap.put ("drillUp", new AbstractAction ()
@@ -621,7 +623,7 @@ public class GraphNode extends JPanel
                     {
                         setCursor (Cursor.getPredefinedCursor (Cursor.DEFAULT_CURSOR));
                     }
-                    else if (! PanelModel.instance.panelEquations.locked  &&  resizeListener.start == null)
+                    else if (! container.locked  &&  resizeListener.start == null)
                     {
                         setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
                     }
@@ -675,6 +677,8 @@ public class GraphNode extends JPanel
         **/
         public void startEditing ()
         {
+            if (container.locked) return;
+
             if (container.editor.editingNode != null) container.editor.stopCellEditing ();  // Edit could be in progress on another node title or on any tree, including our own.
             container.editor.addCellEditorListener (this);
             editingComponent = container.editor.getTitleEditorComponent (panelEquations.tree, node, open);
@@ -737,7 +741,7 @@ public class GraphNode extends JPanel
 
         public void mouseMoved (MouseEvent me)
         {
-            if (PanelModel.instance.panelEquations.locked) return;
+            if (container.locked) return;
             if (start == null) setCursor (Cursor.getPredefinedCursor (border.getCursor (me)));
         }
 
@@ -749,7 +753,7 @@ public class GraphNode extends JPanel
 
         public void mousePressed (MouseEvent me)
         {
-            if (PanelModel.instance.panelEquations.locked) return;
+            if (container.locked) return;
             if (! SwingUtilities.isLeftMouseButton (me)) return;
 
             // All mouse event coordinates are relative to the bounds of this component.
