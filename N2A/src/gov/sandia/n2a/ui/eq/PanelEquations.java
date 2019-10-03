@@ -1435,15 +1435,13 @@ public class PanelEquations extends JPanel
                 public void focusGained (FocusEvent e)
                 {
                     active = panelParent.panelEquations;
-                    hasFocus = true;
-                    selected = true;
+                    getTreeCellRendererComponent (panelParent.panelEquations.tree, part, true, panelParent.isVisible (), false, -1, true);
                     panelBreadcrumb.repaint ();
                 }
 
                 public void focusLost (FocusEvent e)
                 {
-                    hasFocus = false;
-                    selected = false;
+                    getTreeCellRendererComponent (panelParent.panelEquations.tree, part, false, panelParent.isVisible (), false, -1, false);
                     panelBreadcrumb.repaint ();
                 }
             });

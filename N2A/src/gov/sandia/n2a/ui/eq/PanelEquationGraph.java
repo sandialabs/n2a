@@ -218,6 +218,7 @@ public class PanelEquationGraph extends JScrollPane
     {
         super.updateUI ();
         GraphNode.RoundedBorder.updateUI ();
+        GraphParent.RoundedBottomBorder.updateUI ();
         background = UIManager.getColor ("ScrollPane.background");
     }
 

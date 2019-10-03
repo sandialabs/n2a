@@ -77,6 +77,8 @@ public class GraphParent extends JPanel
             if (panelEquations.tree.isFocusOwner ()) container.breadcrumbRenderer.requestFocusInWindow ();
             setVisible (false);
         }
+    	boolean focused = container.breadcrumbRenderer.isFocusOwner ();
+        container.breadcrumbRenderer.getTreeCellRendererComponent (panelEquations.tree, container.part, focused, value, false, -1, focused);
     }
 
     public void loadPart ()

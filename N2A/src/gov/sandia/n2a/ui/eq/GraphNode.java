@@ -196,7 +196,6 @@ public class GraphNode extends JPanel
     {
         if (open == value) return;
         open = value;
-        title.getTreeCellRendererComponent (panelEquations.tree, node, titleFocused, open, false, -1, titleFocused);
         if (open)
         {
             panelTitle.add (hr, BorderLayout.CENTER);
@@ -210,6 +209,8 @@ public class GraphNode extends JPanel
             panelTitle.remove (hr);
             remove (panelEquations);  // assume that equation tree does not have focus
         }
+        boolean focused = title.isFocusOwner ();
+        title.getTreeCellRendererComponent (panelEquations.tree, node, focused, open, false, -1, focused);
         animate (new Rectangle (getLocation (), getPreferredSize ()));
     }
 
@@ -657,15 +658,13 @@ public class GraphNode extends JPanel
             {
                 public void focusGained (FocusEvent e)
                 {
-                    hasFocus = true;
-                    selected = true;
+                    getTreeCellRendererComponent (panelEquations.tree, node, true, open, false, -1, true);
                     restoreFocus ();  // does repaint
                 }
 
                 public void focusLost (FocusEvent e)
                 {
-                    hasFocus = false;
-                    selected = false;
+                    getTreeCellRendererComponent (panelEquations.tree, node, false, open, false, -1, false);
                     GraphNode.this.repaint ();
                 }
             });
