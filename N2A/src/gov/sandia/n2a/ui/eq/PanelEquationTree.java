@@ -57,7 +57,6 @@ public class PanelEquationTree extends JScrollPane
     public    FilteredTreeModel model;
     public    NodePart          root;
     protected PanelEquations    container;
-    protected boolean           needsFullRepaint;
 
     public PanelEquationTree (PanelEquations container, NodePart initialRoot, boolean headless)
     {
@@ -357,27 +356,6 @@ public class PanelEquationTree extends JScrollPane
         tree.addMouseListener (mouseAdapter);
         tree.addMouseMotionListener (mouseAdapter);
 
-        // Hack for slow Swing repaint when clicking to select new node
-        tree.addTreeSelectionListener (new TreeSelectionListener ()
-        {
-            NodeBase oldSelection;
-            Rectangle oldBounds;
-
-            public void valueChanged (TreeSelectionEvent e)
-            {
-                if (! e.isAddedPath ()) return;
-                TreePath path = e.getPath ();
-                NodeBase newSelection = (NodeBase) path.getLastPathComponent ();
-                if (newSelection == oldSelection) return;
-
-                if (oldBounds != null) tree.paintImmediately (oldBounds);
-                Rectangle newBounds = tree.getPathBounds (path);
-                if (newBounds != null) tree.paintImmediately (newBounds);
-                oldSelection = newSelection;
-                oldBounds    = newBounds;
-            }
-        });
-
         tree.addTreeWillExpandListener (new TreeWillExpandListener ()
         {
             @Override
@@ -391,41 +369,6 @@ public class PanelEquationTree extends JScrollPane
                 TreePath path = event.getPath ();
                 NodeBase node = (NodeBase) path.getLastPathComponent ();
                 if (node == root) throw new ExpandVetoException (event);
-            }
-        });
-
-        tree.addTreeExpansionListener (new TreeExpansionListener ()
-        {
-            public void treeExpanded (TreeExpansionEvent event)
-            {
-                if (! expandGraphNode (event, true)) repaintSouth (event.getPath ());
-            }
-
-            public void treeCollapsed (TreeExpansionEvent event)
-            {
-                if (! expandGraphNode (event, false)) repaintSouth (event.getPath ());
-            }
-
-            public boolean expandGraphNode (TreeExpansionEvent event, boolean open)
-            {
-                TreePath path = event.getPath ();
-                Object o = path.getLastPathComponent ();
-                if (o instanceof NodePart)
-                {
-                    NodePart part = (NodePart) o;
-                    GraphNode gn = part.graph;
-                    if (gn != null)
-                    {
-                        if (open) gn.parent.setComponentZOrder (gn, 0);
-                        Point     p = gn.getLocation ();
-                        Dimension d = gn.getPreferredSize ();
-                        Rectangle bounds = new Rectangle (p, d);
-                        gn.animate (bounds);
-                        gn.parent.scrollRectToVisible (bounds);
-                        return true;
-                    }
-                }
-                return false;
             }
         });
 
@@ -497,7 +440,6 @@ public class PanelEquationTree extends JScrollPane
         root = part;
         root.pet = this;
         model.setRoot (root);  // triggers repaint, but may be too slow
-        needsFullRepaint = true;  // next call to repaintSouth() will repaint everything
     }
 
     public void clear ()
@@ -761,8 +703,6 @@ public class PanelEquationTree extends JScrollPane
             NodeBase c = (NodeBase) path[i];
             if (c.getParent () == null) continue;
             model.nodeChanged (c);
-            Rectangle bounds = pet.tree.getPathBounds (new TreePath (c.getPath ()));
-            if (bounds != null) pet.tree.paintImmediately (bounds);
         }
 
         if (lastChange < path.length)
@@ -782,7 +722,6 @@ public class PanelEquationTree extends JScrollPane
                 childObjects[0] = c;
                 model.nodesWereRemoved (p, childIndices, childObjects);
             }
-            pet.repaintSouth (new TreePath (p.getPath ()));
         }
 
         // select last visible node
@@ -822,7 +761,6 @@ public class PanelEquationTree extends JScrollPane
             boolean expanded = pet.tree.isExpanded (selectedPath);
             model.nodeStructureChanged (c);  // Should this be more targeted?
             if (c != pet.root  &&  expanded) pet.tree.expandPath (selectedPath);
-            pet.repaintSouth (selectedPath);
         }
         if (setSelection)
         {
@@ -906,18 +844,5 @@ public class PanelEquationTree extends JScrollPane
         Rectangle rect = tree.getPathBounds (path);
         rect.height = tree.getHeight ();
         tree.scrollRectToVisible (rect);
-    }
-
-    public void repaintSouth (TreePath path)
-    {
-        Rectangle node    = tree.getPathBounds (path);
-        Rectangle visible = getViewport ().getViewRect ();
-        if (! needsFullRepaint  &&  node != null)
-        {
-            visible.height -= node.y - visible.y;
-            visible.y       = node.y;
-        }
-        needsFullRepaint = false;
-        tree.paintImmediately (visible);
     }
 }
