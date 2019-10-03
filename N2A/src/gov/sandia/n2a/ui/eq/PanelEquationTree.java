@@ -148,7 +148,7 @@ public class PanelEquationTree extends JScrollPane
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (tree.getLeadSelectionRow () == 0)
+                if (tree.getLeadSelectionRow () <= 0)
                 {
                     if (root.graph != null)
                     {
@@ -169,7 +169,7 @@ public class PanelEquationTree extends JScrollPane
             public void actionPerformed (ActionEvent e)
             {
                 TreePath path = tree.getLeadSelectionPath ();
-                if (path != null  &&  path.getPathCount () == 2  &&  tree.isCollapsed (path))  // This is a direct child of the root (which is not visible).
+                if (path == null  ||  path.getPathCount () == 2  &&  tree.isCollapsed (path))  // This is a direct child of the root (which is not visible).
                 {
                     if (root.graph != null)
                     {
@@ -265,17 +265,34 @@ public class PanelEquationTree extends JScrollPane
                 if (! tree.isFocusOwner ()) tree.requestFocusInWindow ();
             }
 
+            /**
+                Does bookkeeping for focus change caused by direct click (as opposed to keyboard navigation or undo).
+            **/
             public void switchToTree ()
             {
-                // When we grab focus via a direct click, need to note the title is no longer focused.
                 if (root == null) return;
-                if (root.graph != null)
+                if (tree.getRowCount () == 0)  // Empty tree, so we don't want to shift focus.
                 {
-                    root.graph.titleFocused = false;
-                    return;
+                    // Claw focus back to title
+                    if (root.graph != null)
+                    {
+                        root.graph.switchFocus (true);
+                        return;
+                    }
+                    PanelEquations pe = PanelModel.instance.panelEquations;
+                    if (PanelEquationTree.this == pe.panelParent.panelEquations) pe.switchFocus (true);
                 }
-                PanelEquations pe = PanelModel.instance.panelEquations;
-                if (PanelEquationTree.this == pe.panelParent.panelEquations) pe.titleFocused = false;
+                else
+                {
+                    // Set flag to indicate that tree, rather than title, is now focused.
+                    if (root.graph != null)
+                    {
+                        root.graph.titleFocused = false;
+                        return;
+                    }
+                    PanelEquations pe = PanelModel.instance.panelEquations;
+                    if (PanelEquationTree.this == pe.panelParent.panelEquations) pe.titleFocused = false;
+                }
             }
 
             public void mouseClicked (MouseEvent e)

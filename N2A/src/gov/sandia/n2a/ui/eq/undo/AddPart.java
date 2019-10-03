@@ -60,8 +60,10 @@ public class AddPart extends Undoable
             nameIsGenerated = false;  // Because we don't go into edit mode on a drop or paste. If that changes, then always set nameIsGenerated to true.
         }
 
-        if (location != null)
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        if (! pe.viewTree)  // In graph mode
         {
+            if (location == null) location = pe.panelEquationGraph.getCenter ();
             MNode bounds = createSubtree.childOrCreate ("$metadata", "gui", "bounds");
             bounds.set (location.x, "x");
             bounds.set (location.y, "y");

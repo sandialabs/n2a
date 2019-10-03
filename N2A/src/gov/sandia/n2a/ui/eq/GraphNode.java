@@ -169,6 +169,8 @@ public class GraphNode extends JPanel
 
     public void switchFocus (boolean ontoTitle)
     {
+        if (panelEquations.tree.getRowCount () == 0) ontoTitle = true;  // Don't focus tree if is empty.
+
         titleFocused = ontoTitle;
         if (ontoTitle)
         {

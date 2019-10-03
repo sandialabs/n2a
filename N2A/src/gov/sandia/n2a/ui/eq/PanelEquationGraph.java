@@ -44,7 +44,6 @@ import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.ViewportLayout;
 import javax.swing.event.MouseInputAdapter;
-import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
@@ -150,6 +149,15 @@ public class PanelEquationGraph extends JScrollPane
     public void updateFilterLevel ()
     {
         graphPanel.updateFilterLevel ();
+    }
+
+    public Point getCenter ()
+    {
+        Point     result = vp.getViewPosition ();
+        Dimension extent = vp.getExtentSize ();
+        result.x += extent.width  / 2;
+        result.y += extent.height / 2;
+        return result;
     }
 
     public void addPart (NodePart node)
@@ -409,25 +417,6 @@ public class PanelEquationGraph extends JScrollPane
         {
             GraphNode gn = new GraphNode (this, node);
             add (gn, 0);  // put at top of z-order, so user can find it easily
-            if (gn.getX () == 0  &&  gn.getY () == 0)  // Need layout
-            {
-                // Just put it in the center of the viewport
-                Point     location = vp.getViewPosition ();
-                Dimension extent   = vp.getExtentSize ();
-                Dimension size     = gn.getSize ();
-                location.x += (extent.width  - size.width)  / 2;
-                location.y += (extent.height - size.height) / 2;
-                location.x = Math.max (0, location.x);
-                location.y = Math.max (0, location.y);
-                gn.setLocation (location);
-
-                // TODO: Instead of saving location, do a fresh auto-layout of all parts that don't have fixed bounds.
-                // This will allow a user to build a graph entirely with auto-layout, without ever setting any bounds.
-                // That will allow parts that don't otherwise need to be overridden to remain untouched.
-                MNode bounds = gn.node.source.childOrCreate ("$metadata", "gui", "bounds");
-                bounds.set (location.x - offset.x, "x");
-                bounds.set (location.y - offset.y, "y");
-            }
             layout.bounds = layout.bounds.union (gn.getBounds ());
             revalidate ();
         }

@@ -896,6 +896,8 @@ public class PanelEquations extends JPanel
     **/
     public void switchFocus (boolean ontoTitle)
     {
+        if (panelParent.panelEquations.tree.getRowCount () == 0) ontoTitle = true;  // Don't switch focus to an empty tree.
+
         titleFocused = ontoTitle;
         if (ontoTitle)
         {
@@ -1413,8 +1415,7 @@ public class PanelEquations extends JPanel
                                 }
 
                                 // Click was on last path element (which may be only path element), so take focus.
-                                if (isFocusOwner ()) startEditing ();
-                                else                 switchFocus (true);
+                                switchFocus (true);
                             }
                         }
                     }
