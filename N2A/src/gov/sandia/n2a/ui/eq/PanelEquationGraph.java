@@ -171,7 +171,7 @@ public class PanelEquationGraph extends JScrollPane
         PanelEquationTree tree = node.getTree ();
         if (container.active == tree) container.active = null;  // In case this graph panel loses focus completely.
 
-        GraphNode nextGraph = null;
+        // Try to keep focus inside graph area.
         PanelModel pm = PanelModel.instance;
         FocusTraversalPolicy ftp = pm.getFocusTraversalPolicy ();
         Component c = ftp.getComponentAfter (pm, node.graph.title);
@@ -179,13 +179,18 @@ public class PanelEquationGraph extends JScrollPane
         if (c == null)  // next focus is not in a graph node, so outside of this equation graph
         {
             c = ftp.getComponentBefore (pm, node.graph.title);
-            while (c != null  &&  ! (c instanceof GraphNode)) c = c.getParent ();
-            if (c != null) nextGraph = (GraphNode) c;
+            PanelEquations pe = pm.panelEquations;
+            if (c == pe.breadcrumbRenderer  ||  c == pe.panelParent.panelEquations.tree)
+            {
+                pe.getTitleFocus ().requestFocusInWindow ();
+            }
+            else
+            {
+                while (c != null  &&  ! (c instanceof GraphNode)) c = c.getParent ();
+                if (c != null) ((GraphNode) c).takeFocus ();
+            }
         }
 
-        // If another node exists in this graph, one of the following lines will shift focus to it.
-        // Otherwise, focus will follow the cycle out of this graph, probably arriving in the search box on the left. 
-        if (nextGraph != null) nextGraph.takeFocus ();  // Only if we need to override the default focus cycle.
         graphPanel.removePart (node);  // If node still has focus, then default focus cycle applies.
     }
 
