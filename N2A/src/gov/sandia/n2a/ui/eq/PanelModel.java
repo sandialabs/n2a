@@ -81,15 +81,21 @@ public class PanelModel extends JPanel implements MNodeListener
                     result = super.getComponentAfter (aContainer, result);
                     g1 = getGraphNode (result);
                 }
-                if (g1 != null) result = g1.getTitleFocus ();
+                if (g1 != null) return g1.getTitleFocus ();
                 return result;
             }
 
             // Handle parent node behavior
-            BreadcrumbRenderer title = instance.panelEquations.breadcrumbRenderer;
-            JTree              tree  = instance.panelEquations.panelParent.panelEquations.tree;
-        	if (aComponent == title  &&  result == tree) return super.getComponentAfter (aContainer, result);
-            if (result == title)                         return panelEquations.getTitleFocus ();
+            BreadcrumbRenderer title = panelEquations.breadcrumbRenderer;
+            JTree              tree  = panelEquations.panelParent.panelEquations.tree;
+        	if (aComponent == title  &&  result == tree)
+        	{
+        	    result = super.getComponentAfter (aContainer, result);
+        	    g1 = getGraphNode (result);
+        	    if (g1 != null) return g1.getTitleFocus ();
+        	    return result;
+        	}
+            if (result == title) return panelEquations.getTitleFocus ();
 
             return result;
         }
@@ -107,14 +113,14 @@ public class PanelModel extends JPanel implements MNodeListener
                     result = super.getComponentBefore (aContainer, result);
                     g1 = getGraphNode (result);
                 }
-                if (g1 != null) result = g1.getTitleFocus ();
-                return result;
+                if (g1 != null) return g1.getTitleFocus ();
+                // Most likely we have cycled into the graph parent, so fall through. The value of aComponent won't matter.
             }
 
-            BreadcrumbRenderer title = instance.panelEquations.breadcrumbRenderer;
-            JTree              tree  = instance.panelEquations.panelParent.panelEquations.tree;
+            BreadcrumbRenderer title = panelEquations.breadcrumbRenderer;
+            JTree              tree  = panelEquations.panelParent.panelEquations.tree;
         	if (aComponent == tree  &&  result == title) return super.getComponentBefore (aContainer, result);
-            if (result == tree)                          return panelEquations.getTitleFocus ();
+            if (result == tree) return panelEquations.getTitleFocus ();
 
             return result;
         }
