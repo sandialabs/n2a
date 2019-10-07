@@ -65,6 +65,14 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         }
     }
 
+    /**
+        Special case where "value" object is known to be null but we still want a basic set up of the editing component.
+    **/
+    public Component getTreeCellRendererComponent (JTree tree, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
+    {
+        return super.getTreeCellRendererComponent (tree, null, selected, expanded, leaf, row, hasFocus);
+    }
+
     public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
     {
         super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);

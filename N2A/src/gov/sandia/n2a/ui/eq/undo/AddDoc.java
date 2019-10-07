@@ -6,6 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import javax.swing.undo.UndoableEdit;
+
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
@@ -17,6 +19,7 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 public class AddDoc extends Undoable
 {
     public String  name;
+    public boolean nameIsGenerated;
     public MNode   saved;
     public boolean fromSearchPanel;
     public String  keyAfter;  // key of doc at the location in search list where we should insert the new doc. The other doc will get pushed down a row.
@@ -25,6 +28,7 @@ public class AddDoc extends Undoable
     public AddDoc ()
     {
         this ("New Model", new MVolatile ());
+        nameIsGenerated = true;
     }
 
     public AddDoc (String name, MNode saved)
@@ -124,7 +128,22 @@ public class AddDoc extends Undoable
         }
     }
 
- 
+    public boolean addEdit (UndoableEdit edit)
+    {
+        if (nameIsGenerated  &&  edit instanceof ChangeDoc)
+        {
+            ChangeDoc change = (ChangeDoc) edit;
+            if (name.equals (change.before))
+            {
+                name = change.after;
+                nameIsGenerated = false;
+                return true;
+            }
+        }
+        return false;
+    }
+
+
     // ID generation -------------------------------------------------------
 
     protected static long userHash = ((long) System.getProperty ("user.name").hashCode ()) << 48 & 0x7FFFFFFFFFFFFFFFl;

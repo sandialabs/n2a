@@ -447,7 +447,6 @@ public class PanelEquations extends JPanel
             {
                 stopEditing ();
                 AddDoc add = new AddDoc ();
-                add.fromSearchPanel = ! viewTree;
                 PanelModel.instance.undoManager.add (add);
             }
         });
@@ -931,7 +930,6 @@ public class PanelEquations extends JPanel
 
     public void resetBreadcrumbs ()
     {
-        breadcrumbRenderer.parts.clear ();
         breadcrumbRenderer.update ();
         panelBreadcrumb.validate ();
         panelBreadcrumb.repaint ();
@@ -964,7 +962,6 @@ public class PanelEquations extends JPanel
             if (record == null)
             {
                 AddDoc add = new AddDoc ();
-                add.fromSearchPanel = ! viewTree;
                 PanelModel.instance.undoManager.add (add);
                 // After load(doc), active is null.
                 // PanelEquationTree focusGained() will set active, but won't be called before the test below.
@@ -1453,7 +1450,20 @@ public class PanelEquations extends JPanel
 
         public void getTreeCellRendererComponent (boolean focused)
         {
-            getTreeCellRendererComponent (panelParent.panelEquations.tree, part, focused, panelParent.isVisible (), false, -1, focused);
+            // In addition to focusGained() and focusLost() above, this method can also be called by GraphParent.setOpen()
+            // to update the state of this renderer component. setOpen() can be called as part of the deletion of part,
+            // so it is necessary to guard against null here.
+            if (part == null)
+            {
+                getTreeCellRendererComponent (panelParent.panelEquations.tree, focused, panelParent.isVisible (), false, -1, focused);
+                text = noModel;
+                setIcon (null);
+                setFocusable (false);
+            }
+            else
+            {
+                getTreeCellRendererComponent (panelParent.panelEquations.tree, part, focused, panelParent.isVisible (), false, -1, focused);
+            }
             Font baseFont = UIManager.getFont ("Tree.font");
             setFont (baseFont.deriveFont (Font.BOLD));
             setText (text);
@@ -1470,7 +1480,7 @@ public class PanelEquations extends JPanel
             }
             if (parts.isEmpty ())
             {
-                setText (noModel);
+                setText (text = noModel);
                 setIcon (null);
                 setFocusable (false);
                 return;
