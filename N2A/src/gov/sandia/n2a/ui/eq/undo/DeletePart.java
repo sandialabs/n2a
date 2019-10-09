@@ -30,6 +30,13 @@ public class DeletePart extends Undoable
 
     public DeletePart (NodePart node, boolean canceled)
     {
+        // Never delete a part in parent position, because after that we would need to drill up anyway.
+        if (view.asParent)
+        {
+            view.asParent = false;
+            view.first    = false;  // Force view to change on first call to redo(), since at this point the part to be deleted is still in parent position.
+        }
+
         NodeBase container = (NodeBase) node.getTrueParent ();
         path          = container.getKeyPath ();
         index         = container.getIndex (node);
