@@ -142,8 +142,8 @@ public class FilteredTreeModel extends DefaultTreeModel
 
     public void removeNodeFromParent (MutableTreeNode child)
     {
-        NodeBase parent = ((NodeBase) child).getTrueParent ();  // Unfortunately, we have to do this redundant operation.
-        int filteredIndex = removeNodeFromParentStatic (child);
+        NodeBase parent = ((NodeBase) child).getTrueParent ();
+        int filteredIndex = removeNodeFromParentStatic (parent, child);
         if (filteredIndex < 0) return;  // No need to send event, because this node was not visible.
 
         int[]    removedIndices = new int   [1];
@@ -156,6 +156,11 @@ public class FilteredTreeModel extends DefaultTreeModel
     public static int removeNodeFromParentStatic (MutableTreeNode child)
     {
         NodeBase parent = ((NodeBase) child).getTrueParent ();
+        return removeNodeFromParentStatic (parent, child);
+    }
+
+    public static int removeNodeFromParentStatic (NodeBase parent, MutableTreeNode child)
+    {
         if (parent == null) throw new IllegalArgumentException ("node does not have a parent.");
 
         int filteredIndex = parent.getIndexFiltered ((NodeBase) child);

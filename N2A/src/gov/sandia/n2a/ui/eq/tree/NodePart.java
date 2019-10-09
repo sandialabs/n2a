@@ -66,7 +66,7 @@ public class NodePart extends NodeContainer
     public    GraphNode                   graph;
     public    PanelEquationTree           pet;                 // If this part is not bound to a graph node, it may be bound to a full-view tree. If not bound to either, then no tree operations are necessary.
     protected NodePart                    trueParent;
-    public    boolean                     hide;                // visible() should return false. Used to temporarily suppress node when adding to graph.  Allows us to avoid tampering with "parent" field.
+    public    boolean                     hide;                // visible() should return false. Used to temporarily suppress node when adding to graph. Allows us to avoid tampering with "parent" field.
 
     public NodePart (MPart source)
     {
