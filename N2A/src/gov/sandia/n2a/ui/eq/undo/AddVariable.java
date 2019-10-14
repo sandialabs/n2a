@@ -107,6 +107,7 @@ public class AddVariable extends Undoable
             boolean wasBinding = createdNode.isBinding;
             createdNode.build ();
             createdNode.findConnections ();
+            createdNode.filter (FilteredTreeModel.filterLevel);
             createdNode.updateColumnWidths (fm);
             if (parent.graph != null)
             {
@@ -160,6 +161,7 @@ public class AddVariable extends Undoable
         {
             createdNode.build ();
             createdNode.findConnections ();
+            createdNode.filter (FilteredTreeModel.filterLevel);
             pet.updateOrder (createdPath);
 
             parent.updateTabStops (fm);
