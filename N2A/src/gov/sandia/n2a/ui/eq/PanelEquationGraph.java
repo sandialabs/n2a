@@ -319,7 +319,7 @@ public class PanelEquationGraph extends JScrollPane
         public void load ()
         {
             Enumeration<?> children = container.part.children ();
-            boolean newLayout = children.hasMoreElements ();
+            List<GraphNode> needLayout = new ArrayList<GraphNode> ();
             while (children.hasMoreElements ())
             {
                 Object c = children.nextElement ();
@@ -328,35 +328,37 @@ public class PanelEquationGraph extends JScrollPane
                     GraphNode gn = new GraphNode (this, (NodePart) c);
                     if (gn.open) add (gn, 0);  // Put open nodes at top of z order
                     else         add (gn);
-                    if (gn.getX () != 0  ||  gn.getY () != 0) newLayout = false;
+                    if (gn.getX () == 0  &&  gn.getY () == 0) needLayout.add (gn);
                 }
             }
 
-            if (newLayout)
+            if (! needLayout.isEmpty ())
             {
                 // TODO: use potential-field method, such as "Drawing Graphs Nicely Using Simulated Annealing" by Davidson & Harel (1996).
 
                 // For now, a very simple layout. Arrange in a grid with some space between nodes.
-                Component[] components = getComponents ();
-                int columns = (int) Math.sqrt (components.length);  // Truncate, so more rows than columns.
-                int gap = 100;
+                int columns = (int) Math.sqrt (needLayout.size ());  // Truncate, so more rows than columns.
+                final int xgap = 100;
+                final int ygap = 60;
                 int x = 0;
                 int y = 0;
-                for (int i = 0; i < components.length; i++)
+                int h = 0;
+                for (int i = 0; i < needLayout.size (); i++)
                 {
-                    Component c = components[i];
+                    GraphNode gn = needLayout.get (i);
                     if (i % columns == 0)
                     {
-                        x = gap;
-                        y += gap;
+                        x = xgap;
+                        y += h + ygap;
+                        h = 0;
                     }
-                    c.setLocation (x, y);
-                    layout.bounds = layout.bounds.union (c.getBounds ());
+                    gn.setLocation (x, y);
+                    Rectangle bounds = gn.getBounds ();
+                    layout.bounds = layout.bounds.union (bounds);
                     // Don't save bounds in metadata. Only touch part if user manually adjusts layout.
-                    x += c.getWidth () + gap;
+                    x += bounds.width + xgap;
+                    h = Math.max (h, bounds.height);
                 }
-
-                // TODO: the equation tree should be rebuilt, so that new metadata nodes become visible.
             }
 
             buildEdges ();
