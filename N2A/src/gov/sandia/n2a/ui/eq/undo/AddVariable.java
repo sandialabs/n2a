@@ -56,6 +56,12 @@ public class AddVariable extends Undoable
             else                 name = AddPart.uniqueName (parent, name, 2, true);
             nameIsGenerated = false;  // Because we don't go into edit mode on a drop or paste. If that changes, then always set nameIsGenerated to true.
         }
+
+        if (FilteredTreeModel.filterLevel == FilteredTreeModel.PARAM)
+        {
+            // Force variable to be a parameter, so it will be visible when going into edit mode.
+            if (! createSubtree.getFlag ("$metadata", "param")) createSubtree.set ("", "$metadata", "param");
+        }
     }
 
     public List<String> fullPath ()

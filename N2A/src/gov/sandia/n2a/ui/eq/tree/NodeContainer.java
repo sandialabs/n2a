@@ -54,7 +54,8 @@ public class NodeContainer extends NodeBase
         if (filtered == null)
         {
             if (filteredIndex == childrenIndex) return;  // the new entry does does not require instantiating "filtered", because the list continues to be exactly 1-to-1
-            int count = children.size () - 1;
+            int count = children.size ();
+            if (shift) count--;  // Because a child was added before this function was called, our count for sizing "filtered" is one too many.
             filtered = new ArrayList<Integer> (count);
             for (int i = 0; i < count; i++) filtered.add (i);
         }
@@ -65,7 +66,7 @@ public class NodeContainer extends NodeBase
             if (shift)
             {
                 int count = filtered.size ();
-                for (int i = filteredIndex + 1; i < count; i++) filtered.set (i, filtered.get (i).intValue () + 1);  // Shift child indices up by one, to account for the new entry added ahead of them.
+                for (int i = filteredIndex + 1; i < count; i++) filtered.set (i, filtered.get (i) + 1);  // Shift child indices up by one, to account for the new entry added ahead of them.
             }
         }
         else // filteredIndex == -1
@@ -76,28 +77,45 @@ public class NodeContainer extends NodeBase
                 int count = filtered.size ();
                 for (int i = 0; i < count; i++)
                 {
-                    int index = filtered.get (i).intValue ();
+                    int index = filtered.get (i);
                     if (index >= childrenIndex) filtered.set (i, index + 1);
                 }
             }
         }
-     }
+    }
 
     @Override
-    public void removeFiltered (int filteredIndex, boolean shift)
+    public void removeFiltered (int filteredIndex, int childrenIndex, boolean shift)
     {
-        if (filtered == null)
+        if (filtered == null)  // Currently no filtering
         {
+            if (filteredIndex == childrenIndex) return;
             int count = children.size ();
             if (shift) count++;  // Because a child was removed before this function was called, our count for sizing "filtered" is one short.
             filtered = new ArrayList<Integer> (count);
             for (int i = 0; i < count; i++) filtered.add (i);
         }
-        filtered.remove (filteredIndex);
-        if (shift)  // Shift child indices down by 1 to account for entry removed ahead of them.
+
+        if (filteredIndex >= 0)
         {
-            int count = filtered.size ();
-            for (int i = filteredIndex; i < count; i++)  filtered.set (i, filtered.get (i).intValue () - 1);
+            filtered.remove (filteredIndex);
+            if (shift)  // Shift child indices down by 1 to account for entry removed ahead of them.
+            {
+                int count = filtered.size ();
+                for (int i = filteredIndex; i < count; i++) filtered.set (i, filtered.get (i) - 1);
+            }
+        }
+        else  // filteredIndex == -1, so element was invisible before removal
+        {
+            if (shift)
+            {
+                int count = filtered.size ();
+                for (int i = 0; i < count; i++)
+                {
+                    int index = filtered.get (i);  // This will never be equal to childrenIndex, since element was invisible.
+                    if (index > childrenIndex) filtered.set (i, index - 1);
+                }
+            }
         }
     }
 }

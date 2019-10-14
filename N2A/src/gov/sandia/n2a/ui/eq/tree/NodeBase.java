@@ -54,15 +54,16 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public void hide (NodeBase child, FilteredTreeModel model)
     {
-        int[] removedIndices = new int[1];
-        removedIndices[0] = getIndexFiltered (child);
-        if (removedIndices[0] == -1) return;  // child is absent or already not visible, so nothing more to do
+        int removedIndex = getIndexFiltered (child);
+        if (removedIndex == -1) return;  // child is absent or already not visible, so nothing more to do
 
-        removeFiltered (removedIndices[0], false);
+        removeFiltered (removedIndex, -1, false);
         for (Object c : children) ((NodeBase) c).invalidateTabs ();
 
         if (model != null)
         {
+            int[] removedIndices = new int[1];
+            removedIndices[0] = removedIndex;
             Object[] removedNodes = new Object[1];
             removedNodes[0] = child;
             model.nodesWereRemoved (this, removedIndices, removedNodes);
@@ -119,10 +120,11 @@ public class NodeBase extends DefaultMutableTreeNode
 
     /**
         Update "filtered" list for removed or hidden child node.
-        @param filteredIndex The index in "filtered" of the node before it was removed.
+        @param filteredIndex The index in "filtered" of the node before it was removed. -1 if it was not visible.
+        @param childrenIndex The index in "children" of the node before it was removed. This value is only used when shift is true and filteredIndex is -1.
         @param shift Indicates that the child node was actually removed (by caller), so indices should be downshifted.
     **/
-    public void removeFiltered (int filteredIndex, boolean shift)
+    public void removeFiltered (int filteredIndex, int childrenIndex, boolean shift)
     {
     }
 

@@ -153,14 +153,19 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return c.get ();
     }
 
+    public static String[] toStrings (Object... indices)
+    {
+        String[] result = new String[indices.length];
+        for (int i = 0; i < indices.length; i++) result[i] = indices[i].toString ();
+        return result;
+    }
+
     /**
         Digs down tree as far as possible to retrieve value; returns "" if node does not exist.
     **/
     public String get (Object... indices)
     {
-        String[] stringIndices = new String[indices.length];
-        for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
-        return get (stringIndices);
+        return get (toStrings (indices));
     }
 
     /**
@@ -253,9 +258,26 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
+    /**
+        Interprets value as boolean, with small extension to Java's string parser:
+        "1" or "true" = true;
+        everything else, including empty = false
+    **/
     public boolean getBoolean (Object... indices)
     {
         return getOrDefault (false, indices);
+    }
+
+    /**
+        Interprets value as flag, which may contain extended information when set:
+        "0" = false;
+        everything else, including empty = true
+    **/
+    public boolean getFlag (Object... indices)
+    {
+        MNode c = child (toStrings (indices));
+        if (c == null) return false;
+        return c.getOrDefault (true);
     }
 
     public int getInt (Object... indices)

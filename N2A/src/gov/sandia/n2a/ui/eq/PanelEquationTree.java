@@ -22,7 +22,6 @@ import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Insets;
-import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusEvent;
@@ -41,9 +40,6 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
 import javax.swing.event.TreeExpansionEvent;
-import javax.swing.event.TreeExpansionListener;
-import javax.swing.event.TreeSelectionEvent;
-import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreeNode;
@@ -536,6 +532,20 @@ public class PanelEquationTree extends JScrollPane
         if (container.locked) return;
         NodeBase selected = getSelected ();
         if (selected == null) return;  // empty tree (should only occur in tree view); could create new model here, but better to do that from search list
+
+        // Don't allow insertion of types that will be invisible at current filter level.
+        if (FilteredTreeModel.filterLevel == FilteredTreeModel.PARAM)
+        {
+            switch (type)
+            {
+                case "Annotation":
+                case "Reference":
+                    return;
+                case "Equation":
+                    type = "Variable";
+            }
+        }
+
         NodeBase editMe = selected.add (type, tree, null, null);
         if (editMe != null)
         {

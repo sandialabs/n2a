@@ -168,8 +168,7 @@ public class PanelEquationGraph extends JScrollPane
     public void removePart (NodePart node)
     {
         if (node.graph == null) return;
-        PanelEquationTree tree = node.getTree ();
-        if (container.active == tree) container.active = null;  // In case this graph panel loses focus completely.
+        if (container.active == node.getTree ()) container.active = null;  // In case this graph panel loses focus completely.
 
         // Try to keep focus inside graph area.
         PanelModel pm = PanelModel.instance;

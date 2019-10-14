@@ -166,7 +166,7 @@ public class FilteredTreeModel extends DefaultTreeModel
         int filteredIndex = parent.getIndexFiltered ((NodeBase) child);
         int index         = parent.getIndex (child);
         parent.remove (index);  // Can't call parent.remove(child), because that function does an isNodeChild() test, which fails for fake roots.
-        if (filteredIndex >= 0) parent.removeFiltered (filteredIndex, true);
+        parent.removeFiltered (filteredIndex, index, true);
         return filteredIndex;
     }
 

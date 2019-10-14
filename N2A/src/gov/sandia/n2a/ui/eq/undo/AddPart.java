@@ -103,7 +103,7 @@ public class AddPart extends Undoable
         PanelEquationGraph peg = pe.panelEquationGraph;  // only used if graphParent is true
 
         TreeNode[] createdPath = createdNode.getPath ();
-        int index = parent.getIndexFiltered (createdNode);
+        int index = parent.getIndexFiltered (createdNode);  // returns -1 if createdNode is filtered out of parent
         if (canceled) index--;
 
         MPart mparent = parent.source;

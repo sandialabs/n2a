@@ -550,17 +550,19 @@ public class NodePart extends NodeContainer
         if (variableIndex < 0) variableIndex = count;
         if (subpartIndex  < 0) subpartIndex  = count;
 
-        TreePath path = null;
-        if (tree != null) path = tree.getSelectionPath ();
-        if (path != null)
+        if (tree != null)
         {
-            NodeBase selected = (NodeBase) path.getLastPathComponent ();
-            if (selected.getParent () == this)
+            TreePath path = tree.getSelectionPath ();
+            if (path != null)
             {
-                // When we have a specific item selected, the user expects the new item to appear directly below it.
-                int selectedIndex = getIndex (selected);  // unfiltered
-                variableIndex = selectedIndex + 1;
-                subpartIndex  = selectedIndex + 1;
+                NodeBase selected = (NodeBase) path.getLastPathComponent ();
+                if (selected.getParent () == this)
+                {
+                    // When we have a specific item selected, the user expects the new item to appear directly below it.
+                    int selectedIndex = getIndex (selected);  // unfiltered
+                    variableIndex = selectedIndex + 1;
+                    subpartIndex  = selectedIndex + 1;
+                }
             }
         }
 
