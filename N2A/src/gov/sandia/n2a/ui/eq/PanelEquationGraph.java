@@ -687,9 +687,12 @@ public class PanelEquationGraph extends JScrollPane
         {
             if (e.getScrollType() == MouseWheelEvent.WHEEL_UNIT_SCROLL)
             {
-                // Should really get scaling from scrollbar, but since we configure it to do pixel increments,
-                // we can hard code the multiplier in terms of how many pixels the scroll wheel should move.
-                if (vsb.isVisible ()) vsb.setValue (vsb.getValue () + e.getUnitsToScroll () * 15);
+                Point p = vp.getViewPosition ();  // should be exactly same as current scrollbar values
+                if (e.isShiftDown ()) p.x += e.getUnitsToScroll () * 15;  // 15px is approximately one line of text; units to scroll is typically 3, so about 45px or 3 lines of text per click of scroll wheel
+                else                  p.y += e.getUnitsToScroll () * 15;
+                graphPanel.layout.shiftViewport (p);
+                graphPanel.revalidate ();  // necessary to show scrollbars when components go past right or bottom
+                graphPanel.repaint ();
             }
         }
 
@@ -770,7 +773,7 @@ public class PanelEquationGraph extends JScrollPane
                 Point d = graphPanel.layout.shiftViewport (p);
                 startPan.x += d.x;
                 startPan.y += d.y;
-                graphPanel.revalidate ();  // necessary to get scrollbars when components go past right or bottom
+                graphPanel.revalidate ();  // necessary to show scrollbars when components go past right or bottom
                 graphPanel.repaint ();
             }
         }
