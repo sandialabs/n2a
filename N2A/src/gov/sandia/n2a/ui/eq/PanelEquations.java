@@ -1571,7 +1571,7 @@ public class PanelEquations extends JPanel
 
             breadcrumbRenderer.update ();
             panelParent.setOpen (part.source.getBoolean ("$metadata", "gui", "bounds", "parent")  ||  panelEquationGraph.isEmpty ());
-
+            panelEquationGraph.restoreViewportPosition (createFocus (part));
             validate ();  // In case breadcrumbRenderer changes shape.
         }
 

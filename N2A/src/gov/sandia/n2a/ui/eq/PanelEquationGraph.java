@@ -15,7 +15,6 @@ import java.awt.Dimension;
 import java.awt.FocusTraversalPolicy;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.KeyboardFocusManager;
 import java.awt.LayoutManager;
 import java.awt.LayoutManager2;
 import java.awt.Point;
@@ -35,7 +34,6 @@ import java.util.Map.Entry;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
-import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
@@ -44,6 +42,8 @@ import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.ViewportLayout;
 import javax.swing.event.MouseInputAdapter;
+
+import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
@@ -58,8 +58,7 @@ public class PanelEquationGraph extends JScrollPane
     protected GraphPanel     graphPanel;
 
     // Convenience references
-    protected JViewport  vp;
-    protected JScrollBar vsb;
+    protected JViewport vp;
 
     protected static Color background = new Color (0xF0F0F0);  // light gray
 
@@ -72,8 +71,7 @@ public class PanelEquationGraph extends JScrollPane
 
         setTransferHandler (new GraphTransferHandler ());
 
-        vp  = getViewport ();
-        vsb = getVerticalScrollBar ();
+        vp = getViewport ();
     }
 
     public void loadPart ()
@@ -98,37 +96,19 @@ public class PanelEquationGraph extends JScrollPane
         Point focus = vp.getViewPosition ();
         focus.x -= graphPanel.offset.x;
         focus.y -= graphPanel.offset.y;
+        if (! container.locked)
+        {
+            MPart parent = (MPart) container.part.source.childOrCreate ("$metadata", "gui", "bounds", "parent");
+            parent.set (focus.x, "x");
+            parent.set (focus.y, "y");
+        }
         return focus;
     }
 
     public void takeFocus (FocusCacheEntry fce)
     {
-        Point focus = new Point ();  // (0,0)
-        GraphNode gn = null;
-        if (fce != null)
-        {
-            if (fce.position != null)
-            {
-                focus = new Point (fce.position);
-                focus.x += graphPanel.offset.x;
-                focus.y += graphPanel.offset.y;
-                focus.x = Math.max (0, focus.x);
-                focus.y = Math.max (0, focus.y);
-                Dimension extent = vp.getExtentSize ();
-                focus.x = Math.min (focus.x, Math.max (0, graphPanel.layout.bounds.width  - extent.width));
-                focus.y = Math.min (focus.y, Math.max (0, graphPanel.layout.bounds.height - extent.height));
-            }
-            gn = graphPanel.findNode (fce.subpart);
-        }
-
-        // Restore the viewport position, but only if the viewport has changed content.
-        // As a heuristic to detect whether content has changed, we assume that focus has not yet
-        // shifted to any tree in the graph. But if focus is already on one of our trees, then
-        // the previous view was the same as this one.
-        Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ();
-        if (! isAncestorOf (focusOwner)) vp.setViewPosition (focus);
-
-        // Select first node to focus, if one wasn't specified by focus cache.
+        // Select first node to focus.
+        GraphNode gn = graphPanel.findNode (fce.subpart);
         if (gn == null  &&  graphPanel.getComponentCount () > 0)
         {
             Component c = PanelModel.instance.getFocusTraversalPolicy ().getFirstComponent (graphPanel);
@@ -144,6 +124,29 @@ public class PanelEquationGraph extends JScrollPane
             gn.titleFocused = fce.titleFocused;
             gn.takeFocus ();  // possibly change the viewport position set above
         }
+    }
+
+    public void restoreViewportPosition (FocusCacheEntry fce)
+    {
+        Point focus = new Point ();  // (0,0)
+        if (fce.position == null)
+        {
+            MPart parent = (MPart) container.part.source.child ("$metadata", "gui", "bounds", "parent");
+            if (parent != null)
+            {
+                focus.x = parent.getOrDefault (0, "x");
+                focus.y = parent.getOrDefault (0, "y");
+            }
+        }
+        else
+        {
+            focus.x = fce.position.x;
+            focus.y = fce.position.y;
+        }
+
+        focus.x += graphPanel.offset.x;
+        focus.y += graphPanel.offset.y;
+        graphPanel.layout.shiftViewport (focus);
     }
 
     public void updateFilterLevel ()
