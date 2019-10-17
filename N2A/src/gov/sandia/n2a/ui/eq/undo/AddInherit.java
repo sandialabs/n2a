@@ -64,12 +64,12 @@ public class AddInherit extends Undoable
         parent.build ();  // Handles all cases (complete deletion or exposed hidden node)
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
+        parent.filter (FilteredTreeModel.filterLevel);
         if (! pe.viewTree  &&  parent == pe.part)
         {
             peg.loadPart ();  // safely disconnects old nodes, even though parent has been rebuilt with new nodes
             peg.repaint ();
         }
-        parent.filter (FilteredTreeModel.filterLevel);
         if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
 
         pet.updateOrder (nodePath);
@@ -104,12 +104,12 @@ public class AddInherit extends Undoable
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
+        parent.filter (FilteredTreeModel.filterLevel);
         if (! pe.viewTree  &&  parent == pe.part)
         {
             peg.loadPart ();
             peg.repaint ();
         }
-        parent.filter (FilteredTreeModel.filterLevel);
         model.nodeStructureChanged (parent);  // Since $inherit is being added, parent will almost certainly become visible, if it's not already.
 
         TreeNode[] createdPath = parent.child ("$inherit").getPath ();

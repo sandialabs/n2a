@@ -67,12 +67,12 @@ public class ChangeVariableToInherit extends Undoable
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
+        parent.filter (FilteredTreeModel.filterLevel);
         if (! pe.viewTree  &&  parent == pe.part)
         {
             peg.loadPart ();
             peg.repaint ();
         }
-        parent.filter (FilteredTreeModel.filterLevel);
         if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child (nameBefore).getPath ();
@@ -110,12 +110,12 @@ public class ChangeVariableToInherit extends Undoable
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
+        parent.filter (FilteredTreeModel.filterLevel);
         if (! pe.viewTree  &&  parent == pe.part)
         {
             peg.loadPart ();
             peg.repaint ();
         }
-        parent.filter (FilteredTreeModel.filterLevel);
         model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child ("$inherit").getPath ();
