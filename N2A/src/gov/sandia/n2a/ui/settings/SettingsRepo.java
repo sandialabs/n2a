@@ -35,7 +35,9 @@ import java.awt.event.FocusListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,6 +50,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import javax.swing.AbstractAction;
 import javax.swing.AbstractCellEditor;
@@ -1311,6 +1315,36 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
         }
 
+        public Path createZip (Path baseDir, List<Delta> stash) throws Exception
+        {
+            Path zipFile = baseDir.resolve ("stash.zip");
+            if (Files.exists (zipFile)) throw new IOException ("A stash file already exists.");
+
+            // Copy files to stash
+            try (OutputStream ostream = Files.newOutputStream (zipFile);
+                 ZipOutputStream zip = new ZipOutputStream (ostream))
+            {
+                for (Delta d : stash)
+                {
+                    Path inFile = baseDir.resolve (d.name);
+                    InputStream istream = Files.newInputStream (inFile);
+                    zip.putNextEntry (new ZipEntry (d.name));
+
+                    int length;
+                    byte[] bytes = new byte[4096];
+                    while ((length = istream.read (bytes)) >= 0) zip.write (bytes, 0, length);
+
+                    zip.closeEntry ();
+                }
+            }
+            catch (IOException e)  // The purpose of this try-catch block is to ensure that streams get closed.
+            {
+                throw new Exception ("Unable to finish stash file.");  // But we pass the exception on in any case.
+            }
+
+            return zipFile;
+        }
+
         public void getRemoteTracking ()
         {
             ahead  = 0;
@@ -1349,12 +1383,24 @@ public class SettingsRepo extends JScrollPane implements Settings
             // Stash changed and untracked files so they won't get in the way of pull.
             List<Delta> stash = createStashInternal ();
             Path baseDir = gitDir.getParent ();
+            Path zipFile = null;
+            try
+            {
+                if (! stash.isEmpty ()) zipFile = createZip (baseDir, stash);
+            }
+            catch (Exception e)
+            {
+                // TODO: show an error message
+                return;
+            }
             for (Delta d : stash)
             {
                 try {Files.delete (baseDir.resolve (d.name));}
                 catch (IOException e) {}
             }
 
+            // User data could be permanently lost if we don't get past this section and restore the internal stash from memory back to disk.
+            // Therefore we use the strongest form of catch().
             try
             {
                 boolean newRepo = isNew ();
@@ -1375,13 +1421,27 @@ public class SettingsRepo extends JScrollPane implements Settings
                     create.call ();
                 }
             }
-            catch (Exception e)
+            catch (Throwable e)
             {
                 e.printStackTrace ();
             }
 
             // Restore changes
             applyStashInternal (stash);
+            boolean shouldDelete = ! stash.isEmpty ();
+            for (Delta d : stash)
+            {
+                if (! Files.exists (baseDir.resolve (d.name)))
+                {
+                    shouldDelete = false;
+                    break;
+                }
+            }
+            try
+            {
+                if (shouldDelete) Files.delete (zipFile);
+            }
+            catch (IOException e) {}
             clearDiff ();
         }
 
@@ -1692,10 +1752,9 @@ public class SettingsRepo extends JScrollPane implements Settings
                 if (d.ignore) newDeltas.add (d);
                 else          files    .add (d);
             }
-            if (files.isEmpty ()) return;
 
             // Give immediate visual feedback that commit has started.
-            fieldMessage.setText ("");
+            if (! files.isEmpty ()) fieldMessage.setText ("");
             List<Delta> oldDeltas = deltas;
             deltas = newDeltas;
             refreshTable ();
@@ -1726,7 +1785,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                         return;
                     }
                     undoMessage.discardAllEdits ();
-                    working.message = "";
+                    if (! files.isEmpty ()) working.message = "";
 
                     working.commit (files, author, message);
                     if (working != current) return;
