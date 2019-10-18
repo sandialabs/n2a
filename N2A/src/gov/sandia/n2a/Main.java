@@ -87,7 +87,7 @@ public class Main
                 (
                     parent,
                     "<html><body><p style='width:300px'>"
-                    + "Please file a bug report on github. Describe what you were doing at the time, and include the file "
+                    + "You exposed a bug in the program! Please help us by filing a report on github. Describe what you were doing at the time, and include the file "
                     + crashdump.getAbsolutePath ()
                     + "</p></body></html>",
                     "Internal Error",
