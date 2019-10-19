@@ -1,5 +1,5 @@
 /*
-Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -64,6 +64,7 @@ import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JColorChooser;
 import javax.swing.JComponent;
+import javax.swing.JEditorPane;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -135,11 +136,16 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected JTextArea      fieldMessage;
     protected JScrollPane    paneMessage;
     protected UndoManager    undoMessage;
+    protected JEditorPane    paneProgress;
 
-    protected boolean           needRebuild;     // need to re-collate AppData.models and AppData.references
-    protected boolean           needSave = true; // need to flush repositories to disk for git status
+    // The job of existingModels and existingReferences is to ensure that rebuild() does not create duplicate MDir instances.
+    // The goal is to maintain the guarantee of object identity.
+    // These two collections may grow to be larger than the set in use by AppData, but entries that
+    // coincide with AppData entries must reference exactly the same MDir instance.
     protected Map<String,MNode> existingModels     = AppData.models    .getContainerMap ();
     protected Map<String,MNode> existingReferences = AppData.references.getContainerMap ();
+    protected boolean           needRebuild;     // need to re-collate AppData.models and AppData.references
+    protected boolean           needSave = true; // need to flush repositories to disk for git status
     protected Path              reposDir           = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
 
     protected int timeout = 30;  // seconds; for git operations
@@ -325,6 +331,9 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (row < 0) return;
                     gitModel.setCurrent (row);
                 }
+
+                Component to = e.getComponent ();
+                if (to == gitTable) gitModel.refreshButtonRevert ();
             }
 
             public void focusLost (FocusEvent e)
@@ -455,10 +464,11 @@ public class SettingsRepo extends JScrollPane implements Settings
         ((DefaultTableCellRenderer) gitTable.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
 
 
-        buttonRevert = new JButton (ImageUtil.getImage ("revert.gif"));
+        buttonRevert = new JButton (ImageUtil.getImage ("undo_edit.png"));
         buttonRevert.setMargin (new Insets (2, 2, 2, 2));
         buttonRevert.setFocusable (false);
-        buttonRevert.setToolTipText ("Revert");
+        buttonRevert.setEnabled (false);
+        buttonRevert.setToolTipText ("Revert Selected Document");
         buttonRevert.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
@@ -470,6 +480,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         buttonPull = new JButton (ImageUtil.getImage ("pull.png"));
         buttonPull.setMargin (new Insets (2, 2, 2, 2));
         buttonPull.setFocusable (false);
+        buttonRevert.setEnabled (false);
         buttonPull.setToolTipText ("Pull");
         buttonPull.addActionListener (new ActionListener ()
         {
@@ -482,6 +493,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         buttonPush = new JButton (ImageUtil.getImage ("push.png"));
         buttonPush.setMargin (new Insets (2, 2, 2, 2));
         buttonPush.setFocusable (false);
+        buttonRevert.setEnabled (false);
         buttonPush.setToolTipText ("Push");
         buttonPush.addActionListener (new ActionListener ()
         {
@@ -528,6 +540,10 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
         });
 
+        paneProgress = new JEditorPane ();
+        paneProgress.setEditable (false);
+        paneProgress.setOpaque (false);
+        
         // Use JGit utility class to present username/password prompt for remote access.
         CredentialsProvider.setDefault (new ChainingCredentialsProvider (new NetRCCredentialsProvider (), new CredentialCache (), new CredentialDialog ()));
 
@@ -545,7 +561,9 @@ public class SettingsRepo extends JScrollPane implements Settings
                                 Lay.FL (Lay.lb ("Author"), fieldAuthor),
                                 Box.createVerticalStrut (5),
                                 Lay.BL ("W", Lay.lb ("Commit message:")),
-                                paneMessage
+                                paneMessage,
+                                Box.createVerticalStrut (5),
+                                paneProgress
                             )
                         )
                     )
@@ -572,6 +590,48 @@ public class SettingsRepo extends JScrollPane implements Settings
         return panel;
     }
 
+    public void status (String message)
+    {
+        paneProgress.setText (message);
+    }
+
+    public void warning (String message)
+    {
+        status ("<html><span style=\"color:yellow\">" + message + "</span></html>");
+    }
+
+    public void error (String message)
+    {
+        status ("<html><span style=\"color:red\">" + message + "</span></html>");
+    }
+
+    public void success (String message)
+    {
+        status ("<html><span style=\"color:green\">" + message + "</span></html>");
+    }
+
+    public MNode getModels (String repoName)
+    {
+        MNode result = existingModels.get (repoName);
+        if (result == null)
+        {
+            result = new MDir (repoName, reposDir.resolve (repoName).resolve ("models"));
+            existingModels.put (repoName, result);
+        }
+        return result;
+    }
+
+    public MNode getReferences (String repoName)
+    {
+        MNode result = existingReferences.get (repoName);
+        if (result == null)
+        {
+            result = new MDir (repoName, reposDir.resolve (repoName).resolve ("references"));
+            existingReferences.put (repoName, result);
+        }
+        return result;
+    }
+
     /**
         Rebuild the combo directories.
         This is lightweight enough that it can be done on the main UI thread.
@@ -587,22 +647,10 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             String repoName = repo.key ();
             boolean isPrimary = repoName.equals (primary);
-            if (repo.getInt ("visible") == 0  &&  ! isPrimary) continue;
+            if (! repo.getBoolean ("visible")  &&  ! isPrimary) continue;
 
-            MNode models     = existingModels    .get (repoName);
-            MNode references = existingReferences.get (repoName);
-            Path repoDir = reposDir.resolve (repoName);
-            if (models == null)
-            {
-                models = new MDir (repoName, repoDir.resolve ("models"));
-                existingModels.put (repoName, models);
-            }
-            if (references == null)
-            {
-                references = new MDir (repoName, repoDir.resolve ("references"));
-                existingReferences.put (repoName, references);
-            }
-
+            MNode models     = getModels     (repoName);
+            MNode references = getReferences (repoName);
             if (isPrimary)
             {
                 modelContainers    .add (0, models);
@@ -621,8 +669,8 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public boolean isEmpty (String key)
     {
-        MDir models     = (MDir) existingModels    .get (key);
-        MDir references = (MDir) existingReferences.get (key);
+        MDir models     = (MDir) getModels     (key);
+        MDir references = (MDir) getReferences (key);
         return  models.size () == 0  &&  references.size () == 0;
     }
 
@@ -635,8 +683,8 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 // TODO: Prevent repo rename while pull is in progress. Simple approach is to add check to TextCellEditor.isCellEditable()
                 gitRepo.pull ();
-                ((MDir) existingModels    .get (key)).reload ();
-                ((MDir) existingReferences.get (key)).reload ();
+                ((MDir) getModels     (key)).reload ();
+                ((MDir) getReferences (key)).reload ();
                 if (needRebuild)  // UI focus is still on settings panel.
                 {
                     if (gitRepo == gitModel.current)
@@ -798,8 +846,8 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (AppData.repos.child (newName) != null) return;
 
                     // Now we have a legitimate name change.
-                    MDir models     = (MDir) existingModels    .get (oldName);
-                    MDir references = (MDir) existingReferences.get (oldName);
+                    MDir models     = (MDir) getModels     (oldName);
+                    MDir references = (MDir) getReferences (oldName);
                     existingModels    .remove (oldName);
                     existingReferences.remove (oldName);
                     existingModels    .put (newName, models);
@@ -1082,6 +1130,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         public IndexDiff          diff;
         public String             message;
         public Map<String,String> credentials;
+        public boolean            authFailed;  // Indicates that last attempt at authentication failed, so prompt user to re-enter password.
 
         public GitWrapper (Path gitDir)
         {
@@ -1536,6 +1585,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 current = null;
                 repo = null;
                 deltas.clear ();
+                buttonRevert.setEnabled (false);
                 fieldAuthor .setText ("");
                 fieldMessage.setText ("");
                 return;
@@ -1571,6 +1621,13 @@ public class SettingsRepo extends JScrollPane implements Settings
             if (column < 0) column = 1;
             if (row >= deltas.size ()) row = deltas.size () - 1;
             if (row >= 0) gitTable.changeSelection (row, column, false, false);
+
+            buttonRevert.setEnabled (row >= 0);
+        }
+
+        public void refreshButtonRevert ()
+        {
+            buttonRevert.setEnabled (! deltas.isEmpty ()  &&  gitTable.getSelectedRow () >= 0);
         }
 
         public void refreshDiff ()
@@ -1728,8 +1785,8 @@ public class SettingsRepo extends JScrollPane implements Settings
             String repoName = repo.key ();
             MDir dir;
             String[] pieces = delta.name.split ("/");
-            if (pieces[0].equals ("models")) dir = (MDir) existingModels    .get (repoName);
-            else                             dir = (MDir) existingReferences.get (repoName);
+            if (pieces[0].equals ("models")) dir = (MDir) getModels     (repoName);
+            else                             dir = (MDir) getReferences (repoName);
             dir.nodeChanged (pieces[1]);
             // TODO: create an undo object for the checkout, so it can integrate with other edit actions in the UI.
         }
@@ -2055,6 +2112,11 @@ public class SettingsRepo extends JScrollPane implements Settings
                 }
             }
             if (git == null) return false;
+            if (git.authFailed)
+            {
+                git.authFailed = false;
+                return false;
+            }
 
             for (int i = 0; i < items.length; i++)
             {
