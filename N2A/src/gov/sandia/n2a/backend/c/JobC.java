@@ -2184,9 +2184,12 @@ public class JobC extends Thread
             }
 
             // contained populations
-            for (EquationSet e : s.orderedParts)
+            if (s.parts.size () > 0)
             {
-                result.append ("  " + mangle (e.name) + ".init ();\n");
+                for (EquationSet e : s.orderedParts)
+                {
+                    result.append ("  " + mangle (e.name) + ".init ();\n");
+                }
             }
 
             s.setInit (0);
