@@ -186,6 +186,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"), "moveDown");
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),      "startEditing");
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing");
 
         ActionMap actionMap = repoTable.getActionMap ();
@@ -228,7 +229,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     int response = JOptionPane.showConfirmDialog
                     (
                         MainFrame.instance,
-                        "<html><body><p style='width:300px'>Permanently erase all models and references in repository \"" + name + "\"?</p></body></html>",
+                        "<html><body><p style='width:300px'>Permanently erase all data in repository \"" + name + "\"?</p></body></html>",
                         "Delete Repository",
                         JOptionPane.OK_CANCEL_OPTION,
                         JOptionPane.WARNING_MESSAGE
@@ -340,8 +341,9 @@ public class SettingsRepo extends JScrollPane implements Settings
             public void focusLost (FocusEvent e)
             {
                 Component to = e.getOppositeComponent ();
-                if (to == gitTable  ||  to == repoTable  ||  to == SettingsRepo.this) return;  // Loss is still within current tab, so ignore.
+                if (to == gitTable  ||  to == repoTable  ||  to == fieldAuthor  ||  to == fieldMessage  ||  to == SettingsRepo.this) return;  // Loss is still within current tab, so ignore.
                 if (e.isTemporary ()  ||  repoTable.isEditing ()) return;  // The shift to the editing component appears as a loss of focus.
+
                 repoModel.clearStatus ();
                 needSave = true;
                 rebuild ();
@@ -509,6 +511,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         fieldAuthor = new JTextField ();
         fieldAuthor.setColumns (30);
+        fieldAuthor.addFocusListener (rebuildListener);
 
         fieldMessage = new JTextArea ();
         paneMessage = new JScrollPane (fieldMessage);
@@ -516,6 +519,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         fieldMessage.setWrapStyleWord (true);
         fieldMessage.setRows (6);
         fieldMessage.setTabSize (4);
+        fieldMessage.addFocusListener (rebuildListener);
 
         undoMessage = new UndoManager ();
         fieldMessage.getDocument ().addUndoableEditListener (undoMessage);
@@ -1194,7 +1198,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         public String getURL ()
         {
             List<URIish> URIs = remote.getURIs ();
-            if (URIs.size () == 0) return null;
+            if (URIs.size () == 0) return null;  // TODO: return "" instead. Ensure that all calling code works correctly with this, including values returned by table model.
             return URIs.get (0).toString ();
         }
 
@@ -1421,7 +1425,6 @@ public class SettingsRepo extends JScrollPane implements Settings
             Path zipFile = baseDir.resolve ("stash.zip");
             if (Files.exists (zipFile))
             {
-                System.out.println ("stash exists");
                 throw new Exception ("A stash file already exists.");
             }
 
@@ -1657,6 +1660,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 try
                 {
                     commit.call ();
+                    success ("Committed");
                 }
                 catch (Exception e)
                 {
@@ -1665,12 +1669,15 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
 
             // Push changes upstream
-            status ("Pushing to " + getURL ());
+            String url = getURL ();
+            if (url == null  ||  url.isEmpty ()) return;  // No upstream to push. OK to stop after local commit.
+            status ("Pushing to " + url);
             PushCommand push = git.push ();
             push.setTimeout (timeout);
             try
             {
                 push.call ();
+                success ("Pushed");
             }
             catch (Exception e)
             {
@@ -1683,7 +1690,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             BranchConfig branch = new BranchConfig (config, head);
             if (branch.getRemote () == null)  // head is not tracking remote
             {
-                status ("Set head to track remote origin");
+                status ("Set head to track remote");
                 CreateBranchCommand create = git.branchCreate ();
                 create.setUpstreamMode (SetupUpstreamMode.SET_UPSTREAM);
                 create.setName (head);
@@ -1692,14 +1699,13 @@ public class SettingsRepo extends JScrollPane implements Settings
                 try
                 {
                     create.call ();
+                    success ("Pushed. Head is now tracking remote.");
                 }
                 catch (Exception e)
                 {
                     warning (e.getMessage ());
                 }
             }
-
-            success ("Pushed");
         }
     }
 
