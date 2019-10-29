@@ -86,6 +86,7 @@ import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
+import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
@@ -543,6 +544,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         paneProgress = new JEditorPane ();
         paneProgress.setEditable (false);
         paneProgress.setOpaque (false);
+        paneProgress.setEditorKit (new HTMLEditorKit ());
         
         // Use JGit utility class to present username/password prompt for remote access.
         CredentialsProvider.setDefault (new ChainingCredentialsProvider (new NetRCCredentialsProvider (), new CredentialCache (), new CredentialDialog ()));
@@ -551,7 +553,16 @@ public class SettingsRepo extends JScrollPane implements Settings
         Lay.BLtg (panel,
             "N", Lay.BxL (
                 Lay.BL ("W", repoPanel),
-                Lay.WL ("L", buttonRevert, Box.createHorizontalStrut (15), labelStatus, buttonPull, buttonPush, "hgap=10,vgap=10"),
+                Lay.WL ("L",
+                        buttonRevert,
+                        Box.createHorizontalStrut (15),
+                        labelStatus,
+                        buttonPull,
+                        buttonPush,
+                        Box.createHorizontalStrut (15),
+                        paneProgress,
+                        "hgap=10,vgap=10"
+                ),
                 Lay.BL ("W",
                     Lay.BxL ("H",
                         Lay.BL ("N", gitPanel),
@@ -561,9 +572,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                                 Lay.FL (Lay.lb ("Author"), fieldAuthor),
                                 Box.createVerticalStrut (5),
                                 Lay.BL ("W", Lay.lb ("Commit message:")),
-                                paneMessage,
-                                Box.createVerticalStrut (5),
-                                paneProgress
+                                paneMessage
                             )
                         )
                     )
@@ -592,12 +601,18 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public void status (String message)
     {
-        paneProgress.setText (message);
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                paneProgress.setText (message);
+            }
+        });
     }
 
     public void warning (String message)
     {
-        status ("<html><span style=\"color:yellow\">" + message + "</span></html>");
+        status ("<html><span style=\"color:#C0C000\">" + message + "</span></html>");
     }
 
     public void error (String message)
@@ -690,7 +705,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (gitRepo == gitModel.current)
                     {
                         gitModel.refreshDiff ();
-                        gitModel.refreshTrack ();
+                        gitModel.refreshTrack (false);
                     }
                 }
                 else  // UI focus has shifted away from settings panel, and rebuild() may have been done before pull finished.
@@ -1157,7 +1172,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
             catch (Exception e)
             {
-                e.printStackTrace ();
+                error ("Failed to open repo: " + e.getMessage ());
             }
         }
 
@@ -1168,7 +1183,10 @@ public class SettingsRepo extends JScrollPane implements Settings
                 // This is just a paranoia measure. config should be saved any time significant changes are made,
                 if (config != null) config.save ();
             }
-            catch (IOException e) {}
+            catch (IOException e)
+            {
+                warning ("Failed to save config: " + e.getMessage ());
+            }
             if (git     != null) git    .close ();
             if (gitRepo != null) gitRepo.close ();
         }
@@ -1189,22 +1207,37 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
             catch (URISyntaxException e)
             {
+                error (e.getMessage ());
                 return;
             }
 
             String remoteName = remote.getName ();
             if (gitRepo.getRemoteNames ().isEmpty ())
             {
-                try {remote = git.remoteAdd ().setName (remoteName).setUri (valueURI).call ();}
-                catch (Exception e) {}
+                try
+                {
+                    remote = git.remoteAdd ().setName (remoteName).setUri (valueURI).call ();
+                    success ("Changed URI");
+                }
+                catch (Exception e)
+                {
+                    error (e.getMessage ());
+                }
                 return;  // Because we've already set the remote URI, which is the goal of this function.
             }
 
             RemoteSetUrlCommand command = git.remoteSetUrl ();
             command.setRemoteName (remoteName);
             command.setRemoteUri (valueURI);
-            try {remote = command.call ();}
-            catch (Exception e) {}
+            try
+            {
+                remote = command.call ();
+                success ("Changed URI");
+            }
+            catch (Exception e)
+            {
+                error (e.getMessage ());
+            }
         }
 
         public String getAuthor ()
@@ -1232,8 +1265,15 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             config.setString ("user", null, "name",  name);
             config.setString ("user", null, "email", email);
-            try {config.save ();}
-            catch (IOException e) {}
+            try
+            {
+                config.save ();
+                success ("Changed author");
+            }
+            catch (IOException e)
+            {
+                error (e.getMessage ());
+            }
         }
 
         public synchronized void clearDiff ()
@@ -1269,7 +1309,10 @@ public class SettingsRepo extends JScrollPane implements Settings
                     diff = new IndexDiff (gitRepo, head, new FileTreeIterator (gitRepo));
                     diff.diff ();
                 }
-                catch (IOException e) {}
+                catch (IOException e)
+                {
+                    warning (e.getMessage ());
+                }
             }
             return getDeltas (diff);
         }
@@ -1339,7 +1382,10 @@ public class SettingsRepo extends JScrollPane implements Settings
                     }
                 }
             }
-            catch (Exception e) {}
+            catch (Exception e)
+            {
+                warning (e.getMessage ());
+            }
             return stash;
         }
 
@@ -1351,8 +1397,14 @@ public class SettingsRepo extends JScrollPane implements Settings
                 Path path = baseDir.resolve (d.name);
                 if (d.deleted)
                 {
-                    try {Files.delete (path);}
-                    catch (IOException e) {}
+                    try
+                    {
+                        Files.delete (path);
+                    }
+                    catch (IOException e)
+                    {
+                        warning (e.getMessage ());
+                    }
                 }
                 else
                 {
@@ -1367,7 +1419,11 @@ public class SettingsRepo extends JScrollPane implements Settings
         public Path createZip (Path baseDir, List<Delta> stash) throws Exception
         {
             Path zipFile = baseDir.resolve ("stash.zip");
-            if (Files.exists (zipFile)) throw new IOException ("A stash file already exists.");
+            if (Files.exists (zipFile))
+            {
+                System.out.println ("stash exists");
+                throw new Exception ("A stash file already exists.");
+            }
 
             // Copy files to stash
             try (OutputStream ostream = Files.newOutputStream (zipFile);
@@ -1394,13 +1450,39 @@ public class SettingsRepo extends JScrollPane implements Settings
             return zipFile;
         }
 
-        public void getRemoteTracking ()
+        public void checkAuthFail (Throwable e)
+        {
+            // This is only a heurisitic.
+            // It would be better if there were a specific exception class for authorization failure.
+            String message = e.getMessage ().toLowerCase ();
+            if (message.contains ("auth"))
+            {
+                authFailed = true;
+            }
+        }
+
+        public void getRemoteTracking (boolean showStatus)
         {
             ahead  = 0;
             behind = 0;
+            String URL = getURL ();
+            if (URL == null  ||  URL.isEmpty ())
+            {
+                if (showStatus) status ("");
+                return;  // Nothing to do
+            }
 
-            try {git.fetch ().setTimeout (timeout).call ();}
-            catch (Exception e) {}
+            try
+            {
+                if (showStatus) status ("Fetching " + URL);
+                git.fetch ().setTimeout (timeout).call ();
+                if (showStatus) success ("Fetched");
+            }
+            catch (Exception e)
+            {
+                warning (e.getMessage ());
+                checkAuthFail (e);
+            }
 
             try
             {
@@ -1411,7 +1493,10 @@ public class SettingsRepo extends JScrollPane implements Settings
                     behind = track.getBehindCount ();
                 }
             }
-            catch (IOException e) {}
+            catch (IOException e)
+            {
+                warning (e.getMessage ());
+            }
         }
 
         // Determine if this is a newly-create repo.
@@ -1430,6 +1515,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         public synchronized void pull ()
         {
             // Stash changed and untracked files so they won't get in the way of pull.
+            status ("Stashing changes");
             List<Delta> stash = createStashInternal ();
             Path baseDir = gitDir.getParent ();
             Path zipFile = null;
@@ -1439,8 +1525,8 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
             catch (Exception e)
             {
-                // TODO: show an error message
-                return;
+                error (e.getMessage ());
+                return;  // It's crucial that the backup fully succeed before we start deleting files.
             }
             for (Delta d : stash)
             {
@@ -1450,6 +1536,8 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             // User data could be permanently lost if we don't get past this section and restore the internal stash from memory back to disk.
             // Therefore we use the strongest form of catch().
+            status ("Pulling " + getURL ());
+            boolean succeeded = true;
             try
             {
                 boolean newRepo = isNew ();
@@ -1472,38 +1560,62 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
             catch (Throwable e)
             {
-                e.printStackTrace ();
+                succeeded = false;
+                error (e.getMessage ());
+                checkAuthFail (e);
             }
 
             // Restore changes
-            applyStashInternal (stash);
-            boolean shouldDelete = ! stash.isEmpty ();
-            for (Delta d : stash)
+            if (! stash.isEmpty ())
             {
-                if (! Files.exists (baseDir.resolve (d.name)))
+                if (succeeded) status ("Applying stash");
+                applyStashInternal (stash);
+
+                // Verify that stash applied correctly. (This is only a heuristic.)
+                boolean shouldDelete = true;
+                for (Delta d : stash)
                 {
-                    shouldDelete = false;
-                    break;
+                    if (! Files.exists (baseDir.resolve (d.name)))
+                    {
+                        shouldDelete = false;
+                        break;
+                    }
+                }
+
+                // If backup is no longer needed, delete it.
+                try
+                {
+                    if (shouldDelete) Files.delete (zipFile);
+                }
+                catch (IOException e)
+                {
+                    if (succeeded) warning ("Failed to remove stash.zip: " + e.getMessage ());
+                    succeeded = false;
                 }
             }
-            try
-            {
-                if (shouldDelete) Files.delete (zipFile);
-            }
-            catch (IOException e) {}
             clearDiff ();
+            if (succeeded) success ("Pulled");
         }
 
         public synchronized void checkout (String name)
         {
             clearDiff ();  // force update
-            try {git.checkout ().addPath (name).call ();}
-            catch (Exception e) {}
+            try
+            {
+                status ("Reverting " + name);
+                git.checkout ().addPath (name).call ();
+                success ("Reverted " + name);
+            }
+            catch (Exception e)
+            {
+                error (e.getMessage ());
+            }
         }
 
         public synchronized void commit (List<Delta> deltas, String author, String message)
         {
             // Commit current changes
+            status ("Updating index");
             AddCommand add = null;
             RmCommand  rm  = null;
             for (Delta d : deltas)
@@ -1525,10 +1637,15 @@ public class SettingsRepo extends JScrollPane implements Settings
                 if (add != null) add.call ();
                 if (rm  != null) rm .call ();
             }
-            catch (Exception e) {}
+            catch (Exception e)
+            {
+                warning (e.getMessage ());
+            }
 
             if (add != null  ||  rm != null)
             {
+                status ("Commiting");
+                clearDiff ();
                 String[] pieces = author.split ("<", 2);
                 String name = pieces[0].trim ();
                 String email = "";
@@ -1537,16 +1654,28 @@ public class SettingsRepo extends JScrollPane implements Settings
                 CommitCommand commit = git.commit ();
                 commit.setAuthor (name, email);
                 commit.setMessage (message);
-                try {commit.call ();}
-                catch (Exception e) {}
+                try
+                {
+                    commit.call ();
+                }
+                catch (Exception e)
+                {
+                    warning (e.getMessage ());
+                }
             }
 
             // Push changes upstream
+            status ("Pushing to " + getURL ());
             PushCommand push = git.push ();
             push.setTimeout (timeout);
-            try {push.call ();}
+            try
+            {
+                push.call ();
+            }
             catch (Exception e)
             {
+                error (e.getMessage ());
+                checkAuthFail (e);
                 return;
             }
 
@@ -1554,14 +1683,23 @@ public class SettingsRepo extends JScrollPane implements Settings
             BranchConfig branch = new BranchConfig (config, head);
             if (branch.getRemote () == null)  // head is not tracking remote
             {
+                status ("Set head to track remote origin");
                 CreateBranchCommand create = git.branchCreate ();
                 create.setUpstreamMode (SetupUpstreamMode.SET_UPSTREAM);
                 create.setName (head);
                 create.setForce (true);  // Because head already exists.
                 create.setStartPoint (remote.getName () + "/" + head);
-                try {create.call ();}
-                catch (Exception e) {}
+                try
+                {
+                    create.call ();
+                }
+                catch (Exception e)
+                {
+                    warning (e.getMessage ());
+                }
             }
+
+            success ("Pushed");
         }
     }
 
@@ -1599,12 +1737,12 @@ public class SettingsRepo extends JScrollPane implements Settings
             fieldAuthor .setText (current.getAuthor ());
             fieldMessage.setText (current.message);
             refreshDiff ();
-            refreshTrackUI ();
-            Thread thread = new Thread ()
+            refreshTrackUI ();  // Give immediate feedback ...
+            Thread thread = new Thread ()  // Then do the (possibly) slower work of refreshing track status.
             {
                 public void run ()
                 {
-                    refreshTrack ();
+                    refreshTrack (true);
                 }
             };
             thread.setDaemon (true);
@@ -1681,10 +1819,10 @@ public class SettingsRepo extends JScrollPane implements Settings
             thread.start ();
         }
 
-        public void refreshTrack ()
+        public void refreshTrack (boolean showStatus)
         {
             GitWrapper working = current;
-            working.getRemoteTracking ();
+            working.getRemoteTracking (showStatus);
             if (working != current) return;
             EventQueue.invokeLater (new Runnable ()
             {
@@ -1823,7 +1961,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     // Ensure that repo is up to date before committing.
                     // The "Push" button should be disabled if we already know that we are behind the upstream repo.
                     // Here we make a last-second check, just in case our information is out of date.
-                    refreshTrack ();
+                    refreshTrack (false);
                     if (working.behind > 0)
                     {
                         // Restore state of commit screen to show that commit was aborted.
@@ -1841,18 +1979,23 @@ public class SettingsRepo extends JScrollPane implements Settings
                         });
                         return;
                     }
-                    undoMessage.discardAllEdits ();
-                    if (! files.isEmpty ()) working.message = "";
+                    if (! files.isEmpty ())
+                    {
+                        undoMessage.discardAllEdits ();
+                        working.message = "";
+                    }
 
-                    working.commit (files, author, message);
+                    working.commit (files, author, message);  // Whether or not there are files to commit, we want to call this to at least do a push on any commits that are ahead of upstream.
                     if (working != current) return;
-                    EventQueue.invokeLater (new Runnable ()
+                    Thread thread = new Thread ()
                     {
                         public void run ()
                         {
-                            refreshTrackUI ();
+                            refreshTrack (false);
                         }
-                    });
+                    };
+                    thread.setDaemon (true);
+                    thread.start ();
                     refreshDiff ();
                 }
             };
