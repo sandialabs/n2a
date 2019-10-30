@@ -846,13 +846,4 @@ public class PanelEquationTree extends JScrollPane
             }
         }
     }
-
-    public void scrollToVisible (NodePart part)
-    {
-        TreePath path = new TreePath (part.getPath ());
-        tree.setSelectionPath (path);
-        Rectangle rect = tree.getPathBounds (path);
-        rect.height = tree.getHeight ();
-        tree.scrollRectToVisible (rect);
-    }
 }

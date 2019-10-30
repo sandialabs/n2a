@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,6 +14,7 @@ import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class StoredPath
 {
@@ -46,6 +47,14 @@ public class StoredPath
             for (int i = 1; i < objectPath.length; i++) stringPath[i-1] = ((NodeBase) objectPath[i]).source.key ();
             others.add (stringPath);
         }
+    }
+
+    public StoredPath (NodePart part)
+    {
+        selected = true;
+        expanded = true;
+        keys = part.getKeyPath ();
+        keys.remove (0);
     }
 
     public void restore (JTree tree)

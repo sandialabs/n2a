@@ -726,15 +726,8 @@ public class PanelEquations extends JPanel
 
         this.part = part;
         active = null;
-        if (viewTree)
-        {
-            panelEquationTree.loadPart (root);
-            panelEquationTree.scrollToVisible (part);
-        }
-        else
-        {
-            panelGraph.loadPart ();
-        }
+        if (viewTree) panelEquationTree.loadPart (root);
+        else          panelGraph.loadPart ();
         repaint ();
         takeFocus ();  // sets active
     }
@@ -769,6 +762,12 @@ public class PanelEquations extends JPanel
 
         if (viewTree)
         {
+            // Transfer focus information
+            FocusCacheEntry fce = createFocus (root);
+            fce.sp = new StoredPath (part);
+
+            // Update user interface
+
             AppData.state.set ("tree", "PanelModel", "view");
 
             buttonView.setIcon (iconViewGraph);
@@ -780,6 +779,14 @@ public class PanelEquations extends JPanel
         }
         else
         {
+            TreePath path = panelEquationTree.tree.getSelectionPath ();
+            if (path != null)
+            {
+                NodeBase p = (NodeBase) path.getLastPathComponent ();
+                while (! (p instanceof NodePart)) p = p.getTrueParent ();  // Should not have to guard against null, because root is a NodePart.
+                part = (NodePart) p;
+            }
+
             AppData.state.set ("graph", "PanelModel", "view");
 
             buttonView.setIcon (iconViewTree);
