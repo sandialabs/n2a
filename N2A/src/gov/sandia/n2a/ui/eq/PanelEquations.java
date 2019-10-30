@@ -1303,7 +1303,6 @@ public class PanelEquations extends JPanel
             setTransferHandler (transferHandler);
 
             InputMap inputMap = getInputMap ();
-            inputMap.put (KeyStroke.getKeyStroke ("UP"),               "close");
             inputMap.put (KeyStroke.getKeyStroke ("DOWN"),             "selectNext");
             inputMap.put (KeyStroke.getKeyStroke ("LEFT"),             "close");
             inputMap.put (KeyStroke.getKeyStroke ("RIGHT"),            "selectChild");

@@ -445,7 +445,6 @@ public class GraphNode extends JPanel
             setTransferHandler (container.transferHandler);
 
             InputMap inputMap = getInputMap ();
-            inputMap.put (KeyStroke.getKeyStroke ("UP"),               "close");
             inputMap.put (KeyStroke.getKeyStroke ("DOWN"),             "selectNext");
             inputMap.put (KeyStroke.getKeyStroke ("LEFT"),             "close");
             inputMap.put (KeyStroke.getKeyStroke ("RIGHT"),            "selectChild");
