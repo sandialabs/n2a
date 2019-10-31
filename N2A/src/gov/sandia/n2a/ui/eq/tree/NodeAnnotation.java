@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
+import java.awt.Insets;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +15,8 @@ import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
@@ -145,14 +148,32 @@ public class NodeAnnotation extends NodeContainer
         if (! value.isEmpty ())
         {
             int offset = tabs.get (0);
-
             TreeNode parent = getParent ();
             boolean pure = parent instanceof NodeAnnotations  ||  parent instanceof NodeAnnotation;
             if (! pure)  // not in a $metadata block, so may share tab stops with equations
             {
                 offset = tabs.get (1) - offset;
             }
-            int width = getTree ().tree.getWidth () - offset;  // Available width for displaying value (not including key).
+
+            int width = 800;  // Available width for displaying value (not including key).
+            PanelEquations pe = PanelModel.instance.panelEquations;
+            PanelEquationTree pet = getTree ();
+            if (pet == pe.panelParent.panelEquations)  // parent node
+            {
+                Insets insets = pe.panelParent.getInsets ();
+                width = pe.panelEquationGraph.getViewport ().getExtentSize ().width / 2 - insets.left - insets.right;
+            }
+            else if (pet.root.graph != null)  // child node
+            {
+                Insets insets = pet.root.graph.getInsets ();
+                width = pe.panelEquationGraph.getViewport ().getExtentSize ().width - insets.left - insets.right;
+            }
+            else if (pet == pe.panelEquationTree)  // classic tree
+            {
+                Insets insets = pe.getInsets ();
+                width = pe.getWidth () - insets.left - insets.right;
+            }
+            width -= offset;
 
             boolean addEllipsis = false;
             String[] pieces = value.split ("\n", 2);

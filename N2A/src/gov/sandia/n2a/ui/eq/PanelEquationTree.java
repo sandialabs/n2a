@@ -40,6 +40,7 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
 import javax.swing.event.TreeExpansionEvent;
+import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreeNode;
@@ -249,7 +250,6 @@ public class PanelEquationTree extends JScrollPane
 
         MouseAdapter mouseAdapter = new MouseAdapter ()
         {
-            @Override
             public void mouseDragged (MouseEvent e)
             {
                 // For some reason, a DnD gesture does not cause JTree to take focus.
@@ -354,17 +354,28 @@ public class PanelEquationTree extends JScrollPane
 
         tree.addTreeWillExpandListener (new TreeWillExpandListener ()
         {
-            @Override
             public void treeWillExpand (TreeExpansionEvent event) throws ExpandVetoException
             {
             }
 
-            @Override
             public void treeWillCollapse (TreeExpansionEvent event) throws ExpandVetoException
             {
                 TreePath path = event.getPath ();
                 NodeBase node = (NodeBase) path.getLastPathComponent ();
                 if (node == root) throw new ExpandVetoException (event);
+            }
+        });
+
+        tree.addTreeExpansionListener (new TreeExpansionListener ()
+        {
+            public void treeExpanded (TreeExpansionEvent event)
+            {
+                if (PanelEquationTree.this != container.panelEquationTree) animate ();
+            }
+
+            public void treeCollapsed (TreeExpansionEvent event)
+            {
+                if (PanelEquationTree.this != container.panelEquationTree) animate ();
             }
         });
 
