@@ -53,27 +53,42 @@ public class Table extends OutputParser
 
     public Component createVisualization ()
     {
-        JTable result = new JTable (new OutputTableModel ());
-        result.setAutoResizeMode (JTable.AUTO_RESIZE_OFF);
-        ((DefaultTableCellRenderer) result.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
+        return new OutputTable ();
+    }
 
-        FontMetrics fm = result.getFontMetrics (result.getFont ());
-        int digitWidth = fm.charWidth ('0');
-
-        int maxTextWidth = 10;
-        for (int i = 0; i < columns.size (); i++) maxTextWidth = Math.max (maxTextWidth, columns.get (i).textWidth);
-        maxTextWidth *= digitWidth * 2;
-
-        TableColumnModel cols = result.getColumnModel ();
-        for (int i = 0; i < columns.size (); i++)
+    @SuppressWarnings("serial")
+    public class OutputTable extends JTable
+    {
+        public OutputTable ()
         {
-            Column c = columns.get (i);
-            int width = Math.max (digitWidth * c.textWidth, fm.stringWidth (c.header) + digitWidth);
-            width = Math.min (width, maxTextWidth);  // Avoid absurdly wide columns, because it's hard to read table.
-            cols.getColumn (i).setPreferredWidth (width);
+            super (new OutputTableModel ());
+
+            setAutoResizeMode (JTable.AUTO_RESIZE_OFF);
+            ((DefaultTableCellRenderer) getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
         }
 
-        return result;
+        public void updateUI ()
+        {
+            super.updateUI ();
+
+            FontMetrics fm = getFontMetrics (getFont ());
+
+            setRowHeight (fm.getHeight () + getRowMargin ());
+
+            int digitWidth = fm.charWidth ('0');
+            int maxTextWidth = 10;
+            for (int i = 0; i < columns.size (); i++) maxTextWidth = Math.max (maxTextWidth, columns.get (i).textWidth);
+            maxTextWidth *= digitWidth * 2;
+
+            TableColumnModel cols = getColumnModel ();
+            for (int i = 0; i < columns.size (); i++)
+            {
+                Column c = columns.get (i);
+                int width = Math.max (digitWidth * c.textWidth, fm.stringWidth (c.header) + digitWidth);
+                width = Math.min (width, maxTextWidth);  // Avoid absurdly wide columns, because it's hard to read table.
+                cols.getColumn (i).setPreferredWidth (width);
+            }
+        }
     }
 
     @SuppressWarnings("serial")
