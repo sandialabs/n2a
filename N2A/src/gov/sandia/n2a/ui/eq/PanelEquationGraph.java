@@ -294,6 +294,12 @@ public class PanelEquationGraph extends JScrollPane
             addMouseWheelListener (mouseListener);
         }
 
+        public void updateUI ()
+        {
+            super.updateUI ();
+            if (layout != null) layout.UIupdated = true;
+        }
+
         public boolean isOptimizedDrawingEnabled ()
         {
             // Because parts can overlap, we must return false.
@@ -517,6 +523,7 @@ public class PanelEquationGraph extends JScrollPane
     public class GraphLayout implements LayoutManager2
     {
         public Rectangle bounds = new Rectangle ();
+        public boolean   UIupdated;
 
         public void addLayoutComponent (String name, Component comp)
         {
@@ -569,10 +576,25 @@ public class PanelEquationGraph extends JScrollPane
             // TODO: shiftViewport() does not work well when dragging edge endpoints. Work on collapsing these two functions.
 
             // Only change layout if a component has moved into negative space.
-            if (bounds.x >= 0  &&  bounds.y >= 0) return;
-
             GraphPanel gp = (GraphPanel) target;
-            JViewport  vp = (JViewport) gp.getParent ();
+            if (bounds.x >= 0  &&  bounds.y >= 0)
+            {
+                if (UIupdated)
+                {
+                    UIupdated = false;
+                    for (Component c : target.getComponents ())
+                    {
+                        c.setSize (c.getPreferredSize ());
+                    }
+                    for (GraphEdge ge : gp.edges)
+                    {
+                        ge.updateShape (false);
+                    }
+                }
+                return;
+            }
+
+            JViewport vp = (JViewport) gp.getParent ();
             int dx = Math.max (-bounds.x, 0);
             int dy = Math.max (-bounds.y, 0);
             bounds.translate (dx, dy);

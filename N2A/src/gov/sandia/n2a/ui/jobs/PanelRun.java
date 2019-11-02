@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -45,6 +45,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
+import javax.swing.UIManager;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeSelectionEvent;
@@ -239,9 +240,17 @@ public class PanelRun extends JPanel
         refreshThreadFast.setDaemon (true);
         refreshThreadFast.start ();
 
-        displayText = new JTextArea ();
+        displayText = new JTextArea ()
+        {
+            public void updateUI ()
+            {
+                super.updateUI ();
+                Font f = UIManager.getFont ("TextArea.font");
+                if (f == null) return;
+                setFont (new Font (Font.MONOSPACED, Font.PLAIN, f.getSize ()));
+            }
+        };
         displayText.setEditable(false);
-        displayText.setFont (new Font (Font.MONOSPACED, Font.PLAIN, displayText.getFont ().getSize ()));
         displayPane.setViewportView (displayText);
 
         buttonStop = new JButton (ImageUtil.getImage ("stop.gif"));

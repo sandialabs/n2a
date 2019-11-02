@@ -60,7 +60,7 @@ public class PanelEquationTree extends JScrollPane
         this.container = container;
 
         root  = initialRoot;
-        model = new FilteredTreeModel (initialRoot);  // Can be null
+        model = new FilteredTreeModel (initialRoot);  // initialRoot can be null
         tree  = new JTree (model)
         {
             public String convertValueToText (Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
@@ -99,9 +99,8 @@ public class PanelEquationTree extends JScrollPane
 
             public void updateUI ()
             {
-                // We need to reset the renderer font first, before polling for cell sizes.
-                if (root != null) root.filter (FilteredTreeModel.filterLevel);  // Force update to tab stops, in case font has changed.
-                super.updateUI ();
+                if (root != null) root.filter (FilteredTreeModel.filterLevel);  // Force (later) update to tab stops, in case font has changed. This can also affect cell size.
+                super.updateUI ();  // Causes tree to poll for cell sizes.
             }
         };
 

@@ -25,6 +25,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
@@ -73,8 +74,10 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
@@ -158,7 +161,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         setViewportView (panel);
 
         repoModel = new RepoTableModel ();
-        repoTable = new JTable (repoModel);
+        repoTable = new RepoTable (repoModel);
         JPanel repoPanel = new JPanel ();
         repoPanel.setAlignmentX (LEFT_ALIGNMENT);
         Lay.BLtg (repoPanel, "N", repoTable.getTableHeader (), "C", repoTable);
@@ -330,12 +333,17 @@ public class SettingsRepo extends JScrollPane implements Settings
                 {
                     gitModel.current = null;
                     int row = repoTable.getSelectedRow ();
-                    if (row < 0) return;
-                    gitModel.setCurrent (row);
+                    if (row >= 0) gitModel.setCurrent (row);
                 }
 
                 Component to = e.getComponent ();
                 if (to == gitTable) gitModel.refreshButtonRevert ();
+                if (to == fieldAuthor  ||  to == fieldMessage)
+                {
+                    JViewport vp = getViewport ();
+                    Rectangle bounds = SwingUtilities.convertRectangle (to, to.getBounds (), vp);
+                    vp.scrollRectToVisible (bounds);
+                }
             }
 
             public void focusLost (FocusEvent e)
@@ -360,53 +368,9 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
         });
 
-        FontMetrics fm = repoTable.getFontMetrics (repoTable.getFont ());
-        int em = fm.charWidth ('M');
-        TableColumnModel cols = repoTable.getColumnModel ();
-
-        TableColumn col = cols.getColumn (0);
-        int width = fm.stringWidth (repoModel.getColumnName (0)) + em;
-        col.setMaxWidth (width);
-
-        col = cols.getColumn (1);
-        width = fm.stringWidth (repoModel.getColumnName (1)) + em;
-        col.setMaxWidth (width);
-
-        col = cols.getColumn (2);
-        width = fm.stringWidth (repoModel.getColumnName (2)) + em;
-        col.setMaxWidth (width);
-        col.setCellRenderer (new ColorRenderer ());
-
-        col = cols.getColumn (3);
-        width = fm.stringWidth (repoModel.getColumnName (3));
-        for (MNode r : AppData.repos) width = Math.max (width, fm.stringWidth (r.key ()));
-        width = Math.max (width, 15 * em);
-        width += em;
-        col.setMinWidth (width);
-        col.setPreferredWidth (width);
-        col.setCellRenderer (new ColorTextRenderer ());
-        TextCellEditor cellEditor = new TextCellEditor ();
-        col.setCellEditor (cellEditor);
-
-        col = cols.getColumn (4);
-        width = fm.stringWidth (repoModel.getColumnName (4));
-        for (GitWrapper w : repoModel.gitRepos)
-        {
-            String url = w.getURL ();
-            if (url == null) continue;
-            width = Math.max (width, fm.stringWidth (url));
-        }
-        width = Math.max (width, 40 * em);
-        width += em;
-        col.setMinWidth (width);
-        col.setPreferredWidth (width);
-        col.setCellEditor (cellEditor);
-
-        ((DefaultTableCellRenderer) repoTable.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
-
 
         gitModel = new GitTableModel ();
-        gitTable = new JTable (gitModel);
+        gitTable = new GitTable (gitModel);
         JPanel gitPanel = new JPanel ();
         gitPanel.setAlignmentX (LEFT_ALIGNMENT);
         Lay.BLtg (gitPanel, "N", gitTable.getTableHeader (), "C", gitTable);
@@ -448,23 +412,6 @@ public class SettingsRepo extends JScrollPane implements Settings
                 if (column == 0) gitModel.toggle (row);
             }
         });
-
-        fm = gitTable.getFontMetrics (gitTable.getFont ());
-        em = fm.charWidth ('M');
-        cols = gitTable.getColumnModel ();
-
-        col = cols.getColumn (0);
-        width = fm.stringWidth (gitModel.getColumnName (0)) + em;
-        col.setMaxWidth (width);
-
-        col = cols.getColumn (1);
-        width = fm.stringWidth (gitModel.getColumnName (1));
-        width = Math.max (width, 40 * em);
-        width += em;
-        col.setMinWidth (width);
-        col.setCellRenderer (new GitColorTextRenderer ());
-
-        ((DefaultTableCellRenderer) gitTable.getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
 
 
         buttonRevert = new JButton (ImageUtil.getImage ("undo_edit.png"));
@@ -722,6 +669,76 @@ public class SettingsRepo extends JScrollPane implements Settings
         };
         thread.setDaemon (true);
         thread.start ();
+    }
+
+    public class RepoTable extends JTable
+    {
+        public RepoTable (RepoTableModel repoModel)
+        {
+            super (repoModel);
+
+            TableColumnModel cols = getColumnModel ();
+
+            TableColumn col = cols.getColumn (2);
+            col.setCellRenderer (new ColorRenderer ());
+
+            col = cols.getColumn (3);
+            col.setCellRenderer (new ColorTextRenderer ());
+            TextCellEditor cellEditor = new TextCellEditor ();
+            col.setCellEditor (cellEditor);
+
+            col = cols.getColumn (4);
+            col.setCellEditor (cellEditor);
+
+            ((DefaultTableCellRenderer) getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
+        }
+
+        public void updateUI ()
+        {
+            super.updateUI ();
+
+            FontMetrics fm = getFontMetrics (getFont ());
+            int em = fm.charWidth ('M');
+
+            setRowHeight (fm.getHeight () + getRowMargin ());
+
+            TableColumnModel cols = getColumnModel ();
+            TableColumn col = cols.getColumn (0);
+            int width = fm.stringWidth (getColumnName (0)) + em;
+            col.setMaxWidth (width);
+            col.setPreferredWidth (width);
+
+            col = cols.getColumn (1);
+            width = fm.stringWidth (getColumnName (1)) + em;
+            col.setMaxWidth (width);
+            col.setPreferredWidth (width);
+
+            col = cols.getColumn (2);
+            width = fm.stringWidth (getColumnName (2)) + em;
+            col.setMaxWidth (width);
+            col.setPreferredWidth (width);
+
+            col = cols.getColumn (3);
+            width = fm.stringWidth (getColumnName (3));
+            for (MNode r : AppData.repos) width = Math.max (width, fm.stringWidth (r.key ()));
+            width = Math.max (width, 15 * em);
+            width += em;
+            col.setMinWidth (width);
+            col.setPreferredWidth (width);
+
+            col = cols.getColumn (4);
+            width = fm.stringWidth (getColumnName (4));
+            for (GitWrapper w : repoModel.gitRepos)
+            {
+                String url = w.getURL ();
+                if (url == null) continue;
+                width = Math.max (width, fm.stringWidth (url));
+            }
+            width = Math.max (width, 40 * em);
+            width += em;
+            col.setMinWidth (width);
+            col.setPreferredWidth (width);
+        }
     }
 
     public class RepoTableModel extends AbstractTableModel
@@ -1706,6 +1723,42 @@ public class SettingsRepo extends JScrollPane implements Settings
                     warning (e.getMessage ());
                 }
             }
+        }
+    }
+
+    public class GitTable extends JTable
+    {
+        public GitTable (GitTableModel gitModel)
+        {
+            super (gitModel);
+
+            TableColumnModel cols = getColumnModel ();
+            TableColumn col = cols.getColumn (1);
+            col.setCellRenderer (new GitColorTextRenderer ());
+
+            ((DefaultTableCellRenderer) getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
+        }
+
+        public void updateUI ()
+        {
+            super.updateUI ();
+
+            FontMetrics fm = getFontMetrics (getFont ());
+            int em = fm.charWidth ('M');
+
+            setRowHeight (fm.getHeight () + getRowMargin ());
+
+            TableColumnModel cols = getColumnModel ();
+            TableColumn col = cols.getColumn (0);
+            int width = fm.stringWidth (getColumnName (0)) + em;
+            col.setMaxWidth (width);
+            col.setPreferredWidth (width);
+
+            col = cols.getColumn (1);
+            width = fm.stringWidth (getColumnName (1));
+            width = Math.max (width, 40 * em);
+            width += em;
+            col.setMinWidth (width);
         }
     }
 

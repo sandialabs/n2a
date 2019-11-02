@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -22,7 +22,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeSet;
 
-import javax.swing.BoxLayout;
+import javax.swing.Box;
 import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
@@ -41,12 +41,12 @@ import javax.swing.plaf.metal.MetalLookAndFeel;
 import javax.swing.plaf.metal.MetalTheme;
 import javax.swing.plaf.metal.OceanTheme;
 
-public class SettingsLookAndFeel implements Settings
+@SuppressWarnings("serial")
+public class SettingsLookAndFeel extends JPanel implements Settings
 {
     public static SettingsLookAndFeel instance;
 
     protected Map<String, Laf> catalog = new HashMap<String, Laf> ();
-    protected JPanel           menu    = new JPanel ();
     protected ButtonGroup      group   = new ButtonGroup ();
     protected ActionListener   menuListener;
     protected Laf              currentLaf;
@@ -187,19 +187,6 @@ public class SettingsLookAndFeel implements Settings
             }
         };
 
-        menu.setLayout (new BoxLayout (menu, BoxLayout.Y_AXIS));
-        String currentClass = UIManager.getLookAndFeel ().getClass ().getName ();
-        for (Laf laf : catalog.values ())
-        {
-            boolean selected = currentClass.equals (laf.instance.getClass ().getName ());
-            if (selected) currentLaf = laf;
-            laf.item = new JRadioButton (laf.toString (), selected);
-            laf.item.addActionListener (menuListener);
-            menu.add (laf.item);
-            group.add (laf.item);
-        }
-        if (currentLaf != null) group.setSelected (currentLaf.item.getModel (), true);
-
         JLabel labelFontScale = new JLabel ("Font Scale:");
         fieldFontScale = new JTextField (Float.toString (fontScale), 10);
         fieldFontScale.addActionListener (new ActionListener ()
@@ -214,7 +201,28 @@ public class SettingsLookAndFeel implements Settings
             }
         });
         fieldFontScale.setTransferHandler (new SafeTextTransferHandler ());
-        menu.add (Lay.FL (labelFontScale, fieldFontScale));
+        JPanel panelFontScale = Lay.FL ("L", labelFontScale, fieldFontScale);
+        panelFontScale.setAlignmentX (LEFT_ALIGNMENT);
+        JPanel menu = Lay.BxL
+        (
+            panelFontScale,
+            Box.createVerticalStrut (15)
+        );
+
+        String currentClass = UIManager.getLookAndFeel ().getClass ().getName ();
+        for (Laf laf : catalog.values ())
+        {
+            boolean selected = currentClass.equals (laf.instance.getClass ().getName ());
+            if (selected) currentLaf = laf;
+            laf.item = new JRadioButton (laf.toString (), selected);
+            laf.item.addActionListener (menuListener);
+            laf.item.setAlignmentX (LEFT_ALIGNMENT);
+            menu.add (laf.item);
+            group.add (laf.item);
+        }
+        if (currentLaf != null) group.setSelected (currentLaf.item.getModel (), true);
+
+        Lay.BLtg (this, "N", menu);
     }
 
     public void load ()
@@ -245,7 +253,7 @@ public class SettingsLookAndFeel implements Settings
     @Override
     public Component getPanel ()
     {
-        return menu;
+        return this;
     }
 
     @Override

@@ -119,6 +119,18 @@ public class GraphNode extends JPanel
         });
     }
 
+    public void updateUI ()
+    {
+        super.updateUI ();
+
+        // This function is probably called by SwingUtilities.updateComponentTreeUI().
+        // If we are open, then our equation tree will be automatically included in the walk.
+        // If we are closed, then our equation tree will be missed.
+        if (open) return;
+        if (hr             != null) SwingUtilities.updateComponentTreeUI (hr);
+        if (panelEquations != null) SwingUtilities.updateComponentTreeUI (panelEquations);
+    }
+
     public Component getTitleFocus ()
     {
         if (titleFocused) return title;
@@ -439,6 +451,7 @@ public class GraphNode extends JPanel
     public class TitleRenderer extends EquationTreeCellRenderer implements CellEditorListener
     {
         protected Component editingComponent;
+        protected boolean   UIupdated;
 
         public TitleRenderer ()
         {
@@ -669,6 +682,23 @@ public class GraphNode extends JPanel
                     GraphNode.this.repaint ();
                 }
             });
+        }
+
+        public void updateUI ()
+        {
+            super.updateUI ();
+            UIupdated = true;
+        }
+
+        public Dimension getPreferredSize ()
+        {
+            if (UIupdated)
+            {
+                UIupdated = false;
+                // We are never the focus owner, because updateUI() is triggered from the L&F panel.
+                getTreeCellRendererComponent (panelEquations.tree, node, false, open, false, -1, false);
+            }
+            return super.getPreferredSize ();
         }
 
         /**

@@ -35,6 +35,7 @@ import org.jfree.data.xy.XYSeriesCollection;
     Create a spike-raster plot.
     The parsing functions in this class are similar to Plot, but they can be implemented
     more efficiently because we have simpler needs.
+    TODO: Update this to use or derive from the OutputParser class.
 **/
 public class Raster
 {

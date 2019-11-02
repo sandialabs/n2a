@@ -28,6 +28,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
+import javax.swing.UIManager;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 
@@ -41,11 +42,7 @@ public class SettingsAbout extends JPanel implements Settings
         setName ("About");  // Necessary to fulfill Settings interface.
 
         MNode pc = AppData.properties;
-
-        JEditorPane html = new JEditorPane
-        (
-            "text/html",
-
+        String message = 
             "<html><body>" +
             "<p><span style='font-size:150%'>" + pc.get ("name") + "</span> version " + pc.get ("version") + "</p>" +
             "<hr/>" +
@@ -53,8 +50,20 @@ public class SettingsAbout extends JPanel implements Settings
             "<p>Concept development: Brad Aimone, Corinne Teeter, Steve Verzi, Asmeret Bier, Brandon Rohrer, Ann Speed, Felix Wang</p>" +
             "<p>Technical support: <a href=\"mailto:frothga@sandia.gov\">frothga@sandia.gov</a></p>" +
             "<p>Licenses:</p>" +
-            "</body></html>"
-        );
+            "</body></html>";
+
+        JEditorPane html = new JEditorPane ("text/html", message)
+        {
+            public void updateUI ()
+            {
+                super.updateUI ();
+
+                Font f = UIManager.getFont ("EditorPane.font");
+                if (f == null) return;
+                setFont (f);
+                putClientProperty (JEditorPane.HONOR_DISPLAY_PROPERTIES, true);
+            }
+        };
         html.setEditable (false);
         html.setOpaque (false);
         html.addHyperlinkListener (hyperlinkListener);
@@ -97,11 +106,8 @@ public class SettingsAbout extends JPanel implements Settings
         addLicenseHTML (licenses, "Eclipse",       loadResource ("eclipse"));
 
         Lay.BLtg (this,
-            "N", Lay.lb (ImageUtil.getImage ("n2a-splash.png")),
-            "C", Lay.BL (
-                "N", html, "eb=10",
-                "C", licenses
-            )
+            "N", html,
+            "C", licenses
         );
     }
 
@@ -125,7 +131,18 @@ public class SettingsAbout extends JPanel implements Settings
 
     public void addLicenseHTML (JTabbedPane licenses, String name, String content)
     {
-        JEditorPane editorPane = new JEditorPane ("text/html", content);
+        JEditorPane editorPane = new JEditorPane ("text/html", content)
+        {
+            public void updateUI ()
+            {
+                super.updateUI ();
+
+                Font f = UIManager.getFont ("EditorPane.font");
+                if (f == null) return;
+                setFont (f);
+                putClientProperty (JEditorPane.HONOR_DISPLAY_PROPERTIES, true);
+            }
+        };
         editorPane.setEditable (false);
         editorPane.addHyperlinkListener (hyperlinkListener);
         JScrollPane scrollPane = new JScrollPane (editorPane);
@@ -134,8 +151,17 @@ public class SettingsAbout extends JPanel implements Settings
 
     public void addLicense (JTabbedPane licenses, String name, String content)
     {
-        JTextArea textArea = new JTextArea (content);
-        textArea.setFont (new Font (Font.MONOSPACED, Font.PLAIN, textArea.getFont ().getSize ()));
+        JTextArea textArea = new JTextArea (content)
+        {
+            public void updateUI ()
+            {
+                super.updateUI ();
+
+                Font f = UIManager.getFont ("TextArea.font");
+                if (f == null) return;
+                setFont (new Font (Font.MONOSPACED, Font.PLAIN, f.getSize ()));
+            }
+        };
         JScrollPane scrollPane = new JScrollPane (textArea);
         licenses.addTab (name, null, scrollPane, null);
     }

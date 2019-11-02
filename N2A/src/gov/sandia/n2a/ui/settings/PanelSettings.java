@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -26,6 +26,7 @@ import java.util.Map.Entry;
 
 import javax.swing.Icon;
 import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
@@ -47,7 +48,7 @@ public class PanelSettings extends JTabbedPane
         }
 
         Set<String> sorted = new HashSet<String> ();
-        String[] titles = {"About", "Backup"};  // Force the order of these panels.
+        String[] titles = {"About", "General", "Look & Feel", "Repositories"};  // Force the order of these panels.
         for (String title : titles)
         {
             Settings s = settings.get (title);
@@ -110,7 +111,11 @@ public class PanelSettings extends JTabbedPane
         setTabPlacement (LEFT);
         setOpaque (true);
         setFocusCycleRoot (true);
-        resetFocus ();
+
+        // updateUI() on all child panels. Needed because Settings often construct their panel during plugin load time, which happens before L&F is set.
+        // A better approach would be to require that each Settings plugin separate the construction of its panel from the construction of itself.
+        // However, this has the advantage of simplicity. A Settings plugin can be a single class that does everything.
+        SwingUtilities.updateComponentTreeUI (this);
     }
 
     public void addSettings (Settings s)

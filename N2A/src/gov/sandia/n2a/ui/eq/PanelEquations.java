@@ -10,6 +10,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -1292,6 +1293,7 @@ public class PanelEquations extends JPanel
         protected List<Integer>  offsets = new ArrayList<Integer> ();
         protected String         text    = noModel;
         protected Component      editingComponent;
+        protected boolean        UIupdated;
 
         public BreadcrumbRenderer ()
         {
@@ -1454,6 +1456,23 @@ public class PanelEquations extends JPanel
             });
         }
 
+        public void updateUI ()
+        {
+            super.updateUI ();
+            UIupdated = true;
+        }
+
+        public Dimension getPreferredSize ()
+        {
+            if (UIupdated)
+            {
+                UIupdated = false;
+                // We are never the focus owner, because updateUI() is triggered from the L&F panel.
+                getTreeCellRendererComponent (false);
+            }
+            return super.getPreferredSize ();
+        }
+
         public void getTreeCellRendererComponent (boolean focused)
         {
             // In addition to focusGained() and focusLost() above, this method can also be called by GraphParent.setOpen()
@@ -1549,6 +1568,8 @@ public class PanelEquations extends JPanel
 
     public class PanelGraph extends JPanel
     {
+        public boolean UIupdated;
+
         public PanelGraph ()
         {
             setLayout (new BorderLayout ()
@@ -1557,8 +1578,19 @@ public class PanelEquations extends JPanel
                 {
                     super.layoutContainer (target);
                     panelParent.setLocation (panelEquationGraph.getLocation ());
+                    if (UIupdated)
+                    {
+                        UIupdated = false;
+                        if (panelParent.part != null) panelParent.setSize (panelParent.getPreferredSize ());
+                    }
                 }
             });
+        }
+
+        public void updateUI ()
+        {
+            super.updateUI ();
+            UIupdated = true;
         }
 
         public boolean isOptimizedDrawingEnabled ()

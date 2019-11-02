@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -135,8 +135,18 @@ public class PanelEntry extends JPanel
 
     public PanelEntry ()
     {
-        model      = new MNodeTableModel ();
-        table      = new JTable (model);
+        model = new MNodeTableModel ();
+        table = new JTable (model)
+        {
+            public void updateUI ()
+            {
+                super.updateUI ();
+
+                if (table == null) return;  // This happens once during initial construction, before table is set by assignment above.
+                model.updateColumnWidth ();
+                model.updateRowHeights ();
+            }
+        };
         scrollPane = new JScrollPane (table);
 
         table.setTableHeader (null);
@@ -576,7 +586,8 @@ public class PanelEntry extends JPanel
             TableColumn col1 = cols.getColumn (1);
             TableCellRenderer renderer = col1.getCellRenderer ();
             int width = col1.getWidth ();
-            int defaultHeight = table.getFontMetrics (table.getFont ()).getHeight () + 1;
+            int margin = table.getRowMargin ();
+            int defaultHeight = table.getFontMetrics (table.getFont ()).getHeight () + margin;
             for (int row = 0; row < keys.size (); row++)
             {
                 int height = defaultHeight;
@@ -586,7 +597,7 @@ public class PanelEntry extends JPanel
                 {
                     JTextArea area = (JTextArea) renderer.getTableCellRendererComponent (table, value, false, false, row, 1);
                     area.setSize (width, 1);
-                    height = area.getPreferredSize ().height + 1;
+                    height = area.getPreferredSize ().height + margin;
                 }
                 if (height != table.getRowHeight (row)) table.setRowHeight (row, height);
             }
