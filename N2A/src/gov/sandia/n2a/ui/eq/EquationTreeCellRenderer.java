@@ -20,6 +20,7 @@ import javax.swing.UIManager;
 import javax.swing.tree.DefaultTreeCellRenderer;
 
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import sun.swing.DefaultLookup;
 
 /**
     Extends the standard tree cell renderer to get icon and text style from NodeBase.
@@ -77,8 +78,14 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
     public void updateUI ()
     {
         super.updateUI ();
+
+        // The following are hacks to fix issues with Nimubs
+
+        setBackgroundSelectionColor (DefaultLookup.getColor (this, ui, "Tree.selectionBackground"));
+
         Object o = UIManager.get ("Tree:TreeCell[Focused+Selected].backgroundPainter");
         if (o instanceof Painter<?>) backgroundPainter = (Painter<JComponent>) o;
+        else                         backgroundPainter = null;
     }
 
     /**
