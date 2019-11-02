@@ -1298,6 +1298,8 @@ public class PanelEquations extends JPanel
 
         public BreadcrumbRenderer ()
         {
+            nontree = true;
+
             Font baseFont = UIManager.getFont ("Tree.font");
             setFont (baseFont.deriveFont (Font.BOLD));
             setText (text);

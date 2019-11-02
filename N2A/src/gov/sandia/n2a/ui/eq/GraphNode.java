@@ -455,6 +455,8 @@ public class GraphNode extends JPanel
 
         public TitleRenderer ()
         {
+            nontree = true;
+
             setTransferHandler (container.transferHandler);
 
             InputMap inputMap = getInputMap ();

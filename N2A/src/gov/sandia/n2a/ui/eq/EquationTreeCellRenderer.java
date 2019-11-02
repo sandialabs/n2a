@@ -9,8 +9,13 @@ package gov.sandia.n2a.ui.eq;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+
 import javax.swing.Icon;
+import javax.swing.JComponent;
 import javax.swing.JTree;
+import javax.swing.Painter;
 import javax.swing.UIManager;
 import javax.swing.tree.DefaultTreeCellRenderer;
 
@@ -23,6 +28,9 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 @SuppressWarnings("serial")
 public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
 {
+    protected boolean             nontree;  // Need hack to paint background
+    protected Painter<JComponent> backgroundPainter;
+
     // These colors may get changed when look & feel is changed.
     public static Color colorInherit          = Color.blue;
     public static Color colorOverride         = Color.black;
@@ -63,6 +71,14 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
             colorSelectedOverride = Color.black;
             colorSelectedKill     = Color.red;
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    public void updateUI ()
+    {
+        super.updateUI ();
+        Object o = UIManager.get ("Tree:TreeCell[Focused+Selected].backgroundPainter");
+        if (o instanceof Painter<?>) backgroundPainter = (Painter<JComponent>) o;
     }
 
     /**
@@ -133,5 +149,16 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         Icon icon = getIcon ();
         if (icon == null) return 0;
         return icon.getIconWidth () + getIconTextGap ();
+    }
+
+    public void paint (Graphics g)
+    {
+        if (nontree  &&  backgroundPainter != null  &&  hasFocus)
+        {
+            Graphics2D g2 = (Graphics2D) g.create ();
+            backgroundPainter.paint (g2, this, getWidth (), getHeight ());
+            g2.dispose ();
+        }
+        super.paint (g);
     }
 }
