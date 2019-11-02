@@ -264,6 +264,20 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         multiLineEditor.addMouseListener (mouseListener);
     }
 
+    public static void staticUpdateUI ()
+    {
+        int left  = (Integer) UIManager.get ("Tree.leftChildIndent");
+        int right = (Integer) UIManager.get ("Tree.rightChildIndent");
+        offsetPerLevel = left + right;
+    }
+
+    public void updateUI ()
+    {
+        oneLineEditor  .updateUI ();
+        multiLinePane  .updateUI ();
+        multiLineEditor.updateUI ();
+    }
+
     public Component getTitleEditorComponent (JTree tree, NodePart value, boolean open)
     {
         return getTreeCellEditorComponent (tree, value, open, false, true);
@@ -434,13 +448,6 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         if (! e.isAddedPath ()) return;
         focusTree = (JTree) e.getSource ();
         lastPath = focusTree.getSelectionPath ();
-    }
-
-    public static void updateUI ()
-    {
-        int left  = (Integer) UIManager.get ("Tree.leftChildIndent");
-        int right = (Integer) UIManager.get ("Tree.rightChildIndent");
-        offsetPerLevel = left + right;
     }
 
     /**

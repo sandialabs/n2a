@@ -695,8 +695,9 @@ public class PanelEquations extends JPanel
 
     public void updateUI ()
     {
-        EquationTreeCellRenderer.earlyUpdateUI ();
-        EquationTreeCellEditor.updateUI ();
+        EquationTreeCellRenderer.staticUpdateUI ();
+        EquationTreeCellEditor  .staticUpdateUI ();
+        if (editor != null) editor.updateUI ();
         super.updateUI ();
     }
 

@@ -31,7 +31,7 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
     public static Color colorSelectedOverride = Color.black;
     public static Color colorSelectedKill     = Color.red;
 
-    public static void earlyUpdateUI ()
+    public static void staticUpdateUI ()
     {
         // Check colors to see if text is dark or light.
         Color fg = UIManager.getColor ("Tree.textForeground");
