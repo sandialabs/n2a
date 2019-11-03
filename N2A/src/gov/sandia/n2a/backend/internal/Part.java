@@ -180,6 +180,7 @@ public class Part extends Instance
 
         if (equations.parts.size () > 0)
         {
+            // If there are parts at all, then orderedParts must be filled in correctly. Otherwise it may be null.
             for (EquationSet s : equations.orderedParts) ((Population) valuesObject[s.priority]).init (simulator);
         }
     }

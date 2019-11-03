@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -51,6 +51,23 @@ public class Subtract extends OperatorBinary
                 from.changed = true;
                 operand0.parent = parent;
                 return operand0;
+            }
+        }
+        else if (operand1 instanceof AccessVariable)
+        {
+            if (operand0 instanceof AccessVariable)
+            {
+                AccessVariable av0 = (AccessVariable) operand0;
+                AccessVariable av1 = (AccessVariable) operand1;
+                if (av0.reference.equals (av1.reference))
+                {
+                    operand0.releaseDependencies (from);
+                    operand1.releaseDependencies (from);
+                    from.changed = true;
+                    result = new Constant (0);
+                    result.parent = parent;
+                    return result;
+                }
             }
         }
         return this;

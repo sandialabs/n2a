@@ -1,5 +1,5 @@
 /*
-Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -413,8 +413,18 @@ public class BackendDataC
         needLocalPreserve = localIntegrated.size () > 0  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0;
         needLocalDtor     = needLocalPreserve  ||  localDerivative.size () > 0;
         needLocalCtor     = needLocalDtor  ||  s.accountableConnections != null  ||  refcount  ||  index != null  ||  localMembers.size () > 0;
-        needLocalDie      = s.canDie ()  &&  (liveFlag >= 0  ||  s.connectionBindings == null  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
-        needLocalInit     = s.connectionBindings == null  ||  simplifiedLocalInit.size () > 0  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0;
+        boolean trackN    =  n != null  &&  ! singleton;
+        needLocalDie      = s.canDie ()  &&  (liveFlag >= 0  ||  trackN  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
+        needLocalInit     =    localBufferedExternal.size () > 0
+                            || eventTargets.size () > 0
+                            || ! localFlagType.isEmpty ()
+                            || localBuffered.contains (dt)
+                            || lastT
+                            || simplifiedLocalInit.size () > 0
+                            || trackN
+                            || accountableEndpoints.size () > 0
+                            || eventTargets.size () > 0
+                            || s.parts.size () > 0;
         needLocalFinalize = localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();
     }
 

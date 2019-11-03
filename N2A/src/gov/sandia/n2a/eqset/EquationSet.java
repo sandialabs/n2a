@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -544,9 +544,11 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void sortParts ()
     {
+        if (parts.size () == 0) return;  // Nothing to do. We want to avoid requesting a zero-length PriorityQueue below, because that is illegal.
+
         for (EquationSet p : parts)
         {
-            p.determineOrder ();  // Apply this process recursively.
+            p.sortParts ();  // Apply this process recursively.
             p.priority = 0;  // Should not generally be needed, since we do this process only once, and priority is initialize to zero.
         }
 
@@ -2924,7 +2926,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            if (v.hasAttribute ("temporary")  &&  v.hasAttribute ("initOnly"))
+            if (v.hasAll ("temporary", "initOnly"))
             {
                 v.removeAttribute ("initOnly");
 

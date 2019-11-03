@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -2186,6 +2186,7 @@ public class JobC extends Thread
             // contained populations
             if (s.parts.size () > 0)
             {
+                // If there are parts at all, then orderedParts must be filled in correctly. Otherwise it may be null.
                 for (EquationSet e : s.orderedParts)
                 {
                     result.append ("  " + mangle (e.name) + ".init ();\n");
@@ -3449,39 +3450,52 @@ public class JobC extends Thread
         // Write the default equation
         if (defaultEquation == null)
         {
-            String defaultValue = null;
-            if (isType)
-            {
-                defaultValue = "0";  // always reset $type to 0
-            }
-            else if (connect  &&  v.name.equals ("$p"))
-            {
-                defaultValue = "1";
-            }
-            else
-            {
-                // External-write variables with a combiner get reset during finalize.
-                // However, buffered variables with simple assignment (REPLACE) need
-                // to copy forward the current buffered value.
-                if (   v.assignment == Variable.REPLACE
-                    && v.reference.variable == v
-                    && v.equations.size () > 0
-                    && v.hasAny ("cycle", "externalRead")
-                    && ! v.hasAttribute ("initOnly"))
-                {
-                    defaultValue = resolve (v.reference, context, false);  // copy previous value
-                }
-            }
-
-            if (defaultValue != null)
+            if (v.hasAttribute ("temporary"))
             {
                 if (haveIf)
                 {
                     context.result.append (pad + "else\n");
                     context.result.append (pad + "{\n");
                 }
-                context.result.append (padIf + resolve (v.reference, context, true) + " = " + defaultValue + ";\n");
+                context.result.append (padIf + zero (resolve (v.reference, context, true), v) + ";\n");
                 if (haveIf) context.result.append (pad + "}\n");
+            }
+            else
+            {
+                String defaultValue = null;
+                if (isType)
+                {
+                    defaultValue = "0";  // always reset $type to 0
+                }
+                else if (connect  &&  v.name.equals ("$p"))
+                {
+                    defaultValue = "1";
+                }
+                else
+                {
+                    // External-write variables with a combiner get reset during finalize.
+                    // However, buffered variables with simple assignment (REPLACE) need
+                    // to copy forward the current buffered value.
+                    if (   v.assignment == Variable.REPLACE
+                        && v.reference.variable == v
+                        && v.equations.size () > 0
+                        && v.hasAny ("cycle", "externalRead")
+                        && ! v.hasAttribute ("initOnly"))
+                    {
+                        defaultValue = resolve (v.reference, context, false);  // copy previous value
+                    }
+                }
+
+                if (defaultValue != null)
+                {
+                    if (haveIf)
+                    {
+                        context.result.append (pad + "else\n");
+                        context.result.append (pad + "{\n");
+                    }
+                    context.result.append (padIf + resolve (v.reference, context, true) + " = " + defaultValue + ";\n");
+                    if (haveIf) context.result.append (pad + "}\n");
+                }
             }
         }
         else
