@@ -1316,11 +1316,15 @@ public class JobC extends Thread
         }
         s.simplify ("$init", bed.globalInit);
         EquationSet.determineOrderInit (bed.globalInit);
+        //   The following code tricks multiconditional() into treating all variables as unbuffered and non-accumulating.
         List<Variable> buffered = bed.globalBuffered;
-        bed.globalBuffered = new ArrayList<Variable> ();  // Trick multiconditional() and its subroutines into directly updating members.
+        bed.globalBuffered = new ArrayList<Variable> ();
         for (Variable v : bed.globalInit)
         {
+            int assignment = v.assignment;
+            v.assignment = Variable.REPLACE;
             multiconditional (v, context, "  ");
+            v.assignment = assignment;
         }
         bed.globalBuffered = buffered;
         //   create instances

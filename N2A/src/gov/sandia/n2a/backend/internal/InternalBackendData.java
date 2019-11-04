@@ -1,5 +1,5 @@
 /*
-Copyright 2015-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2015-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -722,7 +722,8 @@ public class InternalBackendData
             }
 
             boolean initOnly        = v.hasAttribute ("initOnly");
-            boolean updates         = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
+            boolean emptyCombiner   = v.isEmptyCombiner ();
+            boolean updates         = ! initOnly  &&  v.equations.size () > 0  &&  ! emptyCombiner  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
             boolean temporary       = v.hasAttribute ("temporary");
             boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
             if (v.hasAttribute ("externalWrite")) v.externalWrite = true;
@@ -756,7 +757,7 @@ public class InternalBackendData
                 if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))  // eliminate non-computed values, unless they refer to a variable outside the immediate equation set
                 {
                     if (updates) globalUpdate.add (v);
-                    if (! unusedTemporary) globalInit.add (v);
+                    if (! unusedTemporary  &&  ! emptyCombiner) globalInit.add (v);
                     if (v.hasAttribute ("reference"))
                     {
                         addReferenceGlobal (v.reference, s);
@@ -812,7 +813,7 @@ public class InternalBackendData
                 if (! v.hasAny (new String[] {"constant", "accessor", "readOnly"})  ||  v.hasAll (new String[] {"constant", "reference"}))
                 {
                     if (updates) localUpdate.add (v);
-                    if (! unusedTemporary  &&  ! forbiddenLocalInit.contains (v.name)) localInit.add (v);
+                    if (! unusedTemporary  &&  ! emptyCombiner  &&  ! forbiddenLocalInit.contains (v.name)) localInit.add (v);
                     if (v.hasAttribute ("reference"))
                     {
                         addReferenceLocal (v.reference, s);

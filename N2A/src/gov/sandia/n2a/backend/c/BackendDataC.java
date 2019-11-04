@@ -174,7 +174,7 @@ public class BackendDataC
             boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
             boolean temporary              = v.hasAttribute ("temporary");
             boolean unusedTemporary        = temporary  &&  ! v.hasUsers ();
-            boolean updates                = ! initOnly  &&  v.equations.size () > 0  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
+            boolean updates                = ! initOnly  &&  v.equations.size () > 0  &&  ! v.isEmptyCombiner ()  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
 
             if (v.hasAttribute ("global"))
             {

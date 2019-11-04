@@ -452,6 +452,28 @@ public class Variable implements Comparable<Variable>, Cloneable
         v.equations.clear ();
     }
 
+    public boolean isEmptyCombiner ()
+    {
+        if (equations.size () != 1  ||  assignment == Variable.REPLACE) return false;
+
+        Operator e = equations.first ().expression;
+        if (! e.isScalar ()) return false;
+        double value = e.getDouble ();
+        switch (assignment)
+        {
+            case Variable.ADD:
+                return value == 0;
+            case Variable.MULTIPLY:
+            case Variable.DIVIDE:
+                return value == 1;
+            case Variable.MIN:
+                return value == Double.POSITIVE_INFINITY;
+            case Variable.MAX:
+                return value == Double.NEGATIVE_INFINITY;
+        }
+        return false;  // This statement should never be reached.
+    }
+
     public void visit (Visitor visitor)
     {
         if (equations == null) return;
