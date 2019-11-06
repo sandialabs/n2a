@@ -2213,26 +2213,6 @@ public class EquationSet implements Comparable<EquationSet>
         for (EquationSet s : parts) s.dumpMedians (ps);
     }
 
-    public void determineUnits ()
-    {
-        while (determineUnitsEval ());
-    }
-
-    public boolean determineUnitsEval ()
-    {
-        boolean changed = false;
-        for (EquationSet s : parts)
-        {
-            if (s.determineUnitsEval ()) changed = true;
-        }
-        for (Variable v : variables)
-        {
-            try {if (v.determineUnit (false)) changed = true;}
-            catch (Exception e) {}  // No exceptions should occur during this pass.
-        }
-        return changed;
-    }
-
     /**
         Convenience function to implement user preferences about dimension checking during compilation.
         Depends on results of: resolveLHS, resolveRHS -- All variable references must be resolved.
@@ -2250,10 +2230,48 @@ public class EquationSet implements Comparable<EquationSet>
         {
             boolean error = dimension.equals ("Error");
             PrintStream err = Backend.err.get ();
-            err.println ((error ? "ERROR" : "WARNING") + ": Inconsistent dimensions. Report shows operator and mismatched units from operands.");
+            err.println ((error ? "ERROR" : "WARNING") + ": Inconsistent dimensions. For each variable, this report shows the mismatched dimensions around the first offending operator.");
             for (String m : mismatches) err.println (m);
             if (error) throw new AbortRun ();
         }
+    }
+
+    public void determineUnits ()
+    {
+        int depth = determineUnitsDepth () * 2 + 2;  // See comments on determineExponents(). Similar reasoning on depth limit applies here.
+        for (int i = 0; i < depth; i++)
+        {
+            if (! determineUnitsEval ()) break;
+        }
+    }
+
+    public int determineUnitsDepth ()
+    {
+        int result = 0;
+        for (EquationSet s : parts) result = Math.max (result, s.determineUnitsDepth ());
+        result = Math.max (result, variables.size ());
+        return result;
+    }
+
+    public boolean determineUnitsEval ()
+    {
+        boolean changed = false;
+        for (EquationSet s : parts)
+        {
+            if (s.determineUnitsEval ()) changed = true;
+        }
+        for (Variable v : variables)
+        {
+            try
+            {
+                if (v.determineUnit (false)) changed = true;
+            }
+            catch (Exception e)
+            {
+                return false;  // An exception during this pass is fatal. Try to stop as soon as possible.
+            }
+        }
+        return changed;
     }
 
     public void checkUnitsEval (LinkedList<String> mismatches)
@@ -2270,7 +2288,7 @@ public class EquationSet implements Comparable<EquationSet>
                 String name = prefix ();
                 if (! name.isEmpty ()) name += ".";
                 name += v.nameString ();
-                mismatches.add ("  " + name + " : " + error.getMessage ());
+                mismatches.add ("  " + name + ": " + error.getMessage ());
             }
         }
     }

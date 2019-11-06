@@ -35,10 +35,12 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
 
+import javax.measure.Dimension;
 import javax.measure.Unit;
 
 public class Variable implements Comparable<Variable>, Cloneable
@@ -816,6 +818,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         boolean changed = false;
         Unit<?> nextUnit = null;
 
+        // Ensure that all equations share the same unit.
         for (EquationEntry e : equations)
         {
             if (e.condition != null) e.condition.determineUnit (fatal);
@@ -836,6 +839,7 @@ public class Variable implements Comparable<Variable>, Cloneable
             }
         }
 
+        // If we have a derivative, then use it as a clue, or offer a clue to it.
         if (derivative != null)
         {
             boolean haveNext       =  nextUnit        != null  &&  ! nextUnit       .isCompatible (AbstractUnit.ONE);
@@ -847,23 +851,25 @@ public class Variable implements Comparable<Variable>, Cloneable
                 {
                     if (fatal  &&  ! integrated.isCompatible (AbstractUnit.ONE)  &&  ! integrated.isCompatible (nextUnit))
                     {
-                        throw new Exception ("derivative " + derivative.unit + " versus " + nextUnit);
+                        throw new Exception (nextUnit + " versus integrated " + integrated);
                     }
                 }
-                else
+                else  // derivative unit is better defined than nextUnit
                 {
                     nextUnit = integrated;
                 }
             }
-            else if (haveNext  ||  nextUnit != null  &&  derivative.unit == null)
+            else if (haveNext  ||  nextUnit != null  &&  derivative.unit == null)  // nextUnit is better defined than derivative unit
             {
                 derivative.unit = UnitValue.simplify (nextUnit.divide (UnitValue.seconds));
                 changed = true;
             }
         }
 
-        boolean referenceOut = reference != null  &&  reference.variable != this;
-        if (referenceOut)
+        // If we are a reference to another variable, then synchronize unit with it,
+        // but only if the combining operator is such that it must have the same unit as us.
+        // Generally, this is any combiner that is not multiplicative in nature.
+        if (reference != null  &&  reference.variable != this  &&  assignment != MULTIPLY  &&  assignment != DIVIDE)
         {
             boolean haveNext      =  nextUnit                != null  &&  ! nextUnit               .isCompatible (AbstractUnit.ONE);
             boolean haveReference =  reference.variable.unit != null  &&  ! reference.variable.unit.isCompatible (AbstractUnit.ONE);
@@ -873,23 +879,37 @@ public class Variable implements Comparable<Variable>, Cloneable
                 {
                     if (fatal  &&  ! reference.variable.unit.isCompatible (nextUnit))
                     {
-                        throw new Exception ("reference " + reference.variable.unit + " versus " + unit);
+                        throw new Exception (nextUnit + " versus reference " + reference.variable.unit);
                     }
                 }
-                else
+                else  // reference unit is better defined than nextUnit
                 {
                     nextUnit = reference.variable.unit;
                 }
             }
-            else if (haveNext  ||  nextUnit != null  &&  reference.variable.unit == null)
+            else if (haveNext  ||  nextUnit != null  &&  reference.variable.unit == null)  // nextUnit is better defined than reference unit
             {
                 reference.variable.unit = nextUnit;
                 changed = true;
             }
         }
 
-        if (nextUnit != null  &&  (unit == null  ||  ! nextUnit.isCompatible (unit)))
+        if (nextUnit != null  &&  (unit == null  ||  ! nextUnit.isCompatible (unit)))  // nextUnit is better defined than current unit
         {
+            // Sanity check. Because dimensional analysis can form a feedback loop through the system of equations,
+            // it is possible for a bizarre unit to grow without bound. This would be fine, except that the Units of Measurement
+            // library uses a recursive function call to evaluate dimension powers, and this can result in a stack overflow for
+            // excessively large numbers.
+            final int maxPower = 10;  // The limit here is arbitrary, but should be enough for any sane unit (except maybe volume of 11-dimensional space). If not, maybe make this user-configurable on the same tab as dimension checking mode.
+            Map<? extends Dimension, Integer> d = nextUnit.getDimension ().getBaseDimensions ();
+            if (d != null)
+            {
+                for (Entry<? extends Dimension, Integer> e : d.entrySet ())
+                {
+                    if (Math.abs (e.getValue ()) > maxPower) return false;  // Stop propagating units when they go insane.
+                }
+            }
+
             changed = true;
             unit = nextUnit;
         }
