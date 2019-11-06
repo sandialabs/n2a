@@ -357,6 +357,7 @@ public class MDir extends MNode
         for (String index : root.toFile ().list ())  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
         {
             if (index.startsWith (".")) continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
+            if (suffix != null  &&  ! Files.isDirectory (root.resolve (index))) continue;  // Only permit directories when suffix is defined.
             newChildren.put (index, children.get (index));  // Some children could get orphaned, if they were deleted from disk by another process. In that case the UI should be rebuilt.
         }
         // Include newly-created docs that have never been flushed to disk.
