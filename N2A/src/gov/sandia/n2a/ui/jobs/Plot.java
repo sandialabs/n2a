@@ -40,16 +40,13 @@ public class Plot extends OutputParser
         // Decide between one or two axis display
 
         columnCount = columns.size () - 1;   // Subtract 1 to account for time column.
-        if (isXycePRN  &&  time != columns.get (0)) columnCount--;  // Account for Xyce step column.
-
         Column[] sorted = new Column[columnCount];
         int i = 0;
         for (Column c : columns)
         {
             if (c == time) continue;
-            if (isXycePRN  &&  c == columns.get (0)) continue;
-
             c.computeStats ();
+            if (raw) c.header = Integer.toString (i);
             sorted[i++] = c;
         }
         Arrays.sort (sorted, new ColumnComparator ());
@@ -88,8 +85,8 @@ public class Plot extends OutputParser
         	XYSeries series = new XYSeries (c.header);
             for (int r = 0; r < c.values.size (); r++)
             {
-                Double value = c.values.get (r);
-                if (value.isInfinite ()  ||  value.isNaN ()) value = 0.0;  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
+                Float value = c.values.get (r);
+                if (value.isInfinite ()  ||  value.isNaN ()) value = 0.0f;  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
                 series.add (time.values.get (r + c.startRow), value);
             }
             dataset0.addSeries (series);
@@ -108,8 +105,8 @@ public class Plot extends OutputParser
                 XYSeries series = new XYSeries (c.header);
                 for (int r = 0; r < c.values.size (); r++)
                 {
-                    Double value = c.values.get (r);
-                    if (value.isInfinite ()  ||  value.isNaN ()) value = 0.0;  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
+                    Float value = c.values.get (r);
+                    if (value.isInfinite ()  ||  value.isNaN ()) value = 0.0f;  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
                     series.add (time.values.get (r + c.startRow), value);
                 }
                 dataset1.addSeries (series);

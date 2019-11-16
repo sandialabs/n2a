@@ -27,10 +27,9 @@ public class Table extends OutputParser
 
     public Table (Path path, boolean sorted)
     {
-    	parse (path, Double.NaN);
+    	parse (path, Float.NaN);
     	for (Column c : columns) rows = Math.max (rows, c.startRow + c.values.size ());
 
-    	if (isXycePRN) columns.remove (0);  // get rid of Index column
     	int t = columns.indexOf (time);
     	if (t > 0)
     	{
@@ -39,13 +38,13 @@ public class Table extends OutputParser
     	}
 
     	int count = columns.size ();
-    	if (sorted  &&  count > 1)
+    	if (sorted  &&  count > 1  &&  ! raw)
     	{
     	    // By using an MNode to sort, we get the columns in M order (numbers first, in truly numerical order, followed alphabetical order)
     	    MVolatile mapping = new MVolatile ();
     	    for (int i = 1; i < count; i++) mapping.set (i, columns.get (i).header);
     	    ArrayList<Column> sortedColumns = new ArrayList<Column> (count);
-    	    sortedColumns.add (columns.get (0));
+    	    sortedColumns.add (columns.get (0));  // time always goes first
     	    for (MNode m : mapping) sortedColumns.add (columns.get (m.getInt ()));
     	    columns = sortedColumns;
     	}
@@ -114,8 +113,8 @@ public class Table extends OutputParser
             Column c = columns.get (column);
             row -= c.startRow;
             if (row < 0  ||  row >= c.values.size ()) return "";
-            double result = c.values.get (row);
-            if (Double.isNaN (result)) return "";
+            float result = c.values.get (row);
+            if (Float.isNaN (result)) return "";
             return Scalar.print (result);
         }
     }

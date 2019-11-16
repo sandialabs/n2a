@@ -42,29 +42,36 @@ public class Raster extends OutputParser
         dataset.addSeries (series);
 
         // Convert column indices.
-        int nextColumn = 0;
-        for (Column c : columns)
+        if (raw)
         {
-            try
+            int i = 0;
+            for (Column c : columns)
             {
-                c.index = Integer.parseInt (c.header);
+                if (! timeFound  ||  c != time) c.index = i++;
             }
-            catch (NumberFormatException e)
+        }
+        else
+        {
+            int nextColumn = -1;
+            for (Column c : columns)
             {
-                c.index = -1;
+                try
+                {
+                    c.index = Integer.parseInt (c.header);
+                }
+                catch (NumberFormatException e)
+                {
+                    c.index = nextColumn--;
+                }
             }
-            nextColumn = Math.max (nextColumn, c.index);
         }
 
         // Generate dateset
         for (Column c : columns)
         {
-            // Assign column index if header was not an integer.
-            if (c.index < 0) c.index = ++nextColumn;
-
-            // Assemble data
             if (timeFound)
             {
+                if (c == time) continue;
                 for (int r = 0; r < c.values.size (); r++)
                 {
                     if (c.values.get (r) != 0) series.add (time.values.get (r + c.startRow).doubleValue (), c.index);

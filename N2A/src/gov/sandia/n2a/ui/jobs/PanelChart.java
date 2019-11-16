@@ -6,9 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.jobs;
 
-import java.awt.AlphaComposite;
 import java.awt.Color;
-import java.awt.Composite;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
@@ -40,12 +38,15 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ConcurrentModificationException;
 
 import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.event.MouseInputAdapter;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
@@ -57,8 +58,6 @@ import org.jfree.chart.editor.ChartEditor;
 import org.jfree.chart.editor.ChartEditorManager;
 import org.jfree.chart.event.ChartChangeEvent;
 import org.jfree.chart.event.ChartChangeListener;
-import org.jfree.chart.event.ChartProgressEvent;
-import org.jfree.chart.event.ChartProgressListener;
 import org.jfree.chart.plot.Pannable;
 import org.jfree.chart.plot.Plot;
 import org.jfree.chart.plot.PlotOrientation;
@@ -70,7 +69,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 
 
 @SuppressWarnings("serial")
-public class PanelChart extends JPanel implements ChartChangeListener, ChartProgressListener, Printable
+public class PanelChart extends JPanel implements ChartChangeListener, Printable
 {
     protected JFreeChart         chart;
     protected Plot               plot;
@@ -87,11 +86,10 @@ public class PanelChart extends JPanel implements ChartChangeListener, ChartProg
 
     public PanelChart ()
     {
-        setOpaque (false);
-
         MouseInputAdapter mouseListener = new PanelChartMouseListener ();
         addMouseListener       (mouseListener);
         addMouseMotionListener (mouseListener);
+        addMouseWheelListener  (mouseListener);
 
         JButton buttonProperties = new JButton (ImageUtil.getImage ("properties.gif"));
         buttonProperties.setMargin (new Insets (2, 2, 2, 2));
@@ -139,15 +137,9 @@ public class PanelChart extends JPanel implements ChartChangeListener, ChartProg
     **/
     public void setChart (JFreeChart newChart)
     {
-        if (chart != null)
-        {
-            chart.removeChangeListener (this);
-            chart.removeProgressListener (this);
-        }
-        chart = newChart;
         if (drawThread != null) drawThread.stop = true;
-        drawThread = null;
-        buffer = null;
+        if (chart != null) chart.removeChangeListener (this);
+        chart = newChart;
         if (chart == null)
         {
             plot = null;
@@ -157,9 +149,18 @@ public class PanelChart extends JPanel implements ChartChangeListener, ChartProg
 
         plot = chart.getPlot ();
         info = new ChartRenderingInfo ();
-
         chart.addChangeListener (this);
-        chart.addProgressListener (this);
+
+        if (buffer != null)
+        {
+            // Ensure that any previous graph is wiped clean.
+            Graphics2D bg = (Graphics2D) buffer.getGraphics ();
+            bg.clearRect (0, 0, buffer.getWidth (), buffer.getHeight ());  // The clear color is platform dependent. We don't really care what it is.
+            bg.dispose ();
+
+            drawThread = new DrawThread ();
+            drawThread.start ();
+        }
     }
 
     public class PanelChartMouseListener extends MouseInputAdapter
@@ -170,28 +171,11 @@ public class PanelChart extends JPanel implements ChartChangeListener, ChartProg
 
         public void mousePressed (MouseEvent e)
         {
-            if (e.getButton () == MouseEvent.BUTTON1)
+            if (SwingUtilities.isRightMouseButton (e))
             {
-                // can we pan this plot?
-                if (plot instanceof Pannable)
-                {
-                    Pannable pannable = (Pannable) plot;
-                    if (pannable.isDomainPannable ()  ||  pannable.isRangePannable ())
-                    {
-                        Rectangle2D screenDataArea = getScreenDataArea (e.getX (), e.getY ());
-                        if (screenDataArea != null  &&  screenDataArea.contains (e.getPoint ()))
-                        {
-                            panW = screenDataArea.getWidth ();
-                            panH = screenDataArea.getHeight ();
-                            panLast = e.getPoint ();
-                            setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
-                        }
-                    }
-                }
-            }
-            else if (zoomRectangle == null)
-            {
+                if (zoomRectangle != null) return;
                 if (! (plot instanceof Zoomable)) return;  // Don't even initiate a zoom region unless it can have an effect. This reduces need to check for Zoomable elsewhere.
+                if (drawThread != null  &&  drawThread.isAlive ()) return;  // JFreeChart is not thread-safe, so don't update chart while draw is in progress.
 
                 int x = e.getX ();
                 int y = e.getY ();
@@ -207,6 +191,23 @@ public class PanelChart extends JPanel implements ChartChangeListener, ChartProg
                     zoomPoint.y = (int) Math.max (area.getMinY (), Math.min (y, area.getMaxY ()));
                 }
             }
+            else  // Left or Middle buttons
+            {
+                // can we pan this plot?
+                if (! (plot instanceof Pannable)) return;
+                Pannable pannable = (Pannable) plot;
+                if (pannable.isDomainPannable ()  ||  pannable.isRangePannable ())
+                {
+                    Rectangle2D screenDataArea = getScreenDataArea (e.getX (), e.getY ());
+                    if (screenDataArea != null  &&  screenDataArea.contains (e.getPoint ()))
+                    {
+                        panW = screenDataArea.getWidth ();
+                        panH = screenDataArea.getHeight ();
+                        panLast = e.getPoint ();
+                        setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
+                    }
+                }
+            }
         }
 
         public void mouseDragged (MouseEvent e)
@@ -214,6 +215,8 @@ public class PanelChart extends JPanel implements ChartChangeListener, ChartProg
             // Handle pan, if active
             if (panLast != null)
             {
+                if (drawThread != null  &&  drawThread.isAlive ()) return;
+
                 double dx = e.getX () - panLast.getX();
                 double dy = e.getY () - panLast.getY();
                 if (dx == 0  &&  dy == 0) return;
@@ -376,6 +379,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, ChartProg
 
         public void mouseWheelMoved (MouseWheelEvent e)
         {
+            if (drawThread != null  &&  drawThread.isAlive ()) return;
             if (! (plot instanceof Zoomable)) return;
             Zoomable z = (Zoomable) plot;
 
@@ -503,14 +507,16 @@ public class PanelChart extends JPanel implements ChartChangeListener, ChartProg
     @Override
     public void chartChanged (ChartChangeEvent event)
     {
-        if (drawThread != null) drawThread.stop = true;
+        if (drawThread != null  &&  drawThread.isAlive ()) return;  // Prevent infinite loop when initializing Raster.TickRenderer. In general, don't change chart when draw is in progress.
         drawThread = new DrawThread ();
         drawThread.start ();
     }
 
-    public class DrawThread extends Thread
+    public class DrawThread extends Thread implements ActionListener
     {
         public boolean stop;
+        public Timer   timer = new Timer (1000, this);
+        public int     age;
 
         public DrawThread ()
         {
@@ -520,31 +526,32 @@ public class PanelChart extends JPanel implements ChartChangeListener, ChartProg
 
         public void run ()
         {
-            // Determine buffer bounds
             int w = buffer.getWidth ();
             int h = buffer.getHeight ();
             Rectangle2D bufferArea = new Rectangle2D.Double (0, 0, w, h);
 
-            // Clear buffer with a transparent background
-            if (buffer == null) return;  // This is not enough to prevent a race condition with setChart(). However, in practice the timing will never be close enough to create one.
-            Graphics2D bg = (Graphics2D) buffer.getGraphics ();  // buffer in our containing class may change, but that does no harm to bg. It merely means that we may waste some work painting a buffer that will never be used.
-            Composite savedComposite = bg.getComposite ();
-            bg.setComposite (AlphaComposite.getInstance (AlphaComposite.CLEAR, 0.0f));
-            bg.fill (bufferArea);
-            bg.setComposite (savedComposite);
-
-            if (! stop) chart.draw (bg, bufferArea, null, info);  // The most important line of code in this entire class.
+            Graphics2D bg;
+            synchronized (this)
+            {
+                bg = (Graphics2D) buffer.getGraphics ();  // buffer in our containing class may change, but that does no harm to bg. It merely means that we may waste some work painting a buffer that will never be used.
+            }
+            timer.start ();
+            try
+            {
+                if (! stop) chart.draw (bg, bufferArea, null, info);  // The most important line in this entire class.
+            }
+            catch (ConcurrentModificationException e) {}
+            timer.stop ();
             bg.dispose ();
 
-            if (! stop) repaint ();  // The final repaint. Several other calls may be made by chartProgress() to show intermediate results.
+            if (! stop) repaint ();  // The final repaint.
         }
-    }
 
-    @Override
-    public void chartProgress (ChartProgressEvent event)
-    {
-        int percent = event.getPercent ();
-        if (percent > 0  &&  percent < 100) repaint (1000);  // Throttle repaint rate.
+        public void actionPerformed (ActionEvent e)
+        {
+            age++;
+            repaint ();
+        }
     }
 
     public void paintComponent (Graphics g)

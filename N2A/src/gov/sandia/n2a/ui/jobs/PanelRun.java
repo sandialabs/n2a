@@ -518,8 +518,8 @@ public class PanelRun extends JPanel
                                     {
                                         try
                                         {
-                                            double v = Double.parseDouble (p);
-                                            if (v != 0) columns++;
+                                            Float.parseFloat (p);
+                                            columns++;  // If that didn't throw an exception, then p is likely a number.
                                         }
                                         catch (Exception e) {}
                                     }
