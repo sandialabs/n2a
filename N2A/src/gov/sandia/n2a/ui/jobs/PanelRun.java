@@ -70,6 +70,7 @@ public class PanelRun extends JPanel
     public ButtonGroup       buttons;
     public JComboBox<String> comboScript;
     public JTextArea         displayText;
+    public PanelChart        displayChart = new PanelChart ();
     public JScrollPane       displayPane = new JScrollPane ();
     public DisplayThread     displayThread = null;
     public NodeBase          displayNode = null;
@@ -327,6 +328,8 @@ public class PanelRun extends JPanel
         buttons.add (buttonRaster);
         buttonText.setSelected (true);
 
+        displayChart.buttonBar.setVisible (false);
+
         comboScript = new JComboBox<String> ();
         comboScript.setEditable (true);
         comboScript.setToolTipText ("Run Script");
@@ -399,6 +402,7 @@ public class PanelRun extends JPanel
                             buttonGraph,
                             buttonRaster,
                             Box.createHorizontalStrut (15),
+                            displayChart.buttonBar,
                             "hgap=5,vgap=1"
                         ),
                         "C", comboScript
@@ -434,13 +438,14 @@ public class PanelRun extends JPanel
     {
         public NodeFile node;
         public String   viz;  ///< The type of visualization to show, such as table, graph or raster
-        public boolean stop = false;
+        public boolean  stop = false;
 
         public DisplayThread (NodeFile node, String viz)
         {
             super ("PanelRun Fetch File");
             this.node = node;
             this.viz  = viz;
+            setDaemon (true);
         }
 
         public void run ()
@@ -542,12 +547,22 @@ public class PanelRun extends JPanel
                         else if (viz.equals ("Graph"))
                         {
                             Plot plot = new Plot (node.path);
-                            if (plot.hasData ()) panel = plot.createGraphPanel ();
+                            if (plot.hasData ())
+                            {
+                                displayChart.setChart (plot.createChart ());
+                                panel = displayChart;
+                                displayChart.buttonBar.setVisible (true);
+                            }
                         }
                         else if (viz.equals ("Raster"))
                         {
                             Raster raster = new Raster (node.path);
-                            panel = raster.createGraphPanel ();
+                            if (raster.hasData ())
+                            {
+                                displayChart.setChart (raster.createChart ());
+                                panel = displayChart;
+                                displayChart.buttonBar.setVisible (true);
+                            }
                         }
 
                         if (stop) return;
@@ -605,7 +620,16 @@ public class PanelRun extends JPanel
             }
             displayText.setText ("loading...");
         }
-        if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
+        Component view = displayPane.getViewport ().getView ();
+        if (view != displayText)
+        {
+            if (view == displayChart)
+            {
+                displayChart.setChart (null);  // preemtively release old chart
+                displayChart.buttonBar.setVisible (false);
+            }
+            displayPane.setViewportView (displayText);
+        }
 
         String viz = buttons.getSelection ().getActionCommand ();
         displayThread = new DisplayThread ((NodeFile) displayNode, viz);

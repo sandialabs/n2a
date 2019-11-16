@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,7 +9,6 @@ package gov.sandia.n2a.ui.jobs;
 import java.awt.Color;
 import java.nio.file.Path;
 import java.util.Arrays;
-import javax.swing.JPanel;
 
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
@@ -33,13 +32,7 @@ public class Plot extends OutputParser
     public Plot (Path path)
     {
     	parse (path);
-    }
-
-    public JPanel createGraphPanel ()
-    {
         createDatasets ();
-        JFreeChart chart = createChart ();
-        return new ChartPanelDrag (chart);
     }
 
     public void createDatasets ()

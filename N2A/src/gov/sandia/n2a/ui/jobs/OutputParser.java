@@ -19,6 +19,7 @@ public class OutputParser
     public List<Column> columns = new ArrayList<Column> ();
     public boolean      isXycePRN;
     public Column       time;
+    public boolean      timeFound;  // Indicates that time is a properly-labeled column, rather than a fallback.
 
     public void parse (Path f)
     {
@@ -115,6 +116,7 @@ public class OutputParser
             {
                 timeMatch = potentialMatch;
                 time = c;
+                timeFound = true;
             }
         }
     }
@@ -128,6 +130,7 @@ public class OutputParser
     public static class Column
     {
         public String       header = "";
+        public int          index;  // If this is a spike raster, then header should convert to an integer.
         public List<Double> values = new ArrayList<Double> ();
         public int          startRow;
         public int          textWidth;
