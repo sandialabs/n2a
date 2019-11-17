@@ -38,8 +38,6 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ConcurrentModificationException;
-
 import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
@@ -137,7 +135,6 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
     **/
     public void setChart (JFreeChart newChart)
     {
-        if (drawThread != null) drawThread.stop = true;
         if (chart != null) chart.removeChangeListener (this);
         chart = newChart;
         if (chart == null)
@@ -151,16 +148,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
         info = new ChartRenderingInfo ();
         chart.addChangeListener (this);
 
-        if (buffer != null)
-        {
-            // Ensure that any previous graph is wiped clean.
-            Graphics2D bg = (Graphics2D) buffer.getGraphics ();
-            bg.clearRect (0, 0, buffer.getWidth (), buffer.getHeight ());  // The clear color is platform dependent. We don't really care what it is.
-            bg.dispose ();
-
-            drawThread = new DrawThread ();
-            drawThread.start ();
-        }
+        // Need to allocate buffer and start drawing. This will be handled by one (and only one) of setSize() or addNotify().
     }
 
     public class PanelChartMouseListener extends MouseInputAdapter
@@ -483,21 +471,45 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
         return result;
     }
 
+    public void addNotify ()
+    {
+        super.addNotify ();
+
+        // It would be more ideal to do this in setChart(). However, setChart() is called before we
+        // are added to our container, so getGraphics() returns null, causing updateBuffer() to fail.
+        if (buffer != null)
+        {
+            // Presumably, size was previously set and remains correct. If size is wrong, a setSize()
+            // call will soon follow, which will replace our new buffer with yet another one that is correct.
+            replaceBuffer ();
+        }
+    }
+
     public void setSize (int width, int height)
     {
         super.setSize (width, height);
+        resizeBuffer ();
+    }
 
+    public void replaceBuffer ()
+    {
+        buffer = null;
+        resizeBuffer ();
+    }
+
+    public void resizeBuffer ()
+    {
+        int width  = getWidth ();
+        int height = getHeight ();
         Insets insets = getInsets ();
         width  -= insets.left + insets.right;
         height -= insets.top  + insets.bottom;
 
         if (buffer == null  ||  buffer.getWidth () != width  ||  buffer.getHeight () != height)
         {
-            if (drawThread != null) drawThread.stop = true;
-
             Graphics2D g2 = (Graphics2D) getGraphics ();
             GraphicsConfiguration gc = g2.getDeviceConfiguration ();
-            buffer = gc.createCompatibleImage (width, height, Transparency.TRANSLUCENT);  // By changing buffer on the EDT, we guarantee that the old buffer will never get painted. At this point it no longer matters what any previous draw threads are doing.
+            buffer = gc.createCompatibleImage (width, height, Transparency.TRANSLUCENT);
 
             drawThread = new DrawThread ();
             drawThread.start ();
@@ -507,16 +519,15 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
     @Override
     public void chartChanged (ChartChangeEvent event)
     {
-        if (drawThread != null  &&  drawThread.isAlive ()) return;  // Prevent infinite loop when initializing Raster.TickRenderer. In general, don't change chart when draw is in progress.
+        if (drawThread != null  &&  drawThread.isAlive ()) return;  // Prevent infinite loop when initializing Raster.TickRenderer. All other code should explicitly guard against changing chart while draw is in progress.
         drawThread = new DrawThread ();
         drawThread.start ();
     }
 
     public class DrawThread extends Thread implements ActionListener
     {
-        public boolean stop;
-        public Timer   timer = new Timer (1000, this);
-        public int     age;
+        public Timer timer = new Timer (1000, this);
+        public int   age;
 
         public DrawThread ()
         {
@@ -526,25 +537,25 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
 
         public void run ()
         {
-            int w = buffer.getWidth ();
-            int h = buffer.getHeight ();
-            Rectangle2D bufferArea = new Rectangle2D.Double (0, 0, w, h);
-
-            Graphics2D bg;
-            synchronized (this)
-            {
-                bg = (Graphics2D) buffer.getGraphics ();  // buffer in our containing class may change, but that does no harm to bg. It merely means that we may waste some work painting a buffer that will never be used.
-            }
-            timer.start ();
             try
             {
-                if (! stop) chart.draw (bg, bufferArea, null, info);  // The most important line in this entire class.
-            }
-            catch (ConcurrentModificationException e) {}
-            timer.stop ();
-            bg.dispose ();
+                int w = buffer.getWidth ();
+                int h = buffer.getHeight ();
+                Rectangle2D bufferArea = new Rectangle2D.Double (0, 0, w, h);
 
-            if (! stop) repaint ();  // The final repaint.
+                Graphics2D bg = (Graphics2D) buffer.getGraphics ();  // buffer in our containing class may change, but that does no harm to bg. It merely means that we may waste some work painting a buffer that will never be used.
+                timer.start ();
+                try
+                {
+                    if (drawThread == this) chart.draw (bg, bufferArea, null, info);  // The most important line in this entire class.
+                }
+                catch (Exception e) {}  // For example, a ConcurrentModificationException
+                timer.stop ();
+                bg.dispose ();
+
+                if (drawThread == this) repaint ();  // The final repaint.
+            }
+            catch (Exception e) {}  // For example, a NullPointerException for either buffer or chart.
         }
 
         public void actionPerformed (ActionEvent e)
@@ -556,7 +567,12 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
 
     public void paintComponent (Graphics g)
     {
-        // Don't call super, because we fully handle the component area.
+        if (buffer == null)
+        {
+            super.paintComponent (g);
+            return;
+        }
+
         Graphics2D g2 = (Graphics2D) g;
         Insets insets = getInsets ();
         g2.drawImage (buffer, insets.left, insets.top, null);

@@ -487,7 +487,6 @@ public class PanelRun extends JPanel
                         {
                             if (stop) return;
                             displayPane.setViewportView (p);
-                            displayPane.paintImmediately (displayPane.getBounds ());
                         }
                     });
                     return;
@@ -575,7 +574,6 @@ public class PanelRun extends JPanel
                                 {
                                     if (stop) return;
                                     displayPane.setViewportView (p);
-                                    displayPane.paintImmediately (displayPane.getBounds ());
                                 }
                             });
 
@@ -599,7 +597,6 @@ public class PanelRun extends JPanel
                             displayText.setText (contents);
                             displayText.setCaretPosition (0);
                         }
-                        displayPane.paintImmediately (displayPane.getBounds ());
                     }
                 });
             }
