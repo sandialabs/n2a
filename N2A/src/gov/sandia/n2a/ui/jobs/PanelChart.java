@@ -163,7 +163,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             {
                 if (zoomRectangle != null) return;
                 if (! (plot instanceof Zoomable)) return;  // Don't even initiate a zoom region unless it can have an effect. This reduces need to check for Zoomable elsewhere.
-                if (drawThread != null  &&  drawThread.isAlive ()) return;  // JFreeChart is not thread-safe, so don't update chart while draw is in progress.
+                if (drawThread != null  &&  drawThread.keepWaiting ()) return;
 
                 int x = e.getX ();
                 int y = e.getY ();
@@ -203,7 +203,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             // Handle pan, if active
             if (panLast != null)
             {
-                if (drawThread != null  &&  drawThread.isAlive ()) return;
+                if (drawThread != null  &&  drawThread.keepWaiting ()) return;
 
                 double dx = e.getX () - panLast.getX();
                 double dy = e.getY () - panLast.getY();
@@ -267,9 +267,9 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
 
             // Update using XOR method
             Graphics2D g2 = (Graphics2D) getGraphics ();
-            drawZoomRectangle (g2, true);
+            drawZoomRectangle (g2);
             zoomRectangle = nextZoom;
-            drawZoomRectangle (g2, true);
+            drawZoomRectangle (g2);
             g2.dispose ();
         }
 
@@ -330,7 +330,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
 
                         if (selection.getHeight () > 0  &&  selection.getWidth () > 0)
                         {
-                            Point2D selectOrigin = translateScreenToJava2D (selection.getLocation ());
+                            Point2D selectOrigin = screenToPlot (selection.getLocation ());
                             PlotRenderingInfo plotInfo = info.getPlotInfo ();
 
                             double hLower = (selection.getMinX () - dataArea.getMinX ()) / dataArea.getWidth ();
@@ -357,7 +357,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
                 {
                     // erase the zoom rectangle
                     Graphics2D g2 = (Graphics2D) getGraphics ();
-                    drawZoomRectangle (g2, true);
+                    drawZoomRectangle (g2);
                     g2.dispose();
                 }
                 zoomPoint = null;
@@ -367,7 +367,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
 
         public void mouseWheelMoved (MouseWheelEvent e)
         {
-            if (drawThread != null  &&  drawThread.isAlive ()) return;
+            if (drawThread != null  &&  drawThread.keepWaiting ()) return;
             if (! (plot instanceof Zoomable)) return;
             Zoomable z = (Zoomable) plot;
 
@@ -392,7 +392,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             range  = range   &&  z.isRangeZoomable ();
 
             PlotRenderingInfo pri = info.getPlotInfo ();
-            Point2D c = translateScreenToJava2D (e.getPoint ());
+            Point2D c = screenToPlot (e.getPoint ());
             if (! pri.getDataArea ().contains (c)) return;
 
             int clicks = e.getWheelRotation ();
@@ -405,14 +405,14 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             plot.setNotify (true);
         }
 
-        public void drawZoomRectangle (Graphics2D g2, boolean xor)
+        public void drawZoomRectangle (Graphics2D g2)
         {
             if (zoomRectangle == null) return;
 
-            if (xor) g2.setXORMode (Color.GRAY);
+            g2.setXORMode (Color.GRAY);
             g2.setPaint (zoomFillPaint);
             g2.fill (zoomRectangle);
-            if (xor) g2.setPaintMode ();
+            g2.setPaintMode ();
         }
 
         public Rectangle getScreenDataArea (int x, int y)
@@ -426,7 +426,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             }
             else
             {
-                Point2D selectOrigin = translateScreenToJava2D (new Point (x, y));
+                Point2D selectOrigin = screenToPlot (new Point (x, y));
                 int subplotIndex = plotInfo.getSubplotIndex (selectOrigin);
                 if (subplotIndex == -1) return null;
                 dataArea = plotInfo.getSubplotInfo (subplotIndex).getDataArea ();
@@ -439,7 +439,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
         /**
             Transforms screen pixel coordinate to plot coordinate.
         **/
-        public Point2D translateScreenToJava2D (Point screenPoint)
+        public Point2D screenToPlot (Point screenPoint)
         {
             Insets insets = getInsets ();
             double x = screenPoint.getX () - insets.left;
@@ -563,16 +563,32 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             age++;
             repaint ();
         }
+
+        /**
+            Controls the speed at which mouse gestures can change chart.
+            We want to wait a non-zero amount of time between updates, so that draw has some chance of finishing.
+            This produces smoother scrolling with less flicker. OTOH, we don't want to delay for very long renders.
+            This function strikes a balance between the two.
+            @return true if the mouse gesture should be ignored in favor of more draw time. false if it is OK
+            to update the chart. In the latter case, this method makes all necessary preparations so that the
+            new drawing will be shown and any in-progress drawing is ignored.
+        **/
+        public boolean keepWaiting ()
+        {
+            if (! isAlive ()) return false;
+            if (age < 1) return true;
+
+            // Prepare for new drawing.
+            timer.stop ();      // Try to stop repaint() calls.
+            drawThread = null;  // Ditto. Notice that the old draw thread continues running to completion. It simply has no effect on display.
+            replaceBuffer ();
+            return false;
+        }
     }
 
     public void paintComponent (Graphics g)
     {
-        if (buffer == null)
-        {
-            super.paintComponent (g);
-            return;
-        }
-
+        if (buffer == null) return;  // This can only happen in the middle of changing buffers for a new drawing. In that case, do nothing. This leaves old pixels on the screen which will soon be wiped by yet another repaint.
         Graphics2D g2 = (Graphics2D) g;
         Insets insets = getInsets ();
         g2.drawImage (buffer, insets.left, insets.top, null);
