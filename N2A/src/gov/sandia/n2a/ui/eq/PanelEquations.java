@@ -490,7 +490,7 @@ public class PanelEquations extends JPanel
         buttonWatch = new JButton (ImageUtil.getImage ("watch.png"));
         buttonWatch.setMargin (new Insets (2, 2, 2, 2));
         buttonWatch.setFocusable (false);
-        buttonWatch.setToolTipText ("Toggle Output");
+        buttonWatch.setToolTipText ("Watch Variable");
         buttonWatch.addActionListener (listenerWatch);
 
         buttonFilter = new JButton (ImageUtil.getImage ("filter.png"));

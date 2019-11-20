@@ -135,6 +135,7 @@ public class PanelEquationTree extends JScrollPane
         inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"),  "startEditing");
         inputMap.put (KeyStroke.getKeyStroke ("shift SPACE"), "drillUp");
         inputMap.put (KeyStroke.getKeyStroke ("SPACE"),       "drillDown");
+        inputMap.put (KeyStroke.getKeyStroke ("W"),           "watch");
 
         ActionMap actionMap = tree.getActionMap ();
         Action selectPrevious = actionMap.get ("selectPrevious");
@@ -244,6 +245,14 @@ public class PanelEquationTree extends JScrollPane
                         break;
                     }
                 }
+            }
+        });
+        actionMap.put ("watch", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                // PanelEquations also does a stopEditing() call, but it should not be needed here.
+                watchSelected ();
             }
         });
 
