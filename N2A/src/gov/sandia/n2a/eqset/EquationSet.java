@@ -2789,8 +2789,8 @@ public class EquationSet implements Comparable<EquationSet>
         <li>not integrated
         <li>one of:
             <ul>
-            <li>all equations are conditional, and none are true when $init=0 (that is, during update)
-            <li>only one equation could fire during update, and it depends only on "constant" or "initOnly" variables.
+            <li>all equations are conditional, and no condition is true when $init=0 (that is, during update)
+            <li>the same equation always fires during both init and update, and it depends only on "constant" or "initOnly" variables.
             Why only one equation? Multiple equations imply the value could change via conditional selection.
             </ul>
         </ul>
@@ -2806,7 +2806,7 @@ public class EquationSet implements Comparable<EquationSet>
         public double init;
         public double connect;
         public double type;
-        // Don't really need $live, since it's not used as a phase indicator. It is user-accessible, but not documented.
+        // Don't really need $live, since it's not used as a phase indicator. It is user-accessible but not documented.
         public Operator transform (Operator op)
         {
             if (op instanceof AccessVariable)
@@ -2868,7 +2868,7 @@ public class EquationSet implements Comparable<EquationSet>
         for (final Variable v : variables)
         {
             // Note: some variables get tagged "initOnly" by other means.
-            // Note: "externalWrite" implies not initOnly, even if the external source is initOnly, unless it can be established
+            // Note: "externalWrite" implies not "initOnly", even if the external source is initOnly, unless it can be established
             //       that both the external part and this part always go through init at the same time.
             if (v.hasAny (new String[] {"initOnly", "constant", "dummy", "externalWrite"})) continue;
 
@@ -2876,6 +2876,7 @@ public class EquationSet implements Comparable<EquationSet>
             int firesDuringInit   = 0;
             int firesDuringUpdate = 0;
             EquationEntry update = null;  // If we have a single update equation, then we may still be initOnly if it depends only on constants or other initOnly variables. Save the update equation for analysis.
+            EquationEntry init   = null;
             for (EquationEntry e : v.equations)
             {
                 // In the following tests, we make the conservative assumption that an equation fires
@@ -2885,6 +2886,7 @@ public class EquationSet implements Comparable<EquationSet>
                     firesDuringInit++;
                     firesDuringUpdate++;
                     update = e;
+                    init   = e;
                 }
                 else
                 {
@@ -2896,7 +2898,11 @@ public class EquationSet implements Comparable<EquationSet>
                     // init
                     replacePhase.init = 1;
                     Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (v);
-                    if (! test.isScalar ()  ||  test.getDouble () != 0)  firesDuringInit++;
+                    if (! test.isScalar ()  ||  test.getDouble () != 0)
+                    {
+                        firesDuringInit++;
+                        init = e;
+                    }
 
                     // update
                     replacePhase.init = 0;
@@ -2917,19 +2923,16 @@ public class EquationSet implements Comparable<EquationSet>
                     changed = true;
                 }
             }
-            else if (firesDuringUpdate == 1  &&  v.assignment == Variable.REPLACE)  // last chance to be "initOnly": must be exactly one equation that is not a combining operator
+            else if (firesDuringUpdate == 1  &&  firesDuringInit == 1  &&  update == init  &&  v.assignment == Variable.REPLACE)  // last chance to be "initOnly": must be exactly one equation that is not a combining operator
             {
                 // Determine if our single update equation depends only on constants and initOnly variables
                 visitor.isInitOnly = true;
                 if (update.condition != null) update.condition.visit (visitor);
+                if (visitor.isInitOnly) update.expression.visit (visitor);
                 if (visitor.isInitOnly)
                 {
-                    update.expression.visit (visitor);
-                    if (visitor.isInitOnly)
-                    {
-                        v.addAttribute ("initOnly");
-                        changed = true;
-                    }
+                    v.addAttribute ("initOnly");
+                    changed = true;
                 }
             }
 
