@@ -257,26 +257,23 @@ public class EquationSet implements Comparable<EquationSet>
                 else
                 {
                     Variable v = new Variable (this, e);
-                    if (v.equations.size () > 0)  // Note: a variable with no equations and no accumulating combiner is likely to be a revocation.
+                    if (v.equations.size () > 0) variables.add (v);
+
+                    // Add a watch expression, if requested.
+                    MNode p = getTopDocumentNode ();
+                    if (p != null)
                     {
-                        variables.add (v);
-
-                        // Also add a watch expression, if requested
-                        MNode p = getTopDocumentNode ();
-                        if (p != null)
+                        MNode watch = p.child (e.key (), "$metadata", "watch");
+                        if (watch != null)
                         {
-                            MNode watch = p.child (e.key (), "$metadata", "watch");
-                            if (watch != null)
-                            {
-                                // Determine dummy variable name
-                                String dummy = "x0";
-                                int suffix = 1;
-                                while (find (new Variable (dummy)) != null  ||  source.child (dummy) != null) dummy = "x" + suffix++;
+                            // Determine dummy variable name
+                            String dummy = "x0";
+                            int suffix = 1;
+                            while (find (new Variable (dummy)) != null  ||  source.child (dummy) != null) dummy = "x" + suffix++;
 
-                                // Create output expression
-                                Variable o = new Variable (this, new MVolatile ("output(" + v.nameString () + ")", dummy));
-                                variables.add (o);
-                            }
+                            // Create output expression
+                            Variable o = new Variable (this, new MVolatile ("output(" + v.nameString () + ")", dummy));
+                            variables.add (o);
                         }
                     }
                 }
@@ -758,8 +755,6 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            boolean gotit = v.name.equals ("error.r2");
-            if (gotit) System.out.println ("checking error.r2 in " + name);
             Variable query = new Variable (v.name, v.order);
             query.reference = new VariableReference ();
             query.assignment = v.assignment;  // If referent is created in target eqset, then this hints the correct combiner type.
@@ -767,7 +762,6 @@ public class EquationSet implements Comparable<EquationSet>
             if (dest != null) query.reference.variable = dest.find (query);
             v.reference = query.reference;
             Variable target = v.reference.variable;
-            if (gotit) System.out.println ("  target = " + target.container.name);
             if (target != v  &&  target != null)
             {
                 v.addAttribute ("reference");

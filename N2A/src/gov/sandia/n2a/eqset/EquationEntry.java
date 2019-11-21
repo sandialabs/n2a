@@ -78,7 +78,7 @@ public class EquationEntry implements Comparable<EquationEntry>
     {
         ifString = "";
 
-        String[] parts = rhs.split ("@");
+        String[] parts = rhs.split ("@", 2);
         if (parts[0].isEmpty ()  ||  parts[0].startsWith ("$kill")) return;
         try
         {

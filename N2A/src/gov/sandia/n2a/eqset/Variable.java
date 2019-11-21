@@ -127,7 +127,7 @@ public class Variable implements Comparable<Variable>, Cloneable
                     EquationEntry e = new EquationEntry (i);
                     if (e.expression != null) add (e);
                 }
-                if (key.equals ("$metadata")) metadata.merge (i);
+                else if (key.equals ("$metadata")) metadata.merge (i);
                 // Ignore references, as they have no function in simulation.
             }
 

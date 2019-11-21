@@ -421,9 +421,9 @@ public class NodeVariable extends NodeContainer
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();
+        boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddVariable");
         if (input.isEmpty ())
         {
-            boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddVariable");
             delete (tree, canceled);
             return;
         }
@@ -438,7 +438,7 @@ public class NodeVariable extends NodeContainer
         }
         else
         {
-            valueAfter = "0";  // Assume input was a variable name with no assignment. Note: an explicit assignment is required to revoke a variable.
+            valueAfter = "";  // Input was a variable name with no assignment.
         }
 
         // What follows is a series of analyses, most having to do with enforcing constraints
@@ -456,7 +456,7 @@ public class NodeVariable extends NodeContainer
         // Handle creation of $inherit node.
         PanelModel mep = PanelModel.instance;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        boolean newlyCreated =  getChildCount () == 0  &&  valueBefore.isEmpty ();  // Only a heuristic
+        boolean newlyCreated =  getChildCount () == 0  &&  valueBefore.isEmpty ()  &&  source.isFromTopDocument ();  // Only a heuristic. Could also be an existing variable with no equation.
         NodeBase parent = (NodeBase) getParent ();
         if (nameAfter.equals ("$inherit"))
         {
@@ -475,7 +475,7 @@ public class NodeVariable extends NodeContainer
                 return;
             }
 
-            nameAfter = nameBefore;
+            nameAfter = nameBefore;  // Reject name change, because $inherit already exists. User should edit it directly.
         }
 
         // Prevent illegal name change. (Don't override another top-level node. Don't overwrite a non-variable node.)
@@ -546,53 +546,46 @@ public class NodeVariable extends NodeContainer
             {
                 if (newlyCreated)  // The newly created node has been renamed such that it will inject into/over an existing variable.
                 {
-                    NodeVariable nva = (NodeVariable) nodeAfter;
-                    if (equationCount == 0)
+                    // Remove newly-created variable, regardless of what we do to nodeAfter.
+                    mep.undoManager.add (new DeleteVariable (this, canceled));
+
+                    // Decide what change (if any) to apply to nodeAfter.
+                    if (expressionAfter)
                     {
-                        if (piecesAfter.condition.equals (piecesDest.condition))  // Directly overwrite the target, since they share the say name and condition.
+                        NodeVariable nva = (NodeVariable) nodeAfter;
+                        if (equationCount == 0)
                         {
-                            if (valueAfter.isEmpty ()) valueAfter = "$kill";
-                            mep.undoManager.add (new ChangeVariable (nva, nameAfter, valueAfter, getKeyPath ()));
+                            if (piecesAfter.condition.equals (piecesDest.condition))  // Directly overwrite the target, since they share the say name and condition.
+                            {
+                                mep.undoManager.add (new ChangeVariable (nva, nameAfter, valueAfter, getKeyPath ()));
+                            }
+                            else  // Inject new equation and change target into a multiconditional variable.
+                            {
+                                // Possible to revoke non-existent equation
+                                mep.undoManager.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                            }
                         }
-                        else  // Inject new equation and change target into a multiconditional variable.
+                        else
                         {
-                            // Possible to revoke non-existent equation
-                            mep.undoManager.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                            if (equationMatch == null)  // Add new equation to an existing multiconditional.
+                            {
+                                // Possible to revoke non-existent equation
+                                mep.undoManager.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                            }
+                            else  // Overwrite an existing equation in a multiconditional
+                            {
+                                Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
+                                mep.undoManager.add (new ChangeEquation (nva, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                            }
                         }
                     }
-                    else
-                    {
-                        if (equationMatch == null)  // Add  new equation to an existing multiconditional.
-                        {
-                            // Possible to revoke non-existent equation
-                            mep.undoManager.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
-                        }
-                        else  // Overwrite an existing equation in a multiconditional
-                        {
-                            Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
-                            mep.undoManager.add (new ChangeEquation (nva, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
-                        }
-                    }
-                    // commit suicide
-                    parent.source.clear (nameBefore);
-                    model.removeNodeFromParent (this);
                     return;
                 }
             }
         }
 
         // The default action
-        if (valueAfter.isEmpty ())
-        {
-            if (newlyCreated)
-            {
-                valueAfter = "0";
-            }
-            else
-            {
-                if (! hasEquations ()) valueAfter = "$kill";
-            }
-        }
+        if (valueAfter.isEmpty ()  &&  ! hasEquations ()) valueAfter = "@";  // The @ will be hidden most of the time, but it will distinguish a variable from a part.
         mep.undoManager.add (new ChangeVariable (this, nameAfter, valueAfter));
     }
 
