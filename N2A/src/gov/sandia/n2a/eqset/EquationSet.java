@@ -685,6 +685,17 @@ public class EquationSet implements Comparable<EquationSet>
                     return resolveEquationSet (v, create);
                 }
             }
+
+            // Check for reference to variable in peer equation set.
+            // Since this is effectively a down-reference into the peer, the peer must be a singleton.
+            if (container != null)
+            {
+                int last = v.reference.resolution.size ();
+                v.reference.resolution.add (container);
+                EquationSet peer = container.resolveEquationSet (v, false);
+                if (peer != null) return peer;
+                while (v.reference.resolution.size () > last) v.reference.resolution.remove (last);  // Restore resolution path, since container didn't contain what we're looking for.
+            }
         }
 
         // Check connections
@@ -747,6 +758,8 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
+            boolean gotit = v.name.equals ("error.r2");
+            if (gotit) System.out.println ("checking error.r2 in " + name);
             Variable query = new Variable (v.name, v.order);
             query.reference = new VariableReference ();
             query.assignment = v.assignment;  // If referent is created in target eqset, then this hints the correct combiner type.
@@ -754,6 +767,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (dest != null) query.reference.variable = dest.find (query);
             v.reference = query.reference;
             Variable target = v.reference.variable;
+            if (gotit) System.out.println ("  target = " + target.container.name);
             if (target != v  &&  target != null)
             {
                 v.addAttribute ("reference");
