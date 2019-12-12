@@ -18,7 +18,6 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Matrix.IteratorNonzero;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
@@ -157,30 +156,7 @@ public class Population extends Instance
 
         // Finalize
         for (Variable v : bed.globalBufferedExternal) setFinal (v, getFinal (v));
-        for (Variable v : bed.globalBufferedExternalWrite)
-        {
-            switch (v.assignment)
-            {
-                case Variable.ADD:
-                    set (v, v.type);  // initial value is zero-equivalent (additive identity)
-                    break;
-                case Variable.MULTIPLY:
-                case Variable.DIVIDE:
-                    // multiplicative identity
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).identity ());
-                    else                          set (v, new Scalar (1));
-                    break;
-                case Variable.MIN:
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
-                    else                          set (v, new Scalar (Double.POSITIVE_INFINITY));
-                    break;
-                case Variable.MAX:
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
-                    else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
-                    break;
-                // For all other assignment types, do nothing. Effectively, buffered value is initialized to current value
-            }
-        }
+        clearExternalWriteBuffers (bed.globalBufferedExternalWrite);
 
         // Structural dynamics
         if (bed.populationCanResize)

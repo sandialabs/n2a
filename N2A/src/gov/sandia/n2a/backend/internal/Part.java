@@ -154,7 +154,14 @@ public class Part extends Instance
             Type result = v.eval (temp);
             if (result == null  ||  v.reference.variable.writeIndex < 0) continue;
             if (v.reference.variable == v) temp.setFinal (v, result);
-            else                           temp.applyResult (v, result); // External reference, so need to do proper combining operation, just like regular update.
+            // else this is an external reference, so need to do a proper combining operation in the target part. The options are:
+            // 1) combine with buffered value
+            // 2) combine with final value
+            // 3) do nothing
+            // Option 1 is definitely wrong, because it can cause a value to be added twice (here and in update) before the next call to finish.
+            // Option 2 is dubious, because it could cause changes to a value in the middle of a cycle.
+            // That leaves option 3, which is what we take here. This means that a combiner generally has no effect during the init cycle,
+            // and must wait until the first full cycle to deliver its result.
         }
         if (bed.liveStorage == InternalBackendData.LIVE_STORED) set (bed.live, new Scalar (1));
         if (bed.lastT != null) temp.setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
@@ -408,8 +415,8 @@ public class Part extends Instance
         // Other stuff
         if (bed.lastT != null) setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
         for (Variable v : bed.localBufferedExternal) setFinal (v, getFinal (v));
-        for (Integer i : bed.eventLatches) valuesFloat[i] = 0;
         clearExternalWriteBuffers (bed.localBufferedExternalWrite);
+        for (Integer i : bed.eventLatches) valuesFloat[i] = 0;
 
         if (bed.type != null)
         {
