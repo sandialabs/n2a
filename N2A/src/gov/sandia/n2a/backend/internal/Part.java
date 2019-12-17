@@ -610,10 +610,12 @@ public class Part extends Instance
     }
 
     /**
-        Only supports connection matching to eliminate duplicates.
+        Supports connection matching to eliminate duplicates.
+        Also supports exact object identity, so we can search event monitor lists.
     **/
     public boolean equals (Object o)
     {
+        if (this == o) return true;  // exact object identity
         if (! (o instanceof Part)) return false;
         Part that = (Part) o;
         if (equations.connectionBindings == null  ||  that.equations.connectionBindings == null) return false;  // We are only interested in connection instances.
@@ -638,8 +640,9 @@ public class Part extends Instance
         {
             Part p = (Part) valuesObject[bed.endpoints+i];
             InternalBackendData pbed = (InternalBackendData) p.equations.backendData;
-            // Every connection endpoint should have an index, at least for Internal backend.
-            int index = (int) p.valuesFloat[pbed.index.readIndex];
+            // Every connection endpoint, except for a singleton, should have an index.
+            int index = 0;
+            if (pbed.index != null) index = (int) p.valuesFloat[pbed.index.readIndex];
             result = (result << shift) + index;
         }
         return result;
