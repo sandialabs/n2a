@@ -16,6 +16,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 
@@ -597,20 +598,30 @@ public class PanelEquationTree extends JScrollPane
     {
         if (container.locked) return;
         NodeBase selected = getSelected ();
+        if (! (selected instanceof NodeVariable)) selected = (NodeBase) selected.getParent ();  // Make one attempt to walk up tree, in case an equation or metadata item is selected under a variable.
         if (! (selected instanceof NodeVariable)) return;
 
         // Toggle watch on the selected variable
         MPart watch = (MPart) selected.source.child ("$metadata", "watch");
-        if (watch != null  &&  watch.isFromTopDocument ())  // currently on, so turn it off
+        if (watch != null)
         {
-            DeleteAnnotation d = new DeleteAnnotation ((NodeAnnotation) selected.child ("watch"), false);
-            d.setSelection = false;
-            PanelModel.instance.undoManager.add (d);
+            NodeAnnotation watchNode = (NodeAnnotation) selected.child ("watch");
+            if (watch.isFromTopDocument ())  // currently on, so turn it off
+            {
+                DeleteAnnotation d = new DeleteAnnotation (watchNode, false);
+                d.setSelection = tree.isExpanded (new TreePath (selected.getPath ()));
+                PanelModel.instance.undoManager.add (d);
+            }
+            else  // Currently off, because it is not explicitly set in this document. Turn it on by overriding in locally. 
+            {
+                ChangeAnnotation c = new ChangeAnnotation (watchNode, "watch", "1");
+                PanelModel.instance.undoManager.add (c);
+            }
         }
         else  // currently off, so turn it on
         {
             AddAnnotation a = new AddAnnotation (selected, selected.getChildCount (), new MVolatile ("", "watch"));
-            a.setSelection = false;
+            a.setSelection = tree.isExpanded (new TreePath (selected.getPath ()));
             PanelModel.instance.undoManager.add (a);
         }
     }

@@ -37,6 +37,7 @@ public class ChangeAnnotation extends Undoable
     protected String       valueBefore;
     protected String       valueAfter;
     protected MNode        savedTree;    // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
+    public    boolean      setSelection = true;
 
     public ChangeAnnotation (NodeAnnotation node, String nameAfter, String valueAfter)
     {
@@ -86,17 +87,17 @@ public class ChangeAnnotation extends Undoable
     {
         super.undo ();
         savedTree.set (valueBefore);
-        apply (nameAfter, nameBefore, prefixAfter);
+        apply (nameAfter, nameBefore, prefixAfter, setSelection);
     }
 
     public void redo ()
     {
         super.redo ();
         savedTree.set (valueAfter);
-        apply (nameBefore, nameAfter, prefixBefore);
+        apply (nameBefore, nameAfter, prefixBefore, setSelection);
     }
 
-    public void apply (String nameBefore, String nameAfter, String prefixBefore)
+    public void apply (String nameBefore, String nameAfter, String prefixBefore, boolean setSelection)
     {
         view.restore ();
         NodeContainer parent = (NodeContainer) NodeBase.locateNode (path);
@@ -138,7 +139,7 @@ public class ChangeAnnotation extends Undoable
             AddAnnotation.restoreExpandedNodes (pet.tree, parent, expanded);
         }
         NodeBase nodeAfter = AddAnnotation.resolve (parent, nameAfter);
-        pet.updateVisibility (nodeAfter.getPath ());
+        pet.updateVisibility (nodeAfter.getPath (), -2, setSelection);
 
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
         if (parent instanceof NodePart)
