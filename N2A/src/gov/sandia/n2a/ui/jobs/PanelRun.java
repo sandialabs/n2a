@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -352,13 +352,13 @@ public class PanelRun extends JPanel
                     else if (displayNode instanceof NodeFile) path =            ((NodeFile) displayNode).path;
                     if (path != null)
                     {
-                        String pathString = path.toAbsolutePath ().toString ();
-                        String dirString = path.getParent ().toAbsolutePath ().toString ();
-                        System.out.println ("script=" + script);
-                        System.out.println ("path=" + pathString);
-                        System.out.println ("dir=" + dirString);
-                        script = script.replaceAll ("\\%d", Matcher.quoteReplacement (dirString));
+                        String jobDirString      = path.getParent ().toAbsolutePath ().toString ();
+                        String pathString        = path.toAbsolutePath ().toString ();
+                        String resourceDirString = AppData.properties.get ("resourceDir");
+                        script = script.replaceAll ("\\%d", Matcher.quoteReplacement (jobDirString));
                         script = script.replaceAll ("\\%f", Matcher.quoteReplacement (pathString));
+                        script = script.replaceAll ("\\%r", Matcher.quoteReplacement (resourceDirString));
+                        System.out.println ("script = " + script);
                         try {Runtime.getRuntime ().exec (script);}
                         catch (IOException error) {error.printStackTrace ();}
                     }
