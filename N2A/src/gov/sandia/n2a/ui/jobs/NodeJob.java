@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -58,12 +58,17 @@ public class NodeJob extends NodeBase
     protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
     protected long    lastLiveCheck   = 0;
     protected boolean deleted;
+    protected boolean tryToSelectOutput;
 
     public NodeJob (MNode source, boolean newlyStarted)
     {
         this.source = source;
         setUserObject (source.key ());  // This is fast, but the task of loading the $inherit line is slow, so we do it on the first call to monitorProgress().
-        if (newlyStarted) lastLiveCheck = System.currentTimeMillis () + 500000;  // About 10 minutes in the future
+        if (newlyStarted)
+        {
+            lastLiveCheck = System.currentTimeMillis ();  // See below. Gives new jobs about 20 minutes to show some progress. Old jobs have no grace period because their last live check is 0.
+            tryToSelectOutput = true;
+        }
     }
 
     @Override
@@ -153,7 +158,7 @@ public class NodeJob extends NodeBase
             else
             {
                 long currentTime = System.currentTimeMillis ();
-                if (currentTime - lastLiveCheck > 1000000)  // a million milliseconds is about 20 minutes
+                if (currentTime - lastLiveCheck > 1000000)  // about 20 minutes
                 {
                     HostSystem env = HostSystem.get (source.get ("$metadata", "host"));
                     long pid = source.getOrDefault (0l, "$metadata", "pid");
@@ -192,9 +197,12 @@ public class NodeJob extends NodeBase
             {
                 public void run ()
                 {
-                    if (panel.displayNode == NodeJob.this) panel.viewJob ();
+                    if (panel.displayNode == NodeJob.this)
+                    {
+                        panel.buttonStop.setEnabled (complete < 1);
+                        panel.viewJob ();
+                    }
                     panel.model.nodeChanged (NodeJob.this);
-                    panel.tree.paintImmediately (panel.tree.getPathBounds (new TreePath (NodeJob.this.getPath ())));
                 }
             });
         }
@@ -315,6 +323,26 @@ public class NodeJob extends NodeBase
                     NodeBase parent = (NodeBase) selected.getParent ();
                     if (parent != NodeJob.this) selected = null;
                     else if (! ((NodeFile) selected).found) selected = parent;
+                }
+
+                // Try to select an output file when it first appears for the newest job, but only if the job is still selected. 
+                if (tryToSelectOutput  &&  selected == NodeJob.this  &&  selected == tree.getPathForRow (0).getLastPathComponent ())
+                {
+                    NodeFile bestFile = null;
+                    for (Object c : children)
+                    {
+                        NodeFile nf = (NodeFile) c;
+                        if (nf.type.priority == 0) continue;
+                        if (bestFile == null  ||  nf.type.priority > bestFile.type.priority)
+                        {
+                            bestFile = nf;
+                        }
+                    }
+                    if (bestFile != null)
+                    {
+                        selected = bestFile;
+                        tryToSelectOutput = false;
+                    }
                 }
             }
             final TreePath selectedPath = (selected == null) ? null : new TreePath (selected.getPath ());

@@ -455,7 +455,7 @@ public class PanelEquationTree extends JScrollPane
 
         root = part;
         root.pet = this;
-        model.setRoot (root);  // triggers repaint, but may be too slow
+        model.setRoot (root);  // triggers repaint
     }
 
     public void clear ()

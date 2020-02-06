@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -19,22 +19,24 @@ public class NodeFile extends NodeBase
 {
     public enum Type
     {
-        Model   ("Model",       "file_in.gif"),
-        Output  ("Output",      "file_out.gif"),
-        Error   ("Diagnostics", "file_err.gif"),
-        Result  ("Result",      "file_prn.gif"),
-        Console ("Console",     "file_cout.gif"),
-        Other   ("Other",       "file_obj.gif"),
-        Video   ("Other",       "file_obj.gif"),
-        Picture ("Other",       "file_obj.gif");
+        Model   (0, "Model",       "file_in.gif"),
+        Output  (1, "Output",      "file_out.gif"),
+        Error   (0, "Diagnostics", "file_err.gif"),
+        Result  (2, "Result",      "file_prn.gif"),
+        Console (0, "Console",     "file_cout.gif"),
+        Other   (0, "Other",       "file_obj.gif"),
+        Video   (2, "Other",       "file_obj.gif"),
+        Picture (2, "Other",       "file_obj.gif");
 
+        public int       priority;  // For choosing primary output file. 0 means don't ever select as output.
         public String    label;
         public ImageIcon icon;
 
-        Type (String lbl, String fileName)
+        Type (int p, String lbl, String fileName)
         {
-            label = lbl;
-            icon = ImageUtil.getImage (fileName);
+            priority = p;
+            label    = lbl;
+            icon     = ImageUtil.getImage (fileName);
         }
     }
 

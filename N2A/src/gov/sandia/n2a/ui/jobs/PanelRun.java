@@ -17,7 +17,6 @@ import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Insets;
-import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
@@ -47,7 +46,6 @@ import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.UIManager;
 import javax.swing.event.TreeExpansionEvent;
-import javax.swing.event.TreeExpansionListener;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
@@ -109,22 +107,25 @@ public class PanelRun extends JPanel
 
         tree.addTreeSelectionListener (new TreeSelectionListener ()
         {
-            Rectangle oldBounds;
-
             public void valueChanged (TreeSelectionEvent e)
             {
                 NodeBase newNode = (NodeBase) tree.getLastSelectedPathComponent ();
                 if (newNode == null) return;
                 if (newNode == displayNode) return;
-
-                if (oldBounds != null) tree.paintImmediately (oldBounds);
-                Rectangle newBounds = tree.getPathBounds (e.getPath ());
-                if (newBounds != null) tree.paintImmediately (newBounds);
-                oldBounds = newBounds;
-
                 displayNode = newNode;
-                if      (displayNode instanceof NodeFile) viewFile ();
-                else if (displayNode instanceof NodeJob)  viewJob ();
+
+                NodeJob job = null;
+                if (displayNode instanceof NodeFile)
+                {
+                    viewFile ();
+                    job = (NodeJob) displayNode.getParent ();
+                }
+                else if (displayNode instanceof NodeJob)
+                {
+                    viewJob ();
+                    job = (NodeJob) displayNode;
+                }
+                buttonStop.setEnabled (job.complete < 1);
             }
         });
 
@@ -144,26 +145,13 @@ public class PanelRun extends JPanel
         {
             public void treeWillExpand (TreeExpansionEvent event) throws ExpandVetoException
             {
-                TreePath path = event.getPath ();  // TODO: can this ever be null?
+                TreePath path = event.getPath ();
                 Object o = path.getLastPathComponent ();
                 if (o instanceof NodeJob) ((NodeJob) o).build (tree);
             }
 
             public void treeWillCollapse (TreeExpansionEvent event) throws ExpandVetoException
             {
-            }
-        });
-
-        tree.addTreeExpansionListener (new TreeExpansionListener ()
-        {
-            public void treeExpanded (TreeExpansionEvent event)
-            {
-                repaintSouth (event.getPath ());
-            }
-
-            public void treeCollapsed (TreeExpansionEvent event)
-            {
-                repaintSouth (event.getPath ());
             }
         });
 
@@ -671,7 +659,7 @@ public class PanelRun extends JPanel
             displayText.setCaretPosition (0);
         }
         if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
-        displayPane.paintImmediately (displayPane.getBounds ());
+        displayPane.repaint (displayPane.getBounds ());
     }
 
     public void appendMetadata (MNode doc, StringBuilder result, String... indices)
@@ -755,7 +743,7 @@ public class PanelRun extends JPanel
             tree.setSelectionPath (new TreePath (nextSelection.getPath ()));
         }
 
-        tree.paintImmediately (treePane.getViewport ().getViewRect ());
+        tree.repaint (treePane.getViewport ().getViewRect ());
     }
 
     public void addNewRun (MNode run)
@@ -763,6 +751,7 @@ public class PanelRun extends JPanel
         final NodeJob node = new NodeJob (run, true);
         model.insertNodeInto (node, root, 0);  // Since this always executes on event dispatch thread, it will not conflict with other code that accesses model.
         if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, we need to give the JTree a little extra kick to get started.
+        tree.expandRow (0);
         tree.setSelectionRow (0);
         tree.requestFocusInWindow ();
 
@@ -785,14 +774,5 @@ public class PanelRun extends JPanel
                 if (node.complete < 1) synchronized (running) {running.add (0, node);}  // It could take a very long time for this job to get added, but no longer than one complete update pass over running jobs.
             };
         }.start ();
-    }
-
-    public void repaintSouth (TreePath path)
-    {
-        Rectangle node    = tree.getPathBounds (path);
-        Rectangle visible = treePane.getViewport ().getViewRect ();
-        visible.height -= node.y - visible.y;
-        visible.y       = node.y;
-        tree.paintImmediately (visible);
     }
 }
