@@ -167,8 +167,9 @@ public class Part extends Instance
         if (bed.lastT != null) temp.setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
         if (bed.type != null) temp.setFinal (bed.type, new Scalar (0));
 
-        // zero external buffered variables that may be written before first finish()
-        clearExternalWriteBuffers (bed.localBufferedExternalWrite);
+        // Prepare variables that have a combiner, in case they get written before the first finish().
+        // This is done after initialize so that we don't apply our own equations twice (here and in update) before first finish.
+        clearExternalWriteBuffers (bed.localBufferedExternalWrite);  // See comment on this function. We still need to handle REPLACE ,,,
         for (Variable v : bed.localBufferedExternalWrite) if (v.assignment == Variable.REPLACE) temp.set (v, temp.get (v));
 
         // Request event monitors

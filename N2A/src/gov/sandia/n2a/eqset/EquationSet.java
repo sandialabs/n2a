@@ -2890,7 +2890,7 @@ public class EquationSet implements Comparable<EquationSet>
                 }
                 else
                 {
-                    // The following tests do simplification of the expression, rather than simple substitution
+                    // The following tests do simplification of the expression, rather than substitution
                     // with a fake Instance. We don't really know the values of variables until runtime.
                     // To be completely certain of an expression's value, it must reduce to a Scalar using only
                     // values that we can know now (specifically, the state of the phase indicators).
