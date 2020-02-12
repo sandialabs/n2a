@@ -43,6 +43,7 @@ import javax.swing.UIManager;
 import javax.swing.ViewportLayout;
 import javax.swing.event.MouseInputAdapter;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
@@ -98,9 +99,20 @@ public class PanelEquationGraph extends JScrollPane
         focus.y -= graphPanel.offset.y;
         if (! container.locked)
         {
-            MPart parent = (MPart) container.part.source.childOrCreate ("$metadata", "gui", "bounds", "parent");
-            parent.set (focus.x, "x");
-            parent.set (focus.y, "y");
+            // Check if offset has actually changed. This is a nicety to avoid modifying models unless absolutely necessary.
+            Point old = new Point ();
+            MNode parent = container.part.source.child ("$metadata", "gui", "bounds", "parent");
+            if (parent != null)
+            {
+                old.x = parent.getInt ("x");
+                old.y = parent.getInt ("y");
+            }
+            if (! focus.equals (old))
+            {
+                parent = container.part.source.childOrCreate ("$metadata", "gui", "bounds", "parent");
+                if (focus.x != old.x) parent.set (focus.x, "x");
+                if (focus.y != old.y) parent.set (focus.y, "y");
+            }
         }
         return focus;
     }

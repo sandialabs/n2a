@@ -259,9 +259,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Interprets value as boolean, with small extension to Java's string parser:
-        "1" or "true" = true;
-        everything else, including empty = false
+        Interprets value as boolean, with a small extension to Java's string parser:
+        true = "1" or "true";
+        false = everything else, including empty.
+        See getFlag() for a different way to interpret booleans. The key difference is
+        that a boolean defaults to false.
     **/
     public boolean getBoolean (Object... indices)
     {
@@ -270,8 +272,10 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Interprets value as flag, which may contain extended information when set:
-        "0" = false;
-        everything else, including empty = true
+        false = "0";
+        true = everything else, including empty.
+        See getBoolean() for a different way to interpret booleans. The key difference is
+        that a flag defaults to true, so it can indicate something by merely existing, without a value.
     **/
     public boolean getFlag (Object... indices)
     {
