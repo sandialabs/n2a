@@ -45,6 +45,7 @@ public class PanelModel extends JPanel implements MNodeListener
     public    PanelEquations panelEquations;
     public    UndoManager    undoManager = new UndoManager ();
 
+    // TODO: Enforce focus policy on individual components, rather than using a single policy object for everything.
     public class GraphFocusTraversalPolicy extends LayoutFocusTraversalPolicy
     {
     	public GraphNode getGraphNode (Component g)
@@ -64,12 +65,17 @@ public class PanelModel extends JPanel implements MNodeListener
                 return super.getComponentAfter (aContainer, aComponent);  // Otherwise, do normal focus cycle without considering GraphNode. This is necessary to enter editor to begin with.
             }
 
-            if (aComponent == panelSearch.nameEditor)  // nameEditor will be null when no active name edit
+            if (aComponent == panelSearch.nameEditor.editor)
             {
-                return panelSearch.list;
+                return panelSearch.tree;
             }
 
             Component result = super.getComponentAfter (aContainer, aComponent);
+
+            if (result == panelSearch.tree  &&  panelSearch.tree.getRowCount () == 0)
+            {
+                return super.getComponentAfter (aContainer, result);  // Skip search tree if it is empty.
+            }
 
             // Handle GraphNode behavior: only one of title or tree should receive keyboard focus at any given time
             GraphNode g1 = getGraphNode (result);
@@ -103,6 +109,11 @@ public class PanelModel extends JPanel implements MNodeListener
         public Component getComponentBefore (Container aContainer, Component aComponent)
         {
             Component result = super.getComponentBefore (aContainer, aComponent);
+
+            if (result == panelSearch.tree  &&  panelSearch.tree.getRowCount () == 0)
+            {
+                return super.getComponentBefore (aContainer, result);  // Skip search tree if it is empty.
+            }
 
             GraphNode g1 = getGraphNode (result);
             if (g1 != null)
@@ -146,7 +157,7 @@ public class PanelModel extends JPanel implements MNodeListener
 
         // Determine the split positions.
 
-        FontMetrics fm = panelSearch.list.getFontMetrics (panelSearch.list.getFont ());
+        FontMetrics fm = panelSearch.tree.getFontMetrics (panelSearch.tree.getFont ());
         splitMRU.setDividerLocation (AppData.state.getOrDefault (fm.getHeight () * 4, "PanelModel", "dividerMRU"));
         splitMRU.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
@@ -230,10 +241,8 @@ public class PanelModel extends JPanel implements MNodeListener
 
     public void childChanged (String oldKey, String newKey)
     {
-        // Holders in search and MRU should associate newKey with correct doc.
-        MNode newDoc = AppData.models.child (newKey);
-        panelMRU.updateDoc (newDoc);
-        panelSearch.updateDoc (newDoc);
+        panelMRU.updateDoc (oldKey, newKey);
+        panelSearch.updateDoc (oldKey, newKey);
 
         String key = "";
         MNode record = panelEquations.record;
@@ -245,7 +254,7 @@ public class PanelModel extends JPanel implements MNodeListener
             if (contentOnly)
             {
                 panelEquations.record = null;  // Force rebuild of display
-                panelEquations.load (newDoc);
+                panelEquations.load (AppData.models.child (newKey));
             }
             else
             {
@@ -263,8 +272,6 @@ public class PanelModel extends JPanel implements MNodeListener
         }
         else  // oldDoc has changed identity
         {
-            panelMRU.updateDoc (oldDoc);
-            panelSearch.updateDoc (oldDoc);
             if (key.equals (oldKey))
             {
                 panelEquations.record = null;

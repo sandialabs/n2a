@@ -1,10 +1,12 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq.undo;
+
+import java.util.List;
 
 import javax.swing.undo.UndoableEdit;
 
@@ -15,31 +17,31 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 
 public class DeleteDoc extends Undoable
 {
-    protected MVolatile saved;
-    protected boolean   neutralized;
-    protected String    keyAfter;  // key of the doc in the search list immediately after the one being deleted, or empty string is this is the end of the list
-    protected boolean   fromSearchPanel;
-    protected boolean   wasShowing;
+    protected MVolatile    saved;
+    protected boolean      neutralized;
+    protected List<String> pathAfter;  // key in the search list immediately after the one being deleted, or null if this is the end of the list
+    protected boolean      fromSearchPanel;
+    protected boolean      wasShowing;
+    protected boolean      wasInMRU;
 
     public DeleteDoc (MDoc doc)
     {
         saved = new MVolatile (null, doc.key ());
         saved.merge (doc);  // in-memory copy of the entire document
 
-        PanelModel mep = PanelModel.instance;
-        fromSearchPanel = mep.panelSearch.list.isFocusOwner ();
-        keyAfter        = mep.panelSearch.keyAfter (doc);
-        wasShowing      = mep.panelEquations.record == doc;
+        PanelModel pm = PanelModel.instance;
+        fromSearchPanel = pm.panelSearch.tree.isFocusOwner ();
+        wasShowing      = pm.panelEquations.record == doc;
+        wasInMRU        = pm.panelMRU.hasDoc (doc);
+        if (fromSearchPanel) pathAfter = pm.panelSearch.pathAfter (doc.key ());
     }
 
     public void undo ()
     {
         super.undo ();
         PanelModel mep = PanelModel.instance;
-        mep.panelMRU.dontInsert = true;
-        int index = mep.panelSearch.indexOf (keyAfter);
-        if (index < 0) index = 0;
-        AddDoc.create (saved.key (), saved, index, fromSearchPanel, wasShowing);
+        mep.panelMRU.dontInsert = ! wasInMRU;
+        AddDoc.create (saved.key (), saved, pathAfter, fromSearchPanel, wasShowing);
     }
 
     public void redo ()

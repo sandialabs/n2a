@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
@@ -15,11 +14,12 @@ import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
+import gov.sandia.n2a.ui.eq.search.NameEditor;
+import gov.sandia.n2a.ui.eq.search.NodeBase;
+import gov.sandia.n2a.ui.eq.search.NodeModel;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
-import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.datatransfer.DataFlavor;
@@ -33,52 +33,59 @@ import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
-import java.io.StringWriter;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.ActionMap;
-import javax.swing.DefaultListModel;
+import javax.swing.Icon;
 import javax.swing.InputMap;
 import javax.swing.JComponent;
-import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
+import javax.swing.JTree;
 import javax.swing.KeyStroke;
-import javax.swing.ListCellRenderer;
-import javax.swing.ListSelectionModel;
+import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
-import javax.swing.UIManager;
-import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.DefaultHighlighter;
-import javax.swing.text.Highlighter;
+import javax.swing.tree.DefaultTreeCellRenderer;
+import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreePath;
+import javax.swing.tree.TreeSelectionModel;
 
 
 @SuppressWarnings("serial")
 public class PanelSearch extends JPanel
 {
-    public JTextField               textQuery;
-    public JList<Holder>            list;
-    public DefaultListModel<Holder> model;
-    public int                      lastSelection = -1;
-    public int                      insertAt;
-    public MNodeRenderer            renderer = new MNodeRenderer ();
-    public TransferHandler          transferHandler;
-    public NameEditor               nameEditor;
+    protected SearchThread           thread;
+    protected JTextField             textQuery;
+    protected NodeBase               root       = new NodeBase ();
+    protected DefaultTreeModel       model      = new DefaultTreeModel (root);
+    public    JTree                  tree       = new JTree (model);
+    protected MNodeRenderer          renderer   = new MNodeRenderer ();
+    public    NameEditor             nameEditor = new NameEditor (renderer);
+    public    TransferHandler        transferHandler;
+    public    List<String>           lastSelection;
+    public    List<String>           insertAt;  // Path to node that next insertion should precede. If null, insert at top of uncategorized nodes.
 
     public PanelSearch ()
     {
-        list = new JList<Holder> (model = new DefaultListModel<Holder> ());
-        list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
-        list.setDragEnabled (true);
-        list.setCellRenderer (renderer);
+        tree.setRootVisible (false);
+        tree.setExpandsSelectedPaths (true);
+        tree.setScrollsOnExpand (true);
+        tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection.
+        tree.setEditable (true);
+        tree.setInvokesStopCellEditing (true);  // auto-save current edits, as much as possible
+        tree.setDragEnabled (true);
+        tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
+        ToolTipManager.sharedInstance ().registerComponent (tree);
+        tree.setCellRenderer (renderer);
+        tree.setCellEditor (nameEditor);
+        tree.addTreeSelectionListener (nameEditor);
 
-        InputMap inputMap = list.getInputMap ();
+        InputMap inputMap = tree.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"), "delete");
@@ -86,25 +93,31 @@ public class PanelSearch extends JPanel
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "select");
         inputMap.put (KeyStroke.getKeyStroke ("F2"),         "edit");
 
-        ActionMap actionMap = list.getActionMap ();
-        Action selectPreviousRow = actionMap.get ("selectPreviousRow");
-        actionMap.put ("selectPreviousRow", new AbstractAction ()
+        ActionMap actionMap = tree.getActionMap ();
+        Action selectPrevious = actionMap.get ("selectPrevious");
+        Action selectParent   = actionMap.get ("selectParent");
+        actionMap.put ("selectPrevious", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (list.getSelectedIndex () == 0)
+                if (tree.getLeadSelectionRow () == 0)
                 {
                     textQuery.requestFocusInWindow ();
                     return;
                 }
-                selectPreviousRow.actionPerformed (e);
+                selectPrevious.actionPerformed (e);
             }
         });
-        actionMap.put ("selectPreviousColumn", new AbstractAction ()
+        actionMap.put ("selectParent", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                textQuery.requestFocusInWindow ();
+                TreePath path = tree.getLeadSelectionPath ();
+                if (path == null  ||  path.getPathCount () == 2  &&  tree.isCollapsed (path))  // This is a direct child of the root (which is not visible).
+                {
+                    textQuery.requestFocusInWindow ();
+                }
+                selectParent.actionPerformed (e);
             }
         });
         actionMap.put ("add", new AbstractAction ()
@@ -118,10 +131,9 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                MNode deleteMe = list.getSelectedValue ().doc;
-                if (deleteMe == null  ||  ! AppData.models.isWriteable (deleteMe)) return;
-                lastSelection = list.getSelectedIndex ();
-                PanelModel.instance.undoManager.add (new DeleteDoc ((MDoc) deleteMe));
+                NodeModel n = getSelectedNodeModel ();
+                if (n == null  ||  ! n.allowEdit ()) return;
+                PanelModel.instance.undoManager.add (new DeleteDoc ((MDoc) AppData.models.child (n.key)));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -135,15 +147,13 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-            	Holder h = list.getSelectedValue ();
-            	if (h == null  ||  ! AppData.models.isWriteable (h.doc)) return;
-                nameEditor = new NameEditor (); 
-                list.add (nameEditor);
-                nameEditor.requestFocusInWindow ();
+                NodeModel n = getSelectedNodeModel ();
+                if (n == null  ||  ! n.allowEdit ()) return;
+                tree.startEditingAtPath (new TreePath (n.getPath ()));
             }
         });
 
-        list.addMouseListener (new MouseAdapter ()
+        tree.addMouseListener (new MouseAdapter ()
         {
             public void mouseClicked (MouseEvent e)
             {
@@ -151,17 +161,16 @@ public class PanelSearch extends JPanel
             }
         });
 
-        list.addFocusListener (new FocusListener ()
+        tree.addFocusListener (new FocusListener ()
         {
             public void focusGained (FocusEvent e)
             {
-                PanelModel.instance.panelEquations.yieldFocus ();
-                showSelection ();
+                restoreFocus ();
             }
 
             public void focusLost (FocusEvent e)
             {
-                hideSelection ();
+                if (! e.isTemporary ()  &&  ! tree.isEditing ()) yieldFocus ();
             }
         });
 
@@ -174,7 +183,7 @@ public class PanelSearch extends JPanel
 
             public boolean importData (TransferSupport xfer)
             {
-                if (! list.isFocusOwner ()) hideSelection ();
+                if (! tree.isFocusOwner ()) yieldFocus ();
 
                 Transferable xferable = xfer.getTransferable ();
                 if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))
@@ -236,18 +245,20 @@ public class PanelSearch extends JPanel
 
             protected Transferable createTransferable (JComponent comp)
             {
-                TransferableNode result = list.getSelectedValue ().createTransferable ();
+                NodeModel n = getSelectedNodeModel ();
+                if (n == null) return null;
+                TransferableNode result = n.createTransferable ();
                 result.panel = PanelSearch.this;
                 return result;
             }
 
             protected void exportDone (JComponent source, Transferable data, int action)
             {
-                if (! list.isFocusOwner ()) hideSelection ();
+                if (! tree.isFocusOwner ()) yieldFocus ();
                 PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         };
-        list.setTransferHandler (transferHandler);
+        tree.setTransferHandler (transferHandler);
 
 
         textQuery = new JTextField ();
@@ -270,20 +281,8 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                lastSelection = 0;
-                list.requestFocusInWindow ();
-            }
-        });
-
-        textQuery.addFocusListener (new FocusListener ()
-        {
-            public void focusGained (FocusEvent e)
-            {
-                PanelModel.instance.panelEquations.yieldFocus ();
-            }
-
-            public void focusLost (FocusEvent e)
-            {
+                lastSelection = null;
+                tree.requestFocusInWindow ();
             }
         });
 
@@ -318,7 +317,7 @@ public class PanelSearch extends JPanel
 
         Lay.BLtg (this,
             "N", Lay.BL ("C", textQuery, "eb=2"),
-            "C", Lay.sp (list)
+            "C", Lay.sp (tree)
         );
 
         search ();
@@ -334,15 +333,22 @@ public class PanelSearch extends JPanel
         thread.start ();
     }
 
+    public NodeModel getSelectedNodeModel ()
+    {
+        TreePath path = tree.getSelectionPath ();
+        if (path == null) return null;
+        Object o = path.getLastPathComponent ();
+        if (o instanceof NodeModel) return (NodeModel) o;
+        return null;
+    }
+
     public void selectCurrent ()
     {
-        int index = list.getSelectedIndex ();
-        if (index >= 0)
-        {
-            MNode doc = model.get (index).doc;
-            PanelModel.instance.panelMRU.useDoc (doc);
-            recordSelected (doc);
-        }
+        NodeModel n = getSelectedNodeModel ();
+        if (n == null) return;
+        MNode doc = AppData.models.child (n.key);
+        PanelModel.instance.panelMRU.useDoc (doc);
+        recordSelected (doc);
     }
 
     public static void recordSelected (final MNode doc)
@@ -358,142 +364,147 @@ public class PanelSearch extends JPanel
         });
     }
 
-    public void hideSelection ()
+    public void yieldFocus ()
     {
-        int index = list.getSelectedIndex ();
-        if (index >= 0) lastSelection = index;
-        list.clearSelection ();
+        TreePath path = tree.getSelectionPath ();
+        if (path != null) lastSelection = ((NodeBase) path.getLastPathComponent ()).getKeyPath ();
+        // else leave lastSelection at its previous value
+        tree.clearSelection ();
     }
 
-    public void showSelection ()
+    public void takeFocus ()
     {
-        if (list.getSelectedIndex () < 0)
+        if (tree.isFocusOwner ()) restoreFocus ();
+        else                      tree.requestFocusInWindow ();  // Triggers focus listener, which calls restoreFocus()
+    }
+
+    public void restoreFocus ()
+    {
+        if (tree.getSelectionCount () > 0) return;
+        NodeBase n = nodeFor (lastSelection);
+        TreePath path;
+        if (n == null) path = tree.getPathForRow (0);
+        else           path = new TreePath (n.getPath ());
+        tree.setSelectionPath (path);
+        tree.scrollPathToVisible (path);
+    }
+
+    public void forceSelection (List<String> selection)
+    {
+        lastSelection = selection;
+        tree.clearSelection ();  // so that restoreFocus() will actually apply lastSelection
+        takeFocus ();
+    }
+
+    public NodeBase nodeFor (List<String> path)
+    {
+        if (path == null) return null;
+        String last = path.get (path.size () - 1);
+        NodeBase n = root;
+        for (String key : path)
         {
-            int last = model.getSize () - 1;
-            if      (lastSelection < 0   ) list.setSelectedIndex (0);
-            else if (lastSelection > last) list.setSelectedIndex (last);
-            else                           list.setSelectedIndex (lastSelection);
+            NodeBase c = null;
+            if (key.isEmpty ()) c = n.firstModel ();
+            else                c = n.child (key, key == last);
+            if (c == null) break;
+            n = c;
         }
+        if (n == root) return null;
+        return n;
     }
 
-    public String currentKey ()
+    public List<String> currentPath ()
     {
-        int index = list.getSelectedIndex ();
-        if (index < 0) return "";
-        return model.get (index).doc.key ();
+        TreePath path = tree.getSelectionPath ();
+        if (path == null) return null;
+        return ((NodeBase) path.getLastPathComponent ()).getKeyPath ();
     }
 
-    public String keyAfter (MNode doc)
+    /**
+        Of all places that given key occurs in tree, returns the one most suitable given current selection.
+    **/
+    public NodeModel find (String key)
     {
-        int index = model.indexOf (new Holder (doc));
-        if (index < 0  ||  index == model.getSize () - 1) return "";  // indexOf(String) will return end-of-list in response to this value.
-        return model.get (index + 1).doc.key ();
+        NodeBase n = null;
+        List<String> currentSelection = currentPath ();
+        if (currentSelection == null) currentSelection = lastSelection;
+        if (currentSelection != null) n = nodeFor (currentSelection);
+        if (! (n instanceof NodeModel)) n = null;
+        if (n != null)  // Use current selection as starting context to search for key.
+        {
+            NodeBase p = (NodeBase) n.getParent ();  // could be root, or any category folder
+            n = p.child (key, true);
+        }
+        if (n == null) n = root.findModel (key);  // key was not found, so do full search.
+        return (NodeModel) n;
     }
 
-    public int indexOf (String key)
+    public List<String> pathAfter (String key)
     {
-        int count = model.size ();
-        if (key.isEmpty ()) return count;
-        for (int i = 0; i < count; i++) if (model.get (i).doc.key ().equals (key)) return i;
-        return -1;
+        NodeBase n = find (key);  // Determine best path to doc, if it is currently listed.
+        if (n == null)  // Not found anywhere, so choose first uncategorized entry at top level.
+        {
+            List<String> result = new ArrayList<String> ();
+            result.add ("");
+            return result;
+        }
+
+        NodeBase next = (NodeBase) n.getNextSibling ();
+        if (next != null) return next.getKeyPath ();
+
+        // No next sibling, so choose first uncategorized entry at this level.
+        List<String> result = n.getKeyPath ();
+        result.set (result.size () - 1, "");
+        return result;
     }
 
     public void removeDoc (String key)
     {
-        int index = indexOf (key);
-        if (index < 0) return;
-        model.remove (index);
-        if (lastSelection > index) lastSelection--;
-        lastSelection = Math.min (model.size () - 1, lastSelection);
+        if (lastSelection == null  ||  lastSelection.get (lastSelection.size () - 1).equals (key)) lastSelection = pathAfter (key);
+        root.purge (key, model);
     }
 
-    /**
-        For multirepo, if the key of the doc in a Holder gets claimed by another doc,
-        then the Holder should be updated to point to the new doc. This could, for example,
-        change what color it gets displayed as.
-    **/
-    public void updateDoc (MNode doc)
+    public void updateDoc (String oldKey, String newKey)
     {
-        String key = doc.key ();
-        int index = indexOf (key);
-        if (index < 0) return;
-        Holder h = model.get (index);
-        if (h.doc == doc) return;
-        h.doc = doc;
-        model.setElementAt (h, index);  // Doesn't change the entry in model, just forces repaint of the associated row.
+        root.replaceDoc (oldKey, newKey, model);
+        if (lastSelection != null)
+        {
+            int last = lastSelection.size () - 1;
+            if (lastSelection.get (last).equals (oldKey)) lastSelection.set (last, newKey);
+        }
     }
 
-    public void insertNextAt (int at)
+    public void insertNextAt (List<String> at)
     {
         insertAt = at;
     }
 
     public void insertDoc (MNode doc)
     {
-        Holder h = new Holder (doc);
-        int index = model.indexOf (h);
-        if (index < 0)
+        NodeBase n = find (doc.key ());
+        if (n == null)
         {
-            if (insertAt > model.size ()) insertAt = 0;  // The list has changed, perhaps due to filtering, and our position is no longer valid, so simply insert at top.
-            model.add (insertAt, h);
-            lastSelection = insertAt;
-        }
-        else
-        {
-            lastSelection = index;
-        }
-        insertAt = 0;
-    }
+            n = new NodeModel (doc.key ());
 
-    public void updateUI ()
-    {
-        super.updateUI ();
-        if (renderer != null) renderer.updateUI ();
-    }
-
-    /**
-        Indirect access to MDoc, because toString() would otherwise load and return the entire document.
-    **/
-    public static class Holder
-    {
-        public MNode doc;
-
-        public Holder (MNode doc)
-        {
-            this.doc = doc;
-        }
-
-        public TransferableNode createTransferable ()
-        {
-            Schema schema = Schema.latest ();
-            schema.type = "Part";
-            StringWriter writer = new StringWriter ();
-            try
+            NodeBase p;
+            int index;
+            NodeBase at = nodeFor (insertAt);
+            if (at == null) at = root.firstModel ();
+            if (at == null)
             {
-                schema.write (writer);
-                writer.write (doc.key () + String.format ("%n"));
-                for (MNode c : doc) schema.write (c, writer, " ");
-                writer.close ();
-                return new TransferableNode (writer.toString (), null, false, doc.key ());
+                p = root;
+                index = root.getChildCount ();  // past end of list, which will all be categories
             }
-            catch (IOException e)
+            else
             {
+                p = (NodeBase) at.getParent ();
+                index = p.getIndex (at);
             }
 
-            return null;
+            model.insertNodeInto (n, p, index);
         }
-
-        public String toString ()
-        {
-            return doc.key ();
-        }
-
-        public boolean equals (Object that)
-        {
-            // MDocs are unique, so direct object equality is OK here.
-            if (that instanceof Holder) return ((Holder) that).doc == doc;
-            return false;
-        }
+        lastSelection = n.getKeyPath ();
+        insertAt = null;
     }
 
     // Retrieve records matching the filter text, and deliver them to the model.
@@ -510,11 +521,22 @@ public class PanelSearch extends JPanel
         @Override
         public void run ()
         {
-            List<MNode> results = new LinkedList<MNode> ();
+            NodeBase newRoot = new NodeBase ();
             for (MNode i : AppData.models)
             {
                 if (stop) return;
-                if (i.key ().toLowerCase ().contains (query)) results.add (i);
+                String key = i.key ();
+                if (key.toLowerCase ().contains (query))
+                {
+                    String[] categories = i.get ("$metadata", "gui", "category").split (",");
+                    for (String category : categories)
+                    {
+                        category = category.trim ();
+                        NodeModel n = new NodeModel (key);
+                        if (category.isEmpty ()) newRoot.add (n);
+                        else                     newRoot.insert (category, n);
+                    }
+                }
             }
 
             // Update of list should be atomic with respect to other ui events.
@@ -525,215 +547,35 @@ public class PanelSearch extends JPanel
                     synchronized (model)
                     {
                         if (stop) return;
-                        model.clear ();
-                        lastSelection = -1;
-                        for (MNode record : results)
-                        {
-                            if (stop) return;
-                            model.addElement (new Holder (record));
-                        }
+                        root = newRoot;
+                        model.setRoot (newRoot);  // triggers repaint
+                        lastSelection = null;
                     }
                 }
             });
         }
     }
-    protected SearchThread thread;
 
-    public static class MNodeRenderer extends JTextField implements ListCellRenderer<Holder>
+    public static class MNodeRenderer extends DefaultTreeCellRenderer
     {
-        protected static DefaultHighlighter.DefaultHighlightPainter painter;
-
-        // These colors may get changed when look & feel is changed.
-        public static Color colorInherit          = Color.blue;
-        public static Color colorOverride         = Color.black;
-        public static Color colorSelectedInherit  = Color.blue;
-        public static Color colorSelectedOverride = Color.black;
-
-        public MNodeRenderer ()
+        public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
         {
-            painter = new DefaultHighlighter.DefaultHighlightPainter (UIManager.getColor ("List.selectionBackground"));
-            setBorder (new EmptyBorder (0, 0, 0, 0));
-        }
+            super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
 
-        public Component getListCellRendererComponent (JList<? extends Holder> list, Holder holder, int index, boolean selected, boolean focused)
-        {
-            MNode doc = holder.doc;
-            String name = doc.key ();
-            if (name.isEmpty ()) name = doc.get ();
-            setText (name);
-
-            Color color;
-            if (AppData.models.isWriteable (doc))
-            {
-                color = selected ? colorSelectedOverride : colorOverride;
-            }
-            else
-            {
-                color = null;
-                String colorName = "";
-                MNode repo = AppData.repos.child (doc.parent ().key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.
-                if (repo != null) colorName = repo.get ("color");
-                if (! colorName.isEmpty ())
-                {
-                    try
-                    {
-                        color = Color.decode (colorName);
-                        if (color.equals (Color.black)) color = null;  // Treat black as always default. Thus, the user can't explicitly set black, but they can set extremely dark (R=G=B=1).
-                    }
-                    catch (NumberFormatException e) {}
-                }
-                if (color == null) color = selected ? colorSelectedInherit : colorInherit;
-            }
-            setForeground (color);
-
-            if (selected)
-            {
-                Highlighter h = getHighlighter ();
-                h.removeAllHighlights ();
-                try
-                {
-                    h.addHighlight (0, name.length (), painter);
-                }
-                catch (BadLocationException e)
-                {
-                }
-            }
+            NodeBase n = (NodeBase) value;
+            setForeground (n.getColor (selected));
+            setIcon (getIconFor (n, expanded, leaf));
 
             return this;
         }
 
-        public void updateUI ()
+        public Icon getIconFor (NodeBase node, boolean expanded, boolean leaf)
         {
-            super.updateUI ();
-            painter = new DefaultHighlighter.DefaultHighlightPainter (UIManager.getColor ("List.selectionBackground"));
-
-            // Check colors to see if text is dark or light.
-            Color fg = UIManager.getColor ("List.foreground");
-            float[] hsb = Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), null);
-            if (hsb[2] > 0.5)  // Light text
-            {
-                colorInherit  = new Color (0xC0C0FF);  // light blue
-                colorOverride = Color.white;
-            }
-            else  // Dark text
-            {
-                colorInherit  = Color.blue;
-                colorOverride = Color.black;
-            }
-
-            fg = UIManager.getColor ("List.selectionForeground");  // for Metal, and many other L&Fs
-            if (fg == null) fg = UIManager.getColor ("List[Selected].textForeground");  // for Nimbus
-            Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), hsb);
-            if (hsb[2] > 0.5)  // Light text
-            {
-                colorSelectedInherit  = new Color (0xC0C0FF);
-                colorSelectedOverride = Color.white;
-            }
-            else  // Dark text
-            {
-                colorSelectedInherit  = Color.blue;
-                colorSelectedOverride = Color.black;
-            }
-        }
-    }
-
-    /**
-        Conceptually similar to CellEditor, but this class is highly specialized to the task of editing a part name in our list.
-        It does not implement any CellEditor-related interfaces, because it does not need to be general-purpose.
-    **/
-    public class NameEditor extends JTextField
-    {
-        boolean editing;
-        String  oldName;
-        String  newName;
-
-        public NameEditor ()
-        {
-            editing = true;
-            oldName = list.getSelectedValue ().toString ();
-            int index = list.getSelectedIndex ();
-            setText (oldName);
-            setBounds (list.getCellBounds (index, index));
-
-            InputMap inputMap = getInputMap ();
-            inputMap.put (KeyStroke.getKeyStroke ("ESCAPE"), "cancel");
-            inputMap.put (KeyStroke.getKeyStroke ("ENTER"),  "stop");
-
-            ActionMap actionMap = getActionMap ();
-            actionMap.put ("cancel", new AbstractAction ()
-            {
-                public void actionPerformed (ActionEvent e)
-                {
-                    cancelEditing ();
-                }
-            });
-            actionMap.put ("stop", new AbstractAction ()
-            {
-                public void actionPerformed (ActionEvent e)
-                {
-                    stopEditing ();
-                }
-            });
-
-            addFocusListener (new FocusListener ()
-            {
-                public void focusGained (FocusEvent e)
-                {
-                }
-
-                public void focusLost (FocusEvent e)
-                {
-                    if (editing) stopEditing ();
-                }
-            });
-        }
-
-        public void stopEditing ()
-        {
-            editing = false;
-            list.remove (this);  // triggers shift of focus
-            nameEditor = null;
-
-            // Similar to NodePart.applyEdit()
-
-            newName = getText ();
-            if (newName.isEmpty ()  ||  newName.equals (oldName))
-            {
-                list.repaint ();
-                return;
-            }
-
-            //   Make name valid
-            newName = MDir.validFilenameFrom (newName);
-            newName = newName.replace (",", "-");
-
-            //   Make name unique
-            String stem = newName;
-            int suffix = 0;
-            MNode models = AppData.models;
-            MNode existingDocument = models.child (newName);
-            while (existingDocument != null)
-            {
-                suffix++;
-                newName = stem + " " + suffix;
-                existingDocument = models.child (newName);
-            }
-
-            EventQueue.invokeLater (new Runnable ()
-            {
-                public void run ()
-                {
-                    PanelModel.instance.undoManager.add (new ChangeDoc (oldName, newName));
-                }
-            });
-        }
-
-        public void cancelEditing ()
-        {
-            editing = false;
-            list.remove (this);
-            nameEditor = null;
-            list.repaint ();
+            Icon result = node.getIcon (expanded);  // A node knows whether it should hold other nodes or not, so don't pass leaf to it.
+            if (result != null) return result;
+            if (leaf)     return getDefaultLeafIcon ();
+            if (expanded) return getDefaultOpenIcon ();
+            return               getDefaultClosedIcon ();
         }
     }
 }

@@ -10,7 +10,6 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.ref.PanelReference;
 
 public class AddEntry extends Undoable
@@ -65,11 +64,11 @@ public class AddEntry extends Undoable
     {
         AppData.references.clear (id);  // Triggers PanelReference.childDeleted(name), which removes doc from all 3 sub-panels.
 
-        PanelReference mep = PanelReference.instance;
+        PanelReference pr = PanelReference.instance;
         if (fromSearchPanel)
         {
-            mep.panelSearch.showSelection ();
-            mep.panelSearch.list.requestFocusInWindow ();
+            pr.panelSearch.showSelection ();
+            pr.panelSearch.list.requestFocusInWindow ();
         }
         // else leave the focus wherever it's at. We shift focus to make user aware of the delete, but this is only meaningful in the search list.
     }
@@ -80,7 +79,7 @@ public class AddEntry extends Undoable
         int index = 0;
         if (! keyAfter.isEmpty ())
         {
-            index = PanelModel.instance.panelSearch.indexOf (keyAfter);
+            index = PanelReference.instance.panelSearch.indexOf (keyAfter);
             if (index < 0) index = 0;
         }
         create (id, saved, index, fromSearchPanel, wasShowing, wasShowing);
@@ -88,23 +87,23 @@ public class AddEntry extends Undoable
 
     public static void create (String id, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing, boolean willEdit)
     {
-        PanelReference mep = PanelReference.instance;
-        mep.panelSearch.insertNextAt (index);
+        PanelReference pr = PanelReference.instance;
+        pr.panelSearch.insertNextAt (index);
 
         MNode doc = AppData.references.childOrCreate (id);  // Triggers PanelReference.childAdded(name), which updates the select and MRU panels, but not the entry panel.
         doc.merge (saved);
 
-        if (wasShowing) mep.panelEntry.model.setRecord (doc);
+        if (wasShowing) pr.panelEntry.model.setRecord (doc);
         if (willEdit  ||  ! fromSearchPanel)
         {
-            mep.panelSearch.hideSelection ();
-            mep.panelSearch.lastSelection = index;  // Because hideSelection() stores current selection, which was one row past index.
-            mep.panelEntry.table.requestFocusInWindow ();
+            pr.panelSearch.hideSelection ();
+            pr.panelSearch.lastSelection = index;  // Because hideSelection() stores current selection, which was one row past index.
+            pr.panelEntry.table.requestFocusInWindow ();
         }
         else
         {
-            mep.panelSearch.list.setSelectedIndex (index);
-            mep.panelSearch.list.requestFocusInWindow ();
+            pr.panelSearch.list.setSelectedIndex (index);
+            pr.panelSearch.list.requestFocusInWindow ();
         }
     }
 }

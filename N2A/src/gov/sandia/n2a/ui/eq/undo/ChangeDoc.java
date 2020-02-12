@@ -1,10 +1,12 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq.undo;
+
+import java.util.List;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
@@ -14,10 +16,11 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 
 public class ChangeDoc extends Undoable
 {
-    protected String  before;
-    protected String  after;
-    protected boolean fromSearchPanel;
-    protected boolean wasShowing;
+    protected String       before;
+    protected String       after;
+    protected boolean      fromSearchPanel;
+    protected List<String> selection;
+    protected boolean      wasShowing;
 
     public ChangeDoc (String before, String after)
     {
@@ -25,8 +28,9 @@ public class ChangeDoc extends Undoable
         this.after  = after;
 
         PanelModel pm = PanelModel.instance;
-        fromSearchPanel = pm.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on equation panel
+        fromSearchPanel = pm.panelSearch.tree.isFocusOwner ()  ||  pm.panelSearch.nameEditor.editor.isFocusOwner ();  // Otherwise, assume focus is on equation panel
         wasShowing      = pm.panelEquations.record != null  &&  pm.panelEquations.record.key ().equals (before);
+        if (fromSearchPanel) selection = pm.panelSearch.find (before).getKeyPath ();
     }
 
     public void undo ()
@@ -69,9 +73,12 @@ public class ChangeDoc extends Undoable
             }
         }
         pm.panelMRU.renamed ();  // Because the change in document name does not directly notify the list model.
-        pm.panelSearch.list.repaint ();
 
-        if (fromSearchPanel) pm.panelSearch.list.requestFocusInWindow ();
+        if (fromSearchPanel)
+        {
+            selection.set (selection.size () - 1, B);
+            pm.panelSearch.forceSelection (selection);
+        }
         else if (wasShowing) container.breadcrumbRenderer.requestFocusInWindow ();
         // else we don't care where focus is
     }

@@ -1,10 +1,12 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq.undo;
+
+import java.util.List;
 
 import javax.swing.undo.UndoableEdit;
 
@@ -18,12 +20,12 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 
 public class AddDoc extends Undoable
 {
-    public String  name;
-    public boolean nameIsGenerated;
-    public MNode   saved;
-    public boolean fromSearchPanel;
-    public String  keyAfter;  // key of doc at the location in search list where we should insert the new doc. The other doc will get pushed down a row.
-    public boolean wasShowing = true;
+    public String       name;
+    public boolean      nameIsGenerated;
+    public MNode        saved;
+    public boolean      fromSearchPanel;
+    public List<String> pathAfter;  // tree path of doc at the location in search list where we should insert the new doc. The other doc will get pushed down a row.
+    public boolean      wasShowing = true;
 
     public AddDoc ()
     {
@@ -36,9 +38,9 @@ public class AddDoc extends Undoable
         this.name  = uniqueName (name);
         this.saved = saved;
 
-        PanelModel mep = PanelModel.instance;
-        fromSearchPanel = mep.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on equation tree
-        keyAfter = mep.panelSearch.currentKey ();
+        PanelModel pm = PanelModel.instance;
+        fromSearchPanel = pm.panelSearch.tree.isFocusOwner ();  // Otherwise, assume focus is on equation tree
+        if (fromSearchPanel) pathAfter = pm.panelSearch.currentPath ();  // Otherwise, pathAfter is null and new entry will appear at top of uncategorized entries.
 
         // Insert ID, if given doc does not already have one.
         MNode id = saved.childOrCreate ("$metadata", "id");
@@ -50,7 +52,7 @@ public class AddDoc extends Undoable
     {
         wasShowing      = false;
         fromSearchPanel = false;
-        keyAfter        = "";
+        pathAfter       = null;
     }
 
     /**
@@ -89,30 +91,20 @@ public class AddDoc extends Undoable
         AppData.models.clear (name);  // Triggers PanelModel.childDeleted(name), which removes doc from all 3 sub-panels.
 
         PanelModel pm = PanelModel.instance;
-        if (fromSearchPanel)
-        {
-            pm.panelSearch.showSelection ();
-            pm.panelSearch.list.requestFocusInWindow ();
-        }
+        if (fromSearchPanel) pm.panelSearch.takeFocus ();
         // else leave the focus wherever it's at. We shift focus to make user aware of the delete, but this is only meaningful in the search list.
     }
 
     public void redo ()
     {
         super.redo ();
-        int index = 0;
-        if (! keyAfter.isEmpty ())
-        {
-            index = PanelModel.instance.panelSearch.indexOf (keyAfter);
-            if (index < 0) index = 0;
-        }
-        create (name, saved, index, fromSearchPanel, wasShowing);
+        create (name, saved, pathAfter, fromSearchPanel, wasShowing);
     }
 
-    public static void create (String name, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing)
+    public static void create (String name, MNode saved, List<String> pathAfter, boolean fromSearchPanel, boolean wasShowing)
     {
         PanelModel pm = PanelModel.instance;
-        pm.panelSearch.insertNextAt (index);
+        pm.panelSearch.insertNextAt (pathAfter);  // Note that lastSelection will end up pointing to new entry, not pathAfter.
 
         MDoc doc = (MDoc) AppData.models.childOrCreate (name);  // Triggers PanelModel.childAdded(name), which updates the select and MRU panels, but not the equation tree panel.
         doc.merge (saved);
@@ -120,11 +112,10 @@ public class AddDoc extends Undoable
         AppData.set (doc.get ("$metadata", "id"), doc);
 
         if (wasShowing) pm.panelEquations.load (doc);  // Takes focus
-        pm.panelSearch.lastSelection = index;  // So that next time focus shifts to search list, this model will be selected.
         if (fromSearchPanel)
         {
-            pm.panelSearch.list.setSelectedIndex (index);  // In case focus is already on search list.
-            pm.panelSearch.list.requestFocusInWindow ();   // In case it's not.
+            pm.panelSearch.tree.clearSelection ();
+            pm.panelSearch.tree.requestFocusInWindow ();  // Must claw back focus, even though tree thinks that it still has focus.
         }
     }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,9 +8,11 @@ package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.ui.eq.PanelSearch.Holder;
+import gov.sandia.n2a.db.Schema;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
@@ -18,25 +20,35 @@ import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.io.StringWriter;
+
 import javax.swing.DefaultListModel;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
+import javax.swing.JTextField;
+import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
+import javax.swing.UIManager;
+import javax.swing.border.EmptyBorder;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.DefaultHighlighter;
+import javax.swing.text.Highlighter;
 
 @SuppressWarnings("serial")
 public class PanelMRU extends JPanel
 {
-    public JList<PanelSearch.Holder>            list;
-    public DefaultListModel<PanelSearch.Holder> model;
-    public boolean                              dontInsert;  // Ignore next call to insertDoc()
+    public JList<String>            list;
+    public DefaultListModel<String> model;
+    public boolean                  dontInsert;  // Ignore next call to insertDoc()
 
     public PanelMRU ()
     {
-        list = new JList<PanelSearch.Holder> (model = new DefaultListModel<PanelSearch.Holder> ());
+        model = new DefaultListModel<String> ();
+        list = new JList<String> (model);
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
-        list.setCellRenderer (new PanelSearch.MNodeRenderer ());
+        list.setCellRenderer (new MNodeRenderer ());
         list.setFocusable (false);
         list.setDragEnabled (true);
         list.addMouseListener (new MouseAdapter ()
@@ -44,7 +56,11 @@ public class PanelMRU extends JPanel
             public void mouseClicked (MouseEvent e)
             {
                 int index = list.getSelectedIndex ();
-                if (index >= 0) PanelSearch.recordSelected (model.get (index).doc);
+                if (index >= 0)
+                {
+                    MNode doc = AppData.models.child (model.get (index));
+                    PanelSearch.recordSelected (doc);
+                }
                 list.clearSelection ();
             }
         });
@@ -76,12 +92,12 @@ public class PanelMRU extends JPanel
                     int newIndex = dl.getIndex ();
                     if (newIndex < 0) newIndex = 0;
 
-                    PanelSearch.Holder h = new PanelSearch.Holder (doc);
-                    int oldIndex = model.indexOf (h);
+                    String key = doc.key ();
+                    int oldIndex = model.indexOf (key);
                     if (newIndex != oldIndex)
                     {
                         if (oldIndex >= 0) model.remove (oldIndex);
-                        model.add (newIndex, h);
+                        model.add (newIndex, key);
                         saveMRU ();
                     }
                 }
@@ -97,9 +113,25 @@ public class PanelMRU extends JPanel
 
             protected Transferable createTransferable (JComponent comp)
             {
-                TransferableNode result = list.getSelectedValue ().createTransferable ();
-                result.panel = PanelMRU.this;
-                return result;
+                String key = list.getSelectedValue ();
+                MNode doc = AppData.models.child (key);
+
+                Schema schema = Schema.latest ();
+                schema.type = "Part";
+                StringWriter writer = new StringWriter ();
+                try
+                {
+                    schema.write (writer);
+                    writer.write (key + String.format ("%n"));
+                    for (MNode c : doc) schema.write (c, writer, " ");
+                    writer.close ();
+                    TransferableNode result = new TransferableNode (writer.toString (), null, false, key);
+                    result.panel = PanelMRU.this;
+                    return result;
+                }
+                catch (IOException e) {}
+
+                return null;
             }
 
             protected void exportDone (JComponent source, Transferable data, int action)
@@ -124,17 +156,18 @@ public class PanelMRU extends JPanel
         {
             String name = n.get ();
             MNode part = AppData.models.child (name);
-            if (part != null) model.addElement (new PanelSearch.Holder (part));
+            if (part != null) model.addElement (name);
         }
 
         // Check for first run.
         if (model.size () == 0)
         {
-            MNode part = AppData.models.child ("Example Hodgkin-Huxley Cable");
+            String name = "Example Hodgkin-Huxley Cable";  // Hard-coded name must appear in "local" db.
+            MNode part = AppData.models.child (name);
             if (part != null)
             {
-                model.addElement (new PanelSearch.Holder (part));
-                AppData.state.set ("Example Hodgkin-Huxley Cable", "PanelModel", "lastUsed");
+                model.addElement (name);
+                AppData.state.set (name, "PanelModel", "lastUsed");
             }
         }
     }
@@ -146,7 +179,7 @@ public class PanelMRU extends JPanel
         parts.clear ();
         for (int i = 0; i < model.size ()  &&  i < limit; i++)
         {
-            parts.set (model.get (i).doc.key (), i);
+            parts.set (model.get (i), i);
         }
     }
 
@@ -155,8 +188,7 @@ public class PanelMRU extends JPanel
         int count = model.size ();
         for (int i = 0; i < count; i++)
         {
-            Holder h = model.get (i);
-            if (h.doc.key ().equals (key))
+            if (model.get (i).equals (key))
             {
                 model.remove (i);
                 saveMRU ();
@@ -165,21 +197,14 @@ public class PanelMRU extends JPanel
         }
     }
 
-    public void updateDoc (MNode doc)
+    public void updateDoc (String oldKey, String newKey)
     {
-        String key = doc.key ();
         int count = model.size ();
         for (int i = 0; i < count; i++)
         {
-            Holder h = model.get (i);
-            if (h.doc.key ().equals (key))
+            if (model.get (i).equals (oldKey))
             {
-                if (h.doc != doc)
-                {
-                    h.doc = doc;
-                    model.setElementAt (h, i);  // Force repaint of the associated row.
-                }
-                return;
+                model.setElementAt (newKey, i);  // Force repaint of the associated row.
             }
         }
     }
@@ -191,25 +216,128 @@ public class PanelMRU extends JPanel
             dontInsert = false;
             return;
         }
-        PanelSearch.Holder h = new PanelSearch.Holder (doc);
-        int index = model.indexOf (h);
+        String key = doc.key ();
+        int index = model.indexOf (key);
         if (index >= 0) return;  // nothing to do
-        model.add (0, h);
+        model.add (0, key);
         saveMRU ();
     }
 
     public void useDoc (MNode doc)
     {
-        PanelSearch.Holder h = new PanelSearch.Holder (doc);
-        int index = model.indexOf (h);
+        String key = doc.key ();
+        int index = model.indexOf (key);
         if (index >= 0) model.remove (index);
-        model.add (0, h);
+        model.add (0, key);
         saveMRU ();
+    }
+
+    public boolean hasDoc (MNode doc)
+    {
+        String key = doc.key ();
+        int index = model.indexOf (key);
+        return index >= 0;
     }
 
     public void renamed ()  // No need to specify doc, because it should already be at top of list
     {
         list.repaint ();
         saveMRU ();
+    }
+
+    public static class MNodeRenderer extends JTextField implements ListCellRenderer<String>
+    {
+        protected static DefaultHighlighter.DefaultHighlightPainter painter;
+
+        // These colors may get changed when look & feel is changed.
+        public static Color colorInherit          = Color.blue;
+        public static Color colorOverride         = Color.black;
+        public static Color colorSelectedInherit  = Color.blue;
+        public static Color colorSelectedOverride = Color.black;
+
+        public MNodeRenderer ()
+        {
+            painter = new DefaultHighlighter.DefaultHighlightPainter (UIManager.getColor ("List.selectionBackground"));
+            setBorder (new EmptyBorder (0, 0, 0, 0));
+        }
+
+        public Component getListCellRendererComponent (JList<? extends String> list, String name, int index, boolean selected, boolean focused)
+        {
+            setText (name);
+
+            Color color;
+            if (AppData.models.isWriteable (name))
+            {
+                color = selected ? colorSelectedOverride : colorOverride;
+            }
+            else
+            {
+                color = null;
+                String colorName = "";
+                MNode mdir = AppData.models.containerFor (name);
+                MNode repo = AppData.repos.child (mdir.key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.
+                if (repo != null) colorName = repo.get ("color");
+                if (! colorName.isEmpty ())
+                {
+                    try
+                    {
+                        color = Color.decode (colorName);
+                        if (color.equals (Color.black)) color = null;  // Treat black as always default. Thus, the user can't explicitly set black, but they can set extremely dark (R=G=B=1).
+                    }
+                    catch (NumberFormatException e) {}
+                }
+                if (color == null) color = selected ? colorSelectedInherit : colorInherit;
+            }
+            setForeground (color);
+
+            if (selected)
+            {
+                Highlighter h = getHighlighter ();
+                h.removeAllHighlights ();
+                try
+                {
+                    h.addHighlight (0, name.length (), painter);
+                }
+                catch (BadLocationException e)
+                {
+                }
+            }
+
+            return this;
+        }
+
+        public void updateUI ()
+        {
+            super.updateUI ();
+            painter = new DefaultHighlighter.DefaultHighlightPainter (UIManager.getColor ("List.selectionBackground"));
+
+            // Check colors to see if text is dark or light.
+            Color fg = UIManager.getColor ("List.foreground");
+            float[] hsb = Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), null);
+            if (hsb[2] > 0.5)  // Light text
+            {
+                colorInherit  = new Color (0xC0C0FF);  // light blue
+                colorOverride = Color.white;
+            }
+            else  // Dark text
+            {
+                colorInherit  = Color.blue;
+                colorOverride = Color.black;
+            }
+
+            fg = UIManager.getColor ("List.selectionForeground");  // for Metal, and many other L&Fs
+            if (fg == null) fg = UIManager.getColor ("List[Selected].textForeground");  // for Nimbus
+            Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), hsb);
+            if (hsb[2] > 0.5)  // Light text
+            {
+                colorSelectedInherit  = new Color (0xC0C0FF);
+                colorSelectedOverride = Color.white;
+            }
+            else  // Dark text
+            {
+                colorSelectedInherit  = Color.blue;
+                colorSelectedOverride = Color.black;
+            }
+        }
     }
 }

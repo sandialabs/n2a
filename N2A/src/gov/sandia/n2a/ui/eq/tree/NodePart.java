@@ -728,10 +728,10 @@ public class NodePart extends NodeContainer
     @Override
     public void delete (JTree tree, boolean canceled)
     {
-        if (! source.isFromTopDocument ()) return;  // This should be true of root, as well as any other node we might try to delete.
-        PanelModel mep = PanelModel.instance;
-        if (isTrueRoot ()) mep.undoManager.add (new DeleteDoc ((MDoc) source.getSource ()));
-        else               mep.undoManager.add (new DeletePart (this, canceled));
+        if (! source.isFromTopDocument ()) return;  // Root will always be from top document. Any other node we might try to delete must meet the same requirement.
+        PanelModel pm = PanelModel.instance;
+        if (isTrueRoot ()) pm.undoManager.add (new DeleteDoc ((MDoc) source.getSource ()));
+        else               pm.undoManager.add (new DeletePart (this, canceled));
     }
 
     @Override

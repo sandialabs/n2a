@@ -79,7 +79,7 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
     {
         super.updateUI ();
 
-        // The following are hacks to fix issues with Nimubs
+        // The following are hacks to fix issues with Nimbus
 
         setBackgroundSelectionColor (DefaultLookup.getColor (this, ui, "Tree.selectionBackground"));
 

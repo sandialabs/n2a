@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -64,6 +64,14 @@ public class MCombo extends MNode implements MNodeListener
         return doc.parent () == primary;
     }
 
+    public synchronized boolean isWriteable (String key)
+    {
+        load ();
+        MNode container = children.get (key);
+        if (container == null) return false;
+        return container == primary;
+    }
+
     public synchronized boolean isVisible (MNode doc)
     {
         if (doc == null) return false;
@@ -76,18 +84,17 @@ public class MCombo extends MNode implements MNodeListener
         return false;
     }
 
-    public synchronized MNode rescanContainer (String key)
+    public synchronized MNode containerFor (String key)
     {
-        for (MNode c : containers) if (c.child (key) != null) return c;
-        return null;
+        return children.get (key);
     }
 
-    protected synchronized MNode getChild (String index)
+    protected synchronized MNode getChild (String key)
     {
         load ();
-        MNode container = children.get (index);
+        MNode container = children.get (key);
         if (container == null) return null;
-        return container.child (index);
+        return container.child (key);
     }
 
     public synchronized void clear ()
@@ -98,12 +105,12 @@ public class MCombo extends MNode implements MNodeListener
         fireChanged ();
     }
 
-    protected synchronized void clearChild (String index)
+    protected synchronized void clearChild (String key)
     {
         // This actually removes the original object.
         load ();
-        MNode container = children.get (index);
-        if (container == primary) container.clear (index);  // Triggers childDeleted() call from MDir, which updates our children collection.
+        MNode container = children.get (key);
+        if (container == primary) container.clear (key);  // Triggers childDeleted() call from MDir, which updates our children collection.
     }
 
     public synchronized int size ()
@@ -112,10 +119,10 @@ public class MCombo extends MNode implements MNodeListener
         return children.size ();
 	}
 
-    public synchronized MNode set (String value, String index)
+    public synchronized MNode set (String value, String key)
     {
         load ();
-        return primary.set (value, index);  // Triggers childAdded() call from MDir, which updates our children collection.
+        return primary.set (value, key);  // Triggers childAdded() call from MDir, which updates our children collection.
     }
 
     /**
@@ -123,12 +130,12 @@ public class MCombo extends MNode implements MNodeListener
         If you already hold a reference to the MDoc named by fromIndex, then that reference remains valid
         after the move.
     **/
-    public synchronized void move (String fromIndex, String toIndex)
+    public synchronized void move (String fromKey, String toKey)
     {
         load ();
-        MNode container = children.get (fromIndex);
+        MNode container = children.get (fromKey);
         if (container != primary) return;
-        primary.move (fromIndex, toIndex);  // Triggers childChanged() call from MDir, which updates our children collection.
+        primary.move (fromKey, toKey);  // Triggers childChanged() call from MDir, which updates our children collection.
     }
 
     public synchronized void addListener (MNodeListener listener)
@@ -167,6 +174,16 @@ public class MCombo extends MNode implements MNodeListener
         children.clear ();
         loaded = false;
         fireChanged ();
+    }
+
+    /**
+        Similar to containerFor(), but does a fresh search for child rather than using cached information.
+        This is a subroutine for childAdded(), childDeleted() and childChanged().
+    **/
+    protected synchronized MNode rescanContainer (String key)
+    {
+        for (MNode c : containers) if (c.child (key) != null) return c;
+        return null;
     }
 
     public void childAdded (String key)
