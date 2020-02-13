@@ -19,6 +19,16 @@ import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 @SuppressWarnings("serial")
 public class NodeBase extends DefaultMutableTreeNode
 {
+    public NodeBase ()
+    {
+        super ();
+    }
+
+    public NodeBase (String userObject, boolean allowsChildren)
+    {
+        super (userObject, allowsChildren);
+    }
+
     public Icon getIcon (boolean expanded)
     {
         return null;  // We end up using the default icon from DefaultTreeCellRenderer.
@@ -102,7 +112,6 @@ public class NodeBase extends DefaultMutableTreeNode
         }
     }
 
-    @SuppressWarnings("unchecked")
     public void insert (String category, NodeModel n)
     {
         String[] pieces = category.split ("/", 2);
@@ -118,7 +127,8 @@ public class NodeBase extends DefaultMutableTreeNode
             if (b instanceof NodeModel  ||  compare < 0)
             {
                 c = new NodeCategory (ckey);
-                children.add (i, c);
+                insert (c, i);
+                break;
             }
             else if (compare == 0)  // and b is a NodeCategory
             {

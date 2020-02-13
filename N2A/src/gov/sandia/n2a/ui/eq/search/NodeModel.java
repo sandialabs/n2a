@@ -10,6 +10,7 @@ import java.awt.Color;
 import java.io.IOException;
 import java.io.StringWriter;
 import javax.swing.Icon;
+import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeModel;
 import gov.sandia.n2a.db.AppData;
@@ -22,16 +23,18 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.TransferableNode;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
+import gov.sandia.n2a.ui.images.ImageUtil;
 
 @SuppressWarnings("serial")
 public class NodeModel extends NodeBase
 {
-    public String key;
+    public           String    key;
+    protected static ImageIcon icon = ImageUtil.getImage ("document.png");
 
     public NodeModel (String key)
     {
-        this.key = key;
-        setUserObject (key);  // key is redundant with user object, except while editing
+        super (key, false);
+        this.key = key;  // key is redundant with user object, except while editing
     }
 
     @Override
@@ -43,7 +46,7 @@ public class NodeModel extends NodeBase
     @Override
     public Icon getIcon (boolean expanded)
     {
-        return null;  // Use the default leaf icon from DefaultTreeCellRenderer
+        return icon;
     }
 
     @Override

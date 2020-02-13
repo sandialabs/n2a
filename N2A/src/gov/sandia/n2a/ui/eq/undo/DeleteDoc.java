@@ -47,7 +47,7 @@ public class DeleteDoc extends Undoable
     public void redo ()
     {
         super.redo ();
-        AddDoc.destroy (saved.key (), fromSearchPanel);
+        AddDoc.destroy (saved.key (), pathAfter, fromSearchPanel);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

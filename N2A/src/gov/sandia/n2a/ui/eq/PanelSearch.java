@@ -39,6 +39,7 @@ import java.util.List;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.ActionMap;
+import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.InputMap;
 import javax.swing.JComponent;
@@ -48,6 +49,7 @@ import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
+import javax.swing.border.Border;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.tree.DefaultTreeCellRenderer;
@@ -245,6 +247,7 @@ public class PanelSearch extends JPanel
 
             protected Transferable createTransferable (JComponent comp)
             {
+                // TODO: consider creating a transferable that contains all the models in a selected category
                 NodeModel n = getSelectedNodeModel ();
                 if (n == null) return null;
                 TransferableNode result = n.createTransferable ();
@@ -344,11 +347,20 @@ public class PanelSearch extends JPanel
 
     public void selectCurrent ()
     {
-        NodeModel n = getSelectedNodeModel ();
-        if (n == null) return;
-        MNode doc = AppData.models.child (n.key);
-        PanelModel.instance.panelMRU.useDoc (doc);
-        recordSelected (doc);
+        TreePath path = tree.getSelectionPath ();
+        if (path == null) return;
+        Object o = path.getLastPathComponent ();
+        if (o instanceof NodeModel)
+        {
+            MNode doc = AppData.models.child (o.toString ());
+            PanelModel.instance.panelMRU.useDoc (doc);
+            recordSelected (doc);
+        }
+        else  // category
+        {
+            if (tree.isExpanded (path)) tree.collapsePath (path);
+            else                        tree.expandPath (path);
+        }
     }
 
     public static void recordSelected (final MNode doc)
@@ -558,6 +570,8 @@ public class PanelSearch extends JPanel
 
     public static class MNodeRenderer extends DefaultTreeCellRenderer
     {
+        protected Border border = BorderFactory.createEmptyBorder (0, 0, 1, 0);
+
         public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
         {
             super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
@@ -565,6 +579,7 @@ public class PanelSearch extends JPanel
             NodeBase n = (NodeBase) value;
             setForeground (n.getColor (selected));
             setIcon (getIconFor (n, expanded, leaf));
+            setBorder (border);  // Ensure a little space between icons. It would be nice to only use this when icon determines the overall size, but haven't figured out how to detect that yet.
 
             return this;
         }

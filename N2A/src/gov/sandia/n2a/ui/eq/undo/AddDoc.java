@@ -80,10 +80,10 @@ public class AddDoc extends Undoable
     public void undo ()
     {
         super.undo ();
-        destroy (name, fromSearchPanel);
+        destroy (name, pathAfter, fromSearchPanel);
     }
 
-    public static void destroy (String name, boolean fromSearchPanel)
+    public static void destroy (String name, List<String> pathAfter, boolean fromSearchPanel)
     {
         MNode doc = AppData.models.child (name);
         String id = doc.get ("$metadata", "id");
@@ -91,7 +91,12 @@ public class AddDoc extends Undoable
         AppData.models.clear (name);  // Triggers PanelModel.childDeleted(name), which removes doc from all 3 sub-panels.
 
         PanelModel pm = PanelModel.instance;
-        if (fromSearchPanel) pm.panelSearch.takeFocus ();
+        if (fromSearchPanel)
+        {
+            pm.panelSearch.lastSelection = pathAfter;
+            pm.panelSearch.tree.clearSelection ();
+            pm.panelSearch.takeFocus ();
+        }
         // else leave the focus wherever it's at. We shift focus to make user aware of the delete, but this is only meaningful in the search list.
     }
 
@@ -115,7 +120,8 @@ public class AddDoc extends Undoable
         if (fromSearchPanel)
         {
             pm.panelSearch.tree.clearSelection ();
-            pm.panelSearch.tree.requestFocusInWindow ();  // Must claw back focus, even though tree thinks that it still has focus.
+            if (wasShowing) pm.panelSearch.tree.requestFocusInWindow ();  // For some reason tree still thinks it has the focus, so takeFocus() doesn't work correctly. This call forces it back.
+            else            pm.panelSearch.takeFocus ();
         }
     }
 

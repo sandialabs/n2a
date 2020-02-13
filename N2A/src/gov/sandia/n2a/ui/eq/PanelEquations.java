@@ -142,7 +142,7 @@ public class PanelEquations extends JPanel
     protected static ImageIcon iconViewGraph = ImageUtil.getImage ("viewGraph.png");
     protected static ImageIcon iconViewTree  = ImageUtil.getImage ("explore.gif");
 
-    protected static String noModel = "Select a model from the left, or click New Model button above.";
+    protected static String noModel = "Select a model from the left, or click the New Model button above.";
 
     protected int jobCount = 0;  // for launching jobs
 
