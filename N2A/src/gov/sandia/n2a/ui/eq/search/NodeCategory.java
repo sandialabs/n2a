@@ -11,7 +11,7 @@ public class NodeCategory extends NodeBase
 {
     public NodeCategory (String name)
     {
-        super (name, true);
+        setUserObject (name);
     }
 
     @Override

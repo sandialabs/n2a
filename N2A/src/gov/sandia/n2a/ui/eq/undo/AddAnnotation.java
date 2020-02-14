@@ -197,6 +197,10 @@ public class AddAnnotation extends Undoable
             NodePart p = (NodePart) parent;
             if (p.graph != null) p.graph.updateGUI ();
         }
+        if (parent.getTrueParent () == null  &&  name.endsWith ("category"))  // root node, so update categories in search list
+        {
+            PanelModel.instance.panelSearch.search ();
+        }
     }
 
     public void redo ()
@@ -284,6 +288,10 @@ public class AddAnnotation extends Undoable
             {
                 NodePart p = (NodePart) parent;
                 if (p.graph != null) p.graph.updateGUI ();
+            }
+            if (parent.getTrueParent () == null  &&  name.endsWith ("category"))
+            {
+                PanelModel.instance.panelSearch.search ();
             }
         }
         return createdNode;

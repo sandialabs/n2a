@@ -33,7 +33,7 @@ public class NodeModel extends NodeBase
 
     public NodeModel (String key)
     {
-        super (key, false);
+        setUserObject (key);
         this.key = key;  // key is redundant with user object, except while editing
     }
 

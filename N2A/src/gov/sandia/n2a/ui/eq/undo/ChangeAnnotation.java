@@ -147,6 +147,10 @@ public class ChangeAnnotation extends Undoable
             NodePart p = (NodePart) parent;
             if (p.graph != null) p.graph.updateGUI ();
         }
+        if (parent.getTrueParent () == null  &&  nameAfter.endsWith ("category"))  // root node, so update categories in search list
+        {
+            PanelModel.instance.panelSearch.search ();
+        }
     }
 
     /**

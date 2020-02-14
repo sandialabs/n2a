@@ -34,6 +34,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
 
 import javax.swing.AbstractAction;
@@ -70,7 +71,9 @@ public class PanelSearch extends JPanel
     public    NameEditor             nameEditor = new NameEditor (renderer);
     public    TransferHandler        transferHandler;
     public    List<String>           lastSelection;
-    public    List<String>           insertAt;  // Path to node that next insertion should precede. If null, insert at top of uncategorized nodes.
+    public    List<String>           insertAt;       // Path to node that next insertion should precede. If null, insert at top of uncategorized nodes.
+    protected String                 lastQuery = ""; // for purpose of caching expanded nodes
+    protected List<String[]>         expandedNodes = new ArrayList<String[]> ();
 
     public PanelSearch ()
     {
@@ -86,6 +89,7 @@ public class PanelSearch extends JPanel
         tree.setCellRenderer (renderer);
         tree.setCellEditor (nameEditor);
         tree.addTreeSelectionListener (nameEditor);
+        //tree.putClientProperty ("JTree.lineStyle", "None");  // Get rid of lines that connect children to parents. Also need to hide handles, but that is more difficult (no option in JTree).
 
         InputMap inputMap = tree.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
@@ -559,9 +563,51 @@ public class PanelSearch extends JPanel
                     synchronized (model)
                     {
                         if (stop) return;
+
+                        // Save list of open nodes
+                        if (lastQuery.isEmpty ())
+                        {
+                            expandedNodes = new ArrayList<String[]> ();
+                            Enumeration<TreePath> expandedPaths = tree.getExpandedDescendants (new TreePath (root.getPath ()));
+                            if (expandedPaths != null)
+                            {
+                                while (expandedPaths.hasMoreElements ())
+                                {
+                                    TreePath path = expandedPaths.nextElement ();
+                                    Object[] objectPath = path.getPath ();
+                                    if (objectPath.length == 1) continue;  // Don't store root node.
+                                    String[] stringPath = new String[objectPath.length - 1];
+                                    for (int i = 1; i < objectPath.length; i++) stringPath[i-1] = ((NodeBase) objectPath[i]).toString ();
+                                    expandedNodes.add (stringPath);
+                                }
+                            }
+                        }
+                        lastQuery = query;
+
+                        // Switch to new tree
                         root = newRoot;
                         model.setRoot (newRoot);  // triggers repaint
-                        lastSelection = null;
+
+                        // Restore open nodes
+                        for (String[] stringPath : expandedNodes)
+                        {
+                            NodeBase c = root;
+                            for (String key : stringPath)
+                            {
+                                c = c.child (key, false);
+                                if (c == null) break;
+                            }
+                            if (c != null) tree.expandPath (new TreePath (c.getPath ()));
+                        }
+
+                        // Scroll to most recent selection. However, don't actually select it, since tree does not currently have focus.
+                        NodeBase n = nodeFor (lastSelection);
+                        if (n != null)
+                        {
+                            TreePath path = new TreePath (n.getPath ());
+                            tree.expandPath (path);
+                            tree.scrollPathToVisible (path);
+                        }
                     }
                 }
             });

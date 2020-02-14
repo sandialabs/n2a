@@ -19,16 +19,6 @@ import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 @SuppressWarnings("serial")
 public class NodeBase extends DefaultMutableTreeNode
 {
-    public NodeBase ()
-    {
-        super ();
-    }
-
-    public NodeBase (String userObject, boolean allowsChildren)
-    {
-        super (userObject, allowsChildren);
-    }
-
     public Icon getIcon (boolean expanded)
     {
         return null;  // We end up using the default icon from DefaultTreeCellRenderer.
@@ -118,7 +108,7 @@ public class NodeBase extends DefaultMutableTreeNode
 
         NodeBase c = null;
         String ckey = pieces[0];
-        int count = children.size ();
+        int count = getChildCount ();
         int i;
         for (i = 0; i < count; i++)
         {

@@ -40,7 +40,20 @@ public class AddDoc extends Undoable
 
         PanelModel pm = PanelModel.instance;
         fromSearchPanel = pm.panelSearch.tree.isFocusOwner ();  // Otherwise, assume focus is on equation tree
-        if (fromSearchPanel) pathAfter = pm.panelSearch.currentPath ();  // Otherwise, pathAfter is null and new entry will appear at top of uncategorized entries.
+        if (fromSearchPanel)  // Otherwise, pathAfter is null and new entry will appear at top of uncategorized entries.
+        {
+            pathAfter = pm.panelSearch.currentPath ();
+            if (pathAfter != null)
+            {
+                String category = "";
+                for (String c : pathAfter.subList (0, pathAfter.size () - 1)) category += "/" + c;
+                if (! category.isEmpty ())
+                {
+                    category = category.substring (1);
+                    saved.set (category, "$metadata", "gui", "category");
+                }
+            }
+        }
 
         // Insert ID, if given doc does not already have one.
         MNode id = saved.childOrCreate ("$metadata", "id");
