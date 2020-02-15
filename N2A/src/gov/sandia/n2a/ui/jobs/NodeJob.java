@@ -28,6 +28,7 @@ import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -50,7 +51,7 @@ public class NodeJob extends NodeBase
 
     protected static List<String> imageFileSuffixes = Arrays.asList (ImageIO.getReaderFileSuffixes ());  // We don't expect to load image handling plugins after startup, so one-time initialization is fine.
 
-    protected MNode   source;
+    protected String  key;
     protected String  inherit         = "";
     protected float   complete        = -1; // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means terminated.
     protected Date    dateStarted     = null;
@@ -62,8 +63,8 @@ public class NodeJob extends NodeBase
 
     public NodeJob (MNode source, boolean newlyStarted)
     {
-        this.source = source;
-        setUserObject (source.key ());  // This is fast, but the task of loading the $inherit line is slow, so we do it on the first call to monitorProgress().
+        key = source.key ();
+        setUserObject (key);  // This is fast, but the task of loading the $inherit line is slow, so we do it on the first call to monitorProgress().
         if (newlyStarted)
         {
             lastLiveCheck = System.currentTimeMillis ();  // See below. Gives new jobs about 20 minutes to show some progress. Old jobs have no grace period because their last live check is 0.
@@ -97,13 +98,27 @@ public class NodeJob extends NodeBase
         return new ImageIcon (inProgress);
     }
 
+    public MNode getSource ()
+    {
+        return AppData.runs.child (key);
+    }
+
+    /**
+        @return Path to the source file (not the containing directory).
+    **/
+    public Path getJobPath ()
+    {
+        return Paths.get (getSource ().get ());
+    }
+
     public synchronized void monitorProgress (final PanelRun panel)
     {
         if (deleted) return;
 
+        MNode source = getSource ();
         if (inherit.isEmpty ())
         {
-            inherit = source.getOrDefault (source.key (), "$inherit").split (",", 2)[0].replace ("\"", "");
+            inherit = source.getOrDefault (key, "$inherit").split (",", 2)[0].replace ("\"", "");
             setUserObject (inherit);
             if (complete >= 1)
             {
@@ -212,6 +227,7 @@ public class NodeJob extends NodeBase
 
     public void stop ()
     {
+        MNode source = getSource ();
         Backend.getBackend (source.get ("$metadata", "backend")).kill (source);
     }
 
@@ -298,6 +314,7 @@ public class NodeJob extends NodeBase
             }
         };
         FileConsumer consumer = new FileConsumer ();
+        MNode source = getSource ();
         Path dir = Paths.get (source.get ()).getParent ();
         try (Stream<Path> dirStream = Files.list (dir))
         {

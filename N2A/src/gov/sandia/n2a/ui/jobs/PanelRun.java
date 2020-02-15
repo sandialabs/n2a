@@ -27,7 +27,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -336,8 +335,8 @@ public class PanelRun extends JPanel
 
                     // Execute script
                     Path path = null;
-                    if      (displayNode instanceof NodeJob ) path = Paths.get (((NodeJob ) displayNode).source.get ());
-                    else if (displayNode instanceof NodeFile) path =            ((NodeFile) displayNode).path;
+                    if      (displayNode instanceof NodeJob ) path = ((NodeJob ) displayNode).getJobPath ();
+                    else if (displayNode instanceof NodeFile) path = ((NodeFile) displayNode).path;
                     if (path != null)
                     {
                         String jobDirString      = path.getParent ().toAbsolutePath ().toString ();
@@ -447,7 +446,7 @@ public class PanelRun extends JPanel
                 //   big   -- too big for memory; must load/display in segments
                 //   huge  -- too big to store on local system, for example a supercomputer job; must be downloaded/displayed in segments
                 // The current code only handles small files. In particular, we don't actually do Step 1, but simply assume data is local.
-                MNode job = ((NodeJob) node.getParent ()).source;
+                MNode job = ((NodeJob) node.getParent ()).getSource ();
                 HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
 
                 // Step 2 -- Load data
@@ -633,7 +632,7 @@ public class PanelRun extends JPanel
         }
 
         NodeJob job = (NodeJob) displayNode;
-        MNode doc = job.source;
+        MNode doc = job.getSource ();
 
         StringBuilder contents = new StringBuilder ();
         contents.append ("Status:");
@@ -712,7 +711,7 @@ public class PanelRun extends JPanel
                         NodeJob job = (NodeJob) node;
                         synchronized (job) {job.deleted = true;}
 
-                        MDoc doc = (MDoc) job.source;
+                        MDoc doc = (MDoc) job.getSource ();
                         HostSystem env = HostSystem.get (doc.getOrDefault ("localhost", "$metadata", "host"));
                         String jobName = doc.key ();
                         try
