@@ -195,14 +195,7 @@ public class MDir extends MNode
         {
             result = new MDoc (this, index);
             children.put (index, new SoftReference<MDoc> (result));
-
-            // Set the new document to save.
-            // Due to subtle interactions with MDoc.save() and load(), this will not force an empty MDoc to exist.
-            // Specifically, load() on a non-existent file will clear the needsWrite flag. save() forces load()
-            // in order to iterate children. OTOH, if children are added and removed before save(),
-            // an empty MDoc will still be flagged to write. Whether this is a bug or a feature is debatable. The
-            // net effect for the N2A application is that new models which are not actually filled will evaporate.
-            result.markChanged ();
+            result.markChanged ();  // Set the new document to save. Adds to writeQueue.
 
             fireChildAdded (index);
         }

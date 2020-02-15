@@ -73,6 +73,10 @@ public class MDoc extends MPersistent
     {
         if (! needsWrite)
         {
+            // If this is a new document, then treat it as if it were already loaded.
+            // If there is content on disk, it will be blown away.
+            if (children == null) children = new TreeMap<String,MNode> (comparator);
+            needsWrite = true;
             if (parent instanceof MDir)
             {
                 synchronized (parent)
@@ -80,7 +84,6 @@ public class MDoc extends MPersistent
                     ((MDir) parent).writeQueue.add (this);
                 }
             }
-            needsWrite = true;
         }
     }
 
