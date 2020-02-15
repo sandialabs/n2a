@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -29,9 +29,9 @@ public class AddEntry extends Undoable
     {
         this.saved = saved;
 
-        PanelReference mep = PanelReference.instance;
-        fromSearchPanel = mep.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on the entry panel
-        keyAfter = mep.panelSearch.currentKey ();
+        PanelReference pr = PanelReference.instance;
+        fromSearchPanel = pr.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on the entry panel
+        keyAfter = pr.panelSearch.currentKey ();
 
         // Determine unique name in database
         MNode references = AppData.references;

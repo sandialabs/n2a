@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -20,13 +20,13 @@ import javax.swing.ListSelectionModel;
 @SuppressWarnings("serial")
 public class PanelMRU extends JPanel
 {
-    public JList<MNode>            list;
-    public DefaultListModel<MNode> model;
-    public boolean                 dontInsert;  // Ignore next call to insertDoc()
+    public JList<String>            list;
+    public DefaultListModel<String> model;
+    public boolean                  dontInsert;  // Ignore next call to insertDoc()
 
     public PanelMRU ()
     {
-        list = new JList<MNode> (model = new DefaultListModel<MNode> ());
+        list = new JList<String> (model = new DefaultListModel<String> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer (new PanelSearch.MNodeRenderer ());
         list.setFocusable (false);
@@ -35,7 +35,7 @@ public class PanelMRU extends JPanel
             public void mouseClicked (MouseEvent e)
             {
                 int index = list.getSelectedIndex ();
-                if (index >= 0) PanelSearch.recordSelected (model.get (index));
+                if (index >= 0) PanelSearch.recordSelected (AppData.references.child (model.get (index)));
                 list.clearSelection ();
             }
         });
@@ -55,8 +55,7 @@ public class PanelMRU extends JPanel
         for (MNode n : AppData.state.childOrCreate ("PanelReference", "MRU"))
         {
             String name = n.get ();
-            MNode part = AppData.references.child (name);
-            if (part != null) model.add (index++, part);
+            if (AppData.references.child (name) != null) model.add (index++, name);
         }
     }
 
@@ -67,7 +66,7 @@ public class PanelMRU extends JPanel
         parts.clear ();
         for (int i = 0; i < model.size ()  &&  i < limit; i++)
         {
-            parts.set (model.get (i).key (), i);
+            parts.set (model.get (i), i);
         }
     }
 
@@ -76,8 +75,7 @@ public class PanelMRU extends JPanel
         int count = model.size ();
         for (int i = 0; i < count; i++)
         {
-            MNode n = model.get (i);
-            if (n.key ().equals (key))
+            if (model.get (i).equals (key))
             {
                 model.remove (i);
                 saveMRU ();
@@ -86,39 +84,45 @@ public class PanelMRU extends JPanel
         }
     }
 
-    public void updateDoc (MNode doc)
+    public void updateDoc (String oldKey, String newKey)
     {
-        String key = doc.key ();
         int count = model.size ();
         for (int i = 0; i < count; i++)
         {
-            MNode n = model.get (i);
-            if (n.key ().equals (key))
+            if (model.get (i).equals (oldKey))
             {
-                if (n != doc) model.setElementAt (doc, i);
+                model.setElementAt (newKey, i);
                 return;
             }
         }
     }
 
-    public void insertDoc (MNode doc)
+    public void insertDoc (String key)
     {
         if (dontInsert)
         {
             dontInsert = false;
             return;
         }
-        int index = model.indexOf (doc);
+        int index = model.indexOf (key);
         if (index >= 0) return;  // nothing to do
-        model.add (0, doc);
+        model.add (0, key);
         saveMRU ();
     }
 
     public void useDoc (MNode doc)
     {
-        int index = model.indexOf (doc);
+        String key = doc.key ();
+        int index = model.indexOf (key);
         if (index >= 0) model.remove (index);
-        model.add (0, doc);
+        model.add (0, key);
         saveMRU ();
+    }
+
+    public boolean hasDoc (MNode doc)
+    {
+        String key = doc.key ();
+        int index = model.indexOf (key);
+        return index >= 0;
     }
 }

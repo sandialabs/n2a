@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -56,6 +56,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
@@ -347,6 +348,7 @@ public class PanelEntry extends JPanel
         TableColumnModel columns = table.getColumnModel ();
         columns.getColumn (0).setCellRenderer (new ColorTextRenderer ());
         columns.getColumn (1).setCellRenderer (new MultilineTextRenderer ());
+        columns.getColumn (0).setCellEditor (new MultilineEditor ());  // Won't actually edit tags in multi-line mode, but this brings in focus control for free.
         columns.getColumn (1).setCellEditor (new MultilineEditor ());
 
         model.addTableModelListener (new TableModelListener ()
@@ -446,7 +448,8 @@ public class PanelEntry extends JPanel
         if (model.locked) return;
         int row = table.getSelectedRow ();
         if (row < 3) return;  // Protect id, form and title
-        PanelReference.instance.undoManager.add (new DeleteTag (model.record, row));
+        String tag = model.keys.get (row);
+        PanelReference.instance.undoManager.add (new DeleteTag (model.record, tag));
     }
 
     /**
@@ -650,69 +653,76 @@ public class PanelEntry extends JPanel
             if (row >= keys.size ()  ||  column >= 2) return;  // out of bounds
             if (column == 0  &&  row < 3) return;  // protect id, form and title
 
-            String key = keys.get (row);
-            String name = value.toString ();
+            String tag = keys.get (row);
+            String newValue = value.toString ();
             if (column == 0)  // name change
             {
-                if (name.equals (key)) return;  // nothing to do
-                if (name.isEmpty ())  // tag is deleted. Most likely it was a new tag the user changed their mind about, but could also be an old tag.
+                if (newValue.equals (tag)) return;  // nothing to do
+                if (newValue.isEmpty ())  // tag is deleted. Most likely it was a new tag the user changed their mind about, but could also be an old tag.
                 {
-                    PanelReference.instance.undoManager.add (new DeleteTag (record, row));
+                    PanelReference.instance.undoManager.add (new DeleteTag (record, tag));
                     return;
                 }
-                if (record.child (name) != null) return;  // not allowed
-                if (name.equals ("id")) return;  // also not allowed; note that "form" and "title" are protected by previous line
+                if (record.child (newValue) != null) return;  // not allowed, because another tag with that name already exists
+                if (newValue.equals ("id")) return;  // also not allowed; note that "form" and "title" are protected by previous line
 
-                PanelReference.instance.undoManager.add (new RenameTag (record, keys.indexOf (name), key, name));
+                PanelReference.instance.undoManager.add (new RenameTag (record, keys.indexOf (newValue), tag, newValue));
             }
             else if (column == 1)  // value change
             {
-                String oldValue = record.get (key);
-                if (oldValue.equals (value)) return;  // nothing to do
+                String oldValue = record.get (tag);
+                if (oldValue.equals (newValue)) return;  // nothing to do
                 if (row == 0)  // change id
                 {
-                    if (name.isEmpty ()) return;  // not allowed
-                    name = MDir.validFilenameFrom (name);
-                    if (AppData.references.child (name) != null) return;  // not allowed, because another entry with that id already exists
-                    PanelReference.instance.undoManager.add (new ChangeEntry (record.key (), name));
+                    if (newValue.isEmpty ()) return;  // not allowed
+                    newValue = MDir.validFilenameFrom (newValue);
+                    if (AppData.references.child (newValue) != null) return;  // not allowed, because another entry with that id already exists
+                    PanelReference.instance.undoManager.add (new ChangeEntry (record.key (), newValue));
                 }
                 else
                 {
-                    PanelReference.instance.undoManager.add (new ChangeTag (record, key, name));  // "name" is really value, just in string form
+                    PanelReference.instance.undoManager.add (new ChangeTag (record, tag, newValue));
                 }
             }
         }
 
-        public void create (MNode doc, int row, String name, String value, boolean nameIsGenerated)
+        public void create (String docKey, int row, String name, String value, boolean nameIsGenerated)
         {
+            MNode doc = AppData.references.child (docKey);
             setRecord (doc);
 
             keys.add (row, name);
             record.set (value, name);
             fireTableRowsInserted (row, row);
-            table.changeSelection (row, 1, false, false);
             if (nameIsGenerated)
             {
+                table.changeSelection (row, 0, false, false);
                 editNewRow = true;
                 table.editCellAt (row, 0);
             }
+            else
+            {
+                table.changeSelection (row, 1, false, false);
+            }
         }
 
-        public void destroy (MNode doc, String key)
+        public void destroy (String docKey, String name)
         {
+            MNode doc = AppData.references.child (docKey);
             setRecord (doc);
 
-            int row = keys.indexOf (key);
+            int row = keys.indexOf (name);
             keys.remove (row);
-            record.clear (key);
+            record.clear (name);
             updateColumnWidth ();
             fireTableRowsDeleted (row, row);
             row = Math.min (row, table.getRowCount () - 1);
             table.changeSelection (row, 1, false, false);
         }
 
-        public void rename (MNode doc, int exposedRow, String before, String after)
+        public void rename (String docKey, int exposedRow, String before, String after)
         {
+            MNode doc = AppData.references.child (docKey);
             setRecord (doc);
             int rowBefore = keys.indexOf (before);
             int rowAfter  = keys.indexOf (after);
@@ -725,7 +735,7 @@ public class PanelEntry extends JPanel
             }
             else  // We might be about to expose a standard tag that was previously overwritten.
             {
-                if (form.required.contains (before)  ||  form.optional.contains (before))  // It is a standard tag
+                if (form != null  &&  (form.required.contains (before)  ||  form.optional.contains (before)))  // It is a standard tag
                 {
                     // Assume that exposedRow was saved when the tag was overwritten.
                     keys.add (exposedRow, before);
@@ -737,22 +747,23 @@ public class PanelEntry extends JPanel
             fireTableRowsUpdated (rowBefore, rowBefore);
         }
 
-        public void changeValue (MNode doc, String key, String value)
+        public void changeValue (String docKey, String name, String value)
         {
+            MNode doc = AppData.references.child (docKey);
             setRecord (doc);
 
             // Update data
-            if (value.isEmpty ()  &&  (form.required.contains (key)  ||  form.optional.contains (key)))
+            if (value.isEmpty ()  &&  form != null  &&  (form.required.contains (name)  ||  form.optional.contains (name)))
             {
-                record.clear (key);
+                record.clear (name);
             }
             else
             {
-                record.set (value, key);
+                record.set (value, name);
             }
 
             // Update display
-            int row = keys.indexOf (key);
+            int row = keys.indexOf (name);
             if (row == 1)  // changed form, so need to rebuild
             {
                 focusCache.put (record, row);
@@ -822,6 +833,7 @@ public class PanelEntry extends JPanel
     public class MultilineEditor extends AbstractCellEditor implements TableCellEditor
     {
         public JTextArea         textArea    = new JTextArea ();
+        public JTextField        textField   = new JTextField ();
         public UndoManager       undoManager = new UndoManager ();
         public JScrollPane       scrollPane  = new JScrollPane ();
         public JComboBox<String> comboBox    = new JComboBox<String> ();
@@ -916,11 +928,51 @@ public class PanelEntry extends JPanel
                 {
                 }
             });
+
+
+            // Prepare the text field
+
+            textField.getDocument ().addUndoableEditListener (undoManager);
+
+            inputMap = textField.getInputMap ();
+            inputMap.put (KeyStroke.getKeyStroke ("control Z"), "Undo");
+            inputMap.put (KeyStroke.getKeyStroke ("control Y"), "Redo");
+
+            actionMap = textField.getActionMap ();
+            actionMap.put ("Undo", new AbstractAction ("Undo")
+            {
+                public void actionPerformed (ActionEvent evt)
+                {
+                    try {undoManager.undo ();}
+                    catch (CannotUndoException e) {}
+                }
+            });
+            actionMap.put ("Redo", new AbstractAction ("Redo")
+            {
+                public void actionPerformed (ActionEvent evt)
+                {
+                    try {undoManager.redo();}
+                    catch (CannotRedoException e) {}
+                }
+            });
+
+            textField.addFocusListener (new FocusListener ()
+            {
+                public void focusGained (FocusEvent e)
+                {
+                }
+
+                public void focusLost (FocusEvent e)
+                {
+                    stopCellEditing ();
+                }
+            });
         }
 
         public Object getCellEditorValue ()
         {
             if (component == comboBox) return comboBox.getSelectedItem ();
+            if (component == textField) return textField.getText ();
             return textArea.getText ();
         }
 
@@ -932,7 +984,15 @@ public class PanelEntry extends JPanel
             Color foreground = table.getForeground ();
             Color background = table.getBackground ();
 
-            if (row == 1)  // form
+            if (column == 0)  // tag names
+            {
+                textField.setText       (value.toString ());
+                textField.setForeground (foreground);
+                textField.setBackground (background);
+                textField.setFont       (font);
+                component = textField;
+            }
+            else if (row == 1)  // form
             {
                 comboBox.setSelectedItem (value);
                 comboBox.setForeground   (foreground);

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,40 +15,31 @@ import gov.sandia.n2a.ui.ref.PanelReference;
 
 public class DeleteTag extends Undoable
 {
-    protected MNode   doc;
-    protected int     row;
     protected String  key;
+    protected int     row;
+    protected String  name;
     protected String  value;
     protected boolean neutralized;
 
-    public DeleteTag (MNode doc, int row)
+    public DeleteTag (MNode doc, String name)
     {
-        this.doc = doc;
-        this.row = row;
+        key       = doc.key ();
+        this.name = name;
         MNodeTableModel model = PanelReference.instance.panelEntry.model;
-        key   = model.keys.get (row);
-        value = model.record.get (key);
-    }
-
-    public DeleteTag (MNode doc, String key)
-    {
-        this.doc = doc;
-        this.key = key;
-        MNodeTableModel model = PanelReference.instance.panelEntry.model;
-        row   = model.keys.indexOf (key);
-        value = model.record.get (key);
+        row       = model.keys.indexOf (name);
+        value     = doc.get (name);
     }
 
     public void undo ()
     {
         super.undo ();
-        PanelReference.instance.panelEntry.model.create (doc, row, key, value, false);
+        PanelReference.instance.panelEntry.model.create (key, row, name, value, false);
     }
 
     public void redo ()
     {
         super.redo ();
-        PanelReference.instance.panelEntry.model.destroy (doc, key);
+        PanelReference.instance.panelEntry.model.destroy (key, name);
     }
 
     public boolean replaceEdit (UndoableEdit edit)
@@ -56,7 +47,7 @@ public class DeleteTag extends Undoable
         if (edit instanceof AddTag)
         {
             AddTag at = (AddTag) edit;
-            if (doc == at.doc  &&  key.equals (at.key)  &&  at.nameIsGenerated)
+            if (key == at.key  &&  name.equals (at.name))
             {
                 neutralized = true;
                 return true;

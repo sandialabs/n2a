@@ -20,24 +20,27 @@ public class DeleteEntry extends Undoable
     protected String    keyAfter;  // key of the doc in the search list immediately after the one being deleted, or empty string is this is the end of the list
     protected boolean   fromSearchPanel;
     protected boolean   wasShowing;
+    protected boolean   wasInMRU;
 
     public DeleteEntry (MDoc doc)
     {
-        saved = new MVolatile (null, doc.key ());
+        String key = doc.key ();
+        saved = new MVolatile (null, key);
         saved.merge (doc);  // in-memory copy of the entire document
 
-        PanelReference mep = PanelReference.instance;
-        fromSearchPanel = mep.panelSearch.list.isFocusOwner ();
-        keyAfter        = mep.panelSearch.keyAfter (doc);
-        wasShowing      = mep.panelEntry.model.record == doc;
+        PanelReference pr = PanelReference.instance;
+        fromSearchPanel = pr.panelSearch.list.isFocusOwner ();
+        keyAfter        = pr.panelSearch.keyAfter (key);
+        wasShowing      = pr.panelEntry.model.record == doc;
+        wasInMRU        = pr.panelMRU.hasDoc (doc);
     }
 
     public void undo ()
     {
         super.undo ();
-        PanelReference mep = PanelReference.instance;
-        mep.panelMRU.dontInsert = true;
-        int index = mep.panelSearch.indexOf (keyAfter);
+        PanelReference pr = PanelReference.instance;
+        pr.panelMRU.dontInsert = ! wasInMRU;
+        int index = pr.panelSearch.indexOf (keyAfter);
         if (index < 0) index = 0;
         AddEntry.create (saved.key (), saved, index, fromSearchPanel, wasShowing, false);
     }

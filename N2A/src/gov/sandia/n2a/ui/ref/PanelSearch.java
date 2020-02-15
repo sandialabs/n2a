@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -59,16 +59,15 @@ import javax.swing.text.Highlighter;
 @SuppressWarnings("serial")
 public class PanelSearch extends JPanel
 {
-    public JTextField              textQuery;
-    public JList<MNode>            list;
-    public DefaultListModel<MNode> model;
-    public int                     lastSelection = -1;
-    public int                     insertAt;
-    public MNodeRenderer           renderer = new MNodeRenderer ();
+    public JTextField               textQuery;
+    public DefaultListModel<String> model = new DefaultListModel<String> ();
+    public JList<String>            list  = new JList<String> (model);
+    public int                      lastSelection = -1;
+    public int                      insertAt;
+    public MNodeRenderer            renderer = new MNodeRenderer ();
 
     public PanelSearch ()
     {
-        list = new JList<MNode> (model = new DefaultListModel<MNode> ());
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setDragEnabled (true);
         list.setCellRenderer (renderer);
@@ -91,10 +90,11 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                MNode deleteMe = list.getSelectedValue ();
-                if (deleteMe == null  ||  ! AppData.references.isWriteable (deleteMe)) return;
+                String key = list.getSelectedValue ();
+                if (key == null) return;
+                if (! AppData.references.isWriteable (key)) return;
                 lastSelection = list.getSelectedIndex ();
-                PanelReference.instance.undoManager.add (new DeleteEntry ((MDoc) deleteMe));
+                PanelReference.instance.undoManager.add (new DeleteEntry ((MDoc) AppData.references.child (key)));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -164,14 +164,16 @@ public class PanelSearch extends JPanel
 
             protected Transferable createTransferable (JComponent comp)
             {
-                MNode ref = list.getSelectedValue ();
-                if (ref == null) return null;
+                String key = list.getSelectedValue ();
+                if (key == null) return null;
+                MNode ref = AppData.references.child (key);
 
+                // Note that the output is a BibTeX entry, not the usual N2A schema.
                 StringWriter writer = new StringWriter ();
                 try
                 {
                     String nl = String.format ("%n");
-                    writer.write ("@" + ref.get ("form") + "{" + ref.key () + "," + nl);
+                    writer.write ("@" + ref.get ("form") + "{" + key + "," + nl);
                     for (MNode c : ref) writer.write ("  " + c.key () + "={" + c.get () + "}," + nl);
                     writer.write ("}" + nl);
                     writer.close ();
@@ -259,7 +261,7 @@ public class PanelSearch extends JPanel
         int index = list.getSelectedIndex ();
         if (index >= 0)
         {
-            MNode doc = model.get (index);
+            MNode doc = AppData.references.child (model.get (index));
             PanelReference.instance.panelMRU.useDoc (doc);
             recordSelected (doc);
         }
@@ -300,21 +302,21 @@ public class PanelSearch extends JPanel
     {
         int index = list.getSelectedIndex ();
         if (index < 0) return "";
-        return model.get (index).key ();
+        return model.get (index);
     }
 
-    public String keyAfter (MNode doc)
+    public String keyAfter (String key)
     {
-        int index = model.indexOf (doc);
+        int index = model.indexOf (key);
         if (index < 0  ||  index == model.getSize () - 1) return "";  // indexOf(String) will return end-of-list in response to this value.
-        return model.get (index + 1).key ();
+        return model.get (index + 1);
     }
 
     public int indexOf (String key)
     {
         int count = model.size ();
         if (key.isEmpty ()) return count;
-        for (int i = 0; i < count; i++) if (model.get (i).key ().equals (key)) return i;
+        for (int i = 0; i < count; i++) if (model.get (i).equals (key)) return i;
         return -1;
     }
 
@@ -327,19 +329,11 @@ public class PanelSearch extends JPanel
         lastSelection = Math.min (model.size () - 1, lastSelection);
     }
 
-    /**
-        For multirepo, if the key of the doc in a Holder gets claimed by another doc,
-        then the Holder should be updated to point to the new doc. This could, for example,
-        change what color it gets displayed as.
-    **/
-    public void updateDoc (MNode doc)
+    public void updateDoc (String oldKey, String newKey)
     {
-        String key = doc.key ();
-        int index = indexOf (key);
+        int index = indexOf (oldKey);
         if (index < 0) return;
-        MNode n = model.get (index);
-        if (n == doc) return;
-        model.setElementAt (n, index);
+        model.setElementAt (newKey, index);
     }
 
     public void insertNextAt (int at)
@@ -347,13 +341,13 @@ public class PanelSearch extends JPanel
         insertAt = at;
     }
 
-    public void insertDoc (MNode doc)
+    public void insertDoc (String key)
     {
-        int index = model.indexOf (doc);
+        int index = model.indexOf (key);
         if (index < 0)
         {
             if (insertAt > model.size ()) insertAt = 0;  // The list has changed, perhaps due to filtering, and our position is no longer valid, so simply insert at top.
-            model.add (insertAt, doc);
+            model.add (insertAt, key);
             lastSelection = insertAt;
         }
         else
@@ -383,11 +377,12 @@ public class PanelSearch extends JPanel
         @Override
         public void run ()
         {
-            List<MNode> results = new LinkedList<MNode> ();
+            List<String> results = new LinkedList<String> ();
             for (MNode i : AppData.references)
             {
                 if (stop) return;
-                if (i.key ().toLowerCase ().contains (query)) results.add (i);
+                String key = i.key ();
+                if (key.toLowerCase ().contains (query)) results.add (key);
             }
 
             // Update of list should be atomic with respect to other ui events.
@@ -399,11 +394,7 @@ public class PanelSearch extends JPanel
                     {
                         if (stop) return;
                         model.clear ();
-                        for (MNode record : results)
-                        {
-                            if (stop) return;
-                            model.addElement (record);
-                        }
+                        for (String key : results) model.addElement (key);
                     }
                 }
             });
@@ -411,7 +402,7 @@ public class PanelSearch extends JPanel
     }
     protected SearchThread thread;
 
-    public static class MNodeRenderer extends JTextField implements ListCellRenderer<MNode>
+    public static class MNodeRenderer extends JTextField implements ListCellRenderer<String>
     {
         protected static DefaultHighlighter.DefaultHighlightPainter painter;
 
@@ -421,10 +412,11 @@ public class PanelSearch extends JPanel
             setBorder (new EmptyBorder (0, 0, 0, 0));
         }
 
-        public Component getListCellRendererComponent (JList<? extends MNode> list, MNode doc, int index, boolean isSelected, boolean cellHasFocus)
+        public Component getListCellRendererComponent (JList<? extends String> list, String key, int index, boolean isSelected, boolean cellHasFocus)
         {
+            MNode doc = AppData.references.child (key);
             String name = doc.get ("title");
-            if (name.isEmpty ()) name = doc.key ();
+            if (name.isEmpty ()) name = key;
             setText (name);
 
             Color color = Color.black;

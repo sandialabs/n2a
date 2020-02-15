@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,33 +14,32 @@ import gov.sandia.n2a.ui.ref.PanelReference;
 
 public class AddTag extends Undoable
 {
-    protected MNode   doc;
-    protected int     row;
     protected String  key;
+    protected int     row;
+    protected String  name;
     protected String  value;
     protected boolean nameIsGenerated;
 
     public AddTag (MNode doc, int row)
     {
-        this.doc = doc;
+        key      = doc.key ();
         this.row = row;
         value    = "";
         nameIsGenerated = true;
 
-        MNode record = PanelReference.instance.panelEntry.model.record;
         int suffix = 0;
         while (true)
         {
-            key = "k" + suffix++;
-            if (record.child (key) == null) break;
+            name = "k" + suffix++;
+            if (doc.child (name) == null) break;
         }
     }
 
-    public AddTag (MNode doc, int row, String key, String value)
+    public AddTag (MNode doc, int row, String name, String value)
     {
-        this.doc   = doc;
+        key        = doc.key ();
         this.row   = row;
-        this.key   = key;
+        this.name  = name;
         this.value = value;
         nameIsGenerated = false;
     }
@@ -48,13 +47,13 @@ public class AddTag extends Undoable
     public void undo ()
     {
         super.undo ();
-        PanelReference.instance.panelEntry.model.destroy (doc, key);
+        PanelReference.instance.panelEntry.model.destroy (key, name);
     }
 
     public void redo ()
     {
         super.redo ();
-        PanelReference.instance.panelEntry.model.create (doc, row, key, value, nameIsGenerated);
+        PanelReference.instance.panelEntry.model.create (key, row, name, value, nameIsGenerated);
     }
 
     public boolean addEdit (UndoableEdit edit)
@@ -62,9 +61,9 @@ public class AddTag extends Undoable
         if (nameIsGenerated  &&  edit instanceof RenameTag)
         {
             RenameTag rename = (RenameTag) edit;
-            if (key.equals (rename.before))
+            if (name.equals (rename.before))
             {
-                key = rename.after;
+                name = rename.after;
                 nameIsGenerated = false;
                 return true;
             }

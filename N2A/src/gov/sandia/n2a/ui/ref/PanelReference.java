@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -124,9 +124,8 @@ public class PanelReference extends JPanel implements MNodeListener
 
     public void childAdded (String key)
     {
-        MNode doc = AppData.references.child (key);
-        panelMRU.insertDoc (doc);
-        panelSearch.insertDoc (doc);
+        panelMRU.insertDoc (key);
+        panelSearch.insertDoc (key);
     }
 
     public void childDeleted (String key)
@@ -138,10 +137,8 @@ public class PanelReference extends JPanel implements MNodeListener
 
     public void childChanged (String oldKey, String newKey)
     {
-        // Holders in search and MRU should associate newKey with correct doc.
-        MNode newDoc = AppData.references.child (newKey);
-        panelMRU.updateDoc (newDoc);
-        panelSearch.updateDoc (newDoc);
+        panelMRU.updateDoc (oldKey, newKey);
+        panelSearch.updateDoc (oldKey, newKey);
 
         String key = "";
         MNode record = panelEntry.model.record;
@@ -153,7 +150,7 @@ public class PanelReference extends JPanel implements MNodeListener
             if (contentOnly)
             {
                 panelEntry.model.record = null;  // Force rebuild of display
-                panelEntry.model.setRecord (newDoc);
+                panelEntry.model.setRecord (AppData.references.child (newKey));
             }
             else
             {
@@ -165,14 +162,14 @@ public class PanelReference extends JPanel implements MNodeListener
         MNode oldDoc = AppData.models.child (oldKey);
         if (oldDoc == null)  // deleted
         {
-            panelMRU.removeDoc (oldKey);
-            panelSearch.removeDoc (oldKey);
             panelEntry.checkVisible ();
         }
         else  // oldDoc has changed identity
         {
-            panelMRU.updateDoc (oldDoc);
-            panelSearch.updateDoc (oldDoc);
+            // We renamed oldKey in search and MRU, so need to add it back in.
+            panelMRU.insertDoc (oldKey);
+            panelSearch.insertDoc (oldKey);
+
             if (key.equals (oldKey))
             {
                 panelEntry.model.record = null;
