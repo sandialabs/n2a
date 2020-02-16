@@ -102,6 +102,10 @@ public class NodeBase extends DefaultMutableTreeNode
         }
     }
 
+    /**
+        Assumes that model will be updated by setting new root, so it doesn't need to
+        fire notifications for every change while building the tree.
+    **/
     public void insert (String category, NodeModel n)
     {
         String[] pieces = category.split ("/", 2);

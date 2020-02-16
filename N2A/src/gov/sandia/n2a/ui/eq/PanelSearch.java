@@ -340,6 +340,13 @@ public class PanelSearch extends JPanel
         thread.start ();
     }
 
+    public NodeBase getSelectedNode ()
+    {
+        TreePath path = tree.getSelectionPath ();
+        if (path == null) return null;
+        return (NodeBase) path.getLastPathComponent ();
+    }
+
     public NodeModel getSelectedNodeModel ()
     {
         TreePath path = tree.getSelectionPath ();
@@ -482,6 +489,7 @@ public class PanelSearch extends JPanel
 
     public void updateDoc (String oldKey, String newKey)
     {
+        if (oldKey.equals (newKey)) return;
         root.replaceDoc (oldKey, newKey, model);
         if (lastSelection != null)
         {
@@ -497,10 +505,11 @@ public class PanelSearch extends JPanel
 
     public void insertDoc (MNode doc)
     {
-        NodeBase n = find (doc.key ());
+        String key = doc.key ();
+        NodeBase n = find (key);
         if (n == null)
         {
-            n = new NodeModel (doc.key ());
+            n = new NodeModel (key);
 
             NodeBase p;
             int index;

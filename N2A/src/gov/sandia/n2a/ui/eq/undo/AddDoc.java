@@ -8,6 +8,8 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
+import javax.swing.JTree;
+import javax.swing.tree.TreePath;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.AppData;
@@ -17,6 +19,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.search.NodeBase;
 
 public class AddDoc extends Undoable
 {
@@ -38,15 +41,20 @@ public class AddDoc extends Undoable
         this.name  = uniqueName (name);
         this.saved = saved;
 
-        PanelModel pm = PanelModel.instance;
-        fromSearchPanel = pm.panelSearch.tree.isFocusOwner ();  // Otherwise, assume focus is on equation tree
+        PanelModel pm   = PanelModel.instance;
+        JTree      tree = pm.panelSearch.tree;
+        fromSearchPanel = tree.isFocusOwner ();  // Otherwise, assume focus is on equation tree
         if (fromSearchPanel)  // Otherwise, pathAfter is null and new entry will appear at top of uncategorized entries.
         {
-            pathAfter = pm.panelSearch.currentPath ();
-            if (pathAfter != null)
+            NodeBase n = pm.panelSearch.getSelectedNode ();
+            if (n != null)
             {
+                pathAfter = n.getKeyPath ();
+                if (tree.isExpanded (new TreePath (n.getPath ()))) pathAfter.add ("");
+                List<String> path = pathAfter.subList (0, pathAfter.size () - 1);
+
                 String category = "";
-                for (String c : pathAfter.subList (0, pathAfter.size () - 1)) category += "/" + c;
+                for (String c : path) category += "/" + c;
                 if (! category.isEmpty ())
                 {
                     category = category.substring (1);
@@ -128,6 +136,7 @@ public class AddDoc extends Undoable
         doc.merge (saved);
         new MPart (doc).clearRedundantOverrides ();
         AppData.set (doc.get ("$metadata", "id"), doc);
+        if (doc.get ("$metadata", "gui", "category").contains (",")) pm.panelSearch.search ();  // update for multiple categories
 
         if (wasShowing) pm.panelEquations.load (doc);  // Takes focus
         if (fromSearchPanel)
