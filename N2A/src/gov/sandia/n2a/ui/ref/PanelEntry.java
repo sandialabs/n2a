@@ -935,8 +935,9 @@ public class PanelEntry extends JPanel
             textField.getDocument ().addUndoableEditListener (undoManager);
 
             inputMap = textField.getInputMap ();
-            inputMap.put (KeyStroke.getKeyStroke ("control Z"), "Undo");
-            inputMap.put (KeyStroke.getKeyStroke ("control Y"), "Redo");
+            inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+            inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+            inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
 
             actionMap = textField.getActionMap ();
             actionMap.put ("Undo", new AbstractAction ("Undo")
