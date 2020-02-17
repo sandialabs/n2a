@@ -56,8 +56,9 @@ public class NodeModel extends NodeBase
 
         Color result = null;
         String colorName = "";
+        MNode repo = null;
         MNode mdir = AppData.models.containerFor (key);
-        MNode repo = AppData.repos.child (mdir.key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.
+        if (mdir != null) repo = AppData.repos.child (mdir.key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.
         if (repo != null) colorName = repo.get ("color");
         if (! colorName.isEmpty ())
         {
