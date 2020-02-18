@@ -553,8 +553,7 @@ public class PanelSearch extends JPanel
                 String key = i.key ();
                 if (key.toLowerCase ().contains (query))
                 {
-                    String[] categories = i.get ("$metadata", "gui", "category").split (",");
-                    for (String category : categories)
+                    for (String category : getCategory (key).split (","))
                     {
                         category = category.trim ();
                         NodeModel n = new NodeModel (key);
@@ -620,6 +619,27 @@ public class PanelSearch extends JPanel
                     }
                 }
             });
+        }
+
+        /**
+            Walks up the inheritance hierarchy (in proper order) until a gui.category tag is found.
+            If none is found, return empty string.
+        **/
+        public String getCategory (String key)
+        {
+            MNode doc = AppData.models.child (key);
+            if (doc == null) return "";
+            String result = doc.get ("$metadata", "gui", "category");
+            if (! result.isEmpty ()) return result;
+
+            // No local definition, so check parents.
+            for (String inherit : doc.get ("$inherit").split (","))
+            {
+                inherit = inherit.trim ();
+                result = getCategory (inherit);
+                if (! result.isEmpty ()) return result;
+            }
+            return "";
         }
     }
 
