@@ -137,7 +137,7 @@ public class MPart extends MNode
                     parentSource = AppData.getModel (id);
                     if (parentSource != null  &&  maintainable)  // relink
                     {
-                        parentNames[i] = "\"" + parentSource.key () + "\"";
+                        parentNames[i] = parentSource.key ();
                         changedName = true;
                     }
                 }
@@ -164,7 +164,7 @@ public class MPart extends MNode
         {
             StringBuilder value = new StringBuilder ();
             value.append (parentNames[0]);
-            for (int i = 1; i < parentNames.length; i++) value.append ("," + parentNames[i]);
+            for (int i = 1; i < parentNames.length; i++) value.append (", " + parentNames[i]);
             root.source.set (value.toString ());
         }
     }

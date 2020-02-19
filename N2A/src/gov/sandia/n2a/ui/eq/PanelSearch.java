@@ -635,7 +635,7 @@ public class PanelSearch extends JPanel
             // No local definition, so check parents.
             for (String inherit : doc.get ("$inherit").split (","))
             {
-                inherit = inherit.trim ();
+                inherit = inherit.trim ().replace ("\"", "");
                 result = getCategory (inherit);
                 if (! result.isEmpty ()) return result;
             }
