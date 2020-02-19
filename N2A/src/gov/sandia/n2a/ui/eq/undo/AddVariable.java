@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -98,7 +98,11 @@ public class AddVariable extends Undoable
         mparent.clear (name);
         if (mparent.child (name) == null)  // Node is fully deleted
         {
-            if (createdNode.isBinding  &&  parent.graph != null) parent.graph.updateGUI (name, "");
+            if (createdNode.isBinding)
+            {
+                if (parent.graph != null) parent.graph.updateGUI (name, "");
+                if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
+            }
             model.removeNodeFromParent (createdNode);
             parent.findConnections ();
         }
@@ -113,6 +117,7 @@ public class AddVariable extends Undoable
             {
                 if (createdNode.isBinding) parent.graph.updateGUI (name, createdNode.source.get ());
                 else if (wasBinding)       parent.graph.updateGUI (name, "");
+                if ((createdNode.isBinding  ||  wasBinding)  &&  mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
         }
         parent.updateTabStops (fm);
@@ -171,6 +176,12 @@ public class AddVariable extends Undoable
             {
                 if (createdNode.isBinding) parent.graph.updateGUI (name, createdNode.source.get ());
                 else if (wasBinding)       parent.graph.updateGUI (name, "");
+            }
+
+            if (createdNode.isBinding  ||  wasBinding)
+            {
+                MPart mparent = parent.source;
+                if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
         }
         pet.updateVisibility (createdPath);

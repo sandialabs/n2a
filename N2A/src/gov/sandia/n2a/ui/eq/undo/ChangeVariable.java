@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -86,6 +86,7 @@ public class ChangeVariable extends Undoable
         FontMetrics fm = nodeBefore.getFontMetrics (pet.tree);
 
         NodeVariable nodeAfter;
+        boolean touchedBindings = false;
         if (nameBefore.equals (nameAfter))
         {
             nodeAfter = nodeBefore;
@@ -104,7 +105,11 @@ public class ChangeVariable extends Undoable
             nodeAfter = (NodeVariable) parent.child (nameAfter);
             if (oldPart == null)
             {
-                if (nodeBefore.isBinding  &&  parent.graph != null) parent.graph.updateGUI (nameBefore, "");  // remove old connection edge
+                if (nodeBefore.isBinding)
+                {
+                    if (parent.graph != null) parent.graph.updateGUI (nameBefore, "");  // remove old connection edge
+                    touchedBindings = true;
+                }
 
                 if (nodeAfter == null)
                 {
@@ -130,7 +135,11 @@ public class ChangeVariable extends Undoable
                 nodeBefore.filter (FilteredTreeModel.filterLevel);
                 if (nodeBefore.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (nodeBefore);
                 else                                                    parent.hide (nodeBefore, model);
-                if (nodeBefore.isBinding  &&  parent.graph != null) parent.graph.updateGUI (nameBefore, oldPart.get ());
+                if (nodeBefore.isBinding)
+                {
+                    if (parent.graph != null) parent.graph.updateGUI (nameBefore, oldPart.get ());
+                    touchedBindings = true;
+                }
             }
         }
 
@@ -151,6 +160,13 @@ public class ChangeVariable extends Undoable
         {
             if (nodeAfter.isBinding) parent.graph.updateGUI (nameAfter, nodeAfter.source.get ());
             else if (wasBinding)     parent.graph.updateGUI (nameAfter, "");
+        }
+
+        if (nodeAfter.isBinding  ||  wasBinding) touchedBindings = true;
+        if (touchedBindings)
+        {
+            MPart mparent = parent.source;
+            if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
         }
     }
 

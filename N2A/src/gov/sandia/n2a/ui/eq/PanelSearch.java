@@ -511,16 +511,41 @@ public class PanelSearch extends JPanel
     {
         if (lastSelection == null  ||  lastSelection.get (lastSelection.size () - 1).equals (key)) lastSelection = pathAfter (key);
         root.purge (key, model);
+        synchronized (connectors) {connectors.remove (key);}
     }
 
     public void updateDoc (String oldKey, String newKey)
     {
+        MNode oldDoc = AppData.models.child (oldKey);
+        MNode newDoc = AppData.models.child (newKey);
+        Connector oldConnector = null;
+        if (oldDoc != null) oldConnector = new Connector (oldDoc);
+        Connector newConnector = new Connector (newDoc);
+        synchronized (connectors)
+        {
+            connectors.remove (oldKey);
+            connectors.remove (newKey);
+            if (oldConnector != null  &&  oldConnector.hasEndpoints ()) connectors.put (oldKey, oldConnector);
+            if (                          newConnector.hasEndpoints ()) connectors.put (newKey, newConnector);
+        }
+
         if (oldKey.equals (newKey)) return;
         root.replaceDoc (oldKey, newKey, model);
         if (lastSelection != null)
         {
             int last = lastSelection.size () - 1;
             if (lastSelection.get (last).equals (oldKey)) lastSelection.set (last, newKey);
+        }
+    }
+
+    public void updateConnectors (MNode doc)
+    {
+        String key = doc.key ();
+        Connector c = new Connector (doc);
+        synchronized (connectors)
+        {
+            connectors.remove (key);
+            if (c.hasEndpoints ()) connectors.put (key, c);
         }
     }
 
@@ -532,6 +557,9 @@ public class PanelSearch extends JPanel
     public void insertDoc (MNode doc)
     {
         String key = doc.key ();
+        Connector c = new Connector (doc);
+        if (c.hasEndpoints ()) synchronized (connectors) {connectors.put (key, c);}
+
         NodeBase n = find (key);
         if (n == null)
         {
@@ -953,7 +981,7 @@ public class PanelSearch extends JPanel
             for (MNode i : AppData.models)
             {
                 Connector c = new Connector (i);
-                if (c.hasEndpoints ()) connectors.put (c.key, c);
+                if (c.hasEndpoints ()) synchronized (connectors) {connectors.put (c.key, c);}
             }
             //for (Connector c : connectors.values ()) c.dump ();  // debug dump of index
         }
