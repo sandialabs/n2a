@@ -46,6 +46,7 @@ import javax.swing.event.MouseInputAdapter;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -607,12 +608,10 @@ public class GraphNode extends JPanel
                             }
                             titleFocused = true;
                             takeFocus ();
-                            return;
                         }
                         else if (clicks == 2)  // Drill down
                         {
                             container.drill (node);
-                            return;
                         }
                     }
                     else if (SwingUtilities.isRightMouseButton (me))
@@ -621,12 +620,8 @@ public class GraphNode extends JPanel
                         {
                             switchFocus (true);
                             container.menuPopup.show (title, x, y);
-                            return;
                         }
                     }
-
-                    translate (me);
-                    resizeListener.mouseMoved (me);
                 }
 
                 public void mouseMoved (MouseEvent me)
@@ -751,6 +746,8 @@ public class GraphNode extends JPanel
         Point      start;
         Dimension  min;
         Rectangle  old;
+        boolean    connect;
+        GraphEdge  edge;  // Paints edge when in dragging in connect mode.
         MouseEvent lastEvent;
         Timer      timer = new Timer (100, this);
 
@@ -789,10 +786,12 @@ public class GraphNode extends JPanel
 
             // All mouse event coordinates are relative to the bounds of this component.
             parent.setComponentZOrder (GraphNode.this, 0);
-            start  = me.getPoint ();
-            min    = getMinimumSize ();
-            old    = getBounds ();
-            cursor = border.getCursor (me);
+            start   = me.getPoint ();
+            min     = getMinimumSize ();
+            old     = getBounds ();
+            connect = me.isShiftDown ();
+            edge    = null;
+            cursor  = border.getCursor (me);
             setCursor (Cursor.getPredefinedCursor (cursor));
         }
 
@@ -842,6 +841,20 @@ public class GraphNode extends JPanel
                 timer.stop ();
                 lastEvent = null;
                 if (auto) return;
+            }
+
+            if (connect)
+            {
+                if (edge == null)
+                {
+                    // Create and install edge
+                    edge = new GraphEdge (GraphNode.this, null, "");
+                    edge.anchor = new Vector2 (x + start.x, y + start.y);
+                    edge.tip = new Vector2 (0, 0);  // This is normally created by GraphEdge.updateShape(), but we don't call that first.
+                    parent.edges.add (edge);
+                }
+                edge.animate (new Point (x + me.getX (), y + me.getY ()));
+                return;
             }
 
             switch (cursor)
@@ -959,7 +972,26 @@ public class GraphNode extends JPanel
 
             if (SwingUtilities.isLeftMouseButton (me))
             {
-                if (cursor != Cursor.DEFAULT_CURSOR)  // Click on border
+                if (connect)
+                {
+                    if (edge != null)
+                    {
+                        parent.edges.remove (edge);
+                        parent.repaint (edge.bounds);
+
+                        GraphNode gn = parent.findNodeAt (new Point (getX () + me.getX (), getY () + me.getY ()));
+                        if (gn != null)
+                        {
+                            List<NodePart> query = new ArrayList<NodePart> ();
+                            query.add (node);
+                            query.add (gn.node);
+                            PanelModel.instance.panelSearch.search (query);
+                        }
+
+                        edge = null;
+                    }
+                }
+                else if (cursor != Cursor.DEFAULT_CURSOR)  // Click on border
                 {
                     // Store new bounds in metadata
                     MNode guiTree = new MVolatile ();

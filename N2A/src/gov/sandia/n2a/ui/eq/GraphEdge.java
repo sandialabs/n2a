@@ -33,6 +33,7 @@ public class GraphEdge
     protected Rectangle bounds = new Rectangle (0, 0, -1, -1);  // empty. Allows call to animate() on brand-new edges that have not previously called updateShape().
     protected Vector2   tip;
     protected boolean   tipDrag;
+    protected Vector2   anchor;  // When non-null, use this as start for tip drag.
 
     protected static double arrowheadAngle  = Math.PI / 5;
     protected static double arrowheadLength = 10;
@@ -60,6 +61,7 @@ public class GraphEdge
         if (tipDrag)
         {
             a = tip;
+            if (anchor != null) c = anchor;
         }
         else if (nodeTo != null)
         {
@@ -258,9 +260,9 @@ public class GraphEdge
         g2.setColor (Color.black);
         g2.draw (shape);
 
+        if (alias.isEmpty ()) return;
         g2.setColor (new Color (0xD0FFFFFF, true));
         g2.fill (textBox);
-        
         g2.setColor (Color.black);
         g2.drawString (alias, (float) label.x, (float) label.y);
     }

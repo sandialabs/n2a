@@ -17,6 +17,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.search.NameEditor;
 import gov.sandia.n2a.ui.eq.search.NodeBase;
 import gov.sandia.n2a.ui.eq.search.NodeModel;
@@ -293,7 +294,10 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                textQuery.setText ("");
+                // Always force a new search, even if textQuery is empty.
+                // This lets us use the escape key to refresh the list after other types of search.
+                if (textQuery.getText ().isEmpty ()) search ();
+                else                                 textQuery.setText ("");
             }
         });
         actionMap.put ("selectNext", new AbstractAction ()
@@ -351,6 +355,13 @@ public class PanelSearch extends JPanel
         String query = textQuery.getText ();
         threadSearch = new SearchThread (query.trim ());
         threadSearch.start ();
+    }
+
+    public void search (List<NodePart> query)
+    {
+        if (threadConnect != null) threadConnect.stop = true;
+        threadConnect = new ConnectThread (query);
+        threadConnect.start ();
     }
 
     public NodeBase getSelectedNode ()
@@ -949,15 +960,20 @@ public class PanelSearch extends JPanel
     // Find best candidate for a connection between two parts.
     public class ConnectThread extends Thread
     {
-        public boolean        stop;
-        public List<NodePart> query;
+        public boolean                            stop;
+        public List<NodePart>                     query;
+        public gov.sandia.n2a.ui.eq.tree.NodePart part;
 
+        /**
+            This constructor is run on the EDT, so it can safely collect current UI state.
+        **/
         public ConnectThread (List<NodePart> nodes)
         {
             super ("Search Connections");
             setDaemon (true);
 
             query = nodes;
+            part = PanelModel.instance.panelEquations.part;
         }
 
         @Override
@@ -1030,7 +1046,7 @@ public class PanelSearch extends JPanel
                 for (String key : m.matches.keySet ())
                 {
                     NodePart p = m.matches.get (key);
-                    data.set (key, p.source.key ());  // Assign name of target part to endpoint variable.
+                    data.set (p.source.key (), key);  // Assign name of target part to endpoint variable.
                     if (p.graph != null)
                     {
                         Point l = p.graph.getLocation ();
@@ -1042,9 +1058,10 @@ public class PanelSearch extends JPanel
                 Point center = null;
                 if (count > 1)
                 {
+                    GraphPanel graphArea = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel;
                     center = new Point ();
-                    center.x = Math.round (x / count);
-                    center.y = Math.round (y / count);
+                    center.x = Math.round (x / count) - graphArea.offset.x;
+                    center.y = Math.round (y / count) - graphArea.offset.y;
                 }
 
                 // UI changes must be done on the EDT.
@@ -1053,6 +1070,7 @@ public class PanelSearch extends JPanel
                 {
                     public void run ()
                     {
+                        if (part != PanelModel.instance.panelEquations.part) return;
                         AddPart ap = new AddPart (parent, parent.getChildCount (), data, c);
                         PanelModel.instance.undoManager.add (ap);
                     }
