@@ -9,19 +9,25 @@ package gov.sandia.n2a.ui.eq;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
+import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.eq.search.NameEditor;
 import gov.sandia.n2a.ui.eq.search.NodeBase;
 import gov.sandia.n2a.ui.eq.search.NodeModel;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 
 import java.awt.Component;
 import java.awt.EventQueue;
+import java.awt.Point;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
@@ -35,8 +41,11 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-
+import java.util.Map;
+import java.util.Set;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.ActionMap;
@@ -62,18 +71,21 @@ import javax.swing.tree.TreeSelectionModel;
 @SuppressWarnings("serial")
 public class PanelSearch extends JPanel
 {
-    protected SearchThread           thread;
-    protected JTextField             textQuery;
-    protected NodeBase               root       = new NodeBase ();
-    protected DefaultTreeModel       model      = new DefaultTreeModel (root);
-    public    JTree                  tree       = new JTree (model);
-    protected MNodeRenderer          renderer   = new MNodeRenderer ();
-    public    NameEditor             nameEditor = new NameEditor (renderer);
-    public    TransferHandler        transferHandler;
-    public    List<String>           lastSelection;
-    public    List<String>           insertAt;       // Path to node that next insertion should precede. If null, insert at top of uncategorized nodes.
-    protected String                 lastQuery = ""; // for purpose of caching expanded nodes
-    protected List<String[]>         expandedNodes = new ArrayList<String[]> ();
+    protected SearchThread     threadSearch;
+    protected JTextField       textQuery;
+    protected NodeBase         root          = new NodeBase ();
+    protected DefaultTreeModel model         = new DefaultTreeModel (root);
+    public    JTree            tree          = new JTree (model);
+    protected MNodeRenderer    renderer      = new MNodeRenderer ();
+    public    NameEditor       nameEditor    = new NameEditor (renderer);
+    public    TransferHandler  transferHandler;
+    public    List<String>     lastSelection;
+    public    List<String>     insertAt;           // Path to node that next insertion should precede. If null, insert at top of uncategorized nodes.
+    protected String           lastQuery     = ""; // for purpose of caching expanded nodes
+    protected List<String[]>   expandedNodes = new ArrayList<String[]> ();
+
+    protected Map<String,Connector> connectors;
+    protected ConnectThread         threadConnect;
 
     public PanelSearch ()
     {
@@ -328,16 +340,17 @@ public class PanelSearch extends JPanel
         );
 
         search ();
+        new BuildConnectorIndex ().start ();
     }
 
     public void search ()
     {
-        if (thread != null) thread.stop = true;
+        if (threadSearch != null) threadSearch.stop = true;
         // Don't wait for thread to stop.
 
         String query = textQuery.getText ();
-        thread = new SearchThread (query.trim ());
-        thread.start ();
+        threadSearch = new SearchThread (query.trim ());
+        threadSearch.start ();
     }
 
     public NodeBase getSelectedNode ()
@@ -540,10 +553,12 @@ public class PanelSearch extends JPanel
 
         public SearchThread (String query)
         {
+            super ("Search Models");
+            setDaemon (true);
+
             this.query = query.toLowerCase ();
         }
 
-        @Override
         public void run ()
         {
             NodeBase newRoot = new NodeBase ();
@@ -666,6 +681,383 @@ public class PanelSearch extends JPanel
             if (leaf)     return getDefaultLeafIcon ();
             if (expanded) return getDefaultOpenIcon ();
             return               getDefaultClosedIcon ();
+        }
+    }
+
+
+    // -----------------------------------------------------------------------
+    // The rest of this class is dedicated to connection matching.
+    // Why is this here? Because it has to do with searching for parts.
+
+    /**
+        Describes the set of parts that a connection endpoint can handle.
+    **/
+    public static class EndpointHandles
+    {
+        String      name;  // Of endpoint
+        Set<String> partNames;
+
+        /**
+            Takes node for endpoint variable and extracts list of compatible parts.
+        **/
+        public EndpointHandles (MNode endpoint)
+        {
+            name = endpoint.key ();
+
+            partNames = new HashSet<String> ();
+            String line = endpoint.get ().split ("connect", 2)[1];
+            line = line.split ("\\(", 2)[1];
+            line = line.split ("\\)")[0];
+            for (String p : line.split (","))
+            {
+                p = p.trim ();
+                partNames.add (p);
+            }
+            if (partNames.isEmpty ()) partNames = null;
+        }
+
+        public float score (EndpointTarget target)
+        {
+            if (partNames.isEmpty ()) return 0;
+            float result = Float.POSITIVE_INFINITY;
+            for (String p : partNames)
+            {
+                Integer s = target.ancestors.get (p);
+                if (s == null) continue;
+                result = Math.min (result, s);
+            }
+            return result;
+        }
+
+        public void dump ()
+        {
+            System.out.print ("  " + name + ": ");
+            for (String pn : partNames) System.out.print (pn + ", ");
+            System.out.println ();
+        }
+    }
+
+    public static class EndpointTarget
+    {
+        NodePart            node;
+        Map<String,Integer> ancestors = new HashMap<String,Integer> ();
+
+        /**
+            Takes a sub-part of model and interprets its $inherit line to form a set of ancestor parts.
+            Ancestors are ranked by distance from the given child part. If an ancestor appears more than
+            once, the closest occurrence determines the rank.
+        **/
+        public EndpointTarget (NodePart node)
+        {
+            this.node = node;
+            process (node.source, 0);
+        }
+
+        public void process (MNode part, int depth)
+        {
+            ancestors.put (part.key (), depth++);
+            String[] inherits = part.get ("$inherit").split (",");
+            for (String inherit : inherits)
+            {
+                inherit = inherit.trim ();
+                if (inherit.isEmpty ()) continue;
+                Integer d = ancestors.get (inherit);
+                if (d == null)
+                {
+                    MNode m = AppData.models.child (inherit);
+                    if (m != null) process (m, depth);
+                }
+                else if (d > depth)
+                {
+                    ancestors.put (inherit, depth);
+                }
+            }
+        }
+    }
+
+    /**
+        One specific mapping from endpoint variables to target parts, along with score.
+        Used to report result
+    **/
+    public static class EndpointMatch
+    {
+        String               key;  // of connection model
+        Map<String,NodePart> matches = new HashMap<String,NodePart> ();  // from endpoint variable name to target part
+        float                score;
+    }
+
+    public static class Connector
+    {
+        String                      key;  // of associated model
+        Map<String,EndpointHandles> handles;
+
+        /**
+            Takes model and extracts endpoints.
+        **/
+        public Connector (MNode doc)
+        {
+            key = doc.key ();
+            build ();
+        }
+
+        /**
+            Rebuild list of endpoints.
+        **/
+        public void build ()
+        {
+            handles = new HashMap<String,EndpointHandles> ();
+            MNode doc = AppData.models.child (key);
+            MPart part = new MPart ((MPersistent) doc);
+            for (MNode c : part)
+            {
+                String value = c.get ();
+                if (! Operator.containsConnect (value)) continue;
+                EndpointHandles e = new EndpointHandles (c);
+                handles.put (e.name, e);
+            }
+            if (handles.isEmpty ()) handles = null;  // release memory
+        }
+
+        public boolean hasEndpoints ()
+        {
+            return handles != null;
+        }
+
+        /**
+            Rates how good a choice this connector is for the given set of target parts.
+            Lower numbers are better. Result is only non-null if the connection is compatible.
+            This requires that it have the right number of endpoints, and that each endpoint match
+            at least one available class.
+        **/
+        public EndpointMatch score (List<EndpointTarget> targets)
+        {
+            int count = targets.size ();
+            if (count != handles.size ()) return null;
+
+            // Build a matrix of all possible endpoint assignments and their scores.
+            // First dimension is handles, and follows its natural enumeration order, which we assume is constant.
+            // Second dimension is targets, and follows simple index order.
+            WorkingState state = new WorkingState ();
+            state.scores = new float[count][count];
+            int[] indices = new int[count];
+            int i = 0;
+            for (String A : handles.keySet ())
+            {
+                EndpointHandles H = handles.get (A);
+                for (int j = 0; j < count; j++)
+                {
+                    state.scores[i][j] = H.score (targets.get (j));
+                }
+                indices[i] = i++;
+            }
+
+            // Test all permutations
+            state.bestPermutation = new int[count];
+            state.bestScore = Float.POSITIVE_INFINITY;
+            generate (count, indices, state);
+
+            EndpointMatch result = new EndpointMatch ();
+            i = 0;
+            for (String A : handles.keySet ())
+            {
+                EndpointTarget T = targets.get (state.bestPermutation[i++]);
+                result.matches.put (A, T.node);
+            }
+            result.score = state.bestScore;
+
+            return result;
+        }
+
+        /**
+            Use Heap's Algorithm to generate all permutations of targets.
+            https://en.wikipedia.org/wiki/Heap%27s_algorithm
+            For any given query, the original order is the first thing tested.
+            This means that the user-specified direction of the connection will take
+            precedence over any other, provided they have the same score.
+            This only really matters for binary connections.
+        **/
+        public void generate (int k, int[] indices, WorkingState state)
+        {
+            if (k == 1)  // Do the actual test on the current permutation.
+            {
+                float score = 0;
+                for (int i = 0; i < indices.length; i++)
+                {
+                    score += state.scores[i][indices[i]];
+                }
+                if (score < state.bestScore)
+                {
+                    state.bestScore = score;
+                    for (int i = 0; i < indices.length; i++) state.bestPermutation[i] = indices[i];
+                }
+            }
+            else  // Generate sub-permutations.
+            {
+                generate (k-1, indices, state);
+                for (int i = 0; i < k-1; i++)
+                {
+                    if (k % 2 == 0) swap (indices, i, k-1);
+                    else            swap (indices, 0, k-1);
+                    generate (k-1, indices, state);
+                }
+            }
+        }
+
+        public void swap (int[] A, int i, int j)
+        {
+            int temp = A[i];
+            A[i] = A[j];
+            A[j] = temp;
+        }
+
+        public void dump ()
+        {
+            System.out.println (key);
+            for (EndpointHandles h : handles.values ()) h.dump ();
+        }
+
+        public static class WorkingState
+        {
+            float[][] scores;
+            int[]     bestPermutation;
+            float     bestScore;
+        }
+    }
+
+    // Initialize connector index.
+    // TODO: also need incremental maintenance of connector index
+    public class BuildConnectorIndex extends Thread
+    {
+        public BuildConnectorIndex ()
+        {
+            super ("Build Connector Index");
+            setDaemon (true);
+        }
+
+        public void run ()
+        {
+            connectors = new HashMap<String,Connector> ();
+            for (MNode i : AppData.models)
+            {
+                Connector c = new Connector (i);
+                if (c.hasEndpoints ()) connectors.put (c.key, c);
+            }
+            //for (Connector c : connectors.values ()) c.dump ();  // debug dump of index
+        }
+    }
+
+    // Find best candidate for a connection between two parts.
+    public class ConnectThread extends Thread
+    {
+        public boolean        stop;
+        public List<NodePart> query;
+
+        public ConnectThread (List<NodePart> nodes)
+        {
+            super ("Search Connections");
+            setDaemon (true);
+
+            query = nodes;
+        }
+
+        @Override
+        public void run ()
+        {
+            // Convert query into set of endpoint targets
+            List<EndpointTarget> targets = new ArrayList<EndpointTarget> ();
+            for (NodePart n : query) targets.add (new EndpointTarget (n));
+
+            // Score each candidate
+            float bestScore = Float.POSITIVE_INFINITY;
+            List<EndpointMatch> bestMatches = new ArrayList<EndpointMatch> ();
+            for (Connector c : connectors.values ())
+            {
+                if (stop) return;
+                EndpointMatch m = c.score (targets);
+                if (m == null) continue;
+                if (Float.isInfinite (m.score)  ||  m.score > bestScore) continue;
+                if (m.score < bestScore)
+                {
+                    bestScore = m.score;
+                    bestMatches.clear ();
+                }
+                m.key = c.key;
+                bestMatches.add (m);
+            }
+
+            if (bestMatches.size () > 1)  // More than one match, so display in search panel.
+            {
+                NodeBase newRoot = new NodeBase ();
+                for (EndpointMatch em : bestMatches)
+                {
+                    if (stop) return;
+                    newRoot.add (new NodeModel (em.key));
+                }
+
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        if (stop) return;
+
+                        // Clear query text. It is unrelated to the search for a connection.
+                        textQuery.setText ("");
+                        lastQuery = "connection";  // TODO: arrange to remember tree state across selection modes, so we can return to regular tree view without losing our original place.
+
+                        // Switch to new tree
+                        root = newRoot;
+                        model.setRoot (newRoot);  // triggers repaint
+
+                        // Pull focus to search tree
+                        tree.setSelectionRow (0);
+                        lastSelection = null;
+                        tree.requestFocusInWindow ();
+                    }
+                });
+            }
+            else if (bestMatches.size () == 1)  // Exactly one match, so apply it.
+            {
+                EndpointMatch m = bestMatches.get (0);
+                NodePart first = m.matches.values ().iterator ().next ();
+                NodePart parent = first.getTrueParent ();
+
+                MNode data = new MVolatile ();
+                data.set (m.key, "$inherit");
+
+                float x     = 0;
+                float y     = 0;
+                int   count = 0;
+                for (String key : m.matches.keySet ())
+                {
+                    NodePart p = m.matches.get (key);
+                    data.set (key, p.source.key ());  // Assign name of target part to endpoint variable.
+                    if (p.graph != null)
+                    {
+                        Point l = p.graph.getLocation ();
+                        x += l.x;
+                        y += l.y;
+                        count++;
+                    }
+                }
+                Point center = null;
+                if (count > 1)
+                {
+                    center = new Point ();
+                    center.x = Math.round (x / count);
+                    center.y = Math.round (y / count);
+                }
+
+                // UI changes must be done on the EDT.
+                final Point c = center;
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        AddPart ap = new AddPart (parent, parent.getChildCount (), data, c);
+                        PanelModel.instance.undoManager.add (ap);
+                    }
+                });
+            }
         }
     }
 }
