@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -72,6 +72,7 @@ public class ChangeVariableToInherit extends Undoable
         {
             peg.loadPart ();
             peg.repaint ();
+            parent.filter (FilteredTreeModel.filterLevel);
         }
         if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
 
@@ -115,6 +116,7 @@ public class ChangeVariableToInherit extends Undoable
         {
             peg.loadPart ();
             peg.repaint ();
+            parent.filter (FilteredTreeModel.filterLevel);
         }
         model.nodeStructureChanged (parent);
 

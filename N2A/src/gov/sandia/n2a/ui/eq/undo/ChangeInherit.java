@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -56,6 +56,8 @@ public class ChangeInherit extends Undoable
         view.restore ();
         NodeBase node = NodeBase.locateNode (path);
         if (node == null) throw new CannotRedoException ();
+        NodePart parent = (NodePart) node.getParent ();
+        NodePart grandparent = (NodePart) parent.getParent ();
 
         PanelEquations pe = PanelModel.instance.panelEquations;
         PanelEquationTree pet = node.getTree ();
@@ -64,8 +66,6 @@ public class ChangeInherit extends Undoable
 
         node.source.set (value);  // Complex restructuring happens here.
 
-        NodePart parent = (NodePart) node.getParent ();
-        NodePart grandparent = (NodePart) parent.getParent ();
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
@@ -74,6 +74,7 @@ public class ChangeInherit extends Undoable
         {
             peg.loadPart ();
             peg.repaint ();
+            parent.filter (FilteredTreeModel.filterLevel);
         }
         if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
 
