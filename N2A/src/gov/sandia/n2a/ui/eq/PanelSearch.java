@@ -47,6 +47,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.ActionMap;
@@ -984,38 +986,76 @@ public class PanelSearch extends JPanel
             for (NodePart n : query) targets.add (new EndpointTarget (n));
 
             // Score each candidate
-            float bestScore = Float.POSITIVE_INFINITY;
-            List<EndpointMatch> bestMatches = new ArrayList<EndpointMatch> ();
+            TreeMap<Float,ArrayList<EndpointMatch>> matches = new TreeMap<Float,ArrayList<EndpointMatch>> ();
             for (Connector c : connectors.values ())
             {
                 if (stop) return;
                 EndpointMatch m = c.score (targets);
-                if (m == null) continue;
-                if (Float.isInfinite (m.score)  ||  m.score > bestScore) continue;
-                if (m.score < bestScore)
-                {
-                    bestScore = m.score;
-                    bestMatches.clear ();
-                }
+                if (m == null  ||  Float.isInfinite (m.score)) continue;
                 m.key = c.key;
-                bestMatches.add (m);
-            }
-
-            if (bestMatches.size () > 1)  // More than one match, so display in search panel.
-            {
-                NodeBase newRoot = new NodeBase ();
-                for (EndpointMatch em : bestMatches)
+                ArrayList<EndpointMatch> tranch = matches.get (m.score);
+                if (tranch == null)
                 {
-                    if (stop) return;
+                    tranch = new ArrayList<EndpointMatch> ();
+                    matches.put (m.score, tranch);
+                }
+                tranch.add (m);
+            }
+            if (matches.isEmpty ()) return;
+
+            // Rebuild search list.
+            NodeBase newRoot = new NodeBase ();
+            for (ArrayList<EndpointMatch> alem : matches.values ())
+            {
+                if (stop) return;
+                for (EndpointMatch em : alem)
+                {
                     newRoot.add (new NodeModel (em.key));
                 }
+            }
 
-                EventQueue.invokeLater (new Runnable ()
+            // Pick the best candidate and create a new connection.
+            EndpointMatch m = matches.firstEntry ().getValue ().get (0);
+            NodePart first = m.matches.values ().iterator ().next ();
+            NodePart parent = first.getTrueParent ();
+
+            MNode data = new MVolatile ();
+            data.set (m.key, "$inherit");
+
+            float x     = 0;
+            float y     = 0;
+            int   count = 0;
+            for (String key : m.matches.keySet ())
+            {
+                NodePart p = m.matches.get (key);
+                data.set (p.source.key (), key);  // Assign name of target part to endpoint variable.
+                if (p.graph != null)
                 {
-                    public void run ()
-                    {
-                        if (stop) return;
+                    Point l = p.graph.getLocation ();
+                    x += l.x;
+                    y += l.y;
+                    count++;
+                }
+            }
+            Point center = null;
+            if (count > 1)
+            {
+                GraphPanel graphArea = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel;
+                center = new Point ();
+                center.x = Math.round (x / count) - graphArea.offset.x;
+                center.y = Math.round (y / count) - graphArea.offset.y;
+            }
 
+            // UI changes must be done on the EDT.
+            final Point c = center;
+            EventQueue.invokeLater (new Runnable ()
+            {
+                public void run ()
+                {
+                    if (stop  ||  part != PanelModel.instance.panelEquations.part) return;
+
+                    if (newRoot.getChildCount () > 1)
+                    {
                         // Clear query text. It is unrelated to the search for a connection.
                         textQuery.setText ("");
                         lastQuery = "connection";  // TODO: arrange to remember tree state across selection modes, so we can return to regular tree view without losing our original place.
@@ -1023,59 +1063,12 @@ public class PanelSearch extends JPanel
                         // Switch to new tree
                         root = newRoot;
                         model.setRoot (newRoot);  // triggers repaint
-
-                        // Pull focus to search tree
-                        tree.setSelectionRow (0);
-                        lastSelection = null;
-                        tree.requestFocusInWindow ();
                     }
-                });
-            }
-            else if (bestMatches.size () == 1)  // Exactly one match, so apply it.
-            {
-                EndpointMatch m = bestMatches.get (0);
-                NodePart first = m.matches.values ().iterator ().next ();
-                NodePart parent = first.getTrueParent ();
 
-                MNode data = new MVolatile ();
-                data.set (m.key, "$inherit");
-
-                float x     = 0;
-                float y     = 0;
-                int   count = 0;
-                for (String key : m.matches.keySet ())
-                {
-                    NodePart p = m.matches.get (key);
-                    data.set (p.source.key (), key);  // Assign name of target part to endpoint variable.
-                    if (p.graph != null)
-                    {
-                        Point l = p.graph.getLocation ();
-                        x += l.x;
-                        y += l.y;
-                        count++;
-                    }
+                    AddPart ap = new AddPart (parent, parent.getChildCount (), data, c);
+                    PanelModel.instance.undoManager.add (ap);
                 }
-                Point center = null;
-                if (count > 1)
-                {
-                    GraphPanel graphArea = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel;
-                    center = new Point ();
-                    center.x = Math.round (x / count) - graphArea.offset.x;
-                    center.y = Math.round (y / count) - graphArea.offset.y;
-                }
-
-                // UI changes must be done on the EDT.
-                final Point c = center;
-                EventQueue.invokeLater (new Runnable ()
-                {
-                    public void run ()
-                    {
-                        if (part != PanelModel.instance.panelEquations.part) return;
-                        AddPart ap = new AddPart (parent, parent.getChildCount (), data, c);
-                        PanelModel.instance.undoManager.add (ap);
-                    }
-                });
-            }
+            });
         }
     }
 }
