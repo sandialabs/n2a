@@ -768,11 +768,11 @@ public class PanelSearch extends JPanel
 
             partNames = new HashSet<String> ();
             String line = endpoint.get ().split ("connect", 2)[1];
-            line = line.split ("\\(", 2)[1];
-            line = line.split ("\\)")[0];
+            line = line.replace ("(", "");
+            line = line.replace (")", "");
             for (String p : line.split (","))
             {
-                p = p.trim ();
+                p = p.trim ().replace ("\"", "");
                 partNames.add (p);
             }
             if (partNames.isEmpty ()) partNames = null;
@@ -821,7 +821,7 @@ public class PanelSearch extends JPanel
             String[] inherits = part.get ("$inherit").split (",");
             for (String inherit : inherits)
             {
-                inherit = inherit.trim ();
+                inherit = inherit.trim ().replace ("\"", "");
                 if (inherit.isEmpty ()) continue;
                 Integer d = ancestors.get (inherit);
                 if (d == null)

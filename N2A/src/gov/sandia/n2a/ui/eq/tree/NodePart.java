@@ -296,7 +296,7 @@ public class NodePart extends NodeContainer
         String[] inherits = inherit.split (",");
         for (String i : inherits)
         {
-            i = i.replace ("\"", "").trim ();
+            i = i.trim ().replace ("\"", "");
             if (ancestors.add (i))
             {
                 MNode parent = AppData.models.child (i);
@@ -322,7 +322,7 @@ public class NodePart extends NodeContainer
             line = line.replace (")", "");
             for (String p : line.split (","))
             {
-                p = p.replace ("\"", "").trim ();
+                p = p.trim ().replace ("\"", "");
                 u.classes.add (p);
             }
             if (u.classes.size () > 0) unsatisfiedConnections.add (u);
