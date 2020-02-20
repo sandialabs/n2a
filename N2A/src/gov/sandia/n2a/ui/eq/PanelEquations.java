@@ -829,6 +829,41 @@ public class PanelEquations extends JPanel
         }
     }
 
+    public void updateDoc (String oldKey, String newKey)
+    {
+        String key = "";
+        if (record != null) key = record.key ();
+
+        boolean contentOnly = oldKey.equals (newKey);
+        if (key.equals (newKey))
+        {
+            if (contentOnly)
+            {
+                record = null;  // Force rebuild of display
+                load (AppData.models.child (newKey));
+            }
+            else
+            {
+                checkVisible ();
+            }
+        }
+        if (contentOnly) return;
+
+        MNode oldDoc = AppData.models.child (oldKey);
+        if (oldDoc == null)  // deleted
+        {
+            checkVisible ();
+        }
+        else  // oldDoc has changed identity
+        {
+            if (key.equals (oldKey))
+            {
+                record = null;
+                load (oldDoc);
+            }
+        }
+    }
+
     public void saveFocus ()
     {
         if (root == null) return;

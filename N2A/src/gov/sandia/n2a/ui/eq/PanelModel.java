@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -243,41 +243,7 @@ public class PanelModel extends JPanel implements MNodeListener
     {
         panelMRU.updateDoc (oldKey, newKey);
         panelSearch.updateDoc (oldKey, newKey);
-
-        String key = "";
-        MNode record = panelEquations.record;
-        if (record != null) key = record.key ();
-
-        boolean contentOnly = oldKey.equals (newKey);
-        if (key.equals (newKey))
-        {
-            if (contentOnly)
-            {
-                panelEquations.record = null;  // Force rebuild of display
-                panelEquations.load (AppData.models.child (newKey));
-            }
-            else
-            {
-                panelEquations.checkVisible ();
-            }
-        }
-        if (contentOnly) return;
-
-        MNode oldDoc = AppData.models.child (oldKey);
-        if (oldDoc == null)  // deleted
-        {
-            panelMRU.removeDoc (oldKey);
-            panelSearch.removeDoc (oldKey);
-            panelEquations.checkVisible ();
-        }
-        else  // oldDoc has changed identity
-        {
-            if (key.equals (oldKey))
-            {
-                panelEquations.record = null;
-                panelEquations.load (oldDoc);
-            }
-        }
+        panelEquations.updateDoc (oldKey, newKey);
     }
 
     public static void importFile (Path path)

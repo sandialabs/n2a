@@ -197,16 +197,41 @@ public class PanelMRU extends JPanel
         }
     }
 
+    /**
+        Four things can happen when a childChanged() message arrives:
+        1) The underlying content of the record has changed;
+        2) The key for the document has changed;
+        3) An existing document has been exposed under the old key;
+        4) An existing document has been hidden under the new key.
+        What is the right response to all this?
+        #1 -- Repaint, in case the record is coming from a different repo, but otherwise don't worry about identity.
+        #2 -- Replace the current key with the new one.
+        #3 -- No need to add to list, since the exposed doc isn't necessarily being used.
+        #4 -- Get rid of the existing item in the list, since it will share the same key as the renamed document.
+    **/
     public void updateDoc (String oldKey, String newKey)
     {
+        if (oldKey.equals (newKey))
+        {
+            list.repaint ();  // A bit lazy, but gets the job done.
+            return;
+        }
+
         int count = model.size ();
         for (int i = 0; i < count; i++)
         {
-            if (model.get (i).equals (oldKey))
+            String key = model.get (i);
+            if (key.equals (newKey))
+            {
+                model.remove (i--);
+                count--;
+            }
+            else if (key.equals (oldKey))
             {
                 model.setElementAt (newKey, i);  // Force repaint of the associated row.
             }
         }
+        saveMRU ();
     }
 
     public void insertDoc (MNode doc)

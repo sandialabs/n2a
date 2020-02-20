@@ -514,6 +514,20 @@ public class PanelSearch extends JPanel
         synchronized (connectors) {connectors.remove (key);}
     }
 
+    /**
+        Four things can happen when a childChanged() message arrives:
+        1) The underlying content of the record has changed;
+        2) The key for the document has changed;
+        3) An existing document has been exposed under the old key;
+        4) An existing document has been hidden under the new key.
+        What is the right response to all this?
+        #1 -- Re-insert doc, since it may have entirely different categories now. Update connector index.
+        #2 -- Replace the current key with the new one.
+        #3 -- Re-insert the doc under the old key, since it may have entirely different categories. Update connector index.
+        #4 -- Re-insert the doc under the new key, since it may have entirely different categories. Update connector index.
+        It seems simplest just to do a fresh search while preserving focus. Also necessary to update connect index
+        under both old and new keys.
+    **/
     public void updateDoc (String oldKey, String newKey)
     {
         MNode oldDoc = AppData.models.child (oldKey);
@@ -529,12 +543,18 @@ public class PanelSearch extends JPanel
             if (                          newConnector.hasEndpoints ()) connectors.put (newKey, newConnector);
         }
 
-        if (oldKey.equals (newKey)) return;
-        root.replaceDoc (oldKey, newKey, model);
         if (lastSelection != null)
         {
             int last = lastSelection.size () - 1;
             if (lastSelection.get (last).equals (oldKey)) lastSelection.set (last, newKey);
+        }
+        if (oldDoc == null  &&  ! AppData.models.isHiding (newKey))  // Simple name change (no hiding or unhiding)
+        {
+            root.replaceDoc (oldKey, newKey, model);
+        }
+        else  // General case: rebuild the entire tree.
+        {
+            search ();
         }
     }
 
@@ -664,13 +684,14 @@ public class PanelSearch extends JPanel
                             if (c != null) tree.expandPath (new TreePath (c.getPath ()));
                         }
 
-                        // Scroll to most recent selection. However, don't actually select it, since tree does not currently have focus.
+                        // Scroll to most recent selection.
                         NodeBase n = nodeFor (lastSelection);
                         if (n != null)
                         {
                             TreePath path = new TreePath (n.getPath ());
                             tree.expandPath (path);
                             tree.scrollPathToVisible (path);
+                            if (tree.isFocusOwner ()) tree.setSelectionPath (path);
                         }
                     }
                 }

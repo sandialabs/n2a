@@ -84,6 +84,17 @@ public class MCombo extends MNode implements MNodeListener
         return false;
     }
 
+    /**
+        Determine if there is more than one container that has a child with the same key.
+        If so, some document is being hidden by another.
+    **/
+    public synchronized boolean isHiding (String key)
+    {
+        int count = 0;
+        for (MNode c : containers) if (c.child (key) != null) count++;
+        return count > 1;
+    }
+
     public synchronized MNode containerFor (String key)
     {
         return children.get (key);
