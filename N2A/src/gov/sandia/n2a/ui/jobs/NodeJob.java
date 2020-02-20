@@ -369,7 +369,11 @@ public class NodeJob extends NodeBase
                 {
                     DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
                     model.nodeStructureChanged (NodeJob.this);
-                    if (selectedPath != null) tree.setSelectionPath (selectedPath);
+                    if (selectedPath != null)
+                    {
+                        tree.setSelectionPath (selectedPath);
+                        tree.scrollPathToVisible (selectedPath);
+                    }
                 }
             };
             if (EventQueue.isDispatchThread ()) update.run ();

@@ -175,7 +175,12 @@ public class PanelRun extends JPanel
                             // then we want to retain that selection.
                             int row = tree.getLeadSelectionRow ();
                             model.nodeStructureChanged (root);
-                            if (model.getChildCount (root) > 0) tree.setSelectionRow (Math.max (0, row));
+                            if (model.getChildCount (root) > 0)
+                            {
+                                row = Math.max (0, row);
+                                tree.setSelectionRow (row);
+                                tree.scrollRowToVisible (row);
+                            }
                         }
                     });
 
@@ -685,7 +690,7 @@ public class PanelRun extends JPanel
         if (nextSelection == null) nextSelection = (NodeBase) firstSelection.getPreviousSibling ();
         if (nextSelection == null)
         {
-            nextSelection = (NodeBase) firstSelection.getParent ();
+            nextSelection = (NodeBase) firstSelection.getParent ();  // could be root
             nextSelectionIsParent = true;
         }
 
@@ -732,14 +737,15 @@ public class PanelRun extends JPanel
             }.start ();
         }
 
-        if (nextSelectionIsParent)
+        if (nextSelectionIsParent  &&  nextSelection.getChildCount () > 0)
         {
-            if (nextSelection.getChildCount () > 0) tree.setSelectionPath (new TreePath (((NodeBase) nextSelection.getChildAt (0)).getPath ()));
-            else if (nextSelection != root)         tree.setSelectionPath (new TreePath (            nextSelection                .getPath ()));
+            nextSelection = (NodeBase) nextSelection.getChildAt (0);
         }
-        else
+        if (nextSelection != root)
         {
-            tree.setSelectionPath (new TreePath (nextSelection.getPath ()));
+            TreePath path = new TreePath (nextSelection.getPath ());
+            tree.setSelectionPath (path);
+            tree.scrollPathToVisible (path);
         }
 
         tree.repaint (treePane.getViewport ().getViewRect ());
@@ -752,6 +758,7 @@ public class PanelRun extends JPanel
         if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, we need to give the JTree a little extra kick to get started.
         tree.expandRow (0);
         tree.setSelectionRow (0);
+        tree.scrollRowToVisible (0);
         tree.requestFocusInWindow ();
 
         new Thread ("PanelRun Add New Run")
