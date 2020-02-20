@@ -375,7 +375,9 @@ public class Population extends Instance
                 e.item = p;
                 entries.add (e);
             }
-            NN.set (entries);
+            
+            if (entries.isEmpty ()) NN = null;  // This line is necessary because a population could drop to zero without ending simulation.
+            else                    NN.set (entries);
         }
 
         @SuppressWarnings("unchecked")
