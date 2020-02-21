@@ -105,7 +105,7 @@ public class PanelEquations extends JPanel
 
     protected PanelGraph               panelGraph;
     protected JPanel                   panelBreadcrumb;
-    public    BreadcrumbRenderer       breadcrumbRenderer     = new BreadcrumbRenderer ();
+    public    BreadcrumbRenderer       breadcrumbRenderer;
     protected boolean                  titleFocused           = true;
     public    PanelEquationGraph       panelEquationGraph;
     public    GraphParent              panelParent;
@@ -193,6 +193,7 @@ public class PanelEquations extends JPanel
                 Component comp = xfer.getComponent ();
                 if      (comp instanceof JTree             ) tree = (JTree)              comp;
                 else if (comp instanceof PanelEquationGraph) peg  = (PanelEquationGraph) comp;
+                else if (comp instanceof BreadcrumbRenderer) peg  = panelEquationGraph;  // There's only one, so should be same as case above.
                 else if (comp instanceof GraphNode.TitleRenderer)
                 {
                     gn = (GraphNode) comp.getParent ().getParent ();
@@ -435,6 +436,9 @@ public class PanelEquations extends JPanel
                 PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         };
+
+        // Need to wait until after transferHandler is constructed before creating breadcrumbRenderer, so that it can get a non-null reference.
+        breadcrumbRenderer = new BreadcrumbRenderer ();
 
         viewTree = AppData.state.getOrDefault ("graph", "PanelModel", "view").equals ("tree");
 
