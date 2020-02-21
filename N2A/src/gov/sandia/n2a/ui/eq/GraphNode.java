@@ -138,6 +138,12 @@ public class GraphNode extends JPanel
         return panelEquations.tree;
     }
 
+    public void takeFocusOnTitle ()
+    {
+        titleFocused = true;
+        takeFocus ();
+    }
+
     public void takeFocus ()
     {
         if (titleFocused)

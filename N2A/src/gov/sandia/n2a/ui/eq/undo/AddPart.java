@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -116,9 +116,18 @@ public class AddPart extends Undoable
         }
         else  // Just exposed an overridden node
         {
-            createdNode.build ();
+            createdNode.build ();  // Does not change the fake-root status of this node.
             parent.findConnections ();
             createdNode.filter (FilteredTreeModel.filterLevel);
+            if (graphParent)  // Need to update entire model under fake root.
+            {
+                PanelEquationTree subpet = createdNode.getTree ();
+                FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
+                submodel.nodeStructureChanged (createdNode);
+                subpet.animate ();
+                // Implicitly, the title of the node was focused when the part was deleted, so ensure it gets the focus back.
+                createdNode.graph.takeFocusOnTitle ();
+            }
         }
 
         if (! pe.viewTree) pe.resetBreadcrumbs ();
@@ -198,9 +207,19 @@ public class AddPart extends Undoable
 
         if (graphParent)
         {
-            if (addGraphNode) peg.addPart (createdNode);
+            if (addGraphNode)
+            {
+                peg.addPart (createdNode);
+            }
+            else  // Existing graph node; content needs to be restructured.
+            {
+                PanelEquationTree subpet = createdNode.getTree ();
+                FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
+                submodel.nodeStructureChanged (createdNode);
+                subpet.animate ();
+            }
             createdNode.hide = false;
-            createdNode.graph.takeFocus ();
+            createdNode.graph.takeFocusOnTitle ();
             peg.reconnect ();
             peg.repaint ();
         }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -83,37 +83,39 @@ public class ChangePart extends Undoable
         // Update GUI
 
         PanelEquations pe = PanelModel.instance.panelEquations;
-        PanelEquationTree pet = nodeBefore.getTree ();
+        boolean graphParent =  parent == pe.part  &&  ! pe.viewTree;
+        PanelEquationTree pet = graphParent ? null : parent.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
-        boolean graphParent =  parent == pe.part  &&  ! pe.viewTree;
         PanelEquationGraph peg = pe.panelEquationGraph;  // Only used if graphParent is true.
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
-        if (oldPart == null)
+        boolean addGraphNode = false;
+        if (oldPart == null)  // Only one node will remain when we are done.
         {
-            if (nodeAfter == null)
+            if (nodeAfter == null)  // This is a simple rename, with no restructuring. Keep nodeBefore.
             {
                 nodeAfter = nodeBefore;
                 nodeAfter.source = newPart;
                 if (graphParent) peg.updatePart (nodeAfter);
             }
-            else
+            else  // Use existing nodeAfter, so get rid of nodeBefore.
             {
                 if (model == null) FilteredTreeModel.removeNodeFromParentStatic (nodeBefore);
                 else               model.removeNodeFromParent (nodeBefore);
-                if (graphParent) peg.removePart (nodeAfter);
+                if (graphParent) peg.removePart (nodeBefore);
             }
         }
-        else
+        else  // Need two nodes
         {
-            if (nodeAfter == null)
+            if (nodeAfter == null)  // Need a node to hold the new part.
             {
                 int index = parent.getIndex (nodeBefore);
                 nodeAfter = new NodePart (newPart);
+                nodeAfter.hide = graphParent;
                 if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (nodeAfter, parent, index);
                 else               model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
-                if (graphParent) peg.addPart (nodeAfter);
+                addGraphNode = true;
             }
 
             nodeBefore.build ();
@@ -121,7 +123,17 @@ public class ChangePart extends Undoable
             nodeBefore.filter (FilteredTreeModel.filterLevel);
             if (nodeBefore.visible (FilteredTreeModel.filterLevel))
             {
-                if (model != null) model.nodeStructureChanged (nodeBefore);
+                if (graphParent)  // Need to update entire model under fake root.
+                {
+                    PanelEquationTree subpet = nodeBefore.getTree ();
+                    FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
+                    submodel.nodeStructureChanged (nodeBefore);
+                    subpet.animate ();
+                }
+                else if (model != null)
+                {
+                    model.nodeStructureChanged (nodeBefore);
+                }
             }
             else
             {
@@ -147,8 +159,22 @@ public class ChangePart extends Undoable
             pet.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
             pet.animate ();
         }
+
         if (graphParent)
         {
+            if (addGraphNode)
+            {
+                peg.addPart (nodeAfter);  // builds tree
+            }
+            else
+            {
+                PanelEquationTree subpet = nodeAfter.getTree ();
+                FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
+                submodel.nodeStructureChanged (nodeAfter);
+                subpet.animate ();
+            }
+            nodeAfter.hide = false;
+            nodeAfter.graph.takeFocusOnTitle ();
             peg.reconnect ();
             peg.repaint ();
         }

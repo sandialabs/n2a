@@ -792,8 +792,11 @@ public class PanelEquationTree extends JScrollPane
         if (setSelection  &&  ! selectTitle)
         {
             // make tree visible
-            if (gn == null) pe.panelParent.setOpen (true);
-            else            gn.setOpen (true);
+            if (! pe.viewTree)
+            {
+                if (gn == null) pe.panelParent.setOpen (true);
+                else            gn.setOpen (true);
+            }
             pet.tree.scrollPathToVisible (selectedPath);
         }
         if (lastChange == path.length)
