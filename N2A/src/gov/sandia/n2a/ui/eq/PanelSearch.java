@@ -1089,10 +1089,10 @@ public class PanelSearch extends JPanel
             Point center = null;
             if (count > 1)
             {
-                GraphPanel graphArea = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel;
+                GraphPanel graphPanel = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel;
                 center = new Point ();
-                center.x = Math.round (x / count) - graphArea.offset.x;
-                center.y = Math.round (y / count) - graphArea.offset.y;
+                center.x = Math.round (x / count) - graphPanel.offset.x;
+                center.y = Math.round (y / count) - graphPanel.offset.y;
             }
 
             // UI changes must be done on the EDT.

@@ -1,5 +1,5 @@
 /*
-Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -166,12 +166,15 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel.updateFilterLevel ();
     }
 
+    /**
+        Gives the coordinates of the center of the graph panel, in a form that is suitable for storing in a part.
+    **/
     public Point getCenter ()
     {
         Point     result = vp.getViewPosition ();
         Dimension extent = vp.getExtentSize ();
-        result.x += extent.width  / 2;
-        result.y += extent.height / 2;
+        result.x += extent.width  / 2 - graphPanel.offset.x;
+        result.y += extent.height / 2 - graphPanel.offset.y;
         return result;
     }
 
