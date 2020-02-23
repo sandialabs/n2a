@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -132,7 +132,6 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected RepoTableModel repoModel;
     protected GitTableModel  gitModel;
     protected JTable         gitTable;
-    protected JButton        buttonRevert;
     protected JLabel         labelStatus;
     protected JButton        buttonPull;
     protected JButton        buttonPush;
@@ -141,9 +140,10 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected JScrollPane    paneMessage;
     protected UndoManager    undoMessage;
     protected JEditorPane    paneProgress;
+    protected PanelDiff      panelDiff;
 
-    // The job of existingModels and existingReferences is to ensure that rebuild() does not create duplicate MDir instances.
-    // The goal is to maintain the guarantee of object identity.
+    // The job of existingModels and existingReferences is to ensure that rebuild() does not create
+    // duplicate MDir instances. The goal is to maintain the guarantee of object identity.
     // These two collections may grow to be larger than the set in use by AppData, but entries that
     // coincide with AppData entries must reference exactly the same MDir instance.
     protected Map<String,MNode> existingModels     = AppData.models    .getContainerMap ();
@@ -159,6 +159,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         setName ("Repositories");  // Necessary to fulfill Settings interface.
         JPanel panel = new JPanel ();
         setViewportView (panel);
+        getVerticalScrollBar ().setUnitIncrement (15);  // About one line of text. Typically, one "click" of the wheel does 3 steps, so about 45px or 3 lines of text.
 
         repoModel = new RepoTableModel ();
         repoTable = new RepoTable (repoModel);
@@ -337,7 +338,6 @@ public class SettingsRepo extends JScrollPane implements Settings
                 }
 
                 Component to = e.getComponent ();
-                if (to == gitTable) gitModel.refreshButtonRevert ();
                 if (to == fieldAuthor  ||  to == fieldMessage)
                 {
                     JViewport vp = getViewport ();
@@ -413,24 +413,20 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
         });
 
-
-        buttonRevert = new JButton (ImageUtil.getImage ("undo_edit.png"));
-        buttonRevert.setMargin (new Insets (2, 2, 2, 2));
-        buttonRevert.setFocusable (false);
-        buttonRevert.setEnabled (false);
-        buttonRevert.setToolTipText ("Revert Selected Document");
-        buttonRevert.addActionListener (new ActionListener ()
+        gitTable.getSelectionModel ().addListSelectionListener (new ListSelectionListener ()
         {
-            public void actionPerformed (ActionEvent e)
+            public void valueChanged (ListSelectionEvent e)
             {
-                gitModel.revert (gitTable.getSelectedRow ());
+                int row = gitTable.getSelectedRow ();
+                if (row >= 0) panelDiff.load (gitModel.current, gitModel.deltas.get (row));
             }
         });
+
 
         buttonPull = new JButton (ImageUtil.getImage ("pull.png"));
         buttonPull.setMargin (new Insets (2, 2, 2, 2));
         buttonPull.setFocusable (false);
-        buttonRevert.setEnabled (false);
+        buttonPull.setEnabled (false);
         buttonPull.setToolTipText ("Pull");
         buttonPull.addActionListener (new ActionListener ()
         {
@@ -443,7 +439,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         buttonPush = new JButton (ImageUtil.getImage ("push.png"));
         buttonPush.setMargin (new Insets (2, 2, 2, 2));
         buttonPush.setFocusable (false);
-        buttonRevert.setEnabled (false);
+        buttonPush.setEnabled (false);
         buttonPush.setToolTipText ("Push");
         buttonPush.addActionListener (new ActionListener ()
         {
@@ -501,12 +497,13 @@ public class SettingsRepo extends JScrollPane implements Settings
         CredentialsProvider.setDefault (new ChainingCredentialsProvider (new NetRCCredentialsProvider (), new CredentialCache (), new CredentialDialog ()));
 
 
+        panelDiff = new PanelDiff ();
+
+
         Lay.BLtg (panel,
             "N", Lay.BxL (
                 Lay.BL ("W", repoPanel),
                 Lay.WL ("L",
-                        buttonRevert,
-                        Box.createHorizontalStrut (15),
                         labelStatus,
                         buttonPull,
                         buttonPush,
@@ -527,7 +524,9 @@ public class SettingsRepo extends JScrollPane implements Settings
                             )
                         )
                     )
-                )
+                ),
+                Box.createVerticalStrut (10),
+                Lay.BL ("W", panelDiff)
             )
         );
     }
@@ -1149,6 +1148,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         public boolean untracked;
         public boolean ignore;
 
+        // These two members are used only for stashing.
         public MNode add;    // Changed and added nodes, relative to parent commit.
         public MNode remove; // Removed nodes relative to parent commit.
     }
@@ -1347,6 +1347,37 @@ public class SettingsRepo extends JScrollPane implements Settings
             for (String s : diff.getModified ())  addDelta (s, sorted);
             for (String s : diff.getMissing ())   addDelta (s, sorted).deleted = true;
             return new ArrayList<Delta> (sorted.values ());
+        }
+
+        /**
+            The object returned here does not maintain identity with objects served by AppData.
+            If changes are made via this object, the corresponding document in AppData must be reloaded.
+        **/
+        public MDoc getDocument (Delta delta)
+        {
+            Path baseDir = gitDir.getParent ();
+            return new MDoc (baseDir.resolve (delta.name));
+        }
+
+        public MNode getOriginal (Delta delta)
+        {
+            MNode result = new MVolatile ();
+            try
+            {
+                ObjectId commitId = gitRepo.resolve (head);
+                if (commitId == null) return result;
+                RevCommit commit = gitRepo.parseCommit (commitId);
+                RevTree tree = commit.getTree ();
+                TreeWalk treeWalk = TreeWalk.forPath (gitRepo, delta.name, tree);
+                if (treeWalk == null) return result;
+
+                ObjectId objectId = treeWalk.getObjectId (0);
+                ObjectLoader loader = gitRepo.open (objectId);
+                ObjectStream stream = loader.openStream ();
+                Schema.readAll (result, new InputStreamReader (stream));
+            }
+            catch (Exception e) {}
+            return result;
         }
 
         public List<Delta> createStashInternal ()
@@ -1776,13 +1807,13 @@ public class SettingsRepo extends JScrollPane implements Settings
                 current.message  = fieldMessage.getText ();
             }
 
+            panelDiff.clear ();
             undoMessage.discardAllEdits ();
             if (repoIndex < 0  ||  repoIndex >= repoModel.gitRepos.size ())
             {
                 current = null;
                 repo = null;
                 deltas.clear ();
-                buttonRevert.setEnabled (false);
                 fieldAuthor .setText ("");
                 fieldMessage.setText ("");
                 return;
@@ -1818,13 +1849,6 @@ public class SettingsRepo extends JScrollPane implements Settings
             if (column < 0) column = 1;
             if (row >= deltas.size ()) row = deltas.size () - 1;
             if (row >= 0) gitTable.changeSelection (row, column, false, false);
-
-            buttonRevert.setEnabled (row >= 0);
-        }
-
-        public void refreshButtonRevert ()
-        {
-            buttonRevert.setEnabled (! deltas.isEmpty ()  &&  gitTable.getSelectedRow () >= 0);
         }
 
         public void refreshDiff ()
