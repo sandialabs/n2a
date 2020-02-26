@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -61,10 +61,10 @@ public class MVolatile extends MNode
         return result;
     }
 
-	protected synchronized MNode getChild (String index)
+	protected synchronized MNode getChild (String key)
     {
         if (children == null) return null;
-        return children.get (index);
+        return children.get (key);
     }
 
 	public synchronized void clear ()
@@ -72,10 +72,10 @@ public class MVolatile extends MNode
 	    if (children != null) children.clear ();
 	}
 
-    protected synchronized void clearChild (String index)
+    protected synchronized void clearChild (String key)
     {
         if (children == null) return;
-        children.remove (index);
+        children.remove (key);
     }
 
 	public synchronized int size ()
@@ -95,18 +95,18 @@ public class MVolatile extends MNode
         return value.toString ();
     }
 
-    public synchronized Object getOrDefaultObject (Object defaultValue, Object... indices)
+    public synchronized Object getOrDefaultObject (Object defaultValue, Object... keys)
     {
-        String[] stringIndices = new String[indices.length];
-        for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
-        MVolatile c = (MVolatile) child (stringIndices);
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) stringKeys[i] = keys[i].toString ();
+        MVolatile c = (MVolatile) child (stringKeys);
         if (c == null  ||  c.value == null) return defaultValue;
         return c.value;
     }
 
-    public synchronized Object getObject (Object... indices)
+    public synchronized Object getObject (Object... keys)
     {
-        return getOrDefaultObject (null, indices);
+        return getOrDefaultObject (null, keys);
     }
 
     public synchronized void set (String value)
@@ -114,14 +114,14 @@ public class MVolatile extends MNode
         this.value = value;
     }
 
-    public synchronized MNode set (String value, String index)
+    public synchronized MNode set (String value, String key)
     {
         if (children == null) children = new TreeMap<String,MNode> (comparator);
-        MNode result = children.get (index);
+        MNode result = children.get (key);
         if (result == null)
         {
-            result = new MVolatile (value, index, this);
-            children.put (index, result);
+            result = new MVolatile (value, key, this);
+            children.put (key, result);
             return result;
         }
         result.set (value);
@@ -131,25 +131,25 @@ public class MVolatile extends MNode
     /**
         Store the value as an Object, rather than converting to String.
     **/
-    public synchronized MNode setObject (Object value, Object... indices)
+    public synchronized MNode setObject (Object value, Object... keys)
     {
-        String[] stringIndices = new String[indices.length];
-        for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
-        MVolatile result = (MVolatile) childOrCreate (stringIndices);
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) stringKeys[i] = keys[i].toString ();
+        MVolatile result = (MVolatile) childOrCreate (stringKeys);
         result.value = value;
         return result;
     }
 
-    public synchronized void move (String fromIndex, String toIndex)
+    public synchronized void move (String fromKey, String toKey)
     {
         if (children == null) children = new TreeMap<String,MNode> (comparator);
-        MNode source = children.get (fromIndex);
-        children.remove (toIndex);
-        children.remove (fromIndex);
+        MNode source = children.get (fromKey);
+        children.remove (toKey);
+        children.remove (fromKey);
         if (source != null)
         {
-            ((MVolatile) source).name = toIndex;  // If this cast ceases to be a safe assumption, then the M hierarchy needs re-design.
-            children.put (toIndex, source);
+            ((MVolatile) source).name = toKey;  // If this cast ceases to be a safe assumption, then the M hierarchy needs re-design.
+            children.put (toKey, source);
         }
     }
 

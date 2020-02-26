@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -53,9 +53,9 @@ public class MPersistent extends MVolatile
         markChanged ();
     }
 
-    protected synchronized void clearChild (String index)
+    protected synchronized void clearChild (String key)
     {
-        super.clearChild (index);
+        super.clearChild (key);
         markChanged ();
     }
 
@@ -79,33 +79,33 @@ public class MPersistent extends MVolatile
         }
     }
 
-    public synchronized MNode set (String value, String index)
+    public synchronized MNode set (String value, String key)
     {
         if (children == null) children = new TreeMap<String,MNode> (comparator);
-        MNode result = children.get (index);
+        MNode result = children.get (key);
         if (result == null)
         {
             markChanged ();
-            result = new MPersistent (this, index, value);
-            children.put (index, result);
+            result = new MPersistent (this, key, value);
+            children.put (key, result);
             return result;
         }
         result.set (value);
         return result;
     }
 
-    public synchronized void move (String fromIndex, String toIndex)
+    public synchronized void move (String fromKey, String toKey)
     {
-        if (toIndex.equals (fromIndex)) return;
+        if (toKey.equals (fromKey)) return;
         if (children == null) return;  // Nothing to move
-        MNode source = children.get (fromIndex);
-        children.remove (toIndex);
-        children.remove (fromIndex);
+        MNode source = children.get (fromKey);
+        children.remove (toKey);
+        children.remove (fromKey);
         if (source != null)
         {
-            children.put (toIndex, source);
+            children.put (toKey, source);
             MPersistent p = (MPersistent) source;  // We can safely assume any child is MPersistent.
-            p.name = toIndex;
+            p.name = toKey;
             p.markChanged ();
         }
         markChanged ();

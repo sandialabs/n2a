@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -37,10 +37,10 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Returns the child indicated by the given index, or null if it doesn't exist.
+        Returns the child indicated by the given key, or null if it doesn't exist.
         This function is separate from child(String...) for ease of implementing subclasses.
     **/
-    protected MNode getChild (String index)
+    protected MNode getChild (String key)
     {
         return null;
     }
@@ -48,16 +48,16 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     /**
         Returns a child node from arbitrary depth, or null if any part of the path doesn't exist.
     **/
-    public synchronized MNode child (String... indices)
+    public synchronized MNode child (String... keys)
     {
         MNode result = this;
-        for (int i = 0; i < indices.length; i++)
+        for (int i = 0; i < keys.length; i++)
         {
-            MNode c = result.getChild (indices[i]);
+            MNode c = result.getChild (keys[i]);
             if (c == null) return null;
             result = c;
         }
-        return result;  // If no indices are specified, we return this node.
+        return result;  // If no keys are specified, we return this node.
     }
 
     /**
@@ -66,13 +66,13 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         The benefit of getting back a node rather than a value is ease of access
         to a list stored as children of the node.
     **/
-    public synchronized MNode childOrCreate (String... indices)
+    public synchronized MNode childOrCreate (String... keys)
     {
         MNode result = this;
-        for (int i = 0; i < indices.length; i++)
+        for (int i = 0; i < keys.length; i++)
         {
-            MNode c = result.getChild (indices[i]);
-            if (c == null) c = result.set (null, indices[i]);
+            MNode c = result.getChild (keys[i]);
+            if (c == null) c = result.set (null, keys[i]);
             result = c;
         }
         return result;
@@ -87,33 +87,33 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Removes child with the given index, if it exists.
+        Removes child with the given key, if it exists.
         This function is separate from clear(String...) for ease of implementing subclasses.
     **/
-    protected void clearChild (String index)
+    protected void clearChild (String key)
     {
     }
 
     /**
         Removes child with arbitrary depth.
-        If no index is specified, then removes all children of this node.
+        If no key is specified, then removes all children of this node.
     **/
-    public synchronized void clear (String... indices)
+    public synchronized void clear (String... keys)
     {
-        if (indices.length == 0)
+        if (keys.length == 0)
         {
             clear ();
             return;
         }
 
         MNode c = this;
-        int last = indices.length - 1;
+        int last = keys.length - 1;
         for (int i = 0; i < last; i++)
         {
-            c = c.getChild (indices[i]);
+            c = c.getChild (keys[i]);
             if (c == null) return;  // Nothing to clear
         }
-        c.clearChild (indices[last]);
+        c.clearChild (keys[last]);
     }
 
     /**
@@ -146,26 +146,26 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     /**
         Digs down tree as far as possible to retrieve value; returns "" if node does not exist.
     **/
-    public String get (String... indices)
+    public String get (String... keys)
     {
-        MNode c = child (indices);
+        MNode c = child (keys);
         if (c == null) return "";
         return c.get ();
     }
 
-    public static String[] toStrings (Object... indices)
+    public static String[] toStrings (Object... keys)
     {
-        String[] result = new String[indices.length];
-        for (int i = 0; i < indices.length; i++) result[i] = indices[i].toString ();
+        String[] result = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) result[i] = keys[i].toString ();
         return result;
     }
 
     /**
         Digs down tree as far as possible to retrieve value; returns "" if node does not exist.
     **/
-    public String get (Object... indices)
+    public String get (Object... keys)
     {
-        return get (toStrings (indices));
+        return get (toStrings (keys));
     }
 
     /**
@@ -180,31 +180,31 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     /**
         Digs down tree as far as possible to retrieve value; returns given defaultValue if node does not exist or is set to "".
     **/
-    public String getOrDefault (String defaultValue, String... indices)
+    public String getOrDefault (String defaultValue, String... keys)
     {
-        String value = get (indices);
+        String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
         return value;
     }
 
-    public String getOrDefault (String defaultValue, Object... indices)
+    public String getOrDefault (String defaultValue, Object... keys)
     {
-        String value = get (indices);
+        String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
         return value;
     }
 
-    public boolean getOrDefault (boolean defaultValue, Object... indices)
+    public boolean getOrDefault (boolean defaultValue, Object... keys)
     {
-        String value = get (indices);
+        String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
         if (value.trim ().equals ("1")) return true;
         return Boolean.parseBoolean (value);
     }
 
-    public int getOrDefault (int defaultValue, Object... indices)
+    public int getOrDefault (int defaultValue, Object... keys)
     {
-        String value = get (indices);
+        String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
         try
         {
@@ -224,9 +224,9 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
-    public long getOrDefault (long defaultValue, Object... indices)
+    public long getOrDefault (long defaultValue, Object... keys)
     {
-        String value = get (indices);
+        String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
         try
         {
@@ -244,9 +244,9 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
-    public double getOrDefault (double defaultValue, Object... indices)
+    public double getOrDefault (double defaultValue, Object... keys)
     {
-        String value = get (indices);
+        String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
         try
         {
@@ -265,9 +265,9 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         See getFlag() for a different way to interpret booleans. The key difference is
         that a boolean defaults to false.
     **/
-    public boolean getBoolean (Object... indices)
+    public boolean getBoolean (Object... keys)
     {
-        return getOrDefault (false, indices);
+        return getOrDefault (false, keys);
     }
 
     /**
@@ -277,26 +277,26 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         See getBoolean() for a different way to interpret booleans. The key difference is
         that a flag defaults to true, so it can indicate something by merely existing, without a value.
     **/
-    public boolean getFlag (Object... indices)
+    public boolean getFlag (Object... keys)
     {
-        MNode c = child (toStrings (indices));
+        MNode c = child (toStrings (keys));
         if (c == null) return false;
         return c.getOrDefault (true);
     }
 
-    public int getInt (Object... indices)
+    public int getInt (Object... keys)
     {
-        return getOrDefault (0, indices);
+        return getOrDefault (0, keys);
     }
 
-    public long getLong (Object... indices)
+    public long getLong (Object... keys)
     {
-        return getOrDefault (0l, indices);
+        return getOrDefault (0l, keys);
     }
 
-    public double getDouble (Object... indices)
+    public double getDouble (Object... keys)
     {
-        return getOrDefault (0.0, indices);
+        return getOrDefault (0.0, keys);
     }
 
     /**
@@ -309,12 +309,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Sets value of child node specified by index, effectively with a call to child.set(String).
+        Sets value of child node specified by key, effectively with a call to child.set(String).
         Creates child node if it doesn't already exist.
         Should be overridden by a subclass.
         @return The child node on which the value was set.
     **/
-    public MNode set (String value, String index)
+    public MNode set (String value, String key)
     {
         return new MNode ();  // A completely useless object.
     }
@@ -322,16 +322,16 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     /**
         Creates all children necessary to set value
     **/
-    public synchronized MNode set (String value, String... indices)
+    public synchronized MNode set (String value, String... keys)
     {
-        MNode result = childOrCreate (indices);
+        MNode result = childOrCreate (keys);
         result.set (value);
         return result;
     }
 
-    public synchronized MNode set (Object value, String... indices)
+    public synchronized MNode set (Object value, String... keys)
     {
-        MNode result = childOrCreate (indices);
+        MNode result = childOrCreate (keys);
         if (value instanceof MNode)
         {
             result.clear ();
@@ -347,11 +347,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return result;
     }
 
-    public synchronized MNode set (Object value, Object... indices)
+    public synchronized MNode set (Object value, Object... keys)
     {
-        String[] stringIndices = new String[indices.length];
-        for (int i = 0; i < indices.length; i++) stringIndices[i] = indices[i].toString ();
-        return set (value, stringIndices);
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) stringKeys[i] = keys[i].toString ();
+        return set (value, stringKeys);
     }
 
     /**
@@ -364,9 +364,9 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         if (that.data ()) set (that.get ());
         for (MNode thatChild : that)
         {
-            String index = thatChild.key ();
-            MNode c = getChild (index);
-            if (c == null) c = set (null, index);  // ensure a target child node exists
+            String key = thatChild.key ();
+            MNode c = getChild (key);
+            if (c == null) c = set (null, key);  // ensure a target child node exists
             c.merge (thatChild);
         }
     }
@@ -380,9 +380,9 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         if (! data ()  &&  that.data ()) set (that.get ());
         for (MNode thatChild : that)
         {
-            String index = thatChild.key ();
-            MNode c = getChild (index);
-            if (c == null) set (thatChild, index);
+            String key = thatChild.key ();
+            MNode c = getChild (key);
+            if (c == null) set (thatChild, key);
             else           c.mergeUnder (thatChild);
         }
     }
@@ -480,16 +480,16 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         An entry will no longer exist at the source key.
         If the source does not exist before the move, then neither node will exist afterward.
     **/
-    public synchronized void move (String fromIndex, String toIndex)
+    public synchronized void move (String fromKey, String toKey)
     {
-        if (toIndex.equals (fromIndex)) return;
-        clearChild (toIndex);
-        MNode source = getChild (fromIndex);
+        if (toKey.equals (fromKey)) return;
+        clearChild (toKey);
+        MNode source = getChild (fromKey);
         if (source != null)
         {
-            MNode destination = set (null, toIndex);
+            MNode destination = set (null, toKey);
             destination.merge (source);
-            clearChild (fromIndex);
+            clearChild (fromKey);
         }
     }
 

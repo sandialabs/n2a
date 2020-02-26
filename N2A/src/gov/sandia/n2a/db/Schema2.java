@@ -94,7 +94,7 @@ public class Schema2 extends Schema1
         String key = node.key ();
         if (key.startsWith ("\"")  ||  key.contains (":"))
         {
-            key = "\"" + key.replace ("\"", "\"\"") + "\"";  // Using quote as its own escape, we avoid the need to escape a second code (such as both quote and backslash). This follows YAMLs example.
+            key = "\"" + key.replace ("\"", "\"\"") + "\"";  // Using quote as its own escape, we avoid the need to escape a second code (such as both quote and backslash). This follows the example of YAML.
         }
 
         if (! node.data ())

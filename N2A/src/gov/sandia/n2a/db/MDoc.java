@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -36,9 +36,9 @@ public class MDoc extends MPersistent
         In this case, the key contains the file name in the dir, and the full path is constructed
         when needed using information from the parent.
     **/
-    public MDoc (MDir parent, String index)
+    public MDoc (MDir parent, String key)
     {
-        this (parent, index, null);
+        this (parent, key, null);
     }
 
     /**
@@ -106,16 +106,16 @@ public class MDoc extends MPersistent
         else parent.clear (name);
     }
 
-    protected synchronized MNode getChild (String index)
+    protected synchronized MNode getChild (String key)
     {
         if (children == null) load ();  // redundant with the guard in load(), but should save time in the common case that file is already loaded
-        return children.get (index);
+        return children.get (key);
     }
 
-    protected synchronized void clearChild (String index)
+    protected synchronized void clearChild (String key)
     {
         if (children == null) load ();
-        super.clearChild (index);
+        super.clearChild (key);
     }
 
     public synchronized int size ()
@@ -144,17 +144,17 @@ public class MDoc extends MPersistent
         }
     }
 
-    public synchronized MNode set (String value, String index)
+    public synchronized MNode set (String value, String key)
     {
         if (children == null) load ();
-        return super.set (value, index);
+        return super.set (value, key);
     }
 
-    public synchronized void move (String fromIndex, String toIndex)
+    public synchronized void move (String fromKey, String toKey)
     {
-        if (toIndex.equals (fromIndex)) return;
+        if (toKey.equals (fromKey)) return;
         if (children == null) load ();
-        super.move (fromIndex, toIndex);
+        super.move (fromKey, toKey);
     }
 
     public synchronized Iterator<MNode> iterator ()
