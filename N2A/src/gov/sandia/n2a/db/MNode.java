@@ -334,14 +334,15 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         MNode result = childOrCreate (keys);
         if (value instanceof MNode)
         {
-            result.clear ();
+            result.clear ();   // get rid of all children
+            result.set (null); // ensure that if value node is undefined, result node will also be undefined
             result.merge ((MNode) value);
         }
         else
         {
-            String stringValue;
+            String stringValue = null;
             if (value instanceof Boolean) stringValue = (Boolean) value ? "1" : "0";
-            else                          stringValue = value.toString ();
+            else if (value != null)       stringValue = value.toString ();
             result.set (stringValue);
         }
         return result;

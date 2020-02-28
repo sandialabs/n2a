@@ -6,12 +6,12 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.settings;
 
+import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.ui.UndoManager;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.settings.SettingsRepo.Delta;
 import gov.sandia.n2a.ui.settings.SettingsRepo.GitWrapper;
-
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.event.ActionEvent;
@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
-import javax.swing.Icon;
 import javax.swing.InputMap;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
@@ -31,23 +30,26 @@ import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
+import javax.swing.undo.CannotUndoException;
 
 
 @SuppressWarnings("serial")
 public class PanelDiff extends JTree
 {
+    protected SettingsRepo     container;
     protected NodeDiff         root        = new NodeDiff ();
     protected DefaultTreeModel model       = new DefaultTreeModel (root);
     protected DiffRenderer     renderer    = new DiffRenderer ();
-    public    UndoManager      undoManager = new UndoManager ();
-    protected GitWrapper       lastGit;
     protected Delta            lastDelta;
     protected List<String>     lastSelection;
 
-    public PanelDiff ()
+    public PanelDiff (SettingsRepo container)
     {
+        this.container = container;
+
         setModel (model);
         setRootVisible (false);
+        setShowsRootHandles (true);
         setExpandsSelectedPaths (true);
         setScrollsOnExpand (true);
         getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection.
@@ -63,8 +65,34 @@ public class PanelDiff extends JTree
         {
             public void actionPerformed (ActionEvent e)
             {
+                if (lastDelta.deleted)  // Force document to be restored in full, rather than allowing targeted undelete.
+                {
+                    container.undoRevert.add (container.new RevertDelta (lastDelta));
+                    return;
+                }
+
                 NodeDiff n = (NodeDiff) getLastSelectedPathComponent ();
-                if (n != null) undoManager.add (new DeleteDiff (n));
+                if (n == null  ||  n == root) return;
+
+                // Find nearest ancestor with an actual difference other than this node.
+                NodeDiff p = (NodeDiff) n.getParent ();
+                while (true)
+                {
+                    if (p.getChildCount () > 1  ||  p.A == null  ||  p.B == null  ||  p.A.data () != p.B.data ()  ||  ! p.A.get().equals (p.B.get ())) break;
+                    NodeDiff nextP = (NodeDiff) p.getParent ();
+                    if (nextP == null) break;
+                    n = p;
+                    p = nextP;
+                }
+
+                // Guard against deleting entire document. Such changes must be relegated to RevertDelta.
+                if (lastDelta.untracked  &&  p == root)
+                {
+                    container.undoRevert.add (container.new RevertDelta (lastDelta));
+                    return;
+                }
+
+                if (n != null) container.undoRevert.add (new RevertDiff (n));
             }
         });
 
@@ -82,15 +110,15 @@ public class PanelDiff extends JTree
         });
     }
 
-    public void load (GitWrapper git, Delta delta)
+    public void load (Delta delta)
     {
-        if (git == lastGit  &&  lastDelta != null  &&  delta.name.equals (lastDelta.name)) return;
-        lastGit       = git;
+        if (lastDelta != null  &&  delta.equals (lastDelta)) return;
         lastDelta     = delta;
         lastSelection = null;
-        MNode A = git.getOriginal (delta);
-        MNode B = git.getDocument (delta);
-        NodeDiff root = new NodeDiff ();
+        MNode A = delta.getOriginal ();
+        MNode B = delta.getDocument ();
+        root = new NodeDiff ();
+        root.key = delta.name;
         root.buildA (A);
         root.buildB (B);
         model.setRoot (root);  // Updates tree
@@ -102,7 +130,6 @@ public class PanelDiff extends JTree
     **/
     public void clear ()
     {
-        lastGit       = null;
         lastDelta     = null;
         lastSelection = null;
         root = new NodeDiff ();
@@ -225,7 +252,8 @@ public class PanelDiff extends JTree
         public void buildA (MNode A)
         {
             this.A = A;
-            key = A.key ();
+            if (A == null) return;
+            if (key.isEmpty ()) key = A.key ();
             for (MNode c : A)
             {
                 NodeDiff n = new NodeDiff ();
@@ -242,9 +270,10 @@ public class PanelDiff extends JTree
         public void buildB (MNode B)
         {
             this.B = B;
+            if (B == null) return;
+            if (key.isEmpty ()) key = B.key ();
             if (A == null)
             {
-                key = B.key ();
                 for (MNode c : B)
                 {
                     NodeDiff n = new NodeDiff ();
@@ -263,13 +292,19 @@ public class PanelDiff extends JTree
                         add (n);
                     }
                     n.buildB (c);
-                    // TODO: this test does not take into account defined vs. undefined value
-                    if (n.getChildCount () == 0  &&  n.A != null  &&  n.A.get ().equals (n.B.get ()))
+                    if (n.getChildCount () == 0  &&  n.A != null  &&  n.A.data () == n.B.data ()  &&  n.A.get ().equals (n.B.get ()))
                     {
                         remove (n);
                     }
                 }
             }
+        }
+
+        public void expandAll ()
+        {
+            expandPath (new TreePath (getPath ()));
+            if (children == null) return;
+            for (Object o : children) ((NodeDiff) o).expandAll ();
         }
 
         public Color getColor (boolean selected)
@@ -278,14 +313,14 @@ public class PanelDiff extends JTree
             {
                 if (A == null) return renderer.colorSelectedB;
                 if (B == null) return renderer.colorSelectedA;
-                if (A.key ().equals (B.key ())  &&  A.get ().equals (B.get ())) return renderer.colorSelectedSame;
+                if (A.data () == B.data ()  &&  A.get ().equals (B.get ())) return renderer.colorSelectedSame;
                 return renderer.colorSelectedDiff;
             }
             else
             {
                 if (A == null) return renderer.colorB;
                 if (B == null) return renderer.colorA;
-                if (A.key ().equals (B.key ())  &&  A.get ().equals (B.get ())) return renderer.colorSame;
+                if (A.data () == B.data ()  &&  A.get ().equals (B.get ())) return renderer.colorSame;
                 return renderer.colorDiff;
             }
         }
@@ -294,15 +329,9 @@ public class PanelDiff extends JTree
         {
             List<String> result;
             NodeDiff parent = (NodeDiff) getParent ();
-            if (parent == null)
-            {
-                result = new ArrayList<String> ();  // Don't include root itself.
-            }
-            else
-            {
-                result = parent.getKeyPath ();
-                result.add (key);
-            }
+            if (parent == null) result = new ArrayList<String> ();
+            else                result = parent.getKeyPath ();
+            result.add (key);
             return result;
         }
 
@@ -324,13 +353,11 @@ public class PanelDiff extends JTree
                 userObject = key;
                 if (B != null)
                 {
-                    String value = B.get ();
-                    if (! value.isEmpty ()) userObject += " = " + value;
+                    if (B.data ()) userObject += " = " + B.get ();
                 }
                 else if (A != null)
                 {
-                    String value = A.get ();
-                    if (! value.isEmpty ()) userObject += " = " + value;
+                    if (A.data ()) userObject += " = " + A.get ();
                 }
             }
             return userObject.toString ();
@@ -348,27 +375,107 @@ public class PanelDiff extends JTree
         }
     }
 
-    public class DeleteDiff extends Undoable
+    public class RevertDiff extends Undoable
     {
-        protected List<String> path;   // to immediate container
+        protected GitWrapper   git;
+        protected List<String> path;   // To immediate container. Starts with name of document itself, so this can handle entire document differences.
+        protected String       name;   // Of node to be restored.
         protected int          index;  // where to insert among siblings
-        protected NodeDiff     saved;  // The portion of the tree that was removed. TODO: this needs more thought.
+        protected MNode        B;      // Snapshot of document tree. Could be null. Key is ignored in favor "name" member variable above.
 
-        public DeleteDiff (NodeDiff node)
+        public RevertDiff (NodeDiff node)
         {
-            NodeDiff parent = (NodeDiff) node.getParent ();
-            index           = parent.getIndex (node);
-            // TODO: capture portion of tree that is being removed.
+            git   = lastDelta.git;
+            NodeDiff p = (NodeDiff) node.getParent ();  // Assume that "node" is never root.
+            path  = p.getKeyPath ();
+            name  = node.key;
+            index = p.getIndex (node);
+            if (node.B != null)
+            {
+                B = new MVolatile ();
+                B.merge (node.B);
+            }
+        }
+
+        public NodeDiff restore (String[] keyArray)
+        {
+            // Select repository
+            int row = container.repoModel.gitRepos.indexOf (git);
+            if (row < 0) throw new CannotUndoException ();
+            if (container.repoTable.getSelectedRow () != row) container.repoTable.changeSelection (row, 3, false, false);
+
+            // Select document
+            // If revert results in complete removal of the Delta, then we should convert it to a RevertDelta instead.
+            // Thus, we should be able to assume a Delta always exists when executing a RevertDiff.
+            Delta delta = container.gitModel.deltaFor (path.get (0));
+            if (delta == null) throw new CannotUndoException ();
+            load (delta);
+
+            // Locate parent of changed node
+            NodeDiff p = root;
+            int i = 0;
+            for (String key : path.subList (1, path.size ()))
+            {
+                p = p.child (key);
+                if (p == null) throw new CannotUndoException ();
+                keyArray[i++] = key;
+            }
+            keyArray[i] = name;
+            return p;
         }
 
         public void undo ()
         {
             super.undo ();
+            String[] keyArray = new String[path.size ()];
+            NodeDiff p = restore (keyArray);
+
+            // Change document
+            // Document should always exist. If revert results in the complete erasure of the document, then it should be a RevertDelta instead.
+            // Likewise, if a revert causes the document to come into existence, then we force the change to affect the document as a whole.
+            // Thus, no need to delete document here as part of undo.
+            MDoc doc = (MDoc) root.B;
+            if (B == null) doc.clear (keyArray);  // Could leave behind empty parent nodes that didn't originally exist. This is probably a rare case, so don't worry about it for now.
+            else           doc.set (B, keyArray);
+            doc.save ();
+            lastDelta.notifyDir ();
+
+            // Rebuild subtree
+            // We assume that p has no child with key==name.
+            NodeDiff c = new NodeDiff ();
+            p.add (c);
+            if (root.A != null) c.buildA (root.A.child (keyArray));
+            c.buildB (doc.child (keyArray));
+
+            // Update display
+            model.nodeStructureChanged (p);
+            p.expandAll ();
+            TreePath tp = new TreePath (c.getPath ());
+            setSelectionPath (tp);
+            scrollPathToVisible (tp);
         }
 
         public void redo ()
         {
             super.redo ();
+            String[] keyArray = new String[path.size ()];
+            NodeDiff p = restore (keyArray);
+            NodeDiff c = p.child (name);  // must exist
+
+            // Change document B to match original A.
+            MDoc doc = (MDoc) root.B;
+            if (c.A == null) doc.clear (keyArray);
+            else             doc.set (c.A, keyArray);  // Automatically sets any missing parent keys in doc. They will be undefined nodes.
+            doc.save ();
+            lastDelta.notifyDir ();
+
+            // Erase NodeDiff subtree, including named node.
+            p.remove (c);
+            model.nodeStructureChanged (p);
+            p.expandAll ();
+            TreePath tp = new TreePath (p.getPath ());
+            setSelectionPath (tp);
+            scrollPathToVisible (tp);
         }
     }
 }
