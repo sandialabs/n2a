@@ -1,5 +1,5 @@
 /*
-Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -30,6 +30,8 @@ import java.awt.event.FocusListener;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
@@ -45,7 +47,6 @@ import java.util.Locale;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.Box;
-import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
 import javax.swing.InputMap;
 import javax.swing.JButton;
@@ -54,7 +55,7 @@ import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
-import javax.swing.JRadioButtonMenuItem;
+import javax.swing.JSplitPane;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
@@ -101,15 +102,22 @@ public class PanelEquations extends JPanel
     public NodePart root;
     public NodePart part;     // The node that contains the current graph. Can be root or a deeper node (via drill-down).
     public boolean  locked;
-    public boolean  viewTree; // Show old-style tree view, rather than graph view.
 
+    // Where does the equation tree for a node appear?
+    public static final int NODE   = 0;  // In the node itself
+    public static final int SIDE   = 1;  // In a panel to the right side
+    public static final int BOTTOM = 2;  // In a panel at the bottom
+    public int view = AppData.state.getOrDefault (NODE, "PanelModel", "view");
+
+    protected JSplitPane               split;
     protected PanelGraph               panelGraph;
     protected JPanel                   panelBreadcrumb;
     public    BreadcrumbRenderer       breadcrumbRenderer;
     protected boolean                  titleFocused           = true;
+    protected boolean                  parentSelected;
     public    PanelEquationGraph       panelEquationGraph;
     public    GraphParent              panelParent;
-    public    PanelEquationTree        panelEquationTree;  // To display root as a tree.
+    public    PanelEquationTree        panelEquationTree;  // For property-panel style display, this is the single tree for editing.
     protected PanelEquationTree        active;             // Tree which most recently received focus. Could be panelEquationTree or a GraphNode.panelEquations.
     protected TransferHandler          transferHandler;
     protected EquationTreeCellRenderer renderer               = new EquationTreeCellRenderer ();
@@ -131,16 +139,18 @@ public class PanelEquations extends JPanel
     protected JButton buttonImport;
 
     protected JPopupMenu menuPopup;
+    protected JPopupMenu menuView;
     protected JPopupMenu menuFilter;
-    protected long       menuFilterCanceledAt = 0;
+    protected long       menuCanceledAt = 0;
 
     protected static ImageIcon iconFilterRevoked = ImageUtil.getImage ("filterRevoked.png");
     protected static ImageIcon iconFilterAll     = ImageUtil.getImage ("filter.png");
     protected static ImageIcon iconFilterParam   = ImageUtil.getImage ("filterParam.png");
     protected static ImageIcon iconFilterLocal   = ImageUtil.getImage ("filterLocal.png");
 
-    protected static ImageIcon iconViewGraph = ImageUtil.getImage ("viewGraph.png");
-    protected static ImageIcon iconViewTree  = ImageUtil.getImage ("explore.gif");
+    protected static ImageIcon iconViewNode   = ImageUtil.getImage ("viewGraph.png");
+    protected static ImageIcon iconViewSide   = ImageUtil.getImage ("viewSide.png");
+    protected static ImageIcon iconViewBottom = ImageUtil.getImage ("viewBottom.png");
 
     protected static String noModel = "Select a model from the left, or click the New Model button above.";
 
@@ -197,7 +207,7 @@ public class PanelEquations extends JPanel
                 else if (comp instanceof GraphNode.TitleRenderer)
                 {
                     gn = (GraphNode) comp.getParent ().getParent ();
-                    if (gn.open) tree = gn.panelEquations.tree;
+                    if (gn.open) tree = gn.panelEquationTree.tree;
                     else         peg  = gn.container.panelEquationGraph;
                 }
 
@@ -289,7 +299,7 @@ public class PanelEquations extends JPanel
                 }
 
                 // Don't drop part directly on parent tree. Instead, deflect to graph panel.
-                if (tree == panelParent.panelEquations.tree  &&  schema.type.endsWith ("Part"))
+                if (tree == getParentEquationTree ().tree  &&  schema.type.endsWith ("Part"))
                 {
                     tree.repaint ();  // hide DnD target highlight
                     tree = null;
@@ -440,8 +450,6 @@ public class PanelEquations extends JPanel
         // Need to wait until after transferHandler is constructed before creating breadcrumbRenderer, so that it can get a non-null reference.
         breadcrumbRenderer = new BreadcrumbRenderer ();
 
-        viewTree = AppData.state.getOrDefault ("graph", "PanelModel", "view").equals ("tree");
-
         buttonAddModel = new JButton (ImageUtil.getImage ("document.png"));
         buttonAddModel.setMargin (new Insets (2, 2, 2, 2));
         buttonAddModel.setFocusable (false);
@@ -497,7 +505,15 @@ public class PanelEquations extends JPanel
         buttonWatch.setToolTipText ("Watch Variable");
         buttonWatch.addActionListener (listenerWatch);
 
-        buttonFilter = new JButton (ImageUtil.getImage ("filter.png"));
+        buttonFilter = new JButton ();
+        FilteredTreeModel.filterLevel = AppData.state.getOrDefault (FilteredTreeModel.PARAM, "PanelModel", "filter");
+        switch (FilteredTreeModel.filterLevel)
+        {
+            case FilteredTreeModel.REVOKED: buttonFilter.setIcon (iconFilterRevoked); break;
+            case FilteredTreeModel.ALL:     buttonFilter.setIcon (iconFilterAll);     break;
+            case FilteredTreeModel.PARAM:   buttonFilter.setIcon (iconFilterParam);   break;
+            case FilteredTreeModel.LOCAL:   buttonFilter.setIcon (iconFilterLocal);   break;
+        }
         buttonFilter.setMargin (new Insets (2, 2, 2, 2));
         buttonFilter.setFocusable (false);
         buttonFilter.setToolTipText ("Filter Equations");
@@ -505,30 +521,31 @@ public class PanelEquations extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (System.currentTimeMillis () - menuFilterCanceledAt > 500)  // A really ugly way to prevent the button from re-showing the menu if it was canceled by clicking the button.
+                if (System.currentTimeMillis () - menuCanceledAt > 500)  // A really ugly way to prevent the button from re-showing the menu if it was canceled by clicking the button.
                 {
                     menuFilter.show (buttonFilter, 0, buttonFilter.getHeight ());
                 }
             }
         });
 
-        if (viewTree)
+        buttonView = new JButton ();
+        switch (view)
         {
-            buttonView = new JButton (iconViewGraph);
-            buttonView.setToolTipText ("Edit Graph");
+            case SIDE:   buttonView.setIcon (iconViewSide);   break;
+            case BOTTOM: buttonView.setIcon (iconViewBottom); break;
+            default:     buttonView.setIcon (iconViewNode);
         }
-        else
-        {
-            buttonView = new JButton (iconViewTree);
-            buttonView.setToolTipText ("Edit Tree");
-        }
+        buttonView.setToolTipText ("View Equation Panel");
         buttonView.setMargin (new Insets (2, 2, 2, 2));
         buttonView.setFocusable (false);
         buttonView.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                setViewTree (! viewTree);
+                if (System.currentTimeMillis () - menuCanceledAt > 500)  // A really ugly way to prevent the button from re-showing the menu if it was canceled by clicking the button.
+                {
+                    menuView.show (buttonView, 0, buttonView.getHeight ());
+                }
             }
         });
 
@@ -549,20 +566,6 @@ public class PanelEquations extends JPanel
         buttonImport.setFocusable (false);
         buttonImport.setToolTipText ("Import");
         buttonImport.addActionListener (listenerImport);
-
-        panelBreadcrumb = Lay.BL ("C", breadcrumbRenderer);
-        panelBreadcrumb.setBorder (new RoundedTopBorder (5));
-        panelBreadcrumb.setOpaque (false);
-
-        panelParent        = new GraphParent (this);
-        panelEquationGraph = new PanelEquationGraph (this);
-
-        panelGraph = new PanelGraph ();
-        panelGraph.add (panelParent);
-        panelGraph.add (panelBreadcrumb,    BorderLayout.NORTH);
-        panelGraph.add (panelEquationGraph, BorderLayout.CENTER);
-
-        panelEquationTree = new PanelEquationTree (this, null, false);
 
         Lay.BLtg (this,
             "N", Lay.WL ("L",
@@ -587,10 +590,49 @@ public class PanelEquations extends JPanel
             )
         );
 
-        if (viewTree) add (panelEquationTree, BorderLayout.CENTER);
-        else          add (panelGraph,        BorderLayout.CENTER);
+        panelBreadcrumb = Lay.BL ("C", breadcrumbRenderer);
+        panelBreadcrumb.setBorder (new RoundedTopBorder (5));
+        panelBreadcrumb.setOpaque (false);
+
+        panelParent        = new GraphParent (this);  // Only one of {panelParent, panelEquationTree} will be used at any given time.
+        panelEquationGraph = new PanelEquationGraph (this);
+
+        panelGraph = new PanelGraph ();
+        panelGraph.add (panelParent);
+        panelGraph.add (panelBreadcrumb,    BorderLayout.NORTH);
+        panelGraph.add (panelEquationGraph, BorderLayout.CENTER);
+
+        panelEquationTree = new PanelEquationTree (this);
+
+        if (view == SIDE) split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT);
+        else              split = new JSplitPane (JSplitPane.VERTICAL_SPLIT);
+        split.setOneTouchExpandable(true);
+        split.setResizeWeight (1);
+        int dividerLocation = AppData.state.getInt ("PanelModel", "view", view);
+        if (dividerLocation != 0) split.setDividerLocation (dividerLocation);
+        split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
+        {
+            public void propertyChange (PropertyChangeEvent e)
+            {
+                Object o = e.getNewValue ();
+                if (o instanceof Integer) AppData.state.set (o, "PanelModel", "view", view);
+            }
+        });
+
+        if (view == NODE)
+        {
+            add (panelGraph, BorderLayout.CENTER);
+        }
+        else
+        {
+            split.add (panelGraph);         // first component, on left or top
+            split.add (panelEquationTree);  // second component, on right or bottom
+            add (split, BorderLayout.CENTER);
+        }
+
 
         // Context Menu
+
         JMenuItem itemAddPart = new JMenuItem ("Add Part", ImageUtil.getImage ("comp.gif"));
         itemAddPart.setActionCommand ("Part");
         itemAddPart.addActionListener (listenerAdd);
@@ -623,47 +665,27 @@ public class PanelEquations extends JPanel
         menuPopup.addSeparator ();
         menuPopup.add (itemWatch);
 
-        // Filter menu
 
-        JRadioButtonMenuItem itemFilterRevoked = new JRadioButtonMenuItem ("Revoked");
-        itemFilterRevoked.addActionListener (listenerFilter);
+        // View menu
 
-        JRadioButtonMenuItem itemFilterAll     = new JRadioButtonMenuItem ("All");
-        itemFilterAll    .addActionListener (listenerFilter);
+        JMenuItem itemViewNode = new JMenuItem ("Equations in Node", iconViewNode);
+        itemViewNode.setActionCommand ("Node");
+        itemViewNode.addActionListener (listenerView);
 
-        JRadioButtonMenuItem itemFilterPublic  = new JRadioButtonMenuItem ("Parameters");
-        itemFilterPublic .addActionListener (listenerFilter);
+        JMenuItem itemViewSide = new JMenuItem ("Equations on Side", iconViewSide);
+        itemViewSide.setActionCommand ("Side");
+        itemViewSide.addActionListener (listenerView);
 
-        JRadioButtonMenuItem itemFilterLocal   = new JRadioButtonMenuItem ("Local");
-        itemFilterLocal  .addActionListener (listenerFilter);
+        JMenuItem itemViewBottom = new JMenuItem ("Equations at Bottom", iconViewBottom);
+        itemViewBottom.setActionCommand ("Bottom");
+        itemViewBottom.addActionListener (listenerView);
 
-        FilteredTreeModel.filterLevel = AppData.state.getOrDefault (FilteredTreeModel.PARAM, "PanelModel", "filter");
-        switch (FilteredTreeModel.filterLevel)
-        {
-            case FilteredTreeModel.REVOKED:
-                buttonFilter.setIcon (iconFilterRevoked);
-                itemFilterRevoked.setSelected (true);
-                break;
-            case FilteredTreeModel.ALL:
-                buttonFilter.setIcon (iconFilterAll);
-                itemFilterAll.setSelected (true);
-                break;
-            case FilteredTreeModel.PARAM:
-                buttonFilter.setIcon (iconFilterParam);
-                itemFilterPublic.setSelected (true);
-                break;
-            case FilteredTreeModel.LOCAL:
-                buttonFilter.setIcon (iconFilterLocal);
-                itemFilterLocal.setSelected (true);
-                break;
-        }
+        menuView = new JPopupMenu ();
+        menuView.add (itemViewNode);
+        menuView.add (itemViewSide);
+        menuView.add (itemViewBottom);
 
-        menuFilter = new JPopupMenu ();
-        menuFilter.add (itemFilterRevoked);
-        menuFilter.add (itemFilterAll);
-        menuFilter.add (itemFilterPublic);
-        menuFilter.add (itemFilterLocal);
-        menuFilter.addPopupMenuListener (new PopupMenuListener ()
+        PopupMenuListener rememberCancelTime = new PopupMenuListener ()
         {
             public void popupMenuWillBecomeVisible (PopupMenuEvent e)
             {
@@ -675,16 +697,39 @@ public class PanelEquations extends JPanel
 
             public void popupMenuCanceled (PopupMenuEvent e)
             {
-                menuFilterCanceledAt = System.currentTimeMillis ();
+                menuCanceledAt = System.currentTimeMillis ();
             }
-        });
+        };
+        menuView.addPopupMenuListener (rememberCancelTime);
 
-        ButtonGroup groupFilter = new ButtonGroup ();
-        groupFilter.add (itemFilterRevoked);
-        groupFilter.add (itemFilterAll);
-        groupFilter.add (itemFilterPublic);
-        groupFilter.add (itemFilterLocal);
 
+        // Filter menu
+
+        JMenuItem itemFilterRevoked = new JMenuItem ("Revoked", iconFilterRevoked);
+        itemFilterRevoked.setActionCommand ("Revoked");
+        itemFilterRevoked.addActionListener (listenerFilter);
+
+        JMenuItem itemFilterAll = new JMenuItem ("All", iconFilterAll);
+        itemFilterAll.setActionCommand ("All");
+        itemFilterAll.addActionListener (listenerFilter);
+
+        JMenuItem itemFilterParameters = new JMenuItem ("Parameters", iconFilterParam);
+        itemFilterParameters.setActionCommand ("Parameters");
+        itemFilterParameters.addActionListener (listenerFilter);
+
+        JMenuItem itemFilterLocal = new JMenuItem ("Local", iconFilterLocal);
+        itemFilterLocal.setActionCommand ("Local");
+        itemFilterLocal.addActionListener (listenerFilter);
+
+        menuFilter = new JPopupMenu ();
+        menuFilter.add (itemFilterRevoked);
+        menuFilter.add (itemFilterAll);
+        menuFilter.add (itemFilterParameters);
+        menuFilter.add (itemFilterLocal);
+        menuFilter.addPopupMenuListener (rememberCancelTime);
+
+
+        // Load initial model
         EventQueue.invokeLater (new Runnable ()
         {
             public void run ()
@@ -732,8 +777,8 @@ public class PanelEquations extends JPanel
 
         this.part = part;
         active = null;
-        if (viewTree) panelEquationTree.loadPart (root);
-        else          panelGraph.loadPart ();
+        parentSelected = false;
+        panelGraph.loadPart ();  // also manages panelEquationTree via panelParent
         repaint ();
         takeFocus ();  // sets active
     }
@@ -750,65 +795,9 @@ public class PanelEquations extends JPanel
         root   = null;
         part   = null;
         active = null;
-        if (viewTree)
-        {
-            panelEquationTree.clear ();
-        }
-        else
-        {
-            panelGraph.clear ();
-        }
+        parentSelected = false;
+        panelGraph.clear ();  // also manages panelEquationTree via panelParent
         repaint ();
-    }
-
-    public void setViewTree (boolean value)
-    {
-        if (viewTree == value) return;
-        viewTree = value;
-
-        if (viewTree)
-        {
-            // Transfer focus information
-            FocusCacheEntry fce = createFocus (root);
-            fce.sp = new StoredPath (part);
-
-            // Update user interface
-
-            AppData.state.set ("tree", "PanelModel", "view");
-
-            buttonView.setIcon (iconViewGraph);
-            buttonView.setToolTipText ("Edit Graph");
-
-            remove (panelGraph);
-            panelGraph.clear ();
-            add (panelEquationTree, BorderLayout.CENTER);
-        }
-        else
-        {
-            TreePath path = panelEquationTree.tree.getSelectionPath ();
-            if (path != null)
-            {
-                NodeBase p = (NodeBase) path.getLastPathComponent ();
-                while (! (p instanceof NodePart)) p = p.getTrueParent ();  // Should not have to guard against null, because root is a NodePart.
-                part = (NodePart) p;
-            }
-
-            AppData.state.set ("graph", "PanelModel", "view");
-
-            buttonView.setIcon (iconViewTree);
-            buttonView.setToolTipText ("Edit Tree");
-
-            remove (panelEquationTree);
-            panelEquationTree.clear ();
-            add (panelGraph, BorderLayout.CENTER);
-        }
-        validate ();
-        repaint ();
-
-        // Update part, in order to populate appropriate panel.
-        NodePart p = part;
-        part = null;  // force update to run
-        loadPart (p);
     }
 
     public void updateLock ()
@@ -816,7 +805,7 @@ public class PanelEquations extends JPanel
         locked = ! AppData.models.isWriteable (record);
         // The following are safe to call, even when record is not fully loaded, and despite which panel is active.
         panelEquationTree.updateLock ();
-        panelEquationGraph.updateLock ();
+        if (view == NODE) panelEquationGraph.updateLock ();
     }
 
     public void checkVisible ()
@@ -824,7 +813,7 @@ public class PanelEquations extends JPanel
         if (record == null) return;
         if (AppData.models.isVisible (record))
         {
-            if (! viewTree) resetBreadcrumbs ();
+            resetBreadcrumbs ();
             updateLock ();
         }
         else
@@ -873,41 +862,29 @@ public class PanelEquations extends JPanel
         if (root == null) return;
 
         FocusCacheEntry fce = createFocus (part);
-        if (viewTree)
+        fce.position = panelEquationGraph.saveFocus ();
+        if (active != null)
         {
-            fce.sp = panelEquationTree.saveFocus (fce.sp);
-        }
-        else
-        {
-            fce.position = panelEquationGraph.saveFocus ();
-            if (active != null)
+            if (active.root == part)
             {
-                if (active == panelParent.panelEquations)
-                {
-                    fce.subpart = "";
-                    fce.titleFocused = titleFocused;
-                }
-                else
-                {
-                    fce.subpart = active.root.source.key ();
-                }
-
-                // Only save state of the active node, rather than all nodes.
-                // This seems sufficient for good user experience.
+                fce.subpart = "";
+                fce.titleFocused = titleFocused;
+            }
+            else
+            {
+                fce.subpart = active.root.source.key ();
                 fce = createFocus (active.root);
                 if (active.root.graph != null) fce.titleFocused = active.root.graph.titleFocused;
-                fce.sp = active.saveFocus (fce.sp);
             }
-        }
-    }
 
-    public FocusCacheEntry getFocus (NodePart p)
-    {
-        return (FocusCacheEntry) focusCache.getObject (p.getKeyPath ().toArray ());
+            // Only save state of the active node, rather than all nodes.
+            // This seems sufficient for good user experience.
+            fce.sp = active.saveFocus (fce.sp);
+        }
     }
 
     /**
-        Same as getFocus(), but creates an entry if it doesn't already exist.
+        Retrieves focus cache entry, or creates a new one if it doesn't already exist.
     **/
     public FocusCacheEntry createFocus (NodePart p)
     {
@@ -933,17 +910,32 @@ public class PanelEquations extends JPanel
 
     public void takeFocus ()
     {
-        if (viewTree) panelEquationTree .takeFocus ();
-        else          panelGraph        .takeFocus ();
+        FocusCacheEntry fce = createFocus (part);
+        if (fce.subpart.isEmpty ())  // focus parent
+        {
+            switchFocus (fce.titleFocused, false);
+        }
+        else  // focus a child
+        {
+            panelEquationGraph.takeFocus (fce);
+        }
+    }
+
+    public PanelEquationTree getParentEquationTree ()
+    {
+        if (view == NODE) return panelParent.panelEquationTree;
+        return panelEquationTree;
     }
 
     /**
-        Moves focus between title and parent panel.
+        Moves focus between title and equation tree.
         If focus is somewhere else, pulls it to one of these two.
     **/
-    public void switchFocus (boolean ontoTitle)
+    public void switchFocus (boolean ontoTitle, boolean selectRow0)
     {
-        if (panelParent.panelEquations.tree.getRowCount () == 0) ontoTitle = true;  // Don't switch focus to an empty tree.
+        PanelEquationTree pet = getParentEquationTree ();
+        if (pet.tree.getRowCount () == 0) ontoTitle = true;  // Don't switch focus to an empty tree.
+        if (view != NODE) pet.loadPart (part);
 
         titleFocused = ontoTitle;
         if (ontoTitle)
@@ -952,17 +944,26 @@ public class PanelEquations extends JPanel
         }
         else
         {
-            panelParent.setOpen (true);
-            panelParent.panelEquations.tree.scrollRowToVisible (0);
-            panelParent.panelEquations.tree.setSelectionRow (0);
-            panelParent.takeFocus ();
+            if (view == NODE) panelParent.setOpen (true);
+            if (selectRow0)
+            {
+                pet.tree.scrollRowToVisible (0);
+                pet.tree.setSelectionRow (0);
+            }
+            pet.takeFocus ();
         }
     }
 
     public Component getTitleFocus ()
     {
     	if (titleFocused) return breadcrumbRenderer;
-    	return panelParent.panelEquations.tree;
+    	return getParentEquationTree ().tree;
+    }
+
+    public void setSelected (boolean value)
+    {
+        parentSelected = value;
+        breadcrumbRenderer.updateSelected ();
     }
 
     public boolean isEditing ()
@@ -985,11 +986,10 @@ public class PanelEquations extends JPanel
 
     public void drill (NodePart nextPart)
     {
-        if (viewTree) return;
         saveFocus ();
         if (nextPart.getTrueParent () == part)
         {
-            FocusCacheEntry fce = getFocus (part);  // guaranteed to exist, due to saveFocus() call above
+            FocusCacheEntry fce = createFocus (part);
             fce.subpart = nextPart.source.key ();
         }
         loadPart (nextPart);
@@ -997,7 +997,6 @@ public class PanelEquations extends JPanel
 
     public void drillUp ()
     {
-        if (viewTree) return;
         NodePart parent = (NodePart) part.getTrueParent ();
         if (parent != null) drill (parent);
     }
@@ -1013,8 +1012,7 @@ public class PanelEquations extends JPanel
                 PanelModel.instance.undoManager.add (add);
                 // After load(doc), active is null.
                 // PanelEquationTree focusGained() will set active, but won't be called before the test below.
-                if (viewTree) active = panelEquationTree;
-                else          active = panelParent.panelEquations;
+                active = getParentEquationTree ();
             }
             else
             {
@@ -1122,15 +1120,9 @@ public class PanelEquations extends JPanel
             {
                 public void run ()
                 {
-                    try
-                    {
-                        simulator.start (job);
-                    }
-                    catch (Exception e)
-                    {
-                        // TODO: Instead of throwing an exception, simulation should record all errors/warnings in a file in the job dir.
-                        e.printStackTrace ();
-                    }
+                    // Simulator should record all errors/warnings to a file in the job dir.
+                    // If this thread throws an untrapped exception, then there is something wrong with the implementation.
+                    simulator.start (job);
                 }
             }.start ();
 
@@ -1250,6 +1242,68 @@ public class PanelEquations extends JPanel
         }
     };
 
+    ActionListener listenerView = new ActionListener ()
+    {
+        public void actionPerformed (ActionEvent e)
+        {
+            panelEquationTree.tree.stopEditing ();
+
+            int lastView = view;
+            String command = e.getActionCommand ();
+            switch (command)
+            {
+                case "Node":
+                    view = NODE;
+                    buttonView.setIcon (iconViewNode);
+                    break;
+                case "Side":
+                    view = SIDE;
+                    buttonView.setIcon (iconViewSide);
+                    break;
+                case "Bottom":
+                    view = BOTTOM;
+                    buttonView.setIcon (iconViewBottom);
+                    break;
+            }
+            AppData.state.set (view, "PanelModel", "view");
+
+            if (view == lastView) return;
+
+            // Rearrange UI components
+            if (lastView == NODE)  // next view will be a split
+            {
+                split.add (panelGraph,        JSplitPane.LEFT);  // removes panelGraph from current parent (this panel)
+                split.add (panelEquationTree, JSplitPane.RIGHT);
+                add (split, BorderLayout.CENTER);
+                panelParent.setOpen (false);
+                panelParent.clear ();  // release current root, since this panel won't be used for editing
+            }
+            else if (view == NODE)  // lastView was a split
+            {
+                remove (split);
+                add (panelGraph, BorderLayout.CENTER);
+                panelEquationTree.clear ();  // release root, as above
+            }
+            if      (view == SIDE)   split.setOrientation (JSplitPane.HORIZONTAL_SPLIT);
+            else if (view == BOTTOM) split.setOrientation (JSplitPane.VERTICAL_SPLIT);
+            if (view != NODE)
+            {
+                int dividerLocation = AppData.state.getInt ("PanelModel", "view", view);
+                if (dividerLocation != 0) split.setDividerLocation (dividerLocation);
+            }
+            validate ();
+            repaint ();
+
+            // Reload, so that graph nodes can be configured correctly (with or without equation trees).
+            if (view == NODE  ||  lastView == NODE)
+            {
+                NodePart p = part;
+                part = null;  // force update to run
+                loadPart (p);
+            }
+        }
+    };
+
     ActionListener listenerFilter = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
@@ -1276,13 +1330,11 @@ public class PanelEquations extends JPanel
                     break;
             }
             AppData.state.set (FilteredTreeModel.filterLevel, "PanelModel", "filter");
-            if (viewTree)
+
+            if (panelEquationTree.isVisible ()) panelEquationTree.updateFilterLevel ();
+            if (view == NODE)
             {
-                panelEquationTree.updateFilterLevel ();
-            }
-            else
-            {
-                if (panelParent.isVisible ()) panelParent.panelEquations.updateFilterLevel ();
+                if (panelParent.isVisible ()) panelParent.panelEquationTree.updateFilterLevel ();
                 panelEquationGraph.updateFilterLevel ();
             }
         }
@@ -1347,9 +1399,14 @@ public class PanelEquations extends JPanel
             setTransferHandler (transferHandler);
 
             InputMap inputMap = getInputMap ();
+            inputMap.put (KeyStroke.getKeyStroke ("UP"),               "nothing");
             inputMap.put (KeyStroke.getKeyStroke ("DOWN"),             "selectNext");
             inputMap.put (KeyStroke.getKeyStroke ("LEFT"),             "close");
             inputMap.put (KeyStroke.getKeyStroke ("RIGHT"),            "selectChild");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl UP"),          "nothing");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl DOWN"),        "selectChild");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl LEFT"),        "nothing");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl RIGHT"),       "selectChild");
             inputMap.put (KeyStroke.getKeyStroke ("shift DELETE"),     "cut");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl X"),           "cut");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl INSERT"),      "copy");
@@ -1375,16 +1432,16 @@ public class PanelEquations extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (! panelParent.isVisible ()) panelParent.toggleOpen ();  // because switchFocus() does not set metadata "parent" open flag
-                    switchFocus (false);
+                    if (view == NODE  &&  ! panelParent.isVisible ()) panelParent.toggleOpen ();  // because switchFocus() does not set metadata "parent" open flag
+                    switchFocus (false, view == NODE);
                 }
             });
             actionMap.put ("selectChild", new AbstractAction ()
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (panelParent.isVisible ()) switchFocus (false);
-                    else                          panelParent.toggleOpen ();
+                    if (view == NODE  &&  ! panelParent.isVisible ()) panelParent.toggleOpen ();
+                    else                                              switchFocus (false, false);
                 }
             });
             actionMap.put ("cut",   TransferHandler.getCutAction ());
@@ -1398,7 +1455,7 @@ public class PanelEquations extends JPanel
                     if (panelParent.isVisible ())  // parent is open
                     {
                     	// Add a NodeVariable under part
-                        panelParent.panelEquations.addAtSelected ("");  // No selection should be active in panelParent.panelEquations, so this should apply to its root.
+                        getParentEquationTree ().addAtSelected ("");  // No selection should be active in panelParent.panelEquations, so this should apply to its root.
                     }
                     else  // parent is closed
                     {
@@ -1451,8 +1508,8 @@ public class PanelEquations extends JPanel
                         {
                             if (x < getIconWidth ())  // Open/close
                             {
-                                panelParent.toggleOpen ();
-                                switchFocus (true);
+                                if (view == NODE) panelParent.toggleOpen ();
+                                switchFocus (true, false);
                             }
                             else  // Drill up to specific path element.
                             {
@@ -1466,7 +1523,7 @@ public class PanelEquations extends JPanel
                                 }
 
                                 // Click was on last path element (which may be only path element), so take focus.
-                                switchFocus (true);
+                                switchFocus (true, false);
                             }
                         }
                     }
@@ -1474,7 +1531,7 @@ public class PanelEquations extends JPanel
                     {
                         if (clicks == 1)  // Show popup menu
                         {
-                            switchFocus (true);
+                            switchFocus (true, false);
                             menuPopup.show (breadcrumbRenderer, x, y);
                         }
                     }
@@ -1485,14 +1542,24 @@ public class PanelEquations extends JPanel
             {
                 public void focusGained (FocusEvent e)
                 {
-                    active = panelParent.panelEquations;
-                    getTreeCellRendererComponent (true);
+                    if (view == NODE)
+                    {
+                        active = panelParent.panelEquationTree;
+                    }
+                    else
+                    {
+                        active = panelEquationTree;
+                        panelEquationTree.loadPart (part);
+                        FocusCacheEntry fce = createFocus (part);
+                        if (fce.sp != null) fce.sp.restore (panelEquationTree.tree, false);
+                    }
+                    getTreeCellRendererComponent (true, true);
                     panelBreadcrumb.repaint ();
                 }
 
                 public void focusLost (FocusEvent e)
                 {
-                    getTreeCellRendererComponent (false);
+                    getTreeCellRendererComponent (parentSelected, false);
                     panelBreadcrumb.repaint ();
                 }
             });
@@ -1510,30 +1577,32 @@ public class PanelEquations extends JPanel
             {
                 UIupdated = false;
                 // We are never the focus owner, because updateUI() is triggered from the L&F panel.
-                getTreeCellRendererComponent (false);
+                getTreeCellRendererComponent (parentSelected, false);
             }
             return super.getPreferredSize ();
         }
 
-        public void getTreeCellRendererComponent (boolean focused)
+        public void getTreeCellRendererComponent (boolean selected, boolean focused)
         {
             // In addition to focusGained() and focusLost() above, this method can also be called by GraphParent.setOpen()
             // to update the state of this renderer component. setOpen() can be called as part of the deletion of part,
             // so it is necessary to guard against null here.
+            getTreeCellRendererComponent (getParentEquationTree ().tree, part, selected, panelParent.isVisible (), false, -1, focused);
             if (part == null)
             {
-                getTreeCellRendererComponent (panelParent.panelEquations.tree, focused, panelParent.isVisible (), false, -1, focused);
                 text = noModel;
                 setIcon (null);
                 setFocusable (false);
             }
-            else
-            {
-                getTreeCellRendererComponent (panelParent.panelEquations.tree, part, focused, panelParent.isVisible (), false, -1, focused);
-            }
             Font baseFont = UIManager.getFont ("Tree.font");
             setFont (baseFont.deriveFont (Font.BOLD));
             setText (text);
+        }
+
+        public void updateSelected ()
+        {
+            getTreeCellRendererComponent (parentSelected, isFocusOwner ());
+            panelBreadcrumb.repaint ();
         }
 
         public void update ()
@@ -1550,6 +1619,7 @@ public class PanelEquations extends JPanel
                 setText (text = noModel);
                 setIcon (null);
                 setFocusable (false);
+                getTreeCellRendererComponent (false, false);
                 return;
             }
 
@@ -1566,6 +1636,9 @@ public class PanelEquations extends JPanel
             setText (text);
             setIcon (part.getIcon (panelParent.isVisible ()));
             setFocusable (true);
+
+            boolean focused = isFocusOwner ();
+            getTreeCellRendererComponent (parentSelected  ||  focused, focused);
         }
 
         /**
@@ -1577,7 +1650,7 @@ public class PanelEquations extends JPanel
 
             if (editor.editingNode != null) editor.stopCellEditing ();  // Edit could be in progress on a node title or on any tree, including our own.
             editor.addCellEditorListener (this);
-            editingComponent = editor.getTitleEditorComponent (panelParent.panelEquations.tree, part, panelParent.isVisible ());
+            editingComponent = editor.getTitleEditorComponent (getParentEquationTree ().tree, part, panelParent.isVisible ());
             panelBreadcrumb.add (editingComponent, BorderLayout.CENTER, 0);  // displaces this renderer from the layout manager's center slot
             setVisible (false);  // hide this renderer
 
@@ -1643,48 +1716,25 @@ public class PanelEquations extends JPanel
         public void loadPart ()
         {
             // Release any existing trees, including their fake roots
-            panelParent.clear ();
+            panelParent.clear ();  // Clears our panelEquationTree when not in NODE view.
             panelEquationGraph.clear ();
             // Load trees
             panelEquationGraph.loadPart ();
-            panelParent.loadPart ();
+            panelParent.loadPart ();  // Loads our panelEquationTree when not in NODE view.
 
             breadcrumbRenderer.update ();
-            panelParent.setOpen (part.source.getBoolean ("$metadata", "gui", "bounds", "parent")  ||  panelEquationGraph.isEmpty ());
+            if (view == NODE) panelParent.setOpen (part.source.getBoolean ("$metadata", "gui", "bounds", "parent")  ||  panelEquationGraph.isEmpty ());
             panelEquationGraph.restoreViewportPosition (createFocus (part));
             validate ();  // In case breadcrumbRenderer changes shape.
         }
 
         public void clear ()
         {
-            panelParent.setOpen (false);
-            panelParent.clear ();
+            if (view == NODE) panelParent.setOpen (false);
+            panelParent.clear ();  // Clears our panelEquationTree when not in NODE view.
             panelEquationGraph.clear ();
             breadcrumbRenderer.update ();
             validate ();
-        }
-
-        public void takeFocus ()
-        {
-            FocusCacheEntry fce = createFocus (part);
-            if (fce.subpart.isEmpty ())  // focus parent
-            {
-                // Do the same job as switchFocus(), but do not force tree to select first row.
-                titleFocused = fce.titleFocused;
-                if (titleFocused)
-                {
-                    breadcrumbRenderer.requestFocusInWindow ();
-                }
-                else
-                {
-                    panelParent.setOpen (true);
-                    panelParent.takeFocus ();
-                }
-            }
-            else  // focus a child
-            {
-                panelEquationGraph.takeFocus (fce);
-            }
         }
     }
 
@@ -1710,12 +1760,7 @@ public class PanelEquations extends JPanel
         public StoredView ()
         {
             saveFocus ();
-            if (viewTree)
-            {
-                if (panelEquationTree.root != null) path = panelEquationTree.root.getKeyPath ();  // which should simply be the model name
-                asParent = true;
-            }
-            else if (active == null)
+            if (active == null)
             {
                 path = part.getKeyPath ();
                 asParent = true;
@@ -1771,8 +1816,8 @@ public class PanelEquations extends JPanel
             // Grab focus and select correct part
             NodePart p = root;
             for (int i = 1; i < end; i++) p = (NodePart) p.child (path.get (i));
-            if (p == part  ||  viewTree) takeFocus ();  // loadPart() won't run in this case, but we should still take focus.
-            else                         loadPart (p);
+            if (p == part) takeFocus ();  // loadPart() won't run in this case, but we should still take focus.
+            else           loadPart (p);
         }
     }
 }

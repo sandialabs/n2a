@@ -65,12 +65,7 @@ public class ChangeDoc extends Undoable
         if (wasShowing)
         {
             container.load (doc);  // lazy; only loads if not already loaded
-            container.root.setUserObject ();  // In case it was already loaded, ensure that doc name is updated. 
-            if (container.viewTree)
-            {
-                container.panelEquationTree.model.nodeChanged (container.root);
-                container.panelEquationTree.tree.setSelectionRow (0);
-            }
+            container.root.setUserObject ();  // If it was already loaded, then need to directly update doc name.
         }
         pm.panelMRU.renamed ();  // Because the change in document name does not directly notify the list model.
 

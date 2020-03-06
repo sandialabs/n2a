@@ -65,7 +65,7 @@ public class AddInherit extends Undoable
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
         parent.filter (FilteredTreeModel.filterLevel);
-        if (! pe.viewTree  &&  parent == pe.part)
+        if (parent == pe.part)
         {
             peg.loadPart ();  // safely disconnects old nodes, even though parent has been rebuilt with new nodes
             peg.repaint ();
@@ -76,7 +76,7 @@ public class AddInherit extends Undoable
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath, index);
         pet.animate ();
-        if (! pe.viewTree  &&  grandparent == pe.part)
+        if (grandparent == pe.part)
         {
             peg.reconnect ();
             peg.repaint ();
@@ -106,7 +106,7 @@ public class AddInherit extends Undoable
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
         parent.filter (FilteredTreeModel.filterLevel);
-        if (! pe.viewTree  &&  parent == pe.part)
+        if (parent == pe.part)
         {
             peg.loadPart ();
             peg.repaint ();
@@ -118,7 +118,7 @@ public class AddInherit extends Undoable
         pet.updateOrder (createdPath);
         pet.updateVisibility (createdPath);
         pet.animate ();
-        if (! pe.viewTree  &&  grandparent == pe.part)
+        if (grandparent == pe.part)
         {
             peg.reconnect ();
             peg.repaint ();

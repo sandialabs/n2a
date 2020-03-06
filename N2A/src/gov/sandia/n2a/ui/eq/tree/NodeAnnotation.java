@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -26,6 +26,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
+import javax.swing.JViewport;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 
@@ -158,20 +159,24 @@ public class NodeAnnotation extends NodeContainer
             int width = 800;  // Available width for displaying value (not including key).
             PanelEquations pe = PanelModel.instance.panelEquations;
             PanelEquationTree pet = getTree ();
-            if (pet == pe.panelParent.panelEquations)  // parent node
+            if (pe.view == PanelEquations.NODE)
             {
-                Insets insets = pe.panelParent.getInsets ();
-                width = pe.panelEquationGraph.getViewport ().getExtentSize ().width / 2 - insets.left - insets.right;
+                JViewport vp = pe.panelEquationGraph.getViewport ();
+                if (pet.root == pe.part)  // parent node
+                {
+                    Insets insets = pe.panelParent.getInsets ();
+                    width = vp.getExtentSize ().width / 2 - insets.left - insets.right;
+                }
+                else if (pet.root.graph != null)  // child node
+                {
+                    Insets insets = pet.root.graph.getInsets ();
+                    width = vp.getExtentSize ().width - insets.left - insets.right;
+                }
             }
-            else if (pet.root.graph != null)  // child node
+            else  // property panel
             {
-                Insets insets = pet.root.graph.getInsets ();
-                width = pe.panelEquationGraph.getViewport ().getExtentSize ().width - insets.left - insets.right;
-            }
-            else if (pet == pe.panelEquationTree)  // classic tree
-            {
-                Insets insets = pe.getInsets ();
-                width = pe.getWidth () - insets.left - insets.right;
+                // Neither the tree nor the viewport should have insets.
+                width = pet.getViewport ().getWidth ();
             }
             width -= offset;
 

@@ -30,7 +30,9 @@ import sun.swing.DefaultLookup;
 public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
 {
     protected boolean             nontree;  // Need hack to paint background
-    protected Painter<JComponent> backgroundPainter;
+    protected Painter<JComponent> backgroundFocused;
+    protected Painter<JComponent> backgroundSelected;
+    protected Painter<JComponent> backgroundFocusedSelected;
 
     // These colors may get changed when look & feel is changed.
     public static Color colorInherit          = Color.blue;
@@ -83,22 +85,24 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
 
         setBackgroundSelectionColor (DefaultLookup.getColor (this, ui, "Tree.selectionBackground"));
 
-        Object o = UIManager.get ("Tree:TreeCell[Focused+Selected].backgroundPainter");
-        if (o instanceof Painter<?>) backgroundPainter = (Painter<JComponent>) o;
-        else                         backgroundPainter = null;
-    }
+        backgroundFocused         = null;
+        backgroundSelected        = null;
+        backgroundFocusedSelected = null;
 
-    /**
-        Special case where "value" object is known to be null but we still want a basic set up of the editing component.
-    **/
-    public Component getTreeCellRendererComponent (JTree tree, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
-    {
-        return super.getTreeCellRendererComponent (tree, null, selected, expanded, leaf, row, hasFocus);
+        Object o = UIManager.get ("Tree:TreeCell[Enabled+Focused].backgroundPainter");
+        if (o instanceof Painter<?>) backgroundFocused = (Painter<JComponent>) o;
+
+        o = UIManager.get ("Tree:TreeCell[Enabled+Selected].backgroundPainter");
+        if (o instanceof Painter<?>) backgroundSelected = (Painter<JComponent>) o;
+
+        o = UIManager.get ("Tree:TreeCell[Focused+Selected].backgroundPainter");
+        if (o instanceof Painter<?>) backgroundFocusedSelected = (Painter<JComponent>) o;
     }
 
     public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
     {
         super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
+        if (value == null) return this;  // Sometimes we just want a basic set up of the editing component, even though there is nothing to edit.
 
         NodeBase n = (NodeBase) value;
 
@@ -160,10 +164,18 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
 
     public void paint (Graphics g)
     {
-        if (nontree  &&  backgroundPainter != null  &&  hasFocus)
+        if (nontree  &&  backgroundFocusedSelected != null)
         {
             Graphics2D g2 = (Graphics2D) g.create ();
-            backgroundPainter.paint (g2, this, getWidth (), getHeight ());
+            if (hasFocus)
+            {
+                if (selected) backgroundFocusedSelected.paint (g2, this, getWidth (), getHeight ());
+                else          backgroundFocused        .paint (g2, this, getWidth (), getHeight ());
+            }
+            else if (selected)  // and not focused
+            {
+                backgroundSelected.paint (g2, this, getWidth (), getHeight ());
+            }
             g2.dispose ();
         }
         super.paint (g);

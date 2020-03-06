@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -56,12 +56,11 @@ public class PanelEquationTree extends JScrollPane
     public    NodePart          root;
     protected PanelEquations    container;
 
-    public PanelEquationTree (PanelEquations container, NodePart initialRoot, boolean headless)
+    public PanelEquationTree (PanelEquations container)
     {
         this.container = container;
 
-        root  = initialRoot;
-        model = new FilteredTreeModel (initialRoot);  // initialRoot can be null
+        model = new FilteredTreeModel (root);  // member "root" is null at this point
         tree  = new JTree (model)
         {
             public String convertValueToText (Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
@@ -105,6 +104,8 @@ public class PanelEquationTree extends JScrollPane
             }
         };
 
+        tree.setRootVisible (false);
+        tree.setShowsRootHandles (true);
         tree.setExpandsSelectedPaths (true);
         tree.setScrollsOnExpand (true);
         tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection. It only makes deletes and moves more complicated.
@@ -118,15 +119,13 @@ public class PanelEquationTree extends JScrollPane
         tree.setCellEditor (container.editor);
         tree.addTreeSelectionListener (container.editor);
 
-        // Special cases for nodes in graph. Also includes "parent" which lacks an associated graph node.
-        if (headless)
-        {
-            tree.setRootVisible (false);
-            tree.setShowsRootHandles (true);
-            setBorder (BorderFactory.createEmptyBorder ());
-        }
+        setBorder (BorderFactory.createEmptyBorder ());
 
         InputMap inputMap = tree.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl UP"),     "switchFocus");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl LEFT"),   "switchFocus");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl DOWN"),   "nothing");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl RIGHT"),  "nothing");
         inputMap.put (KeyStroke.getKeyStroke ("shift UP"),    "moveUp");
         inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),  "moveDown");
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),      "add");
@@ -149,12 +148,12 @@ public class PanelEquationTree extends JScrollPane
                 {
                     if (root.graph != null)
                     {
-                        root.graph.switchFocus (true);
+                        root.graph.switchFocus (true, false);
                         return;
                     }
-                    if (container.panelParent.panelEquations == PanelEquationTree.this)
+                    if (root == container.part)
                     {
-                        container.switchFocus (true);
+                        container.switchFocus (true, false);
                         return;
                     }
                 }
@@ -170,16 +169,30 @@ public class PanelEquationTree extends JScrollPane
                 {
                     if (root.graph != null)
                     {
-                        root.graph.switchFocus (true);
+                        root.graph.switchFocus (true, false);
                         return;
                     }
-                    if (container.panelParent.panelEquations == PanelEquationTree.this)
+                    if (root == container.part)
                     {
-                        container.switchFocus (true);
+                        container.switchFocus (true, false);
                         return;
                     }
                 }
                 selectParent.actionPerformed (e);
+            }
+        });
+        actionMap.put ("switchFocus", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                if (root.graph != null)
+                {
+                    root.graph.switchFocus (true, false);
+                }
+                else if (root == container.part)
+                {
+                    container.switchFocus (true, false);
+                }
             }
         });
         actionMap.put ("moveUp", new AbstractAction ()
@@ -278,24 +291,14 @@ public class PanelEquationTree extends JScrollPane
                 if (tree.getRowCount () == 0)  // Empty tree, so we don't want to shift focus.
                 {
                     // Claw focus back to title
-                    if (root.graph != null)
-                    {
-                        root.graph.switchFocus (true);
-                        return;
-                    }
-                    PanelEquations pe = PanelModel.instance.panelEquations;
-                    if (PanelEquationTree.this == pe.panelParent.panelEquations) pe.switchFocus (true);
+                    if (root.graph != null) root.graph.switchFocus (true, false);
+                    else if (root == container.part) container.switchFocus (true, false);
                 }
                 else
                 {
                     // Set flag to indicate that tree, rather than title, is now focused.
-                    if (root.graph != null)
-                    {
-                        root.graph.titleFocused = false;
-                        return;
-                    }
-                    PanelEquations pe = PanelModel.instance.panelEquations;
-                    if (PanelEquationTree.this == pe.panelParent.panelEquations) pe.titleFocused = false;
+                    if (root.graph != null) root.graph.titleFocused = false;
+                    else if (root == container.part) container.titleFocused = false;
                 }
             }
 
@@ -327,7 +330,7 @@ public class PanelEquationTree extends JScrollPane
                         if (path != null)
                         {
                             Object temp = path.getLastPathComponent ();
-                            if (temp instanceof NodePart  &&  ! container.viewTree)
+                            if (temp instanceof NodePart)
                             {
                                 part = (NodePart) temp;
                                 // and drill down
@@ -441,7 +444,7 @@ public class PanelEquationTree extends JScrollPane
     {
         if (root == null) return;
         if (root.graph != null) root.graph.animate ();
-        else if (root == container.part) container.panelParent.animate ();
+        else if (root == container.part  &&  container.view == PanelEquations.NODE) container.panelParent.animate ();
     }
 
     /**
@@ -487,20 +490,25 @@ public class PanelEquationTree extends JScrollPane
         fce.sp = saveFocus (fce.sp);
         tree.clearSelection ();
 
-        // Auto-close graph node when it loses focus, if it was auto-opened.
-        if (root.graph == null)
+        if (container.view == PanelEquations.NODE)
         {
-            PanelEquations pe = PanelModel.instance.panelEquations;
-            if (this == pe.panelParent.panelEquations)
+            // Auto-close graph node when it loses focus, if it was auto-opened.
+            if (root.graph != null)
+            {
+                boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "open");
+                if (! open) root.graph.setOpen (false);
+            }
+            else if (root == container.part)
             {
                 boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "parent");
-                if (! open) pe.panelParent.setOpen (false);
+                if (! open) container.panelParent.setOpen (false);
             }
         }
         else
         {
-            boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "open");
-            if (! open) root.graph.setOpen (false);
+            // Remove highlight from graph node we were editing.
+            if (root.graph != null) root.graph.setSelected (false);
+            else if (root == container.part) container.setSelected (false);
         }
     }
 
@@ -519,10 +527,15 @@ public class PanelEquationTree extends JScrollPane
         if (root != null)
         {
             if (root.graph != null) root.graph.restoreFocus ();  // Raise graph node to top of z-order.
+            if (container.view != PanelEquations.NODE)
+            {
+                if (root.graph != null) root.graph.setSelected (true);
+                else if (root == container.part) container.setSelected (true);
+            }
             if (tree.getSelectionCount () == 0)
             {
-                FocusCacheEntry fce = container.getFocus (root);
-                if (fce != null  &&  fce.sp != null) fce.sp.restore (tree);
+                FocusCacheEntry fce = container.createFocus (root);
+                if (fce.sp != null) fce.sp.restore (tree, true);
                 if (tree.getSelectionCount () == 0) tree.setSelectionRow (0);  // First-time display
             }
         }
@@ -535,7 +548,7 @@ public class PanelEquationTree extends JScrollPane
         StoredPath path = new StoredPath (tree);
         model.reload (root);
         animate ();
-        path.restore (tree);
+        path.restore (tree, true);
     }
 
     public NodeBase getSelected ()
@@ -569,18 +582,17 @@ public class PanelEquationTree extends JScrollPane
         NodeBase editMe = selected.add (type, tree, null, null);
         if (editMe != null)
         {
-            TreePath path = new TreePath (editMe.getPath ());
-
             if (editMe instanceof NodePart)
             {
                 GraphNode gn = ((NodePart) editMe).graph;
-                if (gn != null  &&  gn.panelEquations.tree != tree)  // Newly-created part is root of a tree in a new graph node.
+                if (gn != null)  // Newly-created part is root of a tree in a new graph node.
                 {
                     gn.title.startEditing ();
                     return;
                 }
             }
 
+            TreePath path = new TreePath (editMe.getPath ());
             tree.scrollPathToVisible (path);
             tree.setSelectionPath (path);
             tree.startEditingAtPath (path);
@@ -788,12 +800,11 @@ public class PanelEquationTree extends JScrollPane
         TreePath selectedPath = new TreePath (c.getPath ());
         GraphNode gn = pet.root.graph;
         PanelEquations pe = PanelModel.instance.panelEquations;
-        boolean selectTitle =  c == pet.root  &&  (gn != null  ||  pet == pe.panelParent.panelEquations);
-        if (setSelection  &&  ! selectTitle)
+        if (setSelection  &&  c != pet.root)
         {
-            // make tree visible
-            if (! pe.viewTree)
+            if (pe.view == PanelEquations.NODE)
             {
+                // Ensure that tree is visible.
                 if (gn == null) pe.panelParent.setOpen (true);
                 else            gn.setOpen (true);
             }
@@ -807,10 +818,10 @@ public class PanelEquationTree extends JScrollPane
         }
         if (setSelection)
         {
-            if (selectTitle)
+            if (c == pet.root)
             {
-                if (gn == null) pe.switchFocus (true);
-                else            gn.switchFocus (true);
+                if (gn == null) pe.switchFocus (true, false);
+                else            gn.switchFocus (true, false);
             }
             else
             {

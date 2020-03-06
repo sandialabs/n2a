@@ -83,7 +83,7 @@ public class ChangePart extends Undoable
         // Update GUI
 
         PanelEquations pe = PanelModel.instance.panelEquations;
-        boolean graphParent =  parent == pe.part  &&  ! pe.viewTree;
+        boolean graphParent =  parent == pe.part;
         PanelEquationTree pet = graphParent ? null : parent.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
@@ -126,9 +126,12 @@ public class ChangePart extends Undoable
                 if (graphParent)  // Need to update entire model under fake root.
                 {
                     PanelEquationTree subpet = nodeBefore.getTree ();
-                    FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
-                    submodel.nodeStructureChanged (nodeBefore);
-                    subpet.animate ();
+                    if (subpet != null)
+                    {
+                        FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
+                        submodel.nodeStructureChanged (nodeBefore);
+                        subpet.animate ();
+                    }
                 }
                 else if (model != null)
                 {
@@ -146,7 +149,7 @@ public class ChangePart extends Undoable
         else             nodeAfter.findConnections ();
         nodeAfter.filter (FilteredTreeModel.filterLevel);
 
-        if (! pe.viewTree) pe.resetBreadcrumbs ();
+        pe.resetBreadcrumbs ();
         TreeNode[] nodePath = nodeAfter.getPath ();
         if (pet == null)
         {
@@ -169,9 +172,12 @@ public class ChangePart extends Undoable
             else
             {
                 PanelEquationTree subpet = nodeAfter.getTree ();
-                FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
-                submodel.nodeStructureChanged (nodeAfter);
-                subpet.animate ();
+                if (subpet != null)
+                {
+                    FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
+                    submodel.nodeStructureChanged (nodeAfter);
+                    subpet.animate ();
+                }
             }
             nodeAfter.hide = false;
             nodeAfter.graph.takeFocusOnTitle ();

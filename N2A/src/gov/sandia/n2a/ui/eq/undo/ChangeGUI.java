@@ -86,8 +86,13 @@ public class ChangeGUI extends Undoable
         if (parent == null) throw new CannotUndoException ();
 
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
-        StoredPath sp = new StoredPath (pet.tree);
+        FilteredTreeModel model = null;
+        StoredPath sp = null;
+        if (pet != null)
+        {
+            model = (FilteredTreeModel) pet.tree.getModel ();
+            sp = new StoredPath (pet.tree);
+        }
 
         boolean needBuild = true;
         NodeAnnotations metadataNode = (NodeAnnotations) parent.child ("$metadata");
@@ -99,7 +104,8 @@ public class ChangeGUI extends Undoable
             if (mparent.size () == 0)  // No siblings of "gui", so get rid of $metadata.
             {
                 parent.source.clear ("$metadata");
-                model.removeNodeFromParent (metadataNode);
+                if (model == null) FilteredTreeModel.removeNodeFromParentStatic (metadataNode);
+                else               model.removeNodeFromParent (metadataNode);
                 needBuild = false;
             }
         }
@@ -108,7 +114,8 @@ public class ChangeGUI extends Undoable
             if (metadataNode == null)
             {
                 metadataNode = new NodeAnnotations ((MPart) parent.source.childOrCreate ("$metadata"));
-                model.insertNodeIntoUnfiltered (metadataNode, parent, indexMetadata);
+                if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (metadataNode, parent, indexMetadata);
+                else               model.insertNodeIntoUnfiltered (metadataNode, parent, indexMetadata);
             }
             MNode gui = metadataNode.source.childOrCreate ("gui");
             if (remove != null) gui.uniqueNodes (remove);
@@ -118,10 +125,11 @@ public class ChangeGUI extends Undoable
         NodeBase updateNode = metadataNode;
         if (needBuild)
         {
-            List<String> expanded = AddAnnotation.saveExpandedNodes (pet.tree, metadataNode);
+            List<String> expanded = null;
+            if (model != null) expanded = AddAnnotation.saveExpandedNodes (pet.tree, metadataNode);
             metadataNode.build ();
             metadataNode.filter (FilteredTreeModel.filterLevel);
-            if (metadataNode.visible (FilteredTreeModel.filterLevel))
+            if (model != null  &&  metadataNode.visible (FilteredTreeModel.filterLevel))
             {
                 model.nodeStructureChanged (metadataNode);
                 AddAnnotation.restoreExpandedNodes (pet.tree, metadataNode, expanded);
@@ -131,7 +139,7 @@ public class ChangeGUI extends Undoable
             if (updateNode == null) updateNode = metadataNode;
         }
         PanelEquationTree.updateVisibility (pet, updateNode.getPath (), -1, false);
-        sp.restore (pet.tree);  // This forces focus back to original location.
+        if (sp != null) sp.restore (pet.tree, true);  // This forces focus back to original location.
 
         // Update graph
         if (parent.graph != null) parent.graph.updateGUI ();

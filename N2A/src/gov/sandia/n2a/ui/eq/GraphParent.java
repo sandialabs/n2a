@@ -1,5 +1,5 @@
 /*
-Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -37,7 +37,7 @@ public class GraphParent extends JPanel
 {
     protected PanelEquations    container;
     protected NodePart          part;
-    public    PanelEquationTree panelEquations;
+    public    PanelEquationTree panelEquationTree;
     protected ResizeListener    resizeListener = new ResizeListener ();
 
     protected static RoundedBottomBorder border = new RoundedBottomBorder (5);
@@ -45,9 +45,9 @@ public class GraphParent extends JPanel
     public GraphParent (PanelEquations container)
     {
         this.container = container;
-        panelEquations = new PanelEquationTree (container, null, true);
+        panelEquationTree = new PanelEquationTree (container);
 
-        Lay.BLtg (this, "C", panelEquations);
+        Lay.BLtg (this, "C", panelEquationTree);
         setBorder (border);
         setOpaque (false);
         setVisible (false);
@@ -74,33 +74,44 @@ public class GraphParent extends JPanel
         else
         {
             container.titleFocused = true;
-            if (panelEquations.tree.isFocusOwner ()) container.breadcrumbRenderer.requestFocusInWindow ();
+            if (panelEquationTree.tree.isFocusOwner ()) container.breadcrumbRenderer.requestFocusInWindow ();
             setVisible (false);
         }
         boolean focused = container.breadcrumbRenderer.isFocusOwner ();
-        container.breadcrumbRenderer.getTreeCellRendererComponent (focused);
+        boolean selected =  container.parentSelected  ||  focused;
+        container.breadcrumbRenderer.getTreeCellRendererComponent (selected, focused);
     }
 
+    /**
+        Prepares the parent tree to display the current parent part.
+        To simplify code in PanelEquations, we manage the parent tree, even if it is not the one held by this panel.
+    **/
     public void loadPart ()
     {
         if (container.part == part) return;
         if (part != null) part.fakeRoot (false);
         part = container.part;
         part.fakeRoot (true);
-        panelEquations.loadPart (part);
+        if (container.view == PanelEquations.NODE) panelEquationTree.loadPart (part);
+        else                             container.panelEquationTree.loadPart (part);
         animate ();
     }
 
+    /**
+        Sets the parent tree to display nothing.
+        To simplify code in PanelEquations, we manage the parent tree, even if it is not the one held by this panel.
+    **/
     public void clear ()
     {
-        panelEquations.clear ();
+        if (container.view == PanelEquations.NODE) panelEquationTree.clear ();
+        else                             container.panelEquationTree.clear ();
         if (part != null) part.fakeRoot (false);
         part = null;
     }
 
     public void takeFocus ()
     {
-        panelEquations.takeFocus ();
+        panelEquationTree.takeFocus ();
     }
 
     public Dimension getPreferredSize ()

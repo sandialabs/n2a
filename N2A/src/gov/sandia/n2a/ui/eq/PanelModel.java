@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.eq;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.EventQueue;
 import java.awt.FontMetrics;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
@@ -56,7 +57,13 @@ public class PanelModel extends JPanel implements MNodeListener
 
     	public Component getComponentAfter (Container aContainer, Component aComponent)
         {
-            if (aComponent == panelEquations.editor.editingContainer)
+    	    Container ec = panelEquations.editor.editingContainer;
+    	    if (aComponent.getParent () == ec  &&  panelEquations.view != PanelEquations.NODE)
+    	    {
+    	        // Behave as if user tried to tab out of property tree itself. See below.
+    	        aComponent = panelEquations.panelEquationTree.tree;
+    	    }
+    	    else if (aComponent == ec)
             {
                 if (panelEquations.editor.editingNode == null  &&  ! panelEquations.editor.editingTitle)
                 {
@@ -77,37 +84,82 @@ public class PanelModel extends JPanel implements MNodeListener
                 return super.getComponentAfter (aContainer, result);  // Skip search tree if it is empty.
             }
 
-            // Handle GraphNode behavior: only one of title or tree should receive keyboard focus at any given time
-            GraphNode g1 = getGraphNode (result);
-            if (g1 != null)  // result is inside a GraphNode
+            if (panelEquations.view == PanelEquations.NODE)
             {
-                GraphNode g0 = getGraphNode (aComponent);
-                if (g1 == g0)  // Need to escape from the current GraphNode
+                // Handle GraphNode behavior: only one of title or tree should receive keyboard focus at any given time
+                GraphNode g1 = getGraphNode (result);
+                if (g1 != null)  // result is inside a GraphNode
+                {
+                    GraphNode g0 = getGraphNode (aComponent);
+                    if (g1 == g0)  // Need to escape from the current GraphNode
+                    {
+                        result = super.getComponentAfter (aContainer, result);
+                        g1 = getGraphNode (result);
+                    }
+                    if (g1 != null) return g1.getTitleFocus ();
+                    return result;
+                }
+
+                // Handle parent node behavior
+                BreadcrumbRenderer title = panelEquations.breadcrumbRenderer;
+                JTree              tree  = panelEquations.panelParent.panelEquationTree.tree;
+                if (aComponent == title  &&  result == tree)
                 {
                     result = super.getComponentAfter (aContainer, result);
                     g1 = getGraphNode (result);
+                    if (g1 != null) return g1.getTitleFocus ();
+                    return result;
                 }
-                if (g1 != null) return g1.getTitleFocus ();
-                return result;
+                if (result == title) return panelEquations.getTitleFocus ();
             }
+            else
+            {
+                PanelEquationTree pet = panelEquations.panelEquationTree;
+                JTree tree = pet.tree;
+                if (result == tree)
+                {
+                    // Skip property panel in tab sequence
+                    result = super.getComponentAfter (aContainer, result);
+                }
+                else if (aComponent == tree)
+                {
+                    // Go to next graph node after the one currently associated with property panel
+                    if (pet.root == panelEquations.part)  // tree is attached to graph parent
+                    {
+                        result = super.getComponentAfter (aContainer, panelEquations.breadcrumbRenderer);
+                    }
+                    else  // tree is attached to a graph node
+                    {
+                        // Notice the lack of "super" here. We call the present function again, so we also
+                        // skip over the property panel at the end of the graph node focus cycle.
+                        result = getComponentAfter (aContainer, pet.root.graph.title);
+                    }
 
-            // Handle parent node behavior
-            BreadcrumbRenderer title = panelEquations.breadcrumbRenderer;
-            JTree              tree  = panelEquations.panelParent.panelEquations.tree;
-        	if (aComponent == title  &&  result == tree)
-        	{
-        	    result = super.getComponentAfter (aContainer, result);
-        	    g1 = getGraphNode (result);
-        	    if (g1 != null) return g1.getTitleFocus ();
-        	    return result;
-        	}
-            if (result == title) return panelEquations.getTitleFocus ();
+                    // If appropriate, claw back focus to tree.
+                    if (result instanceof GraphNode.TitleRenderer  ||  result instanceof PanelEquations.BreadcrumbRenderer)
+                    {
+                        EventQueue.invokeLater (new Runnable ()
+                        {
+                            public void run ()
+                            {
+                                pet.tree.requestFocusInWindow ();
+                            }
+                        });
+                    }
+                }
+            }
 
             return result;
         }
 
         public Component getComponentBefore (Container aContainer, Component aComponent)
         {
+            Container ec = panelEquations.editor.editingContainer;
+            if (aComponent.getParent () == ec  &&  panelEquations.view != PanelEquations.NODE)
+            {
+                aComponent = panelEquations.panelEquationTree.tree;
+            }
+
             Component result = super.getComponentBefore (aContainer, aComponent);
 
             if (result == panelSearch.tree  &&  panelSearch.tree.getRowCount () == 0)
@@ -115,23 +167,57 @@ public class PanelModel extends JPanel implements MNodeListener
                 return super.getComponentBefore (aContainer, result);  // Skip search tree if it is empty.
             }
 
-            GraphNode g1 = getGraphNode (result);
-            if (g1 != null)
+            if (panelEquations.view == PanelEquations.NODE)
             {
-                GraphNode g0 = getGraphNode (aComponent);
-                if (g1 == g0)
+                GraphNode g1 = getGraphNode (result);
+                if (g1 != null)
+                {
+                    GraphNode g0 = getGraphNode (aComponent);
+                    if (g1 == g0)
+                    {
+                        result = super.getComponentBefore (aContainer, result);
+                        g1 = getGraphNode (result);
+                    }
+                    if (g1 != null) return g1.getTitleFocus ();
+                    // Most likely we have cycled into the graph parent, so fall through. The value of aComponent won't matter.
+                }
+
+                BreadcrumbRenderer title = panelEquations.breadcrumbRenderer;
+                JTree              tree  = panelEquations.panelParent.panelEquationTree.tree;
+                if (aComponent == tree  &&  result == title) return super.getComponentBefore (aContainer, result);
+                if (result == tree) return panelEquations.getTitleFocus ();
+            }
+            else
+            {
+                PanelEquationTree pet = panelEquations.panelEquationTree;
+                JTree tree = pet.tree;
+                if (result == tree)
                 {
                     result = super.getComponentBefore (aContainer, result);
-                    g1 = getGraphNode (result);
                 }
-                if (g1 != null) return g1.getTitleFocus ();
-                // Most likely we have cycled into the graph parent, so fall through. The value of aComponent won't matter.
-            }
+                else if (aComponent == tree)
+                {
+                    if (pet.root == panelEquations.part)
+                    {
+                        result = super.getComponentBefore (aContainer, panelEquations.breadcrumbRenderer);
+                    }
+                    else
+                    {
+                        result = super.getComponentBefore (aContainer, pet.root.graph.title);
+                    }
 
-            BreadcrumbRenderer title = panelEquations.breadcrumbRenderer;
-            JTree              tree  = panelEquations.panelParent.panelEquations.tree;
-        	if (aComponent == tree  &&  result == title) return super.getComponentBefore (aContainer, result);
-            if (result == tree) return panelEquations.getTitleFocus ();
+                    if (result instanceof GraphNode.TitleRenderer  ||  result instanceof PanelEquations.BreadcrumbRenderer)
+                    {
+                        EventQueue.invokeLater (new Runnable ()
+                        {
+                            public void run ()
+                            {
+                                pet.tree.requestFocusInWindow ();
+                            }
+                        });
+                    }
+                }
+            }
 
             return result;
         }

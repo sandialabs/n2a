@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -29,7 +29,6 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
-import gov.sandia.n2a.ui.eq.GraphParent;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
@@ -216,17 +215,13 @@ public class NodePart extends NodeContainer
     @Override
     public Font getPlainFont (Font base)
     {
-        float size = base.getSize2D ();
-        if (PanelModel.instance.panelEquations.viewTree  &&  isTrueRoot ()) size *= 2;
-        return base.deriveFont (Font.PLAIN, size);
+        return base.deriveFont (Font.PLAIN);
     }
 
     @Override
     public Font getStyledFont (Font base)
     {
-        float size = base.getSize2D ();
-        if (PanelModel.instance.panelEquations.viewTree  &&  isTrueRoot ()) size *= 2;
-        return base.deriveFont (Font.BOLD, size);
+        return base.deriveFont (Font.BOLD);
     }
 
     /**
@@ -491,10 +486,10 @@ public class NodePart extends NodeContainer
 
     public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
+        if (type.isEmpty ()) type = "Part";
         if (tree == null)
         {
             // The only thing we can add is a part in the current graph view.
-            if (type.isEmpty ()) type = "Part";
             if (! type.equals ("Part")) return null;
         }
         else
@@ -504,7 +499,6 @@ public class NodePart extends NodeContainer
             boolean hasChildren = ((FilteredTreeModel) tree.getModel ()).getChildCount (this) > 0;
             if (graphClosed  ||  collapsed  &&  hasChildren)  // The node is deliberately closed to indicate user intent.
             {
-                if (type.isEmpty ()) type = "Part";
                 if (graphClosed)
                 {
                     tree = null;  // Create a peer graph node.
@@ -518,16 +512,9 @@ public class NodePart extends NodeContainer
                 }
                 return ((NodePart) getTrueParent ()).add (type, tree, data, location);
             }
-
-            GraphParent parentPanel = PanelModel.instance.panelEquations.panelParent;
-            JTree parentTree = parentPanel.panelEquations.tree;
-            if (tree == parentTree  &&  ! parentPanel.isVisible ())  // parent node is closed
-            {
-                // Can only add a Part
-                if (type.isEmpty ()) type = "Part";
-                if (! type.equals ("Part")) return null;
-                // If type is Part, then fall through, since we will be adding new part as a child of this node.
-            }
+            // else this is an open node, so anything can be inserted under it.
+            // This could also be a graph parent. In that case, we treat it as an open node
+            // regardless of whether the parent panel is actually open.
         }
 
         int variableIndex = -1;
@@ -737,9 +724,8 @@ public class NodePart extends NodeContainer
     @Override
     public PanelEquationTree getTree ()
     {
-        if (pet   != null) return pet;
-        if (graph != null) return graph.panelEquations;  // Graph nodes don't set "pet". Their tree is single-use only, so they don't call PanelEquationTree.loadPart() or PanelEquationTree.clear(), which are where pet is managed.
-        if (parent == null) return null;  // True root. If this were instead a fake root, then at least one of {pet, graph} would be non-null.
+        if (pet != null) return pet;
+        if (parent == null) return null;  // True root, or no tree operations required. If this were instead a fake root that needs tree operations, then pet would be non-null.
         return ((NodeBase) parent).getTree ();
     }
 

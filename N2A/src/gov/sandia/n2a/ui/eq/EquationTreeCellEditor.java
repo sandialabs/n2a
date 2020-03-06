@@ -159,7 +159,11 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 if (editingNode != null)
                 {
                     stopCellEditing ();
-                    if (! editingTree.hasFocus ()) editingTree.clearSelection ();
+                    if (! editingTree.hasFocus ())
+                    {
+                        PanelEquationTree pet = (PanelEquationTree) editingTree.getParent ().getParent ();
+                        pet.yieldFocus ();
+                    }
                     ((MainTabbedPane) MainFrame.instance.tabs).setPreferredFocus (PanelModel.instance, editingTree);
                 }
             }
@@ -247,7 +251,11 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 if (editingNode != null)
                 {
                     stopCellEditing ();
-                    if (! editingTree.hasFocus ()) editingTree.clearSelection ();
+                    if (! editingTree.hasFocus ())
+                    {
+                        PanelEquationTree pet = (PanelEquationTree) editingTree.getParent ().getParent ();
+                        pet.yieldFocus ();
+                    }
                     ((MainTabbedPane) MainFrame.instance.tabs).setPreferredFocus (PanelModel.instance, editingTree);
                 }
             }

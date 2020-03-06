@@ -197,16 +197,16 @@ public class PanelEquationGraph extends JScrollPane
         {
             c = ftp.getComponentBefore (pm, node.graph.title);
             PanelEquations pe = pm.panelEquations;
-            if (c == pe.breadcrumbRenderer  ||  c == pe.panelParent.panelEquations.tree)
+            if (c == pe.breadcrumbRenderer  ||  c == pe.panelParent.panelEquationTree.tree)
             {
                 pe.getTitleFocus ().requestFocusInWindow ();
             }
             else
             {
                 while (c != null  &&  ! (c instanceof GraphNode)) c = c.getParent ();
-                if (c != null) ((GraphNode) c).takeFocus ();
             }
         }
+        if (c instanceof GraphNode) ((GraphNode) c).takeFocus ();
 
         graphPanel.removePart (node);  // If node still has focus, then default focus cycle applies.
     }
@@ -327,7 +327,7 @@ public class PanelEquationGraph extends JScrollPane
             for (Component c : getComponents ())
             {
                 GraphNode gn = (GraphNode) c;
-                gn.panelEquations.clear ();
+                if (gn.panelEquationTree != null) gn.panelEquationTree.clear ();
                 gn.node.graph = null;
                 gn.node.fakeRoot (false);
             }
@@ -470,7 +470,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
-                ((GraphNode) c).panelEquations.updateLock ();
+                ((GraphNode) c).panelEquationTree.updateLock ();
             }
         }
 
@@ -478,7 +478,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
-                ((GraphNode) c).panelEquations.updateFilterLevel ();
+                ((GraphNode) c).panelEquationTree.updateFilterLevel ();
             }
         }
 

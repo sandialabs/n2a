@@ -61,13 +61,10 @@ public class AddPart extends Undoable
         }
 
         PanelEquations pe = PanelModel.instance.panelEquations;
-        if (! pe.viewTree)  // In graph mode
-        {
-            if (location == null) location = pe.panelEquationGraph.getCenter ();
-            MNode bounds = createSubtree.childOrCreate ("$metadata", "gui", "bounds");
-            bounds.set (location.x, "x");
-            bounds.set (location.y, "y");
-        }
+        if (location == null) location = pe.panelEquationGraph.getCenter ();
+        MNode bounds = createSubtree.childOrCreate ("$metadata", "gui", "bounds");
+        bounds.set (location.x, "x");
+        bounds.set (location.y, "y");
     }
 
     public static String uniqueName (NodeBase parent, String prefix, int suffix, boolean allowEmptySuffix)
@@ -96,7 +93,7 @@ public class AddPart extends Undoable
         NodePart createdNode = (NodePart) parent.child (name);
 
         PanelEquations pe = PanelModel.instance.panelEquations;
-        boolean graphParent =  parent == pe.part  &&  ! pe.viewTree;
+        boolean graphParent =  parent == pe.part;
         PanelEquationTree pet = graphParent ? null : parent.getTree ();  // Only use tree if it is not the graph parent, since graph parent hides its sub-parts.
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
@@ -122,15 +119,18 @@ public class AddPart extends Undoable
             if (graphParent)  // Need to update entire model under fake root.
             {
                 PanelEquationTree subpet = createdNode.getTree ();
-                FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
-                submodel.nodeStructureChanged (createdNode);
-                subpet.animate ();
+                if (subpet != null)
+                {
+                    FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
+                    submodel.nodeStructureChanged (createdNode);
+                    subpet.animate ();
+                }
                 // Implicitly, the title of the node was focused when the part was deleted, so ensure it gets the focus back.
                 createdNode.graph.takeFocusOnTitle ();
             }
         }
 
-        if (! pe.viewTree) pe.resetBreadcrumbs ();
+        pe.resetBreadcrumbs ();
         if (pet == null)
         {
             PanelEquationTree.updateOrder (null, createdPath);
@@ -146,7 +146,7 @@ public class AddPart extends Undoable
         {
             peg.reconnect ();
             peg.repaint ();
-            if (peg.isEmpty ()) pe.panelParent.setOpen (true);
+            if (pe.view == PanelEquations.NODE  &&  peg.isEmpty ()) pe.panelParent.setOpen (true);
         }
     }
 
@@ -172,7 +172,7 @@ public class AddPart extends Undoable
         // Update GUI
 
         PanelEquations pe = PanelModel.instance.panelEquations;
-        boolean graphParent =  parent == pe.part  &&  ! pe.viewTree;
+        boolean graphParent =  parent == pe.part;
         PanelEquationTree pet = graphParent ? null : parent.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
@@ -214,9 +214,12 @@ public class AddPart extends Undoable
             else  // Existing graph node; content needs to be restructured.
             {
                 PanelEquationTree subpet = createdNode.getTree ();
-                FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
-                submodel.nodeStructureChanged (createdNode);
-                subpet.animate ();
+                if (subpet != null)
+                {
+                    FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
+                    submodel.nodeStructureChanged (createdNode);
+                    subpet.animate ();
+                }
             }
             createdNode.hide = false;
             createdNode.graph.takeFocusOnTitle ();

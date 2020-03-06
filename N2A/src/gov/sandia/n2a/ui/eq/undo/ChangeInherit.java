@@ -70,7 +70,7 @@ public class ChangeInherit extends Undoable
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
         parent.filter (FilteredTreeModel.filterLevel);
-        if (! pe.viewTree  &&  parent == pe.part)
+        if (parent == pe.part)
         {
             peg.loadPart ();
             peg.repaint ();
@@ -82,7 +82,7 @@ public class ChangeInherit extends Undoable
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
         pet.animate ();
-        if (! pe.viewTree  &&  grandparent == pe.part)
+        if (grandparent == pe.part)
         {
             peg.reconnect ();
             peg.repaint ();

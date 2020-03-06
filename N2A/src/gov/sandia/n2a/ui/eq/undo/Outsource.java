@@ -16,6 +16,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -94,7 +95,8 @@ public class Outsource extends Undoable
         }
         else
         {
-            node.graph.setOpen (wasExpanded);
+            PanelEquations pe = PanelModel.instance.panelEquations;
+            if (pe.view == PanelEquations.NODE) node.graph.setOpen (wasExpanded);
             node.graph.takeFocus ();
         }
 

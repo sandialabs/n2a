@@ -1,5 +1,5 @@
 /*
-Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -62,9 +62,10 @@ public class GraphNode extends JPanel
     protected TitleRenderer       title;
     public    boolean             open;
     protected boolean             titleFocused        = true;  // sans any other knowledge, title should be selected first
+    protected boolean             selected;
     protected JPanel              panelTitle;
     protected Component           hr                  = Box.createVerticalStrut (border.t + 1);
-    public    PanelEquationTree   panelEquations;
+    public    PanelEquationTree   panelEquationTree;
     protected ResizeListener      resizeListener      = new ResizeListener ();
     protected List<GraphEdge>     edgesOut            = new ArrayList<GraphEdge> ();
     protected List<GraphEdge>     edgesIn             = new ArrayList<GraphEdge> ();
@@ -79,12 +80,18 @@ public class GraphNode extends JPanel
         node.graph  = this;
 
         node.fakeRoot (true);
-        panelEquations = new PanelEquationTree (container, node, true);
+        if (container.view == PanelEquations.NODE)
+        {
+            panelEquationTree = new PanelEquationTree (container);
+            panelEquationTree.loadPart (node);
+        }
 
-        open = node.source.getBoolean ("$metadata", "gui", "bounds", "open");
+        // Internally, this class uses that null/non-null state of panelEquationsTree to indicated whether
+        // container.view is NODE or a property panel mode.
+        open =  panelEquationTree != null  &&  node.source.getBoolean ("$metadata", "gui", "bounds", "open");
 
         title = new TitleRenderer ();
-        title.getTreeCellRendererComponent (panelEquations.tree, node, false, open, false, -1, false);  // Configure JLabel with info from node.
+        title.getTreeCellRendererComponent (getEquationTree ().tree, node, false, open, false, -1, false);  // Configure JLabel with info from node.
         title.setFocusable (true);            // make focusable in general
         title.setRequestFocusEnabled (true);  // make focusable by mouse
 
@@ -92,7 +99,7 @@ public class GraphNode extends JPanel
         panelTitle.setOpaque (false);
         if (open) panelTitle.add (hr, BorderLayout.CENTER);
         Lay.BLtg (this, "N", panelTitle);
-        if (open) add (panelEquations, BorderLayout.CENTER);
+        if (open) add (panelEquationTree, BorderLayout.CENTER);
         setBorder (border);
         setOpaque (false);
 
@@ -128,14 +135,20 @@ public class GraphNode extends JPanel
         // If we are open, then our equation tree will be automatically included in the walk.
         // If we are closed, then our equation tree will be missed.
         if (open) return;
-        if (hr             != null) SwingUtilities.updateComponentTreeUI (hr);
-        if (panelEquations != null) SwingUtilities.updateComponentTreeUI (panelEquations);
+        if (hr                != null) SwingUtilities.updateComponentTreeUI (hr);
+        if (panelEquationTree != null) SwingUtilities.updateComponentTreeUI (panelEquationTree);
+    }
+
+    public PanelEquationTree getEquationTree ()
+    {
+        if (panelEquationTree == null) return container.panelEquationTree;
+        return panelEquationTree;
     }
 
     public Component getTitleFocus ()
     {
         if (titleFocused) return title;
-        return panelEquations.tree;
+        return getEquationTree ().tree;
     }
 
     public void takeFocusOnTitle ()
@@ -154,7 +167,7 @@ public class GraphNode extends JPanel
         else
         {
             restoreFocus ();
-            panelEquations.takeFocus ();
+            getEquationTree ().takeFocus ();
         }
     }
 
@@ -163,10 +176,25 @@ public class GraphNode extends JPanel
     **/
     public void restoreFocus ()
     {
-        container.active = panelEquations;
+        if (panelEquationTree == null)
+        {
+            container.active = container.panelEquationTree;
+            if (! node.toString ().isEmpty ())  // Assumes that a blank node is about to be deleted, and we don't want to load tree in that case.
+            {
+                container.panelEquationTree.loadPart (node);
+                FocusCacheEntry fce = container.createFocus (node);
+                if (fce.sp != null) fce.sp.restore (container.panelEquationTree.tree, false);
+            }
+        }
+        else
+        {
+            container.active = panelEquationTree;
+        }
+
         parent.setComponentZOrder (this, 0);
         parent.scrollRectToVisible (getBounds ());
         repaint ();
+
         // Since parent node is always on top, we must shift the graph to avoid occlusion.
         if (container.panelParent.isVisible ())
         {
@@ -186,9 +214,11 @@ public class GraphNode extends JPanel
         }
     }
 
-    public void switchFocus (boolean ontoTitle)
+    public void switchFocus (boolean ontoTitle, boolean selectRow0)
     {
-        if (panelEquations.tree.getRowCount () == 0) ontoTitle = true;  // Don't focus tree if is empty.
+        PanelEquationTree pet = getEquationTree ();
+        if (pet.tree.getRowCount () == 0) ontoTitle = true;  // Don't focus tree if is empty.
+        if (panelEquationTree == null) pet.loadPart (node);  // Because switchFocus() can also be used to grab focus from another part.
 
         titleFocused = ontoTitle;
         if (ontoTitle)
@@ -197,10 +227,13 @@ public class GraphNode extends JPanel
         }
         else
         {
-            setOpen (true);
-            panelEquations.tree.scrollRowToVisible (0);
-            panelEquations.tree.setSelectionRow (0);
-            panelEquations.takeFocus ();
+            if (panelEquationTree != null) setOpen (true);
+            if (selectRow0)
+            {
+                pet.tree.scrollRowToVisible (0);
+                pet.tree.setSelectionRow (0);
+            }
+            pet.takeFocus ();
         }
     }
 
@@ -218,19 +251,25 @@ public class GraphNode extends JPanel
         if (open)
         {
             panelTitle.add (hr, BorderLayout.CENTER);
-            add (panelEquations, BorderLayout.CENTER);
+            add (panelEquationTree, BorderLayout.CENTER);
         }
         else
         {
             titleFocused = true;
-            if (panelEquations.tree.isFocusOwner ()) title.requestFocusInWindow ();
+            if (panelEquationTree.tree.isFocusOwner ()) title.requestFocusInWindow ();
 
             panelTitle.remove (hr);
-            remove (panelEquations);  // assume that equation tree does not have focus
+            remove (panelEquationTree);  // assume that equation tree does not have focus
         }
         boolean focused = title.isFocusOwner ();
-        title.getTreeCellRendererComponent (panelEquations.tree, node, focused, open, false, -1, focused);
+        title.getTreeCellRendererComponent (panelEquationTree.tree, node, focused, open, false, -1, focused);
         animate (new Rectangle (getLocation (), getPreferredSize ()));
+    }
+
+    public void setSelected (boolean value)
+    {
+        selected = value;
+        title.updateSelected ();
     }
 
     public Dimension getPreferredSize ()
@@ -315,7 +354,7 @@ public class GraphNode extends JPanel
         {
             x += bounds.getInt ("x");
             y += bounds.getInt ("y");
-            setOpen (bounds.getBoolean ("open"));
+            if (panelEquationTree != null) setOpen (bounds.getBoolean ("open"));
         }
         Dimension d = getPreferredSize ();  // Fetches updated width and height.
         Rectangle r = new Rectangle (x, y, d.width, d.height);
@@ -467,9 +506,14 @@ public class GraphNode extends JPanel
             setTransferHandler (container.transferHandler);
 
             InputMap inputMap = getInputMap ();
+            inputMap.put (KeyStroke.getKeyStroke ("UP"),               "nothing");
             inputMap.put (KeyStroke.getKeyStroke ("DOWN"),             "selectNext");
             inputMap.put (KeyStroke.getKeyStroke ("LEFT"),             "close");
             inputMap.put (KeyStroke.getKeyStroke ("RIGHT"),            "selectChild");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl UP"),          "nothing");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl DOWN"),        "selectChild");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl LEFT"),        "nothing");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl RIGHT"),       "selectChild");
             inputMap.put (KeyStroke.getKeyStroke ("shift UP"),         "moveUp");
             inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),       "moveDown");
             inputMap.put (KeyStroke.getKeyStroke ("shift LEFT"),       "moveLeft");
@@ -497,23 +541,23 @@ public class GraphNode extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (open) toggleOpen ();
+                    if (panelEquationTree != null  &&  open) toggleOpen ();
                 }
             });
             actionMap.put ("selectNext", new AbstractAction ()
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (! open) toggleOpen ();  // because switchFocus() does not change metadata "open" flag
-                    switchFocus (false);
+                    if (panelEquationTree != null  &&  ! open) toggleOpen ();  // because switchFocus() does not change metadata "open" flag
+                    switchFocus (false, panelEquationTree != null);
                 }
             });
             actionMap.put ("selectChild", new AbstractAction ()
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (open) switchFocus (false);
-                    else      toggleOpen ();
+                    if (panelEquationTree != null  &&  ! open) toggleOpen ();
+                    else                                       switchFocus (false, false);
                 }
             });
             actionMap.put ("moveUp", new AbstractAction ()
@@ -551,14 +595,14 @@ public class GraphNode extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    panelEquations.addAtSelected ("");  // No selection should be active, so this should default to root (same as our "node").
+                    getEquationTree ().addAtSelected ("");  // No selection should be active, so this should default to root (same as our "node").
                 }
             });
             actionMap.put ("delete", new AbstractAction ()
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    node.delete (panelEquations.tree, false);
+                    node.delete (getEquationTree ().tree, false);
                 }
             });
             actionMap.put ("startEditing", new AbstractAction ()
@@ -605,7 +649,7 @@ public class GraphNode extends JPanel
                             int iconWidth = node.getIcon (open).getIconWidth ();  // "open" isn't actually important for root node, as NodePart doesn't currently change appearance.
                             if (x < iconWidth)
                             {
-                                toggleOpen ();
+                                if (panelEquationTree != null) toggleOpen ();
                             }
                             else if (isFocusOwner ())
                             {
@@ -624,7 +668,7 @@ public class GraphNode extends JPanel
                     {
                         if (clicks == 1)  // Show popup menu
                         {
-                            switchFocus (true);
+                            switchFocus (true, false);
                             container.menuPopup.show (title, x, y);
                         }
                     }
@@ -675,13 +719,13 @@ public class GraphNode extends JPanel
             {
                 public void focusGained (FocusEvent e)
                 {
-                    getTreeCellRendererComponent (panelEquations.tree, node, true, open, false, -1, true);
+                    getTreeCellRendererComponent (getEquationTree ().tree, node, true, open, false, -1, true);
                     restoreFocus ();  // does repaint
                 }
 
                 public void focusLost (FocusEvent e)
                 {
-                    getTreeCellRendererComponent (panelEquations.tree, node, false, open, false, -1, false);
+                    getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected, open, false, -1, false);
                     GraphNode.this.repaint ();
                 }
             });
@@ -699,9 +743,15 @@ public class GraphNode extends JPanel
             {
                 UIupdated = false;
                 // We are never the focus owner, because updateUI() is triggered from the L&F panel.
-                getTreeCellRendererComponent (panelEquations.tree, node, false, open, false, -1, false);
+                getTreeCellRendererComponent (getEquationTree ().tree, node, false, open, false, -1, false);
             }
             return super.getPreferredSize ();
+        }
+
+        public void updateSelected ()
+        {
+            getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected, open, false, -1, isFocusOwner ());
+            GraphNode.this.repaint ();
         }
 
         /**
@@ -713,7 +763,7 @@ public class GraphNode extends JPanel
 
             if (container.editor.editingNode != null) container.editor.stopCellEditing ();  // Edit could be in progress on another node title or on any tree, including our own.
             container.editor.addCellEditorListener (this);
-            editingComponent = container.editor.getTitleEditorComponent (panelEquations.tree, node, open);
+            editingComponent = container.editor.getTitleEditorComponent (getEquationTree ().tree, node, open);
             panelTitle.add (editingComponent, BorderLayout.NORTH, 0);  // displaces this renderer from the layout manager's north slot
             setVisible (false);  // hide this renderer
 
@@ -766,7 +816,7 @@ public class GraphNode extends JPanel
                     // Drill down
                     PanelEquations pe = PanelModel.instance.panelEquations;
                     pe.saveFocus ();
-                    FocusCacheEntry fce = pe.getFocus (pe.part);
+                    FocusCacheEntry fce = pe.createFocus (pe.part);
                     fce.subpart = node.source.key ();
                     pe.loadPart (node);
                 }

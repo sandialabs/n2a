@@ -57,7 +57,7 @@ public class StoredPath
         keys.remove (0);
     }
 
-    public void restore (JTree tree)
+    public void restore (JTree tree, boolean setSelection)
     {
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         NodeBase n = (NodeBase) model.getRoot ();  // goal is to find n closest to original selected node as possible
@@ -134,7 +134,7 @@ public class StoredPath
             }
         }
         TreePath path = new TreePath (n.getPath ());
-        tree.setSelectionPath (path);
+        if (setSelection) tree.setSelectionPath (path);
         if (expanded) tree.expandPath (path);
         tree.scrollPathToVisible (path);
     }
