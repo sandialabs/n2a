@@ -138,6 +138,7 @@ public class PanelEquations extends JPanel
     protected JButton buttonExport;
     protected JButton buttonImport;
 
+    protected JMenuItem  itemAddPart;
     protected JPopupMenu menuPopup;
     protected JPopupMenu menuView;
     protected JPopupMenu menuFilter;
@@ -633,7 +634,7 @@ public class PanelEquations extends JPanel
 
         // Context Menu
 
-        JMenuItem itemAddPart = new JMenuItem ("Add Part", ImageUtil.getImage ("comp.gif"));
+        itemAddPart = new JMenuItem ("Add Part", ImageUtil.getImage ("comp.gif"));
         itemAddPart.setActionCommand ("Part");
         itemAddPart.addActionListener (listenerAdd);
 
@@ -1006,6 +1007,14 @@ public class PanelEquations extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             String type = e.getActionCommand ();
+            Point location = null;
+            if (e.getSource () == itemAddPart)
+            {
+                if (menuPopup.getInvoker () == panelEquationGraph.graphPanel)
+                {
+                    location = panelEquationGraph.graphPanel.popupLocation;
+                }
+            }
             if (record == null)
             {
                 AddDoc add = new AddDoc ();
@@ -1019,10 +1028,9 @@ public class PanelEquations extends JPanel
                 if (locked) return;
             }
 
-            if (active == null)
+            if (active == null  ||  location != null)
             {
-                // With no active tree, the only thing we can add is a part. NodePart.add() does this check for us, and returns null if we try to add something other than a part.
-                NodePart editMe = (NodePart) part.add (type, null, null, null);
+                NodePart editMe = (NodePart) part.add (type, null, null, location);
                 if (editMe == null) return;
                 EventQueue.invokeLater (new Runnable ()
                 {

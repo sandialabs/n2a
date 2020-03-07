@@ -33,7 +33,9 @@ import java.util.Map.Entry;
 
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
@@ -44,12 +46,14 @@ import javax.swing.ViewportLayout;
 import javax.swing.event.MouseInputAdapter;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
+import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 
 @SuppressWarnings("serial")
@@ -297,6 +301,9 @@ public class PanelEquationGraph extends JScrollPane
         protected List<GraphEdge> edges    = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
         public    Point           offset   = new Point ();  // Offset from persistent coordinates to viewport coordinates. Add this to a stored (x,y) value to get non-negative coordinates that can be painted.
         protected List<GraphNode> selected = new ArrayList<GraphNode> ();  // TODO: implement selection, with operations: move, resize, delete
+        protected JPopupMenu      arrowMenu;
+        protected GraphEdge       arrowEdge;  // Most recent edge when arrowMenu was activated.
+        protected Point           popupLocation;
 
         public GraphPanel ()
         {
@@ -307,6 +314,30 @@ public class PanelEquationGraph extends JScrollPane
             addMouseListener (mouseListener);
             addMouseMotionListener (mouseListener);
             addMouseWheelListener (mouseListener);
+
+            // Arrow menu
+
+            JMenuItem itemArrowNone = new JMenuItem (GraphEdge.iconFor (""));
+            itemArrowNone.setActionCommand ("");
+            itemArrowNone.addActionListener (listenerArrow);
+
+            JMenuItem itemArrowPlain = new JMenuItem (GraphEdge.iconFor ("arrow"));
+            itemArrowPlain.setActionCommand ("arrow");
+            itemArrowPlain.addActionListener (listenerArrow);
+
+            JMenuItem itemArrowCircle = new JMenuItem (GraphEdge.iconFor ("circle"));
+            itemArrowCircle.setActionCommand ("circle");
+            itemArrowCircle.addActionListener (listenerArrow);
+
+            JMenuItem itemArrowCircleFill = new JMenuItem (GraphEdge.iconFor ("circleFill"));
+            itemArrowCircleFill.setActionCommand ("circleFill");
+            itemArrowCircleFill.addActionListener (listenerArrow);
+
+            arrowMenu = new JPopupMenu ();
+            arrowMenu.add (itemArrowNone);
+            arrowMenu.add (itemArrowPlain);
+            arrowMenu.add (itemArrowCircle);
+            arrowMenu.add (itemArrowCircleFill);
         }
 
         public void updateUI ()
@@ -533,6 +564,16 @@ public class PanelEquationGraph extends JScrollPane
 
             g2.dispose ();
         }
+
+        ActionListener listenerArrow = new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                MNode gui = new MVolatile ();
+                gui.set (e.getActionCommand (), "arrow", arrowEdge.alias);
+                PanelModel.instance.undoManager.add (new ChangeGUI (arrowEdge.nodeFrom.node, gui));
+            }
+        };
     }
 
     public class GraphLayout implements LayoutManager2
@@ -761,6 +802,25 @@ public class PanelEquationGraph extends JScrollPane
             {
                 startPan = me.getPoint ();
                 setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
+            }
+            else if (SwingUtilities.isRightMouseButton (me))
+            {
+                // Context menus
+                if (container.locked) return;
+                Point p = me.getPoint ();
+                graphPanel.arrowEdge = graphPanel.findTipAt (p);
+                if (graphPanel.arrowEdge != null)
+                {
+                    graphPanel.arrowMenu.show (graphPanel, p.x, p.y);
+                }
+                else
+                {
+                    container.getTitleFocus ().requestFocusInWindow ();
+                    graphPanel.popupLocation = new Point ();
+                    graphPanel.popupLocation.x = p.x - graphPanel.offset.x;
+                    graphPanel.popupLocation.y = p.y - graphPanel.offset.y;
+                    container.menuPopup.show (graphPanel, p.x, p.y);
+                }
             }
         }
 

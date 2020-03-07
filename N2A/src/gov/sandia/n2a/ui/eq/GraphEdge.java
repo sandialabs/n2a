@@ -1,22 +1,29 @@
 /*
-Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.geom.CubicCurve2D;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
+
+import javax.swing.Icon;
+import javax.swing.ImageIcon;
 
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 
@@ -27,7 +34,9 @@ public class GraphEdge
     protected GraphEdge edgeOther; // For binary connections only, the edge to the other endpoint. Used to coordinate a smooth curve through the connection node.
     protected String    alias;     // Name of endpoint variable in connection part.
 
-    protected Shape     shape;
+    protected Shape     line;      // The edge itself, along with any additional strokes to paint the arrowhead, if its shape is open.
+    protected Shape     head;      // A closed shape. May be null.
+    protected boolean   headFill;  // if true, fill black; if false, fill with background (or white)
     protected Vector2   label;
     protected Rectangle textBox;
     protected Rectangle bounds = new Rectangle (0, 0, -1, -1);  // empty. Allows call to animate() on brand-new edges that have not previously called updateShape().
@@ -38,8 +47,8 @@ public class GraphEdge
     protected static double arrowheadAngle  = Math.PI / 5;
     protected static double arrowheadLength = 10;
     protected static float  strokeThickness = 3;
-    protected static int    nameTopPad      = 1;
-    protected static int    nameSidePad     = 2;
+    protected static int    padNameTop      = 1;
+    protected static int    padNameSide     = 2;
 
     public GraphEdge (GraphNode nodeFrom, GraphNode nodeTo, String alias)
     {
@@ -49,10 +58,24 @@ public class GraphEdge
     }
 
     /**
-        Updates our cached shape information based current state of graph nodes.
+        Updates our cached shape information based on current state of graph nodes.
     **/
     public void updateShape (boolean updateOther)
     {
+        line       = null;
+        head       = null;
+        label      = null;
+        bounds     = new Rectangle (0, 0, -1, -1);  // empty, so won't affect union(), and will return false from intersects()
+
+        int padTip = 0;  // Distance from boundary of nodeTo to target the tip. Varies depending on arrow type.
+        String headType = nodeFrom.node.source.get ("$metadata", "gui", "arrow", alias);
+        switch (headType)
+        {
+            case "circle":
+            case "circleFill":
+                padTip = (int) Math.round (arrowheadLength / 2);
+        }
+
         Rectangle Cbounds = nodeFrom.getBounds ();
         Vector2 c = new Vector2 (Cbounds.getCenterX (), Cbounds.getCenterY ());
 
@@ -67,6 +90,7 @@ public class GraphEdge
         {
             Abounds = nodeTo.getBounds ();
             a       = new Vector2 (Abounds.getCenterX (), Abounds.getCenterY ());
+            Abounds.grow (padTip, padTip);
         }
 
         Vector2 ba = null;  // Non-null for binary connections that also need a curve rather than straight line.
@@ -151,14 +175,8 @@ public class GraphEdge
                 tip = tip.multiply (length).add (c);
             }
             root = intersection (new Segment2 (c, tip), Cbounds);
-            if (root == null)  // tip is inside Cbounds
-            {
-                shape  = null;
-                label  = null;
-                bounds = new Rectangle (0, 0, -1, -1);  // empty, so won't affect union(), and will return false from intersects()
-                return;
-            }
-            shape = new Line2D.Double (c.x, c.y, tip.x, tip.y);
+            if (root == null) return;  // tip is inside Cbounds
+            line = new Line2D.Double (c.x, c.y, tip.x, tip.y);
             tipAngle = new Segment2 (tip, c).angle ();
         }
         else if (ba == null)  // Draw straight line.
@@ -166,14 +184,8 @@ public class GraphEdge
             Segment2 s = new Segment2 (a, c);
             if (! tipDrag) tip = intersection (s, Abounds);  // tip can be null if c is inside Abounds
             root = intersection (s, Cbounds);  // root can be null if a is inside Cbounds
-            if (tip == null  ||  root == null)
-            {
-                shape  = null;
-                label  = null;
-                bounds = new Rectangle (0, 0, -1, -1);
-                return;
-            }
-            shape = new Line2D.Double (c.x, c.y, tip.x, tip.y);
+            if (tip == null  ||  root == null) return;
+            line = new Line2D.Double (c.x, c.y, tip.x, tip.y);
             tipAngle = s.angle ();
         }
         else  // Draw curve.
@@ -194,28 +206,37 @@ public class GraphEdge
             double length = c.distance (tip) / 3;
             Vector2 w1 = tip.add (c2c.multiply (length));
             Vector2 w2 = c.add (ba.multiply (length));
-            shape = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
+            line = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
 
-            Spline spline = new Spline ((CubicCurve2D) shape);
+            Spline spline = new Spline ((CubicCurve2D) line);
             root = intersection (spline, Cbounds);  // on boundary of c
-            if (root == null)
-            {
-                shape  = null;
-                label  = null;
-                bounds = new Rectangle (0, 0, -1, -1);
-                return;
-            }
+            if (root == null) return;
         }
 
         // Arrow head
-        Path2D path = new Path2D.Double (shape);
-        Vector2 end = new Vector2 (tip, tipAngle + arrowheadAngle, arrowheadLength);
-        path.append (new Line2D.Double (end.x, end.y, tip.x, tip.y), false);
-        end = new Vector2 (tip, tipAngle - arrowheadAngle, arrowheadLength);
-        path.append (new Line2D.Double (tip.x, tip.y, end.x, end.y), false);
-        shape = path;
+        double ah = arrowheadLength / 2;  // arrowhead half-width
+        switch (headType)
+        {
+            case "arrow":
+                Path2D path = new Path2D.Double (line);  // Wrap shape in path object so we can extend it
+                Vector2 end = new Vector2 (tip, tipAngle + arrowheadAngle, arrowheadLength);
+                path.append (new Line2D.Double (end.x, end.y, tip.x, tip.y), false);
+                end = new Vector2 (tip, tipAngle - arrowheadAngle, arrowheadLength);
+                path.append (new Line2D.Double (tip.x, tip.y, end.x, end.y), false);
+                line = path;
+                break;
+            case "circle":
+                head = new Ellipse2D.Double (tip.x - ah, tip.y - ah, arrowheadLength, arrowheadLength);
+                headFill = false;
+                break;
+            case "circleFill":
+                head = new Ellipse2D.Double (tip.x - ah, tip.y - ah, arrowheadLength, arrowheadLength);
+                headFill = true;
+                break;
+        }
 
-        bounds = shape.getBounds ();
+        bounds = line.getBounds ();
+        if (head != null) bounds = bounds.union (head.getBounds ());
         int t = (int) Math.ceil (strokeThickness / 2);
         bounds.grow (t, t);
 
@@ -225,21 +246,21 @@ public class GraphEdge
         if (absAngle > nodeAngle)  // top or bottom
         {
             label.x = root.x - tw / 2;
-            if (root.y < c.y) label.y = root.y - th - nameTopPad;
-            else              label.y = root.y      + nameTopPad;
+            if (root.y < c.y) label.y = root.y - th - padNameTop;
+            else              label.y = root.y      + padNameTop;
         }
         else  // left or right
         {
-            if (root.x < c.x) label.x = root.x - tw - nameSidePad;
-            else              label.x = root.x      + nameSidePad;
+            if (root.x < c.x) label.x = root.x - tw - padNameSide;
+            else              label.x = root.x      + padNameSide;
             label.y = root.y - th / 2;
         }
 
         textBox = new Rectangle ();
-        textBox.x      = (int) label.x - nameSidePad;
-        textBox.y      = (int) label.y - nameTopPad;
-        textBox.width  = (int) Math.ceil (tw) + 2 * nameSidePad;
-        textBox.height = (int) Math.ceil (th) + 2 * nameTopPad;
+        textBox.x      = (int) label.x - padNameSide;
+        textBox.y      = (int) label.y - padNameTop;
+        textBox.width  = (int) Math.ceil (tw) + 2 * padNameSide;
+        textBox.height = (int) Math.ceil (th) + 2 * padNameTop;
         bounds = bounds.union (textBox);
         // tb gives position of top-left corner relative to baseline.
         // We want baseline relative to top-left, so subtract to reverse vector.
@@ -247,24 +268,90 @@ public class GraphEdge
         label.y -= tb.getY ();
     }
 
+    /**
+        Not a true paintComponent(), but rather a subroutine of PanelEquationGraph.paintComponent().
+        We get called with Graphics g already configured with our stroke width and other settings.
+        To maximize efficiency, we don't make a local copy of g.
+        g gets disposed by the caller immediately after all GraphEdges are done drawing, so any
+        changes we make to g are safe.
+    **/
     public void paintComponent (Graphics g)
     {
-        if (shape == null) return;
+        if (line == null) return;
 
-        // If this class gets changed into a proper Swing component (such a JPanel),
-        // then handle g in the appropriate manner. For now, we simply assume that
-        // the caller is using us as subroutine, and that g is a fully configured Graphics2D,
-        // including stroke, color and rendering hints.
         Graphics2D g2 = (Graphics2D) g;
 
         g2.setColor (Color.black);
-        g2.draw (shape);
+        g2.draw (line);
+        if (head != null)
+        {
+            if (! headFill) g2.setColor (PanelEquationGraph.background);
+            g2.fill (head);
+            g2.setColor (Color.black);
+            g2.draw (head);
+        }
 
         if (alias.isEmpty ()) return;
         g2.setColor (new Color (0xD0FFFFFF, true));
         g2.fill (textBox);
         g2.setColor (Color.black);
         g2.drawString (alias, (float) label.x, (float) label.y);
+    }
+
+    /**
+        Create icons for context menu.
+        Icons should be regenerated any time the look & feel changes.
+    **/
+    public static Icon iconFor (String headType)
+    {
+        int h = (int) Math.ceil (arrowheadLength + strokeThickness);
+        int w = 2 * h;
+        int y = h / 2;
+        BufferedImage result = new BufferedImage (w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = result.createGraphics ();
+        g.setBackground (new Color (0, 0, 0, 1));
+        g.clearRect (0, 0, w, h);
+
+        // line
+        int pad = (int) Math.ceil (strokeThickness / 2);
+        int padTip = pad;
+        switch (headType)
+        {
+            case "circle":
+            case "circleFill":
+                padTip += (int) Math.round (arrowheadLength / 2);
+        }
+        g.setStroke (new BasicStroke (strokeThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor (Color.black);
+        g.draw (new Line2D.Double (padTip, y, w, y));
+
+        // head
+        double ah = arrowheadLength / 2;
+        switch (headType)
+        {
+            case "arrow":
+                Vector2 tip = new Vector2 (padTip, y);  // Hides member variable.
+                Vector2 end = new Vector2 (tip, arrowheadAngle, arrowheadLength);
+                g.draw (new Line2D.Double (end.x, end.y, tip.x, tip.y));
+                end = new Vector2 (tip, -arrowheadAngle, arrowheadLength);
+                g.draw (new Line2D.Double (tip.x, tip.y, end.x, end.y));
+                break;
+            case "circle":
+                Shape circle = new Ellipse2D.Double (pad, y - ah, arrowheadLength, arrowheadLength);
+                g.setColor (PanelEquationGraph.background);
+                g.fill (circle);
+                g.setColor (Color.black);
+                g.draw (circle);
+                break;
+            case "circleFill":
+                circle = new Ellipse2D.Double (pad, y - ah, arrowheadLength, arrowheadLength);
+                g.fill (circle);
+                g.draw (circle);
+                break;
+        }
+
+        return new ImageIcon (result);
     }
 
     public void animate (Point p)

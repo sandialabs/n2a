@@ -82,8 +82,8 @@ public class ChangeVariable extends Undoable
         if (nodeBefore == null) throw new CannotRedoException ();
 
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
-        FontMetrics fm = nodeBefore.getFontMetrics (pet.tree);
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
 
         NodeVariable nodeAfter;
         boolean touchedBindings = false;
@@ -118,7 +118,8 @@ public class ChangeVariable extends Undoable
                 }
                 else
                 {
-                    model.removeNodeFromParent (nodeBefore);
+                    if (model == null) FilteredTreeModel.removeNodeFromParentStatic (nodeBefore);
+                    else               model.removeNodeFromParent (nodeBefore);
                 }
             }
             else
@@ -127,14 +128,21 @@ public class ChangeVariable extends Undoable
                 {
                     int index = parent.getIndex (nodeBefore);
                     nodeAfter = new NodeVariable (newPart);
-                    model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
+                    if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (nodeAfter, parent, index);
+                    else               model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
                 }
 
                 nodeBefore.build ();
                 nodeBefore.findConnections ();
                 nodeBefore.filter (FilteredTreeModel.filterLevel);
-                if (nodeBefore.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (nodeBefore);
-                else                                                    parent.hide (nodeBefore, model);
+                if (nodeBefore.visible (FilteredTreeModel.filterLevel))
+                {
+                    if (model != null) model.nodeStructureChanged (nodeBefore);
+                }
+                else
+                {
+                    parent.hide (nodeBefore, model);
+                }
                 if (nodeBefore.isBinding)
                 {
                     if (parent.graph != null) parent.graph.updateGUI (nameBefore, oldPart.get ());
@@ -147,14 +155,18 @@ public class ChangeVariable extends Undoable
         nodeAfter.build ();
         nodeAfter.findConnections ();
         nodeAfter.filter (FilteredTreeModel.filterLevel);
-        nodeAfter.updateColumnWidths (fm);
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
+        if (pet != null)
+        {
+            FontMetrics fm = nodeAfter.getFontMetrics (pet.tree);
+            nodeAfter.updateColumnWidths (fm);
+            parent.updateTabStops (fm);
+            parent.allNodesChanged (model);
 
-        TreeNode[] nodePath = nodeAfter.getPath ();
-        pet.updateOrder (nodePath);
-        pet.updateVisibility (nodePath, -2, ! nodeAfter.isBinding);
-        pet.animate ();
+            TreeNode[] nodePath = nodeAfter.getPath ();
+            pet.updateOrder (nodePath);
+            pet.updateVisibility (nodePath, -2, ! nodeAfter.isBinding);
+            pet.animate ();
+        }
 
         if (parent.graph != null)
         {
