@@ -350,15 +350,31 @@ public class PanelDiff extends JTree
         {
             if (userObject == null)
             {
-                userObject = key;
+                String result = key;
                 if (B != null)
                 {
-                    if (B.data ()) userObject += " = " + B.get ();
+                    if (A == null)
+                    {
+                        if (B.data ()) result += " = " + B.get ();
+                    }
+                    else  // Both A and B are present, so compare them.
+                    {
+                        if (A.data () == B.data ()  &&  A.get ().equals (B.get ()))  // same content
+                        {
+                            if (B.data ()) result += " = " + B.get ();
+                        }
+                        else  // different
+                        {
+                            result  = "<s>" + key + " = " + A.get () + "</s><br/>";
+                            result +=         key + " = " + B.get ();
+                        }
+                    }
                 }
                 else if (A != null)
                 {
-                    if (A.data ()) userObject += " = " + A.get ();
+                    if (A.data ()) result += " = " + A.get ();
                 }
+                userObject = "<html>" + result + "</html>";
             }
             return userObject.toString ();
         }
