@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,10 +10,12 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.Insets;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -21,6 +23,7 @@ import java.util.List;
 
 import javax.swing.Icon;
 import javax.swing.JTree;
+import javax.swing.JViewport;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreeNode;
 
@@ -177,6 +180,47 @@ public class NodeBase extends DefaultMutableTreeNode
     public Icon getIcon (boolean expanded)
     {
         return null;
+    }
+
+    /**
+        Indicates that value is too long to display in a single-line text field.
+        In this case, calling getText() with expanded set to true will return full text.
+    **/
+    public boolean hasTruncatedText ()
+    {
+        return false;
+    }
+
+    /**
+        Utility function for deciding when to truncate text field.
+        @return Usable width of tree's viewport. This is calculated based on possible viewport
+        rather than actual viewport, because the viewport may get resized to fit the resulting field.
+    **/
+    public int availableWidth ()
+    {
+        int width = 800;
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        PanelEquationTree pet = getTree ();
+        if (pe.view == PanelEquations.NODE)
+        {
+            JViewport vp = pe.panelEquationGraph.getViewport ();
+            if (pet.root == pe.part)  // parent node
+            {
+                Insets insets = pe.panelParent.getInsets ();
+                width = vp.getExtentSize ().width / 2 - insets.left - insets.right;
+            }
+            else if (pet.root.graph != null)  // child node
+            {
+                Insets insets = pet.root.graph.getInsets ();
+                width = vp.getExtentSize ().width - insets.left - insets.right;
+            }
+        }
+        else  // property panel
+        {
+            // Neither the tree nor the viewport should have insets.
+            width = pet.getViewport ().getWidth ();
+        }
+        return Math.max (100, width);  // never less than 100px
     }
 
     /**

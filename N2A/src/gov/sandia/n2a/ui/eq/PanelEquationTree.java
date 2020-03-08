@@ -228,12 +228,13 @@ public class PanelEquationTree extends JScrollPane
             public void actionPerformed (ActionEvent e)
             {
                 TreePath path = tree.getSelectionPath ();
-                if (path != null  &&  ! container.locked)
-                {
-                    boolean isControlDown = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
-                    if (isControlDown  &&  ! (path.getLastPathComponent () instanceof NodePart)) container.editor.multiLineRequested = true;
-                    tree.startEditingAtPath (path);
-                }
+                if (path == null) return;
+                NodeBase n = (NodeBase) path.getLastPathComponent ();
+                if (container.locked  &&  ! n.hasTruncatedText ()) return;
+                boolean isControlDown = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
+                if (isControlDown  &&  ! (n instanceof NodePart)) container.editor.multiLineRequested = true;  // Also possible that multiline will be selected automatically based on content.
+                tree.setEditable (true);  // Hack to allow users to view truncated fields in locked models. Lock will be restored to correct state when the edit ends.
+                tree.startEditingAtPath (path);
             }
         });
         actionMap.put ("drillUp", new AbstractAction ()
@@ -337,8 +338,10 @@ public class PanelEquationTree extends JScrollPane
                             }
                             else  // any other node type
                             {
+                                if (container.locked  &&  ! ((NodeBase) temp).hasTruncatedText ()) return;
                                 tree.setSelectionPath (path);
-                                tree.startEditingAtPath (path);  // won't edit if tree is locked
+                                tree.setEditable (true);
+                                tree.startEditingAtPath (path);
                                 return;
                             }
                         }

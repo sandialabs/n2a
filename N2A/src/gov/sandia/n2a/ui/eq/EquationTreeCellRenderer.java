@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -102,7 +102,7 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
     public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
     {
         super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
-        if (value == null) return this;  // Sometimes we just want a basic set up of the editing component, even though there is nothing to edit.
+        if (value == null) return this;  // Sometimes we just want a basic set up of the component, even though there is nothing to show.
 
         NodeBase n = (NodeBase) value;
 

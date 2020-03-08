@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -48,6 +48,12 @@ public class NodeReference extends NodeBase
     public Icon getIcon (boolean expanded)
     {
         return icon;
+    }
+
+    @Override
+    public boolean hasTruncatedText ()
+    {
+        return toString ().endsWith ("...")  &&  ! source.get ().endsWith ("...");
     }
 
     @Override
@@ -112,7 +118,7 @@ public class NodeReference extends NodeBase
             {
                 offset = tabs.get (2) - tabs.get (1) - offset;
             }
-            int width = getTree ().tree.getWidth () - offset;  // Available width for displaying value (not including key).
+            int width = availableWidth () - offset;
 
             boolean addEllipsis = false;
             String[] pieces = value.split ("\n", 2);

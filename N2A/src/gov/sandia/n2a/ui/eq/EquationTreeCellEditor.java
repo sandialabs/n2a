@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,6 +14,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Insets;
+import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
@@ -318,6 +319,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             editingComponent = multiLinePane;
             multiLineEditor.setText (text);
             multiLineEditor.setFont (font);
+            multiLineEditor.setEditable (! PanelModel.instance.panelEquations.locked);
             int equals = text.indexOf ('=');
             if (equals >= 0) multiLineEditor.setCaretPosition (equals);
             multiLineRequested = false;
@@ -327,6 +329,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             editingComponent = oneLineEditor;
             oneLineEditor.setText (text);
             oneLineEditor.setFont (font);
+            oneLineEditor.setEditable (! PanelModel.instance.panelEquations.locked);
         }
         editingContainer.add (editingComponent);
         undoManager.discardAllEdits ();
@@ -407,6 +410,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         editingNode = null;
 
         fireEditingStopped ();
+        editingTree.setEditable (! PanelModel.instance.panelEquations.locked);  // Restore lock that may have been unset to allow user to view truncated fields.
         node.applyEdit (editingTree);
 
         return true;
@@ -418,6 +422,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         editingNode = null;
 
         fireEditingCanceled ();
+        editingTree.setEditable (! PanelModel.instance.panelEquations.locked);
 
         // We only get back an empty string if we explicitly set it before editing starts.
         // Certain types of nodes do this when inserting a new instance into the tree, via NodeBase.add()
@@ -470,15 +475,10 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
         public void paint (Graphics g)
         {
-            // This complex formula to center the icon vertically was copied from DefaultTreeCellEditor.EditorContainer.
-            // It works for both single and multiline editors.
-            int iconHeight = editingIcon.getIconHeight ();
-            int textHeight = editingComponent.getFontMetrics (editingComponent.getFont ()).getHeight ();
-            int textY = iconHeight / 2 - textHeight / 2;  // Vertical offset where text starts w.r.t. top of icon. Can be negative if text is taller.
-            int totalY = Math.min (0, textY);
-            int totalHeight = Math.max (iconHeight, textY + textHeight) - totalY;
-            int y = getHeight () / 2 - (totalY + (totalHeight / 2));
-
+            // DefaultTreeCellEditor.EditorContainer has an excessively complex formula for computing
+            // vertical position of icon. This simple formula seems to do the same thing, but needs more
+            // testing. The goal is to have no visual shift at all when going into edit mode.
+            int y = (getHeight () - editingIcon.getIconHeight ()) / 2;
             editingIcon.paintIcon (this, g, 0, y);
             super.paint (g);
         }
@@ -494,10 +494,14 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
         public Dimension getPreferredSize ()
         {
+            JViewport vp          = (JViewport) editingTree.getParent ();
+            Dimension extent      = vp.getExtentSize ();
+            Point     p           = vp.getViewPosition ();
+            int       rightMargin = p.x + extent.width;
+
             Dimension pSize = editingComponent.getPreferredSize ();
-            Dimension extent = ((JViewport) editingTree.getParent ()).getExtentSize ();
             Insets insets = editingTree.getInsets ();
-            pSize.width = extent.width - editingNode.getLevel () * offsetPerLevel - insets.left - insets.right;
+            pSize.width = rightMargin - offsetPerLevel * editingNode.getLevel () - insets.left - insets.right;
             pSize.width = Math.max (100, pSize.width);
 
             Dimension rSize = renderer.getPreferredSize ();

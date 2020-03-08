@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
-import java.awt.Insets;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,8 +14,6 @@ import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
@@ -26,7 +23,6 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.JViewport;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 
@@ -95,6 +91,12 @@ public class NodeAnnotation extends NodeContainer
     }
 
     @Override
+    public boolean hasTruncatedText ()
+    {
+        return toString ().endsWith ("...")  &&  ! folded.get ().endsWith ("...");
+    }
+
+    @Override
     public String getText (boolean expanded, boolean editing)
     {
         String result = toString ();
@@ -155,30 +157,7 @@ public class NodeAnnotation extends NodeContainer
             {
                 offset = tabs.get (1) - offset;
             }
-
-            int width = 800;  // Available width for displaying value (not including key).
-            PanelEquations pe = PanelModel.instance.panelEquations;
-            PanelEquationTree pet = getTree ();
-            if (pe.view == PanelEquations.NODE)
-            {
-                JViewport vp = pe.panelEquationGraph.getViewport ();
-                if (pet.root == pe.part)  // parent node
-                {
-                    Insets insets = pe.panelParent.getInsets ();
-                    width = vp.getExtentSize ().width / 2 - insets.left - insets.right;
-                }
-                else if (pet.root.graph != null)  // child node
-                {
-                    Insets insets = pet.root.graph.getInsets ();
-                    width = vp.getExtentSize ().width - insets.left - insets.right;
-                }
-            }
-            else  // property panel
-            {
-                // Neither the tree nor the viewport should have insets.
-                width = pet.getViewport ().getWidth ();
-            }
-            width -= offset;
+            int width = availableWidth () - offset;
 
             boolean addEllipsis = false;
             String[] pieces = value.split ("\n", 2);
