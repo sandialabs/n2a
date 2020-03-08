@@ -113,7 +113,7 @@ public class GraphEdge
             c2c = c.subtract (avg);
             double c2cLength = c2c.length ();
             double baLength = ba.length ();
-            if (c2cLength > baLength)  // Draw curved lines.
+            if (c2cLength > baLength)
             {
                 c2c = c2c.normalize ();
                 if (baLength > 0)
@@ -126,9 +126,22 @@ public class GraphEdge
                     if (nodeFrom.edgesOut.get (0) == this) ba = ba.multiply (-1);
                 }
             }
-            else  // Draw straight lines.
+            else  // c2cLength <= baLength; That is, c is roughly between a and b.
             {
-                ba = null;
+                if (baLength < 10  ||  c2cLength < 10)  // Nodes are too close to compute good angles.
+                {
+                    ba = null;  // Draw straight lines. In this case, neither ba nor c2c will be used.
+                }
+                else
+                {
+                    c2c = c2c.normalize ();
+                    ba = ba.normalize ();
+
+                    // Interpolate between c2c and ac (vector from a to c).
+                    double r = c2cLength / baLength;
+                    Vector2 ac = c.subtract (a).normalize ();
+                    c2c = c2c.multiply (r).add (ac.multiply (1 - r)).normalize ();
+                }
             }
 
             // If needed, update shape parameters of the other edge.
