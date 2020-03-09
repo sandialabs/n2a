@@ -420,7 +420,7 @@ public class NodeVariable extends NodeContainer
     @Override
     public void applyEdit (JTree tree)
     {
-        String input = (String) getUserObject ();
+        String input = toString ();
         boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddVariable");
         if (input.isEmpty ())
         {

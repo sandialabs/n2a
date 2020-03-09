@@ -6,8 +6,11 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import java.awt.FontMetrics;
+import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
@@ -23,14 +26,16 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangePart extends Undoable
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
-    protected List<String> path;   // to the container of the part being renamed
-    protected String       nameBefore;
-    protected String       nameAfter;
-    protected MNode        savedTree;  // The entire subtree from the top document. If not from top document, then at least a single node for the part itself.
+    protected StoredView         view = PanelModel.instance.panelEquations.new StoredView ();
+    protected List<String>       path;   // to the container of the part being renamed
+    protected String             nameBefore;
+    protected String             nameAfter;
+    protected MNode              savedTree;  // The entire subtree from the top document. If not from top document, then at least a single node for the part itself.
+    protected List<List<String>> connectionPaths;
 
     /**
         @param node The part being renamed.
@@ -44,6 +49,14 @@ public class ChangePart extends Undoable
 
         savedTree = new MVolatile ();
         if (node.source.isFromTopDocument ()) savedTree.merge (node.source.getSource ());
+
+        // Collect key paths to all nodes which are connection bindings to the given part.
+        List<NodeVariable> connectionBindings = PanelModel.instance.panelEquations.root.bindingsFor (node);
+        if (connectionBindings != null)
+        {
+            connectionPaths = new ArrayList<List<String>> ();
+            for (NodeVariable v : connectionBindings) connectionPaths.add (v.getKeyPath ());
+        }
     }
 
     public void undo ()
@@ -73,16 +86,34 @@ public class ChangePart extends Undoable
         if (! (temp instanceof NodePart)) throw new CannotRedoException ();
         NodePart nodeBefore = (NodePart) temp;
 
-        // Update the database: move the subtree.
+        // Update the database
+        
+        //   Move the subtree
         MPart mparent = parent.source;
         mparent.clear (nameBefore);
         mparent.set (savedTree, nameAfter);
         MPart oldPart = (MPart) mparent.child (nameBefore);
         MPart newPart = (MPart) mparent.child (nameAfter);
 
+        //   Change connection bindings
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        if (connectionPaths != null)
+        {
+            MPart doc = pe.root.source;
+            for (List<String> cp : connectionPaths)
+            {
+                Object[] keyArray = cp.subList (1, cp.size ()).toArray ();
+                String value = doc.get (keyArray);
+                String[] pieces = value.split ("\\.");
+                pieces[pieces.length - 1] = nameAfter;
+                value = pieces[0];
+                for (int i = 1; i < pieces.length; i++) value += "." + pieces[i];
+                doc.set (value, keyArray);
+            }
+        }
+
         // Update GUI
 
-        PanelEquations pe = PanelModel.instance.panelEquations;
         boolean graphParent =  parent == pe.part;
         PanelEquationTree pet = graphParent ? null : parent.getTree ();
         FilteredTreeModel model = null;
@@ -161,6 +192,25 @@ public class ChangePart extends Undoable
             pet.updateOrder (nodePath);
             pet.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
             pet.animate ();
+        }
+
+        if (connectionPaths != null)
+        {
+            // Update connection-binding variables affected by name change.
+            for (List<String> cp : connectionPaths)
+            {
+                NodeBase n = NodeBase.locateNode (cp);
+                if (n == null) continue;
+                PanelEquationTree subpet = n.getTree ();
+                if (subpet == null) continue;
+                JTree subtree = subpet.tree;
+                FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
+
+                FontMetrics fm = n.getFontMetrics (subtree);
+                n.updateColumnWidths (fm);
+                ((NodeBase) n.getParent ()).updateTabStops (fm);
+                submodel.nodeChanged (n);
+            }
         }
 
         if (graphParent)

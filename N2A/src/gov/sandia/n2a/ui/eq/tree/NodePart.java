@@ -231,13 +231,39 @@ public class NodePart extends NodeContainer
     {
         connectionBindings = null;
         unsatisfiedConnections = null;
-        Enumeration<?> i = children ();
-        while (i.hasMoreElements ())
+        if (children == null) return;
+        for (Object o : children)
         {
-            Object o = i.nextElement ();
             if      (o instanceof NodePart)     ((NodePart)     o).findConnections ();  // Recurses down to sub-parts, so everything gets examined.
             else if (o instanceof NodeVariable) ((NodeVariable) o).findConnections ();  // Checks if variable is a connection binding. If so, sets isBinding on the variable and also sets our isConnection member.
         }
+    }
+
+    /**
+        Assembles a list of all connection bindings which reference a given endpoint.
+    **/
+    public List<NodeVariable> bindingsFor (NodePart endpoint)
+    {
+        List<NodeVariable> result = null;
+        if (children != null)
+        {
+            for (Object o : children)
+            {
+                if (! (o instanceof NodePart)) continue;
+                List<NodeVariable> temp = ((NodePart) o).bindingsFor (endpoint);
+                if (temp == null) continue;
+                if (result == null) result = temp;
+                else                result.addAll (temp);
+            }
+        }
+        if (connectionBindings == null) return result;
+        for (Entry<String,NodePart> e : connectionBindings.entrySet ())
+        {
+            if (e.getValue () != endpoint) continue;
+            if (result == null) result = new ArrayList<NodeVariable> ();
+            result.add ((NodeVariable) child (e.getKey ()));  // key should always refer to a NodeVariable acting as a connection binding
+        }
+        return result;
     }
 
     public NodeBase resolveName (String name)
