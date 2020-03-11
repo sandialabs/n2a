@@ -541,6 +541,8 @@ public class PanelEquationTree extends JScrollPane
                 if (fce.sp != null) fce.sp.restore (tree, true);
                 if (tree.getSelectionCount () == 0) tree.setSelectionRow (0);  // First-time display
             }
+            TreePath selected = tree.getLeadSelectionPath ();
+            if (selected != null) tree.scrollPathToVisible (selected);
         }
     }
 
@@ -803,15 +805,11 @@ public class PanelEquationTree extends JScrollPane
         TreePath selectedPath = new TreePath (c.getPath ());
         GraphNode gn = pet.root.graph;
         PanelEquations pe = PanelModel.instance.panelEquations;
-        if (setSelection  &&  c != pet.root)
+        if (setSelection  &&  c != pet.root  &&  pe.view == PanelEquations.NODE)
         {
-            if (pe.view == PanelEquations.NODE)
-            {
-                // Ensure that tree is visible.
-                if (gn == null) pe.panelParent.setOpen (true);
-                else            gn.setOpen (true);
-            }
-            pet.tree.scrollPathToVisible (selectedPath);
+            // Ensure that tree is visible.
+            if (gn == null) pe.panelParent.setOpen (true);
+            else            gn.setOpen (true);
         }
         if (lastChange == path.length)
         {
