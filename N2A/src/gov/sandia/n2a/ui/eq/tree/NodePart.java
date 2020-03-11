@@ -31,6 +31,7 @@ import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddInherit;
@@ -520,7 +521,8 @@ public class NodePart extends NodeContainer
         }
         else
         {
-            boolean graphClosed =  graph != null  &&  ! graph.open;
+            PanelEquations pe = PanelModel.instance.panelEquations;
+            boolean graphClosed =  pe.view == PanelEquations.NODE  &&  graph != null  &&  ! graph.open;
             boolean collapsed   = tree.isCollapsed (new TreePath (getPath ()));
             boolean hasChildren = ((FilteredTreeModel) tree.getModel ()).getChildCount (this) > 0;
             if (graphClosed  ||  collapsed  &&  hasChildren)  // The node is deliberately closed to indicate user intent.
