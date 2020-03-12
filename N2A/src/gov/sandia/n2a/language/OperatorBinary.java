@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -172,17 +172,23 @@ public class OperatorBinary extends Operator implements OperatorArithmetic
     {
         if (operand0.contains (statement.target))  // need left-inverse
         {
-            statement.rhs = inverse (operand1, statement.rhs, false);
+            statement.rhs = inverse (operand1, statement.rhs);
             statement.lhs = operand0;
         }
         else  // need right-inverse
         {
-            statement.rhs = inverse (operand0, statement.rhs, true);
+            statement.rhs = inverse (operand0, statement.rhs);
             statement.lhs = operand1;
         }
     }
 
-    public Operator inverse (Operator lhs, Operator rhs, boolean right) throws EvaluationException
+    /**
+        In an equality statement, moves one of our two operands over to the rhs.
+        @param lhs The selected operand. Will be one of operand0 or operand1.
+        @param rhs The current rhs from the equality statement.
+        @return A new operator to replace the rhs in the equality statement.
+    **/
+    public Operator inverse (Operator lhs, Operator rhs) throws EvaluationException
     {
         throw new EvaluationException ("Can't invert this operator.");
     }

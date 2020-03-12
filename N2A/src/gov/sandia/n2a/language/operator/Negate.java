@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -44,6 +44,16 @@ public class Negate extends OperatorUnary
     public Type eval (Instance context)
     {
         return operand.eval (context).negate ();
+    }
+
+    public double getDouble ()
+    {
+        return - operand.getDouble ();
+    }
+
+    public boolean isScalar ()
+    {
+        return operand.isScalar ();
     }
 
     public void solve (Equality statement) throws EvaluationException

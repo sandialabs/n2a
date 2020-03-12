@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -119,7 +119,7 @@ public class Add extends OperatorBinary
         return operand0.eval (context).add (operand1.eval (context));
     }
 
-    public Operator inverse (Operator lhs, Operator rhs, boolean right)
+    public Operator inverse (Operator lhs, Operator rhs)
     {
         Subtract result = new Subtract ();
         result.operand0 = rhs;
