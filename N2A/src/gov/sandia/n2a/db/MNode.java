@@ -60,6 +60,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return result;  // If no keys are specified, we return this node.
     }
 
+    public MNode child (Object... keys)
+    {
+        return child (toStrings (keys));
+    }
+
     /**
         Retrieves a child node from arbitrary depth, or creates it if nonexistent.
         Like a combination of child() and set().

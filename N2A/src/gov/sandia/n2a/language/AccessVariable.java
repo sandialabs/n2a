@@ -90,6 +90,7 @@ public class AccessVariable extends Operator
         if (e.expression instanceof Constant)
         {
             from.removeDependencyOn (v);
+            reference.removeDependencies (from);
             from.changed = true;
             Operator result = e.expression.deepCopy ();
             result.parent = parent;
@@ -104,6 +105,7 @@ public class AccessVariable extends Operator
 
             // Fold aliased variable
             from.removeDependencyOn (v);
+            reference.removeDependencies (from);
             from.addDependencyOn (v2);
             from.changed = true;
             reference.variable = v2;
@@ -129,6 +131,7 @@ public class AccessVariable extends Operator
                 }
                 reference.resolution.add (o2);
             }
+            reference.addDependencies (from);
         }
         return this;
     }

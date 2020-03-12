@@ -459,6 +459,17 @@ public class NodeBase extends DefaultMutableTreeNode
         return result;  // Can return null, if the leaf node is not found.
     }
 
+    public NodeBase locateNodeFromHere (List<String> path)
+    {
+        NodeBase result = this;
+        for (int i = 0; i < path.size (); i++)
+        {
+            result = (NodeBase) result.child (path.get (i));
+            if (result == null) break;
+        }
+        return result;
+    }
+
     public NodeBase child (String key)
     {
         if (children == null) return null;

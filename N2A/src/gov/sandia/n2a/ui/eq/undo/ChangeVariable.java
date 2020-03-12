@@ -7,18 +7,28 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.undo;
 
 import java.awt.FontMetrics;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeSet;
 
+import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -27,17 +37,17 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeVariable extends Undoable
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
-    protected List<String> path;
-    protected String       nameBefore;
-    protected String       nameAfter;
-    protected String       valueBefore;
-    protected String       valueAfter;
-    protected MNode        savedTree;  // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
-    protected List<String> replacePath;  // If a newly-created variable turns out to modify another node, this lets us remove the AddVariable from the undo stack.
+    protected StoredView    view = PanelModel.instance.panelEquations.new StoredView ();
+    protected List<String>  path;
+    protected String        nameBefore;
+    protected String        nameAfter;
+    protected String        valueBefore;
+    protected String        valueAfter;
+    protected MNode         savedTree;   // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
+    protected List<String>  replacePath; // If a newly-created variable turns out to modify another node, this lets us remove the AddVariable from the undo stack.
 
     /**
-        @param variable The direct container of the node being changed.
+        @param node The variable being changed.
     **/
     public ChangeVariable (NodeVariable node, String nameAfter, String valueAfter)
     {
@@ -95,13 +105,74 @@ public class ChangeVariable extends Undoable
         else
         {
             // Update database
+
+            //   Move the subtree
             MPart mparent = parent.source;
             mparent.clear (nameBefore);
             mparent.set (savedTree, nameAfter);
             MPart newPart = (MPart) mparent.child (nameAfter);
             MPart oldPart = (MPart) mparent.child (nameBefore);
 
+            //   Change references to this variable
+            PanelEquations pe = PanelModel.instance.panelEquations;
+            List<List<String>> references = new ArrayList<List<String>> ();  // Key paths to each variable that references this one.
+            try
+            {
+                // doc is a collated model, so changes will also be made to references from inherited nodes.
+                // Such changes will be saved as an override.
+                MPart doc = pe.root.source;
+                EquationSet compiled = new EquationSet (doc);
+                List<String> vkeypath = new ArrayList<String> (path.subList (1, path.size ()));
+                Variable vold;
+                Variable vnew;
+                if (oldPart == null)
+                {
+                    EquationSet p = (EquationSet) compiled.getObject (vkeypath);
+                    vold = Variable.fromLHS (nameBefore);
+                    vold.equations = new TreeSet<EquationEntry> ();
+                    p.add (vold);
+                    vkeypath.add (nameAfter);
+                }
+                else
+                {
+                    vkeypath.add (nameBefore);
+                    vold = (Variable) compiled.getObject (vkeypath);
+                    vkeypath.set (vkeypath.size () - 1, nameAfter);
+                }
+                vnew = (Variable) compiled.getObject (vkeypath);
+
+                try
+                {
+                    compiled.resolveConnectionBindings ();
+                    // This will very likely throw an AbortRun exception to report unresolved variables.
+                    // This will do no harm. All we need is that other equations resolve to this variable.
+                    compiled.resolveRHS ();
+                }
+                catch (Exception e) {}
+
+                // TODO: Handle connection bindings
+                // Iterate over usedBy, but use a special renderer rather than changeReferences().
+                // The renderer should get changed name from ConnectionBinding.
+
+                if (vold.usedBy != null)
+                {
+                    for (Object o : vold.usedBy)
+                    {
+                        if (! (o instanceof Variable)) continue;
+                        if (o == vnew  &&  nameAfter.equals (this.nameBefore)) continue;  // Don't touch savedTree on undo, as it is an exact snapshot of the previous value for this variable.
+
+                        List<String> ref = ((Variable) o).getKeyPath ();
+                        references.add (ref);
+                        Object[] keyArray = ref.toArray ();
+                        MNode n = doc.child (keyArray);
+                        changeReferences (n, nameBefore, nameAfter);
+                    }
+                }
+            }
+            catch (Exception e) {e.printStackTrace ();}
+
             // Update GUI
+
             nodeAfter = (NodeVariable) parent.child (nameAfter);
             if (oldPart == null)
             {
@@ -149,6 +220,21 @@ public class ChangeVariable extends Undoable
                     touchedBindings = true;
                 }
             }
+
+            for (List<String> ref : references)
+            {
+                NodeBase n = pe.root.locateNodeFromHere (ref);
+                if (n == null) continue;
+                PanelEquationTree subpet = n.getTree ();
+                if (subpet == null) continue;
+                JTree subtree = subpet.tree;
+                FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
+
+                FontMetrics fm = n.getFontMetrics (subtree);
+                n.updateColumnWidths (fm);
+                ((NodeBase) n.getParent ()).updateTabStops (fm);
+                submodel.nodeChanged (n);
+            }
         }
 
         boolean wasBinding = nodeAfter.isBinding;
@@ -180,6 +266,69 @@ public class ChangeVariable extends Undoable
             MPart mparent = parent.source;
             if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
         }
+    }
+
+    /**
+        Given a variable node, change all references contained in its code from one variable name to another.
+    **/
+    public void changeReferences (MNode v, String nameBefore, String nameAfter)
+    {
+        String value = v.get ();
+        if (! value.isEmpty ())
+        {
+            Variable.ParsedValue pv = new Variable.ParsedValue (value);
+            pv.expression = changeExpression (pv.expression, nameBefore, nameAfter);
+            pv.condition  = changeExpression (pv.condition,  nameBefore, nameAfter);
+            v.set (pv);
+        }
+        for (MNode e : v)
+        {
+            String key = e.key ();
+            if (! key.startsWith ("@")) continue;
+            String newKey = "@" + changeExpression (key.substring (1), nameBefore, nameAfter);
+            e.set (changeExpression (e.get (), nameBefore, nameAfter));
+            v.move (key, newKey);
+        }
+    }
+
+    public String changeExpression (String expression, String nameBefore, String nameAfter)
+    {
+        // First check if a simple search-and-replace will work. This will avoid messing with the user's formatting.
+        int pos = expression.indexOf (nameBefore);
+        if (pos < 0) return expression;
+        if (expression.lastIndexOf (nameBefore) == pos)  // only one occurrence in string
+        {
+            return expression.replace (nameBefore, nameAfter);
+        }
+
+        // Otherwise, parse the equation, modify and re-emit.
+        try
+        {
+            Renderer r = new Renderer ()
+            {
+                public boolean render (Operator op)
+                {
+                    if (op instanceof AccessVariable)
+                    {
+                        AccessVariable av = (AccessVariable) op;
+                        String[] pieces = av.name.split ("\\.");
+                        if (! pieces[pieces.length - 1].equals (nameBefore)) return false;
+                        pieces[pieces.length - 1] = nameAfter;
+                        result.append (pieces[0]);
+                        for (int i = 1; i < pieces.length; i++) result.append ("." + pieces[i]);
+                        return true;
+                    }
+
+                    return false;
+                }
+            };
+
+            Operator op = Operator.parse (expression);
+            op.render (r);
+            return r.result.toString ();
+        }
+        catch (Exception e) {}
+        return expression;
     }
 
     public boolean replaceEdit (UndoableEdit edit)

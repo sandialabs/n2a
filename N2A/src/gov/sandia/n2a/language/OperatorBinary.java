@@ -124,7 +124,9 @@ public class OperatorBinary extends Operator implements OperatorArithmetic
     public void render (Renderer renderer)
     {
         if (renderer.render (this)) return;
-        render (renderer, " " + toString () + " ");
+        // As a matter of style, add space around logical operators. This is completely arbitrary.
+        if (this instanceof OperatorLogical) render (renderer, " " + toString () + " ");
+        else                                 render (renderer,       toString ());
     }
 
     public void render (Renderer renderer, String middle)

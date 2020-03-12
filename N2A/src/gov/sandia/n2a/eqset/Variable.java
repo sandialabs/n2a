@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1267,6 +1267,17 @@ public class Variable implements Comparable<Variable>, Cloneable
         if (container != null) result = container.prefix ();
         if (! result.isEmpty ()) result += ".";
         result += nameString ();
+        return result;
+    }
+
+    /**
+        For variables in an equation set, returns a path that can be used to retrieve the source node
+        from the database.
+    **/
+    public List<String> getKeyPath ()
+    {
+        List<String> result = container.getKeyPath ();
+        result.add (nameString ());
         return result;
     }
 

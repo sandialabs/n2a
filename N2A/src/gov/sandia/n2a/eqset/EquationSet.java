@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -89,6 +89,7 @@ public class EquationSet implements Comparable<EquationSet>
     {
         public int         index;  // position in connectionBindings array
         public String      alias;
+        public Variable    variable;  // The original variable from which this binding was derived. Other variables that resolve through this binding are recorded in Variable.usedBy.
         public EquationSet endpoint;
         /**
             Trail of objects followed to resolve the connection.
@@ -331,6 +332,43 @@ public class EquationSet implements Comparable<EquationSet>
         return name;
     }
 
+    public List<String> getKeyPath ()
+    {
+        if (container == null) return new ArrayList<String> ();  // Empty. We don't include the key for the root document.
+        List<String> result = container.getKeyPath ();
+        result.add (name);
+        return result;
+    }
+
+    public Object getObject (List<String> keyPath)
+    {
+        if (keyPath == null  ||  keyPath.isEmpty ()) return this;
+        EquationSet result = this;
+        for (String key : keyPath)
+        {
+            // Search for part with exact key match. findPart() has a different use-case, not suitable for this.
+            EquationSet eqForKey = null;
+            for (EquationSet p : result.parts)
+            {
+                if (p.name.equals (key))
+                {
+                    eqForKey = p;
+                    break;
+                }
+            }
+            if (eqForKey != null)
+            {
+                result = eqForKey;
+                continue;
+            }
+
+            // At this point, we've failed to match an equation set. The only other option is a variable.
+            // Either one matches or we fail. Either way, we are done.
+            return result.find (Variable.fromLHS (key));
+        }
+        return result;
+    }
+
     /**
         Returns the top-level document node associated with this equation set,
         assuming that $inherit was hacked to point to the name of the model in the database.
@@ -434,6 +472,7 @@ public class EquationSet implements Comparable<EquationSet>
             // Store connection binding
             if (connectionBindings == null) connectionBindings = new ArrayList<ConnectionBinding> ();
             result.alias = v.name;
+            result.variable = v;
             result.index = connectionBindings.size ();
             connectionBindings.add (result);
             result.endpoint.connected = true;
@@ -772,6 +811,7 @@ public class EquationSet implements Comparable<EquationSet>
                     target.removeAttribute ("temporary");
                 }
                 target.addDependencyOn (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
+                v.reference.addDependencies (v);
                 target.container.referenced = true;
                 if (   target.assignment != v.assignment
                     && ! (   (target.assignment == Variable.MULTIPLY  &&  v.assignment == Variable.DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
@@ -805,7 +845,9 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Attach the appropriate Variable to each AccessVariable operator.
-        Depends on results of: resolveLHS() -- to create indirect variables and thus avoid unnecessary failure of resolution
+        Depends on results of:
+            resolveConnectionBindings -- to follow connection references
+            resolveLHS() -- to create indirect variables and thus avoid unnecessary failure of resolution
     **/
     public void resolveRHS () throws Exception
     {
@@ -908,6 +950,7 @@ public class EquationSet implements Comparable<EquationSet>
                         }
                     }
                     av.reference = query.reference;
+                    av.reference.addDependencies (from);
                     return av;
                 }
                 if (op instanceof Split)

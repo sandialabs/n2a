@@ -272,6 +272,7 @@ public class Operator implements Cloneable
                 {
                     AccessVariable av = (AccessVariable) op;
                     from.removeDependencyOn (av.reference.variable);
+                    av.reference.removeDependencies (from);
                     return false;
                 }
                 return true;
