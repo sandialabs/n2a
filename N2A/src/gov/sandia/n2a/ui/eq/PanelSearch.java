@@ -1050,7 +1050,6 @@ public class PanelSearch extends JPanel
                 }
                 tranch.add (m);
             }
-            if (matches.isEmpty ()) return;
 
             // Rebuild search list.
             NodeBase newRoot = new NodeBase ();
@@ -1063,21 +1062,34 @@ public class PanelSearch extends JPanel
                 }
             }
 
-            // Pick the best candidate and create a new connection.
-            EndpointMatch m = matches.firstEntry ().getValue ().get (0);
-            NodePart first = m.matches.values ().iterator ().next ();
-            NodePart parent = first.getTrueParent ();
-
+            // Create a new connection.
             MNode data = new MVolatile ();
-            data.set (m.key, "$inherit");
+            if (matches.isEmpty ())  // No connection part is applicable.
+            {
+                char k = 'A';
+                for (NodePart p : query)
+                {
+                    data.set (p.source.key (), "" + k);
+                    k++;
+                }
+            }
+            else  // Pick the best candidate.
+            {
+                EndpointMatch m = matches.firstEntry ().getValue ().get (0);
+                data.set (m.key, "$inherit");
+                for (String key : m.matches.keySet ())
+                {
+                    NodePart p = m.matches.get (key);
+                    data.set (p.source.key (), key);  // Assign name of target part to endpoint variable.
+                }
+            }
 
+            // Determine position in graph.
             float x     = 0;
             float y     = 0;
             int   count = 0;
-            for (String key : m.matches.keySet ())
+            for (NodePart p : query)
             {
-                NodePart p = m.matches.get (key);
-                data.set (p.source.key (), key);  // Assign name of target part to endpoint variable.
                 if (p.graph != null)
                 {
                     Point l = p.graph.getLocation ();
@@ -1096,6 +1108,7 @@ public class PanelSearch extends JPanel
             }
 
             // UI changes must be done on the EDT.
+            NodePart parent = query.get (0).getTrueParent ();
             final Point c = center;
             EventQueue.invokeLater (new Runnable ()
             {
