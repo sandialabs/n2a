@@ -147,6 +147,7 @@ public class ChangeVariable extends Undoable
                 try
                 {
                     compiled.resolveConnectionBindings ();
+                    compiled.resolveLHS ();
                     // This will very likely throw an AbortRun exception to report unresolved variables.
                     // This will do no harm. All we need is that other equations resolve to this variable.
                     compiled.resolveRHS ();
@@ -164,9 +165,17 @@ public class ChangeVariable extends Undoable
 
                         Variable v = (Variable) o;
                         List<String> ref = v.getKeyPath ();
-                        if (o != vnew  &&  o != vold) references.add (ref);  // Queue GUI updates for nodes other than the primary ones.
                         MNode n = doc.child (ref.toArray ());
-                        changeReferences (vold, n, v);
+                        String oldKey = n.key ();
+                        String newKey = changeReferences (vold, n, v);
+                        if (! newKey.equals (oldKey))  // Handle a change in variable name.
+                        {
+                            NodeBase nb = pe.root.locateNodeFromHere (ref);
+                            n.parent ().move (oldKey, newKey);
+                            ref.set (ref.size () - 1, newKey);
+                            nb.source = (MPart) doc.child (ref.toArray ());
+                        }
+                        if (o != vnew  &&  o != vold) references.add (ref);  // Queue GUI updates for nodes other than the primary ones.
                     }
                 }
             }
@@ -287,9 +296,8 @@ public class ChangeVariable extends Undoable
         @param mv The database object associated with the compiled variable.
         @param v The compiled variable, which is part of the fully-compiled model.
     **/
-    public void changeReferences (Variable renamed, MNode mv, Variable v)
+    public String changeReferences (Variable renamed, MNode mv, Variable v)
     {
-        System.out.println ("changeReferences: " + v.fullName ());
         if (v.equations.size () == 1)  // single-line equation
         {
             EquationEntry ee = v.equations.first ();
@@ -328,12 +336,14 @@ public class ChangeVariable extends Undoable
             catch (Exception e) {e.printStackTrace ();}
         }
 
-        // TODO: The name of v can also change, since it might describe a path through a changed connection binding. See EquationSet.resolveLHS().
+        // The name of v can also change, since it might describe a path through a changed connection binding. See EquationSet.resolveLHS().
+        AccessVariable av = new AccessVariable (v.nameString ());
+        av.reference = v.reference;
+        return changeExpression (av, renamed, v.container);
     }
 
     public String changeExpression (Operator expression, Variable renamed, EquationSet container)
     {
-        System.out.println ("changeExpression: " + expression.render ());
         Renderer r = new Renderer ()
         {
             public boolean render (Operator op)
@@ -341,7 +351,6 @@ public class ChangeVariable extends Undoable
                 if (op instanceof AccessVariable)
                 {
                     AccessVariable av = (AccessVariable) op;
-                    System.out.println ("  av " + av.reference.variable.fullName ());
 
                     // Safety checks. We won't modify code unless we are confident that it can be done correctly.
                     boolean safe =  av.reference != null  &&  av.reference.variable != null;  // Must be fully resolved.
@@ -364,7 +373,6 @@ public class ChangeVariable extends Undoable
                         result.append (av.name);  // This is the original text from the parser.
                         return true;
                     }
-                    System.out.println ("    safe");
 
                     // Walk the resolution path and emit a new variable name.
                     EquationSet current = container;
