@@ -8,6 +8,7 @@ package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
@@ -205,9 +206,27 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
+    /**
+        Create a lightweight object for doing queries.
+        We avoid allocating any structures that aren't strictly necessary for comparing two equation sets.
+        That's basically just the name.
+    **/
     public EquationSet (String name)
     {
         this.name = name;
+    }
+
+    /**
+        Create an object suitable for manually building extra parts at compile-time.
+        The minimal set of members are initialized so that middle-end routines won't crash.
+    **/
+    public EquationSet (EquationSet container, String name)
+    {
+        this.name      = name;
+        this.container = container;
+        variables      = new TreeSet<Variable> ();
+        parts          = new TreeSet<EquationSet> ();
+        metadata       = new MVolatile ();
     }
 
     /**
@@ -318,6 +337,21 @@ public class EquationSet implements Comparable<EquationSet>
     {
         v.container = this;
         return variables.add (v);
+    }
+
+    public void override (Variable v)
+    {
+        variables.remove (v);  // Removes matching value, not exact object identity.
+        variables.add (v);
+    }
+
+    public void override (String equation) throws ParseException
+    {
+        String[] pieces = equation.split ("=", 2);
+        String key = pieces[0];
+        String value = "";
+        if (pieces.length > 1) value = pieces[1];
+        override (new Variable (this, new MPersistent (null, key, value)));
     }
 
     /**
@@ -476,6 +510,7 @@ public class EquationSet implements Comparable<EquationSet>
             result.index = connectionBindings.size ();
             connectionBindings.add (result);
             result.endpoint.connected = true;
+            v.container = null;  // Prevent variable from interacting with other analysis routines.
             it.remove ();  // Should no longer be in the equation list, as there is nothing further to compute.
         }
 
@@ -2631,7 +2666,7 @@ public class EquationSet implements Comparable<EquationSet>
                     && ! u.hasAttribute ("temporary")  // temporaries follow the opposite rule on ordering, so don't consider them here
                     &&  ordered.indexOf (u) < index)  // and finally, is it actually ahead of me in the ordering?
                 {
-                    Backend.err.get ().println ("Cyclic dependency: " + v.name + " comes after " + u.name);
+                    Backend.err.get ().println ("Cyclic dependency: " + v.fullName () + " with " + u.name);
                     u.addAttribute ("cycle");  // must be buffered; otherwise we will get the "after" value rather than "before"
                 }
             }

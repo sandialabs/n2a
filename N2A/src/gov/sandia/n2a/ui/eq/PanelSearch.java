@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -752,6 +753,31 @@ public class PanelSearch extends JPanel
     // Why is this here? Because it has to do with searching for parts.
 
     /**
+        Utility to find the best matches for a given set of parts, independent of GUI.
+        @param nodes A list MNodes that contain parts which inherit from some database part.
+        Can be either sub-parts in a model or direct database parts themselves.
+        @return A list of database keys for retrieving suitable connection parts.
+        All returned keys will have the same (best) ranking. The caller can apply some
+        other criteria to further down-select.
+    **/
+    public List<String> findConnectorFor (MNode... nodes)
+    {
+        List<EndpointTarget> targets = new ArrayList<EndpointTarget> ();
+        for (MNode n : nodes) targets.add (new EndpointTarget (n));
+
+        ConnectThread ct = new ConnectThread (null);  // We won't actually run this as a separate thread.
+        TreeMap<Float,ArrayList<EndpointMatch>> matches = ct.score (targets);
+
+        List<String> result = new ArrayList<String> ();
+        if (! matches.isEmpty ())
+        {
+            Entry<Float,ArrayList<EndpointMatch>> e = matches.firstEntry ();
+            for (EndpointMatch m : e.getValue ()) result.add (m.key);
+        }
+        return result;
+    }
+
+    /**
         Describes the set of parts that a connection endpoint can handle.
     **/
     public static class EndpointHandles
@@ -813,6 +839,11 @@ public class PanelSearch extends JPanel
         {
             this.node = node;
             process (node.source, 0);
+        }
+
+        public EndpointTarget (MNode part)
+        {
+            process (part, 0);
         }
 
         public void process (MNode part, int depth)
@@ -1011,9 +1042,9 @@ public class PanelSearch extends JPanel
     // Find best candidate for a connection between two parts.
     public class ConnectThread extends Thread
     {
-        public boolean                            stop;
-        public List<NodePart>                     query;
-        public gov.sandia.n2a.ui.eq.tree.NodePart part;
+        public boolean        stop;
+        public List<NodePart> query;
+        public NodePart       part;
 
         /**
             This constructor is run on the EDT, so it can safely collect current UI state.
@@ -1035,21 +1066,7 @@ public class PanelSearch extends JPanel
             for (NodePart n : query) targets.add (new EndpointTarget (n));
 
             // Score each candidate
-            TreeMap<Float,ArrayList<EndpointMatch>> matches = new TreeMap<Float,ArrayList<EndpointMatch>> ();
-            for (Connector c : connectors.values ())
-            {
-                if (stop) return;
-                EndpointMatch m = c.score (targets);
-                if (m == null  ||  Float.isInfinite (m.score)) continue;
-                m.key = c.key;
-                ArrayList<EndpointMatch> tranch = matches.get (m.score);
-                if (tranch == null)
-                {
-                    tranch = new ArrayList<EndpointMatch> ();
-                    matches.put (m.score, tranch);
-                }
-                tranch.add (m);
-            }
+            TreeMap<Float,ArrayList<EndpointMatch>> matches = score (targets);
 
             // Rebuild search list.
             NodeBase newRoot = new NodeBase ();
@@ -1131,6 +1148,26 @@ public class PanelSearch extends JPanel
                     PanelModel.instance.undoManager.add (ap);
                 }
             });
+        }
+
+        public TreeMap<Float,ArrayList<EndpointMatch>> score (List<EndpointTarget> targets)
+        {
+            TreeMap<Float,ArrayList<EndpointMatch>> result = new TreeMap<Float,ArrayList<EndpointMatch>> ();
+            for (Connector c : connectors.values ())
+            {
+                if (stop) break;
+                EndpointMatch m = c.score (targets);
+                if (m == null  ||  Float.isInfinite (m.score)) continue;
+                m.key = c.key;
+                ArrayList<EndpointMatch> tranch = result.get (m.score);
+                if (tranch == null)
+                {
+                    tranch = new ArrayList<EndpointMatch> ();
+                    result.put (m.score, tranch);
+                }
+                tranch.add (m);
+            }
+            return result;
         }
     }
 }

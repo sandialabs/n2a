@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
@@ -171,6 +172,15 @@ public class Variable implements Comparable<Variable>, Cloneable
             order++;
             name = name.substring (0, name.length () - 1);
         }
+    }
+
+    public static Variable from (String equation) throws ParseException
+    {
+        String[] pieces = equation.split ("=", 2);
+        String key = pieces[0];
+        String value = "";
+        if (pieces.length > 1) value = pieces[1];
+        return new Variable (null, new MPersistent (null, key, value));
     }
 
     public static Variable fromLHS (String lhs)

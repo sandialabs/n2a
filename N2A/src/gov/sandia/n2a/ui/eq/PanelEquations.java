@@ -1174,6 +1174,7 @@ public class PanelEquations extends JPanel
             // Construct and customize a file chooser
             final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
             fc.setDialogTitle ("Export \"" + record.key () + "\"");
+            fc.setSelectedFile (new File (record.key ()));
             ExporterFilter n2a = null;
             List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Exporter.class);
             for (ExtensionPoint exp : exps)

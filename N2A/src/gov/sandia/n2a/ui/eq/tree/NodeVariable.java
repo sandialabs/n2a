@@ -183,15 +183,24 @@ public class NodeVariable extends NodeContainer
             if (NodePart.isIdentifierPath (value))
             {
                 referent = parent.resolveName (value);
-                if      (referent == null)             isBinding = ! value.contains (".");  // Ambiguous, so we make an arbitrary call that it is an unresolved variable reference rather than unresolved part reference.
-                else if (referent instanceof NodePart) isBinding = true;
+                if      (referent == null)                 isBinding = ! value.contains (".");  // Ambiguous, so we make an arbitrary call that it is an unresolved variable reference rather than unresolved part reference.
+                else if (referent instanceof NodePart)     isBinding = true;
+                else if (referent instanceof NodeVariable) isBinding = ((NodeVariable) referent).isBinding;  // probably a sub-reference
             }
         }
 
         if (isBinding)
         {
             if (parent.connectionBindings == null) parent.connectionBindings = new HashMap<String,NodePart> ();
-            parent.connectionBindings.put (name, (NodePart) referent);  // referent may be null, in which case there is unconnected endpoint.
+            if (referent == null  ||  referent instanceof NodePart)
+            {
+                parent.connectionBindings.put (name, (NodePart) referent);  // If referent is null, there this is an unconnected endpoint.
+            }
+            else
+            {
+                // TODO: display sub-references as lines to top edge of graph panel
+                parent.connectionBindings.put (name, null);
+            }
         }
     }
 
@@ -596,12 +605,9 @@ public class NodeVariable extends NodeContainer
         {
             PanelModel.instance.undoManager.add (new DeleteVariable (this, canceled));
         }
-        else
+        else if (! hasEquations ())  // Only allow direct kill of a variable if it is single-line. Otherwise, must kill individual equations.
         {
-            if (! hasEquations ())
-            {
-                PanelModel.instance.undoManager.add (new ChangeVariable (this, source.key (), "$kill"));  // revoke the variable
-            }
+            PanelModel.instance.undoManager.add (new ChangeVariable (this, source.key (), "$kill"));  // revoke the variable
         }
     }
 }
