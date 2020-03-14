@@ -16,7 +16,7 @@ import gov.sandia.n2a.language.type.Scalar;
 
 public class AccessVariable extends Operator
 {
-    public String            name;      // of target variable as it appears in the AST node (which we throw away). Maybe modified by EquationSet.flatten(), but not by our own simplify().
+    public String            name;      // of target variable as it appears in the AST node (which we throw away). May be modified by EquationSet.flatten(), but not by our own simplify().
     public VariableReference reference; // non-null when this node has been resolved in the context of an EquationSet
 
     public AccessVariable ()
