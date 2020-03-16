@@ -233,11 +233,54 @@ public class NodePart extends NodeContainer
         connectionBindings = null;
         unsatisfiedConnections = null;
         if (children == null) return;
-        for (Object o : children)
+        for (Object o : children) if (o instanceof NodeVariable) ((NodeVariable) o).findConnections ();  // Checks if variable is a connection binding. If so, sets isBinding on the variable and also sets our isConnection member.
+        for (Object o : children) if (o instanceof NodePart)     ((NodePart)     o).findConnections ();  // Recurses down to sub-parts, so everything gets examined.
+    }
+
+    /**
+        Walks to part hierarchy while unpacking the given name path.
+        Subroutine of NodeVariable.findConnections()
+        @return The tree node, or null if the path does not resolve exactly.
+    **/
+    public NodeBase resolveName (String name)
+    {
+        if (name.isEmpty ()) return this;
+        String[] pieces = name.split ("\\.", 2);
+        String ns = pieces[0];
+        String nextName;
+        if (pieces.length > 1) nextName = pieces[1];
+        else                   nextName = "";
+
+        NodePart parent = (NodePart) getTrueParent ();
+        if (ns.equals ("$up"))  // Don't bother with local checks if we know we are going up
         {
-            if      (o instanceof NodePart)     ((NodePart)     o).findConnections ();  // Recurses down to sub-parts, so everything gets examined.
-            else if (o instanceof NodeVariable) ((NodeVariable) o).findConnections ();  // Checks if variable is a connection binding. If so, sets isBinding on the variable and also sets our isConnection member.
+            if (parent == null) return null;
+            return parent.resolveName (nextName);
         }
+
+        Enumeration<?> i = children ();
+        while (i.hasMoreElements ())
+        {
+            NodeBase n = (NodeBase) i.nextElement ();
+            if (! n.source.key ().equals (ns)) continue;
+            if (n instanceof NodeVariable)
+            {
+                if (((NodeVariable) n).isBinding  &&  connectionBindings != null)
+                {
+                    NodePart p = connectionBindings.get (ns);
+                    if (p != null) return p.resolveName (nextName);
+                }
+                if (nextName.isEmpty ()) return n;  // fully resolved
+                return null;  // failed to resolve
+            }
+            else if (n instanceof NodePart)
+            {
+                return ((NodePart) n).resolveName (nextName);
+            }
+        }
+
+        if (parent == null) return null;
+        return parent.resolveName (name);
     }
 
     /**
@@ -265,42 +308,6 @@ public class NodePart extends NodeContainer
             result.add ((NodeVariable) child (e.getKey ()));  // key should always refer to a NodeVariable acting as a connection binding
         }
         return result;
-    }
-
-    public NodeBase resolveName (String name)
-    {
-        if (name.isEmpty ()) return this;
-        String[] pieces = name.split ("\\.", 2);
-        String ns = pieces[0];
-        String nextName;
-        if (pieces.length > 1) nextName = pieces[1];
-        else                   nextName = "";
-
-        NodePart parent = (NodePart) getTrueParent ();
-        if (ns.equals ("$up"))  // Don't bother with local checks if we know we are going up
-        {
-            if (parent == null) return null;
-            return parent.resolveName (nextName);
-        }
-
-        Enumeration<?> i = children ();
-        while (i.hasMoreElements ())
-        {
-            Object o = i.nextElement ();
-            if (o instanceof NodeVariable)
-            {
-                NodeVariable v = (NodeVariable) o;
-                if (v.source.key ().equals (ns)) return v;
-            }
-            else if (o instanceof NodePart)
-            {
-                NodePart p = (NodePart) o;
-                if (p.source.key ().equals (ns)) return p.resolveName (nextName);
-            }
-        }
-
-        if (parent == null) return null;
-        return parent.resolveName (name);
     }
 
     public Set<String> getAncestors ()

@@ -110,6 +110,14 @@ public class EquationSet implements Comparable<EquationSet>
                 s.dependentConnections.add (this);
             }
         }
+
+        public void addDependencies ()
+        {
+            for (Object o : resolution)
+            {
+                if (o instanceof ConnectionBinding) variable.addDependencyOn (((ConnectionBinding) o).variable);
+            }
+        }
     }
 
     public static class AccountableConnection implements Comparable<AccountableConnection>
@@ -498,7 +506,7 @@ public class EquationSet implements Comparable<EquationSet>
                 // If the target name contains a ".", then it is more likely to be a variable reference.
                 // That reference may or may not be resolved later (for example, if it is a $variable that hasn't been added yet).
                 // Only report simple names here, to minimize confusion.
-                if (! av.name.contains (".")) unresolved.add (prefix () + "." + v.nameString () + " --> " + av.name);
+                if (! av.name.contains (".")) unresolved.add (v.fullName () + " --> " + av.name);
                 continue;
             }
             if (result.endpoint == null) continue;  // Could be a variable or prefix referring to an already-found connection.
@@ -577,7 +585,17 @@ public class EquationSet implements Comparable<EquationSet>
         EquationSet p = findPart (query);
         if (p != null)
         {
-            result.addResolution (p);
+            List<Object> resolution = result.resolution;
+            int last = resolution.size () - 1;
+            if (last > 0  &&  resolution.get (last) == this  &&  resolution.get (last - 1) == p)  // We doubled back: came up from p to this container and then back down to p.
+            {
+                resolution.remove (last);  // Pop the extra step off the resolution path.
+                // TODO: Should we remove the entry in this.dependentConnections?
+            }
+            else
+            {
+                result.addResolution (p);
+            }
             int length = p.name.length ();
             if (length == query.length ())
             {
@@ -846,7 +864,7 @@ public class EquationSet implements Comparable<EquationSet>
                     target.removeAttribute ("temporary");
                 }
                 target.addDependencyOn (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
-                v.reference.addDependencies (v);
+                v.reference.addDependencies (v);  // A variable depends on its connection bindings. This isn't necessary for execution, but does support analysis during GUI editing.
                 target.container.referenced = true;
                 if (   target.assignment != v.assignment
                     && ! (   (target.assignment == Variable.MULTIPLY  &&  v.assignment == Variable.DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.

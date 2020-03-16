@@ -617,6 +617,7 @@ public class PanelEquationTree extends JScrollPane
         NodeBase selected = getSelected ();
         if (! (selected instanceof NodeVariable)) selected = (NodeBase) selected.getParent ();  // Make one attempt to walk up tree, in case an equation or metadata item is selected under a variable.
         if (! (selected instanceof NodeVariable)) return;
+        if (((NodeVariable) selected).isBinding) return;
 
         // Toggle watch on the selected variable
         MPart watch = (MPart) selected.source.child ("$metadata", "watch");
@@ -829,6 +830,7 @@ public class PanelEquationTree extends JScrollPane
                 pet.tree.setSelectionPath (selectedPath);
                 FocusCacheEntry fce = pe.createFocus (pet.root);
                 fce.titleFocused = false;  // so pet.takeFocus() does not claw focus onto title
+                if (fce.sp != null) fce.sp.updateSelection (c);  // Ensure that current name (in case of name change) is set as desired focus.
                 pet.takeFocus ();
             }
         }

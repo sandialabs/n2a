@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -167,40 +167,40 @@ public class NodeVariable extends NodeContainer
         NodePart parent = (NodePart) getParent ();
         String name  = source.key ().trim ();
         String value = source.get ().trim ();
+        if (parent.connectionBindings != null) parent.connectionBindings.remove (name);  // Will add back later if we turn out to be a connection binding.
+
         NodeBase referent = null;
-        if (Operator.containsConnect (value))
+        if (Operator.containsConnect (value))  // As a simple heuristic, we let "connect()" override any other considerations.
         {
             isBinding = true;
         }
         else
         {
-            if (value.isEmpty ()  ||  value.startsWith ("$kill")) return;
-
-            // Determine if our LHS has the right form.
-            if (name.endsWith ("'")) return;
-
-            // Determine if our RHS has the right form. If so, scan for the referent.
-            if (NodePart.isIdentifierPath (value))
+            // Constraints on form
+            if (value.isEmpty ()  ||  value.startsWith ("$kill")) return;  // Must not be revoked.
+            if (name.contains ("$")  ||  name.contains ("\\.")  ||  name.endsWith ("'")) return;  // LHS must be a simple identifier.
+            if (! NodePart.isIdentifierPath (value)) return;  // RHS must be a valid part name path (not a derivative, no combiner, no expression, no condition).
+            if (children != null)  // Must be single line.
             {
-                referent = parent.resolveName (value);
-                if      (referent == null)                 isBinding = ! value.contains (".");  // Ambiguous, so we make an arbitrary call that it is an unresolved variable reference rather than unresolved part reference.
-                else if (referent instanceof NodePart)     isBinding = true;
-                else if (referent instanceof NodeVariable) isBinding = ((NodeVariable) referent).isBinding;  // probably a sub-reference
+                for (Object o : children) if (o instanceof NodeEquation) return;
             }
+
+            // Scan for the referent.
+            referent = parent.resolveName (value);
+            if      (referent == null)                 isBinding = ! value.contains (".");  // Ambiguous, so we make an arbitrary call that it is an unresolved variable reference rather than unresolved part reference.
+            else if (referent instanceof NodePart)     isBinding = true;
+            else if (referent instanceof NodeVariable) isBinding = ((NodeVariable) referent).isBinding;  // probably a sub-reference
         }
 
-        if (isBinding)
+        if (! isBinding) return;
+        if (parent.connectionBindings == null) parent.connectionBindings = new HashMap<String,NodePart> ();
+        if (referent == null  ||  referent instanceof NodePart)
         {
-            if (parent.connectionBindings == null) parent.connectionBindings = new HashMap<String,NodePart> ();
-            if (referent == null  ||  referent instanceof NodePart)
-            {
-                parent.connectionBindings.put (name, (NodePart) referent);  // If referent is null, there this is an unconnected endpoint.
-            }
-            else
-            {
-                // TODO: display sub-references as lines to top edge of graph panel
-                parent.connectionBindings.put (name, null);
-            }
+            parent.connectionBindings.put (name, (NodePart) referent);  // If referent is null, there this is an unconnected endpoint.
+        }
+        else
+        {
+            parent.connectionBindings.put (name, null);
         }
     }
 
@@ -313,7 +313,7 @@ public class NodeVariable extends NodeContainer
             if (model.getChildCount (this) == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree, data, location);
             type = "Equation";
         }
-        if (isBinding) return ((NodeBase) getParent ()).add (type, tree, data, location);
+        if (isBinding  &&  ! type.equals ("Annotation")) return ((NodeBase) getParent ()).add (type, tree, data, location);
 
         if (type.equals ("Equation"))
         {

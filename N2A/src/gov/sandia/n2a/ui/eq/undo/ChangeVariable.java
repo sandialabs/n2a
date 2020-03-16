@@ -24,6 +24,7 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Operator;
@@ -94,12 +95,14 @@ public class ChangeVariable extends Undoable
         NodeVariable nodeBefore = (NodeVariable) parent.child (nameBefore);
         if (nodeBefore == null) throw new CannotRedoException ();
 
+        PanelEquations pe = PanelModel.instance.panelEquations;
         PanelEquationTree pet = parent.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
 
         NodeVariable nodeAfter;
         boolean touchedBindings = false;
+        List<List<String>> references = new ArrayList<List<String>> ();  // Key paths to each variable that references this one.
         if (nameBefore.equals (nameAfter))
         {
             nodeAfter = nodeBefore;
@@ -107,6 +110,8 @@ public class ChangeVariable extends Undoable
         }
         else
         {
+            // Update database
+
             //   Move the subtree
             MPart mparent = parent.source;
             mparent.clear (nameBefore);
@@ -116,8 +121,6 @@ public class ChangeVariable extends Undoable
             MPart oldPart = (MPart) mparent.child (nameBefore);
 
             //   Change references to this variable
-            PanelEquations pe = PanelModel.instance.panelEquations;
-            List<List<String>> references = new ArrayList<List<String>> ();  // Key paths to each variable that references this one.
             try
             {
                 // "doc" is a collated model, so changes will also be made to references from inherited nodes.
@@ -153,17 +156,35 @@ public class ChangeVariable extends Undoable
                     compiled.resolveRHS ();
                 }
                 catch (Exception e) {}
+                prepareConnections (compiled);
 
+                List<Variable> users = new ArrayList<Variable> ();
                 if (vold.usedBy != null)
                 {
-                    vold.name  = vnew.name;
-                    vold.order = vnew.order;
                     for (Object o : vold.usedBy)
                     {
                         if (! (o instanceof Variable)) continue;
-                        if (nameAfter.equals (this.nameBefore)  &&  (o == vnew  ||  o == vold)) continue;  // On undo, don't touch savedTree or exposed node. They should return to their exact previous values.
+                        if ((o == vnew  ||  o == vold)  &&  nameAfter.equals (this.nameBefore)) continue;  // On undo, don't touch savedTree or exposed node. They should return to their exact previous values.
+                        users.add ((Variable) o);
+                    }
+                }
+                // A variable depends on other variables which write to it. These appear in its "uses" member.
+                // The write relationship is created by naming the target variable on the LHS of the source variable.
+                // This kind of relationship is not generally reciprocal, so we must check uses as well as usedBy.
+                if (vold.uses != null)
+                {
+                    for (Variable v : vold.uses.keySet ())
+                    {
+                        if (v.reference.variable == vold) users.add (v);
+                    }
+                }
 
-                        Variable v = (Variable) o;
+                if (! users.isEmpty ())
+                {
+                    vold.name  = vnew.name;
+                    vold.order = vnew.order;
+                    for (Variable v : users)
+                    {
                         List<String> ref = v.getKeyPath ();
                         MNode n = doc.child (ref.toArray ());
                         String oldKey = n.key ();
@@ -175,11 +196,12 @@ public class ChangeVariable extends Undoable
                             ref.set (ref.size () - 1, newKey);
                             nb.source = (MPart) doc.child (ref.toArray ());
                         }
-                        if (o != vnew  &&  o != vold) references.add (ref);  // Queue GUI updates for nodes other than the primary ones.
+                        if (v != vnew  &&  v != vold) references.add (ref);  // Queue GUI updates for nodes other than the primary ones.
                     }
                 }
             }
             catch (Exception e) {e.printStackTrace ();}
+
 
             // Update GUI
 
@@ -188,7 +210,11 @@ public class ChangeVariable extends Undoable
             {
                 if (nodeBefore.isBinding)
                 {
-                    if (parent.graph != null) parent.graph.updateGUI (nameBefore, "");  // remove old connection edge
+                    if (parent.graph != null)
+                    {
+                        parent.connectionBindings.remove (nameBefore);
+                        parent.graph.updateGUI (nameBefore, "");  // remove old connection edge
+                    }
                     touchedBindings = true;
                 }
 
@@ -213,6 +239,7 @@ public class ChangeVariable extends Undoable
                     else               model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
                 }
 
+                boolean wasBinding = nodeBefore.isBinding;
                 nodeBefore.build ();
                 nodeBefore.findConnections ();
                 nodeBefore.filter (FilteredTreeModel.filterLevel);
@@ -224,36 +251,14 @@ public class ChangeVariable extends Undoable
                 {
                     parent.hide (nodeBefore, model);
                 }
-                if (nodeBefore.isBinding)
+                if (nodeBefore.isBinding  ||  wasBinding)
                 {
-                    if (parent.graph != null) parent.graph.updateGUI (nameBefore, oldPart.get ());
                     touchedBindings = true;
-                }
-            }
-
-            for (List<String> ref : references)
-            {
-                NodeVariable n = (NodeVariable) pe.root.locateNodeFromHere (ref);
-                if (n == null) continue;
-
-                // Rebuild n, because equations and/or their conditions may have changed.
-                n.build ();
-                n.findConnections ();
-                n.filter (FilteredTreeModel.filterLevel);
-                if (n.visible (FilteredTreeModel.filterLevel))  // n's visibility won't change
-                {
-                    PanelEquationTree subpet = n.getTree ();
-                    if (subpet == null) continue;
-                    JTree subtree = subpet.tree;
-                    FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
-                    NodeBase subparent = (NodeBase) n.getParent ();
-
-                    submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
-
-                    FontMetrics fm = n.getFontMetrics (subtree);
-                    n.updateColumnWidths (fm);
-                    subparent.updateTabStops (fm);
-                    subparent.allNodesChanged (submodel);
+                    if (parent.graph != null)
+                    {
+                        if (nodeBefore.isBinding) parent.graph.updateGUI (nameBefore, oldPart.get ());
+                        else if (wasBinding)      parent.graph.updateGUI (nameBefore, "");
+                    }
                 }
             }
         }
@@ -271,21 +276,73 @@ public class ChangeVariable extends Undoable
 
             TreeNode[] nodePath = nodeAfter.getPath ();
             pet.updateOrder (nodePath);
-            pet.updateVisibility (nodePath, -2, ! nodeAfter.isBinding);
-            pet.animate ();
+            pet.updateVisibility (nodePath);
         }
 
-        if (parent.graph != null)
+        for (List<String> ref : references)
         {
-            if (nodeAfter.isBinding) parent.graph.updateGUI (nameAfter, nodeAfter.source.get ());
-            else if (wasBinding)     parent.graph.updateGUI (nameAfter, "");
+            NodeVariable n = (NodeVariable) pe.root.locateNodeFromHere (ref);
+            if (n == null) continue;
+
+            // Rebuild n, because equations and/or their conditions may have changed.
+            n.build ();
+            n.findConnections ();
+            n.filter (FilteredTreeModel.filterLevel);
+            if (n.visible (FilteredTreeModel.filterLevel))  // n's visibility won't change
+            {
+                PanelEquationTree subpet = n.getTree ();
+                if (subpet == null) continue;
+                JTree subtree = subpet.tree;
+                FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
+                NodeBase subparent = (NodeBase) n.getParent ();
+
+                submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
+
+                FontMetrics fm = n.getFontMetrics (subtree);
+                n.updateColumnWidths (fm);
+                subparent.updateTabStops (fm);
+                subparent.allNodesChanged (submodel);
+            }
         }
 
-        if (nodeAfter.isBinding  ||  wasBinding) touchedBindings = true;
+        if (pet != null) pet.animate ();
+        if (nodeAfter.isBinding  ||  wasBinding)
+        {
+            touchedBindings = true;
+            if (parent.graph != null)
+            {
+                if (nodeAfter.isBinding) parent.graph.updateGUI (nameAfter, nodeAfter.source.get ());
+                else if (wasBinding)     parent.graph.updateGUI (nameAfter, "");
+            }
+        }
+
         if (touchedBindings)
         {
             MPart mparent = parent.source;
             if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
+        }
+    }
+
+    /**
+        For each connection binding, tag any connection bindings it passes through as dependencies.
+        This analysis is used for automatic maintenance of links when editing models.
+    **/
+    public static void prepareConnections (EquationSet s)
+    {
+        for (EquationSet p : s.parts) prepareConnections (p);
+
+        if (s.connectionBindings == null) return;
+        for (ConnectionBinding cb : s.connectionBindings)
+        {
+            cb.addDependencies ();
+            cb.variable.container = s;  // Re-attach variable to container, so we can use Variable.getKeyPath()
+            cb.variable.addAttribute ("instance");
+
+            // Hack to make cb.variable look as if it has been resolved ...
+            AccessVariable av = (AccessVariable) cb.variable.equations.first ().expression;
+            av.reference = new VariableReference ();
+            av.reference.variable = cb.variable;
+            av.reference.resolution = cb.resolution;  // must not be modified after this
         }
     }
 
@@ -342,7 +399,7 @@ public class ChangeVariable extends Undoable
         return changeExpression (av, renamed, v.container);
     }
 
-    public String changeExpression (Operator expression, Variable renamed, EquationSet container)
+    public static String changeExpression (Operator expression, Variable renamed, EquationSet container)
     {
         Renderer r = new Renderer ()
         {
@@ -375,7 +432,9 @@ public class ChangeVariable extends Undoable
                     }
 
                     // Walk the resolution path and emit a new variable name.
-                    EquationSet current = container;
+                    EquationSet current = container;  // The working target of resolution.
+                    EquationSet home    = container;  // Where the resolution actually is, based on emitted path so far.
+                    String path = "";
                     int last = av.reference.resolution.size () - 1;
                     for (int i = 0; i <= last; i++)
                     {
@@ -385,38 +444,35 @@ public class ChangeVariable extends Undoable
                             EquationSet s = (EquationSet) o;
                             if (s.container == current)  // descend into one of our contained populations
                             {
-                                result.append (s.name + ".");
+                                path += emitPath (home, current, s.name);
+                                path += s.name + ".";
+                                home = s;
                             }
-                            else  // ascend to our container
-                            {
-                                // Method of ascent depends on visibility of next symbol.
-                                String nextName;
-                                if (i == last)
-                                {
-                                    nextName = av.reference.variable.nameString ();
-                                }
-                                else
-                                {
-                                    Object nextObject = av.reference.resolution.get (i+1);
-                                    if (nextObject instanceof EquationSet) nextName = ((EquationSet) nextObject).name;
-                                    else                                   nextName = ((ConnectionBinding) nextObject).alias;
-                                }
-                                if (isVisible (current, nextName)) result.append ("$up.");
-                                // else no need to emit anything. A symbol not visible in current equation set will automatically be referred up.
-                                // It's also possible that the user explicitly named a container (either direct or ancestor), in which case we will be rewriting code.
-                                // It would take more effort to match the original user-specified path string to the computer resolution path.
-                                // That would be the most information-preserving way to do the name change.
-                            }
+                            // else ascend to our container
+                            // The resolution for the ascent will be handled as soon as we need to reference a sub-part or variable.
                             current = s;
                         }
                         else if (o instanceof ConnectionBinding)  // We are following a part reference (which means we are a connection)
                         {
                             ConnectionBinding c = (ConnectionBinding) o;
-                            result.append (c.variable.name + ".");
+                            String name = c.variable.nameString ();
+                            path += emitPath (home, current, name);
+                            path += name + ".";
+                            home = c.endpoint;
                             current = c.endpoint;
                         }
                     }
-                    result.append (av.reference.variable.nameString ());
+                    String name = av.reference.variable.nameString ();
+                    path += emitPath (home, current, name);
+                    if (av.reference.variable.hasAttribute ("instance"))
+                    {
+                        if (! path.isEmpty ()) path = path.substring (0, path.length () - 1);  // Get rid of trailing dot.
+                    }
+                    else
+                    {
+                        path += name;
+                    }
+                    result.append (path);
 
                     return true;
                 }
@@ -429,9 +485,57 @@ public class ChangeVariable extends Undoable
         return r.result.toString ();
     }
 
-    public boolean isVisible (EquationSet container, String name)
+    public static String emitPath (EquationSet home, EquationSet target, String name)
     {
-        if (container.find (Variable.fromLHS (name)) != null) return true;  // Does a variable with given name exist?
+        // If there is an unambiguous path up to "name", then emit nothing.
+        EquationSet e = home;
+        while (e != target)
+        {
+            if (isVisible (e, name)) break;
+            e = e.container;
+        }
+        if (e == target) return "";
+
+        // If there is an unambiguous path to the container of "name", then use that.
+        if (target.container != null)  // Only do this if not top-level container, as that container can't be referenced explicitly.
+        {
+            int depth = 0;  // Count depth to decide between using this method or $up. For a single level, $up is a nicer choice. For many levels, an explicit part name is more concise.
+            e = home;
+            while (e != target)
+            {
+                depth++;
+                if (isVisible (e, target.name)) break;
+                e = e.container;
+            }
+            if (e == target  &&  depth > 1) return target.name + ".";
+        }
+
+        // Otherwise, use $up.
+        String result = "";
+        e = home;
+        while (e != target)
+        {
+            result += "$up.";
+            e = e.container;
+        }
+        return result;
+    }
+
+    public static boolean isVisible (EquationSet container, String name)
+    {
+        // Does a variable with given name exist?
+        if (container.find (Variable.fromLHS (name)) != null) return true;
+
+        // Is there a connection binding with the given name?
+        if (container.connectionBindings != null)
+        {
+            for (ConnectionBinding cb : container.connectionBindings)
+            {
+                if (cb.alias.equals (name)) return true;
+            }
+        }
+
+        // Is there a sub-part with the given name?
         EquationSet p = container.findPart (name);
         return  p != null  &&  p.name.equals (name);
     }
