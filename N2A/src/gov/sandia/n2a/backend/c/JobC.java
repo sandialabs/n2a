@@ -3785,17 +3785,17 @@ public class JobC extends Thread
         return result;
     }
 
-    public static String mangle (Variable v)
+    public String mangle (Variable v)
     {
         return mangle (v.nameString ());
     }
 
-    public static String mangle (String prefix, Variable v)
+    public String mangle (String prefix, Variable v)
     {
         return mangle (prefix, v.nameString ());
     }
 
-    public static String mangle (String input)
+    public String mangle (String input)
     {
         return mangle ("_", input);
     }
@@ -3872,7 +3872,7 @@ public class JobC extends Thread
         }
     }
 
-    public static String prefix (EquationSet t)
+    public String prefix (EquationSet t)
     {
         if (t == null) return "Wrapper";
         String result = mangle (t.name);

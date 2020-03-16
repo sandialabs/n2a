@@ -350,7 +350,8 @@ public class RendererC extends Renderer
             if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
-        return false;
+
+        return super.render (op);
     }
 
     public String printShift (int shift)
