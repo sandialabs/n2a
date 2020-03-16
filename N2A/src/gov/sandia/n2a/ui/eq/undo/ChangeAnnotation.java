@@ -142,6 +142,7 @@ public class ChangeAnnotation extends Undoable
         pet.updateVisibility (nodeAfter.getPath (), -2, setSelection);
 
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
+        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeContainer) parent.getParent ();  // So arrowhead can update.
         if (parent instanceof NodePart)
         {
             NodePart p = (NodePart) parent;

@@ -22,7 +22,9 @@ import gov.sandia.n2a.ui.eq.StoredPath;
 import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeContainer;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 /**
     Applies multiple changes to $metadata.gui.
@@ -34,14 +36,14 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 public class ChangeGUI extends Undoable
 {
     protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
-    protected List<String> path;          // to part that contains the gui metadata
+    protected List<String> path;          // to node that contains the gui metadata
     protected int          index;         // If we create metadata node, this is where it goes.
     protected MNode        undoAdd;       // Nodes to apply during undo, starting at $metadata.gui. If "gui" key is absent, then this is null.
     protected MNode        undoRemove;    // Nodes that should be removed during undo, via MNode.uniqueNodes(). Like undoAdd, this is null if "gui" key is absent.
-    protected MNode        doAdd;         // The nodes being changed. There is no corresponding doKill.
+    protected MNode        doAdd;         // The nodes being changed. There is no corresponding doRemove.
     protected boolean      neutralized;   // Indicates that this edit exactly reverses the previous one, so completely remove both.
 
-    public ChangeGUI (NodePart parent, MNode guiTree)
+    public ChangeGUI (NodeBase parent, MNode guiTree)
     {
         path = parent.getKeyPath ();
         doAdd = guiTree;
@@ -50,7 +52,7 @@ public class ChangeGUI extends Undoable
         if (currentTree == null)
         {
             NodeBase metadataNode = parent.child ("$metadata");
-            if (metadataNode == null)  // We will create a new $metadata node (to hold the gui.order node). This changes meaning of the given indices.
+            if (metadataNode == null  &&  parent.getChildCount () > 0)  // We will create a new $metadata node, so determine whether it should appear first or second in tree.
             {
                 // Test whether the first child is $inherit, and whether it will remain so after the move. In that case, don't put $metadata in front of it.
                 if (((NodeBase) parent.getChildAt (0)).source.key ().equals ("$inherit")) index = 1;  // otherwise it is 0
@@ -70,19 +72,19 @@ public class ChangeGUI extends Undoable
     public void undo ()
     {
         super.undo ();
-        apply (undoAdd, undoRemove, index);
+        apply (undoAdd, undoRemove);
     }
 
     public void redo ()
     {
         super.redo ();
-        apply (doAdd, null, index);
+        apply (doAdd, null);
     }
 
-    public void apply (MNode add, MNode remove, int indexMetadata)
+    public void apply (MNode add, MNode remove)
     {
         view.restore ();
-        NodePart parent = (NodePart) NodeBase.locateNode (path);
+        NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 
         PanelEquationTree pet = parent.getTree ();
@@ -95,29 +97,43 @@ public class ChangeGUI extends Undoable
         }
 
         boolean needBuild = true;
-        NodeAnnotations metadataNode = (NodeAnnotations) parent.child ("$metadata");
+        NodeContainer metadataNode;          // The immediate container of metadata items in the tree.
+        MNode         metadataSource = null; // The $metadata node under which all changes are made.
+        if (parent instanceof NodeVariable)
+        {
+            metadataNode   = (NodeContainer) parent;
+            metadataSource = metadataNode.source.child ("$metadata");
+        }
+        else  // NodePart is the default case
+        {
+            metadataNode = (NodeContainer) parent.child ("$metadata");
+            if (metadataNode != null) metadataSource = metadataNode.source;
+        }
         if (add == null)  // Remove the gui node if it exists. Possibly remove $metadata itself.
         {
-            // We can safely assume that metadataNode is non-null, since we only get here during an undo.
-            MNode mparent = metadataNode.source;
-            mparent.clear ("gui");
-            if (mparent.size () == 0)  // No siblings of "gui", so get rid of $metadata.
+            // We can safely assume that mparent is non-null, since we only get here during an undo.
+            metadataSource.clear ("gui");
+            if (metadataSource.size () == 0)  // No siblings of "gui", so get rid of $metadata.
             {
-                parent.source.clear ("$metadata");
-                if (model == null) FilteredTreeModel.removeNodeFromParentStatic (metadataNode);
-                else               model.removeNodeFromParent (metadataNode);
-                needBuild = false;
+                metadataSource.parent ().clear ("$metadata");
+                if (parent instanceof NodePart)
+                {
+                    if (model == null) FilteredTreeModel.removeNodeFromParentStatic (metadataNode);
+                    else               model.removeNodeFromParent (metadataNode);
+                    needBuild = false;
+                }
             }
         }
         else  // Update gui node, or add if it doesn't exist. Possibly create $metadata
         {
-            if (metadataNode == null)
+            if (metadataSource == null) metadataSource = parent.source.childOrCreate ("$metadata");
+            if (metadataNode == null)  // only happens when parent is NodePart
             {
-                metadataNode = new NodeAnnotations ((MPart) parent.source.childOrCreate ("$metadata"));
-                if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (metadataNode, parent, indexMetadata);
-                else               model.insertNodeIntoUnfiltered (metadataNode, parent, indexMetadata);
+                metadataNode = new NodeAnnotations ((MPart) metadataSource);
+                if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (metadataNode, parent, index);
+                else               model.insertNodeIntoUnfiltered (metadataNode, parent, index);
             }
-            MNode gui = metadataNode.source.childOrCreate ("gui");
+            MNode gui = metadataSource.childOrCreate ("gui");
             if (remove != null) gui.uniqueNodes (remove);
             gui.merge (add);
         }
@@ -128,6 +144,7 @@ public class ChangeGUI extends Undoable
             List<String> expanded = null;
             if (model != null) expanded = AddAnnotation.saveExpandedNodes (pet.tree, metadataNode);
             metadataNode.build ();
+            if (metadataNode instanceof NodeVariable) ((NodeVariable) metadataNode).findConnections ();
             metadataNode.filter (FilteredTreeModel.filterLevel);
             if (model != null  &&  metadataNode.visible (FilteredTreeModel.filterLevel))
             {
@@ -142,7 +159,10 @@ public class ChangeGUI extends Undoable
         if (sp != null) sp.restore (pet.tree, true);  // This forces focus back to original location.
 
         // Update graph
-        if (parent.graph != null) parent.graph.updateGUI ();
+        NodePart part;
+        if (parent instanceof NodePart) part = (NodePart) parent;
+        else                            part = (NodePart) parent.getParent ();  // Presumably this is a NodeVariable, so our immediate parent is a NodePart.
+        if (part.graph != null) part.graph.updateGUI ();
     }
 
     public boolean addEdit (UndoableEdit edit)
