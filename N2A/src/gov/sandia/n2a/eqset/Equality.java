@@ -11,6 +11,8 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Transformer;
+import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.operator.EQ;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 
@@ -27,6 +29,45 @@ public class Equality
         rc = new Constant (0);
         lhs = op;
         rhs = rc;
+    }
+
+    /**
+        Set up to solve equation for a given variable.
+        If this.target comes back null, then don't try to solve! Caller is responsible to check.
+    **/
+    public Equality (EQ eq, Variable v)
+    {
+        // Find the specified variable
+        eq = (EQ) eq.deepCopy ();
+        class VariableVisitor extends Visitor
+        {
+            public AccessVariable found;
+            public boolean visit (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    if (av.reference.variable == v)
+                    {
+                        found = av;
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }
+        VariableVisitor vv = new VariableVisitor ();
+        eq.operand0.visit (vv);
+        if (vv.found != null)
+        {
+            lhs = eq.operand0;
+            rhs = eq.operand1;
+            target = vv.found;
+        }
+        eq.operand1.visit (vv);
+        lhs = eq.operand1;
+        rhs = eq.operand0;
+        target = vv.found;
     }
 
     public void solve ()
