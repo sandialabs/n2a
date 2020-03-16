@@ -192,6 +192,7 @@ public class AddAnnotation extends Undoable
         pet.animate ();
 
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
+        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeContainer) parent.getParent ();  // So arrowhead can update.
         if (parent instanceof NodePart)
         {
             NodePart p = (NodePart) parent;
@@ -284,6 +285,7 @@ public class AddAnnotation extends Undoable
             pet.animate ();
 
             while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
+            if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeBase) parent.getParent ();
             if (parent instanceof NodePart)
             {
                 NodePart p = (NodePart) parent;

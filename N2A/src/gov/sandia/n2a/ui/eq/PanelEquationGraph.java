@@ -51,10 +51,12 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
+import gov.sandia.n2a.ui.images.ImageUtil;
 
 @SuppressWarnings("serial")
 public class PanelEquationGraph extends JScrollPane
@@ -333,11 +335,17 @@ public class PanelEquationGraph extends JScrollPane
             itemArrowCircleFill.setActionCommand ("circleFill");
             itemArrowCircleFill.addActionListener (listenerArrow);
 
+            JMenuItem itemStraight = new JMenuItem (ImageUtil.getImage ("straight.png"));
+            itemStraight.setActionCommand ("straight");
+            itemStraight.addActionListener (listenerArrow);
+
             arrowMenu = new JPopupMenu ();
             arrowMenu.add (itemArrowNone);
             arrowMenu.add (itemArrowPlain);
             arrowMenu.add (itemArrowCircle);
             arrowMenu.add (itemArrowCircleFill);
+            arrowMenu.addSeparator ();
+            arrowMenu.add (itemStraight);
         }
 
         public void updateUI ()
@@ -569,9 +577,19 @@ public class PanelEquationGraph extends JScrollPane
         {
             public void actionPerformed (ActionEvent e)
             {
+                NodeBase n = arrowEdge.nodeFrom.node.child (arrowEdge.alias);
                 MNode gui = new MVolatile ();
-                gui.set (e.getActionCommand (), "arrow", arrowEdge.alias);
-                PanelModel.instance.undoManager.add (new ChangeGUI (arrowEdge.nodeFrom.node, gui));
+                String action = e.getActionCommand ();
+                if (action.equals ("straight"))
+                {
+                    if (n.source.getFlag ("$metadata", "gui", "arrow", "straight")) gui.set ("0", "arrow", "straight");
+                    else                                                            gui.set ("",  "arrow", "straight");
+                }
+                else
+                {
+                    gui.set (action, "arrow");
+                }
+                PanelModel.instance.undoManager.add (new ChangeGUI (n, gui));
             }
         };
     }

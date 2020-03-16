@@ -281,6 +281,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         true = everything else, including empty.
         See getBoolean() for a different way to interpret booleans. The key difference is
         that a flag defaults to true, so it can indicate something by merely existing, without a value.
+        It also tolerates arbitrary content, so a flag can carry extra data and still be interpreted as true.
     **/
     public boolean getFlag (Object... keys)
     {

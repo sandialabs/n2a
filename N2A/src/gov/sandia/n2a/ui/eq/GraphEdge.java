@@ -68,7 +68,8 @@ public class GraphEdge
         bounds     = new Rectangle (0, 0, -1, -1);  // empty, so won't affect union(), and will return false from intersects()
 
         int padTip = 0;  // Distance from boundary of nodeTo to target the tip. Varies depending on arrow type.
-        String headType = nodeFrom.node.source.get ("$metadata", "gui", "arrow", alias);
+        String headType = nodeFrom.node.source.get (alias, "$metadata", "gui", "arrow");
+        boolean straight = nodeFrom.node.source.getFlag (alias, "$metadata", "gui", "arrow", "straight");
         switch (headType)
         {
             case "circle":
@@ -95,7 +96,7 @@ public class GraphEdge
 
         Vector2 ba = null;  // Non-null for binary connections that also need a curve rather than straight line.
         Vector2 c2c = null;
-        if (edgeOther != null  &&  nodeTo != null  &&  edgeOther.nodeTo != null)
+        if (! straight  &&  edgeOther != null  &&  nodeTo != null  &&  edgeOther.nodeTo != null)
         {
             Vector2 b;
             if (edgeOther.tipDrag)
