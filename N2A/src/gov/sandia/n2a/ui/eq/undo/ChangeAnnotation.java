@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,6 +17,7 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
@@ -146,7 +147,19 @@ public class ChangeAnnotation extends Undoable
         if (parent instanceof NodePart)
         {
             NodePart p = (NodePart) parent;
-            if (p.graph != null) p.graph.updateGUI ();
+            if (p.graph != null)
+            {
+                p.graph.updateGUI ();
+            }
+            else
+            {
+                PanelEquations pe = PanelModel.instance.panelEquations;
+                if (p == pe.part)
+                {
+                    pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
+                    pe.panelEquationGraph.updateGUI ();
+                }
+            }
         }
         if (parent.getTrueParent () == null  &&  nameAfter.endsWith ("category"))  // root node, so update categories in search list
         {

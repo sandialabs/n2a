@@ -167,6 +167,27 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel.layout.shiftViewport (focus);
     }
 
+    /**
+        Apply changes in metadata.
+    **/
+    public void updateGUI ()
+    {
+        Point focus = vp.getViewPosition ();
+        focus.x -= graphPanel.offset.x;
+        focus.y -= graphPanel.offset.y;
+
+        MPart parent = (MPart) container.part.source.child ("$metadata", "gui", "bounds", "parent");
+        if (parent != null)
+        {
+            focus.x = parent.getOrDefault (focus.x, "x");
+            focus.y = parent.getOrDefault (focus.y, "y");
+        }
+
+        focus.x += graphPanel.offset.x;
+        focus.y += graphPanel.offset.y;
+        graphPanel.layout.shiftViewport (focus);
+    }
+
     public void updateFilterLevel ()
     {
         graphPanel.updateFilterLevel ();
