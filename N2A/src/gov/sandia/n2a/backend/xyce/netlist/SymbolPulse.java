@@ -39,7 +39,7 @@ public class SymbolPulse extends Symbol
         // Determine lo and hi
         // The basic idea is to replace the pulse() function with its two states (0, 1),
         // and compute the output of the expression.
-        class ReplacePulse extends Transformer
+        class ReplacePulse implements Transformer
         {
             public Constant pulseState = new Constant ();
             public Pulse pulse;
@@ -71,7 +71,7 @@ public class SymbolPulse extends Symbol
         // Determine time offset
         // The basic idea (similar to above) is to substitute 0 for $t and compute output of expression
         // If $t is not present or the result is not constant, then we can't use a Xyce pulse function
-        class ReplaceTime extends Transformer
+        class ReplaceTime implements Transformer
         {
             public Constant time = new Constant (new Scalar (0));
             public Operator transform (Operator op)

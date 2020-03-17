@@ -9,13 +9,11 @@ package gov.sandia.n2a.language;
 /**
     A generic visitor for Operator.
 **/
-public class Visitor
+public interface Visitor
 {
     /**
         @return true to recurse below current node. false if further recursion below this node is not needed.
+        An empty implementation would return true;
     **/
-    public boolean visit (Operator op)
-    {
-        return true;
-    }
+    public boolean visit (Operator op);
 }

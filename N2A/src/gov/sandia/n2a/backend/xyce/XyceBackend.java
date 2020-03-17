@@ -281,7 +281,7 @@ class XyceBackend extends Backend
                 // TODO: output an ".ic" line for any var with nonzero value (since they all just came from the init cycle)
 
                 // Trace
-                class TraceFinder extends Visitor
+                class TraceFinder implements Visitor
                 {
                     List<Operator> traces = new ArrayList<Operator> ();
                     public boolean visit (Operator op)

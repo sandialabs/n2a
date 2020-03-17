@@ -370,7 +370,7 @@ public class Output extends Function
     **/
     public static boolean isStringExpression (Variable v, Operator op)
     {
-        class StringVisitor extends Visitor
+        class StringVisitor implements Visitor
         {
             boolean foundString;
             Variable from;

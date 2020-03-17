@@ -364,7 +364,7 @@ public class JobC extends Thread
             p.addDependencyOn (dt);
         }
 
-        class VisitorDt extends Visitor
+        class VisitorDt implements Visitor
         {
             public Variable from;
             public boolean visit (Operator op)
@@ -573,7 +573,7 @@ public class JobC extends Thread
         BackendDataC  bed    = context.bed;
         StringBuilder result = context.result;
 
-        class CheckStatic extends Visitor
+        class CheckStatic implements Visitor
         {
             public boolean global;
             public boolean visit (Operator op)

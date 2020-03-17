@@ -40,7 +40,7 @@ public class XyceBackendData
     public Map<EquationEntry,Symbol> equationSymbols = new HashMap<EquationEntry,Symbol> ();
     public Map<String,Symbol>        variableSymbols = new HashMap<String,Symbol> ();
 
-    public class ContainsVariable extends Visitor
+    public class ContainsVariable implements Visitor
     {
         public Variable target;
         boolean found;
@@ -73,7 +73,7 @@ public class XyceBackendData
             deviceSymbol = new Device (s);
         }
 
-        class ContainsOperator extends Visitor
+        class ContainsOperator implements Visitor
         {
             @SuppressWarnings("rawtypes")
             public Class targetClass;

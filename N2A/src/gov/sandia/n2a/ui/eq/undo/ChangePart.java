@@ -301,7 +301,7 @@ public class ChangePart extends Undoable
         for (EquationSet p : s.parts) result.addAll (collectVariables (p, renamed));
 
         // Regular variables might mention the part name, on either the LHS or RHS.
-        class PartVisitor extends Visitor
+        class PartVisitor implements Visitor
         {
             boolean found;
             public boolean visit (Operator op)

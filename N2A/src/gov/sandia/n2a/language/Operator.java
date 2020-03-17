@@ -348,7 +348,7 @@ public class Operator implements Cloneable
     **/
     public boolean contains (Operator target)
     {
-        class ContainsVisitor extends Visitor
+        class ContainsVisitor implements Visitor
         {
             public boolean found;
             public boolean visit (Operator op)

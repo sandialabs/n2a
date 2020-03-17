@@ -178,7 +178,7 @@ public class ExportJob extends XMLutility
     {
         for (EquationSet p : s.parts) analyze (p);
 
-        class ExportTransformer extends Transformer
+        class ExportTransformer implements Transformer
         {
             Variable v;
             public Operator transform (Operator op)
@@ -1998,7 +1998,7 @@ public class ExportJob extends XMLutility
                 // Check for variableParameters
                 List<String> skipList = new ArrayList<String> ();
                 Map<String,String> variableParameters = new TreeMap<String,String> ();
-                class ParameterVisitor extends Visitor
+                class ParameterVisitor implements Visitor
                 {
                     List<String> inhomo = new ArrayList<String> ();
                     String found;
@@ -3095,7 +3095,7 @@ public class ExportJob extends XMLutility
             }
 
             // Requirements
-            class RequirementVisitor extends Visitor
+            class RequirementVisitor implements Visitor
             {
                 public Variable v;
                 public EquationSet equations;
@@ -3217,7 +3217,7 @@ public class ExportJob extends XMLutility
                 }
             }
 
-            class RegimeFinder extends Visitor
+            class RegimeFinder implements Visitor
             {
                 Variable regimeVariable;  // What we search for.
                 Regime regime;
@@ -3255,7 +3255,7 @@ public class ExportJob extends XMLutility
             RegimeFinder regimeFinder = new RegimeFinder ();
             regimeFinder.regimeVariable = regimeVariable;
 
-            class RegimeRemover extends Transformer
+            class RegimeRemover implements Transformer
             {
                 public Variable regimeVariable;
 

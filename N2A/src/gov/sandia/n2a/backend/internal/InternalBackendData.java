@@ -416,7 +416,7 @@ public class InternalBackendData
 
     public static void analyzeEvents (final EquationSet s, final List<EventTarget> eventTargets, final List<Variable> eventReferences)
     {
-        class EventVisitor extends Visitor
+        class EventVisitor implements Visitor
         {
             public boolean found;
 
@@ -530,7 +530,7 @@ public class InternalBackendData
 
                             // Delay
                             // Note the default is already set to -1 (no care)
-                            class DelayVisitor extends Visitor
+                            class DelayVisitor implements Visitor
                             {
                                 TreeSet<EquationSet> containers = new TreeSet<EquationSet> ();
                                 public boolean visit (Operator op)
@@ -561,7 +561,7 @@ public class InternalBackendData
                             }
 
                             // Set up monitors in source parts
-                            class ConditionVisitor extends Visitor
+                            class ConditionVisitor implements Visitor
                             {
                                 TreeSet<EquationSet> containers = new TreeSet<EquationSet> ();
                                 public boolean visit (Operator op)
@@ -1002,7 +1002,7 @@ public class InternalBackendData
                     }
 
                     final TreeSet<VariableReference> references = new TreeSet<VariableReference> (referenceComparator);
-                    class ProjectVisitor extends Visitor
+                    class ProjectVisitor implements Visitor
                     {
                         public boolean visit (Operator op)
                         {
@@ -1284,7 +1284,7 @@ public class InternalBackendData
             v.uses = null;
         }
 
-        class ReplaceConstants extends Transformer
+        class ReplaceConstants implements Transformer
         {
             public Variable self;
             public Operator transform (Operator op)
@@ -1307,7 +1307,7 @@ public class InternalBackendData
         };
         ReplaceConstants replace = new ReplaceConstants ();
 
-        class DependencyTransformer extends Transformer
+        class DependencyTransformer implements Transformer
         {
             public Variable v;
             public Operator transform (Operator op)

@@ -39,7 +39,7 @@ public class Equality
     {
         // Find the specified variable
         eq = (EQ) eq.deepCopy ();
-        class VariableVisitor extends Visitor
+        class VariableVisitor implements Visitor
         {
             public AccessVariable found;
             public boolean visit (Operator op)

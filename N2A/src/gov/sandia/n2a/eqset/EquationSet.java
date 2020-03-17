@@ -180,7 +180,7 @@ public class EquationSet implements Comparable<EquationSet>
         **/
         public AccessVariable endpoint (Operator op)
         {
-            class IndexVisitor extends Visitor
+            class IndexVisitor implements Visitor
             {
                 public AccessVariable found;
                 public boolean visit (Operator op)
@@ -935,7 +935,7 @@ public class EquationSet implements Comparable<EquationSet>
             s.resolveRHS (unresolved);
         }
     
-        class Resolver extends Transformer
+        class Resolver implements Transformer
         {
             public Variable from;
             public LinkedList<UnresolvedVariable> unresolved;
@@ -1073,7 +1073,7 @@ public class EquationSet implements Comparable<EquationSet>
             s.determineTraceVariableName ();
         }
 
-        class TraceVisitor extends Visitor
+        class TraceVisitor implements Visitor
         {
             public Variable v;
             public boolean visit (Operator op)
@@ -1296,7 +1296,7 @@ public class EquationSet implements Comparable<EquationSet>
             final TreeSet<String> names = new TreeSet<String> ();
             for (Variable v : s.variables) names.add (v.nameString ());
 
-            class Prefixer extends Transformer
+            class Prefixer implements Transformer
             {
                 public Operator transform (Operator op)
                 {
@@ -2763,7 +2763,7 @@ public class EquationSet implements Comparable<EquationSet>
         boolean init        = phase.equals ("$init");
         boolean splitTarget = ! splitSources.isEmpty ();
 
-        class ReplaceConstants extends Transformer
+        class ReplaceConstants implements Transformer
         {
             public Variable self;
             public List<String> phases = Arrays.asList ("$connect", "$init", "$live");
@@ -2907,7 +2907,7 @@ public class EquationSet implements Comparable<EquationSet>
         while (findInitOnlyRecursive ()) {}
     }
 
-    public static class ReplacePhaseIndicators extends Transformer
+    public static class ReplacePhaseIndicators implements Transformer
     {
         public double init;
         public double connect;
@@ -2926,7 +2926,7 @@ public class EquationSet implements Comparable<EquationSet>
         }
     };
 
-    public static class VisitInitOnly extends Visitor
+    public static class VisitInitOnly implements Visitor
     {
         boolean isInitOnly = true;  // until something falsifies it
         public boolean visit (Operator op)
@@ -3096,7 +3096,7 @@ public class EquationSet implements Comparable<EquationSet>
                 // See Variable.simplify() for similar code.
                 if (! firesDuringUpdate)
                 {
-                    class ReplaceInit extends Transformer
+                    class ReplaceInit implements Transformer
                     {
                         public Operator transform (Operator op)
                         {
@@ -3301,7 +3301,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (predicate == null) return;
 
         // Detect if equation or direct dependency contains a ReadMatrix function
-        class ContainsTransformer extends Transformer
+        class ContainsTransformer implements Transformer
         {
             public ReadMatrix found;
             public int        countFound;

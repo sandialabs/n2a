@@ -300,7 +300,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         // Rebuild dependency structure within the list.
         // We only care about dependencies that determine ordering within the list.
         // External dependencies won't be counted, but also won't be changed.
-        class DependencyTransformer extends Transformer
+        class DependencyTransformer implements Transformer
         {
             public Variable v;
             public Operator transform (Operator op)
@@ -1110,7 +1110,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
 
         // Scan equations
-        class EventVisitor extends Visitor
+        class EventVisitor implements Visitor
         {
             boolean found;
             public boolean visit (Operator op)
