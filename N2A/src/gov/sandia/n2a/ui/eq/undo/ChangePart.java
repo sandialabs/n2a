@@ -8,7 +8,9 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.awt.FontMetrics;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
@@ -16,7 +18,14 @@ import javax.swing.undo.CannotRedoException;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
+import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
@@ -30,12 +39,11 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangePart extends Undoable
 {
-    protected StoredView         view = PanelModel.instance.panelEquations.new StoredView ();
-    protected List<String>       path;   // to the container of the part being renamed
-    protected String             nameBefore;
-    protected String             nameAfter;
-    protected MNode              savedTree;  // The entire subtree from the top document. If not from top document, then at least a single node for the part itself.
-    protected List<List<String>> connectionPaths;
+    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
+    protected List<String> path;   // to the container of the part being renamed
+    protected String       nameBefore;
+    protected String       nameAfter;
+    protected MNode        savedTree;  // The entire subtree from the top document. If not from top document, then at least a single node for the part itself.
 
     /**
         @param node The part being renamed.
@@ -49,14 +57,6 @@ public class ChangePart extends Undoable
 
         savedTree = new MVolatile ();
         if (node.source.isFromTopDocument ()) savedTree.merge (node.source.getSource ());
-
-        // Collect key paths to all nodes which are connection bindings to the given part.
-        List<NodeVariable> connectionBindings = PanelModel.instance.panelEquations.root.bindingsFor (node);
-        if (connectionBindings != null)
-        {
-            connectionPaths = new ArrayList<List<String>> ();
-            for (NodeVariable v : connectionBindings) connectionPaths.add (v.getKeyPath ());
-        }
     }
 
     public void undo ()
@@ -95,22 +95,70 @@ public class ChangePart extends Undoable
         MPart oldPart = (MPart) mparent.child (nameBefore);
         MPart newPart = (MPart) mparent.child (nameAfter);
 
-        //   Change connection bindings
+        //   Change connection bindings.
+        //   See ChangeVariable.apply() for a similar procedure. More detailed comments appear there.
+        //   We make use of static functions in that class to do the heavy work of emitting code with name changes.
+        //   TODO: This approach will probably fail on parts that contain references to themselves.
         PanelEquations pe = PanelModel.instance.panelEquations;
-        if (connectionPaths != null)
+        List<List<String>> references = new ArrayList<List<String>> ();
+        try
         {
             MPart doc = pe.root.source;
-            for (List<String> cp : connectionPaths)
+            EquationSet compiled = new EquationSet (doc);
+            List<String> keypath = new ArrayList<String> (path.subList (1, path.size ()));
+            EquationSet eold;
+            EquationSet enew;
+            if (oldPart == null)
             {
-                Object[] keyArray = cp.subList (1, cp.size ()).toArray ();
-                String value = doc.get (keyArray);
-                String[] pieces = value.split ("\\.");
-                pieces[pieces.length - 1] = nameAfter;
-                value = pieces[0];
-                for (int i = 1; i < pieces.length; i++) value += "." + pieces[i];
-                doc.set (value, keyArray);
+                EquationSet p = (EquationSet) compiled.getObject (keypath);
+                eold = new EquationSet (p, nameBefore);
+                p.parts.add (eold);
+                keypath.add (nameAfter);
+            }
+            else
+            {
+                keypath.add (nameBefore);
+                eold = (EquationSet) compiled.getObject (keypath);
+                keypath.set (keypath.size () - 1, nameAfter);
+            }
+            enew = (EquationSet) compiled.getObject (keypath);
+
+            try
+            {
+                compiled.resolveConnectionBindings ();
+                compiled.resolveLHS ();
+                compiled.resolveRHS ();
+            }
+            catch (Exception e) {}
+            ChangeVariable.prepareConnections (compiled);
+
+            // Collect variables that might have changed.
+            List<Variable> users = collectVariables (compiled, eold);
+            if (eold.dependentConnections != null)
+            {
+                // Each equation set tracks connection bindings which depend on it for their resolution.
+                // The variable associated with such a connection binding could explicitly mention the part name.
+                for (ConnectionBinding cb : eold.dependentConnections) users.add (cb.variable);
+            }
+
+            eold.name = enew.name;
+            for (Variable v : users)
+            {
+                List<String> ref = v.getKeyPath ();
+                MNode n = doc.child (ref.toArray ());
+                String oldKey = n.key ();
+                String newKey = ChangeVariable.changeReferences (eold, n, v);
+                if (! newKey.equals (oldKey))  // Handle a change in variable name.
+                {
+                    NodeBase nb = pe.root.locateNodeFromHere (ref);
+                    n.parent ().move (oldKey, newKey);
+                    ref.set (ref.size () - 1, newKey);
+                    nb.source = (MPart) doc.child (ref.toArray ());
+                }
+                if (v.container != enew  &&  v.container != eold) references.add (ref);  // Queue GUI updates for nodes other than the primary ones.
             }
         }
+        catch (Exception e) {}
 
         // Update GUI
 
@@ -182,6 +230,7 @@ public class ChangePart extends Undoable
 
         pe.resetBreadcrumbs ();
         TreeNode[] nodePath = nodeAfter.getPath ();
+        Set<PanelEquationTree> needAnimate = new HashSet<PanelEquationTree> ();
         if (pet == null)
         {
             PanelEquationTree.updateOrder (null, nodePath);
@@ -191,27 +240,37 @@ public class ChangePart extends Undoable
         {
             pet.updateOrder (nodePath);
             pet.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
-            pet.animate ();
+            needAnimate.add (pet);
         }
 
-        if (connectionPaths != null)
+        for (List<String> ref : references)
         {
-            // Update connection-binding variables affected by name change.
-            for (List<String> cp : connectionPaths)
+            NodeVariable n = (NodeVariable) pe.root.locateNodeFromHere (ref);
+            if (n == null) continue;
+
+            // Rebuild n, because equations and/or their conditions may have changed.
+            n.build ();
+            n.findConnections ();
+            n.filter (FilteredTreeModel.filterLevel);
+            if (n.visible (FilteredTreeModel.filterLevel))  // n's visibility won't change
             {
-                NodeBase n = NodeBase.locateNode (cp);
-                if (n == null) continue;
                 PanelEquationTree subpet = n.getTree ();
                 if (subpet == null) continue;
                 JTree subtree = subpet.tree;
                 FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
+                NodeBase subparent = (NodeBase) n.getParent ();
+
+                submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
 
                 FontMetrics fm = n.getFontMetrics (subtree);
                 n.updateColumnWidths (fm);
-                ((NodeBase) n.getParent ()).updateTabStops (fm);
-                submodel.nodeChanged (n);
+                subparent.updateTabStops (fm);
+                subparent.allNodesChanged (submodel);
+                needAnimate.add (subpet);
             }
         }
+
+        for (PanelEquationTree ap : needAnimate) ap.animate ();
 
         if (graphParent)
         {
@@ -234,5 +293,41 @@ public class ChangePart extends Undoable
             peg.reconnect ();
             peg.repaint ();
         }
+    }
+
+    public List<Variable> collectVariables (EquationSet s, EquationSet renamed)
+    {
+        List<Variable> result = new ArrayList<Variable> ();
+        for (EquationSet p : s.parts) result.addAll (collectVariables (p, renamed));
+
+        // Regular variables might mention the part name, on either the LHS or RHS.
+        class PartVisitor extends Visitor
+        {
+            boolean found;
+            public boolean visit (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    if (av.reference.resolution.contains (renamed)) found = true;
+                    return false;
+                }
+                return true;
+            }
+        };
+        PartVisitor visitor = new PartVisitor ();
+        for (Variable v : s.variables)
+        {
+            visitor.found = v.reference.resolution.contains (renamed);
+            for (EquationEntry ee : v.equations)
+            {
+                if (visitor.found) break;
+                ee.expression.visit (visitor);
+                if (ee.condition != null) ee.condition.visit (visitor);
+            }
+            if (visitor.found) result.add (v);
+        }
+
+        return result;
     }
 }

@@ -283,33 +283,6 @@ public class NodePart extends NodeContainer
         return parent.resolveName (name);
     }
 
-    /**
-        Assembles a list of all connection bindings which reference a given endpoint.
-    **/
-    public List<NodeVariable> bindingsFor (NodePart endpoint)
-    {
-        List<NodeVariable> result = null;
-        if (children != null)
-        {
-            for (Object o : children)
-            {
-                if (! (o instanceof NodePart)) continue;
-                List<NodeVariable> temp = ((NodePart) o).bindingsFor (endpoint);
-                if (temp == null) continue;
-                if (result == null) result = temp;
-                else                result.addAll (temp);
-            }
-        }
-        if (connectionBindings == null) return result;
-        for (Entry<String,NodePart> e : connectionBindings.entrySet ())
-        {
-            if (e.getValue () != endpoint) continue;
-            if (result == null) result = new ArrayList<NodeVariable> ();
-            result.add ((NodeVariable) child (e.getKey ()));  // key should always refer to a NodeVariable acting as a connection binding
-        }
-        return result;
-    }
-
     public Set<String> getAncestors ()
     {
         if (ancestors != null) return ancestors;

@@ -9,8 +9,10 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 
 import javax.swing.JTree;
@@ -121,6 +123,7 @@ public class ChangeVariable extends Undoable
             MPart oldPart = (MPart) mparent.child (nameBefore);
 
             //   Change references to this variable
+            //   See ChangePart.apply() for a similar procedure.
             try
             {
                 // "doc" is a collated model, so changes will also be made to references from inherited nodes.
@@ -179,28 +182,25 @@ public class ChangeVariable extends Undoable
                     }
                 }
 
-                if (! users.isEmpty ())
+                vold.name  = vnew.name;
+                vold.order = vnew.order;
+                for (Variable v : users)
                 {
-                    vold.name  = vnew.name;
-                    vold.order = vnew.order;
-                    for (Variable v : users)
+                    List<String> ref = v.getKeyPath ();
+                    MNode n = doc.child (ref.toArray ());
+                    String oldKey = n.key ();
+                    String newKey = changeReferences (vold, n, v);
+                    if (! newKey.equals (oldKey))  // Handle a change in variable name.
                     {
-                        List<String> ref = v.getKeyPath ();
-                        MNode n = doc.child (ref.toArray ());
-                        String oldKey = n.key ();
-                        String newKey = changeReferences (vold, n, v);
-                        if (! newKey.equals (oldKey))  // Handle a change in variable name.
-                        {
-                            NodeBase nb = pe.root.locateNodeFromHere (ref);
-                            n.parent ().move (oldKey, newKey);
-                            ref.set (ref.size () - 1, newKey);
-                            nb.source = (MPart) doc.child (ref.toArray ());
-                        }
-                        if (v != vnew  &&  v != vold) references.add (ref);  // Queue GUI updates for nodes other than the primary ones.
+                        NodeBase nb = pe.root.locateNodeFromHere (ref);
+                        n.parent ().move (oldKey, newKey);
+                        ref.set (ref.size () - 1, newKey);
+                        nb.source = (MPart) doc.child (ref.toArray ());
                     }
+                    if (v != vnew  &&  v != vold) references.add (ref);  // Queue GUI updates for nodes other than the primary ones.
                 }
             }
-            catch (Exception e) {e.printStackTrace ();}
+            catch (Exception e) {}
 
 
             // Update GUI
@@ -267,6 +267,7 @@ public class ChangeVariable extends Undoable
         nodeAfter.build ();
         nodeAfter.findConnections ();
         nodeAfter.filter (FilteredTreeModel.filterLevel);
+        Set<PanelEquationTree> needAnimate = new HashSet<PanelEquationTree> ();
         if (pet != null)
         {
             FontMetrics fm = nodeAfter.getFontMetrics (pet.tree);
@@ -277,6 +278,7 @@ public class ChangeVariable extends Undoable
             TreeNode[] nodePath = nodeAfter.getPath ();
             pet.updateOrder (nodePath);
             pet.updateVisibility (nodePath);
+            needAnimate.add (pet);
         }
 
         for (List<String> ref : references)
@@ -302,10 +304,12 @@ public class ChangeVariable extends Undoable
                 n.updateColumnWidths (fm);
                 subparent.updateTabStops (fm);
                 subparent.allNodesChanged (submodel);
+                needAnimate.add (subpet);
             }
         }
 
-        if (pet != null) pet.animate ();
+        for (PanelEquationTree ap : needAnimate) ap.animate ();
+
         if (nodeAfter.isBinding  ||  wasBinding)
         {
             touchedBindings = true;
@@ -324,8 +328,9 @@ public class ChangeVariable extends Undoable
     }
 
     /**
-        For each connection binding, tag any connection bindings it passes through as dependencies.
-        This analysis is used for automatic maintenance of links when editing models.
+        Tags dependencies between connection binding variables.
+        Also prepares the variable held in each connection binding so it can be emitted by changeExpression()
+        and associated functions.
     **/
     public static void prepareConnections (EquationSet s)
     {
@@ -349,11 +354,12 @@ public class ChangeVariable extends Undoable
     /**
         Given variable "v", change all places where its code references variable "renamed".
         The name change is already embedded in the compiled model. We simply re-render the code.
-        @param renamed The variable that has a new name.
+        @param renamed The object that has a new name, for safety checks.
+            This code is called by both ChangeVariable and ChangePart, so "renamed" can be either a Variable or an EquationSet.
         @param mv The database object associated with the compiled variable.
         @param v The compiled variable, which is part of the fully-compiled model.
     **/
-    public String changeReferences (Variable renamed, MNode mv, Variable v)
+    public static String changeReferences (Object renamed, MNode mv, Variable v)
     {
         if (v.equations.size () == 1)  // single-line equation
         {
@@ -390,16 +396,16 @@ public class ChangeVariable extends Undoable
                     mv.move (me.key (), ifString);
                 }
             }
-            catch (Exception e) {e.printStackTrace ();}
+            catch (Exception e) {}
         }
 
-        // The name of v can also change, since it might describe a path through a changed connection binding. See EquationSet.resolveLHS().
+        // The name of v can also change, since it might describe a path through a changed part or connection binding. See EquationSet.resolveLHS().
         AccessVariable av = new AccessVariable (v.nameString ());
         av.reference = v.reference;
         return changeExpression (av, renamed, v.container);
     }
 
-    public static String changeExpression (Operator expression, Variable renamed, EquationSet container)
+    public static String changeExpression (Operator expression, Object renamed, EquationSet container)
     {
         Renderer r = new Renderer ()
         {
@@ -417,8 +423,7 @@ public class ChangeVariable extends Undoable
                         safe = false;
                         for (Object o : av.reference.resolution)
                         {
-                            if (! (o instanceof ConnectionBinding)) continue;
-                            if (((ConnectionBinding) o).variable == renamed)
+                            if (o == renamed  ||  o instanceof ConnectionBinding  &&  ((ConnectionBinding) o).variable == renamed)
                             {
                                 safe = true;
                                 break;
@@ -536,8 +541,7 @@ public class ChangeVariable extends Undoable
         }
 
         // Is there a sub-part with the given name?
-        EquationSet p = container.findPart (name);
-        return  p != null  &&  p.name.equals (name);
+        return container.findPart (name) != null;
     }
 
     public boolean replaceEdit (UndoableEdit edit)

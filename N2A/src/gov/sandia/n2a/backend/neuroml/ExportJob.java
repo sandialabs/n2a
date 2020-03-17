@@ -4098,7 +4098,6 @@ public class ExportJob extends XMLutility
             String name = path.get (i);
             result = result.findPart (name);
             if (result == null) return null;
-            if (! result.name.equals (name)) return null;
         }
         return result;
     }

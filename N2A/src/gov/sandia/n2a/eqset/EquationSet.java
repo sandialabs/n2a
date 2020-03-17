@@ -227,6 +227,7 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Create an object suitable for manually building extra parts at compile-time.
         The minimal set of members are initialized so that middle-end routines won't crash.
+        The caller is responsible for adding this object to container.
     **/
     public EquationSet (EquationSet container, String name)
     {
@@ -430,7 +431,7 @@ public class EquationSet implements Comparable<EquationSet>
         Otherwise, returns null. The matched prefix must be a proper name path, that is, either the full query
         string or else a portion delimited by dot.
     **/
-    public EquationSet findPart (String query)
+    public EquationSet findPartPrefix (String query)
     {
         EquationSet result = null;
         int queryLength = query.length ();
@@ -446,6 +447,15 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
         return result;
+    }
+
+    /**
+        Finds the part whose name exactly matches the given query string. Returns null if no such part exists.
+    **/
+    public EquationSet findPart (String query)
+    {
+        for (EquationSet p : parts) if (p.name.equals (query)) return p;
+        return null;
     }
 
     /**
@@ -582,7 +592,7 @@ public class EquationSet implements Comparable<EquationSet>
             return true;
         }
 
-        EquationSet p = findPart (query);
+        EquationSet p = findPartPrefix (query);
         if (p != null)
         {
             List<Object> resolution = result.resolution;
@@ -749,7 +759,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
 
             int vlength = v.name.length ();
-            EquationSet down = findPart (v.name);
+            EquationSet down = findPartPrefix (v.name);
             if (down != null)
             {
                 int length = down.name.length ();
