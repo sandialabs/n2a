@@ -388,7 +388,6 @@ public class PanelDiff extends JTree
             value = value.replace ("<",  "&lt;");
             value = value.replace (">",  "&gt;");
             value = value.replace ("\"", "&quot;");
-            value = value.replace ("'",  "&apos;");
             return value;
         }
 
