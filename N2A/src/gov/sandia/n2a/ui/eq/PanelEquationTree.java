@@ -473,7 +473,11 @@ public class PanelEquationTree extends JScrollPane
     {
         tree.setEditable (! container.locked);
         if (part == root) return;
-        if (root != null) root.pet = null;
+        if (root != null)
+        {
+            root.pet = null;
+            deselectGraphNode ();
+        }
 
         root = part;
         root.pet = this;
@@ -525,10 +529,17 @@ public class PanelEquationTree extends JScrollPane
         }
         else
         {
-            // Remove highlight from graph node we were editing.
-            if (root.graph != null) root.graph.setSelected (false);
-            else if (root == container.part) container.setSelected (false);
+            deselectGraphNode ();
         }
+    }
+
+    /**
+        Remove highlight from graph node we were editing.
+    **/
+    public void deselectGraphNode ()
+    {
+        if (root.graph != null) root.graph.setSelected (false);
+        else if (root == container.part) container.setSelected (false);
     }
 
     public void takeFocus ()
