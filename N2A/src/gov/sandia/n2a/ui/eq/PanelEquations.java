@@ -1518,7 +1518,6 @@ public class PanelEquations extends JPanel
                             if (x < getIconWidth ())  // Open/close
                             {
                                 if (view == NODE) panelParent.toggleOpen ();
-                                switchFocus (true, false);
                             }
                             else  // Drill up to specific path element.
                             {
@@ -1530,10 +1529,9 @@ public class PanelEquations extends JPanel
                                     drill (parts.get (i));
                                     return;
                                 }
-
-                                // Click was on last path element (which may be only path element), so take focus.
-                                switchFocus (true, false);
+                                // Click was on last path element (which may be only path element), so take focus ...
                             }
+                            switchFocus (true, false);
                         }
                     }
                     else if (SwingUtilities.isRightMouseButton (me))

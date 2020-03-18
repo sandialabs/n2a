@@ -20,6 +20,7 @@ import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Insets;
@@ -405,7 +406,22 @@ public class PanelEquationTree extends JScrollPane
             {
                 // The shift to the editing component appears as a loss of focus.
                 // The shift to a popup menu appears as a "temporary" loss of focus.
-                if (! e.isTemporary ()  &&  ! tree.isEditing ()) yieldFocus ();
+
+                // However, in some cases a shift to the title icon on a graph node also gets flagged as temporary.
+                // Specifically, select a node in tree A, then select a node in tree B, then select title A.
+                // When the code calls title.requestFocusInWindow(), focus goes to tree A for a moment, then on to title A.
+                // The loss of focus is reported to tree B as temporary, so tree B never removes its selection.
+                // Don't fully understand what's happening.
+
+                // To hack around this, explicitly ignore isTemporary() if the other component is a graph node title or equation tree.
+                boolean temporary = e.isTemporary ();
+                if (temporary)
+                {
+                    Component other = e.getOppositeComponent ();
+                    temporary = ! (other instanceof GraphNode.TitleRenderer)  &&  ! (other instanceof JTree);
+                }
+
+                if (! temporary  &&  ! tree.isEditing ()) yieldFocus ();
             }
         });
 

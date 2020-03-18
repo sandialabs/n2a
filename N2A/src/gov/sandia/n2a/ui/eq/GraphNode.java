@@ -656,8 +656,7 @@ public class GraphNode extends JPanel
                                 startEditing ();
                                 return;
                             }
-                            titleFocused = true;
-                            takeFocus ();
+                            switchFocus (true, false);
                         }
                         else if (clicks == 2)  // Drill down
                         {
