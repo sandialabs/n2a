@@ -85,6 +85,7 @@ import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
+import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
@@ -249,7 +250,7 @@ public class PanelEquations extends JPanel
                 }
 
                 // Handle internal DnD as a node reordering.
-                PanelModel pm = PanelModel.instance;
+                UndoManager um = MainFrame.instance.undoManager;
                 if (xferNode != null  &&  xferNode.panel == PanelEquations.this  &&  xfer.isDrop ())
                 {
                     NodeBase source = xferNode.getSource ();
@@ -264,7 +265,7 @@ public class PanelEquations extends JPanel
                         MNode gui = new MVolatile ();
                         gui.set (location.x, "bounds", "x");
                         gui.set (location.y, "bounds", "y");
-                        pm.undoManager.add (new ChangeGUI (sourcePart, gui));
+                        um.add (new ChangeGUI (sourcePart, gui));
                     }
                     else  // DnD operation is internal to the tree. (Could also be DnD between N2A windows. For now, reject that case.)
                     {
@@ -279,18 +280,18 @@ public class PanelEquations extends JPanel
                         NodePart parent = (NodePart) targetParent;
                         int indexBefore = parent.getIndex (source);
                         int indexAfter  = parent.getIndex (target);
-                        pm.undoManager.add (new ChangeOrder (parent, indexBefore, indexAfter));
+                        um.add (new ChangeOrder (parent, indexBefore, indexAfter));
                     }
 
                     return true;
                 }
 
                 // Determine target node. Create new model if needed.
-                pm.undoManager.addEdit (new CompoundEdit ());
+                um.addEdit (new CompoundEdit ());
                 if (root == null)
                 {
                     AddDoc ad = new AddDoc ();
-                    pm.undoManager.add (ad);
+                    um.add (ad);
                     target = root;
                 }
                 if (tree != null)
@@ -340,7 +341,7 @@ public class PanelEquations extends JPanel
                     {
                         // Ensure the part is in our db
                         String key = child.key ();
-                        if (AppData.models.child (key) == null) pm.undoManager.add (new AddDoc (key, child));
+                        if (AppData.models.child (key) == null) um.add (new AddDoc (key, child));
 
                         // Create an include-style part
                         MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
@@ -359,7 +360,7 @@ public class PanelEquations extends JPanel
                     NodePart.suggestConnections (newParts, oldParts);
                     NodePart.suggestConnections (oldParts, newParts);
                 }
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) pm.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
+                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) um.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
                 return result;
             }
 
@@ -434,7 +435,7 @@ public class PanelEquations extends JPanel
                             if (tn.newPartName != null  &&  node != root  &&  node.source.isFromTopDocument ())
                             {
                                 // Change this node into an include of the newly-created part.
-                                PanelModel.instance.undoManager.add (new Outsource ((NodePart) node, tn.newPartName));
+                                MainFrame.instance.undoManager.add (new Outsource ((NodePart) node, tn.newPartName));
                             }
                         }
                         else
@@ -444,7 +445,7 @@ public class PanelEquations extends JPanel
                         }
                     }
                 }
-                PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
+                MainFrame.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         };
 
@@ -461,7 +462,7 @@ public class PanelEquations extends JPanel
             {
                 stopEditing ();
                 AddDoc add = new AddDoc ();
-                PanelModel.instance.undoManager.add (add);
+                MainFrame.instance.undoManager.add (add);
             }
         });
 
@@ -1018,7 +1019,7 @@ public class PanelEquations extends JPanel
             if (record == null)
             {
                 AddDoc add = new AddDoc ();
-                PanelModel.instance.undoManager.add (add);
+                MainFrame.instance.undoManager.add (add);
                 // After load(doc), active is null.
                 // PanelEquationTree focusGained() will set active, but won't be called before the test below.
                 active = getParentEquationTree ();

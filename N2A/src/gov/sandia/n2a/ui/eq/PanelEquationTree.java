@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.eq;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
@@ -655,19 +656,19 @@ public class PanelEquationTree extends JScrollPane
             {
                 DeleteAnnotation d = new DeleteAnnotation (watchNode, false);
                 d.setSelection = tree.isExpanded (new TreePath (selected.getPath ()));
-                PanelModel.instance.undoManager.add (d);
+                MainFrame.instance.undoManager.add (d);
             }
             else  // Currently off, because it is not explicitly set in this document. Turn it on by overriding in locally. 
             {
                 ChangeAnnotation c = new ChangeAnnotation (watchNode, "watch", "1");
-                PanelModel.instance.undoManager.add (c);
+                MainFrame.instance.undoManager.add (c);
             }
         }
         else  // currently off, so turn it on
         {
             AddAnnotation a = new AddAnnotation (selected, selected.getChildCount (), new MVolatile ("", "watch"));
             a.setSelection = tree.isExpanded (new TreePath (selected.getPath ()));
-            PanelModel.instance.undoManager.add (a);
+            MainFrame.instance.undoManager.add (a);
         }
     }
 
@@ -690,7 +691,7 @@ public class PanelEquationTree extends JScrollPane
                 NodeBase nodeAfter = (NodeBase) model.getChild (parent, indexAfter);
                 indexBefore = parent.getIndex (nodeBefore);
                 indexAfter  = parent.getIndex (nodeAfter);
-                PanelModel.instance.undoManager.add (new ChangeOrder ((NodePart) parent, indexBefore, indexAfter));
+                MainFrame.instance.undoManager.add (new ChangeOrder ((NodePart) parent, indexBefore, indexAfter));
             }
         }
     }

@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.eq;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.Schema;
+import gov.sandia.n2a.ui.MainFrame;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -137,7 +138,7 @@ public class PanelMRU extends JPanel
             protected void exportDone (JComponent source, Transferable data, int action)
             {
                 list.clearSelection ();
-                PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
+                MainFrame.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         });
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,7 +9,7 @@ package gov.sandia.n2a.transfer;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.plugins.extpoints.Importer;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 
 import java.io.BufferedReader;
@@ -33,7 +33,7 @@ public class ImportNative implements Importer
         {
             MVolatile doc = new MVolatile ();
             Schema.readAll (doc, reader);
-            PanelModel.instance.undoManager.add (new AddDoc (source.getFileName ().toString (), doc));
+            MainFrame.instance.undoManager.add (new AddDoc (source.getFileName ().toString (), doc));
         }
         catch (IOException e)
         {

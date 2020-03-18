@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017,2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,8 +9,8 @@ package gov.sandia.n2a.backend.neuroml;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Importer;
 import gov.sandia.n2a.ui.CompoundEdit;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 
 import java.io.BufferedReader;
@@ -39,7 +39,7 @@ public class ImportNeuroML implements Importer
         MNode mainModel = job.models.child (job.modelName);
         job.models.clear (job.modelName);
 
-        UndoManager um = PanelModel.instance.undoManager;
+        UndoManager um = MainFrame.instance.undoManager;
         um.addEdit (new CompoundEdit ());
         while (job.models.size () > 0) addModel (job.models.iterator ().next (), job.models, um);
         // Save the best for last. That is, ensure that the main model is the one selected in the UI

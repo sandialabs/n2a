@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,8 +10,8 @@ package gov.sandia.n2a.ui.eq.tree;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
 import gov.sandia.n2a.ui.eq.undo.DeleteInherit;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -150,7 +150,7 @@ public class NodeInherit extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddInherit");
+            boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddInherit");
             delete (tree, canceled);
             return;
         }
@@ -175,13 +175,13 @@ public class NodeInherit extends NodeBase
             return;
         }
 
-        PanelModel.instance.undoManager.add (new ChangeInherit (this, value));
+        MainFrame.instance.undoManager.add (new ChangeInherit (this, value));
     }
 
     @Override
     public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        PanelModel.instance.undoManager.add (new DeleteInherit (this, canceled));
+        MainFrame.instance.undoManager.add (new DeleteInherit (this, canceled));
     }
 }

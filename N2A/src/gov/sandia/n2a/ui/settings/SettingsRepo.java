@@ -130,20 +130,19 @@ import org.eclipse.jgit.treewalk.TreeWalk;
 @SuppressWarnings("serial")
 public class SettingsRepo extends JScrollPane implements Settings
 {
-    protected RepoTable                     repoTable;
-    protected RepoTableModel                repoModel;
-    protected GitTableModel                 gitModel;
-    protected GitTable                      gitTable;
-    protected JLabel                        labelStatus;
-    protected JButton                       buttonPull;
-    protected JButton                       buttonPush;
-    protected JTextField                    fieldAuthor;
-    protected JTextArea                     fieldMessage;
-    protected JScrollPane                   paneMessage;
-    protected UndoManager                   undoMessage = new javax.swing.undo.UndoManager ();  // specifically for editing text field
-    protected JEditorPane                   paneProgress;
-    protected PanelDiff                     panelDiff;
-    protected gov.sandia.n2a.ui.UndoManager undoRevert  = new gov.sandia.n2a.ui.UndoManager ();  // for processing changes to documents in repo
+    protected RepoTable      repoTable;
+    protected RepoTableModel repoModel;
+    protected GitTableModel  gitModel;
+    protected GitTable       gitTable;
+    protected JLabel         labelStatus;
+    protected JButton        buttonPull;
+    protected JButton        buttonPush;
+    protected JTextField     fieldAuthor;
+    protected JTextArea      fieldMessage;
+    protected JScrollPane    paneMessage;
+    protected UndoManager    undoMessage = new UndoManager ();  // specifically for editing text field
+    protected JEditorPane    paneProgress;
+    protected PanelDiff      panelDiff;
 
     // The job of existingModels and existingReferences is to ensure that rebuild() does not create
     // duplicate MDir instances. The goal is to maintain the guarantee of object identity.
@@ -164,32 +163,6 @@ public class SettingsRepo extends JScrollPane implements Settings
         setViewportView (panel);
         getVerticalScrollBar ().setUnitIncrement (15);  // About one line of text. Typically, one "click" of the wheel does 3 steps, so about 45px or 3 lines of text.
 
-        InputMap inputMap = getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
-        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
-        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
-
-        ActionMap actionMap = getActionMap ();
-        actionMap.put ("Undo", new AbstractAction ("Undo")
-        {
-            public void actionPerformed (ActionEvent evt)
-            {
-                try {undoRevert.undo ();}
-                catch (CannotUndoException e) {}
-                catch (CannotRedoException e) {}
-            }
-        });
-        actionMap.put ("Redo", new AbstractAction ("Redo")
-        {
-            public void actionPerformed (ActionEvent evt)
-            {
-                try {undoRevert.redo();}
-                catch (CannotUndoException e) {}
-                catch (CannotRedoException e) {}
-            }
-        });
-
-        
         repoModel = new RepoTableModel ();
         repoTable = new RepoTable (repoModel);
         JPanel repoPanel = new JPanel ();
@@ -214,7 +187,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
         });
 
-        inputMap = repoTable.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        InputMap inputMap = repoTable.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
         inputMap.put (KeyStroke.getKeyStroke ("shift UP"),   "moveUp");
         inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"), "moveDown");
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
@@ -222,7 +195,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         inputMap.put (KeyStroke.getKeyStroke ("SPACE"),      "startEditing");
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing");
 
-        actionMap = repoTable.getActionMap ();
+        ActionMap actionMap = repoTable.getActionMap ();
         actionMap.put ("moveUp", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
@@ -2094,7 +2067,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             if (row < 0  ||  row >= deltas.size ()) return;
             Delta delta = deltas.get (row);
             if (delta.untracked) return;
-            undoRevert.add (new RevertDelta (delta));
+            MainFrame.instance.undoManager.add (new RevertDelta (delta));
         }
 
         public int indexOf (String name)

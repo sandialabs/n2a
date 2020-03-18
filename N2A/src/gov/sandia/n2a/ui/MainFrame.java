@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,6 +13,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Image;
 import java.awt.Toolkit;
+import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.WindowAdapter;
@@ -20,7 +21,14 @@ import java.awt.event.WindowEvent;
 import java.awt.event.WindowStateListener;
 import java.util.ArrayList;
 
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
+import javax.swing.KeyStroke;
+import javax.swing.undo.CannotRedoException;
+import javax.swing.undo.CannotUndoException;
 
 @SuppressWarnings("serial")
 public class MainFrame extends JFrame
@@ -28,6 +36,7 @@ public class MainFrame extends JFrame
     public static MainFrame instance;
 
     public MainTabbedPane tabs;
+    public UndoManager    undoManager;
 
     public MainFrame ()
     {
@@ -106,6 +115,35 @@ public class MainFrame extends JFrame
             {
                 PanelModel.instance.panelEquations.saveFocus ();  // Hack to ensure that final viewport position gets recorded.
                 AppData.quit ();  // Save all user settings (including those from other parts of the app).
+            }
+        });
+
+        // Undo
+        undoManager = new UndoManager ();
+        JComponent content = (JComponent) getContentPane ();
+
+        InputMap inputMap = content.getInputMap (JComponent.WHEN_IN_FOCUSED_WINDOW);
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+
+        ActionMap actionMap = content.getActionMap ();
+        actionMap.put ("Undo", new AbstractAction ("Undo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {undoManager.undo ();}
+                catch (CannotUndoException e) {}
+                catch (CannotRedoException e) {}
+            }
+        });
+        actionMap.put ("Redo", new AbstractAction ("Redo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {undoManager.redo();}
+                catch (CannotUndoException e) {}
+                catch (CannotRedoException e) {}
             }
         });
     }

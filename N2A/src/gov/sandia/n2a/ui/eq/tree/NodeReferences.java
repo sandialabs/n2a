@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,8 +10,8 @@ import java.awt.Point;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.DeleteReferences;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -76,7 +76,7 @@ public class NodeReferences extends NodeContainer
             }
             index++;
             AddReference ar = new AddReference ((NodeBase) getParent (), index, data);
-            PanelModel.instance.undoManager.add (ar);
+            MainFrame.instance.undoManager.add (ar);
             return ar.createdNode;
         }
         return ((NodeBase) getParent ()).add (type, tree, data, location);
@@ -92,6 +92,6 @@ public class NodeReferences extends NodeContainer
     public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        PanelModel.instance.undoManager.add (new DeleteReferences (this));
+        MainFrame.instance.undoManager.add (new DeleteReferences (this));
     }
 }

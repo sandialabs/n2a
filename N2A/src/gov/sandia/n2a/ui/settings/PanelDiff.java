@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.settings;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.settings.SettingsRepo.Delta;
 import gov.sandia.n2a.ui.settings.SettingsRepo.GitWrapper;
@@ -67,7 +68,7 @@ public class PanelDiff extends JTree
             {
                 if (lastDelta.deleted)  // Force document to be restored in full, rather than allowing targeted undelete.
                 {
-                    container.undoRevert.add (container.new RevertDelta (lastDelta));
+                    MainFrame.instance.undoManager.add (container.new RevertDelta (lastDelta));
                     return;
                 }
 
@@ -88,11 +89,11 @@ public class PanelDiff extends JTree
                 // Guard against deleting entire document. Such changes must be relegated to RevertDelta.
                 if (lastDelta.untracked  &&  p == root)
                 {
-                    container.undoRevert.add (container.new RevertDelta (lastDelta));
+                    MainFrame.instance.undoManager.add (container.new RevertDelta (lastDelta));
                     return;
                 }
 
-                if (n != null) container.undoRevert.add (new RevertDiff (n));
+                if (n != null) MainFrame.instance.undoManager.add (new RevertDiff (n));
             }
         });
 

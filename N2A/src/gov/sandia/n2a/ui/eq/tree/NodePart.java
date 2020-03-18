@@ -26,6 +26,8 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
@@ -361,7 +363,6 @@ public class NodePart extends NodeContainer
         }
 
         // Scan for matches
-        PanelModel pm = PanelModel.instance;
         for (NodePart fromPart : fromParts)
         {
             // Collect candidates for each unsatisfied connection.
@@ -485,7 +486,7 @@ public class NodePart extends NodeContainer
                 if (u.candidates.size () == 0) continue;
                 NodePart toPart = u.candidates.get (u.candidates.size () - 1);
                 NodeVariable v = (NodeVariable) fromPart.child (u.alias);  // This must exist.
-                pm.undoManager.add (new ChangeVariable (v, u.alias, toPart.source.key ()));
+                MainFrame.instance.undoManager.add (new ChangeVariable (v, u.alias, toPart.source.key ()));
                 toPart.connectionTarget = true;
             }
         }
@@ -561,22 +562,23 @@ public class NodePart extends NodeContainer
             }
         }
 
+        UndoManager um = MainFrame.instance.undoManager;
         if (type.equals ("Annotation"))
         {
             AddAnnotation aa = new AddAnnotation (this, metadataIndex, data);
-            PanelModel.instance.undoManager.add (aa);  // aa will automagically insert a $metadata block if needed
+            um.add (aa);  // aa will automagically insert a $metadata block if needed
             return aa.createdNode;
         }
         else if (type.equals ("Reference"))
         {
             AddReference ar = new AddReference (this, metadataIndex, data);
-            PanelModel.instance.undoManager.add (ar);
+            um.add (ar);
             return ar.createdNode;
         }
         else if (type.equals ("Part"))
         {
             AddPart ap = new AddPart (this, subpartIndex, data, location);
-            PanelModel.instance.undoManager.add (ap);
+            um.add (ap);
             return ap.createdNode;
         }
         else if (type.equals ("Inherit"))
@@ -593,7 +595,7 @@ public class NodePart extends NodeContainer
             {
                 un = new ChangeInherit (inherit, value);
             }
-            if (un != null) PanelModel.instance.undoManager.add (un);
+            if (un != null) um.add (un);
             return child ("$inherit");
         }
         else  // treat all other requests as "Variable"
@@ -603,7 +605,7 @@ public class NodePart extends NodeContainer
                 data = new MVolatile (data.get () + data.key (), "");  // convert equation into nameless variable
             }
             AddVariable av = new AddVariable (this, variableIndex, data);
-            PanelModel.instance.undoManager.add (av);
+            um.add (av);
             return av.createdNode;
         }
     }
@@ -656,7 +658,7 @@ public class NodePart extends NodeContainer
             return;
         }
 
-        PanelModel mep = PanelModel.instance;
+        UndoManager um = MainFrame.instance.undoManager;
         if (isTrueRoot ())  // Edits to root cause a rename of the document on disk
         {
             if (name.isEmpty ())
@@ -679,7 +681,7 @@ public class NodePart extends NodeContainer
                 existingDocument = models.child (name);
             }
 
-            mep.undoManager.add (new ChangeDoc (oldKey, name));
+            um.add (new ChangeDoc (oldKey, name));
             // MDir promises to maintain object identity during the move, so "source" is still valid.
             return;
         }
@@ -693,7 +695,7 @@ public class NodePart extends NodeContainer
             {
                 public void run ()
                 {
-                    boolean canceled = mep.undoManager.getPresentationName ().equals ("AddPart");
+                    boolean canceled = um.getPresentationName ().equals ("AddPart");
                     delete (tree, canceled);
                 }
             });
@@ -710,7 +712,7 @@ public class NodePart extends NodeContainer
             return;
         }
 
-        mep.undoManager.add (new ChangePart (this, oldKey, name));
+        um.add (new ChangePart (this, oldKey, name));
     }
 
     public void revert (FilteredTreeModel model)
@@ -724,9 +726,9 @@ public class NodePart extends NodeContainer
     public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;  // Root will always be from top document. Any other node we might try to delete must meet the same requirement.
-        PanelModel pm = PanelModel.instance;
-        if (isTrueRoot ()) pm.undoManager.add (new DeleteDoc ((MDoc) source.getSource ()));
-        else               pm.undoManager.add (new DeletePart (this, canceled));
+        UndoManager um = MainFrame.instance.undoManager;
+        if (isTrueRoot ()) um.add (new DeleteDoc ((MDoc) source.getSource ()));
+        else               um.add (new DeletePart (this, canceled));
     }
 
     @Override

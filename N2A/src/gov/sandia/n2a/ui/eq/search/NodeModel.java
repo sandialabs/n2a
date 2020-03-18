@@ -18,8 +18,8 @@ import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.Schema;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.TransferableNode;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
@@ -151,12 +151,11 @@ public class NodeModel extends NodeBase
             existingDocument = models.child (input);
         }
 
-        PanelModel.instance.undoManager.add (new ChangeDoc (key, input));
+        MainFrame.instance.undoManager.add (new ChangeDoc (key, input));
     }
 
     public void delete (JTree tree, boolean cancelled)
     {
-        PanelModel pm = PanelModel.instance;
-        pm.undoManager.add (new DeleteDoc ((MDoc) AppData.models.child (key)));
+        MainFrame.instance.undoManager.add (new DeleteDoc ((MDoc) AppData.models.child (key)));
     }
 }

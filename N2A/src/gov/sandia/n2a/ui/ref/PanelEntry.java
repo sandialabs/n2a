@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.ref.undo.AddTag;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
@@ -202,7 +203,7 @@ public class PanelEntry extends JPanel
         {
             public void actionPerformed (ActionEvent evt)
             {
-                try {PanelReference.instance.undoManager.undo ();}
+                try {MainFrame.instance.undoManager.undo ();}
                 catch (CannotUndoException e) {}
                 catch (CannotRedoException e) {}
             }
@@ -211,7 +212,7 @@ public class PanelEntry extends JPanel
         {
             public void actionPerformed (ActionEvent evt)
             {
-                try {PanelReference.instance.undoManager.redo();}
+                try {MainFrame.instance.undoManager.redo();}
                 catch (CannotUndoException e) {}
                 catch (CannotRedoException e) {}
             }
@@ -296,7 +297,7 @@ public class PanelEntry extends JPanel
                     }
                     else
                     {
-                        PanelReference.instance.undoManager.add (new AddTag (model.record, row, key, value));
+                        MainFrame.instance.undoManager.add (new AddTag (model.record, row, key, value));
                     }
                 }
                 return true;
@@ -335,7 +336,7 @@ public class PanelEntry extends JPanel
                         String key = ((String) data.getTransferData (DataFlavor.stringFlavor)).split ("=", 2)[0];
                         if (! key.equals ("id")  &&  ! key.equals ("form")  &&  ! key.equals ("title"))
                         {
-                            PanelReference.instance.undoManager.add (new DeleteTag (model.record, key));
+                            MainFrame.instance.undoManager.add (new DeleteTag (model.record, key));
                         }
                     }
                     catch (UnsupportedFlavorException | IOException e)
@@ -378,7 +379,7 @@ public class PanelEntry extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                PanelReference.instance.undoManager.add (new AddEntry ());
+                MainFrame.instance.undoManager.add (new AddEntry ());
             }
         });
 
@@ -432,14 +433,14 @@ public class PanelEntry extends JPanel
     {
         if (model.record == null)
         {
-            PanelReference.instance.undoManager.add (new AddEntry ());
+            MainFrame.instance.undoManager.add (new AddEntry ());
         }
         else if (! model.locked)
         {
             int row = table.getSelectedRow ();
             if (row < 0) row = model.keys.size ();
             if (row < 3) row = 3;  // keep id, form and title at the top
-            PanelReference.instance.undoManager.add (new AddTag (model.record, row));
+            MainFrame.instance.undoManager.add (new AddTag (model.record, row));
         }
     }
 
@@ -449,7 +450,7 @@ public class PanelEntry extends JPanel
         int row = table.getSelectedRow ();
         if (row < 3) return;  // Protect id, form and title
         String tag = model.keys.get (row);
-        PanelReference.instance.undoManager.add (new DeleteTag (model.record, tag));
+        MainFrame.instance.undoManager.add (new DeleteTag (model.record, tag));
     }
 
     /**
@@ -660,13 +661,13 @@ public class PanelEntry extends JPanel
                 if (newValue.equals (tag)) return;  // nothing to do
                 if (newValue.isEmpty ())  // tag is deleted. Most likely it was a new tag the user changed their mind about, but could also be an old tag.
                 {
-                    PanelReference.instance.undoManager.add (new DeleteTag (record, tag));
+                    MainFrame.instance.undoManager.add (new DeleteTag (record, tag));
                     return;
                 }
                 if (record.child (newValue) != null) return;  // not allowed, because another tag with that name already exists
                 if (newValue.equals ("id")) return;  // also not allowed; note that "form" and "title" are protected by previous line
 
-                PanelReference.instance.undoManager.add (new RenameTag (record, keys.indexOf (newValue), tag, newValue));
+                MainFrame.instance.undoManager.add (new RenameTag (record, keys.indexOf (newValue), tag, newValue));
             }
             else if (column == 1)  // value change
             {
@@ -677,11 +678,11 @@ public class PanelEntry extends JPanel
                     if (newValue.isEmpty ()) return;  // not allowed
                     newValue = MDir.validFilenameFrom (newValue);
                     if (AppData.references.child (newValue) != null) return;  // not allowed, because another entry with that id already exists
-                    PanelReference.instance.undoManager.add (new ChangeEntry (record.key (), newValue));
+                    MainFrame.instance.undoManager.add (new ChangeEntry (record.key (), newValue));
                 }
                 else
                 {
-                    PanelReference.instance.undoManager.add (new ChangeTag (record, tag, newValue));
+                    MainFrame.instance.undoManager.add (new ChangeTag (record, tag, newValue));
                 }
             }
         }

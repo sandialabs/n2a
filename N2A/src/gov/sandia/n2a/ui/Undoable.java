@@ -1,10 +1,12 @@
 /*
-Copyright 2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016,2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui;
+
+import java.awt.Component;
 
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
@@ -12,8 +14,9 @@ import javax.swing.undo.UndoableEdit;
 
 public class Undoable implements UndoableEdit
 {
-    protected boolean hasBeenDone = false;  // In the original AbstractUndoableEdit class, this was initialized true. We set it false and expect the caller to run redo() during creation of this object.
-    protected boolean alive       = true;
+    protected boolean   hasBeenDone = false;  // In the original AbstractUndoableEdit class, this was initialized true. We set it false and expect the caller to run redo() during creation of this object.
+    protected boolean   alive       = true;
+    protected Component tab         = MainFrame.instance.tabs.getSelectedComponent ();
 
     public void die ()
     {
@@ -24,6 +27,7 @@ public class Undoable implements UndoableEdit
     {
         if (! canUndo ()) throw new CannotUndoException ();
         hasBeenDone = false;
+        MainFrame.instance.tabs.setSelectedComponent (tab);
     }
 
     public boolean canUndo ()
@@ -35,6 +39,7 @@ public class Undoable implements UndoableEdit
     {
         if (! canRedo ()) throw new CannotRedoException();
         hasBeenDone = true;
+        MainFrame.instance.tabs.setSelectedComponent (tab);
     }
 
     public boolean canRedo ()

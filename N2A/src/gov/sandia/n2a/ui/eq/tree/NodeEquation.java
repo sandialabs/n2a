@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,8 +15,8 @@ import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.ChangeEquation;
 import gov.sandia.n2a.ui.eq.undo.DeleteEquation;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -129,7 +129,7 @@ public class NodeEquation extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddEquation");
+            boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddEquation");
             delete (tree, canceled);
             return;
         }
@@ -166,7 +166,7 @@ public class NodeEquation extends NodeBase
         piecesBefore.combiner = parent.source.get ();  // The fact that we are modifying an existing equation node indicates that the variable (parent) should only contain a combiner.
         if (piecesAfter.combiner.isEmpty ()) piecesAfter.combiner = piecesBefore.combiner;
 
-        PanelModel.instance.undoManager.add (new ChangeEquation (parent, piecesBefore.condition, piecesBefore.combiner, piecesBefore.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
+        MainFrame.instance.undoManager.add (new ChangeEquation (parent, piecesBefore.condition, piecesBefore.combiner, piecesBefore.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
     }
 
     @Override
@@ -174,7 +174,7 @@ public class NodeEquation extends NodeBase
     {
         if (source.isFromTopDocument ())
         {
-            PanelModel.instance.undoManager.add (new DeleteEquation (this, canceled));
+            MainFrame.instance.undoManager.add (new DeleteEquation (this, canceled));
         }
         else
         {
@@ -182,7 +182,7 @@ public class NodeEquation extends NodeBase
             String       combiner = parent.source.get ();
             String       name     = source.key ().substring (1);  // strip @ from name, as required by ChangeEquation
             String       value    = source.get ();
-            PanelModel.instance.undoManager.add (new ChangeEquation (parent, name, combiner, value, name, combiner, ""));  // revoke the equation
+            MainFrame.instance.undoManager.add (new ChangeEquation (parent, name, combiner, value, name, combiner, ""));  // revoke the equation
         }
     }
 }

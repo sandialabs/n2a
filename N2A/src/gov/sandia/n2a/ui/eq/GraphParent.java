@@ -29,6 +29,7 @@ import javax.swing.event.MouseInputAdapter;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 
@@ -255,7 +256,7 @@ public class GraphParent extends JPanel
                     Rectangle now = getBounds ();
                     if (now.width  != old.width ) boundsParent.set (now.width,  "width");
                     if (now.height != old.height) boundsParent.set (now.height, "height");
-                    if (boundsParent.size () > 0) PanelModel.instance.undoManager.add (new ChangeGUI (part, guiTree));
+                    if (boundsParent.size () > 0) MainFrame.instance.undoManager.add (new ChangeGUI (part, guiTree));
                 }
             }
 

@@ -16,7 +16,9 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
+import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.search.NameEditor;
 import gov.sandia.n2a.ui.eq.search.NodeBase;
@@ -107,6 +109,8 @@ public class PanelSearch extends JPanel
         tree.addTreeSelectionListener (nameEditor);
         //tree.putClientProperty ("JTree.lineStyle", "None");  // Get rid of lines that connect children to parents. Also need to hide handles, but that is more difficult (no option in JTree).
 
+        UndoManager um = MainFrame.instance.undoManager;
+
         InputMap inputMap = tree.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
@@ -146,7 +150,7 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                PanelModel.instance.undoManager.add (new AddDoc ());
+                um.add (new AddDoc ());
             }
         });
         actionMap.put ("delete", new AbstractAction ()
@@ -155,7 +159,7 @@ public class PanelSearch extends JPanel
             {
                 NodeModel n = getSelectedNodeModel ();
                 if (n == null  ||  ! n.allowEdit ()) return;
-                PanelModel.instance.undoManager.add (new DeleteDoc ((MDoc) AppData.models.child (n.key)));
+                um.add (new DeleteDoc ((MDoc) AppData.models.child (n.key)));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -240,7 +244,7 @@ public class PanelSearch extends JPanel
                     if (! schema.type.contains ("Part")) return false;
                     PanelModel pm = PanelModel.instance;
                     if (xfer.isDrop ()  &&  xferNode != null  &&  xferNode.panel != pm.panelEquations) return false;  // Reject DnD from search or MRU
-                    pm.undoManager.addEdit (new CompoundEdit ());
+                    um.addEdit (new CompoundEdit ());
                     for (MNode n : data)  // data can contain several parts
                     {
                         AddDoc add = new AddDoc (n.key (), n);
@@ -249,10 +253,10 @@ public class PanelSearch extends JPanel
                             add.wasShowing = false;  // on the presumption that the sending side will create an Outsource operation, and thus wants to keep the old model in the equation tree
                             xferNode.newPartName = add.name;
                         }
-                        pm.undoManager.add (add);
+                        um.add (add);
                         break;  // For now, we only support transferring a single part. To do more, we need to add collections in TransferableNode for both the node paths and the created part names.
                     }
-                    if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) PanelModel.instance.undoManager.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
+                    if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) um.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
 
                     return true;
                 }
@@ -278,7 +282,7 @@ public class PanelSearch extends JPanel
             protected void exportDone (JComponent source, Transferable data, int action)
             {
                 if (! tree.isFocusOwner ()) yieldFocus ();
-                PanelModel.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
+                um.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         };
         tree.setTransferHandler (transferHandler);
@@ -1145,7 +1149,7 @@ public class PanelSearch extends JPanel
                     }
 
                     AddPart ap = new AddPart (parent, parent.getChildCount (), data, c);
-                    PanelModel.instance.undoManager.add (ap);
+                    MainFrame.instance.undoManager.add (ap);
                 }
             });
         }

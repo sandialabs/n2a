@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,8 +10,8 @@ import java.awt.Point;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotations;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -88,7 +88,7 @@ public class NodeAnnotations extends NodeContainer
             }
             index++;
             AddAnnotation aa = new AddAnnotation (this, index, data);
-            PanelModel.instance.undoManager.add (aa);
+            MainFrame.instance.undoManager.add (aa);
             return aa.createdNode;
         }
 
@@ -105,6 +105,6 @@ public class NodeAnnotations extends NodeContainer
     public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        PanelModel.instance.undoManager.add (new DeleteAnnotations (this));
+        MainFrame.instance.undoManager.add (new DeleteAnnotations (this));
     }
 }

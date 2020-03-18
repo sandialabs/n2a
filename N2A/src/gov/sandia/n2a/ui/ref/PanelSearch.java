@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
 import gov.sandia.n2a.ui.ref.undo.DeleteEntry;
@@ -83,7 +84,7 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                PanelReference.instance.undoManager.add (new AddEntry ());
+                MainFrame.instance.undoManager.add (new AddEntry ());
             }
         });
         actionMap.put ("delete", new AbstractAction ()
@@ -94,7 +95,7 @@ public class PanelSearch extends JPanel
                 if (key == null) return;
                 if (! AppData.references.isWriteable (key)) return;
                 lastSelection = list.getSelectedIndex ();
-                PanelReference.instance.undoManager.add (new DeleteEntry ((MDoc) AppData.references.child (key)));
+                MainFrame.instance.undoManager.add (new DeleteEntry ((MDoc) AppData.references.child (key)));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -152,7 +153,7 @@ public class PanelSearch extends JPanel
                 for (MNode n : data)  // data can contain several entries
                 {
                     String key = MDir.validFilenameFrom (n.key ());
-                    PanelReference.instance.undoManager.add (new AddEntry (key, n));
+                    MainFrame.instance.undoManager.add (new AddEntry (key, n));
                 }
                 return true;
             }

@@ -49,6 +49,8 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -610,7 +612,7 @@ public class PanelEquationGraph extends JScrollPane
                 {
                     gui.set (action, "arrow");
                 }
-                PanelModel.instance.undoManager.add (new ChangeGUI (n, gui));
+                MainFrame.instance.undoManager.add (new ChangeGUI (n, gui));
             }
         };
     }
@@ -784,7 +786,7 @@ public class PanelEquationGraph extends JScrollPane
 
         public void exportDone (JComponent source, Transferable data, int action)
         {
-            PanelModel.instance.undoManager.endCompoundEdit ();
+            MainFrame.instance.undoManager.endCompoundEdit ();
         }
     }
 
@@ -928,7 +930,7 @@ public class PanelEquationGraph extends JScrollPane
             {
                 edge.tipDrag = false;
 
-                PanelModel mep = PanelModel.instance;
+                UndoManager um = MainFrame.instance.undoManager;
                 GraphNode nodeFrom = edge.nodeFrom;
                 NodePart partFrom = nodeFrom.node;
                 NodeVariable variable = (NodeVariable) partFrom.child (edge.alias);  // There should always be a variable with the alias as its name.
@@ -939,7 +941,7 @@ public class PanelEquationGraph extends JScrollPane
                     String value = "connect()";
                     String original = variable.source.getOriginal ().get ();
                     if (Operator.containsConnect (original)) value = original;
-                    mep.undoManager.add (new ChangeVariable (variable, edge.alias, value));
+                    um.add (new ChangeVariable (variable, edge.alias, value));
                 }
                 else if (nodeTo == edge.nodeTo)  // No change
                 {
@@ -947,7 +949,7 @@ public class PanelEquationGraph extends JScrollPane
                 }
                 else  // Connect to new endpoint
                 {
-                    mep.undoManager.add (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
+                    um.add (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
                 }
                 edge = null;
             }

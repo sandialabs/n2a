@@ -22,8 +22,9 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddEquation;
 import gov.sandia.n2a.ui.eq.undo.AddInherit;
@@ -315,6 +316,7 @@ public class NodeVariable extends NodeContainer
         }
         if (isBinding  &&  ! type.equals ("Annotation")) return ((NodeBase) getParent ()).add (type, tree, data, location);
 
+        UndoManager um = MainFrame.instance.undoManager;
         if (type.equals ("Equation"))
         {
             if (data != null)
@@ -341,7 +343,7 @@ public class NodeVariable extends NodeContainer
                 {
                     String value = existing.combiner + data.get () + key;
                     if (value.endsWith ("@")) value = value.substring (0, value.length () - 1);
-                    PanelModel.instance.undoManager.add (new ChangeVariable (this, source.key (), value));
+                    um.add (new ChangeVariable (this, source.key (), value));
                     return null;  // Don't edit anything
                 }
 
@@ -351,7 +353,7 @@ public class NodeVariable extends NodeContainer
                 {
                     key = key.substring (1);  // remove the @, since ChangeEquation expects strings from ParsedValue
                     String combiner = new Variable.ParsedValue (source.get ()).combiner;
-                    PanelModel.instance.undoManager.add (new ChangeEquation (this, key, combiner, existingEquation.source.get (), key, combiner, data.get ()));
+                    um.add (new ChangeEquation (this, key, combiner, existingEquation.source.get (), key, combiner, data.get ()));
                     return existingEquation;  // Somewhat of a cheat, since we didn't really add it. OTOH, a paste operation should not be followed by edit mode.
                 }
             }
@@ -365,7 +367,7 @@ public class NodeVariable extends NodeContainer
 
             // Create an AddEquation action
             AddEquation ae = new AddEquation (this, index, data);
-            PanelModel.instance.undoManager.add (ae);
+            um.add (ae);
             return ae.createdNode;
         }
         else if (type.equals ("Annotation"))
@@ -376,13 +378,13 @@ public class NodeVariable extends NodeContainer
             while (index < count  &&  ! (children.get (index) instanceof NodeReference)) index++;
 
             AddAnnotation aa = new AddAnnotation (this, index, data);
-            PanelModel.instance.undoManager.add (aa);
+            um.add (aa);
             return aa.createdNode;
         }
         else if (type.equals ("Reference"))
         {
             AddReference ar = new AddReference (this, getChildCount (), data);
-            PanelModel.instance.undoManager.add (ar);
+            um.add (ar);
             return ar.createdNode;
         }
 
@@ -430,7 +432,8 @@ public class NodeVariable extends NodeContainer
     public void applyEdit (JTree tree)
     {
         String input = toString ();
-        boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddVariable");
+        UndoManager um = MainFrame.instance.undoManager;
+        boolean canceled = um.getPresentationName ().equals ("AddVariable");
         if (input.isEmpty ())
         {
             delete (tree, canceled);
@@ -463,7 +466,6 @@ public class NodeVariable extends NodeContainer
         }
 
         // Handle creation of $inherit node.
-        PanelModel mep = PanelModel.instance;
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
         boolean newlyCreated =  getChildCount () == 0  &&  valueBefore.isEmpty ()  &&  source.isFromTopDocument ();  // Only a heuristic. Could also be an existing variable with no equation.
         NodeBase parent = (NodeBase) getParent ();
@@ -475,11 +477,11 @@ public class NodeVariable extends NodeContainer
                 {
                     parent.source.clear (nameBefore);
                     // No need to update GUI, because AddInherit rebuilds parent.
-                    mep.undoManager.add (new AddInherit ((NodePart) parent, valueAfter));
+                    um.add (new AddInherit ((NodePart) parent, valueAfter));
                 }
                 else
                 {
-                    mep.undoManager.add (new ChangeVariableToInherit (this, valueAfter));
+                    um.add (new ChangeVariableToInherit (this, valueAfter));
                 }
                 return;
             }
@@ -539,12 +541,12 @@ public class NodeVariable extends NodeContainer
                     if (equationMatch == null)  // New equation
                     {
                         // It is possible to add an equation revocation here without there being an existing equation to revoke.
-                        mep.undoManager.add (new AddEquation (this, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
+                        um.add (new AddEquation (this, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                     }
                     else  // Overwrite an existing equation
                     {
                         Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
-                        mep.undoManager.add (new ChangeEquation (this, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
+                        um.add (new ChangeEquation (this, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                     }
                     parent.updateTabStops (fm);
                     parent.allNodesChanged (model);
@@ -556,7 +558,7 @@ public class NodeVariable extends NodeContainer
                 if (newlyCreated)  // The newly created node has been renamed such that it will inject into/over an existing variable.
                 {
                     // Remove newly-created variable, regardless of what we do to nodeAfter.
-                    mep.undoManager.add (new DeleteVariable (this, canceled));
+                    um.add (new DeleteVariable (this, canceled));
 
                     // Decide what change (if any) to apply to nodeAfter.
                     if (expressionAfter)
@@ -566,12 +568,12 @@ public class NodeVariable extends NodeContainer
                         {
                             if (piecesAfter.condition.equals (piecesDest.condition))  // Directly overwrite the target, since they share the say name and condition.
                             {
-                                mep.undoManager.add (new ChangeVariable (nva, nameAfter, valueAfter, getKeyPath ()));
+                                um.add (new ChangeVariable (nva, nameAfter, valueAfter, getKeyPath ()));
                             }
                             else  // Inject new equation and change target into a multiconditional variable.
                             {
                                 // Possible to revoke non-existent equation
-                                mep.undoManager.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                                um.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                             }
                         }
                         else
@@ -579,12 +581,12 @@ public class NodeVariable extends NodeContainer
                             if (equationMatch == null)  // Add new equation to an existing multiconditional.
                             {
                                 // Possible to revoke non-existent equation
-                                mep.undoManager.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                                um.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                             }
                             else  // Overwrite an existing equation in a multiconditional
                             {
                                 Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
-                                mep.undoManager.add (new ChangeEquation (nva, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                                um.add (new ChangeEquation (nva, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                             }
                         }
                     }
@@ -595,19 +597,20 @@ public class NodeVariable extends NodeContainer
 
         // The default action
         if (valueAfter.isEmpty ()  &&  ! hasEquations ()) valueAfter = "@";  // The @ will be hidden most of the time, but it will distinguish a variable from a part.
-        mep.undoManager.add (new ChangeVariable (this, nameAfter, valueAfter));
+        um.add (new ChangeVariable (this, nameAfter, valueAfter));
     }
 
     @Override
     public void delete (JTree tree, boolean canceled)
     {
+        UndoManager um = MainFrame.instance.undoManager;
         if (source.isFromTopDocument ())
         {
-            PanelModel.instance.undoManager.add (new DeleteVariable (this, canceled));
+            um.add (new DeleteVariable (this, canceled));
         }
         else if (! hasEquations ())  // Only allow direct kill of a variable if it is single-line. Otherwise, must kill individual equations.
         {
-            PanelModel.instance.undoManager.add (new ChangeVariable (this, source.key (), "$kill"));  // revoke the variable
+            um.add (new ChangeVariable (this, source.key (), "$kill"));  // revoke the variable
         }
     }
 }

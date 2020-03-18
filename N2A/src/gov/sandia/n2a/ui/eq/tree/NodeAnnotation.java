@@ -13,8 +13,8 @@ import java.util.List;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
@@ -209,7 +209,7 @@ public class NodeAnnotation extends NodeContainer
                 }
                 index++;
                 AddAnnotation aa = new AddAnnotation (this, index, data);
-                PanelModel.instance.undoManager.add (aa);
+                MainFrame.instance.undoManager.add (aa);
                 return aa.createdNode;
             }
             // else let the request travel up to our parent
@@ -223,7 +223,7 @@ public class NodeAnnotation extends NodeContainer
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            boolean canceled = PanelModel.instance.undoManager.getPresentationName ().equals ("AddAnnotation");
+            boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddAnnotation");
             delete (tree, canceled);
             return;
         }
@@ -278,13 +278,13 @@ public class NodeAnnotation extends NodeContainer
             return;
         }
 
-        PanelModel.instance.undoManager.add (new ChangeAnnotation (this, name, value));
+        MainFrame.instance.undoManager.add (new ChangeAnnotation (this, name, value));
     }
 
     @Override
     public void delete (JTree tree, boolean canceled)
     {
         if (! source.isFromTopDocument ()) return;
-        PanelModel.instance.undoManager.add (new DeleteAnnotation (this, canceled));
+        MainFrame.instance.undoManager.add (new DeleteAnnotation (this, canceled));
     }
 }

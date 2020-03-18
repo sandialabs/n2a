@@ -46,6 +46,7 @@ import javax.swing.event.MouseInputAdapter;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
@@ -327,7 +328,7 @@ public class GraphNode extends JPanel
             int y = getBounds ().y - parent.offset.y + dy * step;
             gui.set (y, "bounds", "y");
         }
-        PanelModel.instance.undoManager.add (new ChangeGUI (node, gui));
+        MainFrame.instance.undoManager.add (new ChangeGUI (node, gui));
     }
 
     public void updateTitle ()
@@ -1066,7 +1067,7 @@ public class GraphNode extends JPanel
                         if (now.width  != old.width ) bounds.set (now.width,  "width");
                         if (now.height != old.height) bounds.set (now.height, "height");
                     }
-                    if (bounds.size () > 0) PanelModel.instance.undoManager.add (new ChangeGUI (node, guiTree));
+                    if (bounds.size () > 0) MainFrame.instance.undoManager.add (new ChangeGUI (node, guiTree));
                 }
             }
 
