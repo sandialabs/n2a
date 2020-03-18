@@ -366,8 +366,10 @@ public class PanelDiff extends JTree
                         }
                         else  // different
                         {
-                            result  = "<s>" + key + " = " + A.get () + "</s><br/>";
-                            result +=         key + " = " + B.get ();
+                            result  = "<html>";
+                            result += "<s>" + escape (key) + " = " + escape (A.get ()) + "</s><br/>";
+                            result +=         escape (key) + " = " + escape (B.get ());
+                            result += "</html>";
                         }
                     }
                 }
@@ -375,9 +377,19 @@ public class PanelDiff extends JTree
                 {
                     if (A.data ()) result += " = " + A.get ();
                 }
-                userObject = "<html>" + result + "</html>";
+                userObject = result;
             }
             return userObject.toString ();
+        }
+
+        public String escape (String value)
+        {
+            value = value.replace ("&",  "&amp;");
+            value = value.replace ("<",  "&lt;");
+            value = value.replace (">",  "&gt;");
+            value = value.replace ("\"", "&quot;");
+            value = value.replace ("'",  "&apos;");
+            return value;
         }
 
         public void dump (String indent)
