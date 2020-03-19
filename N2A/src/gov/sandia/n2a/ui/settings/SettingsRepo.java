@@ -140,7 +140,7 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected JTextField     fieldAuthor;
     protected JTextArea      fieldMessage;
     protected JScrollPane    paneMessage;
-    protected UndoManager    undoMessage = new UndoManager ();  // specifically for editing text field
+    protected UndoManager    undoMessage;  // specifically for editing text field
     protected JEditorPane    paneProgress;
     protected PanelDiff      panelDiff;
 
@@ -188,12 +188,15 @@ public class SettingsRepo extends JScrollPane implements Settings
         });
 
         InputMap inputMap = repoTable.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),   "moveUp");
-        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"), "moveDown");
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),      "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),        "moveUp");
+        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),      "moveDown");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),          "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),          "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),           "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");  // For some reason, repoTable needs explicit key bindings for undo/redo. However, gitTable does not. Need to understand this better.
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
 
         ActionMap actionMap = repoTable.getActionMap ();
         actionMap.put ("moveUp", new AbstractAction ()
@@ -253,6 +256,24 @@ public class SettingsRepo extends JScrollPane implements Settings
                 int row    = repoTable.getSelectedRow ();
                 int column = repoTable.getSelectedColumn ();
                 if (! repoModel.toggle (row, column)) repoTable.editCellAt (row, column, e);
+            }
+        });
+        actionMap.put ("Undo", new AbstractAction ("Undo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {MainFrame.instance.undoManager.undo ();}
+                catch (CannotUndoException e) {}
+                catch (CannotRedoException e) {}
+            }
+        });
+        actionMap.put ("Redo", new AbstractAction ("Redo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {MainFrame.instance.undoManager.redo();}
+                catch (CannotUndoException e) {}
+                catch (CannotRedoException e) {}
             }
         });
 
@@ -663,6 +684,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public void pull (GitWrapper gitRepo, String key)
     {
+        MainFrame.instance.undoManager.discardAllEdits ();  // TODO: purge only edits related to the current repo.
         needRebuild = true;
         Thread thread = new Thread ()
         {
@@ -861,6 +883,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                         int oldRow = primaryRow;
                         primaryRow = row;
                         AppData.state.set (newKey, "Repos", "primary");
+                        MainFrame.instance.undoManager.discardAllEdits ();
                         needRebuild = true;
                         fireTableCellUpdated (oldRow, 0);  // Primary
                         fireTableCellUpdated (oldRow, 3);  // Name, which may be rendered in a new color
@@ -1045,7 +1068,19 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
             if (! order.isEmpty ()) order = order.substring (1);
             AppData.state.set (order, "Repos", "order");
-            if (repos.size () > 0) AppData.state.set (repos.get (primaryRow).key (), "Repos", "primary");
+            if (repos.size () > 0)
+            {
+                String newPrimary = repos.get (primaryRow).key ();
+                if (! newPrimary.equals (primary))
+                {
+                    AppData.state.set (newPrimary, "Repos", "primary");
+                    MainFrame.instance.undoManager.discardAllEdits ();
+                }
+            }
+            else
+            {
+                MainFrame.instance.undoManager.discardAllEdits ();
+            }
         }
     }
 
@@ -2114,6 +2149,8 @@ public class SettingsRepo extends JScrollPane implements Settings
             List<Delta> oldDeltas = deltas;
             deltas = newDeltas;
             refreshTable ();
+
+            MainFrame.instance.undoManager.discardAllEdits ();  // TODO: purge only edits related to the current repo.
 
             Thread thread = new Thread ()
             {

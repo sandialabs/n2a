@@ -40,4 +40,22 @@ public class UndoManager extends javax.swing.undo.UndoManager
             }
         }
     }
+
+    public synchronized void purge (Filter f)
+    {
+        for (int i = edits.size () - 1; i >= 0; i--)
+        {
+            Undoable edit = (Undoable) edits.get (i);
+            if (f.remove (edit)) trimEdits (i, i);
+        }
+    }
+
+    public interface Filter
+    {
+        /**
+            @param edit The item to be tested.
+            @return true if the item should be removed; false if it should remain
+        **/
+        public boolean remove (Undoable edit);
+    }
 }
