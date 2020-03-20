@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,18 +13,14 @@ import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
-public class ChangeReference extends Undoable
+public class ChangeReference extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  // to the direct parent, whether a $metadata block or a variable
     protected String nameBefore;
     protected String nameAfter;
@@ -58,7 +54,6 @@ public class ChangeReference extends Undoable
 
     public void apply (String nameBefore, String nameAfter, String valueAfter)
     {
-        view.restore ();
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase nodeBefore = parent.child (nameBefore);

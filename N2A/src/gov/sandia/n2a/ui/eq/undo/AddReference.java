@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,20 +16,16 @@ import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeReference;
 import gov.sandia.n2a.ui.eq.tree.NodeReferences;
 import gov.sandia.n2a.ui.ref.PanelReference;
 
-public class AddReference extends Undoable
+public class AddReference extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  // to parent of $reference node
     protected int          index; // where to insert among siblings
     protected String       name;
@@ -80,7 +76,6 @@ public class AddReference extends Undoable
     public void undo ()
     {
         super.undo ();
-        view.restore ();
         destroy (path, false, name);
     }
 
@@ -143,7 +138,6 @@ public class AddReference extends Undoable
     public void redo ()
     {
         super.redo ();
-        view.restore ();
         createdNode = create (path, index, name, value);
     }
 

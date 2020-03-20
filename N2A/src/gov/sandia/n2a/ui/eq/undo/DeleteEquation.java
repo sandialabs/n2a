@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,15 +11,11 @@ import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.ui.Undoable;
-import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 
-public class DeleteEquation extends Undoable
+public class DeleteEquation extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  // to variable node
     protected int          equationCount;  // after deleting this equation
     protected int          index; // where to insert among siblings
@@ -52,14 +48,12 @@ public class DeleteEquation extends Undoable
     public void undo ()
     {
         super.undo ();
-        view.restore ();
         AddEquation.create (path, equationCount, index, name, combiner, value);
     }
 
     public void redo ()
     {
         super.redo ();
-        view.restore ();
         AddEquation.destroy (path, equationCount, canceled, name, combiner);
     }
 

@@ -14,12 +14,9 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.StoredPath;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeContainer;
@@ -33,9 +30,8 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
     That class supports direct user interaction with the metadata tree, including merging and splitting
     of deep node paths. This class deals with behind-the-scenes modification of GUI data.
 **/
-public class ChangeGUI extends Undoable
+public class ChangeGUI extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;          // to node that contains the gui metadata
     protected int          index;         // If we create metadata node, this is where it goes.
     protected MNode        undoAdd;       // Nodes to apply during undo, starting at $metadata.gui. If "gui" key is absent, then this is null.
@@ -45,6 +41,8 @@ public class ChangeGUI extends Undoable
 
     public ChangeGUI (NodeBase parent, MNode guiTree)
     {
+        super (parent);
+
         path = parent.getKeyPath ();
         doAdd = guiTree;
 
@@ -83,7 +81,6 @@ public class ChangeGUI extends Undoable
 
     public void apply (MNode add, MNode remove)
     {
-        view.restore ();
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
 

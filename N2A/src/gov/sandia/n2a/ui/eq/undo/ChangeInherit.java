@@ -11,20 +11,17 @@ import java.util.List;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
-import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeInherit;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
-public class ChangeInherit extends Undoable
+public class ChangeInherit extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;
     protected String valueBefore;
     protected String valueAfter;
@@ -53,7 +50,6 @@ public class ChangeInherit extends Undoable
 
     public void apply (String value)
     {
-        view.restore ();
         NodeBase node = NodeBase.locateNode (path);
         if (node == null) throw new CannotRedoException ();
         NodePart parent = (NodePart) node.getParent ();

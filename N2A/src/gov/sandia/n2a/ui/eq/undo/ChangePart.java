@@ -26,20 +26,17 @@ import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
-import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
-public class ChangePart extends Undoable
+public class ChangePart extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;   // to the container of the part being renamed
     protected String       nameBefore;
     protected String       nameAfter;
@@ -61,25 +58,29 @@ public class ChangePart extends Undoable
 
     public void undo ()
     {
+        updatePath (nameAfter);
         super.undo ();
         apply (nameAfter, nameBefore);
     }
 
     public void redo ()
     {
+        updatePath (nameBefore);
         super.redo ();
         apply (nameBefore, nameAfter);
     }
 
-    public void apply (String nameBefore, String nameAfter)
+    protected void updatePath (String name)
     {
         int viewSize = view.path.size ();
         if (viewSize > path.size ())  // The name change applies to a graph node, which should be the focus.
         {
-            view.path.set (viewSize - 1, nameBefore);
+            view.path.set (viewSize - 1, name);
         }
-        view.restore ();
+    }
 
+    public void apply (String nameBefore, String nameAfter)
+    {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         NodeBase temp = parent.child (nameBefore);

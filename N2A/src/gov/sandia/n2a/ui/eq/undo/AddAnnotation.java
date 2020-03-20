@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,10 +21,8 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
@@ -33,9 +31,8 @@ import gov.sandia.n2a.ui.eq.tree.NodeContainer;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
-public class AddAnnotation extends Undoable
+public class AddAnnotation extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;    // to the container of the new node. Can be a variable, $metadata (under a part), or annotation.
     protected int          index;   // Where to insert among siblings. Unfiltered.
     protected String       name;
@@ -131,7 +128,6 @@ public class AddAnnotation extends Undoable
     public void undo ()
     {
         super.undo ();
-        view.restore ();
         destroy (path, false, name, prefix, setSelection);
     }
 
@@ -207,7 +203,6 @@ public class AddAnnotation extends Undoable
     public void redo ()
     {
         super.redo ();
-        view.restore ();
         createdNode = create (path, index, name, createSubtree, nameIsGenerated, setSelection);
     }
 

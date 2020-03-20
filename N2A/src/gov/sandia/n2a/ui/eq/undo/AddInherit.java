@@ -14,19 +14,16 @@ import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
-public class AddInherit extends Undoable
+public class AddInherit extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  // to parent part
     protected String       value;
 
@@ -39,7 +36,6 @@ public class AddInherit extends Undoable
     public void undo ()
     {
         super.undo ();
-        view.restore ();
         destroy (path, false);
     }
 
@@ -86,7 +82,6 @@ public class AddInherit extends Undoable
     public void redo ()
     {
         super.redo ();
-        view.restore ();
         create (path, value);
     }
 

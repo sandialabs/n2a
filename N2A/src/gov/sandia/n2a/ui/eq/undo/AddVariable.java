@@ -18,18 +18,15 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
-public class AddVariable extends Undoable
+public class AddVariable extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  // to part that contains the variable node
     protected int          index; // where to insert among siblings
     protected String       name;
@@ -75,7 +72,6 @@ public class AddVariable extends Undoable
     public void undo ()
     {
         super.undo ();
-        view.restore ();
         destroy (path, false, name);
     }
 
@@ -131,7 +127,6 @@ public class AddVariable extends Undoable
     public void redo ()
     {
         super.redo ();
-        view.restore ();
         createdNode = create (path, index, name, createSubtree, nameIsGenerated);
     }
 

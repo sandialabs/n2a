@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017,2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,15 +11,11 @@ import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.Undoable;
-import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeReferences;
 
-public class AddReferences extends Undoable
+public class AddReferences extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;  ///< to parent of $metadata node
     protected int          index; ///< Position within parent node
     protected MVolatile    saved; ///< subtree under $metadata
@@ -36,14 +32,12 @@ public class AddReferences extends Undoable
     public void undo ()
     {
         super.undo ();
-        view.restore ();
         AddAnnotations.destroy (path, saved.key ());
     }
 
     public void redo ()
     {
         super.redo ();
-        view.restore ();
         NodeFactory factory = new NodeFactory ()
         {
             public NodeBase create (MPart part)

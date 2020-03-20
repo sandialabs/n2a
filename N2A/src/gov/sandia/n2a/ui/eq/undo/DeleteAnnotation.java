@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,16 +12,12 @@ import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.ui.Undoable;
-import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
-public class DeleteAnnotation extends Undoable
+public class DeleteAnnotation extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;
     protected int          index; // where to insert among siblings
     protected boolean      canceled;
@@ -66,14 +62,12 @@ public class DeleteAnnotation extends Undoable
     public void undo ()
     {
         super.undo ();
-        view.restore ();
         AddAnnotation.create (path, index, name, savedSubtree, false, setSelection);
     }
 
     public void redo ()
     {
         super.redo ();
-        view.restore ();
         AddAnnotation.destroy (path, canceled, name, prefix, setSelection);
     }
 

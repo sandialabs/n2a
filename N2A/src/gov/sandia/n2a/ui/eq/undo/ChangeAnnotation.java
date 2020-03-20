@@ -14,12 +14,10 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
-import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -27,9 +25,8 @@ import gov.sandia.n2a.ui.eq.tree.NodeContainer;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
-public class ChangeAnnotation extends Undoable
+public class ChangeAnnotation extends UndoableView
 {
-    protected StoredView   view = PanelModel.instance.panelEquations.new StoredView ();
     protected List<String> path;         // to the direct parent of the node that was changed
     protected String       nameBefore;
     protected String       nameAfter;
@@ -100,7 +97,6 @@ public class ChangeAnnotation extends Undoable
 
     public void apply (String nameBefore, String nameAfter, String prefixBefore, boolean setSelection)
     {
-        view.restore ();
         NodeContainer parent = (NodeContainer) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         MPart mparent = parent.source;
