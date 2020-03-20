@@ -240,6 +240,19 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel.removePart (node);  // If node still has focus, then default focus cycle applies.
     }
 
+    /**
+        Sets all selected graph nodes to unselected.
+    **/
+    public void clearSelection ()
+    {
+        graphPanel.clearSelection ();
+    }
+
+    public List<GraphNode> getSelection ()
+    {
+        return graphPanel.getSelection ();
+    }
+
     public void deleteSelected ()
     {
         // TODO
@@ -325,7 +338,6 @@ public class PanelEquationGraph extends JScrollPane
         protected GraphLayout     layout;  // For ease of access, to avoid calling getLayout() all the time.
         protected List<GraphEdge> edges    = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
         public    Point           offset   = new Point ();  // Offset from persistent coordinates to viewport coordinates. Add this to a stored (x,y) value to get non-negative coordinates that can be painted.
-        protected List<GraphNode> selected = new ArrayList<GraphNode> ();  // TODO: implement selection, with operations: move, resize, delete
         protected JPopupMenu      arrowMenu;
         protected GraphEdge       arrowEdge;  // Most recent edge when arrowMenu was activated.
         protected Point           popupLocation;
@@ -542,6 +554,25 @@ public class PanelEquationGraph extends JScrollPane
             {
                 ((GraphNode) c).panelEquationTree.updateFilterLevel ();
             }
+        }
+
+        public void clearSelection ()
+        {
+            for (Component c : getComponents ())
+            {
+                ((GraphNode) c).setSelected (false);
+            }
+        }
+
+        public List<GraphNode> getSelection ()
+        {
+            List<GraphNode> result = new ArrayList<GraphNode> ();
+            for (Component c : getComponents ())
+            {
+                GraphNode g = (GraphNode) c;
+                if (g.selected) result.add (g);
+            }
+            return result;
         }
 
         public GraphEdge findTipAt (Point p)

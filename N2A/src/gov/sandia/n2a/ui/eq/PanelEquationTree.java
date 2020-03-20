@@ -124,20 +124,20 @@ public class PanelEquationTree extends JScrollPane
         setBorder (BorderFactory.createEmptyBorder ());
 
         InputMap inputMap = tree.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl UP"),     "switchFocus");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl LEFT"),   "switchFocus");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl DOWN"),   "nothing");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl RIGHT"),  "nothing");
-        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),    "moveUp");
-        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),  "moveDown");
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),      "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),      "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),  "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),       "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"),  "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("shift SPACE"), "drillUp");
-        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),       "drillDown");
-        inputMap.put (KeyStroke.getKeyStroke ("W"),           "watch");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl UP"),      "switchFocus");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl LEFT"),    "switchFocus");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl DOWN"),    "nothing");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl RIGHT"),   "nothing");
+        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),     "moveUp");
+        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),   "moveDown");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),       "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),       "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),   "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),        "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"),   "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl D"), "drillUp");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl D"),       "drillDown");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl W"),       "watch");
 
         ActionMap actionMap = tree.getActionMap ();
         Action selectPrevious = actionMap.get ("selectPrevious");
@@ -148,18 +148,12 @@ public class PanelEquationTree extends JScrollPane
             {
                 if (tree.getLeadSelectionRow () <= 0)
                 {
-                    if (root.graph != null)
-                    {
-                        root.graph.switchFocus (true, false);
-                        return;
-                    }
-                    if (root == container.part)
-                    {
-                        container.switchFocus (true, false);
-                        return;
-                    }
+                    switchFocus ();
                 }
-                selectPrevious.actionPerformed (e);
+                else
+                {
+                    selectPrevious.actionPerformed (e);
+                }
             }
         });
         actionMap.put ("selectParent", new AbstractAction ()
@@ -169,32 +163,19 @@ public class PanelEquationTree extends JScrollPane
                 TreePath path = tree.getLeadSelectionPath ();
                 if (path == null  ||  path.getPathCount () == 2  &&  tree.isCollapsed (path))  // This is a direct child of the root (which is not visible).
                 {
-                    if (root.graph != null)
-                    {
-                        root.graph.switchFocus (true, false);
-                        return;
-                    }
-                    if (root == container.part)
-                    {
-                        container.switchFocus (true, false);
-                        return;
-                    }
+                    switchFocus ();
                 }
-                selectParent.actionPerformed (e);
+                else
+                {
+                    selectParent.actionPerformed (e);
+                }
             }
         });
         actionMap.put ("switchFocus", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (root.graph != null)
-                {
-                    root.graph.switchFocus (true, false);
-                }
-                else if (root == container.part)
-                {
-                    container.switchFocus (true, false);
-                }
+                switchFocus ();
             }
         });
         actionMap.put ("moveUp", new AbstractAction ()
@@ -299,6 +280,8 @@ public class PanelEquationTree extends JScrollPane
                 }
                 else
                 {
+                    container.panelEquationGraph.clearSelection ();
+
                     // Set flag to indicate that tree, rather than title, is now focused.
                     if (root.graph != null) root.graph.titleFocused = false;
                     else if (root == container.part) container.titleFocused = false;
@@ -474,11 +457,7 @@ public class PanelEquationTree extends JScrollPane
     {
         tree.setEditable (! container.locked);
         if (part == root) return;
-        if (root != null)
-        {
-            root.pet = null;
-            deselectGraphNode ();
-        }
+        if (root != null) root.pet = null;
 
         root = part;
         root.pet = this;
@@ -528,19 +507,6 @@ public class PanelEquationTree extends JScrollPane
                 if (! open) container.panelParent.setOpen (false);
             }
         }
-        else
-        {
-            deselectGraphNode ();
-        }
-    }
-
-    /**
-        Remove highlight from graph node we were editing.
-    **/
-    public void deselectGraphNode ()
-    {
-        if (root.graph != null) root.graph.setSelected (false);
-        else if (root == container.part) container.setSelected (false);
     }
 
     public void takeFocus ()
@@ -571,6 +537,23 @@ public class PanelEquationTree extends JScrollPane
             }
             TreePath selected = tree.getLeadSelectionPath ();
             if (selected != null) tree.scrollPathToVisible (selected);
+        }
+    }
+
+    /**
+        Assuming this tree has focus, moves focus back to title.
+    **/
+    public void switchFocus ()
+    {
+        if (root.graph != null)
+        {
+            root.graph.setSelected (false);  // Release temporary selected state that was used to mark the part showing up in the tree.
+            root.graph.switchFocus (true, false);
+        }
+        else if (root == container.part)
+        {
+            container.setSelected (false);  // ditto
+            container.switchFocus (true, false);
         }
     }
 

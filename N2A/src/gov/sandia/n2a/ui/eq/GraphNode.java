@@ -14,6 +14,7 @@ import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
+import java.awt.KeyboardFocusManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
@@ -47,11 +48,13 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
+import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import sun.swing.SwingUtilities2;
 
 @SuppressWarnings("serial")
@@ -269,6 +272,7 @@ public class GraphNode extends JPanel
 
     public void setSelected (boolean value)
     {
+        if (selected == value) return;
         selected = value;
         title.updateSelected ();
     }
@@ -534,8 +538,9 @@ public class GraphNode extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),       "delete");
             inputMap.put (KeyStroke.getKeyStroke ("ENTER"),            "startEditing");
             inputMap.put (KeyStroke.getKeyStroke ("F2"),               "startEditing");
-            inputMap.put (KeyStroke.getKeyStroke ("shift SPACE"),      "drillUp");
-            inputMap.put (KeyStroke.getKeyStroke ("SPACE"),            "drillDown");
+            inputMap.put (KeyStroke.getKeyStroke ("shift ctrl D"),     "drillUp");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl D"),           "drillDown");
+            inputMap.put (KeyStroke.getKeyStroke ("SPACE"),            "toggleSelection");
 
             ActionMap actionMap = getActionMap ();
             actionMap.put ("close", new AbstractAction ()
@@ -550,6 +555,7 @@ public class GraphNode extends JPanel
                 public void actionPerformed (ActionEvent e)
                 {
                     if (panelEquationTree != null  &&  ! open) toggleOpen ();  // because switchFocus() does not change metadata "open" flag
+                    container.panelEquationGraph.clearSelection ();
                     switchFocus (false, panelEquationTree != null);
                 }
             });
@@ -557,8 +563,15 @@ public class GraphNode extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (panelEquationTree != null  &&  ! open) toggleOpen ();
-                    else                                       switchFocus (false, false);
+                    if (panelEquationTree != null  &&  ! open)
+                    {
+                        toggleOpen ();
+                    }
+                    else
+                    {
+                        container.panelEquationGraph.clearSelection ();
+                        switchFocus (false, false);
+                    }
                 }
             });
             actionMap.put ("moveUp", new AbstractAction ()
@@ -627,6 +640,13 @@ public class GraphNode extends JPanel
                     container.drill (node);
                 }
             });
+            actionMap.put ("toggleSelection", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    GraphNode.this.selected = ! GraphNode.this.selected;
+                }
+            });
 
             MouseInputAdapter mouseListener = new MouseInputAdapter ()
             {
@@ -642,6 +662,7 @@ public class GraphNode extends JPanel
                     int x = me.getX ();
                     int y = me.getY ();
                     int clicks = me.getClickCount ();
+                    boolean select =  me.isControlDown ()  ||  me.isShiftDown ();
 
                     if (SwingUtilities.isLeftMouseButton (me))
                     {
@@ -657,6 +678,18 @@ public class GraphNode extends JPanel
                                 startEditing ();
                                 return;
                             }
+                            if (select)
+                            {
+                                GraphNode.this.selected = true;
+                                // We are not the focus owner (implied by above code), so we should ensure that
+                                // the current focus owner is selected. A simple way is to assume that the "active" tree is up-to-date.
+                                GraphNode g = PanelModel.getGraphNode (KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ());
+                                if (g != null) g.setSelected (true);
+                            }
+                            else
+                            {
+                                container.panelEquationGraph.clearSelection ();
+                            }
                             switchFocus (true, false);
                         }
                         else if (clicks == 2)  // Drill down
@@ -668,6 +701,7 @@ public class GraphNode extends JPanel
                     {
                         if (clicks == 1)  // Show popup menu
                         {
+                            container.panelEquationGraph.clearSelection ();
                             switchFocus (true, false);
                             container.menuPopup.show (title, x, y);
                         }
@@ -725,6 +759,13 @@ public class GraphNode extends JPanel
 
                 public void focusLost (FocusEvent e)
                 {
+                    Component other = e.getOppositeComponent ();
+                    if (other != null)  // Focus remains inside application.
+                    {
+                        GraphNode g = PanelModel.getGraphNode (other);
+                        if (g == null) container.panelEquationGraph.clearSelection ();  // Next focus in not a graph node, so unset all selections. This avoids visual confusion.
+                    }
+
                     getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected, open, false, -1, false);
                     GraphNode.this.repaint ();
                 }
@@ -798,14 +839,15 @@ public class GraphNode extends JPanel
 
     public class ResizeListener extends MouseInputAdapter implements ActionListener
     {
-        int        cursor;
-        Point      start;
-        Dimension  min;
-        Rectangle  old;
-        boolean    connect;
-        GraphEdge  edge;  // Paints edge when in dragging in connect mode.
-        MouseEvent lastEvent;
-        Timer      timer = new Timer (100, this);
+        int             cursor;
+        Point           start;
+        Dimension       min;
+        Rectangle       old;
+        boolean         connect;
+        GraphEdge       edge;  // Paints edge when in dragging in connect mode.
+        MouseEvent      lastEvent;
+        Timer           timer = new Timer (100, this);
+        List<GraphNode> selection;
 
         public void mouseClicked (MouseEvent me)
         {
@@ -849,6 +891,9 @@ public class GraphNode extends JPanel
             edge    = null;
             cursor  = border.getCursor (me);
             setCursor (Cursor.getPredefinedCursor (cursor));
+
+            selection = container.panelEquationGraph.getSelection ();
+            selection.remove (GraphNode.this);
         }
 
         public void mouseDragged (MouseEvent me)
@@ -1018,6 +1063,12 @@ public class GraphNode extends JPanel
                     break;
                 case Cursor.MOVE_CURSOR:
                     animate (new Rectangle (x + dx, y + dy, w, h));
+                    for (GraphNode g : selection)
+                    {
+                        Rectangle bounds = g.getBounds ();
+                        bounds.setLocation (bounds.x + dx, bounds.y + dy);
+                        g.animate (bounds);
+                    }
             }
         }
 
@@ -1045,16 +1096,22 @@ public class GraphNode extends JPanel
                         }
 
                         edge = null;
+                        GraphNode.this.selected = false;  // Don't let clearSelection() trigger an update to our renderer.
+                        container.panelEquationGraph.clearSelection ();
+                        // takeFocus() is called below
                     }
                 }
-                else if (cursor != Cursor.DEFAULT_CURSOR)  // Click on border
+                else if (cursor != Cursor.DEFAULT_CURSOR)
                 {
                     // Store new bounds in metadata
                     MNode guiTree = new MVolatile ();
                     MNode bounds = guiTree.childOrCreate ("bounds");
                     Rectangle now = getBounds ();
-                    if (now.x != old.x) bounds.set (now.x - parent.offset.x, "x");
-                    if (now.y != old.y) bounds.set (now.y - parent.offset.y, "y");
+                    int dx = now.x - old.x;
+                    int dy = now.y - old.y;
+                    boolean moved =  dx != 0  ||  dy != 0;
+                    if (dx != 0) bounds.set (now.x - parent.offset.x, "x");
+                    if (dy != 0) bounds.set (now.y - parent.offset.y, "y");
                     if (open)
                     {
                         MNode boundsOpen = bounds.childOrCreate ("open");
@@ -1067,7 +1124,25 @@ public class GraphNode extends JPanel
                         if (now.width  != old.width ) bounds.set (now.width,  "width");
                         if (now.height != old.height) bounds.set (now.height, "height");
                     }
-                    if (bounds.size () > 0) MainFrame.instance.undoManager.add (new ChangeGUI (node, guiTree));
+                    if (bounds.size () > 0)
+                    {
+                        UndoManager um = MainFrame.instance.undoManager;
+                        if (moved  &&  ! selection.isEmpty ()) um.addEdit (new CompoundEditView ());
+                        um.add (new ChangeGUI (node, guiTree));
+                        if (moved)
+                        {
+                            for (GraphNode g : selection)
+                            {
+                                guiTree = new MVolatile ();
+                                bounds = guiTree.childOrCreate ("bounds");
+                                now = g.getBounds ();
+                                if (dx != 0) bounds.set (now.x - parent.offset.x, "x");
+                                if (dy != 0) bounds.set (now.y - parent.offset.y, "y");
+                                um.add (new ChangeGUI (g.node, guiTree));
+                            }
+                        }
+                        um.endCompoundEdit ();
+                    }
                 }
             }
 

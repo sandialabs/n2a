@@ -37,15 +37,15 @@ public class PanelModel extends JPanel implements MNodeListener
     public    PanelSearch    panelSearch;
     public    PanelEquations panelEquations;
 
+    public static GraphNode getGraphNode (Component g)
+    {
+        while (g != null  &&  ! (g instanceof GraphNode)) g = g.getParent ();
+        return (GraphNode) g;
+    }
+
     // TODO: Enforce focus policy on individual components, rather than using a single policy object for everything.
     public class GraphFocusTraversalPolicy extends LayoutFocusTraversalPolicy
     {
-    	public GraphNode getGraphNode (Component g)
-    	{
-            while (g != null  &&  ! (g instanceof GraphNode)) g = g.getParent ();
-            return (GraphNode) g;
-    	}
-
     	public Component getComponentAfter (Container aContainer, Component aComponent)
         {
     	    Container ec = panelEquations.editor.editingContainer;
@@ -126,6 +126,10 @@ public class PanelModel extends JPanel implements MNodeListener
                         result = getComponentAfter (aContainer, pet.root.graph.title);
                     }
 
+                    // Tabbing while tree has focus is similar to a click on a graph node.
+                    // It removes any current multi-selection, so only the new focus gets selected.
+                    panelEquations.panelEquationGraph.clearSelection ();
+
                     // If appropriate, claw back focus to tree.
                     if (result instanceof GraphNode.TitleRenderer  ||  result instanceof PanelEquations.BreadcrumbRenderer)
                     {
@@ -196,6 +200,8 @@ public class PanelModel extends JPanel implements MNodeListener
                     {
                         result = super.getComponentBefore (aContainer, pet.root.graph.title);
                     }
+
+                    panelEquations.panelEquationGraph.clearSelection ();
 
                     if (result instanceof GraphNode.TitleRenderer  ||  result instanceof PanelEquations.BreadcrumbRenderer)
                     {

@@ -964,6 +964,7 @@ public class PanelEquations extends JPanel
 
     public void setSelected (boolean value)
     {
+        if (parentSelected == value) return;
         parentSelected = value;
         breadcrumbRenderer.updateSelected ();
     }
@@ -1428,7 +1429,7 @@ public class PanelEquations extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),       "delete");
             inputMap.put (KeyStroke.getKeyStroke ("ENTER"),            "startEditing");
             inputMap.put (KeyStroke.getKeyStroke ("F2"),               "startEditing");
-            inputMap.put (KeyStroke.getKeyStroke ("shift SPACE"),      "drillUp");
+            inputMap.put (KeyStroke.getKeyStroke ("shift ctrl D"),     "drillUp");
 
             ActionMap actionMap = getActionMap ();
             actionMap.put ("close", new AbstractAction ()
@@ -1443,6 +1444,7 @@ public class PanelEquations extends JPanel
                 public void actionPerformed (ActionEvent e)
                 {
                     if (view == NODE  &&  ! panelParent.isVisible ()) panelParent.toggleOpen ();  // because switchFocus() does not set metadata "parent" open flag
+                    panelEquationGraph.clearSelection ();
                     switchFocus (false, view == NODE);
                 }
             });
@@ -1450,8 +1452,15 @@ public class PanelEquations extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (view == NODE  &&  ! panelParent.isVisible ()) panelParent.toggleOpen ();
-                    else                                              switchFocus (false, false);
+                    if (view == NODE  &&  ! panelParent.isVisible ())
+                    {
+                        panelParent.toggleOpen ();
+                    }
+                    else
+                    {
+                        panelEquationGraph.clearSelection ();
+                        switchFocus (false, false);
+                    }
                 }
             });
             actionMap.put ("cut",   TransferHandler.getCutAction ());
@@ -1532,6 +1541,7 @@ public class PanelEquations extends JPanel
                                 }
                                 // Click was on last path element (which may be only path element), so take focus ...
                             }
+                            panelEquationGraph.clearSelection ();
                             switchFocus (true, false);
                         }
                     }
@@ -1539,6 +1549,7 @@ public class PanelEquations extends JPanel
                     {
                         if (clicks == 1)  // Show popup menu
                         {
+                            panelEquationGraph.clearSelection ();
                             switchFocus (true, false);
                             menuPopup.show (breadcrumbRenderer, x, y);
                         }
@@ -1765,6 +1776,9 @@ public class PanelEquations extends JPanel
         public boolean      asParent; // Indicates that the active tree was editing the part as a parent, rather than a child node in the graph.
         public boolean      first = true;
 
+        /**
+            Create based on active tree.
+        **/
         public StoredView ()
         {
             saveFocus ();
@@ -1778,6 +1792,17 @@ public class PanelEquations extends JPanel
                 path = active.root.getKeyPath ();
                 asParent =  active.root == part;
             }
+        }
+
+        /**
+            Create based on nearest containing tree to given node.
+        **/
+        public StoredView (NodeBase node)
+        {
+            saveFocus ();
+            NodePart r = (NodePart) node.getRoot ();
+            path = r.getKeyPath ();
+            asParent =  r == part;
         }
 
         public void restore ()
