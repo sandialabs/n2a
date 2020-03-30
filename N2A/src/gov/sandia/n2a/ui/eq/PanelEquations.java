@@ -89,8 +89,10 @@ import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
+import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
+import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.Outsource;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun;
@@ -307,15 +309,60 @@ public class PanelEquations extends JPanel
                     tree = null;
                 }
 
-                // An import can either be a new node in the tree, or a link (via inheritance) to an existing part.
-                // In the case of a link, the part may need to be fully imported if it does not already exist in the db.
+                // Import the data
                 boolean result = false;
-                if (schema.type.startsWith ("Clip"))
+                int dataSize = data.size ();
+                if (schema.type.equals ("ClipPart")  &&  dataSize > 1  &&  peg != null)  // Multiple part nodes going into equation graph. The "Clip" prefix indicates the data probably came from this same transfer handler.
                 {
                     result = true;
-                    for (MNode child : data)
+
+                    um.endCompoundEdit ();
+                    um.addEdit (new CompoundEditView ());
+                    panelEquationGraph.clearSelection ();
+
+                    // Determine location
+                    if (location == null) location = panelEquationGraph.getCenter ();
+                    Point center = new Point ();
+                    int count = 0;
+                    for (MNode c : data)
                     {
-                        NodeBase added = target.add (schema.type.substring (4), tree, child, location);
+                        MNode bounds = c.child ("$metadata", "gui", "bounds");
+                        if (bounds == null) continue;
+                        count++;
+                        center.x += bounds.getInt ("x");
+                        center.y += bounds.getInt ("y");
+                    }
+                    if (count > 0)
+                    {
+                        // The idea is to subtract off the center-of-mass of the new nodes,
+                        // then add the resulting relative coordinates to the given drop location.
+                        // This should put the new nodes around the drop location.
+                        location.x -= center.x / count;
+                        location.y -= center.y / count;
+                    }
+
+                    boolean multiLead = true;
+                    for (MNode c : data)
+                    {
+                        Point p = new Point ();
+                        p.x = location.x + c.getInt ("$metadata", "gui", "bounds", "x");
+                        p.y = location.y + c.getInt ("$metadata", "gui", "bounds", "y");
+                        AddPart ap = new AddPart (target, -1, c, p, true, multiLead);
+                        multiLead = false;
+                        um.add (ap);
+                        if (ap.createdNode == null)
+                        {
+                            result = false;
+                            break;
+                        }
+                    }
+                }
+                else if (schema.type.startsWith ("Clip"))  // Any node type, from equation panel.
+                {
+                    result = true;
+                    for (MNode c : data)
+                    {
+                        NodeBase added = target.add (schema.type.substring (4), tree, c, location);
                         if (added == null)
                         {
                             result = false;
@@ -323,7 +370,7 @@ public class PanelEquations extends JPanel
                         }
                     }
                 }
-                else if (schema.type.equals ("Part"))
+                else if (schema.type.equals ("Part"))  // From search panel. Could possibly come via an indirect route such as email.
                 {
                     result = true;
 
@@ -337,9 +384,10 @@ public class PanelEquations extends JPanel
                         if (c instanceof NodePart) oldParts.add ((NodePart) c);
                     }
 
-                    for (MNode child : data)  // There could be multiple parts.
+                    for (MNode child : data)  // There could be multiple parts, though currently the search panel does not support this.
                     {
-                        // Ensure the part is in our db
+                        // Import can either be a new node in the tree, or a link (via inheritance) to an existing part.
+                        // In the case of a link, the part may need to be fully imported if it does not already exist in the db.
                         String key = child.key ();
                         if (AppData.models.child (key) == null) um.add (new AddDoc (key, child));
 
@@ -348,7 +396,7 @@ public class PanelEquations extends JPanel
                         include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
                         include.clear ("$inherit");  // get rid of IDs from included part, so they won't override the new $inherit line ...
                         include.set (key, "$inherit");
-                        NodePart added = (NodePart) target.add ("Part", tree, include, location);
+                        NodePart added = (NodePart) target.add ("Part", tree, include, location);  // TODO: keep multiple parts from going to the same location on graph panel.
                         if (added == null)
                         {
                             result = false;
@@ -398,7 +446,17 @@ public class PanelEquations extends JPanel
 
                 MVolatile copy = new MVolatile ();
                 node.copy (copy);
-                if (node == root) copy.set (null, node.source.key ());  // Remove file information from root node, if that is what we are sending.
+                if (node == root)  // This is the entire document.
+                {
+                    copy.set (null, node.source.key ());  // Remove file information.
+                }
+                else if (node instanceof NodePart  &&  ((NodePart) node).graph != null)  // This is a graph node, so it may have selected siblings which should also be copied.
+                {
+                    NodePart np = (NodePart) node;
+                    List<GraphNode> selected = panelEquationGraph.getSelection ();
+                    selected.remove (np.graph);
+                    for (GraphNode g : selected) g.node.copy (copy);
+                }
 
                 Schema schema = Schema.latest ();
                 schema.type = "Clip" + node.getTypeName ();

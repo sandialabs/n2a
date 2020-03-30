@@ -16,7 +16,7 @@ public class UndoManager extends javax.swing.undo.UndoManager
         edit.redo ();  // All descendants of Undoable are expected to carry out their operation once on creation. We do that here for convenience.
 
         if (! super.addEdit (edit)) return false;
-        UndoableEdit lastEdit = lastEdit ();  // lastEdit could be a CompoundEdit, thus we have to check ...
+        UndoableEdit lastEdit = lastEdit ();  // lastEdit could be an Undoable or a CompoundEdit, thus we have to check ...
         if (lastEdit instanceof Undoable  &&  ((Undoable) lastEdit).anihilate ())
         {
             int lastIndex = edits.size () - 1;

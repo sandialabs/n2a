@@ -17,14 +17,21 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class DeletePart extends UndoableView
 {
-    protected List<String> path;  // to containing part
-    protected int          index; // where to insert among siblings
+    protected List<String> path;           // to containing part
+    protected int          index;          // where to insert among siblings
     protected boolean      canceled;
     protected String       name;
     protected MNode        savedSubtree;
     protected boolean      neutralized;
+    protected boolean      multi;          // Indicates that this is one of several parts being deleted at the same time. During undo, set selected.
+    protected boolean      multiLead;      // Indicates this is the lead (focused) item in the selection. This is the node focused when delete key is pressed.
 
     public DeletePart (NodePart node, boolean canceled)
+    {
+        this (node, canceled, false, false);
+    }
+
+    public DeletePart (NodePart node, boolean canceled, boolean multi, boolean multiLead)
     {
         // Never delete a part in parent position, because after that we would need to drill up anyway.
         if (view.asParent)
@@ -34,10 +41,12 @@ public class DeletePart extends UndoableView
         }
 
         NodeBase container = (NodeBase) node.getTrueParent ();
-        path          = container.getKeyPath ();
-        index         = container.getIndex (node);
-        this.canceled = canceled;
-        name          = node.source.key ();
+        path           = container.getKeyPath ();
+        index          = container.getIndex (node);
+        this.canceled  = canceled;
+        name           = node.source.key ();
+        this.multi     = multi;
+        this.multiLead = multiLead;
 
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source.getSource ());  // Only take the top-doc data, not the collated tree.
@@ -46,7 +55,7 @@ public class DeletePart extends UndoableView
     public void undo ()
     {
         super.undo ();
-        AddPart.create (path, index, name, savedSubtree, false);
+        AddPart.create (path, index, name, savedSubtree, false, multi, multiLead);
     }
 
     public void redo ()

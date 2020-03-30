@@ -46,6 +46,7 @@ import gov.sandia.n2a.ui.eq.undo.DeletePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.eq.undo.ChangePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
+import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -727,8 +728,24 @@ public class NodePart extends NodeContainer
     {
         if (! source.isFromTopDocument ()) return;  // Root will always be from top document. Any other node we might try to delete must meet the same requirement.
         UndoManager um = MainFrame.instance.undoManager;
-        if (isTrueRoot ()) um.add (new DeleteDoc ((MDoc) source.getSource ()));
-        else               um.add (new DeletePart (this, canceled));
+        if (isTrueRoot ())
+        {
+            um.add (new DeleteDoc ((MDoc) source.getSource ()));
+        }
+        else if (graph == null  ||  canceled)
+        {
+            um.add (new DeletePart (this, canceled));
+        }
+        else  // We are a graph node, so see if siblings are also selected for delete.
+        {
+            List<GraphNode> selected = PanelModel.instance.panelEquations.panelEquationGraph.getSelection ();
+            selected.remove (graph);
+            boolean multi = ! selected.isEmpty ();
+            if (multi) um.addEdit (new CompoundEditView ());
+            um.add (new DeletePart (this, false, multi, multi));
+            for (GraphNode g : selected) um.add (new DeletePart (g.node, false, true, false));
+            um.endCompoundEdit ();
+        }
     }
 
     @Override

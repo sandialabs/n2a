@@ -1127,8 +1127,9 @@ public class GraphNode extends JPanel
                     if (bounds.size () > 0)
                     {
                         UndoManager um = MainFrame.instance.undoManager;
-                        if (moved  &&  ! selection.isEmpty ()) um.addEdit (new CompoundEditView ());
-                        um.add (new ChangeGUI (node, guiTree));
+                        boolean multi =  moved  &&  ! selection.isEmpty ();
+                        if (multi) um.addEdit (new CompoundEditView ());
+                        um.add (new ChangeGUI (node, guiTree, multi));
                         if (moved)
                         {
                             for (GraphNode g : selection)
@@ -1138,7 +1139,7 @@ public class GraphNode extends JPanel
                                 now = g.getBounds ();
                                 if (dx != 0) bounds.set (now.x - parent.offset.x, "x");
                                 if (dy != 0) bounds.set (now.y - parent.offset.y, "y");
-                                um.add (new ChangeGUI (g.node, guiTree));
+                                um.add (new ChangeGUI (g.node, guiTree, true));
                             }
                         }
                         um.endCompoundEdit ();

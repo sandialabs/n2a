@@ -1,5 +1,5 @@
 /*
-Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -38,13 +38,20 @@ public class ChangeGUI extends UndoableView
     protected MNode        undoRemove;    // Nodes that should be removed during undo, via MNode.uniqueNodes(). Like undoAdd, this is null if "gui" key is absent.
     protected MNode        doAdd;         // The nodes being changed. There is no corresponding doRemove.
     protected boolean      neutralized;   // Indicates that this edit exactly reverses the previous one, so completely remove both.
+    protected boolean      multi;
 
     public ChangeGUI (NodeBase parent, MNode guiTree)
     {
+        this (parent, guiTree, false);
+    }
+
+    public ChangeGUI (NodeBase parent, MNode guiTree, boolean multi)
+    {
         super (parent);
 
-        path = parent.getKeyPath ();
-        doAdd = guiTree;
+        path       = parent.getKeyPath ();
+        doAdd      = guiTree;
+        this.multi = multi;
 
         MNode currentTree = parent.source.child ("$metadata", "gui");
         if (currentTree == null)
@@ -159,7 +166,11 @@ public class ChangeGUI extends UndoableView
         NodePart part;
         if (parent instanceof NodePart) part = (NodePart) parent;
         else                            part = (NodePart) parent.getParent ();  // Presumably this is a NodeVariable, so our immediate parent is a NodePart.
-        if (part.graph != null) part.graph.updateGUI ();
+        if (part.graph != null)
+        {
+            part.graph.updateGUI ();
+            if (multi) part.graph.setSelected (true);
+        }
     }
 
     public boolean addEdit (UndoableEdit edit)

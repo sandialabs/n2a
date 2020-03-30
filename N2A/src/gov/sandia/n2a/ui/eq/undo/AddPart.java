@@ -27,20 +27,26 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class AddPart extends UndoableView
 {
-    protected List<String> path;  // to containing part
-    protected int          index; // where to insert among siblings
+    protected List<String> path;           // to containing part
+    protected int          index;          // Position in the unfiltered tree where the node should be inserted. -1 means add to end.
     protected String       name;
     protected MNode        createSubtree;
     protected boolean      nameIsGenerated;
-    public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
+    public    NodeBase     createdNode;    // Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected boolean      multi;          // Indicates that this is one of several parts being added at the same time, so set selected.
+    protected boolean      multiLead;      // Indicates this is the lead (focused) item in the selection.
 
-    /**
-        @param index Position in the unfiltered tree where the node should be inserted.
-    **/
     public AddPart (NodeBase parent, int index, MNode data, Point location)
     {
-        path = parent.getKeyPath ();
-        this.index = index;
+        this (parent, index, data, location, false, false);
+    }
+
+    public AddPart (NodeBase parent, int index, MNode data, Point location, boolean multi, boolean multiLead)
+    {
+        path           = parent.getKeyPath ();
+        this.index     = index;
+        this.multi     = multi;
+        this.multiLead = multiLead;
 
         createSubtree = new MVolatile ();
         if (data == null)
@@ -149,10 +155,10 @@ public class AddPart extends UndoableView
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated);
+        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, multiLead);
     }
 
-    public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated)
+    public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated, boolean multi, boolean multiLead)
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -179,6 +185,7 @@ public class AddPart extends UndoableView
             addGraphNode = true;
             createdNode = new NodePart (createdPart);
             createdNode.hide = graphParent;
+            if (index < 0) index = parent.getChildCount ();
             if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (createdNode, parent, index);
             else               model.insertNodeIntoUnfiltered (createdNode, parent, index);
         }
@@ -217,7 +224,9 @@ public class AddPart extends UndoableView
                 }
             }
             createdNode.hide = false;
-            createdNode.graph.takeFocusOnTitle ();
+            if (multi) createdNode.graph.setSelected (true);
+            else       peg.clearSelection ();
+            if (! multi  ||  multiLead) createdNode.graph.takeFocusOnTitle ();
             peg.reconnect ();
             peg.repaint ();
         }

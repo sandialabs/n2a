@@ -16,7 +16,7 @@ public class Undoable implements UndoableEdit
 {
     protected boolean   hasBeenDone = false;  // In the original AbstractUndoableEdit class, this was initialized true. We set it false and expect the caller to run redo() during creation of this object.
     protected boolean   alive       = true;
-    protected Component tab         = MainFrame.instance.tabs.getSelectedComponent ();
+    public    Component tab         = MainFrame.instance.tabs.getSelectedComponent ();
 
     public void die ()
     {
@@ -27,7 +27,7 @@ public class Undoable implements UndoableEdit
     {
         if (! canUndo ()) throw new CannotUndoException ();
         hasBeenDone = false;
-        MainFrame.instance.tabs.setSelectedComponent (tab);
+        if (tab != null) MainFrame.instance.tabs.setSelectedComponent (tab);
     }
 
     public boolean canUndo ()
@@ -39,7 +39,7 @@ public class Undoable implements UndoableEdit
     {
         if (! canRedo ()) throw new CannotRedoException();
         hasBeenDone = true;
-        MainFrame.instance.tabs.setSelectedComponent (tab);
+        if (tab != null) MainFrame.instance.tabs.setSelectedComponent (tab);
     }
 
     public boolean canRedo ()

@@ -62,6 +62,7 @@ public class MainFrame extends JFrame
         icons.add (ImageUtil.getImage ("n2a-32.png").getImage ());
         setIconImages (icons);
 
+        undoManager = new UndoManager ();
         tabs = new MainTabbedPane ();
 
         Lay.BLtg (this,
@@ -119,7 +120,6 @@ public class MainFrame extends JFrame
         });
 
         // Undo
-        undoManager = new UndoManager ();
         JComponent content = (JComponent) getContentPane ();
 
         InputMap inputMap = content.getInputMap (JComponent.WHEN_IN_FOCUSED_WINDOW);

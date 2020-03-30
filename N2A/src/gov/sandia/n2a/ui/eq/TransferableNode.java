@@ -1,5 +1,5 @@
 /*
-Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019,2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,7 +18,6 @@ import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.IOException;
 import java.io.StringReader;
-import java.util.ArrayList;
 import java.util.List;
 
 @SuppressWarnings("deprecation")
@@ -41,8 +40,7 @@ public class TransferableNode implements Transferable, ClipboardOwner
         this.data        = data;
         this.drag        = drag;
         this.newPartName = newPartName;
-        if (source == null) path = new ArrayList<String> ();
-        else                path = source.getKeyPath ();
+        if (source != null) path = source.getKeyPath ();
     }
 
     public NodeBase getSource ()
@@ -53,13 +51,7 @@ public class TransferableNode implements Transferable, ClipboardOwner
         MNode doc = AppData.models.child (path.get (0));
         if (doc != container.record) return null;
 
-        NodeBase result = container.root;
-        for (int i = 1; i < path.size (); i++)
-        {
-            result = (NodeBase) result.child (path.get (i));
-            if (result == null) break;
-        }
-        return result;
+        return NodeBase.locateNode (path);
     }
 
     @Override
