@@ -924,7 +924,7 @@ public class EquationSet implements Comparable<EquationSet>
             ps.println ("Unresolved variables:");
             ps.println ("  " + UnresolvedVariable.pad ("(name)", width) + "\t(referenced by)");
             for (UnresolvedVariable uv : unresolved) ps.println ("  " + UnresolvedVariable.pad (uv.name, width) + "\t" + uv.referencedBy);
-            throw new Backend.AbortRun ();
+            throw new AbortRun ();
         }
     }
 
@@ -1449,12 +1449,31 @@ public class EquationSet implements Comparable<EquationSet>
             e.expression.unit = AbstractUnit.ONE;
             v.add (e);
         }
+        else
+        {
+            v = find (v);
+            EquationEntry e = v.equations.first ();
+            if (! e.expression.isScalar ())
+            {
+                Backend.err.get ().println ("Illegal assignment to " + prefix () + ".$live");
+                throw new AbortRun ();
+            }
+        }
 
         v = new Variable ("$t", 0);
         if (add (v))
         {
             v.unit = UnitValue.seconds;
             v.equations = new TreeSet<EquationEntry> ();
+        }
+        else
+        {
+            v = find (v);
+            if (! v.equations.isEmpty ())
+            {
+                Backend.err.get ().println ("Illegal assignment to " + prefix () + ".$t");
+                throw new AbortRun ();
+            }
         }
 
         v = new Variable ("$t", 1);  // $t'
@@ -1649,6 +1668,11 @@ public class EquationSet implements Comparable<EquationSet>
         else
         {
             EquationEntry e = init.equations.first ();
+            if (! e.expression.isScalar ())
+            {
+                Backend.err.get ().println ("Illegal assignment to " + prefix () + ".$init");
+                throw new AbortRun ();
+            }
             ((Scalar) ((Constant) e.expression).value).value = value;
         }
     }
@@ -1678,6 +1702,11 @@ public class EquationSet implements Comparable<EquationSet>
         else
         {
             EquationEntry e = connect.equations.first ();
+            if (! e.expression.isScalar ())
+            {
+                Backend.err.get ().println ("Illegal assignment to " + prefix () + ".$connect. Try $p=<expression>@$connect instead.");
+                throw new AbortRun ();
+            }
             ((Scalar) ((Constant) e.expression).value).value = value;
         }
     }

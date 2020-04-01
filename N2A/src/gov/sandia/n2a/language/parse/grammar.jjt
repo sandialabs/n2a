@@ -24,6 +24,7 @@ import java.util.Map;
 
 import javax.measure.Unit;
 import javax.measure.format.ParserException;
+import systems.uom.ucum.internal.format.TokenException;
 
 public class ExpressionParser
 {
@@ -403,6 +404,12 @@ void Constant() #Constant : {Token t; Token u; String unitName = "";}
                 ParseException p = new ParseException ("UCUM syntax error");
                 p.currentToken = t;
                 t.next.beginColumn += e.getPosition ();
+                throw p;
+            }
+            catch (TokenException e)
+            {
+                ParseException p = new ParseException ("UCUM syntax error");
+                p.currentToken = t;
                 throw p;
             }
         }
