@@ -110,7 +110,7 @@ public class PanelEquations extends JPanel
     public static final int NODE   = 0;  // In the node itself
     public static final int SIDE   = 1;  // In a panel to the right side
     public static final int BOTTOM = 2;  // In a panel at the bottom
-    public int view = AppData.state.getOrDefault (NODE, "PanelModel", "view");
+    public int view = AppData.state.getOrDefault (BOTTOM, "PanelModel", "view");
 
     protected JSplitPane               split;
     protected PanelGraph               panelGraph;
@@ -566,7 +566,7 @@ public class PanelEquations extends JPanel
         buttonWatch.addActionListener (listenerWatch);
 
         buttonFilter = new JButton ();
-        FilteredTreeModel.filterLevel = AppData.state.getOrDefault (FilteredTreeModel.PARAM, "PanelModel", "filter");
+        FilteredTreeModel.filterLevel = AppData.state.getOrDefault (FilteredTreeModel.ALL, "PanelModel", "filter");
         switch (FilteredTreeModel.filterLevel)
         {
             case FilteredTreeModel.REVOKED: buttonFilter.setIcon (iconFilterRevoked); break;
