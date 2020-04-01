@@ -192,12 +192,12 @@ public class MDoc extends MPersistent
         Path file = path ();
 	    try
 	    {
-	        file.getParent ().toFile ().mkdirs ();  // Files.createDirectories() throws an exception for existing dir, even though it promises not to.
+	        Files.createDirectories (file.getParent ());
 	        try (BufferedWriter writer = Files.newBufferedWriter (file))
 	        {
 	            Schema.latest ().writeAll (this, writer);
+	            clearChanged ();
 	        }
-	        clearChanged ();
 	    }
 	    catch (IOException e)
 	    {

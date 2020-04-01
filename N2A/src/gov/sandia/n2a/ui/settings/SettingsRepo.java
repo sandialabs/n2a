@@ -66,7 +66,6 @@ import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JColorChooser;
 import javax.swing.JComponent;
-import javax.swing.JEditorPane;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -90,7 +89,6 @@ import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
-import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
@@ -99,12 +97,14 @@ import org.eclipse.jgit.api.AddCommand;
 import org.eclipse.jgit.api.CommitCommand;
 import org.eclipse.jgit.api.CreateBranchCommand;
 import org.eclipse.jgit.api.CreateBranchCommand.SetupUpstreamMode;
+import org.eclipse.jgit.api.FetchCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.PullCommand;
 import org.eclipse.jgit.api.PushCommand;
 import org.eclipse.jgit.api.RemoteRemoveCommand;
 import org.eclipse.jgit.api.RemoteSetUrlCommand;
 import org.eclipse.jgit.api.RmCommand;
+import org.eclipse.jgit.api.TransportConfigCallback;
 import org.eclipse.jgit.errors.UnsupportedCredentialItem;
 import org.eclipse.jgit.internal.storage.file.FileRepository;
 import org.eclipse.jgit.lib.BranchConfig;
@@ -121,11 +121,21 @@ import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.transport.ChainingCredentialsProvider;
 import org.eclipse.jgit.transport.CredentialItem;
 import org.eclipse.jgit.transport.CredentialsProvider;
+import org.eclipse.jgit.transport.JschConfigSessionFactory;
 import org.eclipse.jgit.transport.NetRCCredentialsProvider;
+import org.eclipse.jgit.transport.OpenSshConfig.Host;
 import org.eclipse.jgit.transport.RemoteConfig;
+import org.eclipse.jgit.transport.SshSessionFactory;
+import org.eclipse.jgit.transport.SshTransport;
+import org.eclipse.jgit.transport.Transport;
 import org.eclipse.jgit.transport.URIish;
 import org.eclipse.jgit.treewalk.FileTreeIterator;
 import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.util.FS;
+
+import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.Session;
 
 @SuppressWarnings("serial")
 public class SettingsRepo extends JScrollPane implements Settings
@@ -141,7 +151,7 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected JTextArea      fieldMessage;
     protected JScrollPane    paneMessage;
     protected UndoManager    undoMessage;  // specifically for editing text field
-    protected JEditorPane    paneProgress;
+    protected JLabel         labelProgress;
     protected PanelDiff      panelDiff;
 
     // The job of existingModels and existingReferences is to ensure that rebuild() does not create
@@ -154,7 +164,9 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected boolean           needSave = true; // need to flush repositories to disk for git status
     protected Path              reposDir           = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
 
-    protected int timeout = 30;  // seconds; for git operations
+    protected int                     timeout = 30;  // seconds; for git operations
+    protected SshSessionFactory       sessionFactory;
+    protected TransportConfigCallback transportConfig;
 
     public SettingsRepo ()
     {
@@ -531,14 +543,35 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
         });
 
-        paneProgress = new JEditorPane ();
-        paneProgress.setEditable (false);
-        paneProgress.setOpaque (false);
-        paneProgress.setEditorKit (new HTMLEditorKit ());
-        
-        // Use JGit utility class to present username/password prompt for remote access.
-        CredentialsProvider.setDefault (new ChainingCredentialsProvider (new NetRCCredentialsProvider (), new CredentialCache (), new CredentialDialog ()));
+        labelProgress = new JLabel ();
 
+        // JGit configuration
+        CredentialsProvider.setDefault (new ChainingCredentialsProvider (new NetRCCredentialsProvider (), new CredentialCache (), new CredentialDialog ()));
+        sessionFactory = new JschConfigSessionFactory ()
+        {
+            protected JSch createDefaultJSch (FS fs) throws JSchException
+            {
+                JSch result = super.createDefaultJSch (fs);
+                //result.addIdentity ("/path/to/private_key", "passphrase");
+                return result;
+            }
+
+            protected void configure (Host h, Session s)
+            {
+                s.setConfig ("StrictHostKeyChecking", "no");
+            }
+        };
+        transportConfig = new TransportConfigCallback ()
+        {
+            public void configure (Transport t)
+            {
+                if (t instanceof SshTransport)
+                {
+                    SshTransport s = (SshTransport) t;
+                    s.setSshSessionFactory (sessionFactory);
+                }
+            }
+        };
 
         panelDiff = new PanelDiff (this);
 
@@ -551,7 +584,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                         buttonPull,
                         buttonPush,
                         Box.createHorizontalStrut (15),
-                        paneProgress,
+                        labelProgress,
                         "hgap=10,vgap=10"
                 ),
                 Lay.BL ("W",
@@ -598,7 +631,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             public void run ()
             {
-                paneProgress.setText (message);
+                labelProgress.setText (message);
             }
         });
     }
@@ -1577,7 +1610,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             Path zipFile = baseDir.resolve ("stash.zip");
             if (Files.exists (zipFile))
             {
-                throw new Exception ("A stash file already exists.");
+                throw new Exception ("Backup file already exists, indicating that a previous pull failed.  " + zipFile);
             }
 
             // Copy files to stash
@@ -1586,6 +1619,8 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 for (Delta d : stash)
                 {
+                    if (d.deleted) continue;  // Can't save a non-existent file.
+
                     Path inFile = baseDir.resolve (d.name);
                     InputStream istream = Files.newInputStream (inFile);
                     zip.putNextEntry (new ZipEntry (d.name));
@@ -1594,6 +1629,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     byte[] bytes = new byte[4096];
                     while ((length = istream.read (bytes)) >= 0) zip.write (bytes, 0, length);
 
+                    istream.close ();
                     zip.closeEntry ();
                 }
             }
@@ -1609,8 +1645,9 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             // This is only a heurisitic.
             // It would be better if there were a specific exception class for authorization failure.
-            String message = e.getMessage ().toLowerCase ();
-            if (message.contains ("auth"))
+            String message = e.getMessage ();
+            if (message == null) return;
+            if (message.toLowerCase ().contains ("auth"))
             {
                 authFailed = true;
             }
@@ -1627,10 +1664,13 @@ public class SettingsRepo extends JScrollPane implements Settings
                 return;  // Nothing to do
             }
 
+            if (showStatus) status ("Fetching " + URL);
+            FetchCommand fetch = git.fetch ();
+            fetch.setTimeout (timeout);
+            fetch.setTransportConfigCallback (transportConfig);
             try
             {
-                if (showStatus) status ("Fetching " + URL);
-                git.fetch ().setTimeout (timeout).call ();
+                fetch.call ();
                 if (showStatus) success ("Fetched");
             }
             catch (Exception e)
@@ -1703,6 +1743,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 PullCommand pull = git.pull ();
                 pull.setRebase (! newRepo);  // TODO: not sure if git-diff is safe for N2A files. May need to implement our own rebase, which would be a version of the stash code which reaches all the way back to the common ancestor.
                 pull.setTimeout (timeout);
+                pull.setTransportConfigCallback (transportConfig);
                 pull.call ();
 
                 // Update branch to track remote.
@@ -1729,10 +1770,11 @@ public class SettingsRepo extends JScrollPane implements Settings
                 if (succeeded) status ("Applying stash");
                 for (Delta d : stash) d.apply ();
 
-                // Verify that stash applied correctly. (This is only a heuristic.)
+                // Verify that stash applied correctly. This is only a heuristic.
                 boolean shouldDelete = true;
                 for (Delta d : stash)
                 {
+                    if (d.deleted) continue;  // We only care about files that should exist but don't ...
                     if (! Files.exists (baseDir.resolve (d.name)))
                     {
                         shouldDelete = false;
@@ -1829,6 +1871,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             status ("Pushing to " + url);
             PushCommand push = git.push ();
             push.setTimeout (timeout);
+            push.setTransportConfigCallback (transportConfig);
             try
             {
                 push.call ();
@@ -2282,6 +2325,8 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public class CredentialDialog extends CredentialsProvider
     {
+        Map<String,String> legalNotices = new HashMap<String,String> ();
+
         public boolean isInteractive ()
         {
             return true;
@@ -2334,6 +2379,14 @@ public class SettingsRepo extends JScrollPane implements Settings
 
                 if (item instanceof CredentialItem.InformationalMessage)
                 {
+                    // Only show legal messages once.
+                    if (prompt.toLowerCase ().contains ("legal notice"))
+                    {
+                        String notice = legalNotices.get (title);
+                        if (notice != null  &&  prompt.equals (notice)) return true;
+                        legalNotices.put (title, prompt);
+                    }
+
                     JOptionPane.showMessageDialog (MainFrame.instance, prompt, title, JOptionPane.INFORMATION_MESSAGE);
                     return true;
                 }

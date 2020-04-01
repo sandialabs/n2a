@@ -74,7 +74,7 @@ public class Schema2 extends Schema1
                         block.append (reader.line.substring (blockIndent));
                         reader.getNextLine ();
                         if (reader.whitespaces < blockIndent) break;
-                        block.append (String.format ("%n"));
+                        block.append ("\n");
                     }
                 }
                 value = block.toString ();
@@ -105,10 +105,10 @@ public class Schema2 extends Schema1
         {
             String value = node.get ();
             String newLine = String.format ("%n");
-            if (value.contains (newLine))  // go into extended text write mode
+            if (value.contains ("\n"))  // go into extended text write mode
             {
-                value = value.replace (newLine, newLine + indent + "  ");
-                value = "|" + newLine + indent + "  " + value;
+                value = value.replace ("\n", newLine + indent + " ");
+                value = "|" + newLine + indent + " " + value;
             }
             writer.write (String.format ("%s%s:%s%n", indent, key, value));
         }
