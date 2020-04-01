@@ -182,7 +182,7 @@ public class MatrixDense extends Matrix
                 }
             }
 
-            if (value.length == 0  ||  value[1].length == 0) throw new EvaluationException ("Empty matrix");
+            if (value.length == 0  ||  value[0].length == 0) throw new EvaluationException ("Empty matrix");
         }
         catch (IOException error)
         {
