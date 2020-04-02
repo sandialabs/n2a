@@ -70,7 +70,6 @@ public class RendererPython extends Renderer
         }
         if (op instanceof AccessElement)
         {
-            // TODO: import numpy
             AccessElement ae = (AccessElement) op;
             ae.operands[0].render (this);
             if (ae.operands.length >= 2)
@@ -129,7 +128,6 @@ public class RendererPython extends Renderer
         }
         if (op instanceof Exp)
         {
-            // TODO: import math
             Exp e = (Exp) op;
             Operator a = e.operands[0];
             result.append ("exp (");
@@ -139,7 +137,6 @@ public class RendererPython extends Renderer
         }
         if (op instanceof Gaussian)
         {
-            // TODO: needs library implementation
             Gaussian g = (Gaussian) op;
             result.append ("gaussian (");
             if (g.operands.length > 0)
@@ -200,7 +197,6 @@ public class RendererPython extends Renderer
         }
         if (op instanceof Log)
         {
-            // TODO: import math
             Log l = (Log) op;
             Operator a = l.operands[0];
             result.append ("log (");
@@ -219,7 +215,6 @@ public class RendererPython extends Renderer
         }
         if (op instanceof Norm)
         {
-            // TODO: import numpy
             Norm n = (Norm) op;
             Operator A = n.operands[0];
             result.append ("numpy.linalg.norm (");
