@@ -8,6 +8,7 @@ package gov.sandia.n2a.ui.eq;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -160,6 +161,16 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         Icon icon = getIcon ();
         if (icon == null) return 0;
         return icon.getIconWidth () + getIconTextGap ();
+    }
+
+    public Dimension getPreferredSize ()
+    {
+        // Hack to force new cells to full height, even though they contain no text.
+        boolean empty = getText ().isEmpty ();
+        if (empty) setText ("M");
+        Dimension result = super.getPreferredSize ();
+        if (empty) setText ("");
+        return result;
     }
 
     public void paint (Graphics g)
