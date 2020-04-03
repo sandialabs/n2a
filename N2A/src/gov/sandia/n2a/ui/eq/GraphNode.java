@@ -222,16 +222,16 @@ public class GraphNode extends JPanel
     {
         PanelEquationTree pet = getEquationTree ();
         if (pet.tree.getRowCount () == 0) ontoTitle = true;  // Don't focus tree if is empty.
-        if (panelEquationTree == null) pet.loadPart (node);  // Because switchFocus() can also be used to grab focus from another part.
 
         titleFocused = ontoTitle;
         if (ontoTitle)
         {
-            title.requestFocusInWindow ();
+            title.requestFocusInWindow ();  // Triggers restoreFocus() via title focus listener.
         }
         else
         {
-            if (panelEquationTree != null) setOpen (true);
+            if (panelEquationTree == null) pet.loadPart (node);  // Because switchFocus() can also be used to grab focus from another part.
+            else                           setOpen (true);
             if (selectRow0)
             {
                 pet.tree.scrollRowToVisible (0);
@@ -742,6 +742,7 @@ public class GraphNode extends JPanel
 
                 public void mouseReleased (MouseEvent me)
                 {
+                    titleFocused = true;  // When resizeListener processes this event, it will call takeFocus(). The focus should always go to title when title was clicked.
                     translate (me);
                     resizeListener.mouseReleased (me);
                 }

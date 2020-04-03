@@ -130,7 +130,7 @@ public class PanelModel extends JPanel implements MNodeListener
                     // It removes any current multi-selection, so only the new focus gets selected.
                     panelEquations.panelEquationGraph.clearSelection ();
 
-                    // If appropriate, claw back focus to tree.
+                    // If appropriate, claw focus back to tree.
                     if (result instanceof GraphNode.TitleRenderer  ||  result instanceof PanelEquations.BreadcrumbRenderer)
                     {
                         EventQueue.invokeLater (new Runnable ()

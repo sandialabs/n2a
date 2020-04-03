@@ -395,7 +395,7 @@ public class PanelEquationTree extends JScrollPane
                 // Specifically, select a node in tree A, then select a node in tree B, then select title A.
                 // When the code calls title.requestFocusInWindow(), focus goes to tree A for a moment, then on to title A.
                 // The loss of focus is reported to tree B as temporary, so tree B never removes its selection.
-                // Don't fully understand what's happening.
+                // TODO: determine the cause for this unexpected extra focus transition
 
                 // To hack around this, explicitly ignore isTemporary() if the other component is a graph node title or equation tree.
                 boolean temporary = e.isTemporary ();
@@ -506,6 +506,10 @@ public class PanelEquationTree extends JScrollPane
                 boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "parent");
                 if (! open) container.panelParent.setOpen (false);
             }
+        }
+        else
+        {
+            if (root == container.part) container.setSelected (false);
         }
     }
 
