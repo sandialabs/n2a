@@ -183,7 +183,7 @@ public class GraphNode extends JPanel
         if (panelEquationTree == null)
         {
             container.active = container.panelEquationTree;
-            if (! node.toString ().isEmpty ())  // Assumes that a blank node is about to be deleted, and we don't want to load tree in that case.
+            if (container.panelEquationTree.root != node  &&  ! node.toString ().isEmpty ())  // Only load tree if node is not blank. Usually, a blank node is about to be deleted.
             {
                 container.panelEquationTree.loadPart (node);
                 FocusCacheEntry fce = container.createFocus (node);

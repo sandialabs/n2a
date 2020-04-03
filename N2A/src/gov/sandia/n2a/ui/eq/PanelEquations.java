@@ -1626,9 +1626,12 @@ public class PanelEquations extends JPanel
                     else
                     {
                         active = panelEquationTree;
-                        panelEquationTree.loadPart (part);
-                        FocusCacheEntry fce = createFocus (part);
-                        if (fce.sp != null) fce.sp.restore (panelEquationTree.tree, false);
+                        if (part != panelEquationTree.root)
+                        {
+                            panelEquationTree.loadPart (part);
+                            FocusCacheEntry fce = createFocus (part);
+                            if (fce.sp != null) fce.sp.restore (panelEquationTree.tree, false);
+                        }
                     }
                     getTreeCellRendererComponent (true, true);
                     panelBreadcrumb.repaint ();
@@ -1907,8 +1910,15 @@ public class PanelEquations extends JPanel
             // Grab focus and select correct part
             NodePart p = root;
             for (int i = 1; i < end; i++) p = (NodePart) p.child (path.get (i));
-            if (p == part) takeFocus ();  // loadPart() won't run in this case, but we should still take focus.
-            else           loadPart (p);
+            if (p == part)  // Already loaded, so loadPart() won't run. Still need to take focus.
+            {
+                panelEquationGraph.clearSelection ();
+                takeFocus ();
+            }
+            else
+            {
+                loadPart (p);
+            }
         }
     }
 }

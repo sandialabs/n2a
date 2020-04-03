@@ -565,10 +565,10 @@ public class PanelEquationTree extends JScrollPane
     {
         if (root == null) return;
         root.filter (FilteredTreeModel.filterLevel);
-        StoredPath path = new StoredPath (tree);
+        StoredPath sp = new StoredPath (tree);
         model.reload (root);
         animate ();
-        path.restore (tree, true);
+        sp.restore (tree, true);
     }
 
     public NodeBase getSelected ()
