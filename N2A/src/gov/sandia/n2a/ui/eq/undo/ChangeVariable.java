@@ -182,6 +182,8 @@ public class ChangeVariable extends UndoableView
                 vold.order = vnew.order;
                 for (Variable v : users)
                 {
+                    if (v == vnew  &&  v.equations.size () == 1) continue;  // Don't modify expression on variable line itself. Instead, assume the user edited it exactly as intended.
+
                     List<String> ref = v.getKeyPath ();
                     MNode n = doc.child (ref.toArray ());
                     String oldKey = n.key ();
@@ -348,7 +350,7 @@ public class ChangeVariable extends UndoableView
     }
 
     /**
-        Given variable "v", change all places where its code references variable "renamed".
+        Given variable "v", change all places where its code references "renamed".
         The name change is already embedded in the compiled model. We simply re-render the code.
         @param renamed The object that has a new name, for safety checks.
             This code is called by both ChangeVariable and ChangePart, so "renamed" can be either a Variable or an EquationSet.
