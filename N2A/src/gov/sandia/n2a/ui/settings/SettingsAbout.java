@@ -84,7 +84,8 @@ public class SettingsAbout extends JPanel implements Settings
         content.append ("\n");
         content.append ("===============================================================================\n");
         content.append ("\n");
-        content.append (loadResource ("uom-se"));
+        content.append (loadResource ("indriya"));
+        content.append ("\n");
         content.append ("\n");
         content.append ("===============================================================================\n");
         content.append ("\n");

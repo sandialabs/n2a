@@ -18,7 +18,7 @@ import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
-import tec.uom.se.AbstractUnit;
+import tech.units.indriya.AbstractUnit;
 
 public class Power extends OperatorBinary
 {

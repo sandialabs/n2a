@@ -1,5 +1,5 @@
 /*
-Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -20,7 +20,7 @@ import org.w3c.dom.Node;
 
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.type.Scalar;
-import tec.uom.se.AbstractUnit;
+import tech.units.indriya.AbstractUnit;
 
 public class XMLutility
 {

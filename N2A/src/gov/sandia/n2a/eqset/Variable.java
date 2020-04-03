@@ -30,7 +30,7 @@ import gov.sandia.n2a.language.operator.Multiply;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import tec.uom.se.AbstractUnit;
+import tech.units.indriya.AbstractUnit;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;

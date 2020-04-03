@@ -23,7 +23,7 @@ import java.io.StringReader;
 import java.util.Map;
 
 import javax.measure.Unit;
-import javax.measure.format.ParserException;
+import javax.measure.format.MeasurementParseException;
 import systems.uom.ucum.internal.format.TokenException;
 
 public class ExpressionParser
@@ -399,7 +399,7 @@ void Constant() #Constant : {Token t; Token u; String unitName = "";}
                 if (namedUnits  != null) result.unit = namedUnits    .get   (unitName);
                 if (result.unit == null) result.unit = UnitValue.UCUM.parse (unitName);
             }
-            catch (ParserException e)
+            catch (MeasurementParseException e)
             {
                 ParseException p = new ParseException ("UCUM syntax error");
                 p.currentToken = t;

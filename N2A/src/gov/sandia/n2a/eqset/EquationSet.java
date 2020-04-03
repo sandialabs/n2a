@@ -38,7 +38,7 @@ import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.ui.images.ImageUtil;
-import tec.uom.se.AbstractUnit;
+import tech.units.indriya.AbstractUnit;
 import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
 

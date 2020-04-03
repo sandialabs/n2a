@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -49,7 +49,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import javax.measure.Unit;
-import javax.measure.format.ParserException;
+import javax.measure.format.MeasurementParseException;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -63,10 +63,10 @@ import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
 
-import tec.uom.se.AbstractUnit;
-import tec.uom.se.function.RationalConverter;
-import tec.uom.se.unit.TransformedUnit;
-import tec.uom.se.unit.Units;;
+import tech.units.indriya.AbstractUnit;
+import tech.units.indriya.function.MultiplyConverter;
+import tech.units.indriya.unit.TransformedUnit;
+import tech.units.indriya.unit.Units;
 
 public class ImportJob extends XMLutility
 {
@@ -3066,8 +3066,8 @@ public class ImportJob extends XMLutility
         Unit unit = dimensions.get (dimension);
         if (unit == null) unit = nmlDimensions.get (dimension);
         if (unit == null) unit = AbstractUnit.ONE;  // fall back, but in general something is broken about the file
-        if      (power > 0) unit = unit.transform (new RationalConverter (BigInteger.TEN.pow (power), BigInteger.ONE));
-        else if (power < 0) unit = unit.transform (new RationalConverter (BigInteger.ONE,             BigInteger.TEN.pow (-power)));
+        if      (power > 0) unit = unit.transform (MultiplyConverter.ofRational (BigInteger.TEN.pow (power), BigInteger.ONE));
+        else if (power < 0) unit = unit.transform (MultiplyConverter.ofRational (BigInteger.ONE,             BigInteger.TEN.pow (-power)));
         else
         {
             if (scale == 1.0)
@@ -3077,13 +3077,13 @@ public class ImportJob extends XMLutility
             else
             {
                 // UCUM only allows rational numbers, so convert scale
-                RationalConverter ratio = null;
+                MultiplyConverter ratio = null;
                 if (scale < 1.0)
                 {
                     // Attempt to find a simple ratio of 1/integer
                     double inverse = 1.0 / scale;
                     long integer = Math.round (inverse);
-                    if (Math.abs (inverse - integer) < epsilon) ratio = new RationalConverter (1, integer);
+                    if (Math.abs (inverse - integer) < epsilon) ratio = MultiplyConverter.ofRational (1, integer);
                 }
                 if (ratio == null)
                 {
@@ -3099,7 +3099,7 @@ public class ImportJob extends XMLutility
                     }
                     BigInteger numerator   = new BigInteger (s);
                     BigInteger denominator = new BigDecimal (10).pow (shift).toBigInteger ();
-                    ratio = new RationalConverter (numerator, denominator);
+                    ratio = MultiplyConverter.ofRational (numerator, denominator);
                 }
 
                 unit = unit.transform (ratio).shift (offset);
@@ -3116,7 +3116,7 @@ public class ImportJob extends XMLutility
         tempName = tempName.replace ("hour",  "h");
         Unit temp = null;
         try {temp = UCUM.parse (tempName);}
-        catch (ParserException | TokenException e) {}
+        catch (MeasurementParseException | TokenException e) {}
         if (temp != null  &&  temp.isCompatible (unit))  // found a unit with matching dimension ...
         {
             Number tempScale = temp.getConverterTo (temp.getSystemUnit ()).convert (new Integer (1));

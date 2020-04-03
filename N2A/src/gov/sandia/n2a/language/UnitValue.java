@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -26,7 +26,7 @@ public class UnitValue
 
     public static Pattern       floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
     public static SystemOfUnits systemOfUnits = ServiceProvider.current ().getSystemOfUnitsService ().getSystemOfUnits ("UCUM");
-    public static UnitFormat    UCUM          = ServiceProvider.current ().getUnitFormatService ().getUnitFormat ("UCUM");
+    public static UnitFormat    UCUM          = ServiceProvider.current ().getFormatService ().getUnitFormat ("UCUM");
     public static Unit<?>       seconds       = UCUM.parse ("s");
 
     // Allow empty constructor

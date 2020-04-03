@@ -9,7 +9,7 @@ package gov.sandia.n2a.language;
 import gov.sandia.n2a.eqset.Equality;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
-import tec.uom.se.AbstractUnit;
+import tech.units.indriya.AbstractUnit;
 
 public class OperatorBinary extends Operator implements OperatorArithmetic
 {
