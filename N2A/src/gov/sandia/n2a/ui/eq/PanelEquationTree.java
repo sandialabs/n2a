@@ -766,6 +766,7 @@ public class PanelEquationTree extends JScrollPane
         }
 
         if (pet == null) return;  // Everything below this line has to do with updating tree view.
+        PanelEquations pe = PanelModel.instance.panelEquations;
         FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         // update color to indicate override state
@@ -777,6 +778,10 @@ public class PanelEquationTree extends JScrollPane
             if (c.getParent () == null) continue;
             model.nodeChanged (c);
         }
+        //   also update title, if it is separate
+        if (pet.root.graph != null) pet.root.graph.title.updateSelected (); // Reconfigures the cell renderer, which will also include color change.
+        pe.breadcrumbRenderer.updateSelected ();
+        pe.panelEquationGraph.repaint ();  // Force update of overall border. Everything gets repainted, so a bit inefficient.
 
         if (lastChange < path.length)
         {
@@ -820,7 +825,6 @@ public class PanelEquationTree extends JScrollPane
 
         TreePath selectedPath = new TreePath (c.getPath ());
         GraphNode gn = pet.root.graph;
-        PanelEquations pe = PanelModel.instance.panelEquations;
         if (setSelection  &&  c != pet.root  &&  pe.view == PanelEquations.NODE)
         {
             // Ensure that tree is visible.

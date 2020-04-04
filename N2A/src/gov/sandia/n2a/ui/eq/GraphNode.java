@@ -197,12 +197,6 @@ public class GraphNode extends JPanel
 
         parent.setComponentZOrder (this, 0);
         parent.scrollRectToVisible (getBounds ());
-        if (! selected)
-        {
-            selected = true;
-            title.updateSelected ();
-            selected = false;
-        }
         repaint ();
 
         // Since parent node is always on top, we must shift the graph to avoid occlusion.
@@ -272,7 +266,7 @@ public class GraphNode extends JPanel
             remove (panelEquationTree);  // assume that equation tree does not have focus
         }
         boolean focused = title.isFocusOwner ();
-        title.getTreeCellRendererComponent (panelEquationTree.tree, node, focused, open, false, -1, focused);
+        title.getTreeCellRendererComponent (panelEquationTree.tree, node, focused || selected, open, false, -1, focused);
         animate (new Rectangle (getLocation (), getPreferredSize ()));
     }
 
@@ -344,9 +338,12 @@ public class GraphNode extends JPanel
     public void updateTitle ()
     {
         Rectangle old = getBounds ();
+
         node.setUserObject ();
-        title.setText (node.getText (open, false));  // Name change can cause a change in size.
-        panelTitle.invalidate ();  // DefaultTreeCellRenderer stops the invalidate() call caused by setText(), so we must impose it manually. It is sufficient to invalidate the container.
+        boolean focused = title.isFocusOwner ();
+        title.getTreeCellRendererComponent (getEquationTree ().tree, node, focused || selected, open, false, -1, focused);
+
+        panelTitle.invalidate ();
         setSize (getPreferredSize ());  // GraphLayout won't do this, so we must do it manually.
         Rectangle next = getBounds ();
         parent.layout.componentMoved (this);
@@ -798,7 +795,8 @@ public class GraphNode extends JPanel
 
         public void updateSelected ()
         {
-            getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected, open, false, -1, isFocusOwner ());
+            boolean focused = isFocusOwner ();
+            getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected || focused, open, false, -1, focused);
             GraphNode.this.repaint ();
         }
 

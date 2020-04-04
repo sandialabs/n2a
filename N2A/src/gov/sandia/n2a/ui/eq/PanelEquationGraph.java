@@ -30,7 +30,6 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Map.Entry;
 
-import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
@@ -42,6 +41,7 @@ import javax.swing.Timer;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.ViewportLayout;
+import javax.swing.border.LineBorder;
 import javax.swing.event.MouseInputAdapter;
 
 import gov.sandia.n2a.db.MNode;
@@ -65,6 +65,7 @@ public class PanelEquationGraph extends JScrollPane
     protected PanelEquations container;
     protected GraphPanel     graphPanel;
     protected JViewport      vp;  // for convenience
+    protected ColoredBorder  border;
 
     protected static Color background = new Color (0xF0F0F0);  // light gray
 
@@ -73,7 +74,8 @@ public class PanelEquationGraph extends JScrollPane
         this.container = container;
         graphPanel = new GraphPanel ();
         setViewportView (graphPanel);
-        setBorder (BorderFactory.createLineBorder (Color.black));
+        border = new ColoredBorder ();
+        setBorder (border);
 
         setTransferHandler (new GraphTransferHandler ());
 
@@ -323,6 +325,21 @@ public class PanelEquationGraph extends JScrollPane
             if (p.y > 0) return VERTICAL_SCROLLBAR_ALWAYS;
         }
         return VERTICAL_SCROLLBAR_AS_NEEDED;
+    }
+
+    public class ColoredBorder extends LineBorder
+    {
+        ColoredBorder ()
+        {
+            super (Color.black);
+        }
+
+        public void paintBorder (Component c, Graphics g, int x, int y, int width, int height)
+        {
+            if (container.part == null) lineColor = Color.black;  // part can be null if no model is currently loaded
+            else                        lineColor = EquationTreeCellRenderer.getForegroundFor (container.part, false);
+            super.paintBorder (c, g, x, y, width, height);
+        }
     }
 
     public class GraphPanel extends JPanel
