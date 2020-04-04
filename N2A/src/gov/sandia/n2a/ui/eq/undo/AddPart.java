@@ -226,9 +226,12 @@ public class AddPart extends UndoableView
             createdNode.hide = false;
             if (multi) createdNode.graph.setSelected (true);
             else       peg.clearSelection ();
-            if (! multi  ||  multiLead) createdNode.graph.takeFocusOnTitle ();
-            peg.reconnect ();
-            peg.repaint ();
+            if (! multi  ||  multiLead)
+            {
+                createdNode.graph.takeFocusOnTitle ();
+                peg.reconnect ();
+                peg.repaint ();
+            }
         }
 
         return createdNode;

@@ -55,7 +55,7 @@ public class DeletePart extends UndoableView
     public void undo ()
     {
         super.undo ();
-        AddPart.create (path, index, name, savedSubtree, false, multi, multiLead);
+        AddPart.create (path, multi ? -1 : index, name, savedSubtree, false, multi, multiLead);
     }
 
     public void redo ()

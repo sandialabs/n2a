@@ -39,8 +39,9 @@ public class CompoundEditView extends CompoundEdit
     /**
         The first edit submitted to this compound provides the stored view object.
         All edits have their stored views removed, so that only this compound does anything
-        to re-establish the working view. The first-added edit should be the one that
-        you want to receive the final focus after a do or undo.
+        to re-establish the working view.
+        The edits are replayed in exactly the same order they were added, regardless of whether
+        the method is redo() or undo(). This means that the last-added edit has final say over focus.
     **/
     public synchronized boolean addEdit (UndoableEdit edit)
     {
@@ -65,16 +66,8 @@ public class CompoundEditView extends CompoundEdit
         view.restore ();
         PanelModel.instance.panelEquations.panelEquationGraph.clearSelection ();
 
-        super.undo ();    // Process all edits in compound.
-    }
-
-    public void redo () throws CannotRedoException
-    {
-        MainFrame.instance.tabs.setSelectedComponent (tab);
-        view.restore ();
-        PanelModel.instance.panelEquations.panelEquationGraph.clearSelection ();
-
-        // Apply the edits in reverse order, just as in undo().
+        // undo() normally plays edits back in reverse order.
+        // This code circumvents that by substituting a reversed list.
         if (editsBackward == null)
         {
             int last = edits.size ();
@@ -84,7 +77,16 @@ public class CompoundEditView extends CompoundEdit
         }
         Vector<UndoableEdit> temp = edits;
         edits = editsBackward;
-        super.redo ();
+        super.undo ();
         edits = temp;
+    }
+
+    public void redo () throws CannotRedoException
+    {
+        MainFrame.instance.tabs.setSelectedComponent (tab);
+        view.restore ();
+        PanelModel.instance.panelEquations.panelEquationGraph.clearSelection ();
+
+        super.redo ();
     }
 }

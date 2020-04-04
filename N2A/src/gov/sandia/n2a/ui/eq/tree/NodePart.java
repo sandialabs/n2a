@@ -747,9 +747,9 @@ public class NodePart extends NodeContainer
             selected.remove (graph);
             boolean multi = ! selected.isEmpty ();
             if (multi) um.addEdit (new CompoundEditView ());
-            um.add (new DeletePart (this, false, multi, multi));
             for (GraphNode g : selected) um.add (new DeletePart (g.node, false, true, false));
-            um.endCompoundEdit ();
+            um.add (new DeletePart (this, false, multi, multi));
+            if (multi) um.endCompoundEdit ();
         }
     }
 
