@@ -23,7 +23,6 @@ import java.awt.RenderingHints;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.util.ArrayList;
@@ -65,9 +64,7 @@ public class PanelEquationGraph extends JScrollPane
 {
     protected PanelEquations container;
     protected GraphPanel     graphPanel;
-
-    // Convenience references
-    protected JViewport vp;
+    protected JViewport      vp;  // for convenience
 
     protected static Color background = new Color (0xF0F0F0);  // light gray
 
@@ -253,11 +250,6 @@ public class PanelEquationGraph extends JScrollPane
         return graphPanel.getSelection ();
     }
 
-    public void deleteSelected ()
-    {
-        // TODO
-    }
-
     /**
         Called by ChangePart to apply name change to an existing graph node.
         Note that underride implies several other cases besides simple name change.
@@ -335,19 +327,20 @@ public class PanelEquationGraph extends JScrollPane
 
     public class GraphPanel extends JPanel
     {
-        protected GraphLayout     layout;  // For ease of access, to avoid calling getLayout() all the time.
-        protected List<GraphEdge> edges    = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
-        public    Point           offset   = new Point ();  // Offset from persistent coordinates to viewport coordinates. Add this to a stored (x,y) value to get non-negative coordinates that can be painted.
-        protected JPopupMenu      arrowMenu;
-        protected GraphEdge       arrowEdge;  // Most recent edge when arrowMenu was activated.
-        protected Point           popupLocation;
+        protected GraphLayout        layout;                               // For ease of access, to avoid calling getLayout() all the time.
+        protected GraphMouseListener mouseListener;
+        protected List<GraphEdge>    edges  = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
+        public    Point              offset = new Point ();                // Offset from persistent coordinates to viewport coordinates. Add this to a stored (x,y) value to get non-negative coordinates that can be painted.
+        protected JPopupMenu         arrowMenu;
+        protected GraphEdge          arrowEdge;                            // Most recent edge when arrowMenu was activated.
+        protected Point              popupLocation;
 
         public GraphPanel ()
         {
             super (new GraphLayout ());
             layout = (GraphLayout) getLayout ();
 
-            MouseAdapter mouseListener = new GraphMouseListener ();
+            mouseListener = new GraphMouseListener ();
             addMouseListener (mouseListener);
             addMouseMotionListener (mouseListener);
             addMouseWheelListener (mouseListener);
@@ -595,6 +588,39 @@ public class PanelEquationGraph extends JScrollPane
             return null;
         }
 
+        public List<GraphNode> findNodesIn (Rectangle r)
+        {
+            List<GraphNode> result = new ArrayList<GraphNode> ();
+            for (Component c : getComponents ())
+            {
+                if (r.intersects (c.getBounds ())) result.add ((GraphNode) c);
+            }
+            return result;
+        }
+
+        public GraphNode findNodeClosest (Point p)
+        {
+            List<GraphNode> nodes = new ArrayList<GraphNode> ();
+            for (Component c : getComponents ()) nodes.add ((GraphNode) c);
+            return findNodeClosest (p, nodes);
+        }
+
+        public GraphNode findNodeClosest (Point p, List<GraphNode> nodes)
+        {
+            GraphNode result = null;
+            double bestDistance = Double.POSITIVE_INFINITY;
+            for (GraphNode g : nodes)
+            {
+                double d = p.distance (g.getLocation ());
+                if (d < bestDistance)
+                {
+                    result = g;
+                    bestDistance = d;
+                }
+            }
+            return result;
+        }
+
         public GraphNode findNode (String name)
         {
             for (Component c : getComponents ())
@@ -615,6 +641,13 @@ public class PanelEquationGraph extends JScrollPane
             g2.setColor (background);
             Rectangle clip = g2.getClipBounds ();
             g2.fillRect (clip.x, clip.y, clip.width, clip.height);
+
+            // Draw selection region
+            if (mouseListener.selectStart != null)
+            {
+                g2.setColor (new Color (0x300000FF, true));  // TODO: base this color on current L&F
+                g2.fill (mouseListener.selectRegion);
+            }
 
             // Draw connection edges
             g2.setStroke (new BasicStroke (GraphEdge.strokeThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
@@ -823,10 +856,12 @@ public class PanelEquationGraph extends JScrollPane
 
     public class GraphMouseListener extends MouseInputAdapter implements ActionListener
     {
-        Point      startPan = null;
-        GraphEdge  edge     = null;
+        Point      startPan;
+        GraphEdge  edge;
+        Point      selectStart;
+        Rectangle  selectRegion;
         MouseEvent lastEvent;
-        Timer      timer    = new Timer (100, this);
+        Timer      timer = new Timer (100, this);
 
         public void mouseClicked (MouseEvent me)
         {
@@ -864,7 +899,12 @@ public class PanelEquationGraph extends JScrollPane
                 if (container.locked) return;
                 Point p = me.getPoint ();
                 edge = graphPanel.findTipAt (p);
-                if (edge != null)
+                if (edge == null)  // bare background
+                {
+                    selectStart = p;
+                    selectRegion = new Rectangle (p);
+                }
+                else  // arrowhead
                 {
                     setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
                     edge.animate (p);
@@ -906,7 +946,7 @@ public class PanelEquationGraph extends JScrollPane
             pm.y -= pp.y;
             Dimension extent = vp.getExtentSize ();
 
-            if (edge != null)
+            if (edge != null  ||  selectStart != null)
             {
                 boolean auto =  me == lastEvent;
                 if (pm.x < 0  ||  pm.x > extent.width  ||  pm.y < 0  ||  pm.y > extent.height)  // out of bounds
@@ -935,7 +975,17 @@ public class PanelEquationGraph extends JScrollPane
                     if (auto) return;
                 }
 
-                edge.animate (here);
+                if (edge != null)
+                {
+                    edge.animate (here);
+                }
+                else if (selectStart != null)
+                {
+                    Rectangle old = selectRegion;
+                    selectRegion = new Rectangle (selectStart);
+                    selectRegion.add (here);
+                    graphPanel.repaint (old.union (selectRegion));
+                }
             }
             else if (startPan != null)
             {
@@ -983,6 +1033,43 @@ public class PanelEquationGraph extends JScrollPane
                     um.add (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
                 }
                 edge = null;
+            }
+            else if (selectStart != null)  // finish region select
+            {
+                Point p = me.getPoint ();
+                Rectangle old = selectRegion;
+                Rectangle r = new Rectangle (selectStart);
+                r.add (p);
+                selectStart = null;
+                selectRegion = null;
+
+                boolean toggle =  me.isShiftDown ()  ||  me.isControlDown ();
+                if (! toggle) graphPanel.clearSelection ();
+
+                List<GraphNode> selected = graphPanel.findNodesIn (r);
+                for (int i = selected.size () - 1; i >= 0; i--)
+                {
+                    GraphNode g = selected.get (i);
+                    if (toggle)
+                    {
+                        if (g.selected) selected.remove (i);
+                        g.setSelected (! g.selected);
+                    }
+                    else
+                    {
+                        g.setSelected (true);
+                    }
+                }
+
+                if (! toggle)
+                {
+                    GraphNode c;
+                    if (selected.isEmpty ()) c = graphPanel.findNodeClosest (p);
+                    else                     c = graphPanel.findNodeClosest (p, selected);
+                    if (c != null) c.takeFocusOnTitle ();
+                }
+
+                graphPanel.repaint (old.union (r));
             }
         }
 

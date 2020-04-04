@@ -197,6 +197,12 @@ public class GraphNode extends JPanel
 
         parent.setComponentZOrder (this, 0);
         parent.scrollRectToVisible (getBounds ());
+        if (! selected)
+        {
+            selected = true;
+            title.updateSelected ();
+            selected = false;
+        }
         repaint ();
 
         // Since parent node is always on top, we must shift the graph to avoid occlusion.

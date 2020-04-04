@@ -1102,15 +1102,9 @@ public class PanelEquations extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             if (locked) return;
-            if (active == null)  // Either nothing is selected or a graph node is selected.
-            {
-                panelEquationGraph.deleteSelected ();
-            }
-            else
-            {
-                stopEditing ();  // It may seem odd to save a cell just before destroying it, but this gives cleaner UI painting.
-                active.deleteSelected ();
-            }
+            if (active == null) return;
+            stopEditing ();  // It may seem odd to save a cell just before destroying it, but this gives cleaner UI painting.
+            active.deleteSelected ();
         }
     };
 
