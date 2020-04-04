@@ -503,8 +503,13 @@ public class NodePart extends NodeContainer
         }
         else
         {
-            PanelEquations pe = PanelModel.instance.panelEquations;
-            boolean graphClosed =  pe.view == PanelEquations.NODE  &&  graph != null  &&  ! graph.open;
+            boolean graphClosed = false;
+            if (graph != null)
+            {
+                PanelEquations pe = PanelModel.instance.panelEquations;
+                if (pe.view == PanelEquations.NODE) graphClosed = ! graph.open;
+                else                                graphClosed = type.equals ("Part");
+            }
             boolean collapsed   = tree.isCollapsed (new TreePath (getPath ()));
             boolean hasChildren = ((FilteredTreeModel) tree.getModel ()).getChildCount (this) > 0;
             if (graphClosed  ||  collapsed  &&  hasChildren)  // The node is deliberately closed to indicate user intent.
