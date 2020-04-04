@@ -486,6 +486,8 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         Any previously existing node at the destination key will be completely erased and replaced.
         An entry will no longer exist at the source key.
         If the source does not exist before the move, then neither node will exist afterward.
+        Many subclasses guarantee object identity, but that is not a requirement.
+        The safest approach is to call child(toKey) to get a reference to the renamed node.
     **/
     public synchronized void move (String fromKey, String toKey)
     {

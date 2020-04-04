@@ -89,10 +89,9 @@ import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
-import gov.sandia.n2a.ui.eq.undo.AddPart;
+import gov.sandia.n2a.ui.eq.undo.AddPartMulti;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
-import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.Outsource;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun;
@@ -316,10 +315,6 @@ public class PanelEquations extends JPanel
                 {
                     result = true;
 
-                    um.endCompoundEdit ();
-                    um.addEdit (new CompoundEditView ());
-                    panelEquationGraph.clearSelection ();
-
                     // Determine location
                     if (location == null) location = panelEquationGraph.getCenter ();
                     Point center = new Point ();
@@ -341,21 +336,8 @@ public class PanelEquations extends JPanel
                         location.y -= center.y / count;
                     }
 
-                    boolean multiLead = true;
-                    for (MNode c : data)
-                    {
-                        Point p = new Point ();
-                        p.x = location.x + c.getInt ("$metadata", "gui", "bounds", "x");
-                        p.y = location.y + c.getInt ("$metadata", "gui", "bounds", "y");
-                        AddPart ap = new AddPart (target, -1, c, p, true, multiLead);
-                        multiLead = false;
-                        um.add (ap);
-                        if (ap.createdNode == null)
-                        {
-                            result = false;
-                            break;
-                        }
-                    }
+                    AddPartMulti apm = new AddPartMulti (target, data, location);
+                    um.add (apm);
                 }
                 else if (schema.type.startsWith ("Clip"))  // Any node type, from equation panel.
                 {

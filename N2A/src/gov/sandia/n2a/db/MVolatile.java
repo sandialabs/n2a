@@ -140,9 +140,14 @@ public class MVolatile extends MNode
         return result;
     }
 
+    /**
+        If you already hold a reference to the node named by fromKey, then that reference remains
+        valid and its key is updated.
+    **/
     public synchronized void move (String fromKey, String toKey)
     {
-        if (children == null) children = new TreeMap<String,MNode> (comparator);
+        if (toKey.equals (fromKey)) return;
+        if (children == null) return;  // Nothing to move
         MNode source = children.get (fromKey);
         children.remove (toKey);
         children.remove (fromKey);
