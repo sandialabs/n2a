@@ -68,8 +68,7 @@ public class ChangeInherit extends UndoableView
         parent.filter (FilteredTreeModel.filterLevel);
         if (parent == pe.part)
         {
-            peg.loadPart ();
-            peg.repaint ();
+            peg.reloadPart ();
             parent.filter (FilteredTreeModel.filterLevel);
         }
         if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);

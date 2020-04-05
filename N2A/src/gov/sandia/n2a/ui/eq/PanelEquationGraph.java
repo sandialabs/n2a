@@ -88,6 +88,13 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel.load ();
     }
 
+    public void reloadPart ()
+    {
+        graphPanel.clearParts ();
+        graphPanel.load ();
+        repaint ();
+    }
+
     public void clear ()
     {
         container.active = null;  // on the presumption that container.panelEquationGraph was most recently on display. This function is only called in that case.
@@ -104,7 +111,7 @@ public class PanelEquationGraph extends JScrollPane
         Point focus = vp.getViewPosition ();
         focus.x -= graphPanel.offset.x;
         focus.y -= graphPanel.offset.y;
-        if (! container.locked)
+        if (! container.locked  &&  container.part != null)
         {
             // Check if offset has actually changed. This is a nicety to avoid modifying models unless absolutely necessary.
             Point old = new Point ();
@@ -407,6 +414,14 @@ public class PanelEquationGraph extends JScrollPane
 
         public void clear ()
         {
+            clearParts ();
+            layout.bounds = new Rectangle ();
+            offset = new Point ();
+            vp.setViewPosition (new Point ());
+        }
+
+        public void clearParts ()
+        {
             // Disconnect graph nodes from tree nodes
             for (Component c : getComponents ())
             {
@@ -419,9 +434,6 @@ public class PanelEquationGraph extends JScrollPane
             // Flush all data
             removeAll ();
             edges.clear ();
-            layout.bounds = new Rectangle ();
-            offset = new Point ();
-            vp.setViewPosition (new Point ());
         }
 
         public void load ()

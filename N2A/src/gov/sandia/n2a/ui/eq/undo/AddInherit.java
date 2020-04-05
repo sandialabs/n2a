@@ -63,8 +63,7 @@ public class AddInherit extends UndoableView
         parent.filter (FilteredTreeModel.filterLevel);
         if (parent == pe.part)
         {
-            peg.loadPart ();  // safely disconnects old nodes, even though parent has been rebuilt with new nodes
-            peg.repaint ();
+            peg.reloadPart ();  // safely disconnects old nodes, even though parent has been rebuilt with new nodes
             parent.filter (FilteredTreeModel.filterLevel);
         }
         if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
@@ -103,8 +102,7 @@ public class AddInherit extends UndoableView
         parent.filter (FilteredTreeModel.filterLevel);
         if (parent == pe.part)
         {
-            peg.loadPart ();
-            peg.repaint ();
+            peg.reloadPart ();
             parent.filter (FilteredTreeModel.filterLevel);
         }
         model.nodeStructureChanged (parent);  // Since $inherit is being added, parent will almost certainly become visible, if it's not already.
