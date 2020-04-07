@@ -1294,7 +1294,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             //   Variables
             final TreeSet<String> names = new TreeSet<String> ();
-            for (Variable v : s.variables) names.add (v.nameString ());
+            for (Variable v : s.variables) names.add (v.name);  // Naked name will match any order.
 
             class Prefixer implements Transformer
             {
@@ -1310,9 +1310,9 @@ public class EquationSet implements Comparable<EquationSet>
                         }
                         // otherwise, don't modify references to $variables
                     }
-                    else if (names.contains (av.name))
+                    else if (names.contains (av.getName ()))  // Naked name, so matches any order.
                     {
-                        av.name = prefix + "." + av.name;
+                        av.name = prefix + "." + av.name;  // Full name, including order.
                     }
                     return av;
                 }
