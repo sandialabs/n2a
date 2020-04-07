@@ -53,6 +53,7 @@ public class AddPartMulti extends UndoableView
             String newName = nameChanges.get (oldName);
 
             // For all the new parts, scan for apparent connection bindings to the changed name.
+            // This is somewhat heuristic. To do more correctly would require us to compile a mini-model.
             for (MNode p : data)
             {
                 for (MNode v : p)
@@ -60,7 +61,8 @@ public class AddPartMulti extends UndoableView
                     // Detect if v is a connection binding.
                     // Compare these criteria with NodeVariable.findConnections() and EquationSet.resolveConnectionBindings().
                     String value = v.get ();
-                    if (! value.equals (oldName)) continue;
+                    String[] parts = value.split ("\\.");
+                    if (! parts[0].equals (oldName)) continue;
                     String vname = v.key ();
                     if (vname.contains ("$")  ||  vname.contains ("\\.")  ||  vname.endsWith ("'")) continue;  // LHS must be a simple identifier.
                     boolean hasEquations = false;
@@ -75,7 +77,9 @@ public class AddPartMulti extends UndoableView
                     if (hasEquations) continue;  // Must be single line.
 
                     // Apply name change
-                    v.set (newName);
+                    String newValue = newName;
+                    for (int i = 1; i < parts.length; i++) newValue += "." + parts[i];
+                    v.set (newValue);
                 }
             }
         }

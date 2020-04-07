@@ -33,7 +33,6 @@ public class GraphEdge
     protected GraphNode nodeFrom;  // The connection
     protected GraphNode nodeTo;    // The endpoint that this edge goes to
     protected String    nameTo;    // Name of external (not in current graph) part that edge goes to. Will only be set if nodeTo is null. If both are null, this is an unconnected edge.
-    protected int       offsetTo;  // If nameTo is non-null, then this gives number of pixels from center of graph node to target the edge. This allows nodeFrom to have several external edges without overlap.
     protected GraphEdge edgeOther; // For binary connections only, the edge to the other endpoint. Used to coordinate a smooth curve through the connection node.
     protected String    alias;     // Name of endpoint variable in connection part.
 
@@ -62,24 +61,18 @@ public class GraphEdge
 
         if (partTo != null)
         {
-            nodeTo = partTo.graph;
-            if (nodeTo == null)
+            // See if nodeTo or any of its parents is a graph node. If so, that should be the endpoint of this edge.
+            NodePart p = partTo;
+            while (p != null)
             {
-                nameTo = partTo.source.key ();
-
-                // Determine offset
-                // TODO: estimate the text width of each "nameTo"
-                int count = 0;
-                int index = 0;
-                for (String key : nodeFrom.node.connectionBindings.keySet ())
+                if (p.graph != null)
                 {
-                    if (key.equals (alias)) index = count;
-                    NodePart p = nodeFrom.node.connectionBindings.get (key);
-                    if (p != null  &&  p.graph == null) count++;
+                    nodeTo = p.graph;
+                    break;
                 }
-                // offsetTo is initialized to 0. Only change it if there are several external targets.
-                if (count > 1) offsetTo = (int) ((index - (count - 1) / 2.0) * 50);  // pixels
+                p = (NodePart) p.getParent ();
             }
+            if (nodeTo == null) nameTo = partTo.source.key ();
         }
     }
 
@@ -200,6 +193,34 @@ public class GraphEdge
             }
             else
             {
+                // Determine offset
+                // TODO: estimate the text width of each "nameTo"
+                int count = 0;
+                int index = 0;
+                for (String key : nodeFrom.node.connectionBindings.keySet ())
+                {
+                    // Select only connection bindings that require resolution up to container.
+                    // Ignore unconnected edges and edges to children of siblings.
+                    NodePart p = nodeFrom.node.connectionBindings.get (key);
+                    if (p == null) continue;  // not connected
+                    boolean hasGraph = false;  // detect siblings
+                    while (p != null)
+                    {
+                        if (p.graph != null)
+                        {
+                            hasGraph = true;
+                            break;
+                        }
+                        p = (NodePart) p.getParent ();
+                    }
+                    if (hasGraph) continue;
+
+                    if (key.equals (alias)) index = count;
+                    count++;
+                }
+                int offsetTo = 0;
+                if (count > 1) offsetTo = (int) ((index - (count - 1) / 2.0) * 50);  // pixels
+
                 // Determine text box. Need text height to locate arrowhead, so might as well calculate it all now.
                 Rectangle vp = nodeFrom.container.panelEquationGraph.vp.getViewRect ();
                 Rectangle2D eb = fm.getStringBounds (nameTo, g);

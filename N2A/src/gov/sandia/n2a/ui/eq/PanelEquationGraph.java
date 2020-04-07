@@ -502,7 +502,7 @@ public class PanelEquationGraph extends JScrollPane
                     GraphEdge ge = new GraphEdge (gn, np, e.getKey ());
                     edges.add (ge);
                     gn.edgesOut.add (ge);
-                    if (np != null  &&  np.graph != null) np.graph.edgesIn.add (ge);
+                    if (ge.nodeTo != null) ge.nodeTo.edgesIn.add (ge);
                 }
                 if (gn.edgesOut.size () == 2)
                 {
@@ -671,7 +671,7 @@ public class PanelEquationGraph extends JScrollPane
             // Draw selection region
             if (mouseListener.selectStart != null)
             {
-                g2.setColor (new Color (0x300000FF, true));  // TODO: base this color on current L&F
+                g2.setColor (new Color (0x100000FF, true));  // TODO: base this color on current L&F
                 g2.fill (mouseListener.selectRegion);
             }
 
