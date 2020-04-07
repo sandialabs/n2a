@@ -33,20 +33,11 @@ public class AddPart extends UndoableView
     protected MNode        createSubtree;
     protected boolean      nameIsGenerated;
     public    NodeBase     createdNode;    // Used by caller to initiate editing. Only valid immediately after call to redo().
-    protected boolean      multi;          // Indicates that this is one of several parts being added at the same time, so set selected.
-    protected boolean      multiLead;      // Indicates this is the lead (focused) item in the selection.
 
     public AddPart (NodeBase parent, int index, MNode data, Point location)
     {
-        this (parent, index, data, location, false, false);
-    }
-
-    public AddPart (NodeBase parent, int index, MNode data, Point location, boolean multi, boolean multiLead)
-    {
-        path           = parent.getKeyPath ();
-        this.index     = index;
-        this.multi     = multi;
-        this.multiLead = multiLead;
+        path       = parent.getKeyPath ();
+        this.index = index;
 
         createSubtree = new MVolatile ();
         if (data == null)
@@ -155,7 +146,7 @@ public class AddPart extends UndoableView
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, multiLead);
+        createdNode = create (path, index, name, createSubtree, nameIsGenerated, false, false);
     }
 
     public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated, boolean multi, boolean multiLead)

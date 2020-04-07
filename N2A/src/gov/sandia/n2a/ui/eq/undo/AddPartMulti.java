@@ -92,11 +92,11 @@ public class AddPartMulti extends UndoableView
         super.redo ();
 
         PanelModel.instance.panelEquations.panelEquationGraph.clearSelection ();
-        boolean multiLead = true;
+        int last = data.size () - 1;
+        int i = 0;
         for (MNode c : data)
         {
-            AddPart.create (path, -1, c.key (), c, false, true, multiLead);
-            multiLead = false;
+            AddPart.create (path, -1, c.key (), c, false, true, i++ == last);
         }
     }
 }
