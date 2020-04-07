@@ -26,11 +26,14 @@ import javax.swing.Icon;
 import javax.swing.ImageIcon;
 
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class GraphEdge
 {
     protected GraphNode nodeFrom;  // The connection
     protected GraphNode nodeTo;    // The endpoint that this edge goes to
+    protected String    nameTo;    // Name of external (not in current graph) part that edge goes to. Will only be set if nodeTo is null. If both are null, this is an unconnected edge.
+    protected int       offsetTo;  // If nameTo is non-null, then this gives number of pixels from center of graph node to target the edge. This allows nodeFrom to have several external edges without overlap.
     protected GraphEdge edgeOther; // For binary connections only, the edge to the other endpoint. Used to coordinate a smooth curve through the connection node.
     protected String    alias;     // Name of endpoint variable in connection part.
 
@@ -39,10 +42,12 @@ public class GraphEdge
     protected boolean   headFill;  // if true, fill black; if false, fill with background (or white)
     protected Vector2   label;
     protected Rectangle textBox;
+    protected Vector2   labelTo;
+    protected Rectangle textBoxTo;
     protected Rectangle bounds = new Rectangle (0, 0, -1, -1);  // empty. Allows call to animate() on brand-new edges that have not previously called updateShape().
     protected Vector2   tip;
     protected boolean   tipDrag;
-    protected Vector2   anchor;  // When non-null, use this as start for tip drag.
+    protected Point     anchor;  // When non-null, use this as start for tip drag. Value is relative to the upper-left corner of nodeFrom. Mainly for aesthetics.
 
     protected static double arrowheadAngle  = Math.PI / 5;
     protected static double arrowheadLength = 10;
@@ -50,11 +55,32 @@ public class GraphEdge
     protected static int    padNameTop      = 1;
     protected static int    padNameSide     = 2;
 
-    public GraphEdge (GraphNode nodeFrom, GraphNode nodeTo, String alias)
+    public GraphEdge (GraphNode nodeFrom, NodePart partTo, String alias)
     {
         this.nodeFrom = nodeFrom;
-        this.nodeTo   = nodeTo;
         this.alias    = alias;
+
+        if (partTo != null)
+        {
+            nodeTo = partTo.graph;
+            if (nodeTo == null)
+            {
+                nameTo = partTo.source.key ();
+
+                // Determine offset
+                // TODO: estimate the text width of each "nameTo"
+                int count = 0;
+                int index = 0;
+                for (String key : nodeFrom.node.connectionBindings.keySet ())
+                {
+                    if (key.equals (alias)) index = count;
+                    NodePart p = nodeFrom.node.connectionBindings.get (key);
+                    if (p != null  &&  p.graph == null) count++;
+                }
+                // offsetTo is initialized to 0. Only change it if there are several external targets.
+                if (count > 1) offsetTo = (int) ((index - (count - 1) / 2.0) * 50);  // pixels
+            }
+        }
     }
 
     /**
@@ -65,6 +91,7 @@ public class GraphEdge
         line       = null;
         head       = null;
         label      = null;
+        textBoxTo  = null;
         bounds     = new Rectangle (0, 0, -1, -1);  // empty, so won't affect union(), and will return false from intersects()
 
         int padTip = 0;  // Distance from boundary of nodeTo to target the tip. Varies depending on arrow type.
@@ -85,7 +112,7 @@ public class GraphEdge
         if (tipDrag)
         {
             a = tip;
-            if (anchor != null) c = anchor;
+            if (anchor != null) c = new Vector2 (Cbounds.x + anchor.x, Cbounds.y + anchor.y);
         }
         else if (nodeTo != null)
         {
@@ -152,7 +179,7 @@ public class GraphEdge
             if (updateOther) edgeOther.updateShape (false);
         }
 
-        Graphics g = nodeFrom.getGraphics ();
+        Graphics g = nodeFrom.getGraphics ();  // Since we're creating this graphics context, we dispose it below.
         FontMetrics fm = nodeFrom.getFontMetrics (nodeFrom.getFont ());
         Rectangle2D tb = fm.getStringBounds (alias, g);
         double tw = tb.getWidth ();
@@ -162,7 +189,53 @@ public class GraphEdge
         Vector2 root = null;
         double nodeAngle = Math.atan ((double) Cbounds.height / Cbounds.width);
 
-        if (nodeTo == null)  // Unconnected endpoint
+        if (nameTo != null)  // External endpoint
+        {
+            if (tipDrag)
+            {
+                root = intersection (new Segment2 (c, tip), Cbounds);
+                if (root == null) return;  // tip is inside Cbounds
+                line = new Line2D.Double (c.x, c.y, tip.x, tip.y);
+                tipAngle = new Segment2 (tip, c).angle ();
+            }
+            else
+            {
+                // Determine text box. Need text height to locate arrowhead, so might as well calculate it all now.
+                Rectangle vp = nodeFrom.container.panelEquationGraph.vp.getViewRect ();
+                Rectangle2D eb = fm.getStringBounds (nameTo, g);
+                double ew = eb.getWidth ();
+                double eh = eb.getHeight ();
+                labelTo = new Vector2 (c.x + offsetTo - ew / 2, vp.y + padNameTop);
+
+                textBoxTo = new Rectangle ();
+                textBoxTo.x      = (int) labelTo.x - padNameSide;
+                textBoxTo.y      = vp.y;
+                textBoxTo.width  = (int) Math.ceil (ew) + 2 * padNameSide;
+                textBoxTo.height = (int) Math.ceil (eh) + 2 * padNameTop;
+                if (textBoxTo.intersects (Cbounds)  ||  c.y < vp.y  ||  c.y > vp.y + vp.height)
+                {
+                    textBoxTo = null;
+                    return;
+                }
+
+                bounds = bounds.union (textBoxTo);
+                labelTo.x -= eb.getX ();
+                labelTo.y -= eb.getY ();
+
+                tip = new Vector2 (c.x + offsetTo, vp.y + textBoxTo.height + padTip);
+
+                double length = c.distance (tip) / 3;
+                Vector2 w1 = tip.add (new Vector2 (0, length));
+                Vector2 w2 = c.add (new Vector2 (offsetTo, 0));
+                line = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
+
+                Spline spline = new Spline ((CubicCurve2D) line);
+                root = intersection (spline, Cbounds);  // on boundary of c
+                if (root == null) return;
+                tipAngle = Math.PI / 2;
+            }
+        }
+        else if (nodeTo == null)  // Unconnected endpoint
         {
             if (! tipDrag)
             {
@@ -249,7 +322,7 @@ public class GraphEdge
                 break;
         }
 
-        bounds = line.getBounds ();
+        bounds = bounds.union (line.getBounds ());
         if (head != null) bounds = bounds.union (head.getBounds ());
         int t = (int) Math.ceil (strokeThickness / 2);
         bounds.grow (t, t);
@@ -277,9 +350,11 @@ public class GraphEdge
         textBox.height = (int) Math.ceil (th) + 2 * padNameTop;
         bounds = bounds.union (textBox);
         // tb gives position of top-left corner relative to baseline.
-        // We want baseline relative to top-left, so subtract to reverse vector.
+        // We want baseline, so subtract to reverse vector.
         label.x -= tb.getX ();
         label.y -= tb.getY ();
+
+        g.dispose ();
     }
 
     /**
@@ -291,12 +366,10 @@ public class GraphEdge
     **/
     public void paintComponent (Graphics g)
     {
-        if (line == null) return;
-
         Graphics2D g2 = (Graphics2D) g;
 
         g2.setColor (Color.black);
-        g2.draw (line);
+        if (line != null) g2.draw (line);
         if (head != null)
         {
             if (! headFill) g2.setColor (PanelEquationGraph.background);
@@ -305,11 +378,21 @@ public class GraphEdge
             g2.draw (head);
         }
 
-        if (alias.isEmpty ()) return;
-        g2.setColor (new Color (0xD0FFFFFF, true));
-        g2.fill (textBox);
-        g2.setColor (Color.black);
-        g2.drawString (alias, (float) label.x, (float) label.y);
+        if (! alias.isEmpty ()  &&  label != null)
+        {
+            g2.setColor (new Color (0xD0FFFFFF, true));
+            g2.fill (textBox);
+            g2.setColor (Color.black);
+            g2.drawString (alias, (float) label.x, (float) label.y);
+        }
+
+        if (textBoxTo != null)
+        {
+            g2.setColor (new Color (0xD0FFFFFF, true));
+            g2.fill (textBoxTo);
+            g2.setColor (Color.black);
+            g2.drawString (nameTo, (float) labelTo.x, (float) labelTo.y);
+        }
     }
 
     /**

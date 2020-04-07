@@ -370,10 +370,20 @@ public class GraphNode extends JPanel
         parent.scrollRectToVisible (r);
     }
 
+    public void killEdge (String alias)
+    {
+        updateEdge (alias, null, true);
+    }
+
+    public void updateEdge (String alias, NodePart partTo)
+    {
+        updateEdge (alias, partTo, false);
+    }
+
     /**
         Apply changes from a connection binding.
     **/
-    public void updateGUI (String alias, String partName)
+    public void updateEdge (String alias, NodePart partTo, boolean kill)
     {
         GraphEdge edge = null;
         for (GraphEdge ge : edgesOut)
@@ -384,52 +394,22 @@ public class GraphNode extends JPanel
                 break;
             }
         }
+        if (kill  &&  edge == null) return;  // nothing to do
 
         Rectangle paintRegion = new Rectangle (0, 0, -1, -1);
-        if (partName == null  ||  partName.isEmpty ())  // Delete connection binding
+        if (edge != null)  // Remove old edge
         {
-            if (edge == null) return;
+            paintRegion = edge.bounds;
             parent.edges.remove (edge);
             edgesOut.remove (edge);
             if (edge.nodeTo != null) edge.nodeTo.edgesIn.remove (edge);
-            paintRegion = edge.bounds;
         }
-        else
+        if (! kill)  // Recreate edge
         {
-            GraphNode nodeTo = null;
-            for (Component c : parent.getComponents ())
-            {
-                GraphNode gn = (GraphNode) c;
-                if (gn.node.source.key ().equals (partName))  // TODO: handle paths with more than one element
-                {
-                    nodeTo = gn;
-                    break;
-                }
-            }
-
-            if (edge == null)  // Create new connection binding
-            {
-                edge = new GraphEdge (this, nodeTo, alias);
-                parent.edges.add (edge);
-                if (nodeTo != null) nodeTo.edgesIn.add (edge);
-                edgesOut.add (edge);
-            }
-            else  // Update existing connection
-            {
-                if (edge.nodeTo != null) edge.nodeTo.edgesIn.remove (edge);
-                edge.nodeTo = nodeTo;
-                if (nodeTo == null)  // Disconnect edge
-                {
-                    // Move edge to end of list.
-                    // This will make it paint on top of everything else, so we don't lose track of it visually.
-                    parent.edges.remove (edge);
-                    parent.edges.add (edge);
-                }
-                else
-                {
-                    nodeTo.edgesIn.add (edge);
-                }
-            }
+            edge = new GraphEdge (this, partTo, alias);
+            parent.edges.add (edge);
+            edgesOut.add (edge);
+            if (edge.nodeTo != null) edge.nodeTo.edgesIn.add (edge);
         }
 
         // Adjust binary connections
@@ -445,7 +425,7 @@ public class GraphNode extends JPanel
             for (GraphEdge ge : edgesOut) ge.edgeOther = null;
         }
 
-        // Repaint all remaining edges
+        // Repaint all current edges
         Point offsetBefore = new Point (parent.offset);
         for (GraphEdge ge : edgesOut)
         {
@@ -905,13 +885,6 @@ public class GraphNode extends JPanel
         {
             if (start == null) return;
 
-            int x = getX ();
-            int y = getY ();
-            int w = getWidth ();
-            int h = getHeight ();
-            int dx = me.getX () - start.x;
-            int dy = me.getY () - start.y;
-
             JViewport vp = (JViewport) parent.getParent ();
             Point pp = vp.getLocationOnScreen ();
             Point pm = me.getLocationOnScreen ();
@@ -923,17 +896,13 @@ public class GraphNode extends JPanel
             {
                 if (auto)
                 {
-                    // Rather than generate an actual mouse event, simply adjust (dx,dy).
-                    dx = pm.x < 0 ? pm.x : (pm.x > extent.width  ? pm.x - extent.width  : 0);
-                    dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
+                    int dx = pm.x < 0 ? pm.x : (pm.x > extent.width  ? pm.x - extent.width  : 0);
+                    int dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
 
-                    // Stretch bounds and shift viewport
-                    Rectangle next = getBounds ();
-                    next.translate (dx, dy);
-                    parent.layout.componentMoved (next);
                     Point p = vp.getViewPosition ();
                     p.translate (dx, dy);
-                    vp.setViewPosition (p);
+                    parent.layout.shiftViewport (p);
+                    me.translatePoint (dx, dy);  // Makes permanent change to lastEvent. Does not change its getLocationOnScreen()
                 }
                 else  // A regular drag
                 {
@@ -949,19 +918,31 @@ public class GraphNode extends JPanel
                 if (auto) return;
             }
 
+            int x = getX ();
+            int y = getY ();
+
             if (connect)
             {
                 if (edge == null)
                 {
                     // Create and install edge
                     edge = new GraphEdge (GraphNode.this, null, "");
-                    edge.anchor = new Vector2 (x + start.x, y + start.y);
+                    edge.anchor = new Point (start);  // Position in this component where drag started.
                     edge.tip = new Vector2 (0, 0);  // This is normally created by GraphEdge.updateShape(), but we don't call that first.
                     parent.edges.add (edge);
                 }
-                edge.animate (new Point (x + me.getX (), y + me.getY ()));
+                int nx = Math.max (x + me.getX (), 0);
+                int ny = Math.max (y + me.getY (), 0);
+                edge.animate (new Point (nx, ny));
                 return;
             }
+
+            int w = getWidth ();
+            int h = getHeight ();
+            int dx = me.getX () - start.x;
+            int dy = me.getY () - start.y;
+            if (x + dx < 0) dx = -x;  // x is never less than 0
+            if (y + dy < 0) dy = -y;  // ditto
 
             switch (cursor)
             {
@@ -979,6 +960,7 @@ public class GraphNode extends JPanel
                         newH = min.height;
                     }
                     animate (new Rectangle (x + dx, y + dy, newW, newH));
+                    if (auto) me.translatePoint (-dx, -dy);  // Ensure that me continues to be relative to current position of this component.
                     break;
                 case Cursor.N_RESIZE_CURSOR:
                     newH = h - dy;
@@ -988,6 +970,7 @@ public class GraphNode extends JPanel
                         newH = min.height;
                     }
                     animate (new Rectangle (x, y + dy, w, newH));
+                    if (auto) me.translatePoint (0, -dy);
                     break;
                 case Cursor.NE_RESIZE_CURSOR:
                     newW = w + dx;
@@ -1003,6 +986,7 @@ public class GraphNode extends JPanel
                         newH = min.height;
                     }
                     animate (new Rectangle (x, y + dy, newW, newH));
+                    if (auto) me.translatePoint (0, -dy);
                     start.translate (dx, 0);
                     break;
                 case Cursor.E_RESIZE_CURSOR:
@@ -1055,6 +1039,7 @@ public class GraphNode extends JPanel
                         newH = min.height;
                     }
                     animate (new Rectangle (x + dx, y, newW, newH));
+                    if (auto) me.translatePoint (-dx, 0);
                     start.translate (0, dy);
                     break;
                 case Cursor.W_RESIZE_CURSOR:
@@ -1065,6 +1050,7 @@ public class GraphNode extends JPanel
                         newW = min.width;
                     }
                     animate (new Rectangle (x + dx, y, newW, h));
+                    if (auto) me.translatePoint (-dx, 0);
                     break;
                 case Cursor.MOVE_CURSOR:
                     animate (new Rectangle (x + dx, y + dy, w, h));
@@ -1074,6 +1060,7 @@ public class GraphNode extends JPanel
                         bounds.setLocation (bounds.x + dx, bounds.y + dy);
                         g.animate (bounds);
                     }
+                    if (auto) me.translatePoint (-dx, -dy);
             }
         }
 

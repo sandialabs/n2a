@@ -96,7 +96,7 @@ public class AddVariable extends UndoableView
         {
             if (createdNode.isBinding)
             {
-                if (parent.graph != null) parent.graph.updateGUI (name, "");
+                if (parent.graph != null) parent.graph.killEdge (name);
                 if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
             model.removeNodeFromParent (createdNode);
@@ -111,8 +111,8 @@ public class AddVariable extends UndoableView
             createdNode.updateColumnWidths (fm);
             if (parent.graph != null)
             {
-                if (createdNode.isBinding) parent.graph.updateGUI (name, createdNode.source.get ());
-                else if (wasBinding)       parent.graph.updateGUI (name, "");
+                if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
+                else if (wasBinding)       parent.graph.killEdge   (name);
                 if ((createdNode.isBinding  ||  wasBinding)  &&  mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
         }
@@ -169,8 +169,8 @@ public class AddVariable extends UndoableView
 
             if (parent.graph != null)
             {
-                if (createdNode.isBinding) parent.graph.updateGUI (name, createdNode.source.get ());
-                else if (wasBinding)       parent.graph.updateGUI (name, "");
+                if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
+                else if (wasBinding)       parent.graph.killEdge   (name);
             }
 
             if (createdNode.isBinding  ||  wasBinding)

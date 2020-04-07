@@ -498,14 +498,11 @@ public class PanelEquationGraph extends JScrollPane
 
                 for (Entry<String,NodePart> e : gn.node.connectionBindings.entrySet ())
                 {
-                    GraphNode endpoint = null;
                     NodePart np = e.getValue ();
-                    if (np != null) endpoint = np.graph;
-
-                    GraphEdge ge = new GraphEdge (gn, endpoint, e.getKey ());
+                    GraphEdge ge = new GraphEdge (gn, np, e.getKey ());
                     edges.add (ge);
                     gn.edgesOut.add (ge);
-                    if (endpoint != null) endpoint.edgesIn.add (ge);
+                    if (np != null  &&  np.graph != null) np.graph.edgesIn.add (ge);
                 }
                 if (gn.edgesOut.size () == 2)
                 {
@@ -763,20 +760,17 @@ public class PanelEquationGraph extends JScrollPane
 
         public void layoutContainer (Container target)
         {
-            // TODO: shiftViewport() does not work well when dragging edge endpoints. Work on collapsing these two functions.
-
             // Only change layout if a component has moved into negative space.
-            GraphPanel gp = (GraphPanel) target;
             if (bounds.x >= 0  &&  bounds.y >= 0)
             {
                 if (UIupdated)
                 {
                     UIupdated = false;
-                    for (Component c : target.getComponents ())
+                    for (Component c : graphPanel.getComponents ())
                     {
                         c.setSize (c.getPreferredSize ());
                     }
-                    for (GraphEdge ge : gp.edges)
+                    for (GraphEdge ge : graphPanel.edges)
                     {
                         ge.updateShape (false);
                     }
@@ -784,26 +778,7 @@ public class PanelEquationGraph extends JScrollPane
                 return;
             }
 
-            JViewport vp = (JViewport) gp.getParent ();
-            int dx = Math.max (-bounds.x, 0);
-            int dy = Math.max (-bounds.y, 0);
-            bounds.translate (dx, dy);
-            gp.offset.translate (dx, dy);
-            Point p = vp.getViewPosition ();
-            p.translate (dx, dy);
-            vp.setViewPosition (p);
-
-            // None of the following code is allowed to call componentMoved().
-            for (Component c : target.getComponents ())
-            {
-                p = c.getLocation ();
-                p.translate (dx, dy);
-                c.setLocation (p);
-            }
-            for (GraphEdge ge : gp.edges)
-            {
-                ge.updateShape (false);
-            }
+            shiftViewport (vp.getViewPosition ());  // Neutral shift. Side effect is to update all components with positive coordinates.
         }
 
         /**
@@ -824,18 +799,19 @@ public class PanelEquationGraph extends JScrollPane
             }
             for (GraphEdge ge : graphPanel.edges)
             {
+                if (ge.nameTo != null) continue;  // Don't include external edges in tight bound. Their size is arbitrary and viewport-dependent.
                 bounds = bounds.union (ge.bounds);
             }
 
             // Shift components so bounds start at origin
             Point d = new Point (-bounds.x, -bounds.y);
-            if (d.x != 0  ||  d.y != 0)
-            {
-                bounds.translate (d.x, d.y);
-                graphPanel.offset.translate (d.x, d.y);
-                n.translate (d.x, d.y);
+            bounds.translate (d.x, d.y);
+            graphPanel.offset.translate (d.x, d.y);
+            n.translate (d.x, d.y);
+            vp.setViewPosition (n);  // Need to do this before GraphEdge.updateShape().
 
-                // None of the following code is allowed to call componentMoved().
+            if (d.x != 0  ||  d.y != 0)  // Avoid calling these expensive operations unless shift actually occurred.
+            {
                 for (Component c : graphPanel.getComponents ())
                 {
                     Point p = c.getLocation ();
@@ -848,7 +824,6 @@ public class PanelEquationGraph extends JScrollPane
                 }
             }
 
-            vp.setViewPosition (n);  // Doesn't do anything if n is same as current position.
             return d;
         }
 
@@ -967,16 +942,27 @@ public class PanelEquationGraph extends JScrollPane
 
         public void mouseDragged (MouseEvent me)
         {
-            Point here = me.getPoint ();  // relative to origin of viewport, which may not be visible
-
-            Point pp = vp.getLocationOnScreen ();
-            Point pm = me.getLocationOnScreen ();
-            pm.x -= pp.x;  // relative to upper-left corner of visible region
-            pm.y -= pp.y;
-            Dimension extent = vp.getExtentSize ();
-
-            if (edge != null  ||  selectStart != null)
+            if (startPan != null)
             {
+                Point here = me.getPoint ();  // relative to origin of viewport, which may not be visible
+
+                Point p = vp.getViewPosition ();  // should be exactly same as current scrollbar values
+                p.x -= here.x - startPan.x;
+                p.y -= here.y - startPan.y;
+                Point d = graphPanel.layout.shiftViewport (p);
+                startPan.x += d.x;
+                startPan.y += d.y;
+                graphPanel.revalidate ();  // necessary to show scrollbars when components go past right or bottom
+                graphPanel.repaint ();
+            }
+            else if (edge != null  ||  selectStart != null)
+            {
+                Point pp = vp.getLocationOnScreen ();
+                Point pm = me.getLocationOnScreen ();
+                pm.x -= pp.x;  // relative to upper-left corner of visible region
+                pm.y -= pp.y;
+                Dimension extent = vp.getExtentSize ();
+                Point d;  // Amount by which shiftViewport() moved existing components relative to viewport coordinates.
                 boolean auto =  me == lastEvent;
                 if (pm.x < 0  ||  pm.x > extent.width  ||  pm.y < 0  ||  pm.y > extent.height)  // out of bounds
                 {
@@ -985,10 +971,10 @@ public class PanelEquationGraph extends JScrollPane
                         int dx = pm.x < 0 ? pm.x : (pm.x > extent.width  ? pm.x - extent.width  : 0);
                         int dy = pm.y < 0 ? pm.y : (pm.y > extent.height ? pm.y - extent.height : 0);
 
-                        me.translatePoint (dx, dy);  // Makes permanent change to lastEvent
                         Point p = vp.getViewPosition ();
                         p.translate (dx, dy);
-                        vp.setViewPosition (p);
+                        d = graphPanel.layout.shiftViewport (p);
+                        me.translatePoint (dx + d.x, dy + d.y);  // Makes permanent change to lastEvent. Does not change its getLocationOnScreen()
                     }
                     else  // A regular drag
                     {
@@ -1002,30 +988,25 @@ public class PanelEquationGraph extends JScrollPane
                     timer.stop ();
                     lastEvent = null;
                     if (auto) return;
+                    d = new Point ();
                 }
 
+                Point here = me.getPoint ();
                 if (edge != null)
                 {
+                    // Don't let requested coordinates go negative, or it will force another shift of viewport.
+                    here.x = Math.max (here.x, 0);
+                    here.y = Math.max (here.y, 0);
                     edge.animate (here);
                 }
                 else if (selectStart != null)
                 {
                     Rectangle old = selectRegion;
+                    selectStart.translate (d.x, d.y);
                     selectRegion = new Rectangle (selectStart);
                     selectRegion.add (here);
                     graphPanel.repaint (old.union (selectRegion));
                 }
-            }
-            else if (startPan != null)
-            {
-                Point p = vp.getViewPosition ();  // should be exactly same as current scrollbar values
-                p.x -= here.x - startPan.x;
-                p.y -= here.y - startPan.y;
-                Point d = graphPanel.layout.shiftViewport (p);
-                startPan.x += d.x;
-                startPan.y += d.y;
-                graphPanel.revalidate ();  // necessary to show scrollbars when components go past right or bottom
-                graphPanel.repaint ();
             }
         }
 

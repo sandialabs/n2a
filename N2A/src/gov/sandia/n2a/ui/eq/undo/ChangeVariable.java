@@ -211,7 +211,7 @@ public class ChangeVariable extends UndoableView
                     if (parent.graph != null)
                     {
                         parent.connectionBindings.remove (nameBefore);
-                        parent.graph.updateGUI (nameBefore, "");  // remove old connection edge
+                        parent.graph.killEdge (nameBefore);  // remove old connection edge
                     }
                     touchedBindings = true;
                 }
@@ -254,8 +254,8 @@ public class ChangeVariable extends UndoableView
                     touchedBindings = true;
                     if (parent.graph != null)
                     {
-                        if (nodeBefore.isBinding) parent.graph.updateGUI (nameBefore, oldPart.get ());
-                        else if (wasBinding)      parent.graph.updateGUI (nameBefore, "");
+                        if (nodeBefore.isBinding) parent.graph.updateEdge (nameBefore, parent.connectionBindings.get (nameBefore));
+                        else if (wasBinding)      parent.graph.killEdge   (nameBefore);
                     }
                 }
             }
@@ -313,8 +313,8 @@ public class ChangeVariable extends UndoableView
             touchedBindings = true;
             if (parent.graph != null)
             {
-                if (nodeAfter.isBinding) parent.graph.updateGUI (nameAfter, nodeAfter.source.get ());
-                else if (wasBinding)     parent.graph.updateGUI (nameAfter, "");
+                if (nodeAfter.isBinding) parent.graph.updateEdge (nameAfter, parent.connectionBindings.get (nameAfter));
+                else if (wasBinding)     parent.graph.killEdge   (nameAfter);
             }
         }
 
