@@ -1437,9 +1437,9 @@ public class PanelEquations extends JPanel
             nontree = true;
 
             Font baseFont = UIManager.getFont ("Tree.font");
-            setFont (baseFont.deriveFont (Font.BOLD));
-            setText (text);
-            setIcon (null);
+            label.setFont (baseFont.deriveFont (Font.BOLD));
+            label.setText (text);
+            label.setIcon (null);
             setFocusable (false);
             setTransferHandler (transferHandler);
 
@@ -1647,12 +1647,16 @@ public class PanelEquations extends JPanel
             if (part == null)
             {
                 text = noModel;
-                setIcon (null);
+                label.setIcon (null);
                 setFocusable (false);
             }
+            else
+            {
+                setFocusable (true);
+            }
             Font baseFont = UIManager.getFont ("Tree.font");
-            setFont (baseFont.deriveFont (Font.BOLD));
-            setText (text);
+            label.setFont (baseFont.deriveFont (Font.BOLD));
+            label.setText (text);
         }
 
         public void updateSelected ()
@@ -1672,9 +1676,6 @@ public class PanelEquations extends JPanel
             }
             if (parts.isEmpty ())
             {
-                setText (text = noModel);
-                setIcon (null);
-                setFocusable (false);
                 getTreeCellRendererComponent (false, false);
                 return;
             }
@@ -1689,9 +1690,6 @@ public class PanelEquations extends JPanel
                 text += b.source.key ();
                 offsets.add (fm.stringWidth (text));
             }
-            setText (text);
-            setIcon (part.getIcon (panelParent.isVisible ()));
-            setFocusable (true);
 
             boolean focused = isFocusOwner ();
             getTreeCellRendererComponent (parentSelected  ||  focused, focused);

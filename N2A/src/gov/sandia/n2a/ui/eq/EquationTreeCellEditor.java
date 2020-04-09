@@ -304,7 +304,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         editingNode     = (NodeBase) value;
         editingTitle    = isTitle;
         editingIcon     = renderer.getIconFor (editingNode, expanded, leaf);
-        offset          = renderer.getIconTextGap () + editingIcon.getIconWidth ();
+        offset          = renderer.getTextOffset ();
         Font   baseFont = tree.getFont ();
         Font   font     = editingNode.getStyledFont (baseFont);
         String text     = editingNode.getText (expanded, true);
@@ -476,8 +476,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         public void paint (Graphics g)
         {
             // DefaultTreeCellEditor.EditorContainer has an excessively complex formula for computing
-            // vertical position of icon. This simple formula seems to do the same thing, but needs more
-            // testing. The goal is to have no visual shift at all when going into edit mode.
+            // vertical position of icon. This simple formula seems to do the same thing.
             int y = (getHeight () - editingIcon.getIconHeight ()) / 2;
             editingIcon.paintIcon (this, g, 0, y);
             super.paint (g);

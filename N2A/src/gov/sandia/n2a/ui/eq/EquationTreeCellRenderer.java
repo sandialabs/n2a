@@ -12,28 +12,34 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Insets;
 
 import javax.swing.Icon;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JTree;
 import javax.swing.Painter;
 import javax.swing.UIManager;
-import javax.swing.tree.DefaultTreeCellRenderer;
+import javax.swing.border.EmptyBorder;
+import javax.swing.plaf.basic.BasicGraphicsUtils;
+import javax.swing.tree.TreeCellRenderer;
 
+import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
-import sun.swing.DefaultLookup;
 
 /**
     Extends the standard tree cell renderer to get icon and text style from NodeBase.
     This is the core code that makes NodeBase work as a tree node representation.
 **/
 @SuppressWarnings("serial")
-public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
+public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
 {
-    protected boolean             nontree;  // Need hack to paint background
-    protected Painter<JComponent> backgroundFocused;
-    protected Painter<JComponent> backgroundSelected;
-    protected Painter<JComponent> backgroundFocusedSelected;
+    protected JLabel  label = new JLabel ();
+    protected boolean selected;
+    protected boolean hasFocus;
+    protected boolean isDropCell;
+    protected boolean nontree;  // Need hack to paint background
 
     // These colors may get changed when look & feel is changed.
     public static Color colorInherit          = Color.blue;
@@ -43,6 +49,31 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
     public static Color colorSelectedOverride = Color.black;
     public static Color colorSelectedKill     = Color.red;
 
+    public static final int gapAfterIcon = 4;  // equivalent to DefaultTreeCellRenderer.iconTextGap
+
+    protected static Icon    iconClosed;
+    protected static Icon    iconOpen;
+    protected static Icon    iconLeaf;
+    protected static boolean fillBackground;
+    protected static boolean drawsFocusBorderAroundIcon;
+    protected static boolean drawDashedFocusIndicator;
+    protected static Color   colorBackground;
+    protected static Color   colorBackgroundSelected;
+    protected static Color   colorBackgroundDropCell;
+    protected static Color   colorBorderSelected;
+    //protected static Color   colorDropCell;
+
+    protected static Painter<JComponent> backgroundFocused;
+    protected static Painter<JComponent> backgroundSelected;
+    protected static Painter<JComponent> backgroundFocusedSelected;
+
+    public EquationTreeCellRenderer ()
+    {
+        Lay.BLtg (this, "C", label);
+        setOpaque (false);
+    }
+
+    @SuppressWarnings("unchecked")
     public static void staticUpdateUI ()
     {
         // Check colors to see if text is dark or light.
@@ -75,22 +106,28 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
             colorSelectedOverride = Color.black;
             colorSelectedKill     = Color.red;
         }
-    }
 
-    @SuppressWarnings("unchecked")
-    public void updateUI ()
-    {
-        super.updateUI ();
+        iconLeaf   = UIManager.getIcon ("Tree.leafIcon");
+        iconClosed = UIManager.getIcon ("Tree.closedIcon");
+        iconOpen   = UIManager.getIcon ("Tree.openIcon");
 
-        // The following are hacks to fix issues with Nimbus
+        fillBackground = true;
+        Object o = UIManager.get ("Tree.rendererFillBackground");
+        if (o instanceof Boolean) fillBackground = (Boolean) o;
 
-        setBackgroundSelectionColor (DefaultLookup.getColor (this, ui, "Tree.selectionBackground"));
+        drawsFocusBorderAroundIcon = UIManager.getBoolean ("Tree.drawsFocusBorderAroundIcon");  // Default should be false, so blind read is OK.
+        drawDashedFocusIndicator   = UIManager.getBoolean ("Tree.drawDashedFocusIndicator");    // ditto
+        colorBackground            = UIManager.getColor   ("Tree.textBackground");
+        colorBackgroundSelected    = UIManager.getColor   ("Tree.selectionBackground");
+        colorBackgroundDropCell    = UIManager.getColor   ("Tree.dropCellBackground");
+        colorBorderSelected        = UIManager.getColor   ("Tree.selectionBorderColor");
+        //colorDropCell              = UIManager.getColor   ("Tree.dropCellForeground");
 
         backgroundFocused         = null;
         backgroundSelected        = null;
         backgroundFocusedSelected = null;
 
-        Object o = UIManager.get ("Tree:TreeCell[Enabled+Focused].backgroundPainter");
+        o = UIManager.get ("Tree:TreeCell[Enabled+Focused].backgroundPainter");
         if (o instanceof Painter<?>) backgroundFocused = (Painter<JComponent>) o;
 
         o = UIManager.get ("Tree:TreeCell[Enabled+Selected].backgroundPainter");
@@ -100,26 +137,37 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
         if (o instanceof Painter<?>) backgroundFocusedSelected = (Painter<JComponent>) o;
     }
 
+    public void updateUI ()
+    {
+        super.updateUI ();
+
+        Insets margins = UIManager.getInsets ("Tree.rendererMargins");
+        if (margins != null) setBorder (new EmptyBorder (margins));
+    }
+
     public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
     {
-        super.getTreeCellRendererComponent (tree, value, selected, expanded, leaf, row, hasFocus);
-        if (value == null) return this;  // Sometimes we just want a basic set up of the component, even though there is nothing to show.
+        this.selected = selected;
+        this.hasFocus = hasFocus;
+
+        JTree.DropLocation dropLocation = tree.getDropLocation ();
+        isDropCell =  dropLocation != null  &&  dropLocation.getChildIndex () == -1  &&  tree.getRowForPath (dropLocation.getPath ()) == row;
+
+        applyComponentOrientation (tree.getComponentOrientation ());
+
+        // Sometimes we just want a basic set up of the component, even though there is nothing to show.
+        // This guard leaves the label with lingering icon and text, but the caller will override them.
+        if (value == null) return this;
 
         NodeBase n = (NodeBase) value;
 
-        Color fg = getForegroundFor (n, selected);
-        setForeground (fg);
+        label.setIcon (getIconFor (n, expanded, leaf));
+        label.setForeground (getForegroundFor (n, selected  ||  isDropCell));  // Currently, we don't use colorDropCell, but rather the usual foreground that indicates override state.
 
-        setIcon (getIconFor (n, expanded, leaf));
         Font baseFont = tree.getFont ();
-        setFont (n.getPlainFont (baseFont));
-        if (n.needsInitTabs ())
-        {
-            n.initTabs (getFontMetrics (n.getStyledFont (baseFont)));
-            // convertValueToText() is called first thing in super.getTreeCellRendererComponent(),
-            // but text very likely has changed, so we need to call it again here.
-            setText (tree.convertValueToText (value, selected, expanded, leaf, row, hasFocus));
-        }
+        label.setFont (n.getPlainFont (baseFont));
+        if (n.needsInitTabs ()) n.initTabs (getFontMetrics (n.getStyledFont (baseFont)));
+        label.setText (n.getText (expanded, false));
 
         return this;
     }
@@ -128,9 +176,9 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
     {
         Icon result = node.getIcon (expanded);  // A node knows whether it should hold other nodes or not, so don't pass leaf to it.
         if (result != null) return result;
-        if (leaf)     return getDefaultLeafIcon ();
-        if (expanded) return getDefaultOpenIcon ();
-        return               getDefaultClosedIcon ();
+        if (leaf)     return iconLeaf;
+        if (expanded) return iconOpen;
+        return               iconClosed;
     }
 
     public static Color getForegroundFor (NodeBase node, boolean selected)
@@ -145,39 +193,43 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
 
     public int getIconWidth ()
     {
-        Icon icon = getIcon ();
+        Icon icon = label.getIcon ();
         if (icon == null) return 0;
         return icon.getIconWidth ();
     }
 
     /**
-        Does the same job as DefaultCellTreeRenderer.getLabelStart(), except that the Java library
-        designer, in their infinite wisdom, made that method private. Go figure.
-        There is one small difference: the number returned by this function is the
-        actual start pixel, rather than 1 less.
+        Does the same job as DefaultCellTreeRenderer.getLabelStart(), except that the
+        number returned by this function is the actual start pixel, rather than 1 less.
     **/
     public int getTextOffset ()
     {
-        Icon icon = getIcon ();
+        Icon icon = label.getIcon ();
         if (icon == null) return 0;
-        return icon.getIconWidth () + getIconTextGap ();
+        return icon.getIconWidth () + gapAfterIcon;
     }
 
     public Dimension getPreferredSize ()
     {
         // Hack to force new cells to full height, even though they contain no text.
-        boolean empty = getText ().isEmpty ();
-        if (empty) setText ("M");
+        boolean empty = label.getText ().isEmpty ();
+        if (empty) label.setText ("M");
         Dimension result = super.getPreferredSize ();
-        if (empty) setText ("");
+        if (empty) label.setText ("");
+
+        result.width += 3;  // per DefaultTreeCellEditor
         return result;
     }
 
+    /**
+        Paint selection background and focus border.
+        The actual contents of the cell are painted by JLabel when it is called by our superclass (JPanel).
+    **/
     public void paint (Graphics g)
     {
         if (nontree  &&  backgroundFocusedSelected != null)
         {
-            Graphics2D g2 = (Graphics2D) g.create ();
+            Graphics2D g2 = (Graphics2D) g;  // Don't create/dispose Graphics, because the painters shouldn't modify g much.
             if (hasFocus)
             {
                 if (selected) backgroundFocusedSelected.paint (g2, this, getWidth (), getHeight ());
@@ -187,8 +239,54 @@ public class EquationTreeCellRenderer extends DefaultTreeCellRenderer
             {
                 backgroundSelected.paint (g2, this, getWidth (), getHeight ());
             }
-            g2.dispose ();
         }
+
+        Color bColor;
+        if (isDropCell)
+        {
+            bColor = colorBackgroundDropCell;
+            if (bColor == null) bColor = colorBackgroundSelected;
+        }
+        else if (selected)
+        {
+            bColor = colorBackgroundSelected;
+        }
+        else
+        {
+            bColor = colorBackground;
+            if (bColor == null) bColor = label.getBackground ();
+        }
+
+        int imageOffset = getTextOffset () - 1;
+        boolean isLeftToRight = getComponentOrientation ().isLeftToRight ();
+        int h = getHeight ();
+
+        if (bColor != null  &&  fillBackground)
+        {
+            int x = isLeftToRight ? imageOffset : 0;
+            int w = getWidth () - imageOffset;
+            g.setColor (bColor);
+            g.fillRect (x, 0, w, h);
+        }
+
+        if (hasFocus)
+        {
+            if (drawsFocusBorderAroundIcon) imageOffset = 0;
+            int x = isLeftToRight ? imageOffset : 0;
+            int w = getWidth () - imageOffset;
+
+            if (colorBorderSelected != null  &&  (selected  ||  ! drawDashedFocusIndicator))
+            {
+                g.setColor (colorBorderSelected);
+                g.drawRect (x, 0, w - 1, h - 1);
+            }
+            if (drawDashedFocusIndicator  &&  bColor != null)
+            {
+                g.setColor (new Color (~bColor.getRGB ()));
+                BasicGraphicsUtils.drawDashedRect (g, x, 0, w, h);
+            }
+        }
+
         super.paint (g);
     }
 }
