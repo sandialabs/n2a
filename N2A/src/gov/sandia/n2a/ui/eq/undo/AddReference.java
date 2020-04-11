@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import java.awt.FontMetrics;
 import java.util.List;
 
 import javax.swing.tree.TreeNode;
@@ -90,7 +89,6 @@ public class AddReference extends UndoableView
 
         PanelEquationTree pet = parent.getTree ();
         FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
-        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
 
         boolean containerIsVisible = true;
         TreeNode[] createdPath = createdNode.getPath ();
@@ -118,7 +116,7 @@ public class AddReference extends UndoableView
         {
             if (container.visible (FilteredTreeModel.filterLevel))  // We are always visible, but our parent could disappear.
             {
-                createdNode.updateColumnWidths (fm);
+                createdNode.setUserObject ();
             }
             else
             {
@@ -126,11 +124,7 @@ public class AddReference extends UndoableView
             }
         }
 
-        if (containerIsVisible)
-        {
-            container.updateTabStops (fm);
-            container.allNodesChanged (model);
-        }
+        if (containerIsVisible) container.invalidateColumns (model);
         pet.updateVisibility (createdPath, index);
         pet.animate ();
     }
@@ -169,20 +163,11 @@ public class AddReference extends UndoableView
         MPart createdPart = (MPart) block.set (value, name);
         if (! alreadyExists) createdNode = new NodeReference (createdPart);
 
-        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
-        if (container.getChildCount () > 0)
-        {
-            NodeBase firstChild = (NodeBase) container.getChildAt (0);
-            if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
-        }
-
         if (value == null) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
-        createdNode.updateColumnWidths (fm);  // preempt initialization; uses actual name, not user value
         if (! alreadyExists) model.insertNodeIntoUnfiltered (createdNode, container, index);
         if (value != null)  // create was merged with change name/value
         {
-            container.updateTabStops (fm);
-            container.allNodesChanged (model);
+            container.invalidateColumns (model);
             TreeNode[] createdPath = createdNode.getPath ();
             pet.updateOrder (createdPath);
             pet.updateVisibility (createdPath);

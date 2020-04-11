@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import java.awt.FontMetrics;
 import java.util.List;
 
 import javax.swing.undo.CannotRedoException;
@@ -72,7 +71,6 @@ public class ChangeEquation extends UndoableView
 
         PanelEquationTree pet = parent.getTree ();
         FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
-        FontMetrics fm = nodeBefore.getFontMetrics (pet.tree);
 
         NodeBase nodeAfter;
         if (nameBefore.equals (nameAfter))
@@ -115,24 +113,16 @@ public class ChangeEquation extends UndoableView
             }
         }
 
-        if (parent.getChildCount () > 0)
-        {
-            NodeBase firstChild = (NodeBase) parent.getChildAt (0);
-            if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
-        }
-
         if (! parent.source.get ().equals (combinerAfter))
         {
             parent.source.set (combinerAfter);
-            parent.updateColumnWidths (fm);
+            parent.setUserObject ();
             NodeBase grandparent = (NodeBase) parent.getParent ();
-            grandparent.updateTabStops (fm);
-            grandparent.allNodesChanged (model);
+            grandparent.invalidateColumns (model);
         }
 
-        nodeAfter.updateColumnWidths (fm);
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
+        nodeAfter.setUserObject ();
+        parent.invalidateColumns (model);
         pet.updateVisibility (nodeAfter.getPath ());
         pet.animate ();
     }

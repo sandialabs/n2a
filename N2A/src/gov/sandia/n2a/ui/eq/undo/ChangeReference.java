@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import java.awt.FontMetrics;
 import java.util.List;
 
 import javax.swing.tree.TreeNode;
@@ -61,7 +60,6 @@ public class ChangeReference extends UndoableView
 
         PanelEquationTree pet = parent.getTree ();
         FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
-        FontMetrics fm = nodeBefore.getFontMetrics (pet.tree);
 
         NodeBase nodeAfter;
         if (nameBefore.equals (nameAfter))
@@ -104,9 +102,8 @@ public class ChangeReference extends UndoableView
             }
         }
 
-        nodeAfter.updateColumnWidths (fm);
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
+        nodeAfter.setUserObject ();
+        parent.invalidateColumns (model);
 
         TreeNode[] nodePath = nodeAfter.getPath ();
         pet.updateOrder (nodePath);

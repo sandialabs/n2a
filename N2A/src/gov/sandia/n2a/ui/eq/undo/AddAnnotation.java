@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -252,16 +251,7 @@ public class AddAnnotation extends UndoableView
         {
             // The given name should be unique, so don't bother checking for an existing node.
             createdNode = new NodeAnnotation (createdPart);
-
-            FontMetrics fm = createdNode.getFontMetrics (pet.tree);
-            if (container.getChildCount () > 0)
-            {
-                NodeBase firstChild = (NodeBase) container.getChildAt (0);
-                if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
-            }
-
             createdNode.setUserObject ("");  // For edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
-            createdNode.updateColumnWidths (fm);  // preempt initialization; uses actual name, not user value
             model.insertNodeIntoUnfiltered (createdNode, container, index);
         }
         else  // create was merged with change name/value

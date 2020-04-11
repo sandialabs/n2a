@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -84,7 +83,6 @@ public class AddVariable extends UndoableView
 
         PanelEquationTree pet = parent.getTree ();
         FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
-        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -108,7 +106,6 @@ public class AddVariable extends UndoableView
             createdNode.build ();
             createdNode.findConnections ();
             createdNode.filter (FilteredTreeModel.filterLevel);
-            createdNode.updateColumnWidths (fm);
             if (parent.graph != null)
             {
                 if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
@@ -116,8 +113,7 @@ public class AddVariable extends UndoableView
                 if ((createdNode.isBinding  ||  wasBinding)  &&  mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
         }
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
+        parent.invalidateColumns (model);
 
         pet.updateOrder (createdPath);
         pet.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
@@ -151,9 +147,6 @@ public class AddVariable extends UndoableView
         boolean wasBinding =  alreadyExists  &&  createdNode.isBinding;
         if (! alreadyExists) createdNode = new NodeVariable (createdPart);
         if (nameIsGenerated) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
-
-        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
-        createdNode.updateColumnWidths (fm);  // preempt initialization
         if (! alreadyExists) model.insertNodeIntoUnfiltered (createdNode, parent, index);
 
         TreeNode[] createdPath = createdNode.getPath ();
@@ -163,9 +156,7 @@ public class AddVariable extends UndoableView
             createdNode.findConnections ();
             createdNode.filter (FilteredTreeModel.filterLevel);
             pet.updateOrder (createdPath);
-
-            parent.updateTabStops (fm);
-            parent.allNodesChanged (model);
+            parent.invalidateColumns (model);
 
             if (parent.graph != null)
             {

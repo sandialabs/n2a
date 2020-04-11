@@ -30,12 +30,12 @@ import javax.swing.tree.TreePath;
 public class NodeInherit extends NodeBase
 {
     protected static ImageIcon icon = ImageUtil.getImage ("inherit.png");
-    protected List<Integer> columnWidths;
-    protected boolean       showID;
+    protected        boolean   showID;
 
     public NodeInherit (MPart source)
     {
         this.source = source;
+        setUserObject ();
 
         // Check if all IDs match
         String value = source.get ();
@@ -60,10 +60,6 @@ public class NodeInherit extends NodeBase
                 }
             }
         }
-
-        String result = source.key () + "=" + value;
-        if (showID) result = result + " (" + IDs () + ")";
-        setUserObject (result);
     }
 
     public String IDs ()
@@ -93,49 +89,24 @@ public class NodeInherit extends NodeBase
     }
 
     @Override
-    public String getText (boolean expanded, boolean editing)
+    public List<String> getColumns (boolean expanded)
     {
-        String result = toString ();
-        if (editing  &&  ! result.isEmpty ()) return source.key () + "=" + source.get ();
+        List<String> result = new ArrayList<String> (3);
+        result.add (source.key ());
+        result.add ("=");
+        String value = source.get ();
+        if (showID) value = value + " (" + IDs () + ")";
+        result.add (value);
         return result;
     }
 
     @Override
-    public boolean needsInitTabs ()
+    public List<Integer> getColumnWidths (FontMetrics fm)
     {
-        return columnWidths == null;
-    }
-
-    @Override
-    public void updateColumnWidths (FontMetrics fm)
-    {
-        if (columnWidths == null)
-        {
-            columnWidths = new ArrayList<Integer> (2);
-            columnWidths.add (0);
-            columnWidths.add (0);
-        }
-        columnWidths.set (0, fm.stringWidth (source.key () + " "));
-        columnWidths.set (1, fm.stringWidth ("= "));
-    }
-
-    @Override
-    public List<Integer> getColumnWidths ()
-    {
-        return columnWidths;
-    }
-
-    @Override
-    public void applyTabStops (List<Integer> tabs, FontMetrics fm)
-    {
-        String result = source.key ();
-
-        result = pad (result, tabs.get (0), fm) + "=";
-        result = pad (result, tabs.get (1), fm) + source.get ();
-
-        if (showID) result = result + " (" + IDs () + ")";
-
-        setUserObject (result);
+        List<Integer> result = new ArrayList<Integer> (2);
+        result.add (fm.stringWidth (source.key () + " "));
+        result.add (fm.stringWidth ("= "));
+        return result;
     }
 
     @Override

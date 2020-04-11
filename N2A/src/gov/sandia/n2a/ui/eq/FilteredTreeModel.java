@@ -220,5 +220,4 @@ public class FilteredTreeModel extends DefaultTreeModel
             fireTreeNodesChanged (this, getPathToRoot (node), null, null);
         }
     }
-
 }

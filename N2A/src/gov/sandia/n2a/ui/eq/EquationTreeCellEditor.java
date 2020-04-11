@@ -307,7 +307,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         offset          = renderer.getTextOffset ();
         Font   baseFont = tree.getFont ();
         Font   font     = editingNode.getStyledFont (baseFont);
-        String text     = editingNode.getText (expanded, true);
+        String text     = editingNode.toString ();  // fetch user object
 
         FontMetrics fm = tree.getFontMetrics (font);
         int textWidth  = fm.stringWidth (text);
@@ -429,31 +429,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         // We desire in this case that escape cause the new node to evaporate.
         Object o = node.getUserObject ();
         if (! (o instanceof String)) return;
-
-        if (((String) o).isEmpty ())
-        {
-            node.delete (editingTree, true);
-        }
-        else  // The text has been restored to the original value set in node's user object just before edit.
-        {
-            // Visual representation has formatting that is removed for editing. Need to restore.
-            GraphNode gn = null;
-            if (node instanceof NodePart) gn = ((NodePart) node).graph;
-            if (gn != null)
-            {
-                gn.updateTitle ();
-            }
-            else
-            {
-                NodeBase parent = (NodeBase) node.getParent ();
-                if (parent != null)
-                {
-                    // Restore column alignment
-                    parent.updateTabStops (node.getFontMetrics (editingTree));
-                    parent.allNodesChanged ((FilteredTreeModel) editingTree.getModel ());
-                }
-            }
-        }
+        if (((String) o).isEmpty ()) node.delete (editingTree, true);
     }
 
     public void valueChanged (TreeSelectionEvent e)

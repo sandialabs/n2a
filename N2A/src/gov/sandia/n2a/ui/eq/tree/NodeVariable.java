@@ -47,8 +47,7 @@ public class NodeVariable extends NodeContainer
     protected static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
     protected static ImageIcon iconWatch    = ImageUtil.getImage ("watch.png");  // gets modified in static section below
 
-    public    boolean       isBinding;
-    protected List<Integer> columnWidths;
+    public boolean isBinding;
 
     static
     {
@@ -82,6 +81,7 @@ public class NodeVariable extends NodeContainer
     @Override
     public void build ()
     {
+        setUserObject ();
         removeAllChildren ();
 
         // While building the equation list, we also enforce the one-line rule.
@@ -226,19 +226,6 @@ public class NodeVariable extends NodeContainer
     }
 
     @Override
-    public String getText (boolean expanded, boolean editing)
-    {
-        String result = toString ();
-        if (result.isEmpty ()) return result;  // Allow user object to be "" for new nodes.
-        if (editing) return source.key () + "=" + getValue ();  // We're about to go into edit, so remove tabs.
-        if (! expanded  &&  children != null)  // show special mark when multi-line equation is collapsed
-        {
-            for (Object o : children) if (o instanceof NodeEquation) return result + "🡰";
-        }
-        return result;
-    }
-
-    @Override
     public int getForegroundColor ()
     {
         if (source.get ().startsWith ("$kill")) return KILL;
@@ -246,48 +233,48 @@ public class NodeVariable extends NodeContainer
     }
 
     @Override
-    public void invalidateTabs ()
+    public List<String> getColumns (boolean expanded)
     {
-        columnWidths = null;
-    }
+        List<String> result = new ArrayList<String> (3);
+        result.add (source.key ());
+        Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
+        result.add ("=" + pieces.combiner);
 
-    @Override
-    public boolean needsInitTabs ()
-    {
-        return columnWidths == null;
-    }
-
-    @Override
-    public void updateColumnWidths (FontMetrics fm)
-    {
-        if (columnWidths == null)
+        boolean hasEquations = false;
+        if (! expanded  &&  children != null)
         {
-            columnWidths = new ArrayList<Integer> (2);
-            columnWidths.add (0);
-            columnWidths.add (0);
+            for (Object o : children)
+            {
+                if (o instanceof NodeEquation)
+                {
+                    hasEquations = true;
+                    break;
+                }
+            }
         }
-        columnWidths.set (0, fm.stringWidth (source.key () + " "));
-        Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
-        columnWidths.set (1, fm.stringWidth ("=" + pieces.combiner + " "));
+
+        if (hasEquations)  // show special mark when multi-line equation is collapsed
+        {
+            result.add ("🡰");  // TODO: handle case where arrow is not in font
+        }
+        else
+        {
+            String expression = pieces.expression;
+            if (! pieces.condition.isEmpty ()) expression += " @ " + pieces.condition;
+            result.add (expression);
+        }
+
+        return result;
     }
 
     @Override
-    public List<Integer> getColumnWidths ()
+    public List<Integer> getColumnWidths (FontMetrics fm)
     {
-        return columnWidths;
-    }
-
-    @Override
-    public void applyTabStops (List<Integer> tabs, FontMetrics fm)
-    {
-        String result = source.key ();
+        List<Integer> result = new ArrayList<Integer> (2);
+        result.add (fm.stringWidth (source.key () + " "));
         Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
-
-        result = pad (result, tabs.get (0), fm) + "=" + pieces.combiner;
-        result = pad (result, tabs.get (1), fm) + pieces.expression;
-        if (! pieces.condition.isEmpty ()) result = result + " @ " + pieces.condition;
-
-        setUserObject (result);
+        result.add (fm.stringWidth ("=" + pieces.combiner + " "));
+        return result;
     }
 
     @Override
@@ -503,11 +490,10 @@ public class NodeVariable extends NodeContainer
         }
 
         // If there's nothing to do, then repaint the node and quit.
-        FontMetrics fm = getFontMetrics (tree);
         if (nameBefore.equals (nameAfter)  &&  valueBefore.equals (valueAfter))
         {
-            parent.updateTabStops (fm);
-            parent.allNodesChanged (model);
+            setUserObject ();
+            model.nodeChanged (this);
             return;
         }
 
@@ -548,8 +534,7 @@ public class NodeVariable extends NodeContainer
                         Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
                         um.add (new ChangeEquation (this, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                     }
-                    parent.updateTabStops (fm);
-                    parent.allNodesChanged (model);
+                    parent.invalidateColumns (model);
                     return;
                 }
             }

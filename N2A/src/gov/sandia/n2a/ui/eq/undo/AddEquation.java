@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import java.awt.FontMetrics;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.TreeSet;
@@ -111,7 +110,6 @@ public class AddEquation extends UndoableView
 
         PanelEquationTree pet = parent.getTree ();
         FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
-        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -156,20 +154,17 @@ public class AddEquation extends UndoableView
                 model.removeNodeFromParent (lastEquation);
             }
         }
-        else  // Just exposed an overridden value, so update display.
+        else  // Just exposed an overridden value, so update.
         {
-            createdNode.updateColumnWidths (fm);
+            createdNode.setUserObject ();
         }
 
         if (parentChanged)  // Update tabs among this variable's siblings
         {
-            parent.updateColumnWidths (fm);
             NodeBase grandparent = (NodeBase) parent.getParent ();
-            grandparent.updateTabStops (fm);
-            grandparent.allNodesChanged (model);
+            grandparent.invalidateColumns (model);
         }
-        parent.updateTabStops (fm);
-        parent.allNodesChanged (model);
+        parent.invalidateColumns (model);
         pet.updateOrder (createdPath);
         pet.updateVisibility (createdPath, index);
         pet.animate ();
@@ -213,27 +208,16 @@ public class AddEquation extends UndoableView
         boolean alreadyExists = createdNode != null;
         if (! alreadyExists) createdNode = new NodeEquation (createdPart);
 
-        FontMetrics fm = createdNode.getFontMetrics (pet.tree);
-        if (parent.getChildCount () > 0)
-        {
-            NodeBase firstChild = (NodeBase) parent.getChildAt (0);
-            if (firstChild.needsInitTabs ()) firstChild.initTabs (fm);
-        }
-
         if (value == null) createdNode.setUserObject ("");
-        createdNode.updateColumnWidths (fm);  // preempt initialization
         if (! alreadyExists) model.insertNodeIntoUnfiltered (createdNode, parent, index);
         if (parentChanged)
         {
-            parent.updateColumnWidths (fm);
             NodeBase grandparent = (NodeBase) parent.getParent ();
-            grandparent.updateTabStops (fm);
-            grandparent.allNodesChanged (model);
+            grandparent.invalidateColumns (model);
         }
         if (value != null)  // create was merged with change name/value
         {
-            parent.updateTabStops (fm);
-            parent.allNodesChanged (model);
+            parent.invalidateColumns (model);
             pet.updateVisibility (createdNode.getPath ());
             pet.animate ();
         }

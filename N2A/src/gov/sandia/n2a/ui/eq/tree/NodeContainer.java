@@ -1,27 +1,35 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
 
+import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+
 @SuppressWarnings("serial")
 public class NodeContainer extends NodeBase
 {
-    protected List<Integer> filtered;
+    protected List<Integer>       filtered;
+    protected List<List<Integer>> columnGroups;
+    protected boolean             columnsValid;
 
     public void build ()
     {
     }
 
+    // Filtering -------------------------------------------------------------
+
     @Override
     public void filter (int filterLevel)
     {
+        invalidateColumns (null);  // force columns to be updated for new subset of children
         if (children == null)
         {
             filtered = null;
@@ -35,7 +43,6 @@ public class NodeContainer extends NodeBase
         {
             NodeBase c = (NodeBase) o;
             c.filter (filterLevel);
-            c.invalidateTabs ();  // force columns to be updated for new subset of children
             if (c.visible (filterLevel)) filtered.add (childIndex);
             childIndex++;  // always increment
         }
@@ -117,5 +124,55 @@ public class NodeContainer extends NodeBase
                 }
             }
         }
+    }
+
+    // Column alignment ------------------------------------------------------
+
+    @Override
+    public List<Integer> getMaxColumnWidths (int group, FontMetrics fm)
+    {
+        if (columnsValid)
+        {
+            if (group < columnGroups.size ()) return columnGroups.get (group);
+            return null;
+        }
+        if (children == null) return null;
+
+        List<Integer> indices = filtered;
+        if (indices == null)
+        {
+            int count = children.size ();
+            indices = new ArrayList<Integer> (count);
+            for (int i = 0; i < count; i++) indices.add (i);
+        }
+
+        columnGroups = new ArrayList<List<Integer>> ();
+        for (int index : indices)
+        {
+            NodeBase n = (NodeBase) children.get (index);
+            List<Integer> columnWidths = n.getColumnWidths (fm);
+            if (columnWidths == null) continue;
+
+            int g = n.getColumnGroup ();
+            while (columnGroups.size () <= g) columnGroups.add (new ArrayList<Integer> ());
+            List<Integer> maxes = columnGroups.get (g);
+
+            int i = 0;
+            int columns = columnWidths.size ();
+            int overlap = Math.min (columns, maxes.size ());
+            for (; i < overlap; i++) maxes.set (i, Math.max (columnWidths.get (i), maxes.get (i)));
+            for (; i < columns; i++) maxes.add (columnWidths.get (i));
+        }
+
+        columnsValid = true;
+        if (group < columnGroups.size ()) return columnGroups.get (group);
+        return null;
+    }
+
+    @Override
+    public void invalidateColumns (FilteredTreeModel model)
+    {
+        columnsValid = false;
+        super.invalidateColumns (model);
     }
 }

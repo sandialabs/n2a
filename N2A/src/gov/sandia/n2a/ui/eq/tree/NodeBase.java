@@ -10,12 +10,10 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 
 import java.awt.Font;
 import java.awt.FontMetrics;
-import java.awt.Insets;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -23,7 +21,6 @@ import java.util.List;
 
 import javax.swing.Icon;
 import javax.swing.JTree;
-import javax.swing.JViewport;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreeNode;
 
@@ -36,6 +33,11 @@ public class NodeBase extends DefaultMutableTreeNode
     public static final int OVERRIDE = 1;
     public static final int KILL     = 2;
 
+
+    public void setUserObject ()
+    {
+        setUserObject (source.key () + "=" + source.get ());
+    }
 
     // Filtering -------------------------------------------------------------
 
@@ -61,7 +63,6 @@ public class NodeBase extends DefaultMutableTreeNode
         if (removedIndex == -1) return;  // child is absent or already not visible, so nothing more to do
 
         removeFiltered (removedIndex, -1, false);
-        for (Object c : children) ((NodeBase) c).invalidateTabs ();
 
         if (model != null)
         {
@@ -71,6 +72,8 @@ public class NodeBase extends DefaultMutableTreeNode
             removedNodes[0] = child;
             model.nodesWereRemoved (this, removedIndices, removedNodes);
         }
+
+        invalidateColumns (model);
     }
 
     public void unhide (NodeBase child, FilteredTreeModel model)
@@ -92,7 +95,6 @@ public class NodeBase extends DefaultMutableTreeNode
 
         insertFiltered (filteredIndex, childIndex, false);
         child.filter (FilteredTreeModel.filterLevel);
-        for (Object c : children) ((NodeBase) c).invalidateTabs ();
 
         if (model != null)
         {
@@ -100,6 +102,8 @@ public class NodeBase extends DefaultMutableTreeNode
             filteredIndices[0] = filteredIndex;
             model.nodesWereInserted (this, filteredIndices);
         }
+
+        invalidateColumns (model);
     }
 
     /**
@@ -182,56 +186,6 @@ public class NodeBase extends DefaultMutableTreeNode
         return null;
     }
 
-    /**
-        Indicates that value is too long to display in a single-line text field.
-        In this case, calling getText() with expanded set to true will return full text.
-    **/
-    public boolean hasTruncatedText ()
-    {
-        return false;
-    }
-
-    /**
-        Utility function for deciding when to truncate text field.
-        @return Usable width of tree's viewport. This is calculated based on possible viewport
-        rather than actual viewport, because the viewport may get resized to fit the resulting field.
-    **/
-    public int availableWidth ()
-    {
-        int width = 800;
-        PanelEquations pe = PanelModel.instance.panelEquations;
-        PanelEquationTree pet = getTree ();
-        if (pe.view == PanelEquations.NODE)
-        {
-            JViewport vp = pe.panelEquationGraph.getViewport ();
-            if (pet.root == pe.part)  // parent node
-            {
-                Insets insets = pe.panelParent.getInsets ();
-                width = vp.getExtentSize ().width / 2 - insets.left - insets.right;
-            }
-            else if (pet.root.graph != null)  // child node
-            {
-                Insets insets = pet.root.graph.getInsets ();
-                width = vp.getExtentSize ().width - insets.left - insets.right;
-            }
-        }
-        else  // property panel
-        {
-            // Neither the tree nor the viewport should have insets.
-            width = pet.getViewport ().getWidth ();
-        }
-        return Math.max (100, width);  // never less than 100px
-    }
-
-    /**
-        @param editing When true, the returned text should be suitable for editing.
-        Tabs should be removed for ease of navigation.
-    **/
-    public String getText (boolean expanded, boolean editing)
-    {
-        return toString ();  // parent class uses the "user object", which is the string we set elsewhere
-    }
-
     public int getForegroundColor ()
     {
         if (source.isFromTopDocument ()) return OVERRIDE;
@@ -255,50 +209,84 @@ public class NodeBase extends DefaultMutableTreeNode
         return base;
     }
 
-    // Column alignment ------------------------------------------------------
-    //   TODO: The system for retrieving fonts and setting tab stops is broken.
-    //   Better approach is to retrieve the font for each individual node.
-    //   Also, better to render using JLabel configured to each column, rather than creating filler with spaces.
-
-    /**
-        Combines column width information from children to generate a set of tab stops that all children should use when displaying text.
-    **/
-    public void updateTabStops (FontMetrics fm)
+    public boolean allowTruncate ()
     {
-        if (children == null) return;
-        List<Integer> filtered = getFiltered ();
-        if (filtered == null)
-        {
-            int count = children.size ();
-            filtered = new ArrayList<Integer> (count);
-            for (int i = 0; i < count; i++) filtered.add (i);
-        }
-
-        ArrayList<Integer> tabs = new ArrayList<Integer> ();
-        for (int index : filtered)
-        {
-            List<Integer> columnWidths = ((NodeBase) children.get (index)).getColumnWidths ();
-            if (columnWidths == null) continue;
-
-            int i = 0;
-            int columns = columnWidths.size ();
-            int overlap = Math.min (columns, tabs.size ());
-            for (; i < overlap; i++) tabs.set (i, Math.max (columnWidths.get (i), tabs.get (i)));
-            for (; i < columns; i++) tabs.add (columnWidths.get (i));
-        }
-        int count = tabs.size ();
-        if (count == 0) return;
-
-        int sum = 0;
-        for (int i = 0; i < count; i++) tabs.set (i, sum += tabs.get (i));
-
-        for (int index : filtered) ((NodeBase) children.get (index)).applyTabStops (tabs, fm);
+        return false;
     }
 
     /**
-        Call DefaultModel.nodesChanged for all children of the current node.
-        Normally done right after a call to updateTabStops(). However, this
-        function can't be combined with that one, because it breaks initialization.
+        Used by renderer to inform this node that part of its text was cut off last time it was rendered.
+    **/
+    public void wasTruncated ()
+    {
+    }
+
+    /**
+        Indicates that tree should allow edit on this node even if the tree is locked,
+        so that full contents can be viewed. If the tree is locked, the editor will be
+        set to read-only mode so no harm will be done.
+    **/
+    public boolean showMultiLine ()
+    {
+        return false;
+    }
+
+    public List<String> getColumns (boolean expanded)
+    {
+        List<String> result = new ArrayList<String> ();
+        result.add (toString ());
+        return result;
+    }
+
+    // Column alignment ------------------------------------------------------
+
+    /**
+        Indicates which set of column widths this node wants to use.
+        A container may have more than one set of column widths, to support different node categories.
+        The main example is metadata versus equations under a given variable. These are mixed together,
+        but look better if they have their own alignments.
+    **/
+    public int getColumnGroup ()
+    {
+        return 0;
+    }
+
+    /**
+        Provides container with the widths of various components of the displayed text.
+        For example, an equation could have up to 4 components: variable, assignment, value, condition.
+        @param fm For measuring pixel width of strings.
+    **/
+    public List<Integer> getColumnWidths (FontMetrics fm)
+    {
+        return null;
+    }
+
+    /**
+        Returns a list of pixel widths that all children of this container should use when displaying text.
+        The value is calculated by calling getColumnWidths() on each child and collating the results.
+        The list of widths may be cached by this container until the next call to invalidateTabs().
+        If this is not a container, or has only one column, then the result may be null.
+        @param group Specifies the column group. See getColumnGroup()
+        @param fm In case this function needs to call getColumnWidths() on children.
+    **/
+    public List<Integer> getMaxColumnWidths (int group, FontMetrics fm)
+    {
+        return null;
+    }
+
+    /**
+        Marks this container as needing to regenerate its tab stops.
+        One noteworthy use of this function is when the children of this container get filtered.
+        In that case, the tab stops may change because set of column widths may change.
+        @param model If null, then caller takes responsibility for notifying model of change.
+    **/
+    public void invalidateColumns (FilteredTreeModel model)
+    {
+        if (model != null) allNodesChanged (model);
+    }
+
+    /**
+        Notifies the tree model that all our children have changed, so that they will be redrawn by the tree.
     **/
     public void allNodesChanged (FilteredTreeModel model)
     {
@@ -309,96 +297,6 @@ public class NodeBase extends DefaultMutableTreeNode
         int[] childIndices = new int[count];
         for (int i = 0; i < count; i++) childIndices[i] = i;
         model.nodesChanged (this, childIndices);
-    }
-
-    /**
-        Set this node that it will return true on a call to needsInitTabs().
-        This only affects nodes which actually do tab initialization.
-        Called by filter() on child nodes so that they will recompute column
-        alignment in the context of a filtered set of siblings.
-    **/
-    public void invalidateTabs ()
-    {
-    }
-
-    /**
-        Check if this node uses tab stops, and if so, whether they need to be initialized.
-        This is called every time the node is about to be rendered, and ideally should answer true only once.
-        If the answer is true, then initTabs() is called with a properly contextualized FontMetrics.
-    **/
-    public boolean needsInitTabs ()
-    {
-        return false;
-    }
-
-    /**
-        Do the full process of setting up tab stops on all the siblings of this node (including itself).
-    **/
-    public void initTabs (FontMetrics fm)
-    {
-        NodeBase parent = (NodeBase) getParent ();
-        if (parent == null) return;
-        for (Object c : parent.children) ((NodeBase) c).updateColumnWidths (fm);
-        parent.updateTabStops (fm);
-    }
-
-    /**
-        Determines the column widths that will be returned by getColumnWidths().
-        Presumably these are cached in some form, as the getColumnWidth() call may occur multiple times without an intervening update.
-    **/
-    public void updateColumnWidths (FontMetrics fm)
-    {
-    }
-
-    /**
-        Provides container with the widths of various components of the displayed text.
-        For example, an equation could have up to 4 components: variable, assignment, value, condition.
-    **/
-    public List<Integer> getColumnWidths ()
-    {
-        return null;
-    }
-
-    /**
-        Prepare to efficiently respond to getText() with a modified value that produces column alignment.
-        This might involve inserting space or tab characters into a cached version of the text.
-        The tabbed version of the text may be stored as the user object, because getText() will be
-        called to obtain the text for editing.
-        @param tabs The first column always starts at 0, so 0 is not included in the list of tab stops.
-    **/
-    public void applyTabStops (List<Integer> tabs, FontMetrics fm)
-    {
-    }
-
-    public static String pad (String result, int offset, FontMetrics fm)
-    {
-        // Full-width spaces
-        int length = fm.stringWidth (result);
-        while (length < offset)
-        {
-            String next = result + " ";
-            int nextLength = fm.stringWidth (next);
-            if (nextLength > offset) break;
-            result = next;
-            length = nextLength;
-        }
-        // Hairline spaces
-        while (length < offset)
-        {
-            String next = result + "\u200A";
-            int nextLength = fm.stringWidth (next);
-            if (nextLength > offset) break;
-            result = next;
-            length = nextLength;
-        }
-        return result;
-    }
-
-    public FontMetrics getFontMetrics (JTree tree)
-    {
-        Font baseFont = tree.getFont ();
-        Font f = getPlainFont (baseFont);
-        return tree.getFontMetrics (f);
     }
 
     // Copy/Drag -------------------------------------------------------------

@@ -76,6 +76,7 @@ public class NodePart extends NodeContainer
         this.source = source;
     }
 
+    @Override
     public void setUserObject ()
     {
         setUserObject (source.key ());  // This won't actually be used in editing, but it does prevent editingCancelled() from getting a null object.
@@ -207,13 +208,14 @@ public class NodePart extends NodeContainer
     }
 
     @Override
-    public String getText (boolean expanded, boolean editing)
+    public List<String> getColumns (boolean expanded)
     {
-        String key = toString ();  // This allows us to set editing text to "" for new objects, while showing key for old objects.
-        if (editing) return key;
-        if (expanded  ||  inheritName.isEmpty ()) return "<html><b>" + key + "</b></html>";
-        if (graph == null) return "<html><b>" + key + "</b>  <i>(" + inheritName + ")</i></html>";
-        return "<html><b>" + key + "</b><br/><i>" + inheritName + "</i></html>";
+        List<String> result = new ArrayList<String> (1);
+        String key = source.key ();
+        if (expanded  ||  inheritName.isEmpty ()) result.add ("<html><b>" + key + "</b></html>");
+        else if (graph == null)                   result.add ("<html><b>" + key + "</b>  <i>(" + inheritName + ")</i></html>");
+        else                                      result.add ("<html><b>" + key + "</b><br/><i>" + inheritName + "</i></html>");
+        return result;
     }
 
     @Override

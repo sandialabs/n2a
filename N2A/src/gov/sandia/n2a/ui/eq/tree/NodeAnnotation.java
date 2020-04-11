@@ -23,20 +23,28 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
-import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 
 @SuppressWarnings("serial")
 public class NodeAnnotation extends NodeContainer
 {
-    public static ImageIcon     icon = ImageUtil.getImage ("edit.gif");
-    protected     List<Integer> columnWidths;
-    public        MPart         folded;
+    protected static ImageIcon icon = ImageUtil.getImage ("edit.gif");
+    public           MPart     folded;
+    protected        boolean   truncated;
 
     public NodeAnnotation (MPart source)
     {
         this.source = source;
         folded = source;
+    }
+
+    @Override
+    public void setUserObject ()
+    {
+        String key   = key ();
+        String value = folded.get ();
+        if (value.isEmpty ()) setUserObject (key);
+        else                  setUserObject (key + "=" + value);
     }
 
     @Override
@@ -91,94 +99,47 @@ public class NodeAnnotation extends NodeContainer
     }
 
     @Override
-    public boolean hasTruncatedText ()
+    public boolean allowTruncate ()
     {
-        return toString ().endsWith ("...")  &&  ! folded.get ().endsWith ("...");
+        return true;
     }
 
     @Override
-    public String getText (boolean expanded, boolean editing)
+    public void wasTruncated ()
     {
-        String result = toString ();
-        if (editing  &&  ! result.isEmpty ())  // An empty user object indicates a newly created node, which we want to edit as a blank.
-        {
-            result       = key ();
-            String value = folded.get ();
-            if (! value.isEmpty ()) result = result + "=" + value;
-        }
+        truncated = true;
+    }
+
+    @Override
+    public boolean showMultiLine ()
+    {
+        return truncated;
+    }
+
+    @Override
+    public List<String> getColumns (boolean expanded)
+    {
+        truncated = false;
+
+        List<String> result = new ArrayList<String> (2);
+        result.add (key ());
+        String value = folded.get ();
+        if (! value.isEmpty ()) result.add ("= " + value);
         return result;
     }
 
     @Override
-    public void invalidateTabs ()
+    public int getColumnGroup ()
     {
-        columnWidths = null;
+        return 1;
     }
 
     @Override
-    public boolean needsInitTabs ()
+    public List<Integer> getColumnWidths (FontMetrics fm)
     {
-        return columnWidths == null;
-    }
-
-    @Override
-    public void updateColumnWidths (FontMetrics fm)
-    {
-        TreeNode parent = getParent ();
-        boolean pure = parent instanceof NodeAnnotations  ||  parent instanceof NodeAnnotation;
-        if (columnWidths == null)
-        {
-            columnWidths = new ArrayList<Integer> (1);
-            columnWidths.add (0);
-            if (! pure) columnWidths.add (0);  // To function alongside equations
-        }
-        int width = fm.stringWidth (key () + " ");
-        if (pure) columnWidths.set (0, width);  // We are in a $metadata block, so only need the first tab stop.
-        else      columnWidths.set (1, width);  // Stash column width in higher position, so it doesn't interfere with multi-line equations under a variable.
-    }
-
-    @Override
-    public List<Integer> getColumnWidths ()
-    {
+        List<Integer> columnWidths = new ArrayList<Integer> (1);
+        columnWidths.add (fm.stringWidth (key () + " "));
         return columnWidths;
-    }
-
-    @Override
-    public void applyTabStops (List<Integer> tabs, FontMetrics fm)
-    {
-        String result = key ();
-        String value  = folded.get ();
-        if (! value.isEmpty ())
-        {
-            int offset = tabs.get (0);
-            TreeNode parent = getParent ();
-            boolean pure = parent instanceof NodeAnnotations  ||  parent instanceof NodeAnnotation;
-            if (! pure)  // not in a $metadata block, so may share tab stops with equations
-            {
-                offset = tabs.get (1) - offset;
-            }
-            int width = availableWidth () - offset;
-
-            boolean addEllipsis = false;
-            String[] pieces = value.split ("\n", 2);
-            if (pieces.length > 1)
-            {
-                value = pieces[0];
-                addEllipsis = true;
-            }
-            int valueWidth = fm.stringWidth (value);
-            if (valueWidth > width)
-            {
-                width = Math.max (0, width - fm.getMaxAdvance () * 2);  // allow 2em for ellipsis
-                int characters = (int) Math.floor ((double) value.length () * width / valueWidth);  // A crude estimate. Just take a ratio of the number of characters, rather then measuring them exactly.
-                value = value.substring (0, characters);
-                addEllipsis = true;
-            }
-            if (addEllipsis) value += " ...";
-
-            result = pad (result, offset, fm) + "= " + value;
-        }
-        setUserObject (result);
     }
 
     @Override
@@ -234,7 +195,6 @@ public class NodeAnnotation extends NodeContainer
         if (parts.length > 1) value = parts[1].trim ();
         else                  value = "";
 
-        NodeBase parent = (NodeBase) getParent ();
         String oldName  = key ();
         String oldValue = folded.get ();
         if (! name.equals (oldName))
@@ -272,8 +232,7 @@ public class NodeAnnotation extends NodeContainer
         if (name.equals (oldName)  &&  value.equals (oldValue))
         {
             FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-            FontMetrics fm = getFontMetrics (tree);
-            parent.updateTabStops (fm);
+            setUserObject ();
             model.nodeChanged (this);  // Our siblings should not change, because we did not really change. Just repaint in non-edit mode.
             return;
         }

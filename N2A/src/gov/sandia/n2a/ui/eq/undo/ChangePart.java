@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -262,11 +261,7 @@ public class ChangePart extends UndoableView
                 NodeBase subparent = (NodeBase) n.getParent ();
 
                 submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
-
-                FontMetrics fm = n.getFontMetrics (subtree);
-                n.updateColumnWidths (fm);
-                subparent.updateTabStops (fm);
-                subparent.allNodesChanged (submodel);
+                subparent.invalidateColumns (submodel);
                 needAnimate.add (subpet);
             }
         }

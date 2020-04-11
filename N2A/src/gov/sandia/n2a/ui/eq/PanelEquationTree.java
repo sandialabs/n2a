@@ -65,12 +65,6 @@ public class PanelEquationTree extends JScrollPane
         model = new FilteredTreeModel (root);  // member "root" is null at this point
         tree  = new JTree (model)
         {
-            public String convertValueToText (Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
-            {
-                if (value == null) return "";
-                return ((NodeBase) value).getText (expanded, false);
-            }
-
             public void startEditingAtPath (TreePath path)
             {
                 super.startEditingAtPath (path);
@@ -213,7 +207,7 @@ public class PanelEquationTree extends JScrollPane
                 TreePath path = tree.getSelectionPath ();
                 if (path == null) return;
                 NodeBase n = (NodeBase) path.getLastPathComponent ();
-                if (container.locked  &&  ! n.hasTruncatedText ()) return;
+                if (container.locked  &&  ! n.showMultiLine ()) return;
                 boolean isControlDown = (e.getModifiers () & ActionEvent.CTRL_MASK) != 0;
                 if (isControlDown  &&  ! (n instanceof NodePart)) container.editor.multiLineRequested = true;  // Also possible that multiline will be selected automatically based on content.
                 tree.setEditable (true);  // Hack to allow users to view truncated fields in locked models. Lock will be restored to correct state when the edit ends.
@@ -323,7 +317,7 @@ public class PanelEquationTree extends JScrollPane
                             }
                             else  // any other node type
                             {
-                                if (container.locked  &&  ! ((NodeBase) temp).hasTruncatedText ()) return;
+                                if (container.locked  &&  ! ((NodeBase) temp).showMultiLine ()) return;
                                 tree.setSelectionPath (path);
                                 tree.setEditable (true);
                                 tree.startEditingAtPath (path);
@@ -896,17 +890,15 @@ public class PanelEquationTree extends JScrollPane
         if (metadataNode == null) return;
 
         NodeBase a = AddAnnotation.resolve (metadataNode, "gui.order");
-        if (a != metadataNode)
+        if (a != metadataNode)  // found
         {
             MNode m = ((NodeAnnotation) a).folded;
-            if (m.key ().equals ("order")  &&  m.parent ().key ().equals ("gui"))  // This check is necessary to avoid overwriting a pre-existing node folded under "gui" (for example, gui.bounds).
+            if (m.key ().equals ("order")  &&  m.parent ().key ().equals ("gui"))  // is actually "gui.order". This check is necessary to avoid overwriting a pre-existing node folded under "gui" (for example, gui.bounds).
             {
-                m.set (order);  // Shouldn't require change to tab stops, which should already be set.
+                m.set (order);  // Value is in last column, so no need to invalidate columns.
                 if (tree != null)
                 {
-                    NodeBase ap = (NodeBase) a.getParent ();
-                    FontMetrics fm = a.getFontMetrics (tree);
-                    ap.updateTabStops (fm);  // Cause node to update it's text.
+                    a.setUserObject ();  // Cause gui.order to update it's text.
                     ((FilteredTreeModel) tree.getModel ()).nodeChanged (a);
                 }
             }

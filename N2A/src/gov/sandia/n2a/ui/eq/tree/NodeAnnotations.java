@@ -7,6 +7,8 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.Point;
+import java.util.ArrayList;
+import java.util.List;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
@@ -29,7 +31,7 @@ public class NodeAnnotations extends NodeContainer
     public NodeAnnotations (MPart source)
     {
         this.source = source;
-        setUserObject ("$metadata");
+        // This is a non-editable node, so we should never access userObject.
     }
 
     @Override
@@ -61,9 +63,11 @@ public class NodeAnnotations extends NodeContainer
     }
 
     @Override
-    public String getText (boolean expanded, boolean editing)
+    public List<String> getColumns (boolean expanded)
     {
-        return "<html><i>" + toString () + "</i></html>";
+        List<String> result = new ArrayList<String> (1);
+        result.add ("<html><i>$metadata</i></html>");
+        return result;
     }
 
     @Override

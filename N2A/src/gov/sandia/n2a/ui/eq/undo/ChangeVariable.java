@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import java.awt.FontMetrics;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -268,11 +267,7 @@ public class ChangeVariable extends UndoableView
         Set<PanelEquationTree> needAnimate = new HashSet<PanelEquationTree> ();
         if (pet != null)
         {
-            FontMetrics fm = nodeAfter.getFontMetrics (pet.tree);
-            nodeAfter.updateColumnWidths (fm);
-            parent.updateTabStops (fm);
-            parent.allNodesChanged (model);
-
+            parent.invalidateColumns (model);
             TreeNode[] nodePath = nodeAfter.getPath ();
             pet.updateOrder (nodePath);
             pet.updateVisibility (nodePath);
@@ -298,10 +293,7 @@ public class ChangeVariable extends UndoableView
 
                 submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
 
-                FontMetrics fm = n.getFontMetrics (subtree);
-                n.updateColumnWidths (fm);
-                subparent.updateTabStops (fm);
-                subparent.allNodesChanged (submodel);
+                subparent.invalidateColumns (submodel);
                 needAnimate.add (subpet);
             }
         }

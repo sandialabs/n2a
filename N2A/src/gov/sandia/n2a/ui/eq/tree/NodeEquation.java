@@ -29,11 +29,23 @@ import javax.swing.JTree;
 public class NodeEquation extends NodeBase
 {
     protected static ImageIcon icon = ImageUtil.getImage ("assign.png");
-    protected List<Integer> columnWidths;
 
     public NodeEquation (MPart source)
     {
         this.source = source;
+        setUserObject ();
+    }
+
+    @Override
+    public void setUserObject ()
+    {
+        String condition  = source.key ();
+        String expression = source.get ();
+        if (! condition.equals ("@")  ||  expression.length () == 0)  // Condition always starts with @, but might otherwise be empty, if it is the default equation. Generally, don't show the @ for the default equation, unless it has been revoked.
+        {
+            expression += "@" + condition.substring (1);
+        }
+        setUserObject (expression);
     }
 
     @Override
@@ -55,19 +67,6 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
-    public String getText (boolean expanded, boolean editing)
-    {
-        String result = toString ();
-        if (editing  &&  ! result.isEmpty ())  // An empty user object indicates a newly created node, which we want to edit as a blank.
-        {
-            result           = source.get ();
-            String condition = source.key ();
-            if (! condition.equals ("@")  ||  result.length () == 0) result = result + condition;
-        }
-        return result;
-    }
-
-    @Override
     public int getForegroundColor ()
     {
         String value = source.get ();
@@ -76,44 +75,25 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
-    public void invalidateTabs ()
+    public List<String> getColumns (boolean expanded)
     {
-        columnWidths = null;
-    }
-
-    @Override
-    public boolean needsInitTabs ()
-    {
-        return columnWidths == null;
-    }
-
-    @Override
-    public void updateColumnWidths (FontMetrics fm)
-    {
-        if (columnWidths == null)
+        List<String> result = new ArrayList<String> (2);
+        String expression = source.get ();
+        String condition  = source.key ();
+        result.add (expression);
+        if (! condition.equals ("@")  ||  expression.length () == 0)
         {
-            columnWidths = new ArrayList<Integer> (1);
-            columnWidths.add (0);
+            result.add ("@ " + condition.substring (1));
         }
-        columnWidths.set (0, fm.stringWidth (source.get () + " "));
+        return result;
     }
 
     @Override
-    public List<Integer> getColumnWidths ()
+    public List<Integer> getColumnWidths (FontMetrics fm)
     {
-        return columnWidths;
-    }
-
-    @Override
-    public void applyTabStops (List<Integer> tabs, FontMetrics fm)
-    {
-        String key    = source.key ();
-        String result = source.get ();
-        if (! key.equals ("@")  ||  result.length () == 0)  // Condition always starts with @, but might otherwise be empty, if it is the default equation. Generally, don't show the @ for the default equation, unless it has been revoked.
-        {
-            result = pad (result, tabs.get (0), fm) + "@ " + key.substring (1);
-        }
-        setUserObject (result);
+        List<Integer> result = new ArrayList<Integer> (1);
+        result.add (fm.stringWidth (source.get () + " "));
+        return result;
     }
 
     @Override
@@ -156,10 +136,9 @@ public class NodeEquation extends NodeBase
 
         if (piecesBefore.equals (piecesAfter))
         {
+            setUserObject ();
             FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-            FontMetrics fm = getFontMetrics (tree);
-            parent.updateTabStops (fm);
-            parent.allNodesChanged (model);
+            model.nodeChanged (this);
             return;
         }
 

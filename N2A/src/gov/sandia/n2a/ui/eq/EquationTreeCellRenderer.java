@@ -10,22 +10,28 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
+import java.awt.LayoutManager2;
+import java.util.ArrayList;
+import java.util.List;
 
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTree;
+import javax.swing.JViewport;
 import javax.swing.Painter;
 import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import javax.swing.plaf.basic.BasicGraphicsUtils;
 import javax.swing.tree.TreeCellRenderer;
 
-import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 /**
@@ -35,7 +41,11 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 @SuppressWarnings("serial")
 public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
 {
-    protected JLabel  label = new JLabel ();
+    protected LayoutManager2 layout;
+    protected JLabel         iconHolder = new JLabel ();
+    protected JLabel         label      = new JLabel ();             // The first text column, for convenient access.
+    protected List<JLabel>   labels     = new ArrayList<JLabel> ();  // All text columns, including the first.
+
     protected boolean selected;
     protected boolean hasFocus;
     protected boolean isDropCell;
@@ -48,8 +58,6 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
     public static Color colorSelectedInherit  = Color.blue;
     public static Color colorSelectedOverride = Color.black;
     public static Color colorSelectedKill     = Color.red;
-
-    public static final int gapAfterIcon = 4;  // equivalent to DefaultTreeCellRenderer.iconTextGap
 
     protected static Icon    iconClosed;
     protected static Icon    iconOpen;
@@ -69,8 +77,15 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
 
     public EquationTreeCellRenderer ()
     {
-        Lay.BLtg (this, "C", label);
+        layout = new BoxLayout (this, BoxLayout.X_AXIS);
+        setLayout (layout);
         setOpaque (false);
+
+        add (iconHolder);
+        add (Box.createHorizontalStrut (label.getIconTextGap ()));
+        add (label);
+
+        labels.add (label);
     }
 
     @SuppressWarnings("unchecked")
@@ -161,13 +176,81 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
 
         NodeBase n = (NodeBase) value;
 
-        label.setIcon (getIconFor (n, expanded, leaf));
-        label.setForeground (getForegroundFor (n, selected  ||  isDropCell));  // Currently, we don't use colorDropCell, but rather the usual foreground that indicates override state.
+        Color fg        = getForegroundFor (n, selected  ||  isDropCell);  // Currently, we don't use colorDropCell, but rather the usual foreground that indicates override state.
+        Font  fontBase  = tree.getFont ();
+        Font  fontPlain = n.getPlainFont (fontBase);
 
-        Font baseFont = tree.getFont ();
-        label.setFont (n.getPlainFont (baseFont));
-        if (n.needsInitTabs ()) n.initTabs (getFontMetrics (n.getStyledFont (baseFont)));
-        label.setText (n.getText (expanded, false));
+        iconHolder.setIcon (getIconFor (n, expanded, leaf));
+
+        List<Integer> columnWidths = null;
+        FontMetrics fm = getFontMetrics (n.getStyledFont (fontBase));
+        NodeBase p = n.getTrueParent ();
+        if (p != null) columnWidths = p.getMaxColumnWidths (n.getColumnGroup (), fm);
+        int widthCount = 0;
+        if (columnWidths != null) widthCount = columnWidths.size ();
+
+        List<String> columns = n.getColumns (expanded);
+        int last = columns.size () - 1;
+        while (labels.size () <= last)
+        {
+            JLabel l = new JLabel ();
+            add (l);
+            labels.add (l);
+        }
+        int sum = getTextOffset ();
+        int i = 0;
+        for (; i <= last; i++)
+        {
+            String text = columns.get (i);
+            JLabel l = labels.get (i);
+            l.setForeground (fg);
+            l.setFont (fontPlain);
+            l.setVisible (true);
+            l.setText (text);
+
+            l.setPreferredSize (null);  // Necessary so getPreferredSize() computes a fresh value.
+            l.setMaximumSize (null);
+            if (i < last)  // Set column width.
+            {
+                Dimension d = l.getPreferredSize ();
+                if (i < widthCount)
+                {
+                    d.width = columnWidths.get (i);
+                    l.setPreferredSize (d);
+                    l.setMaximumSize (d);
+                }
+                sum += d.width;
+            }
+            else if (n.allowTruncate ())  // Ensure last column is not too wide.
+            {
+                boolean truncate = false;
+                String[] pieces = text.split ("\n", 2);
+                if (pieces.length > 1)
+                {
+                    truncate = true;
+                    text = pieces[0];
+                    l.setText (text);
+                }
+
+                int width = availableWidth (n.getTree ()) - sum;
+                Dimension d = l.getPreferredSize ();
+                if (d.width > width)
+                {
+                    truncate = true;
+                    width = Math.max (0, width - fm.getMaxAdvance () * 2);  // allow 2em for ellipsis
+                    int characters = (int) Math.floor ((double) text.length () * width / d.width);  // A crude estimate. Just take a ratio of the number of characters, rather then measuring them exactly.
+                    text = text.substring (0, characters);
+                }
+                if (truncate)
+                {
+                    text += " ...";
+                    l.setText (text);
+                    n.wasTruncated ();
+                }
+            }
+        }
+        last = labels.size () - 1;
+        for (; i <= last; i++) labels.get (i).setVisible (false);
 
         return this;
     }
@@ -193,9 +276,14 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
 
     public int getIconWidth ()
     {
-        Icon icon = label.getIcon ();
+        Icon icon = iconHolder.getIcon ();
         if (icon == null) return 0;
         return icon.getIconWidth ();
+    }
+
+    public int getIconTextGap ()
+    {
+        return iconHolder.getIconTextGap ();
     }
 
     /**
@@ -204,9 +292,9 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
     **/
     public int getTextOffset ()
     {
-        Icon icon = label.getIcon ();
+        Icon icon = iconHolder.getIcon ();
         if (icon == null) return 0;
-        return icon.getIconWidth () + gapAfterIcon;
+        return icon.getIconWidth () + iconHolder.getIconTextGap ();
     }
 
     public Dimension getPreferredSize ()
@@ -219,6 +307,37 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
 
         result.width += 3;  // per DefaultTreeCellEditor
         return result;
+    }
+
+    /**
+        Utility function for deciding when to truncate text field.
+        @return Usable width of tree's viewport. This is calculated based on possible viewport
+        rather than actual viewport, because the viewport may get resized to fit the resulting field.
+    **/
+    public static int availableWidth (PanelEquationTree pet)
+    {
+        int width = 800;
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        if (pe.view == PanelEquations.NODE)
+        {
+            JViewport vp = pe.panelEquationGraph.getViewport ();
+            if (pet.root == pe.part)  // parent node
+            {
+                Insets insets = pe.panelParent.getInsets ();
+                width = vp.getExtentSize ().width / 2 - insets.left - insets.right;
+            }
+            else if (pet.root.graph != null)  // child node
+            {
+                Insets insets = pet.root.graph.getInsets ();
+                width = vp.getExtentSize ().width - insets.left - insets.right;
+            }
+        }
+        else  // property panel
+        {
+            // Neither the tree nor the viewport should have insets.
+            width = pet.getViewport ().getWidth ();
+        }
+        return Math.max (100, width);  // never less than 100px
     }
 
     /**
