@@ -54,6 +54,7 @@ import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
 
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
@@ -94,6 +95,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected Component                editingComponent;
     protected int                      offset;
     protected static int               offsetPerLevel;     // How much to indent per tree level to accommodate for expansion handles.
+    protected String                   rangeUnits;
     protected double                   rangeLo;
     protected double                   rangeHi;
     protected double                   rangeStepSize;
@@ -434,18 +436,21 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             for (String c : pieces) choiceEditor.addItem (c);
             choiceEditor.setSelectedItem (text);
         }
-        else if (param.contains (":"))  // Numeric range
+        else if (param.startsWith ("["))  // Numeric range
         {
             editingComponent = rangeEditor;
 
-            String[] pieces = param.split (":");
+            String[] pieces = param.substring (1).split ("]", 2);
+            rangeUnits = "";
+            if (pieces.length == 2) rangeUnits = pieces[1];
+            pieces = pieces[0].split (":");
             rangeLo = Double.valueOf (pieces[0]);
             rangeHi = Double.valueOf (pieces[1]);
             rangeStepSize = 1;
             if (pieces.length == 3) rangeStepSize = Double.valueOf (pieces[2]);
 
             int steps = (int) Math.round ((rangeHi - rangeLo) / rangeStepSize);
-            double current = Double.valueOf (text);
+            double current = new UnitValue (text).value;
             int c = (int) Math.round ((current - rangeLo) / rangeStepSize);
             c = Math.max (c, 0);
             c = Math.min (c, steps);
@@ -497,6 +502,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             {
                 value = String.valueOf (c);
             }
+            value += rangeUnits;
         }
         if (labels.get (0).isVisible ())  // parameter mode, so add back name and assignment character
         {
