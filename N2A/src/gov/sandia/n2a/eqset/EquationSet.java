@@ -22,7 +22,7 @@ import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.UndefinedFunctionException;
+import gov.sandia.n2a.language.UnsupportedFunctionException;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Input;
@@ -313,7 +313,7 @@ public class EquationSet implements Comparable<EquationSet>
                 exception = true;
                 pe.print (Backend.err.get ());
             }
-            catch (UndefinedFunctionException ufe)
+            catch (UnsupportedFunctionException ufe)
             {
                 exception = true;
                 Backend.err.get ().println (ufe.message);

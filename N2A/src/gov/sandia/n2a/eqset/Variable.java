@@ -18,7 +18,7 @@ import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.UndefinedFunctionException;
+import gov.sandia.n2a.language.UnsupportedFunctionException;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Event;
@@ -162,9 +162,9 @@ public class Variable implements Comparable<Variable>, Cloneable
             e.column += prefix.length ();
             throw e;
         }
-        catch (UndefinedFunctionException e)
+        catch (UnsupportedFunctionException e)
         {
-            e.message = "Undefined function " + e.message + " in " + fullName ();
+            e.message = "Unsupported function " + e.message + " in " + fullName ();
             throw e;
         }
     }

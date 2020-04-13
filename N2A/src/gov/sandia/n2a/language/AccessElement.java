@@ -18,7 +18,7 @@ public class AccessElement extends Function
 {
     public void getOperandsFrom (SimpleNode node) throws Exception
     {
-        if (node.jjtGetNumChildren () == 0) throw new UndefinedFunctionException (node.jjtGetValue ().toString ());
+        if (node.jjtGetNumChildren () == 0) throw new UnsupportedFunctionException (node.jjtGetValue ().toString ());
         if (node.jjtGetNumChildren () != 1) throw new Error ("AST for function has unexpected form");
         Object o = node.jjtGetChild (0);
         if (! (o instanceof ASTList)) throw new Error ("AST for function has unexpected form");
