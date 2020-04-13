@@ -1,5 +1,5 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,7 +9,6 @@ package gov.sandia.n2a.language.type;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.operator.Negate;
 
@@ -57,9 +56,7 @@ public class Scalar extends Type
             Type result = ((Constant) op).value;
             if (result instanceof Scalar) return ((Scalar) result).value * sign;
         }
-        catch (ParseException e)
-        {
-        }
+        catch (Exception e) {}
         return 0;
     }
 

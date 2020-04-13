@@ -38,7 +38,7 @@ public class EquationEntry implements Comparable<EquationEntry>
         symbol is included in the stored index (to allow commingling with $metadata
         and $reference).
     **/
-    public EquationEntry (MNode source) throws ParseException
+    public EquationEntry (MNode source) throws Exception
     {
         ifString                = source.key ();
         String expressionString = source.get ();
@@ -74,7 +74,7 @@ public class EquationEntry implements Comparable<EquationEntry>
         Parses the right-hand side of an equation and converts it into an EquationEntry.
         The caller is responsible for adding the equation object to the correct variable.
     **/
-    public EquationEntry (String rhs) throws ParseException
+    public EquationEntry (String rhs) throws Exception
     {
         ifString = "";
 

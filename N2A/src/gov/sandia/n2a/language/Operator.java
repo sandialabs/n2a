@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -128,7 +128,7 @@ public class Operator implements Cloneable
         };
     }
 
-    public void getOperandsFrom (SimpleNode node) throws ParseException
+    public void getOperandsFrom (SimpleNode node) throws Exception
     {
     }
 
@@ -237,7 +237,7 @@ public class Operator implements Cloneable
                     if (value <= 0) return 0;
                     return (int) Math.floor (Math.log (value) / Math.log (2));  // log base 2
                 }
-                catch (ParseException e) {}
+                catch (Exception e) {}
                 break;
             }
         }
@@ -436,12 +436,12 @@ public class Operator implements Cloneable
         for (ExtensionPoint e : extensions) register ((Factory) e);
     }
 
-    public static Operator parse (String line) throws ParseException
+    public static Operator parse (String line) throws Exception
     {
         return getFrom (ExpressionParser.parse (line));
     }
 
-    public static Operator getFrom (SimpleNode node) throws ParseException
+    public static Operator getFrom (SimpleNode node) throws Exception
     {
         Operator result;
         if (node instanceof ASTOperator)

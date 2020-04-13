@@ -17,7 +17,7 @@ public class OperatorBinary extends Operator implements OperatorArithmetic
     public Operator operand1;
     protected Type type;
 
-    public void getOperandsFrom (SimpleNode node) throws ParseException
+    public void getOperandsFrom (SimpleNode node) throws Exception
     {
         if (node.jjtGetNumChildren () != 2) throw new Error ("AST for operator has unexpected form");
         operand0 = Operator.getFrom ((SimpleNode) node.jjtGetChild (0));

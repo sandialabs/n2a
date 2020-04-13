@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,8 +16,9 @@ import gov.sandia.n2a.language.type.Scalar;
 
 public class AccessElement extends Function
 {
-    public void getOperandsFrom (SimpleNode node) throws ParseException
+    public void getOperandsFrom (SimpleNode node) throws Exception
     {
+        if (node.jjtGetNumChildren () == 0) throw new UndefinedFunctionException (node.jjtGetValue ().toString ());
         if (node.jjtGetNumChildren () != 1) throw new Error ("AST for function has unexpected form");
         Object o = node.jjtGetChild (0);
         if (! (o instanceof ASTList)) throw new Error ("AST for function has unexpected form");

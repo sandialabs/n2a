@@ -18,6 +18,7 @@ import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.UndefinedFunctionException;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Event;
@@ -104,7 +105,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         this.order = order;
     }
 
-    public Variable (EquationSet container, MNode source) throws ParseException
+    public Variable (EquationSet container, MNode source) throws Exception
     {
         this.container = container;
         equations = new TreeSet<EquationEntry> ();  // It is possible for Variable to be parsed from MNode without any equations, but code that relies on this ctor expects a non-null equations member.
@@ -156,9 +157,14 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
         catch (ParseException e)
         {
-            String prefix = container.prefix () + "." + source.key () + "=" + combinerString ();
+            String prefix = fullName () + "=" + combinerString ();
             e.line = prefix + e.line;
             e.column += prefix.length ();
+            throw e;
+        }
+        catch (UndefinedFunctionException e)
+        {
+            e.message = "Undefined function " + e.message + " in " + fullName ();
             throw e;
         }
     }
@@ -174,7 +180,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
     }
 
-    public static Variable from (String equation) throws ParseException
+    public static Variable from (String equation) throws Exception
     {
         String[] pieces = equation.split ("=", 2);
         String key = pieces[0];
@@ -764,7 +770,7 @@ public class Variable implements Comparable<Variable>, Cloneable
                 centerNew   = Operator.MSB / 2;
                 exponentNew = centerPower + Operator.MSB - centerNew;
             }
-            catch (ParseException e) {}
+            catch (Exception e) {}
         }
 
         if (exponentNew != exponent  ||  centerNew != center) changed = true;

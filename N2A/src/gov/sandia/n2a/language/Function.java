@@ -16,7 +16,7 @@ public class Function extends Operator
 {
     public Operator[] operands;
 
-    public void getOperandsFrom (SimpleNode node) throws ParseException
+    public void getOperandsFrom (SimpleNode node) throws Exception
     {
         if (node.jjtGetNumChildren () == 0)
         {

@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -56,7 +56,6 @@ import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Comparison;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.UnitValue;
@@ -2043,7 +2042,7 @@ public class ExportJob extends XMLutility
                                 variableParameters.put (key, visitor.found);
                             }
                         }
-                        catch (ParseException e) {}
+                        catch (Exception e) {}
                     }
                 }
                 boolean nonuniform = skipList.size () > 0;
@@ -2436,7 +2435,7 @@ public class ExportJob extends XMLutility
                         return tau;
                     }
                 }
-                catch (ParseException e) {}
+                catch (Exception e) {}
             }
             return 0;
         }

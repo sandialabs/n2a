@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -32,7 +32,7 @@ public class ParseException extends Exception
 
     public void print (PrintStream ps)
     {
-        ps.println (this.getMessage ());
+        ps.println (getMessage ());
         ps.println (line);
         for (int i = 0; i < column; i++) ps.print (" ");
         ps.println ("^");

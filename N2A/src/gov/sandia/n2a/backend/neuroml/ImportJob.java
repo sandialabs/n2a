@@ -18,7 +18,6 @@ import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.UnitValue;
@@ -1263,7 +1262,7 @@ public class ImportJob extends XMLutility
                             });
                             value = op.render ().replace (" ", "");
                         }
-                        catch (ParseException e) {}
+                        catch (Exception e) {}
                     }
                     subpart.set (value, parameter);
                 }
@@ -4313,7 +4312,7 @@ public class ImportJob extends XMLutility
                 Operator.parse (line).render (this);
                 return result.toString ().replace (" ", "");
             }
-            catch (ParseException e)
+            catch (Exception e)
             {
                 return line;
             }

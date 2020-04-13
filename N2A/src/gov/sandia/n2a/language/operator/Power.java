@@ -10,7 +10,6 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
-import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.UnitValue;
@@ -40,7 +39,7 @@ public class Power extends OperatorBinary
         };
     }
 
-    public void getOperandsFrom (SimpleNode node) throws ParseException
+    public void getOperandsFrom (SimpleNode node) throws Exception
     {
         if (node.jjtGetNumChildren () == 1)
         {

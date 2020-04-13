@@ -22,6 +22,7 @@ import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.UndefinedFunctionException;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Input;
@@ -312,6 +313,11 @@ public class EquationSet implements Comparable<EquationSet>
                 exception = true;
                 pe.print (Backend.err.get ());
             }
+            catch (UndefinedFunctionException ufe)
+            {
+                exception = true;
+                Backend.err.get ().println (ufe.message);
+            }
         }
         if (exception) throw new Backend.AbortRun ();
     }
@@ -354,7 +360,7 @@ public class EquationSet implements Comparable<EquationSet>
         variables.add (v);
     }
 
-    public void override (String equation) throws ParseException
+    public void override (String equation) throws Exception
     {
         String[] pieces = equation.split ("=", 2);
         String key = pieces[0];
@@ -1405,7 +1411,7 @@ public class EquationSet implements Comparable<EquationSet>
         return result;
     }
 
-    public void addGlobalConstants () throws ParseException
+    public void addGlobalConstants () throws Exception
     {
         String key = AppData.state.getOrDefault ("Constants", "General", "constants");
         MNode constants = AppData.models.child (key);

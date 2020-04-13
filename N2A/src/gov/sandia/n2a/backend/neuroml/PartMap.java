@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,7 +21,6 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.ParseException;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.operator.Negate;
 
@@ -123,7 +122,7 @@ public class PartMap
                                 if (unitIndex < value.length ()) unit = value.substring (unitIndex);
                             }
                         }
-                        catch (ParseException e) {}
+                        catch (Exception e) {}
                     }
                     if (! unit.isEmpty ()) dimensions.put (key, unit);
                 }
