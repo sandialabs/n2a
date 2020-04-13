@@ -53,6 +53,7 @@ public class NodeAnnotation extends NodeContainer
         removeAllChildren ();
         folded = source;
         buildFolded ();
+        setUserObject ();
     }
 
     public void buildFolded ()

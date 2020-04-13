@@ -277,8 +277,8 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Interprets value as flag, which may contain extended information when set:
-        false = "0";
-        true = everything else, including empty.
+        false <-- "0", non-existent or no data;
+        true <-- everything else, including empty
         See getBoolean() for a different way to interpret booleans. The key difference is
         that a flag defaults to true, so it can indicate something by merely existing, without a value.
         It also tolerates arbitrary content, so a flag can carry extra data and still be interpreted as true.
@@ -286,8 +286,8 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     public boolean getFlag (Object... keys)
     {
         MNode c = child (toStrings (keys));
-        if (c == null) return false;
-        return c.getOrDefault (true);
+        if (c == null  ||  ! c.data ()  ||  c.get ().equals ("0")) return false;
+        return true;
     }
 
     public int getInt (Object... keys)

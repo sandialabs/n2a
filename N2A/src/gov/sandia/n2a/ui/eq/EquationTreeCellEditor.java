@@ -12,7 +12,6 @@ import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.FontMetrics;
-import java.awt.Graphics;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
@@ -23,13 +22,17 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.EventObject;
+import java.util.List;
 
 import javax.swing.AbstractAction;
 import javax.swing.AbstractCellEditor;
 import javax.swing.ActionMap;
-import javax.swing.Icon;
 import javax.swing.InputMap;
+import javax.swing.JComboBox;
+import javax.swing.JLabel;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -40,8 +43,11 @@ import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
+import javax.swing.plaf.basic.BasicComboBoxUI;
 import javax.swing.tree.TreeCellEditor;
 import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
@@ -73,6 +79,10 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected JTextField               oneLineEditor;
     protected JTextArea                multiLineEditor;
     protected JScrollPane              multiLinePane;      // provides scrolling for multiLineEditor, and acts as the editingComponent
+    protected JComboBox<String>        choiceEditor;
+    protected JScrollBar               rangeEditor;
+    protected JLabel                   iconHolder   = new JLabel ();
+    protected List<JLabel>             labels       = new ArrayList<JLabel> ();
 
     protected JTree                    focusTree;
     protected TreePath                 lastPath;
@@ -82,15 +92,25 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected boolean                  editingTitle;       // Indicates that we are in a graph node title rather than a proper tree.
     protected Container                editingContainer;
     protected Component                editingComponent;
-    protected Icon                     editingIcon;
     protected int                      offset;
     protected static int               offsetPerLevel;     // How much to indent per tree level to accommodate for expansion handles.
+    protected double                   rangeLo;
+    protected double                   rangeHi;
+    protected double                   rangeStepSize;
 
     public EquationTreeCellEditor (EquationTreeCellRenderer renderer)
     {
         this.renderer = renderer;
         undoManager = new UndoManager ();
         editingContainer = new EditorContainer ();
+
+        editingContainer.add (iconHolder);
+        for (int i = 0; i < 2; i++)
+        {
+            JLabel l = new JLabel ();
+            editingContainer.add (l);
+            labels.add (l);
+        }
 
 
         oneLineEditor = new JTextField ();
@@ -241,7 +261,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             }
         });
 
-        multiLineEditor.addFocusListener (new FocusListener ()
+        FocusListener focusListener = new FocusListener ()
         {
             public void focusGained (FocusEvent e)
             {
@@ -249,18 +269,16 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
             public void focusLost (FocusEvent e)
             {
-                if (editingNode != null)
+                if (editingNode != null) stopCellEditing ();
+                if (! editingTree.hasFocus ())
                 {
-                    stopCellEditing ();
-                    if (! editingTree.hasFocus ())
-                    {
-                        PanelEquationTree pet = (PanelEquationTree) editingTree.getParent ().getParent ();
-                        pet.yieldFocus ();
-                    }
-                    ((MainTabbedPane) MainFrame.instance.tabs).setPreferredFocus (PanelModel.instance, editingTree);
+                    PanelEquationTree pet = (PanelEquationTree) editingTree.getParent ().getParent ();
+                    pet.yieldFocus ();
                 }
+                ((MainTabbedPane) MainFrame.instance.tabs).setPreferredFocus (PanelModel.instance, editingTree);
             }
-        });
+        };
+        multiLineEditor.addFocusListener (focusListener);
 
         multiLineEditor.addKeyListener (new KeyAdapter ()
         {
@@ -271,6 +289,72 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         });
 
         multiLineEditor.addMouseListener (mouseListener);
+
+
+        choiceEditor = new JComboBox<String> ();
+        choiceEditor.setUI (new BasicComboBoxUI ());  // Avoid borders on edit box, to save space.
+
+        choiceEditor.addPopupMenuListener (new PopupMenuListener ()
+        {
+            public void popupMenuWillBecomeVisible (PopupMenuEvent e)
+            {
+            }
+
+            public void popupMenuWillBecomeInvisible (PopupMenuEvent e)
+            {
+                // Have to test if we are still editing, because this may have been triggered by "finishEditing" action.
+                if (editingNode != null) stopCellEditing ();
+            }
+
+            public void popupMenuCanceled (PopupMenuEvent e)
+            {
+            }
+        });
+
+        inputMap = choiceEditor.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),  "finishEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ESCAPE"), "cancelEditing");
+        actionMap = choiceEditor.getActionMap ();
+        actionMap.put ("finishEditing", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                stopCellEditing ();
+            }
+        });
+        actionMap.put ("cancelEditing", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                cancelCellEditing ();
+            }
+        });
+
+        choiceEditor.addFocusListener (focusListener);
+
+
+        rangeEditor = new JScrollBar (JScrollBar.HORIZONTAL);
+
+        inputMap = rangeEditor.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),  "finishEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ESCAPE"), "cancelEditing");
+        actionMap = rangeEditor.getActionMap ();
+        actionMap.put ("finishEditing", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                stopCellEditing ();
+            }
+        });
+        actionMap.put ("cancelEditing", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                cancelCellEditing ();
+            }
+        });
+
+        rangeEditor.addFocusListener (focusListener);
     }
 
     public static void staticUpdateUI ()
@@ -303,44 +387,129 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         editingTree     = tree;
         editingNode     = (NodeBase) value;
         editingTitle    = isTitle;
-        editingIcon     = renderer.getIconFor (editingNode, expanded, leaf);
         offset          = renderer.getTextOffset ();
-        Font   baseFont = tree.getFont ();
-        Font   font     = editingNode.getStyledFont (baseFont);
-        String text     = editingNode.toString ();  // fetch user object
+        Font fontBase   = tree.getFont ();
+        Font fontPlain  = editingNode.getPlainFont (fontBase);
+        Font fontStyled = editingNode.getStyledFont (fontBase);
+        FontMetrics fm  = tree.getFontMetrics (fontStyled);
 
-        FontMetrics fm = tree.getFontMetrics (font);
-        int textWidth  = fm.stringWidth (text);
-        int treeWidth  = tree.getWidth ();
+        iconHolder.setIcon (renderer.getIconFor (editingNode, expanded, leaf));
 
-        if (editingComponent != null) editingContainer.remove (editingComponent);
-        if (! isTitle  &&  (text.contains ("\n")  ||  textWidth > treeWidth  ||  multiLineRequested))
+        String text;
+        String param;
+        // A variable is only visible in parameter mode if it is actually parameter, so no need to check for "param" in metadata. 
+        if (editingNode instanceof NodeVariable  &&  FilteredTreeModel.filterLevel == FilteredTreeModel.PARAM)
         {
-            editingComponent = multiLinePane;
-            multiLineEditor.setText (text);
-            multiLineEditor.setFont (font);
-            multiLineEditor.setEditable (! PanelModel.instance.panelEquations.locked);
-            int equals = text.indexOf ('=');
-            if (equals >= 0) multiLineEditor.setCaretPosition (equals);
-            multiLineRequested = false;
+            // Add static labels for all columns except the value. See EquationTreeCellRenderer.getTreeCellRendererComponent()
+            NodeBase      p            = editingNode.getTrueParent ();
+            List<Integer> columnWidths = p.getMaxColumnWidths (editingNode.getColumnGroup (), fm);
+            List<String>  columns      = editingNode.getColumns (expanded);  // NodeVariable should always return 3 columns.
+            for (int i = 0; i < 2; i++)  // Set up the first two columns to display as fixed text in the editor.
+            {
+                JLabel l = labels.get (i);
+                l.setText (columns.get (i));
+                l.setFont (fontPlain);
+                l.setVisible (true);
+                l.setLocation (offset, 0);
+                offset += columnWidths.get (i);
+            }
+
+            text = columns.get (2);  // 3rd column contains the value of the parameter.
+            param = editingNode.source.get ("$metadata", "param");
         }
         else
         {
-            editingComponent = oneLineEditor;
-            oneLineEditor.setText (text);
-            oneLineEditor.setFont (font);
-            oneLineEditor.setEditable (! PanelModel.instance.panelEquations.locked);
+            for (int i = 0; i < 2; i++) labels.get (i).setVisible (false);
+            text = editingNode.toString ();  // Fetch user object.
+            param = "";
+        }
+
+        // Update editing component
+        if (editingComponent != null) editingContainer.remove (editingComponent);
+        if (param.contains (","))  // Dropdown list with fixed set of options.
+        {
+            editingComponent = choiceEditor;
+            choiceEditor.removeAllItems ();
+            String[] pieces = param.split (",");
+            for (String c : pieces) choiceEditor.addItem (c);
+            choiceEditor.setSelectedItem (text);
+        }
+        else if (param.contains (":"))  // Numeric range
+        {
+            editingComponent = rangeEditor;
+
+            String[] pieces = param.split (":");
+            rangeLo = Double.valueOf (pieces[0]);
+            rangeHi = Double.valueOf (pieces[1]);
+            rangeStepSize = 1;
+            if (pieces.length == 3) rangeStepSize = Double.valueOf (pieces[2]);
+
+            int steps = (int) Math.round ((rangeHi - rangeLo) / rangeStepSize);
+            double current = Double.valueOf (text);
+            int c = (int) Math.round ((current - rangeLo) / rangeStepSize);
+            c = Math.max (c, 0);
+            c = Math.min (c, steps);
+            rangeEditor.setValues (c, 1, 0, steps + 1);
+        }
+        else  // Plain text
+        {
+            int textWidth = fm.stringWidth (text);
+            int treeWidth = tree.getWidth ();
+            if (! isTitle  &&  (text.contains ("\n")  ||  textWidth > treeWidth  ||  multiLineRequested))
+            {
+                editingComponent = multiLinePane;
+                multiLineEditor.setText (text);
+                multiLineEditor.setFont (fontStyled);
+                multiLineEditor.setEditable (! PanelModel.instance.panelEquations.locked);
+                int equals = text.indexOf ('=');
+                if (equals >= 0) multiLineEditor.setCaretPosition (equals);
+                multiLineRequested = false;
+            }
+            else
+            {
+                editingComponent = oneLineEditor;
+                oneLineEditor.setText (text);
+                oneLineEditor.setFont (fontStyled);
+                oneLineEditor.setEditable (! PanelModel.instance.panelEquations.locked);
+            }
+            undoManager.discardAllEdits ();
         }
         editingContainer.add (editingComponent);
-        undoManager.discardAllEdits ();
+
         return editingContainer;
     }
 
     @Override
     public Object getCellEditorValue ()
     {
-        if (editingComponent == oneLineEditor) return oneLineEditor.getText ();
-        return multiLineEditor.getText ();  // TODO: post-process the text to remove added \n after =
+        String value = "";
+        if      (editingComponent == choiceEditor)  value = choiceEditor.getSelectedItem ().toString ();
+        else if (editingComponent == oneLineEditor) value = oneLineEditor.getText ();
+        else if (editingComponent == multiLinePane) value = multiLineEditor.getText ();
+        else                      // rangeEditor
+        {
+            double c = rangeEditor.getValue () * rangeStepSize + rangeLo;
+            if (isInteger (rangeLo)  &&  isInteger (rangeHi)  &&  isInteger (rangeStepSize))
+            {
+                value = String.valueOf ((int) Math.round (c));
+            }
+            else
+            {
+                value = String.valueOf (c);
+            }
+        }
+        if (labels.get (0).isVisible ())  // parameter mode, so add back name and assignment character
+        {
+            value = labels.get (0).getText ().trim () + "=" + value;
+        }
+        return value;
+    }
+
+    public static boolean isInteger (double value)
+    {
+        // Could compute threshold using Math.ulp(1.0), which gives machine epsilon, but that is a bit too tight.
+        // The number here is arbitrary, but reasonable for double. It is roughly sqrt(epsilon).
+        return Math.abs (value - Math.round (value)) < 1e-8;  
     }
 
     /**
@@ -449,22 +618,40 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             setLayout (null);
         }
 
-        public void paint (Graphics g)
-        {
-            // DefaultTreeCellEditor.EditorContainer has an excessively complex formula for computing
-            // vertical position of icon. This simple formula seems to do the same thing.
-            int y = (getHeight () - editingIcon.getIconHeight ()) / 2;
-            editingIcon.paintIcon (this, g, 0, y);
-            super.paint (g);
-        }
-
         /**
             Place editingComponent past the icon
         **/
         public void doLayout ()
         {
-            if (editingComponent == null) return;
-            editingComponent.setBounds (offset, 0, getWidth () - offset, getHeight ());
+            int w = getWidth ();
+            int h = getHeight ();
+
+            Dimension d = iconHolder.getPreferredSize ();
+            int y = Math.max (0, h - d.height) / 2;
+            iconHolder.setBounds (0, y, d.width, d.height);
+
+            if (labels.get (0).isVisible ())
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    JLabel l = labels.get (i);
+                    d = l.getPreferredSize ();
+                    int x = l.getX ();
+                    y = Math.max (0, h - d.height) / 2;
+                    l.setBounds (x, y, d.width, d.height);
+                }
+            }
+
+            if (editingComponent != null)
+            {
+                // Most editors will be sized to exactly fill available area.
+                // In the case of a combo-box (choiceEditor), there is no way to scroll interior content.
+                // Also, it looks terrible if stretched wide. Better to show at its preferred size.
+                d = editingComponent.getPreferredSize ();
+                if (editingComponent != choiceEditor) d.width = w - offset; 
+                y = Math.max (0, h - d.height) / 2;
+                editingComponent.setBounds (offset, y, d.width, d.height);
+            }
         }
 
         public Dimension getPreferredSize ()
@@ -481,7 +668,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
             Dimension rSize = renderer.getPreferredSize ();
             pSize.height = Math.max (pSize.height, rSize.height);
-            // Renderer is using exactly the same icon, so no need to do separate check for icon size.
+            // Renderer has exactly the same icon, so no need to do separate check for icon size.
 
             return pSize;
         }
