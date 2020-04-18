@@ -98,7 +98,7 @@ public class OperatorUnary extends Operator implements OperatorArithmetic
 
         renderer.result.append (toString ());
 
-        boolean needParens =  operand instanceof OperatorArithmetic  &&  precedence () < operand.precedence ();
+        boolean needParens =  operand instanceof OperatorArithmetic  &&  precedence () <= operand.precedence ();
         if (needParens) renderer.result.append ("(");
         operand.render (renderer);
         if (needParens) renderer.result.append (")");
