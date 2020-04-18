@@ -71,7 +71,7 @@ public class Power extends OperatorBinary
 
     public int precedence ()
     {
-        if (hint == null) return 3;  // for ^
+        if (hint == null) return 2;  // for ^
         return 1;  // for pow()
     }
 

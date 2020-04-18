@@ -40,7 +40,7 @@ public class NOT extends OperatorUnary implements OperatorLogical
 
     public int precedence ()
     {
-        return 2;
+        return 3;
     }
 
     public void determineExponent (Variable from)

@@ -292,50 +292,57 @@ void MultiplicativeExpression() : {}
     )*
 }
 
-// TODO: Make this rule right-associative. This is, a^b^c is parsed as a^(b^c).
+// See https://www.engr.mun.ca/~theo/Misc/exp_parsing.htm, section "classic solution".
 void PowerExpression() : {}
 {
-    UnaryExpression()
+    PrimaryExpression()
     (
-        (<POWER> UnaryExpression()
+        LOOKAHEAD(1)
+        (<POWER> PowerExpression()
             {
                 jjtThis.jjtSetValue("^");
             }
         ) #Operator(2)
-    )*
+    )?
 }
 
-// TODO: Make this rule recursive and right-associative.
 void UnaryExpression() : {}
 {
-    (<MINUS> PrimaryExpression()
+    (<MINUS> PowerExpression()
         {
             jjtThis.jjtSetValue("UM");
         }
     ) #Operator(1)
       |
-    (<NOT> PrimaryExpression()
+    (<NOT> PowerExpression()
         {
             jjtThis.jjtSetValue("!");
         }
     ) #Operator(1)
       |
-    (<TILDE> PrimaryExpression()
+    (<TILDE> PowerExpression()
         {
             jjtThis.jjtSetValue("~");
         }
     ) #Operator(1)
-      |
-    PrimaryExpression()
 }
 
 void PrimaryExpression() : {}
 {
     Constant()
       |
+    LOOKAHEAD(3)
+    (<MINUS> Constant()
+        {
+            jjtThis.jjtSetValue("UM");
+        }
+    ) #Operator(1)
+      |
     Identifier()
       |
     <LRND> OrExpression() <RRND> 
+      |
+    UnaryExpression()
       |
     MatrixExpression()
 }

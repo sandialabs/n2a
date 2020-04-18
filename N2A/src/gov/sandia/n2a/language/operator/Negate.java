@@ -38,7 +38,7 @@ public class Negate extends OperatorUnary
 
     public int precedence ()
     {
-        return 2;
+        return 3;
     }
 
     public Type eval (Instance context)

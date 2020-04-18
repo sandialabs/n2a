@@ -83,4 +83,10 @@ public class UnitValue
         m.find ();
         return m.end ();
     }
+
+    public String toString ()
+    {
+        if (unit == null) return String.valueOf (value);
+        return String.valueOf (value) + UCUM.format (unit);
+    }
 }
