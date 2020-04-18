@@ -28,6 +28,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
@@ -470,6 +471,15 @@ public class ChangeVariable extends UndoableView
                     result.append (path);
 
                     return true;
+                }
+                if (op instanceof Constant)
+                {
+                    Constant c = (Constant) op;
+                    if (c.unitValue != null)
+                    {
+                        result.append (c.unitValue);
+                        return true;
+                    }
                 }
 
                 return false;

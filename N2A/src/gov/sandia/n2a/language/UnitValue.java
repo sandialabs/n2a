@@ -15,6 +15,8 @@ import javax.measure.format.UnitFormat;
 import javax.measure.spi.ServiceProvider;
 import javax.measure.spi.SystemOfUnits;
 
+import gov.sandia.n2a.language.type.Scalar;
+
 /**
     Utility class for capturing units of numeric constants during parsing.
 **/
@@ -86,7 +88,8 @@ public class UnitValue
 
     public String toString ()
     {
-        if (unit == null) return String.valueOf (value);
-        return String.valueOf (value) + UCUM.format (unit);
+        String result = Scalar.print (value);
+        if (unit != null) result += UCUM.format (unit);
+        return result;
     }
 }
