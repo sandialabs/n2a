@@ -161,6 +161,7 @@ public class AddEquation extends UndoableView
 
         if (parentChanged)  // Update tabs among this variable's siblings
         {
+            parent.setUserObject ();
             NodeBase grandparent = (NodeBase) parent.getParent ();
             grandparent.invalidateColumns (model);
         }
@@ -212,6 +213,7 @@ public class AddEquation extends UndoableView
         if (! alreadyExists) model.insertNodeIntoUnfiltered (createdNode, parent, index);
         if (parentChanged)
         {
+            parent.setUserObject ();
             NodeBase grandparent = (NodeBase) parent.getParent ();
             grandparent.invalidateColumns (model);
         }
