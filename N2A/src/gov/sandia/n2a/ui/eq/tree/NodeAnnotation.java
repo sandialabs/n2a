@@ -118,7 +118,7 @@ public class NodeAnnotation extends NodeContainer
     }
 
     @Override
-    public List<String> getColumns (boolean expanded)
+    public List<String> getColumns (boolean selected, boolean expanded)
     {
         truncated = false;
 

@@ -4,7 +4,6 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.AlphaComposite;
@@ -24,6 +23,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
+import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddEquation;
@@ -47,7 +47,8 @@ public class NodeVariable extends NodeContainer
     protected static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
     protected static ImageIcon iconWatch    = ImageUtil.getImage ("watch.png");  // gets modified in static section below
 
-    public boolean isBinding;
+    public    boolean       isBinding;
+    protected List<Integer> highlights;
 
     static
     {
@@ -232,8 +233,71 @@ public class NodeVariable extends NodeContainer
         return super.getForegroundColor ();
     }
 
+    public boolean findHighlights (String name)
+    {
+        boolean result = false;
+        if (highlights != null)
+        {
+            result = true;
+            highlights.clear ();
+        }
+        if (name.isEmpty ()) return result;
+
+        // Generate 3rd column using same method as getColumns().
+        Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
+        String expression = pieces.expression;
+        if (! pieces.condition.isEmpty ()) expression += " @ " + pieces.condition;
+        if (! expression.isEmpty ())
+        {
+            if (highlights == null) highlights = new ArrayList<Integer> ();
+            findHighlights (name, expression, highlights);
+            if (highlights.isEmpty ()) highlights = null;
+        }
+        return  result  ||  highlights != null;
+    }
+
+    public static void findHighlights (String name, String expression, List<Integer> inout)
+    {
+        inout.clear ();
+        int next = 0;
+        while (next < expression.length ())
+        {
+            int in = expression.indexOf (name, next);
+            if (in < 0) return;
+            next = in + name.length ();
+            if (in   > 0                     &&  Character.isJavaIdentifierPart (expression.charAt (in - 1))) continue;
+            if (next < expression.length ()  &&  Character.isJavaIdentifierPart (expression.charAt (next  ))) continue;
+            inout.add (in);
+            inout.add (next);
+        }
+    }
+
+    public static String markHighlights (String value, List<Integer> inout)
+    {
+        if (inout == null  ||  inout.isEmpty ()) return value;
+
+        // Create an HTML version of the value, with appropriate sections marked.
+        StringBuilder result = new StringBuilder ();
+        result.append ("<html>");
+        int count = inout.size ();
+        int next = 0;
+        for (int i = 0; i < count; i += 2)
+        {
+            int in  = inout.get (i);
+            int out = inout.get (i+1);
+            result.append (escapeHTML (value.substring (next, in)));
+            result.append ("<span bgcolor=\"" + EquationTreeCellRenderer.colorHighlight + "\">");
+            result.append (escapeHTML (value.substring (in, out)));
+            result.append ("</span>");
+            next = out;
+        }
+        result.append (escapeHTML (value.substring (next)));
+        result.append ("</html>");
+        return result.toString ();
+    }
+
     @Override
-    public List<String> getColumns (boolean expanded)
+    public List<String> getColumns (boolean selected, boolean expanded)
     {
         List<String> result = new ArrayList<String> (3);
         result.add (source.key ());
@@ -261,6 +325,7 @@ public class NodeVariable extends NodeContainer
         {
             String expression = pieces.expression;
             if (! pieces.condition.isEmpty ()) expression += " @ " + pieces.condition;
+            if (! selected) expression = markHighlights (expression, highlights);
             result.add (expression);
         }
 

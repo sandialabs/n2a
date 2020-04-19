@@ -379,7 +379,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     }
 
     @Override
-    public Component getTreeCellEditorComponent (JTree tree, Object value, boolean isSelected, boolean expanded, boolean leaf, int row)
+    public Component getTreeCellEditorComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row)
     {
         return getTreeCellEditorComponent (tree, value, expanded, leaf, false);
     }
@@ -405,7 +405,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             // Add static labels for all columns except the value. See EquationTreeCellRenderer.getTreeCellRendererComponent()
             NodeBase      p            = editingNode.getTrueParent ();
             List<Integer> columnWidths = p.getMaxColumnWidths (editingNode.getColumnGroup (), fm);
-            List<String>  columns      = editingNode.getColumns (expanded);  // NodeVariable should always return 3 columns.
+            List<String>  columns      = editingNode.getColumns (true, expanded);  // NodeVariable should always return 3 columns.
             for (int i = 0; i < 2; i++)  // Set up the first two columns to display as fixed text in the editor.
             {
                 JLabel l = labels.get (i);

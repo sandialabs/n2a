@@ -89,7 +89,7 @@ public class NodeInherit extends NodeBase
     }
 
     @Override
-    public List<String> getColumns (boolean expanded)
+    public List<String> getColumns (boolean selected, boolean expanded)
     {
         List<String> result = new ArrayList<String> (3);
         result.add (source.key ());

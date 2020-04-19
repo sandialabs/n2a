@@ -8,6 +8,7 @@ package gov.sandia.n2a.ui.eq;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -19,7 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -59,6 +59,8 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
     public static Color colorSelectedOverride = Color.black;
     public static Color colorSelectedKill     = Color.red;
 
+    public static String colorHighlight;  // Color name, so it can be used in HTML.
+
     protected static Icon    iconClosed;
     protected static Icon    iconOpen;
     protected static Icon    iconLeaf;
@@ -77,8 +79,7 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
 
     public EquationTreeCellRenderer ()
     {
-        layout = new BoxLayout (this, BoxLayout.X_AXIS);
-        setLayout (layout);
+        setLayout (new ColumnLayout ());
         setOpaque (false);
 
         add (iconHolder);
@@ -99,12 +100,14 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
             colorInherit  = new Color (0xC0C0FF);  // light blue
             colorOverride = Color.white;
             colorKill     = Color.pink;
+            colorHighlight = "#200800";  // dark orange. Fallback value in case colorBackground is not available for reference below.
         }
         else  // Dark text
         {
             colorInherit  = Color.blue;
             colorOverride = Color.black;
             colorKill     = Color.red;
+            colorHighlight = "#FFE8B0";  // light orange. Fallback.
         }
 
         fg = UIManager.getColor ("Tree.selectionForeground");
@@ -137,6 +140,16 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         colorBackgroundDropCell    = UIManager.getColor   ("Tree.dropCellBackground");
         colorBorderSelected        = UIManager.getColor   ("Tree.selectionBorderColor");
         //colorDropCell              = UIManager.getColor   ("Tree.dropCellForeground");
+
+        if (colorBackground != null)
+        {
+            Color.RGBtoHSB (colorBackground.getRed (), colorBackground.getGreen (), colorBackground.getBlue (), hsb);
+            hsb[0] = 0.12f;
+            hsb[1] = Math.max (0.3f, hsb[1]);
+            int c = Color.HSBtoRGB (hsb[0], hsb[1], hsb[2]) & 0xFFFFFF;
+            colorHighlight = "#" + Integer.toHexString (c);
+        }
+        // else rely on the fallback colors set above
 
         backgroundFocused         = null;
         backgroundSelected        = null;
@@ -189,7 +202,7 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         int widthCount = 0;
         if (columnWidths != null) widthCount = columnWidths.size ();
 
-        List<String> columns = n.getColumns (expanded);
+        List<String> columns = n.getColumns (selected, expanded);
         int last = columns.size () - 1;
         while (labels.size () <= last)
         {
@@ -209,7 +222,6 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
             l.setText (text);
 
             l.setPreferredSize (null);  // Necessary so getPreferredSize() computes a fresh value.
-            l.setMaximumSize (null);
             if (i < last)  // Set column width.
             {
                 Dimension d = l.getPreferredSize ();
@@ -217,7 +229,6 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
                 {
                     d.width = columnWidths.get (i);
                     l.setPreferredSize (d);
-                    l.setMaximumSize (d);
                 }
                 sum += d.width;
             }
@@ -407,5 +418,74 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         }
 
         super.paint (g);
+    }
+
+    public class ColumnLayout implements LayoutManager2
+    {
+        public void invalidateLayout (Container target)
+        {
+        }
+
+        public void addLayoutComponent (String name, Component comp)
+        {
+        }
+
+        public void removeLayoutComponent (Component comp)
+        {
+        }
+
+        public void addLayoutComponent (Component comp, Object constraints)
+        {
+        }
+
+        public Dimension preferredLayoutSize (Container target)
+        {
+            Dimension result = new Dimension ();
+            for (Component c : target.getComponents ())
+            {
+                if (! c.isVisible ()) continue;
+                Dimension d = c.getPreferredSize ();
+                result.width += d.width;
+                result.height = Math.max (result.height, d.height);
+            }
+
+            Insets insets = target.getInsets ();
+            result.width  += insets.left + insets.right;
+            result.height += insets.top + insets.bottom;
+            return result;
+        }
+
+        public Dimension minimumLayoutSize (Container target)
+        {
+            return preferredLayoutSize (target);
+        }
+
+        public Dimension maximumLayoutSize (Container target)
+        {
+            return preferredLayoutSize (target);
+        }
+
+        public float getLayoutAlignmentX (Container target)
+        {
+            return 0;
+        }
+
+        public float getLayoutAlignmentY (Container target)
+        {
+            return 0.5f;
+        }
+
+        public void layoutContainer (Container target)
+        {
+            int h = target.getHeight ();
+            int x = target.getInsets ().left;
+            for (Component c : target.getComponents ())
+            {
+                Dimension d = c.getPreferredSize ();
+                int y = Math.max (0, h - d.height) / 2;
+                c.setBounds (x, y, d.width, d.height);
+                x += d.width;
+            }
+        }
     }
 }

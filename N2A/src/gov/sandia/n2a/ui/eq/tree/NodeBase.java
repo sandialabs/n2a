@@ -231,7 +231,16 @@ public class NodeBase extends DefaultMutableTreeNode
         return false;
     }
 
-    public List<String> getColumns (boolean expanded)
+    public static String escapeHTML (String value)
+    {
+        value = value.replace ("&",  "&amp;");
+        value = value.replace ("<",  "&lt;");
+        value = value.replace (">",  "&gt;");
+        value = value.replace ("\"", "&quot;");
+        return value;
+    }
+
+    public List<String> getColumns (boolean selected, boolean expanded)
     {
         List<String> result = new ArrayList<String> ();
         result.add (toString ());

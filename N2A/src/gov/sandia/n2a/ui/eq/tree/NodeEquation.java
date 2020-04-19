@@ -30,6 +30,9 @@ public class NodeEquation extends NodeBase
 {
     protected static ImageIcon icon = ImageUtil.getImage ("assign.png");
 
+    protected List<Integer> highlightsExpression;
+    protected List<Integer> highlightsCondition;
+
     public NodeEquation (MPart source)
     {
         this.source = source;
@@ -74,16 +77,58 @@ public class NodeEquation extends NodeBase
         return super.getForegroundColor ();
     }
 
+    public boolean findHighlights (String name)
+    {
+        boolean result =  highlightsExpression != null  ||  highlightsCondition != null;
+        if (highlightsExpression != null) highlightsExpression.clear ();
+        if (highlightsCondition  != null) highlightsCondition .clear ();
+        if (name.isEmpty ()) return result;
+
+        // Generate strings using same method as getColumns().
+        String expression = source.get ();
+        String condition  = source.key ();
+
+        // The following logic is excessively complicated in order to minimize number of objects created and stored.
+        if (highlightsExpression == null) highlightsExpression = new ArrayList<Integer> ();
+        NodeVariable.findHighlights (name, expression, highlightsExpression);  // This is the important line.
+        List<Integer> reuse = null;
+        if (highlightsExpression.isEmpty ())
+        {
+            reuse = highlightsExpression;
+            highlightsExpression = null;
+        }
+        else
+        {
+            result = true;
+        }
+
+        if (! condition.equals ("@")  ||  expression.length () == 0)
+        {
+            condition = "@ " + condition.substring (1);
+
+            if (highlightsCondition == null) highlightsCondition = reuse;
+            if (highlightsCondition == null) highlightsCondition = new ArrayList<Integer> ();
+            NodeVariable.findHighlights (name, condition, highlightsCondition);
+            if (highlightsCondition.isEmpty ()) highlightsCondition = null;
+            else                                result = true;
+        }
+
+        return result;
+    }
+
     @Override
-    public List<String> getColumns (boolean expanded)
+    public List<String> getColumns (boolean selected, boolean expanded)
     {
         List<String> result = new ArrayList<String> (2);
         String expression = source.get ();
         String condition  = source.key ();
-        result.add (expression);
+        if (selected) result.add (expression);
+        else          result.add (NodeVariable.markHighlights (expression, highlightsExpression));
         if (! condition.equals ("@")  ||  expression.length () == 0)
         {
-            result.add ("@ " + condition.substring (1));
+            condition = "@ " + condition.substring (1);
+            if (! selected) condition = NodeVariable.markHighlights (condition, highlightsCondition);
+            result.add (condition);
         }
         return result;
     }

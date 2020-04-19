@@ -11,6 +11,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.settings.SettingsRepo.Delta;
 import gov.sandia.n2a.ui.settings.SettingsRepo.GitWrapper;
 import java.awt.Color;
@@ -367,8 +368,8 @@ public class PanelDiff extends JTree
                         else  // different
                         {
                             result  = "<html>";
-                            result += "<s>" + escape (key) + " = " + escape (A.get ()) + "</s><br/>";
-                            result +=         escape (key) + " = " + escape (B.get ());
+                            result += "<s>" + NodeBase.escapeHTML (key) + " = " + NodeBase.escapeHTML (A.get ()) + "</s><br/>";
+                            result +=         NodeBase.escapeHTML (key) + " = " + NodeBase.escapeHTML (B.get ());
                             result += "</html>";
                         }
                     }
@@ -380,15 +381,6 @@ public class PanelDiff extends JTree
                 userObject = result;
             }
             return userObject.toString ();
-        }
-
-        public String escape (String value)
-        {
-            value = value.replace ("&",  "&amp;");
-            value = value.replace ("<",  "&lt;");
-            value = value.replace (">",  "&gt;");
-            value = value.replace ("\"", "&quot;");
-            return value;
         }
 
         public void dump (String indent)

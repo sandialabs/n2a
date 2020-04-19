@@ -58,7 +58,7 @@ public class NodeReferences extends NodeContainer
     }
 
     @Override
-    public List<String> getColumns (boolean expanded)
+    public List<String> getColumns (boolean selected, boolean expanded)
     {
         List<String> result = new ArrayList<String> (1);
         result.add ("<html><i>$reference</i></html>");

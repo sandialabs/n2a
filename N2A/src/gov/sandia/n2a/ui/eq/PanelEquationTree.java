@@ -14,6 +14,7 @@ import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
@@ -44,6 +45,8 @@ import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
+import javax.swing.event.TreeSelectionEvent;
+import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreeNode;
@@ -400,6 +403,25 @@ public class PanelEquationTree extends JScrollPane
                 }
 
                 if (! temporary  &&  ! tree.isEditing ()) yieldFocus ();
+            }
+        });
+
+        tree.addTreeSelectionListener (new TreeSelectionListener ()
+        {
+            public void valueChanged (TreeSelectionEvent e)
+            {
+                // Update highlights based on currently selected variable
+
+                if (root == null) return;
+                NodeVariable v = null;
+                TreePath path = e.getNewLeadSelectionPath ();
+                Object o = null;
+                if (path != null) o = path.getLastPathComponent ();
+                if      (o instanceof NodeVariable) v = (NodeVariable) o;
+                else if (o instanceof NodeEquation) v = (NodeVariable) ((NodeBase) o).getParent ();
+
+                if (v == null  ||  v.toString ().isEmpty ()) updateHighlights (root, "");  // Remove old highlights.
+                else                                         updateHighlights (root, v.source.key ());
             }
         });
 
@@ -902,6 +924,37 @@ public class PanelEquationTree extends JScrollPane
                     ((FilteredTreeModel) tree.getModel ()).nodeChanged (a);
                 }
             }
+        }
+    }
+
+    // For now, this is fast enough to run on EDT, but larger models could bog down the UI.
+    // TODO: run this on a separate thread, if the need arises
+    public void updateHighlights (NodeBase node, String name)
+    {
+        int count = node.getChildCount ();
+        for (int i = 0; i < count; i++)
+        {
+            NodeBase n = (NodeBase) node.getChildAt (i);
+            if (! n.visible (FilteredTreeModel.filterLevel)) continue;
+
+            boolean needsRepaint = false;
+            if (n instanceof NodePart)
+            {
+                updateHighlights ((NodePart) n, name);
+            }
+            else if (n instanceof NodeVariable)
+            {
+                needsRepaint = ((NodeVariable) n).findHighlights (name);
+            }
+            else if (n instanceof NodeEquation)
+            {
+                needsRepaint = ((NodeEquation) n).findHighlights (name);
+            }
+
+            if (! needsRepaint) continue;
+            TreePath path = new TreePath (n.getPath ());
+            Rectangle pathBounds = tree.getPathBounds (path);
+            if (pathBounds != null) tree.repaint (pathBounds);
         }
     }
 }

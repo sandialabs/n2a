@@ -268,11 +268,12 @@ public class ChangeVariable extends UndoableView
         Set<PanelEquationTree> needAnimate = new HashSet<PanelEquationTree> ();
         if (pet != null)
         {
+            needAnimate.add (pet);
+            pet.updateHighlights (pet.root, nameAfter);  // Must be done before invalidateColumns(), because that function causes new columns to be fetched for renderer sizing.
             parent.invalidateColumns (model);
             TreeNode[] nodePath = nodeAfter.getPath ();
             pet.updateOrder (nodePath);
             pet.updateVisibility (nodePath);
-            needAnimate.add (pet);
         }
 
         for (List<String> ref : references)
@@ -292,10 +293,11 @@ public class ChangeVariable extends UndoableView
                 FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
                 NodeBase subparent = (NodeBase) n.getParent ();
 
+                boolean added = needAnimate.add (subpet);
+                if (added) subpet.updateHighlights (subpet.root, nameAfter);
+                else       subpet.updateHighlights (n, nameAfter);
                 submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
-
                 subparent.invalidateColumns (submodel);
-                needAnimate.add (subpet);
             }
         }
 
