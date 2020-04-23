@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,6 +21,7 @@ public class OutputParser
     public boolean      isXycePRN;
     public Column       time;
     public boolean      timeFound;  // Indicates that time is a properly-labeled column, rather than a fallback.
+    public float        defaultValue;
 
     public void parse (Path f)
     {
@@ -29,10 +30,11 @@ public class OutputParser
 
     public void parse (Path f, float defaultValue)
     {
-        columns = new ArrayList<Column> ();
-        raw = true;  // Will be negated if any non-empty column name is found.
-        isXycePRN = false;
-        time = null;
+        columns           = new ArrayList<Column> ();
+        raw               = true;  // Will be negated if any non-empty column name is found.
+        isXycePRN         = false;
+        time              = null;
+        this.defaultValue = defaultValue;
 
         try (BufferedReader br = Files.newBufferedReader (f))
         {
@@ -125,9 +127,33 @@ public class OutputParser
         if (isXycePRN) columns.remove (0);
     }
 
+    public Column getColumn (String columnName)
+    {
+        for (Column c : columns) if (c.header.equals (columnName)) return c;
+        return null;
+    }
+
+    public float get (String columnName)
+    {
+        return get (columnName, -1);
+    }
+
+    public float get (String columnName, int row)
+    {
+        Column c = getColumn (columnName);
+        if (c == null) return defaultValue;
+        return c.get (row, defaultValue);
+    }
+
     public boolean hasData ()
     {
         for (Column c : columns) if (! c.values.isEmpty ()) return true;
+        return false;
+    }
+
+    public boolean hasHeaders ()
+    {
+        for (Column c : columns) if (! c.header.isEmpty ()) return true;
         return false;
     }
 
@@ -161,6 +187,24 @@ public class OutputParser
             {
                 range = max - min;
             }
+        }
+
+        public float get ()
+        {
+            return get (-1, 0);
+        }
+
+        public float get (int row)
+        {
+            return get (row, 0);
+        }
+
+        public float get (int row, float defaultValue)
+        {
+            //if (row < 0) return value;  TODO: implement line-by-line reading mode. row==-1 means retrieve current value. See OutputParser.h
+            row -= startRow;
+            if (row < 0  ||  row >= values.size ()) return defaultValue;
+            return values.get (row);
         }
     }
 
