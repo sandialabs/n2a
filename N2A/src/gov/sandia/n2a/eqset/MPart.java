@@ -14,7 +14,6 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MPersistent;
 
 /**
     Collates models following all the N2A language rules, and provides an interface
@@ -25,16 +24,14 @@ import gov.sandia.n2a.db.MPersistent;
     Additional functions (outside the main MNode interface) support efficient
     construction.
 
-    A key assumption of this implementation is that only MPersistent nodes are fed into it.
-
     All MNode functions are fully supported. In particular, merge() is safe to use, even
     if it involves $inherit lines.
 **/
 public class MPart extends MNode
 {
-    protected MPersistent source;
-    protected MPersistent original;        // The original source of this node, before it was overwritten by another document. Refers to same object as source if this node has not been overridden.
-    protected MPart       inheritedFrom;   // Node in the tree that contains the $include statement that generated this node. Retained even if the node is overridden.
+    protected MNode source;
+    protected MNode original;        // The original source of this node, before it was overwritten by another document. Refers to same object as source if this node has not been overridden.
+    protected MPart inheritedFrom;   // Node in the tree that contains the $include statement that generated this node. Retained even if the node is overridden.
 
     protected MPart container;
     protected NavigableMap<String,MPart> children;
@@ -42,31 +39,31 @@ public class MPart extends MNode
     /**
         Collates a full model from the given source document.
     **/
-    public MPart (MPersistent source)
+    public MPart (MNode source)
     {
-        container       = null;
-        this.source     = source;
-        original        = source;
-        inheritedFrom   = null;
+        container     = null;
+        this.source   = source;
+        original      = source;
+        inheritedFrom = null;
 
         underrideChildren (null, source);
         expand ();
     }
 
-    protected MPart (MPart container, MPart inheritedFrom, MPersistent source)
+    protected MPart (MPart container, MPart inheritedFrom, MNode source)
     {
-        this.container       = container;
-        this.source          = source;
-        original             = source;
-        this.inheritedFrom   = inheritedFrom;
+        this.container     = container;
+        this.source        = source;
+        original           = source;
+        this.inheritedFrom = inheritedFrom;
     }
 
     /**
-        Convenience method for expand(LinkedList<MPersistent>).
+        Convenience method for expand(LinkedList<MNode>).
     **/
     public synchronized void expand ()
     {
-        LinkedList<MPersistent> visited = new LinkedList<MPersistent> ();
+        LinkedList<MNode> visited = new LinkedList<MNode> ();
         visited.push (getRoot ().source);
         expand (visited);
     }
@@ -79,7 +76,7 @@ public class MPart extends MNode
         lingering structure that we might otherwise build now.
         @param visited Used to guard against a document loading itself.
     **/
-    public synchronized void expand (LinkedList<MPersistent> visited)
+    public synchronized void expand (LinkedList<MNode> visited)
     {
         inherit (visited);
         for (MNode n : this)
@@ -94,7 +91,7 @@ public class MPart extends MNode
         using the current value of $inherit in our collated children.
         @param visited Used to guard against a document loading itself.
     **/
-    public synchronized void inherit (LinkedList<MPersistent> visited)
+    public synchronized void inherit (LinkedList<MNode> visited)
     {
         if (children == null) return;
         MPart root = children.get ("$inherit");
@@ -111,7 +108,7 @@ public class MPart extends MNode
         @param from The $inherit node to be processed. We parse this into a set of part names
         which we retrieve from the database.
     **/
-    public synchronized void inherit (LinkedList<MPersistent> visited, MPart root, MNode from)
+    public synchronized void inherit (LinkedList<MNode> visited, MPart root, MNode from)
     {
         boolean maintainable =  from == root  &&  root.isFromTopDocument ();
         boolean changedName = false;  // Indicates that at least one name changed due to ID resolution. This lets us delay updating the field until all names are processed.
@@ -122,7 +119,7 @@ public class MPart extends MNode
             String parentName = parentNames[i];
             String id         = from.get (i);
             parentName = parentName.trim ().replace ("\"", "");
-            MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
+            MNode parentSource = AppData.models.child (parentName);
 
             String parentID = "";
             if (parentSource != null)
@@ -150,7 +147,7 @@ public class MPart extends MNode
             if (parentSource != null  &&  ! visited.contains (parentSource))
             {
                 underrideChildren (root, parentSource);
-                MPersistent parentFrom = (MPersistent) parentSource.child ("$inherit");
+                MNode parentFrom = parentSource.child ("$inherit");
                 if (parentFrom != null)
                 {
                     visited.push (parentSource);
@@ -176,7 +173,7 @@ public class MPart extends MNode
         so it is safe to run more than once for a given $inherit statement.
         @param newSource The current node in the source document which corresponds to this node in the MPart tree.
     **/
-    public synchronized void underride (MPart from, MPersistent newSource)
+    public synchronized void underride (MPart from, MNode newSource)
     {
         if (inheritedFrom == null  &&  from != this)  // The second clause is for very peculiar case. We don't allow incoming $inherit lines to underride the $inherit that brought them in, since their existence is completely contingent on it.
         {
@@ -189,28 +186,26 @@ public class MPart extends MNode
     /**
         Injects inherited equations as children of this node.
         Handles recursion down our containment hierarchy.
-        See note on underride(MPart,MPersistent). This is safe to run more than once for a given $inherit statement.
+        See note on underride(MPart,MNode). This is safe to run more than once for a given $inherit statement.
         @param newSource The current node in the source document which matches this node in the MPart tree.
     **/
-    public synchronized void underrideChildren (MPart from, MPersistent newSource)
+    public synchronized void underrideChildren (MPart from, MNode newSource)
     {
         if (newSource.size () == 0) return;
         if (children == null) children = new TreeMap<String,MPart> (comparator);
         for (MNode n : newSource)
         {
             String key = n.key ();
-            MPersistent p = (MPersistent) n;
-
             MPart c = children.get (key);
             if (c == null)
             {
-                c = new MPart (this, from, p);
+                c = new MPart (this, from, n);
                 children.put (key, c);
-                c.underrideChildren (from, p);
+                c.underrideChildren (from, n);
             }
             else
             {
-                c.underride (from, p);
+                c.underride (from, n);
             }
         }
     }
@@ -292,12 +287,12 @@ public class MPart extends MNode
         return result;
     }
 
-    public MPersistent getSource ()
+    public MNode getSource ()
     {
         return source;
     }
 
-    public MPersistent getOriginal ()
+    public MNode getOriginal ()
     {
         return original;
     }
@@ -408,7 +403,7 @@ public class MPart extends MNode
         if (isFromTopDocument ()) return;
         // The only way to get past the above line is if original==source
         container.override ();
-        source = (MPersistent) container.source.set (get (), key ());  // Most intermediate nodes will have a value of "", unless they are a variable.
+        source = container.source.set (get (), key ());  // Most intermediate nodes will have a value of "", unless they are a variable.
     }
 
     /**
@@ -461,7 +456,7 @@ public class MPart extends MNode
 
         // We don't have the child, so by construction it is not in any source document.
         override ();  // ensures that source is a member of the top-level document tree
-        MPersistent s = (MPersistent) source.set (value, index);
+        MNode s = source.set (value, index);
         result = new MPart (this, null, s);
         if (children == null) children = new TreeMap<String,MPart> (comparator);
         children.put (index, result);
@@ -486,7 +481,7 @@ public class MPart extends MNode
         {
             String parentName = parentNames[i];
             parentName = parentName.trim ().replace ("\"", "");
-            MPersistent parentSource = (MPersistent) AppData.models.child (parentName);
+            MNode parentSource = AppData.models.child (parentName);
             if (parentSource != null) set (parentSource.get ("$metadata", "id"), i);
         }
     }
@@ -580,7 +575,7 @@ public class MPart extends MNode
         MNode toPart = getChild (toIndex);
         if (toPart == null)  // No node at the destination, so merge at level of top-document.
         {
-            MPersistent toDoc = (MPersistent) source.childOrCreate (toIndex);
+            MNode toDoc = source.childOrCreate (toIndex);
             toDoc.merge (fromDoc);
             MPart c = new MPart (this, null, toDoc);
             children.put (toIndex, c);

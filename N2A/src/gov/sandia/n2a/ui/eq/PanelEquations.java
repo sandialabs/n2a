@@ -72,7 +72,6 @@ import javax.swing.tree.TreePath;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.eqset.MPart;
@@ -800,7 +799,7 @@ public class PanelEquations extends JPanel
         updateLock ();
         try
         {
-            root = new NodePart (new MPart ((MPersistent) record));
+            root = new NodePart (new MPart (record));
             root.build ();
             root.findConnections ();
             loadPart (root);
@@ -1132,11 +1131,6 @@ public class PanelEquations extends JPanel
 
     ActionListener listenerRun = new ActionListener ()
     {
-        /**
-            Fire off a simulation.
-            The code below is adapted from gove.sandia.n2a.ui.model.RunDetailPanel, specifically the old-style single-run.
-            uiController.prepareAndSubmitRunEnsemble() is the way to set up a run ensemble
-        **/
         public void actionPerformed (ActionEvent e)
         {
             if (record == null) return;
@@ -1148,7 +1142,6 @@ public class PanelEquations extends JPanel
                 GraphNode gn = active.root.graph;
                 if (gn != null  &&  gn.titleFocused) mtp.setPreferredFocus (PanelModel.instance, gn.title);
                 else                                 mtp.setPreferredFocus (PanelModel.instance, active.tree);
-                
             }
 
             String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.

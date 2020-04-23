@@ -18,7 +18,6 @@ import java.util.Set;
 import gov.sandia.n2a.backend.neuroml.Sequencer.SequencerElement;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.UnitValue;
@@ -309,7 +308,7 @@ public class PartMap
         for (MNode c : AppData.models)
         {
             if (c.child ("$metadata", "backend", "lems", "part") == null) continue;  // Must directly declare a NeuroML part to be included.
-            NameMap map = new NameMap (new MPart ((MPersistent) c));  // Create map using fully-collated part, not just the immediate one.
+            NameMap map = new NameMap (new MPart (c));  // Create map using fully-collated part, not just the immediate one.
             outward.put (map.internal, map);
             for (String n : map.neuroml) inward.put (n, map);
         }

@@ -9,7 +9,6 @@ package gov.sandia.n2a.ui.eq;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.eqset.MPart;
@@ -904,7 +903,7 @@ public class PanelSearch extends JPanel
         {
             handles = new HashMap<String,EndpointHandles> ();
             MNode doc = AppData.models.child (key);
-            MPart part = new MPart ((MPersistent) doc);
+            MPart part = new MPart (doc);
             for (MNode c : part)
             {
                 String value = c.get ();

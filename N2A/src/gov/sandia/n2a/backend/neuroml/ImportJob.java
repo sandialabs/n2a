@@ -9,7 +9,6 @@ package gov.sandia.n2a.backend.neuroml;
 import gov.sandia.n2a.backend.neuroml.PartMap.NameMap;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
@@ -3938,7 +3937,7 @@ public class ImportJob extends XMLutility
             MNode parent = findBasePart (part);
             if (parent != null)
             {
-                MPart mparent = new MPart ((MPersistent) parent);
+                MPart mparent = new MPart (parent);
 
                 NameMap nameMap = partMap.outward.get (parent.key ());
                 if (nameMap == null)

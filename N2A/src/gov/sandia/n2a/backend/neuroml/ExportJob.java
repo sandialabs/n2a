@@ -121,7 +121,7 @@ public class ExportJob extends XMLutility
 
         try
         {
-            MPart mpart = new MPart ((MPersistent) source);
+            MPart mpart = new MPart (source);
             modelName = source.key ();
             equations = new EquationSet (mpart);
             makeExecutable (equations, true);
@@ -2971,7 +2971,7 @@ public class ExportJob extends XMLutility
                 {
                     // Do a complete build of the model, including inheritance resolution.
                     // This makes it indistinguishable from an embedded LEMS model.
-                    source = new MPart ((MPersistent) source);
+                    source = new MPart (source);
                     equations = new EquationSet (source);
                     makeExecutable (equations, false);
                 }
@@ -3525,7 +3525,7 @@ public class ExportJob extends XMLutility
                                 {
                                     MNode doc = AppData.models.child (a.partName);
                                     if (doc == null) continue;
-                                    MPart part = new MPart ((MPersistent) doc);
+                                    MPart part = new MPart (doc);
                                     MNode node = part.child (query);
                                     if (node == null) continue;
                                     NameMap nameMap = partMap.exportMap (a.partName);
