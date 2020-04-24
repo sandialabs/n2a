@@ -549,6 +549,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             {
                 if (clicks == 1)
                 {
+                    if (focusTree == null) return false;
                     final TreePath path = focusTree.getPathForLocation (x, y);
                     if (path != null  &&  path.equals (lastPath))  // Second click on node, but not double-click.
                     {
