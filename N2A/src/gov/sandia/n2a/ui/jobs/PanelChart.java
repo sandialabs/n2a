@@ -33,7 +33,6 @@ import java.awt.print.PrinterJob;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -61,6 +60,7 @@ import org.jfree.chart.plot.Plot;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.PlotRenderingInfo;
 import org.jfree.chart.plot.Zoomable;
+import org.jfree.graphics2d.svg.SVGGraphics2D;
 
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -622,9 +622,10 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
         public void actionPerformed (ActionEvent e)
         {
             JFileChooser fileChooser = new JFileChooser ();
-            FileNameExtensionFilter filter = new FileNameExtensionFilter ("PNG", "png");
+            FileNameExtensionFilter filter = new FileNameExtensionFilter ("JPEG", "jpeg", "jpg");
             fileChooser.addChoosableFileFilter (filter);
             fileChooser.setFileFilter (filter);
+            fileChooser.addChoosableFileFilter (new FileNameExtensionFilter ("PNG", "png"));
             if (ChartUtils.isJFreeSVGAvailable ()) fileChooser.addChoosableFileFilter (new FileNameExtensionFilter ("SVG", "svg"));
             if (ChartUtils.isOrsonPDFAvailable ()) fileChooser.addChoosableFileFilter (new FileNameExtensionFilter ("PDF", "pdf"));
 
@@ -647,6 +648,11 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             int h = getHeight ();
             switch (suffix)
             {
+                case "jpg":
+                case "jpeg":
+                    try {ChartUtils.saveChartAsJPEG (new File (fileName), chart, w, h);}
+                    catch (IOException ex) {}
+                    return;
                 case "png":
                     try {ChartUtils.saveChartAsPNG (new File (fileName), chart, w, h);}
                     catch (IOException ex) {}
@@ -654,17 +660,12 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
                 case "svg":
                     try (BufferedWriter writer = Files.newBufferedWriter (file))
                     {
-                        Class<?> svgGraphics2d = Class.forName ("org.jfree.graphics2d.svg.SVGGraphics2D");
-                        Constructor<?> ctor = svgGraphics2d.getConstructor (int.class, int.class);
-                        Method         m    = svgGraphics2d.getMethod ("getSVGElement");
-
-                        Graphics2D g2 = (Graphics2D) ctor.newInstance(w, h);
+                        SVGGraphics2D g2 = new SVGGraphics2D (w, h);
                         g2.setRenderingHint (JFreeChart.KEY_SUPPRESS_SHADOW_GENERATION, true);
                         Rectangle2D drawArea = new Rectangle2D.Double (0, 0, w, h);
                         chart.draw (g2, drawArea);
 
-                        writer.write ("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n");
-                        writer.write (m.invoke (g2) + "\n");
+                        writer.write (g2.getSVGDocument ());
                         writer.flush ();
                     }
                     catch (Exception ex) {}
