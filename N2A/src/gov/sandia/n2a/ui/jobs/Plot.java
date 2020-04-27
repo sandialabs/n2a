@@ -132,7 +132,7 @@ public class Plot extends OutputParser
         );
 
         LegendTitle legend = chart.getLegend ();
-        legend.setVisible (columnCount <= 5);
+        legend.setVisible (columnCount <= 10);
 
         XYPlot plot = chart.getXYPlot();
         plot.setBackgroundPaint     (Color.white);
@@ -140,12 +140,21 @@ public class Plot extends OutputParser
         plot.setRangeGridlinePaint  (Color.lightGray);
         plot.setDomainPannable (true);
         plot.setRangePannable  (true);
+
+        int count0 = dataset0.getSeriesCount ();
+        int count = count0;
+        if (dataset1 != null) count += dataset1.getSeriesCount ();
+
         NumberAxis axis0 = (NumberAxis) plot.getRangeAxis ();
         axis0.setAutoRangeIncludesZero (false);
         if (range0 > 0) axis0.setAutoRangeMinimumSize (range0 / 2);
 
         XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
-        for (int i = 0; i < dataset0.getSeriesCount (); i++) renderer.setSeriesShapesVisible (i, false);
+        for (int i = 0; i < dataset0.getSeriesCount (); i++)
+        {
+            renderer.setSeriesShapesVisible (i, false);
+            renderer.setSeriesPaint (i, Color.getHSBColor ((float) i / count, 1.0f, 0.9f));
+        }
         plot.setRenderer (renderer);
 
         if (dataset1 != null)
@@ -160,7 +169,11 @@ public class Plot extends OutputParser
             plot.setRangeAxis (1, axis1);
 
             renderer = new XYLineAndShapeRenderer();
-            for (int i = 0; i < dataset1.getSeriesCount (); i++) renderer.setSeriesShapesVisible (i, false);
+            for (int i = 0; i < dataset1.getSeriesCount (); i++)
+            {
+                renderer.setSeriesShapesVisible (i, false);
+                renderer.setSeriesPaint (i, Color.getHSBColor ((float) (i + count0) / count, 1.0f, 0.9f));
+            }
             plot.setRenderer (1, renderer);
             plot.setDatasetRenderingOrder (DatasetRenderingOrder.REVERSE);
         }
