@@ -12,7 +12,7 @@ import java.util.List;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotations;
@@ -71,7 +71,14 @@ public class NodeAnnotations extends NodeContainer
     }
 
     @Override
-    public NodeBase add (String type, JTree tree, MNode data, Point location)
+    public NodeBase containerFor (String type)
+    {
+        if (type.equals ("Annotation")) return this;
+        return ((NodeBase) parent).containerFor (type);
+    }
+
+    @Override
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
     {
         if (type.isEmpty ())
         {
@@ -84,19 +91,17 @@ public class NodeAnnotations extends NodeContainer
         {
             // Add a new annotation to our children
             int index = getChildCount () - 1;
-            TreePath path = tree.getSelectionPath ();
+            TreePath path = tree.getLeadSelectionPath ();
             if (path != null)
             {
                 NodeBase selected = (NodeBase) path.getLastPathComponent ();
                 if (isNodeChild (selected)) index = getIndex (selected);  // unfiltered index
             }
             index++;
-            AddAnnotation aa = new AddAnnotation (this, index, data);
-            MainFrame.instance.undoManager.add (aa);
-            return aa.createdNode;
+            return new AddAnnotation (this, index, data);
         }
 
-        return ((NodeBase) getParent ()).add (type, tree, data, location);
+        return ((NodeBase) parent).makeAdd (type, tree, data, location);
     }
 
     @Override
@@ -106,9 +111,9 @@ public class NodeAnnotations extends NodeContainer
     }
 
     @Override
-    public void delete (JTree tree, boolean canceled)
+    public Undoable makeDelete (boolean canceled)
     {
-        if (! source.isFromTopDocument ()) return;
-        MainFrame.instance.undoManager.add (new DeleteAnnotations (this));
+        if (source.isFromTopDocument ()) return new DeleteAnnotations (this);
+        return null;
     }
 }

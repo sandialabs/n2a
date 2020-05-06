@@ -84,7 +84,7 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                MainFrame.instance.undoManager.add (new AddEntry ());
+                MainFrame.instance.undoManager.apply (new AddEntry ());
             }
         });
         actionMap.put ("delete", new AbstractAction ()
@@ -95,7 +95,7 @@ public class PanelSearch extends JPanel
                 if (key == null) return;
                 if (! AppData.references.isWriteable (key)) return;
                 lastSelection = list.getSelectedIndex ();
-                MainFrame.instance.undoManager.add (new DeleteEntry ((MDoc) AppData.references.child (key)));
+                MainFrame.instance.undoManager.apply (new DeleteEntry ((MDoc) AppData.references.child (key)));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -153,7 +153,7 @@ public class PanelSearch extends JPanel
                 for (MNode n : data)  // data can contain several entries
                 {
                     String key = MDir.validFilenameFrom (n.key ());
-                    MainFrame.instance.undoManager.add (new AddEntry (key, n));
+                    MainFrame.instance.undoManager.apply (new AddEntry (key, n));
                 }
                 return true;
             }

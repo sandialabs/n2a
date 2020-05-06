@@ -262,6 +262,7 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         }
         last = labels.size () - 1;
         for (; i <= last; i++) labels.get (i).setVisible (false);
+        invalidate ();  // Force layout to update with new column sizes.
 
         return this;
     }

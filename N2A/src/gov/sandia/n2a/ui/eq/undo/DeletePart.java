@@ -1,5 +1,5 @@
 /*
-Copyright 2017,2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -24,14 +24,9 @@ public class DeletePart extends UndoableView
     protected MNode        savedSubtree;
     protected boolean      neutralized;
     protected boolean      multi;          // Indicates that this is one of several parts being deleted at the same time. During undo, set selected.
-    protected boolean      multiLead;      // Indicates this is the lead (focused) item in the selection. This is the node focused when delete key is pressed.
+    protected boolean      multiLast;      // Indicates this is the focused item in the selection.
 
     public DeletePart (NodePart node, boolean canceled)
-    {
-        this (node, canceled, false, false);
-    }
-
-    public DeletePart (NodePart node, boolean canceled, boolean multi, boolean multiLead)
     {
         // Never delete a part in parent position, because after that we would need to drill up anyway.
         if (view.asParent)
@@ -41,27 +36,35 @@ public class DeletePart extends UndoableView
         }
 
         NodeBase container = (NodeBase) node.getTrueParent ();
-        path           = container.getKeyPath ();
-        index          = container.getIndex (node);
-        this.canceled  = canceled;
-        name           = node.source.key ();
-        this.multi     = multi;
-        this.multiLead = multiLead;
+        path          = container.getKeyPath ();
+        index         = container.getIndex (node);
+        this.canceled = canceled;
+        name          = node.source.key ();
 
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source.getSource ());  // Only take the top-doc data, not the collated tree.
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
-        AddPart.create (path, multi ? -1 : index, name, savedSubtree, false, multi, multiLead);
+        AddPart.create (path, index, name, savedSubtree, false, multi, multiLast, false);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddPart.destroy (path, canceled, name);
+        AddPart.destroy (path, canceled, name, ! multi  ||  multiLast, false);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

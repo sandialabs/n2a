@@ -103,11 +103,11 @@ public class ChangeReference extends UndoableView
         }
 
         nodeAfter.setUserObject ();
-        parent.invalidateColumns (model);
-
+        parent.invalidateColumns (null);
         TreeNode[] nodePath = nodeAfter.getPath ();
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
+        parent.allNodesChanged (model);
         pet.animate ();
     }
 }

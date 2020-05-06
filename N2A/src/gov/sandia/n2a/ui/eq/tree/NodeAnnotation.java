@@ -14,6 +14,7 @@ import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
@@ -153,7 +154,14 @@ public class NodeAnnotation extends NodeContainer
     }
 
     @Override
-    public NodeBase add (String type, JTree tree, MNode data, Point location)
+    public NodeBase containerFor (String type)
+    {
+        if (type.equals ("Annotation")) return this;
+        return ((NodeBase) parent).containerFor (type);
+    }
+
+    @Override
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
     {
         if (type.isEmpty ()) type = "Annotation";  // By context, we assume the user wants to add another annotation.
         if (type.equals ("Annotation"))
@@ -163,20 +171,18 @@ public class NodeAnnotation extends NodeContainer
             {
                 // Add a new annotation to our children
                 int index = getChildCount () - 1;
-                TreePath path = tree.getSelectionPath ();
+                TreePath path = tree.getLeadSelectionPath ();
                 if (path != null)
                 {
                     NodeBase selected = (NodeBase) path.getLastPathComponent ();
                     if (isNodeChild (selected)) index = getIndex (selected);  // unfiltered index
                 }
                 index++;
-                AddAnnotation aa = new AddAnnotation (this, index, data);
-                MainFrame.instance.undoManager.add (aa);
-                return aa.createdNode;
+                return new AddAnnotation (this, index, data);
             }
             // else let the request travel up to our parent
         }
-        return ((NodeBase) getParent ()).add (type, tree, data, location);
+        return ((NodeBase) parent).makeAdd (type, tree, data, location);
     }
 
     @Override
@@ -186,7 +192,7 @@ public class NodeAnnotation extends NodeContainer
         if (input.isEmpty ())
         {
             boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddAnnotation");
-            delete (tree, canceled);
+            delete (canceled);
             return;
         }
 
@@ -238,13 +244,13 @@ public class NodeAnnotation extends NodeContainer
             return;
         }
 
-        MainFrame.instance.undoManager.add (new ChangeAnnotation (this, name, value));
+        MainFrame.instance.undoManager.apply (new ChangeAnnotation (this, name, value));
     }
 
     @Override
-    public void delete (JTree tree, boolean canceled)
+    public Undoable makeDelete (boolean canceled)
     {
-        if (! source.isFromTopDocument ()) return;
-        MainFrame.instance.undoManager.add (new DeleteAnnotation (this, canceled));
+        if (source.isFromTopDocument ()) return new DeleteAnnotation (this, canceled);
+        return null;
     }
 }

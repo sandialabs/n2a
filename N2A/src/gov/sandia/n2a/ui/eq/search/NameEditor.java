@@ -258,7 +258,7 @@ public class NameEditor extends AbstractCellEditor implements TreeCellEditor, Tr
     {
         if (! e.isAddedPath ()) return;
         tree = (JTree) e.getSource ();
-        lastPath = tree.getSelectionPath ();
+        lastPath = e.getNewLeadSelectionPath ();
     }
 
     /**

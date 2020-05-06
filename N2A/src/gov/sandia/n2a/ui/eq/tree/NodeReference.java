@@ -14,6 +14,7 @@ import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.ChangeReference;
 import gov.sandia.n2a.ui.eq.undo.DeleteReference;
@@ -104,10 +105,10 @@ public class NodeReference extends NodeBase
     }
 
     @Override
-    public NodeBase add (String type, JTree tree, MNode data, Point location)
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
     {
         if (type.isEmpty ()) type = "Reference";  // By context, we assume the user wants to add another reference.
-        return ((NodeBase) getParent ()).add (type, tree, data, location);
+        return ((NodeBase) parent).makeAdd (type, tree, data, location);
     }
 
     @Override
@@ -117,7 +118,7 @@ public class NodeReference extends NodeBase
         if (input.isEmpty ())
         {
             boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddReference");
-            delete (tree, canceled);
+            delete (canceled);
             return;
         }
 
@@ -152,13 +153,13 @@ public class NodeReference extends NodeBase
             return;
         }
 
-        MainFrame.instance.undoManager.add (new ChangeReference (parent, oldName, oldValue, name, value));
+        MainFrame.instance.undoManager.apply (new ChangeReference (parent, oldName, oldValue, name, value));
     }
 
     @Override
-    public void delete (JTree tree, boolean canceled)
+    public Undoable makeDelete (boolean canceled)
     {
-        if (! source.isFromTopDocument ()) return;
-        MainFrame.instance.undoManager.add (new DeleteReference (this, canceled));
+        if (source.isFromTopDocument ()) return new DeleteReference (this, canceled);
+        return null;
     }
 }

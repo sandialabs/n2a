@@ -286,7 +286,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     public boolean getFlag (Object... keys)
     {
         MNode c = child (toStrings (keys));
-        if (c == null  ||  ! c.data ()  ||  c.get ().equals ("0")) return false;
+        if (c == null  ||  c.get ().equals ("0")) return false;
         return true;
     }
 

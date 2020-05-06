@@ -11,6 +11,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.EventQueue;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
@@ -55,6 +56,7 @@ import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
+import gov.sandia.n2a.ui.eq.undo.DeletePart;
 import sun.swing.SwingUtilities2;
 
 @SuppressWarnings("serial")
@@ -90,7 +92,7 @@ public class GraphNode extends JPanel
             panelEquationTree.loadPart (node);
         }
 
-        // Internally, this class uses that null/non-null state of panelEquationsTree to indicated whether
+        // Internally, this class uses the null/non-null state of panelEquationsTree to indicated whether
         // container.view is NODE or a property panel mode.
         open =  panelEquationTree != null  &&  node.source.getBoolean ("$metadata", "gui", "bounds", "open");
 
@@ -149,10 +151,15 @@ public class GraphNode extends JPanel
         return panelEquationTree;
     }
 
-    public Component getTitleFocus ()
+    public Component getTargetComponent ()
     {
         if (titleFocused) return title;
         return getEquationTree ().tree;
+    }
+
+    public boolean titleIsFocusOwner ()
+    {
+        return title.isFocusOwner ();
     }
 
     public void takeFocusOnTitle ()
@@ -163,16 +170,13 @@ public class GraphNode extends JPanel
 
     public void takeFocus ()
     {
-        if (titleFocused)
-        {
-            if (title.isFocusOwner ()) restoreFocus ();
-            else                       title.requestFocusInWindow ();
-        }
-        else
-        {
-            restoreFocus ();
-            getEquationTree ().takeFocus ();
-        }
+        // A call to title.requestFocusInWindow() may not result in a call to focusGained()
+        // soon enough to get this graph node ready for edit playback. Thus we need to directly call
+        // restoreFocus every time. This will result in some redundant calls to restoreFocus(),
+        // but this is safer than relying on Swing's scheduling.
+        restoreFocus ();
+        if (titleFocused) title.requestFocusInWindow ();
+        else              getEquationTree ().takeFocus ();
     }
 
     /**
@@ -180,6 +184,7 @@ public class GraphNode extends JPanel
     **/
     public void restoreFocus ()
     {
+        container.setSelected (false);
         if (panelEquationTree == null)
         {
             container.active = container.panelEquationTree;
@@ -332,7 +337,7 @@ public class GraphNode extends JPanel
             int y = getBounds ().y - parent.offset.y + dy * step;
             gui.set (y, "bounds", "y");
         }
-        MainFrame.instance.undoManager.add (new ChangeGUI (node, gui));
+        MainFrame.instance.undoManager.apply (new ChangeGUI (node, gui));
     }
 
     public void updateTitle ()
@@ -523,6 +528,7 @@ public class GraphNode extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("F2"),               "startEditing");
             inputMap.put (KeyStroke.getKeyStroke ("shift ctrl D"),     "drillUp");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl D"),           "drillDown");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl O"),           "outsource");
             inputMap.put (KeyStroke.getKeyStroke ("SPACE"),            "toggleSelection");
 
             ActionMap actionMap = getActionMap ();
@@ -592,14 +598,62 @@ public class GraphNode extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    getEquationTree ().addAtSelected ("");  // No selection should be active, so this should default to root (same as our "node").
+                    if (open)
+                    {
+                        panelEquationTree.addAtSelected ("");  // No selection should be active, so this should default to root (same as our "node").
+                    }
+                    else  // closed, so add new peer part in graph area near this node
+                    {
+                        Point location = GraphNode.this.getLocation ();
+                        location.x += 100 - parent.offset.x;
+                        location.y += 100 - parent.offset.y;
+                        NodePart editMe = (NodePart) container.part.add ("Part", null, null, location);
+                        if (editMe == null) return;
+                        EventQueue.invokeLater (new Runnable ()
+                        {
+                            public void run ()
+                            {
+                                editMe.graph.title.startEditing ();
+                            }
+                        });
+                    }
                 }
             });
             actionMap.put ("delete", new AbstractAction ()
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    node.delete (getEquationTree ().tree, false);
+                    // Compare this implementation with NodePart.delete(). Here we specifically handle graph nodes.
+
+                    if (! node.source.isFromTopDocument ()) return;
+
+                    List<GraphNode> selected = parent.getSelection ();
+                    selected.remove (GraphNode.this);
+
+                    UndoManager um = MainFrame.instance.undoManager;
+                    if (selected.isEmpty ())
+                    {
+                        um.apply (new DeletePart (node, false));
+                    }
+                    else
+                    {
+                        selected.add (GraphNode.this);  // Now at end of list, which is where we want it.
+                        CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
+                        compound.leadPath = node.getKeyPath ();
+                        // No need to clear selection, because all nodes are going away.
+                        um.addEdit (compound);
+                        int last = selected.size () - 1;
+                        int i = 0;
+                        for (GraphNode g : selected)
+                        {
+                            DeletePart d = new DeletePart (g.node, false);
+                            d.setMulti (true);
+                            if (i++ == last) d.setMultiLast (true);
+                            um.apply (d);
+                        }
+                        um.endCompoundEdit ();
+                        // No need to focus the lead, because all nodes are gone. Instead, rely on behavior of multiLast to focus another node.
+                    }
                 }
             });
             actionMap.put ("startEditing", new AbstractAction ()
@@ -621,6 +675,13 @@ public class GraphNode extends JPanel
                 public void actionPerformed (ActionEvent e)
                 {
                     container.drill (node);
+                }
+            });
+            actionMap.put ("outsource", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    PanelEquationTree.outsource (node);
                 }
             });
             actionMap.put ("toggleSelection", new AbstractAction ()
@@ -1120,10 +1181,16 @@ public class GraphNode extends JPanel
                     {
                         UndoManager um = MainFrame.instance.undoManager;
                         boolean multi =  moved  &&  ! selection.isEmpty ();
-                        if (multi) um.addEdit (new CompoundEditView ());
-                        um.add (new ChangeGUI (node, guiTree, multi));
-                        if (moved)
+                        ChangeGUI cg = new ChangeGUI (node, guiTree);
+                        if (! multi)
                         {
+                            um.apply (cg);
+                        }
+                        else
+                        {
+                            CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
+                            um.addEdit (compound);
+                            compound.addEdit (cg);  // delayed execution
                             for (GraphNode g : selection)
                             {
                                 guiTree = new MVolatile ();
@@ -1131,10 +1198,11 @@ public class GraphNode extends JPanel
                                 now = g.getBounds ();
                                 if (dx != 0) bounds.set (now.x - parent.offset.x, "x");
                                 if (dy != 0) bounds.set (now.y - parent.offset.y, "y");
-                                um.add (new ChangeGUI (g.node, guiTree, true));
+                                compound.addEdit (new ChangeGUI (g.node, guiTree));
                             }
+                            um.endCompoundEdit ();
+                            compound.redo ();
                         }
-                        um.endCompoundEdit ();
                     }
                 }
             }

@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.util.List;
 
 import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 
@@ -23,9 +24,11 @@ import gov.sandia.n2a.ui.eq.tree.NodeContainer;
 
 public class AddAnnotations extends UndoableView
 {
-    protected List<String> path;  ///< to parent of $metadata node
-    protected int          index; ///< Position within parent node
-    protected MVolatile    saved; ///< subtree under $metadata
+    protected List<String> path;  // to parent of $metadata node
+    protected int          index; // Position within parent node
+    protected MVolatile    saved; // subtree under $metadata
+    protected boolean      multi;
+    protected boolean      multiLast;
 
     public AddAnnotations (NodeBase parent, int index, MNode data)
     {
@@ -36,13 +39,23 @@ public class AddAnnotations extends UndoableView
         saved.merge (data);
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
-        destroy (path, saved.key ());
+        destroy (path, saved.key (), ! multi  ||  multiLast);
     }
 
-    public static void destroy (List<String> path, String blockName)
+    public static void destroy (List<String> path, String blockName, boolean setSelected)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
@@ -65,7 +78,7 @@ public class AddAnnotations extends UndoableView
             node.build ();  // Necessary to remove all overridden nodes
             node.filter (FilteredTreeModel.filterLevel);
         }
-        pet.updateVisibility (nodePath, index);
+        pet.updateVisibility (nodePath, index, setSelected);
         pet.animate ();
     }
 
@@ -79,10 +92,10 @@ public class AddAnnotations extends UndoableView
                 return new NodeAnnotations (part);
             }
         };
-        create (path, index, saved, factory);
+        create (path, index, saved, factory, multi);
     }
 
-    public static void create (List<String> path, int index, MNode saved, NodeFactory factory)
+    public static void create (List<String> path, int index, MNode saved, NodeFactory factory, boolean multi)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -104,7 +117,9 @@ public class AddAnnotations extends UndoableView
         }
         node.build ();  // Replaces all nodes, so they are set to require tab initialization.
         node.filter (FilteredTreeModel.filterLevel);
-        pet.updateVisibility (node.getPath ());
+        TreeNode[] nodePath = node.getPath ();
+        pet.updateVisibility (nodePath, -2, ! multi);
+        if (multi) pet.tree.addSelectionPath (new TreePath (nodePath));
         pet.animate ();
     }
 }

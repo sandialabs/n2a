@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,7 +11,7 @@ import javax.swing.undo.UndoableEdit;
 @SuppressWarnings("serial")
 public class UndoManager extends javax.swing.undo.UndoManager
 {
-    public synchronized boolean add (Undoable edit)
+    public synchronized boolean apply (Undoable edit)
     {
         edit.redo ();  // All descendants of Undoable are expected to carry out their operation once on creation. We do that here for convenience.
 

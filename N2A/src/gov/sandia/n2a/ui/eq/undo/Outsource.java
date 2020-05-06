@@ -29,11 +29,13 @@ public class Outsource extends UndoableView
 
     public Outsource (NodePart node, String inherit)
     {
+        view.first = false;  // So we can claw back focus after AddDoc runs.
+
         path         = node.getKeyPath ();
         this.inherit = inherit;
 
         savedSubtree = new MVolatile ();
-        savedSubtree.merge (node.source);  // This takes the entire tree, regardless of visibility. TODO: should this match the visibility semantics used by copy/paste operations?
+        savedSubtree.merge (node.source);  // This takes the entire tree, regardless of visibility.
 
         if (node.graph == null)
         {
@@ -93,10 +95,12 @@ public class Outsource extends UndoableView
         {
             PanelEquations pe = PanelModel.instance.panelEquations;
             if (pe.view == PanelEquations.NODE) node.graph.setOpen (wasExpanded);
-            node.graph.takeFocus ();
+            node.graph.takeFocusOnTitle ();
+            node.graph.updateTitle ();  // Because changes to inherit can change how a part's title is displayed.
         }
+        pet.animate ();
 
         // Not necessary to update the graph, since exactly the same connections exist.
-        // findConnections() merely re-establishes them.
+        // findConnections() would merely re-establish them.
     }
 }

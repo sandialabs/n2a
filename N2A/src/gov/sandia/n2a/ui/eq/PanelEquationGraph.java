@@ -15,6 +15,7 @@ import java.awt.Dimension;
 import java.awt.FocusTraversalPolicy;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.KeyboardFocusManager;
 import java.awt.LayoutManager;
 import java.awt.LayoutManager2;
 import java.awt.Point;
@@ -213,35 +214,57 @@ public class PanelEquationGraph extends JScrollPane
         return result;
     }
 
+    public Dimension getExtentSize ()
+    {
+        return vp.getExtentSize ();
+    }
+
+    public Point getViewPosition ()
+    {
+        return vp.getViewPosition ();
+    }
+
+    /**
+        @return The amount to add to stored coordinates to convert them to current view coordinates.
+        Don't modify this object.
+    **/
+    public Point getOffset ()
+    {
+        return graphPanel.offset;
+    }
+
     public void addPart (NodePart node)
     {
         if (node.getParent () == container.part) graphPanel.addPart (node);
     }
 
-    public void removePart (NodePart node)
+    public void removePart (NodePart node, boolean holdFocusInGraph)
     {
         if (node.graph == null) return;
         if (container.active == node.getTree ()) container.active = null;  // In case this graph panel loses focus completely.
 
         // Try to keep focus inside graph area.
-        PanelModel pm = PanelModel.instance;
-        FocusTraversalPolicy ftp = pm.getFocusTraversalPolicy ();
-        Component c = ftp.getComponentAfter (pm, node.graph.title);
-        while (c != null  &&  ! (c instanceof GraphNode)) c = c.getParent ();
-        if (c == null)  // next focus is not in a graph node, so outside of this equation graph
+        if (holdFocusInGraph)
         {
-            c = ftp.getComponentBefore (pm, node.graph.title);
-            PanelEquations pe = pm.panelEquations;
-            if (c == pe.breadcrumbRenderer  ||  c == pe.panelParent.panelEquationTree.tree)
+            PanelModel pm = PanelModel.instance;
+            FocusTraversalPolicy ftp = pm.getFocusTraversalPolicy ();
+            Component c = ftp.getComponentAfter (pm, node.graph.title);
+            while (c != null  &&  ! (c instanceof GraphNode)) c = c.getParent ();
+            if (c == null)  // next focus is not in a graph node, so outside of this equation graph
             {
-                pe.getTitleFocus ().requestFocusInWindow ();
+                c = ftp.getComponentBefore (pm, node.graph.title);
+                PanelEquations pe = pm.panelEquations;
+                if (c == pe.breadcrumbRenderer  ||  c == pe.panelParent.panelEquationTree.tree)
+                {
+                    pe.getTitleFocus ().requestFocusInWindow ();
+                }
+                else
+                {
+                    while (c != null  &&  ! (c instanceof GraphNode)) c = c.getParent ();
+                }
             }
-            else
-            {
-                while (c != null  &&  ! (c instanceof GraphNode)) c = c.getParent ();
-            }
+            if (c instanceof GraphNode) ((GraphNode) c).takeFocus ();
         }
-        if (c instanceof GraphNode) ((GraphNode) c).takeFocus ();
 
         graphPanel.removePart (node);  // If node still has focus, then default focus cycle applies.
     }
@@ -702,7 +725,7 @@ public class PanelEquationGraph extends JScrollPane
                 {
                     gui.set (action, "arrow");
                 }
-                MainFrame.instance.undoManager.add (new ChangeGUI (n, gui));
+                MainFrame.instance.undoManager.apply (new ChangeGUI (n, gui));
             }
         };
     }
@@ -1032,7 +1055,7 @@ public class PanelEquationGraph extends JScrollPane
                     String value = "connect()";
                     String original = variable.source.getOriginal ().get ();
                     if (Operator.containsConnect (original)) value = original;
-                    um.add (new ChangeVariable (variable, edge.alias, value));
+                    um.apply (new ChangeVariable (variable, edge.alias, value));
                 }
                 else if (nodeTo == edge.nodeTo)  // No change
                 {
@@ -1040,7 +1063,7 @@ public class PanelEquationGraph extends JScrollPane
                 }
                 else  // Connect to new endpoint
                 {
-                    um.add (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
+                    um.apply (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
                 }
                 edge = null;
             }
@@ -1071,7 +1094,27 @@ public class PanelEquationGraph extends JScrollPane
                     }
                 }
 
-                if (! toggle)
+                boolean focusNearest = true;
+                if (toggle)
+                {
+                    // Move focus to graph if it is not already here. Prefer node associated with current part shown in property panel.
+                    focusNearest = false;
+                    GraphNode g = PanelModel.getGraphNode (KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ());
+                    if (g == null)  // Current focus is not on a graph node, so pull it here.
+                    {
+                        focusNearest = true;  // Fallback
+                        if (container.view != PanelEquations.NODE)
+                        {
+                            g = container.panelEquationTree.root.graph;
+                            if (g != null)
+                            {
+                                g.takeFocusOnTitle ();
+                                focusNearest = false;
+                            }
+                        }
+                    }
+                }
+                if (focusNearest)  // Move focus to nearest graph node.
                 {
                     GraphNode c;
                     if (selected.isEmpty ()) c = graphPanel.findNodeClosest (p);

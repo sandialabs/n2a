@@ -87,7 +87,7 @@ public class PanelModel extends JPanel implements MNodeListener
                         result = super.getComponentAfter (aContainer, result);
                         g1 = getGraphNode (result);
                     }
-                    if (g1 != null) return g1.getTitleFocus ();
+                    if (g1 != null) return g1.getTargetComponent ();
                     return result;
                 }
 
@@ -98,7 +98,7 @@ public class PanelModel extends JPanel implements MNodeListener
                 {
                     result = super.getComponentAfter (aContainer, result);
                     g1 = getGraphNode (result);
-                    if (g1 != null) return g1.getTitleFocus ();
+                    if (g1 != null) return g1.getTargetComponent ();
                     return result;
                 }
                 if (result == title) return panelEquations.getTitleFocus ();
@@ -173,7 +173,7 @@ public class PanelModel extends JPanel implements MNodeListener
                         result = super.getComponentBefore (aContainer, result);
                         g1 = getGraphNode (result);
                     }
-                    if (g1 != null) return g1.getTitleFocus ();
+                    if (g1 != null) return g1.getTargetComponent ();
                     // Most likely we have cycled into the graph parent, so fall through. The value of aComponent won't matter.
                 }
 

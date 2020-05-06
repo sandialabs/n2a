@@ -1,5 +1,5 @@
 /*
-Copyright 2017,2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -23,6 +23,8 @@ public class DeleteVariable extends UndoableView
     protected String       name;
     protected MNode        savedSubtree;
     protected boolean      neutralized;
+    protected boolean      multi;
+    protected boolean      multiLast;
 
     public DeleteVariable (NodeVariable node, boolean canceled)
     {
@@ -36,16 +38,26 @@ public class DeleteVariable extends UndoableView
         savedSubtree.merge (node.source.getSource ());
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
-        AddVariable.create (path, index, name, savedSubtree, false);
+        AddVariable.create (path, index, name, savedSubtree, false, multi);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddVariable.destroy (path, canceled, name);
+        AddVariable.destroy (path, canceled, name, ! multi  ||  multiLast);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

@@ -44,7 +44,7 @@ public class ImportNeuroML implements Importer
         while (job.models.size () > 0) addModel (job.models.iterator ().next (), job.models, um);
         // Save the best for last. That is, ensure that the main model is the one selected in the UI
         // after all add operations are completed.
-        if (mainModel != null) um.add (new AddDoc (job.modelName, mainModel));
+        if (mainModel != null) um.apply (new AddDoc (job.modelName, mainModel));
         um.endCompoundEdit ();
     }
 
@@ -73,7 +73,7 @@ public class ImportNeuroML implements Importer
 
         AddDoc add = new AddDoc (key, m);
         add.setSilent ();
-        um.add (add);
+        um.apply (add);
     }
 
     @Override

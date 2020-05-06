@@ -19,13 +19,15 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 public class DeleteAnnotation extends UndoableView
 {
     protected List<String> path;
-    protected int          index; // where to insert among siblings
+    protected int          index;         // where to insert among siblings
     protected boolean      canceled;
     protected String       name;
     protected String       prefix;
     protected MNode        savedSubtree;
     protected boolean      neutralized;
-    public    boolean      setSelection = true;
+    protected boolean      multi;         // See AddAnnotation for explanation of multi and kin.
+    protected boolean      multiLast;
+    public    boolean      selectVariable;
 
     public DeleteAnnotation (NodeAnnotation node, boolean canceled)
     {
@@ -59,16 +61,26 @@ public class DeleteAnnotation extends UndoableView
         savedSubtree.merge (node.folded.getSource ());
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
-        AddAnnotation.create (path, index, name, savedSubtree, false, setSelection);
+        AddAnnotation.create (path, index, name, savedSubtree, false, multi, selectVariable);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddAnnotation.destroy (path, canceled, name, prefix, setSelection);
+        AddAnnotation.destroy (path, canceled, name, prefix, multi, multiLast, selectVariable);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

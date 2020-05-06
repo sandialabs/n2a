@@ -69,7 +69,7 @@ public class PanelDiff extends JTree
             {
                 if (lastDelta.deleted)  // Force document to be restored in full, rather than allowing targeted undelete.
                 {
-                    MainFrame.instance.undoManager.add (container.new RevertDelta (lastDelta));
+                    MainFrame.instance.undoManager.apply (container.new RevertDelta (lastDelta));
                     return;
                 }
 
@@ -90,11 +90,11 @@ public class PanelDiff extends JTree
                 // Guard against deleting entire document. Such changes must be relegated to RevertDelta.
                 if (lastDelta.untracked  &&  p == root)
                 {
-                    MainFrame.instance.undoManager.add (container.new RevertDelta (lastDelta));
+                    MainFrame.instance.undoManager.apply (container.new RevertDelta (lastDelta));
                     return;
                 }
 
-                if (n != null) MainFrame.instance.undoManager.add (new RevertDiff (n));
+                if (n != null) MainFrame.instance.undoManager.apply (new RevertDiff (n));
             }
         });
 

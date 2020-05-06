@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
@@ -24,14 +25,16 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
-public class AddVariable extends UndoableView
+public class AddVariable extends UndoableView implements AddEditable
 {
-    protected List<String> path;  // to part that contains the variable node
-    protected int          index; // where to insert among siblings
+    protected List<String> path;         // to part that contains the variable node
+    protected int          index;        // where to insert among siblings
     protected String       name;
     protected MNode        createSubtree;
     protected boolean      nameIsGenerated;
-    public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected NodeBase     createdNode;  // Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected boolean      multi;
+    protected boolean      multiLast;
 
     public AddVariable (NodePart parent, int index, MNode data)
     {
@@ -68,13 +71,23 @@ public class AddVariable extends UndoableView
         return result;
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
-        destroy (path, false, name);
+        destroy (path, false, name, ! multi  ||  multiLast);
     }
 
-    public static void destroy (List<String> path, boolean canceled, String name)
+    public static void destroy (List<String> path, boolean canceled, String name, boolean setSelection)
     {
         // Retrieve created node
         NodePart parent = (NodePart) NodeBase.locateNode (path);
@@ -116,17 +129,22 @@ public class AddVariable extends UndoableView
         parent.invalidateColumns (model);
 
         pet.updateOrder (createdPath);
-        pet.updateVisibility (createdPath, index);  // includes nodeStructureChanged(), if necessary
+        pet.updateVisibility (createdPath, index, setSelection);  // includes nodeStructureChanged(), if necessary
         pet.animate ();
     }
 
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated);
+        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi);
     }
 
-    public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated)
+    public NodeBase getCreatedNode ()
+    {
+        return createdNode;
+    }
+
+    public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated, boolean multi)
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -170,7 +188,8 @@ public class AddVariable extends UndoableView
                 if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
         }
-        pet.updateVisibility (createdPath);
+        pet.updateVisibility (createdPath, -2, ! multi);
+        if (multi) pet.tree.addSelectionPath (new TreePath (createdPath));
         pet.animate ();
 
         return createdNode;

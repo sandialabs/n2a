@@ -16,6 +16,7 @@ import java.util.TreeSet;
 
 import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
 
@@ -41,13 +42,15 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeVariable extends UndoableView
 {
-    protected List<String>  path;
-    protected String        nameBefore;
-    protected String        nameAfter;
-    protected String        valueBefore;
-    protected String        valueAfter;
-    protected MNode         savedTree;   // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
-    protected List<String>  replacePath; // If a newly-created variable turns out to modify another node, this lets us remove the AddVariable from the undo stack.
+    protected List<String> path;
+    protected String       nameBefore;
+    protected String       nameAfter;
+    protected String       valueBefore;
+    protected String       valueAfter;
+    protected MNode        savedTree;   // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
+    protected List<String> replacePath; // If a newly-created variable turns out to modify another node, this lets us remove the AddVariable from the undo stack.
+    protected boolean      multi;
+    protected boolean      multiLast;
 
     /**
         @param node The variable being changed.
@@ -72,21 +75,31 @@ public class ChangeVariable extends UndoableView
         this.replacePath = replacePath;
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
         savedTree.set (valueBefore);
-        apply (nameAfter, nameBefore);
+        apply (nameAfter, nameBefore, multi, multiLast);
     }
 
     public void redo ()
     {
         super.redo ();
         savedTree.set (valueAfter);
-        apply (nameBefore, nameAfter);
+        apply (nameBefore, nameAfter, multi, multiLast);
     }
 
-    public void apply (String nameBefore, String nameAfter)
+    public void apply (String nameBefore, String nameAfter, boolean multi, boolean multiLast)
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -273,7 +286,12 @@ public class ChangeVariable extends UndoableView
             parent.invalidateColumns (model);
             TreeNode[] nodePath = nodeAfter.getPath ();
             pet.updateOrder (nodePath);
-            pet.updateVisibility (nodePath);
+            boolean killed = savedTree.get ().equals ("$kill");
+            boolean setSelection;
+            if (killed) setSelection =  ! multi  ||  multiLast;
+            else        setSelection =  ! multi;
+            pet.updateVisibility (nodePath, -2, setSelection);
+            if (multi  &&  ! killed) pet.tree.addSelectionPath (new TreePath (nodePath));
         }
 
         for (List<String> ref : references)
@@ -296,8 +314,10 @@ public class ChangeVariable extends UndoableView
                 boolean added = needAnimate.add (subpet);
                 if (added) subpet.updateHighlights (subpet.root, nameAfter);
                 else       subpet.updateHighlights (n, nameAfter);
+                subparent.invalidateColumns (null);
                 submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
-                subparent.invalidateColumns (submodel);
+                subpet.updateVisibility (n.getPath (), -2, false);
+                subparent.allNodesChanged (submodel);
             }
         }
 

@@ -2145,7 +2145,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             if (row < 0  ||  row >= deltas.size ()) return;
             Delta delta = deltas.get (row);
             if (delta.untracked) return;
-            MainFrame.instance.undoManager.add (new RevertDelta (delta));
+            MainFrame.instance.undoManager.apply (new RevertDelta (delta));
         }
 
         public int indexOf (String name)

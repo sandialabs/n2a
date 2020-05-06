@@ -31,22 +31,16 @@ import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
-import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelEquations;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
-import gov.sandia.n2a.ui.eq.undo.AddInherit;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.AddVariable;
-import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.eq.undo.ChangePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
-import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.Icon;
@@ -489,15 +483,21 @@ public class NodePart extends NodeContainer
                 if (u.candidates.size () == 0) continue;
                 NodePart toPart = u.candidates.get (u.candidates.size () - 1);
                 NodeVariable v = (NodeVariable) fromPart.child (u.alias);  // This must exist.
-                MainFrame.instance.undoManager.add (new ChangeVariable (v, u.alias, toPart.source.key ()));
+                MainFrame.instance.undoManager.apply (new ChangeVariable (v, u.alias, toPart.source.key ()));
                 toPart.connectionTarget = true;
             }
         }
     }
 
-    public NodeBase add (String type, JTree tree, MNode data, Point location)
+    @Override
+    public NodeBase containerFor (String type)
     {
-        if (type.isEmpty ()) type = "Part";
+        return this;
+    }
+
+    @Override
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
+    {
         if (tree == null)
         {
             // The only thing we can add is a part in the current graph view.
@@ -505,33 +505,14 @@ public class NodePart extends NodeContainer
         }
         else
         {
-            boolean graphClosed = false;
-            if (graph != null)
-            {
-                PanelEquations pe = PanelModel.instance.panelEquations;
-                if (pe.view == PanelEquations.NODE) graphClosed = ! graph.open;
-                else                                graphClosed = type.equals ("Part");
-            }
             boolean collapsed   = tree.isCollapsed (new TreePath (getPath ()));
             boolean hasChildren = ((FilteredTreeModel) tree.getModel ()).getChildCount (this) > 0;
-            if (graphClosed  ||  collapsed  &&  hasChildren)  // The node is deliberately closed to indicate user intent.
+            if (collapsed  &&  hasChildren)  // The node is deliberately closed to indicate user intent.
             {
-                if (graphClosed)
-                {
-                    tree = null;  // Create a peer graph node.
-                    if (location == null  &&  graph != null)
-                    {
-                        GraphPanel graphArea = (GraphPanel) graph.getParent ();
-                        location = graph.getLocation ();
-                        location.x += 100 - graphArea.offset.x;
-                        location.y += 100 - graphArea.offset.y;
-                    }
-                }
-                return ((NodePart) getTrueParent ()).add (type, tree, data, location);
+                if (type.isEmpty ()) type = "Part";
+                return ((NodePart) parent).makeAdd (type, tree, data, location);
             }
             // else this is an open node, so anything can be inserted under it.
-            // This could also be a graph parent. In that case, we treat it as an open node
-            // regardless of whether the parent panel is actually open.
         }
 
         int variableIndex = -1;
@@ -556,7 +537,7 @@ public class NodePart extends NodeContainer
 
         if (tree != null)
         {
-            TreePath path = tree.getSelectionPath ();
+            TreePath path = tree.getLeadSelectionPath ();
             if (path != null)
             {
                 NodeBase selected = (NodeBase) path.getLastPathComponent ();
@@ -570,41 +551,17 @@ public class NodePart extends NodeContainer
             }
         }
 
-        UndoManager um = MainFrame.instance.undoManager;
         if (type.equals ("Annotation"))
         {
-            AddAnnotation aa = new AddAnnotation (this, metadataIndex, data);
-            um.add (aa);  // aa will automagically insert a $metadata block if needed
-            return aa.createdNode;
+            return new AddAnnotation (this, metadataIndex, data);  // will automagically insert a $metadata block if needed
         }
         else if (type.equals ("Reference"))
         {
-            AddReference ar = new AddReference (this, metadataIndex, data);
-            um.add (ar);
-            return ar.createdNode;
+            return new AddReference (this, metadataIndex, data);
         }
         else if (type.equals ("Part"))
         {
-            AddPart ap = new AddPart (this, subpartIndex, data, location);
-            um.add (ap);
-            return ap.createdNode;
-        }
-        else if (type.equals ("Inherit"))
-        {
-            Undoable un = null;
-            NodeInherit inherit = (NodeInherit) child ("$inherit");
-            String value = "";
-            if (data != null) value = data.get ();
-            if (inherit == null)
-            {
-                un = new AddInherit (this, value);
-            }
-            else if (! value.isEmpty ())
-            {
-                un = new ChangeInherit (inherit, value);
-            }
-            if (un != null) um.add (un);
-            return child ("$inherit");
+            return new AddPart (this, subpartIndex, data, location);
         }
         else  // treat all other requests as "Variable"
         {
@@ -612,9 +569,7 @@ public class NodePart extends NodeContainer
             {
                 data = new MVolatile (data.get () + data.key (), "");  // convert equation into nameless variable
             }
-            AddVariable av = new AddVariable (this, variableIndex, data);
-            um.add (av);
-            return av.createdNode;
+            return new AddVariable (this, variableIndex, data);
         }
     }
 
@@ -689,7 +644,7 @@ public class NodePart extends NodeContainer
                 existingDocument = models.child (name);
             }
 
-            um.add (new ChangeDoc (oldKey, name));
+            um.apply (new ChangeDoc (oldKey, name));
             // MDir promises to maintain object identity during the move, so "source" is still valid.
             return;
         }
@@ -704,7 +659,7 @@ public class NodePart extends NodeContainer
                 public void run ()
                 {
                     boolean canceled = um.getPresentationName ().equals ("AddPart");
-                    delete (tree, canceled);
+                    delete (canceled);
                 }
             });
             return;
@@ -720,7 +675,7 @@ public class NodePart extends NodeContainer
             return;
         }
 
-        um.add (new ChangePart (this, oldKey, name));
+        um.apply (new ChangePart (this, oldKey, name));
     }
 
     public void revert (FilteredTreeModel model)
@@ -731,28 +686,12 @@ public class NodePart extends NodeContainer
     }
 
     @Override
-    public void delete (JTree tree, boolean canceled)
+    public Undoable makeDelete (boolean canceled)
     {
-        if (! source.isFromTopDocument ()) return;  // Root will always be from top document. Any other node we might try to delete must meet the same requirement.
-        UndoManager um = MainFrame.instance.undoManager;
-        if (isTrueRoot ())
-        {
-            um.add (new DeleteDoc ((MDoc) source.getSource ()));
-        }
-        else if (graph == null  ||  canceled)
-        {
-            um.add (new DeletePart (this, canceled));
-        }
-        else  // We are a graph node, so see if siblings are also selected for delete.
-        {
-            List<GraphNode> selected = PanelModel.instance.panelEquations.panelEquationGraph.getSelection ();
-            selected.remove (graph);
-            boolean multi = ! selected.isEmpty ();
-            if (multi) um.addEdit (new CompoundEditView ());
-            for (GraphNode g : selected) um.add (new DeletePart (g.node, false, true, false));
-            um.add (new DeletePart (this, false, multi, multi));
-            if (multi) um.endCompoundEdit ();
-        }
+        // Graph nodes are handled by GraphNode.TitleRenderer. A delete on the title of a graph node never reaches here.
+        if (! source.isFromTopDocument ()) return null;
+        if (isTrueRoot ()) return new DeleteDoc ((MDoc) source.getSource ());  // Root will always be from top document.
+        return new DeletePart (this, canceled);
     }
 
     @Override

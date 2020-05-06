@@ -15,9 +15,11 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 public class DeleteAnnotations extends UndoableView
 {
-    protected List<String> path;  ///< to parent of $metadata node
-    protected int          index; ///< Position within parent node
-    protected MVolatile    saved; ///< subtree under $metadata
+    protected List<String> path;  // to parent of $metadata node
+    protected int          index; // Position within parent node
+    protected MVolatile    saved; // subtree under $metadata
+    protected boolean      multi;
+    protected boolean      multiLast;
 
     public DeleteAnnotations (NodeBase node)
     {
@@ -27,6 +29,16 @@ public class DeleteAnnotations extends UndoableView
 
         saved = new MVolatile (null, "$metadata");
         saved.merge (node.source.getSource ());  // We only save top-document data. $metadata node is guaranteed to be from top doc, due to guard in NodeAnnotations.delete().
+    }
+
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
     }
 
     public void undo ()
@@ -39,12 +51,12 @@ public class DeleteAnnotations extends UndoableView
                 return new NodeAnnotations (part);
             }
         };
-        AddAnnotations.create (path, index, saved, factory);
+        AddAnnotations.create (path, index, saved, factory, multi);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddAnnotations.destroy (path, saved.key ());
+        AddAnnotations.destroy (path, saved.key (), ! multi  ||  multiLast);
     }
 }

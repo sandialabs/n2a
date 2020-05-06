@@ -25,8 +25,8 @@ public class StoredPath
 
     public StoredPath (JTree tree)
     {
-        TreePath path = tree.getSelectionPath ();
-        selected = path != null;
+        TreePath path = tree.getLeadSelectionPath ();
+        selected =  path != null;
         if (selected)
         {
             for (Object o : path.getPath ()) keys.add (((NodeBase) o).source.key ());

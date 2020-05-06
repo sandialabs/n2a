@@ -24,6 +24,8 @@ public class DeleteEquation extends UndoableView
     protected String       combiner;
     protected String       value;
     protected boolean      neutralized;
+    protected boolean      multi;
+    protected boolean      multiLast;
 
     public DeleteEquation (NodeEquation node, boolean canceled)
     {
@@ -45,16 +47,26 @@ public class DeleteEquation extends UndoableView
         if (equationCount < 2) equationCount = 0;  // Because we always merge a single equation back into a one-line variable=equation.
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
-        AddEquation.create (path, equationCount, index, name, combiner, value);
+        AddEquation.create (path, equationCount, index, name, combiner, value, multi);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddEquation.destroy (path, equationCount, canceled, name, combiner);
+        AddEquation.destroy (path, equationCount, canceled, name, combiner, ! multi  ||  multiLast);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

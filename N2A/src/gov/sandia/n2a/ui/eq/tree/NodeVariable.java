@@ -23,6 +23,7 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
@@ -358,17 +359,30 @@ public class NodeVariable extends NodeContainer
     }
 
     @Override
-    public NodeBase add (String type, JTree tree, MNode data, Point location)
+    public NodeBase containerFor (String type)
+    {
+        if (isBinding  &&  ! type.equals ("Annotation")) return ((NodeBase) parent).containerFor (type);
+        switch (type)
+        {
+            case "Equation":
+            case "Annotation":
+            case "Reference":
+                return this;
+        }
+        return ((NodeBase) parent).containerFor (type);
+    }
+
+    @Override
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
     {
         if (type.isEmpty ())
         {
             FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-            if (model.getChildCount (this) == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) getParent ()).add ("Variable", tree, data, location);
+            if (model.getChildCount (this) == 0  ||  tree.isCollapsed (new TreePath (getPath ()))) return ((NodeBase) parent).makeAdd ("Variable", tree, data, location);
             type = "Equation";
         }
-        if (isBinding  &&  ! type.equals ("Annotation")) return ((NodeBase) getParent ()).add (type, tree, data, location);
+        if (isBinding  &&  ! type.equals ("Annotation")) return ((NodeBase) parent).makeAdd (type, tree, data, location);
 
-        UndoManager um = MainFrame.instance.undoManager;
         if (type.equals ("Equation"))
         {
             if (data != null)
@@ -395,8 +409,7 @@ public class NodeVariable extends NodeContainer
                 {
                     String value = existing.combiner + data.get () + key;
                     if (value.endsWith ("@")) value = value.substring (0, value.length () - 1);
-                    um.add (new ChangeVariable (this, source.key (), value));
-                    return null;  // Don't edit anything
+                    return new ChangeVariable (this, source.key (), value);
                 }
 
                 // Determine if pasting over an existing equation
@@ -405,22 +418,19 @@ public class NodeVariable extends NodeContainer
                 {
                     key = key.substring (1);  // remove the @, since ChangeEquation expects strings from ParsedValue
                     String combiner = new Variable.ParsedValue (source.get ()).combiner;
-                    um.add (new ChangeEquation (this, key, combiner, existingEquation.source.get (), key, combiner, data.get ()));
-                    return existingEquation;  // Somewhat of a cheat, since we didn't really add it. OTOH, a paste operation should not be followed by edit mode.
+                    return new ChangeEquation (this, key, combiner, existingEquation.source.get (), key, combiner, data.get ());
                 }
             }
 
             // Determine index for new equation
             int index = 0;
-            NodeBase child = (NodeBase) tree.getLastSelectedPathComponent ();
+            NodeBase child = (NodeBase) tree.getLeadSelectionPath ().getLastPathComponent ();
             if (child != null  &&  child.getParent () == this) index = getIndex (child);
             while (index > 0  &&  ! (getChildAt (index) instanceof NodeEquation)) index--;
             if (index < getChildCount ()  &&  getChildAt (index) instanceof NodeEquation) index++;
 
             // Create an AddEquation action
-            AddEquation ae = new AddEquation (this, index, data);
-            um.add (ae);
-            return ae.createdNode;
+            return new AddEquation (this, index, data);
         }
         else if (type.equals ("Annotation"))
         {
@@ -429,18 +439,14 @@ public class NodeVariable extends NodeContainer
             int count = getChildCount ();
             while (index < count  &&  ! (children.get (index) instanceof NodeReference)) index++;
 
-            AddAnnotation aa = new AddAnnotation (this, index, data);
-            um.add (aa);
-            return aa.createdNode;
+            return new AddAnnotation (this, index, data);
         }
         else if (type.equals ("Reference"))
         {
-            AddReference ar = new AddReference (this, getChildCount (), data);
-            um.add (ar);
-            return ar.createdNode;
+            return new AddReference (this, getChildCount (), data);
         }
 
-        return ((NodeBase) getParent ()).add (type, tree, data, location);  // refer all other requests up the tree
+        return ((NodeBase) parent).makeAdd (type, tree, data, location);  // refer all other requests up the tree
     }
 
     public static boolean isValidIdentifier (String name)
@@ -488,7 +494,7 @@ public class NodeVariable extends NodeContainer
         boolean canceled = um.getPresentationName ().equals ("AddVariable");
         if (input.isEmpty ())
         {
-            delete (tree, canceled);
+            delete (canceled);
             return;
         }
 
@@ -529,11 +535,11 @@ public class NodeVariable extends NodeContainer
                 {
                     parent.source.clear (nameBefore);
                     // No need to update GUI, because AddInherit rebuilds parent.
-                    um.add (new AddInherit ((NodePart) parent, valueAfter));
+                    um.apply (new AddInherit ((NodePart) parent, valueAfter));
                 }
                 else
                 {
-                    um.add (new ChangeVariableToInherit (this, valueAfter));
+                    um.apply (new ChangeVariableToInherit (this, valueAfter));
                 }
                 return;
             }
@@ -592,14 +598,13 @@ public class NodeVariable extends NodeContainer
                     if (equationMatch == null)  // New equation
                     {
                         // It is possible to add an equation revocation here without there being an existing equation to revoke.
-                        um.add (new AddEquation (this, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
+                        um.apply (new AddEquation (this, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                     }
                     else  // Overwrite an existing equation
                     {
                         Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
-                        um.add (new ChangeEquation (this, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
+                        um.apply (new ChangeEquation (this, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                     }
-                    parent.invalidateColumns (model);
                     return;
                 }
             }
@@ -608,7 +613,7 @@ public class NodeVariable extends NodeContainer
                 if (newlyCreated)  // The newly created node has been renamed such that it will inject into/over an existing variable.
                 {
                     // Remove newly-created variable, regardless of what we do to nodeAfter.
-                    um.add (new DeleteVariable (this, canceled));
+                    um.apply (new DeleteVariable (this, canceled));
 
                     // Decide what change (if any) to apply to nodeAfter.
                     if (expressionAfter)
@@ -618,12 +623,12 @@ public class NodeVariable extends NodeContainer
                         {
                             if (piecesAfter.condition.equals (piecesDest.condition))  // Directly overwrite the target, since they share the say name and condition.
                             {
-                                um.add (new ChangeVariable (nva, nameAfter, valueAfter, getKeyPath ()));
+                                um.apply (new ChangeVariable (nva, nameAfter, valueAfter, getKeyPath ()));
                             }
                             else  // Inject new equation and change target into a multiconditional variable.
                             {
                                 // Possible to revoke non-existent equation
-                                um.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                                um.apply (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                             }
                         }
                         else
@@ -631,12 +636,12 @@ public class NodeVariable extends NodeContainer
                             if (equationMatch == null)  // Add new equation to an existing multiconditional.
                             {
                                 // Possible to revoke non-existent equation
-                                um.add (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                                um.apply (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                             }
                             else  // Overwrite an existing equation in a multiconditional
                             {
                                 Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
-                                um.add (new ChangeEquation (nva, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                                um.apply (new ChangeEquation (nva, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
                             }
                         }
                     }
@@ -647,20 +652,15 @@ public class NodeVariable extends NodeContainer
 
         // The default action
         if (valueAfter.isEmpty ()  &&  ! hasEquations ()) valueAfter = "@";  // The @ will be hidden most of the time, but it will distinguish a variable from a part.
-        um.add (new ChangeVariable (this, nameAfter, valueAfter));
+        um.apply (new ChangeVariable (this, nameAfter, valueAfter));
     }
 
     @Override
-    public void delete (JTree tree, boolean canceled)
+    public Undoable makeDelete (boolean canceled)
     {
-        UndoManager um = MainFrame.instance.undoManager;
-        if (source.isFromTopDocument ())
-        {
-            um.add (new DeleteVariable (this, canceled));
-        }
-        else if (! hasEquations ())  // Only allow direct kill of a variable if it is single-line. Otherwise, must kill individual equations.
-        {
-            um.add (new ChangeVariable (this, source.key (), "$kill"));  // revoke the variable
-        }
+        if (source.isFromTopDocument ()) return new DeleteVariable (this, canceled);
+        // Possibly kill inherited values ...
+        if (hasEquations ()) return null;  // Only allow direct kill of a variable if it is single-line. Otherwise, must kill individual equations.
+        return new ChangeVariable (this, source.key (), "$kill");  // revoke the variable
     }
 }

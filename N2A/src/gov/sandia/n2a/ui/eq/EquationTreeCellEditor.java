@@ -603,16 +603,22 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         // We only get back an empty string if we explicitly set it before editing starts.
         // Certain types of nodes do this when inserting a new instance into the tree, via NodeBase.add()
         // We desire in this case that escape cause the new node to evaporate.
-        Object o = node.getUserObject ();
-        if (! (o instanceof String)) return;
-        if (((String) o).isEmpty ()) node.delete (editingTree, true);
+        if (node.toString ().isEmpty ())
+        {
+            node.delete (true);
+        }
+        else if (node instanceof NodePart)
+        {
+            NodePart p = (NodePart) node;
+            if (p.graph != null) p.graph.animate ();
+        }
     }
 
     public void valueChanged (TreeSelectionEvent e)
     {
         if (! e.isAddedPath ()) return;
         focusTree = (JTree) e.getSource ();
-        lastPath = focusTree.getSelectionPath ();
+        lastPath = e.getNewLeadSelectionPath ();  // Unlike DefaultTreeCellEditor, we allow the lead cell to edit even when there are multiple cells selected.
     }
 
     /**
@@ -663,10 +669,19 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
         public Dimension getPreferredSize ()
         {
-            JViewport vp          = (JViewport) editingTree.getParent ();
-            Dimension extent      = vp.getExtentSize ();
-            Point     p           = vp.getViewPosition ();
-            int       rightMargin = p.x + extent.width;
+            int rightMargin = -1;
+            if (editingNode instanceof NodePart)  // Possibly use size of graph node
+            {
+                NodePart editingPart = (NodePart) editingNode;
+                if (editingPart.graph != null) rightMargin = editingPart.graph.panelTitle.getWidth ();
+            }
+            if (rightMargin < 0)  // Use tree boundaries
+            {
+                JViewport vp     = (JViewport) editingTree.getParent ();
+                Dimension extent = vp.getExtentSize ();
+                Point     p      = vp.getViewPosition ();
+                rightMargin = p.x + extent.width;
+            }
 
             Dimension pSize = editingComponent.getPreferredSize ();
             Insets insets = editingTree.getInsets ();

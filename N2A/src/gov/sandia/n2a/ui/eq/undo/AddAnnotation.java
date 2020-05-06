@@ -30,16 +30,18 @@ import gov.sandia.n2a.ui.eq.tree.NodeContainer;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
-public class AddAnnotation extends UndoableView
+public class AddAnnotation extends UndoableView implements AddEditable
 {
-    protected List<String> path;    // to the container of the new node. Can be a variable, $metadata (under a part), or annotation.
-    protected int          index;   // Where to insert among siblings. Unfiltered.
+    protected List<String> path;            // to the container of the new node. Can be a variable, $metadata (under a part), or annotation.
+    protected int          index;           // Where to insert among siblings. Unfiltered.
     protected String       name;
-    protected String       prefix;  // Name path to first node that does not already exist at add location. If all nodes already exist (and this is merely a value set), then string is empty and undo() will not clear anything.
+    protected String       prefix;          // Name path to first node that does not already exist at add location. If all nodes already exist (and this is merely a value set), then string is empty and undo() will not clear anything.
     protected MNode        createSubtree;
     protected boolean      nameIsGenerated;
-    public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
-    public    boolean      setSelection = true;
+    protected NodeBase     createdNode;     // Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected boolean      multi;           // Add to existing selection rather than blowing it away.
+    protected boolean      multiLast;       // Set selection during delete, but add to selection during create.
+    public    boolean      selectVariable;  // Select containing variable rather than specific metadata node. Implies the relevant node is directly under a variable.
 
     /**
         @param parent Direct container of the new node, even if not a $metadata node.
@@ -124,13 +126,23 @@ public class AddAnnotation extends UndoableView
         return prefix + suffix;
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
-        destroy (path, false, name, prefix, setSelection);
+        destroy (path, false, name, prefix, multi, multiLast, selectVariable);
     }
 
-    public static void destroy (List<String> path, boolean canceled, String name, String prefix, boolean setSelection)
+    public static void destroy (List<String> path, boolean canceled, String name, String prefix, boolean multi, boolean multiLast, boolean selectVariable)
     {
         // Retrieve created node
         NodeContainer parent = (NodeContainer) NodeBase.locateNode (path);
@@ -160,7 +172,8 @@ public class AddAnnotation extends UndoableView
         // Update GUI
 
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -168,23 +181,31 @@ public class AddAnnotation extends UndoableView
 
         if (killBlock  &&  parent instanceof NodeAnnotations)  // We just emptied $metadata, so remove the node.
         {
-            model.removeNodeFromParent (parent);
+            if (model == null) FilteredTreeModel.removeNodeFromParentStatic (parent);
+            else               model.removeNodeFromParent (parent);
             // No need to update order, because we just destroyed $metadata, where order is stored.
             // No need to update tab stops in grandparent, because block nodes don't offer any tab stops.
         }
         else  // Rebuild container (variable, metadata block, or annotation)
         {
-            List<String> expanded = saveExpandedNodes (pet.tree, parent);
+            List<String> expanded = null;
+            if (model != null) expanded = saveExpandedNodes (pet.tree, parent);
             parent.build ();
             parent.filter (FilteredTreeModel.filterLevel);
-            if (parent.visible (FilteredTreeModel.filterLevel))
+            if (model != null  &&  parent.visible (FilteredTreeModel.filterLevel))
             {
                 model.nodeStructureChanged (parent);
                 restoreExpandedNodes (pet.tree, parent, expanded);
             }
         }
-        pet.updateVisibility (createdPath, index, setSelection);
-        pet.animate ();
+        if (pet != null)
+        {
+            TreeNode[] parentPath = parent.getPath ();
+            if (selectVariable) pet.updateVisibility (parentPath,  index, ! multi);
+            else                pet.updateVisibility (createdPath, index, ! multi  ||  multiLast);
+            if (multi  &&  selectVariable) pet.tree.addSelectionPath (new TreePath (parentPath));  // Assumes nodeAfter is directly under a NodeVariable. Note that effect will be redundant with above when multiLast is true.
+            pet.animate ();
+        }
 
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
         if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeContainer) parent.getParent ();  // So arrowhead can update.
@@ -202,10 +223,15 @@ public class AddAnnotation extends UndoableView
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated, setSelection);
+        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, selectVariable);
     }
 
-    public static NodeBase create (List<String> path, int index, String name, MNode createSubtree, boolean nameIsGenerated, boolean setSelection)
+    public NodeBase getCreatedNode ()
+    {
+        return createdNode;
+    }
+
+    public static NodeBase create (List<String> path, int index, String name, MNode createSubtree, boolean nameIsGenerated, boolean multi, boolean selectVariable)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null)
@@ -231,7 +257,8 @@ public class AddAnnotation extends UndoableView
         // Update GUI
 
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
 
         NodeContainer container = (NodeContainer) parent;
         if (parent instanceof NodePart)  // If this is a part, then display special block.
@@ -240,7 +267,8 @@ public class AddAnnotation extends UndoableView
             if (container == null)
             {
                 container = new NodeAnnotations (mparent);
-                model.insertNodeIntoUnfiltered (container, parent, index);
+                if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (container, parent, index);
+                else               model.insertNodeIntoUnfiltered (container, parent, index);
                 // TODO: update order?
                 index = 0;
             }
@@ -252,22 +280,37 @@ public class AddAnnotation extends UndoableView
             // The given name should be unique, so don't bother checking for an existing node.
             createdNode = new NodeAnnotation (createdPart);
             createdNode.setUserObject ("");  // For edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
-            model.insertNodeIntoUnfiltered (createdNode, container, index);
+            if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (createdNode, container, index);
+            else               model.insertNodeIntoUnfiltered (createdNode, container, index);
         }
         else  // create was merged with change name/value
         {
-            List<String> expanded = saveExpandedNodes (pet.tree, container);
+            List<String> expanded = null;
+            if (model != null) expanded = saveExpandedNodes (pet.tree, container);
             container.build ();
             container.filter (FilteredTreeModel.filterLevel);
-            if (container.visible (FilteredTreeModel.filterLevel))
+            if (model != null  &&  container.visible (FilteredTreeModel.filterLevel))
             {
                 model.nodeStructureChanged (container);
                 restoreExpandedNodes (pet.tree, container, expanded);
             }
+
             createdNode = resolve (container, name);
-            pet.tree.expandPath (new TreePath (createdNode.getPath ()));
-            pet.updateVisibility (createdNode.getPath (), -2, setSelection);
-            pet.animate ();
+            if (pet != null)
+            {
+                TreeNode[] parentPath      = parent     .getPath ();
+                TreeNode[] createdPath     = createdNode.getPath ();
+                TreePath   createdTreePath = new TreePath (createdPath);
+                pet.tree.expandPath (createdTreePath);
+                if (selectVariable) pet.updateVisibility (parentPath,  -2, ! multi);
+                else                pet.updateVisibility (createdPath, -2, ! multi);
+                if (multi)
+                {
+                    if (selectVariable) pet.tree.addSelectionPath (new TreePath (parentPath));
+                    else                pet.tree.addSelectionPath (createdTreePath);
+                }
+                pet.animate ();
+            }
 
             while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
             if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeBase) parent.getParent ();

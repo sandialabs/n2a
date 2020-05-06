@@ -8,6 +8,8 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
+import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
 
@@ -27,15 +29,16 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeAnnotation extends UndoableView
 {
-    protected List<String> path;         // to the direct parent of the node that was changed
+    protected List<String> path;           // to the direct parent of the node that was changed
     protected String       nameBefore;
     protected String       nameAfter;
-    protected String       prefixBefore; // Base of tree which gets removed during rename. Single path element.
-    protected String       prefixAfter;  // Name path of first node that does not already exist at destination. If everything in nameAfter already exists, then this string is empty and tree structure will not be cleared by undo().
+    protected String       prefixBefore;   // Base of tree which gets removed during rename. Single path element.
+    protected String       prefixAfter;    // Name path of first node that does not already exist at destination. If everything in nameAfter already exists, then this string is empty and tree structure will not be cleared by undo().
     protected String       valueBefore;
     protected String       valueAfter;
-    protected MNode        savedTree;    // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
-    public    boolean      setSelection = true;
+    protected MNode        savedTree;      // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
+    protected boolean      multi;          // Add to existing selection rather than blowing it away.
+    public    boolean      selectVariable; // Select containing variable rather than specific metadata node. Implies the relevant node is directly under a variable.
 
     public ChangeAnnotation (NodeAnnotation node, String nameAfter, String valueAfter)
     {
@@ -81,21 +84,26 @@ public class ChangeAnnotation extends UndoableView
         }
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
     public void undo ()
     {
         super.undo ();
         savedTree.set (valueBefore);
-        apply (nameAfter, nameBefore, prefixAfter, setSelection);
+        apply (nameAfter, nameBefore, prefixAfter);
     }
 
     public void redo ()
     {
         super.redo ();
         savedTree.set (valueAfter);
-        apply (nameBefore, nameAfter, prefixBefore, setSelection);
+        apply (nameBefore, nameAfter, prefixBefore);
     }
 
-    public void apply (String nameBefore, String nameAfter, String prefixBefore, boolean setSelection)
+    public void apply (String nameBefore, String nameAfter, String prefixBefore)
     {
         NodeContainer parent = (NodeContainer) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -125,18 +133,33 @@ public class ChangeAnnotation extends UndoableView
         // Update GUI
 
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
 
-        List<String> expanded = AddAnnotation.saveExpandedNodes (pet.tree, parent);
+        List<String> expanded = null;
+        if (model != null) expanded = AddAnnotation.saveExpandedNodes (pet.tree, parent);
         parent.build ();
         parent.filter (FilteredTreeModel.filterLevel);
-        if (parent.visible (FilteredTreeModel.filterLevel))
+        if (model != null  &&  parent.visible (FilteredTreeModel.filterLevel))
         {
             model.nodeStructureChanged (parent);
             AddAnnotation.restoreExpandedNodes (pet.tree, parent, expanded);
         }
+
         NodeBase nodeAfter = AddAnnotation.resolve (parent, nameAfter);
-        pet.updateVisibility (nodeAfter.getPath (), -2, setSelection);
+        if (pet != null)
+        {
+            TreeNode[] afterPath  = nodeAfter.getPath ();
+            TreeNode[] parentPath = parent   .getPath ();
+            if (selectVariable) pet.updateVisibility (parentPath, -2, ! multi);
+            else                pet.updateVisibility (afterPath,  -2, ! multi);
+            if (multi)
+            {
+                if (selectVariable) pet.tree.addSelectionPath (new TreePath (parentPath));  // Assumes nodeAfter is directly under a NodeVariable.
+                else                pet.tree.addSelectionPath (new TreePath (afterPath));
+            }
+            pet.animate ();
+        }
 
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
         if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeContainer) parent.getParent ();  // So arrowhead can update.

@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,6 +18,8 @@ public class DeleteReferences extends UndoableView
     protected List<String> path;  ///< to parent of $metadata node
     protected int          index; ///< Position within parent node
     protected MVolatile    saved; ///< subtree under $metadata
+    protected boolean      multi;
+    protected boolean      multiLast;
 
     public DeleteReferences (NodeBase node)
     {
@@ -27,6 +29,16 @@ public class DeleteReferences extends UndoableView
 
         saved = new MVolatile (null, "$references");
         saved.merge (node.source.getSource ());  // We only save top-document data. $metadata node is guaranteed to be from top doc, due to guard in NodeAnnotations.delete().
+    }
+
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
     }
 
     public void undo ()
@@ -39,12 +51,12 @@ public class DeleteReferences extends UndoableView
                 return new NodeReferences (part);
             }
         };
-        AddAnnotations.create (path, index, saved, factory);
+        AddAnnotations.create (path, index, saved, factory, multi);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddAnnotations.destroy (path, saved.key ());
+        AddAnnotations.destroy (path, saved.key (), ! multi  ||  multiLast);
     }
 }

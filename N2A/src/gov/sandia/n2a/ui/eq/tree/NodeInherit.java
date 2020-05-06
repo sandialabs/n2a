@@ -4,13 +4,13 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-
 package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
 import gov.sandia.n2a.ui.eq.undo.DeleteInherit;
@@ -122,7 +122,7 @@ public class NodeInherit extends NodeBase
         if (input.isEmpty ())
         {
             boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddInherit");
-            delete (tree, canceled);
+            delete (canceled);
             return;
         }
 
@@ -146,13 +146,13 @@ public class NodeInherit extends NodeBase
             return;
         }
 
-        MainFrame.instance.undoManager.add (new ChangeInherit (this, value));
+        MainFrame.instance.undoManager.apply (new ChangeInherit (this, value));
     }
 
     @Override
-    public void delete (JTree tree, boolean canceled)
+    public Undoable makeDelete (boolean canceled)
     {
-        if (! source.isFromTopDocument ()) return;
-        MainFrame.instance.undoManager.add (new DeleteInherit (this, canceled));
+        if (source.isFromTopDocument ()) return new DeleteInherit (this, canceled);
+        return null;
     }
 }

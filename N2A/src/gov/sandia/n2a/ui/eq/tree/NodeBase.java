@@ -8,9 +8,12 @@ package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.undo.AddEditable;
 
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -23,6 +26,7 @@ import javax.swing.Icon;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 
 @SuppressWarnings("serial")
 public class NodeBase extends DefaultMutableTreeNode
@@ -401,9 +405,42 @@ public class NodeBase extends DefaultMutableTreeNode
         return null;
     }
 
+    /**
+        Walks of the ancestry of this node until a selected one is found, or we reach root.
+        Does not consider graph node selection, only tree node selection.
+        Stops at the first fake root.
+    **/
+    public boolean hasSelectedAncestor (JTree tree)
+    {
+        TreePath tp = new TreePath (getPath ()).getParentPath ();
+        while (tp != null)
+        {
+            if (tree.isPathSelected (tp)) return true;
+            tp = tp.getParentPath ();
+        }
+        return false;
+    }
+
+    /**
+        Locates the nearest node in the hierarchy at or above this node which can contain the given type.
+        The choice logic is equivalent to add().
+    **/
+    public NodeBase containerFor (String type)
+    {
+        return ((NodeBase) parent).containerFor (type);
+    }
+
     public NodeBase add (String type, JTree tree, MNode data, Point location)
     {
-        return ((NodeBase) parent).add (type, tree, data, location);  // default action is to refer the add request up the tree
+        Undoable u = makeAdd (type, tree, data, location);
+        if (u != null) MainFrame.instance.undoManager.apply (u);
+        if (u instanceof AddEditable) return ((AddEditable) u).getCreatedNode ();
+        return null;
+    }
+
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
+    {
+        return ((NodeBase) parent).makeAdd (type, tree, data, location);  // default action is to refer the add request up the tree
     }
 
     public boolean allowEdit ()
@@ -416,8 +453,15 @@ public class NodeBase extends DefaultMutableTreeNode
         System.out.println ("NodeBase.applyEdit: " + this);
     }
 
-    public void delete (JTree tree, boolean canceled)
+    public void delete (boolean canceled)
     {
-        // Default action is to ignore request. Only nodes that can actually be deleted need to override this.
+        Undoable u = makeDelete (canceled);
+        if (u != null) MainFrame.instance.undoManager.apply (u);
+    }
+
+    public Undoable makeDelete (boolean canceled)
+    {
+        // Only nodes that can actually be deleted need to override this.
+        return null;
     }
 }

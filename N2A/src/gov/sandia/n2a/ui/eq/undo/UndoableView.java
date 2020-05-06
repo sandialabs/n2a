@@ -15,7 +15,7 @@ import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
 
 public class UndoableView extends Undoable
 {
-    protected StoredView view = PanelModel.instance.panelEquations.new StoredView ();
+    protected StoredView view;
 
     public UndoableView ()
     {
@@ -25,6 +25,21 @@ public class UndoableView extends Undoable
     public UndoableView (NodeBase node)
     {
         view = PanelModel.instance.panelEquations.new StoredView (node);
+    }
+
+    public void setMulti (boolean value)
+    {
+    }
+
+    /**
+        For deletes or delete-like operations, sets a flag so that indicates this is the last
+        item in a compound edit. In this case, it is necessary to determine where the focus
+        should go after the node disappears. It is also possible that an overridden node
+        becomes visible, so the focus should go nowhere. Individual undoable classes will know
+        what to do.
+    **/
+    public void setMultiLast (boolean value)
+    {
     }
 
     public void undo () throws CannotUndoException

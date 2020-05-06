@@ -81,7 +81,7 @@ public class PanelRun extends JPanel
         tree  = new JTree (model);
         tree.setRootVisible (false);
         tree.setShowsRootHandles (true);
-        tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
+        tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);  // Appears to be the default, but we make it explicit.
 
         tree.setCellRenderer (new DefaultTreeCellRenderer ()
         {
@@ -108,7 +108,9 @@ public class PanelRun extends JPanel
         {
             public void valueChanged (TreeSelectionEvent e)
             {
-                NodeBase newNode = (NodeBase) tree.getLastSelectedPathComponent ();
+                TreePath newPath = e.getNewLeadSelectionPath ();
+                if (newPath == null) return;
+                NodeBase newNode = (NodeBase) newPath.getLastPathComponent ();
                 if (newNode == null) return;
                 if (newNode == displayNode) return;
                 displayNode = newNode;
@@ -707,6 +709,10 @@ public class PanelRun extends JPanel
                 if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
             }
 
+            // It may seem insane to start a separate thread for each path, but it actually makes sense
+            // to do all this work in parallel. In particular, if there are remote jobs, there may be
+            // some delay in confirming they are stopped. No reason to do that serially.
+            // The downside is that we could end up spawning thousands of threads at the same time.
             new Thread ("PanelRun Delete")
             {
                 public void run ()

@@ -4,7 +4,6 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-
 package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Color;
@@ -236,7 +235,7 @@ public class NodeJob extends NodeBase
         // Only handle local resources.
         // If a job runs remotely, then we need to fetch its files to view them, so assume they will be downloaded to local dir when requested.
 
-        NodeBase selected = (NodeBase) tree.getLastSelectedPathComponent ();
+        NodeBase selected = (NodeBase) tree.getLeadSelectionPath ().getLastPathComponent ();
         TreeMap<Path,NodeFile> existing = new TreeMap<Path,NodeFile> ();
         if (children != null)
         {

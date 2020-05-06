@@ -149,7 +149,7 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                um.add (new AddDoc ());
+                um.apply (new AddDoc ());
             }
         });
         actionMap.put ("delete", new AbstractAction ()
@@ -158,7 +158,7 @@ public class PanelSearch extends JPanel
             {
                 NodeModel n = getSelectedNodeModel ();
                 if (n == null  ||  ! n.allowEdit ()) return;
-                um.add (new DeleteDoc ((MDoc) AppData.models.child (n.key)));
+                um.apply (new DeleteDoc ((MDoc) AppData.models.child (n.key)));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -252,7 +252,7 @@ public class PanelSearch extends JPanel
                             add.wasShowing = false;  // on the presumption that the sending side will create an Outsource operation, and thus wants to keep the old model in the equation tree
                             xferNode.newPartName = add.name;
                         }
-                        um.add (add);
+                        um.apply (add);
                         break;  // For now, we only support transferring a single part. To do more, we need to add collections in TransferableNode for both the node paths and the created part names.
                     }
                     if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) um.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
@@ -1148,7 +1148,7 @@ public class PanelSearch extends JPanel
                     }
 
                     AddPart ap = new AddPart (parent, parent.getChildCount (), data, c);
-                    MainFrame.instance.undoManager.add (ap);
+                    MainFrame.instance.undoManager.apply (ap);
                 }
             });
         }

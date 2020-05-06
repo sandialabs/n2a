@@ -9,18 +9,26 @@ package gov.sandia.n2a.ui.eq;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.UndoManager;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
+import gov.sandia.n2a.ui.eq.tree.NodeInherit;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
+import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
+import gov.sandia.n2a.ui.eq.undo.Outsource;
+import gov.sandia.n2a.ui.eq.undo.UndoableView;
 
 import java.awt.Component;
 import java.awt.Dimension;
@@ -32,7 +40,12 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.ActionMap;
@@ -107,7 +120,7 @@ public class PanelEquationTree extends JScrollPane
         tree.setShowsRootHandles (true);
         tree.setExpandsSelectedPaths (true);
         tree.setScrollsOnExpand (true);
-        tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection. It only makes deletes and moves more complicated.
+        tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);  // Appears to be the default, but we make it explicit.
         tree.setEditable (! container.locked);
         tree.setInvokesStopCellEditing (true);  // auto-save current edits, as much as possible
         tree.setDragEnabled (true);
@@ -120,21 +133,23 @@ public class PanelEquationTree extends JScrollPane
 
         setBorder (BorderFactory.createEmptyBorder ());
 
-        InputMap inputMap = tree.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl UP"),      "switchFocus");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl LEFT"),    "switchFocus");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl DOWN"),    "nothing");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl RIGHT"),   "nothing");
-        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),     "moveUp");
-        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),   "moveDown");
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),       "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),       "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),   "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),        "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"),   "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl D"), "drillUp");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl D"),       "drillDown");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl W"),       "watch");
+        InputMap inputMap = tree.getInputMap ();                                   // Previous definition             also covered by
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl UP"),         "switchFocus");  // selectPreviousChangeLead        ctrl-KP_UP
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl LEFT"),       "switchFocus");  // scrollLeft                      ctrl-KP_LEFT or shift-mouse-wheel
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl DOWN"),       "nothing");      // selectNextChangeLead            ctrl-KP_DOWN
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl RIGHT"),      "nothing");      // scrollRight                     ctrl-KP_RIGHT or shift-mouse-wheel
+        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl UP"),   "moveUp");       // selectPreviousExtendSelection   shift-UP
+        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl DOWN"), "moveDown");     // selectNextExtendSelection       shift-DOWN
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),          "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),          "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),      "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"),      "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl D"),          "drillDown");
+        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl D"),    "drillUp");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl W"),          "watch");
+        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl W"),    "watch");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl O"),          "outsource");
 
         ActionMap actionMap = tree.getActionMap ();
         Action selectPrevious = actionMap.get ("selectPrevious");
@@ -207,7 +222,7 @@ public class PanelEquationTree extends JScrollPane
         {
             public void actionPerformed (ActionEvent e)
             {
-                TreePath path = tree.getSelectionPath ();
+                TreePath path = tree.getLeadSelectionPath ();
                 if (path == null) return;
                 NodeBase n = (NodeBase) path.getLastPathComponent ();
                 if (container.locked  &&  ! n.showMultiLine ()) return;
@@ -229,7 +244,7 @@ public class PanelEquationTree extends JScrollPane
             public void actionPerformed (ActionEvent e)
             {
                 // Find the nearest enclosing NodePart and drill into it.
-                TreePath path = tree.getSelectionPath ();
+                TreePath path = tree.getLeadSelectionPath ();
                 if (path == null) return;
                 for (int i = path.getPathCount () - 1; i >= 0; i--)
                 {
@@ -247,7 +262,14 @@ public class PanelEquationTree extends JScrollPane
             public void actionPerformed (ActionEvent e)
             {
                 // PanelEquations also does a stopEditing() call, but it should not be needed here.
-                watchSelected ();
+                watchSelected ((e.getModifiers () & ActionEvent.SHIFT_MASK) != 0);  // shift indicates to clear all other watches in model
+            }
+        });
+        actionMap.put ("outsource", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                outsourceSelected ();
             }
         });
 
@@ -497,7 +519,7 @@ public class PanelEquationTree extends JScrollPane
     public StoredPath saveFocus (StoredPath previous)
     {
         // Save tree state, but only if it's better than the previously-saved state.
-        if (previous == null  ||  tree.getSelectionPath () != null) return new StoredPath (tree);
+        if (previous == null  ||  tree.getLeadSelectionPath () != null) return new StoredPath (tree);
         return previous;
     }
 
@@ -590,7 +612,7 @@ public class PanelEquationTree extends JScrollPane
     public NodeBase getSelected ()
     {
         NodeBase result = null;
-        TreePath path = tree.getSelectionPath ();
+        TreePath path = tree.getLeadSelectionPath ();
         if (path != null) result = (NodeBase) path.getLastPathComponent ();
         if (result != null) return result;
         return root;
@@ -638,47 +660,194 @@ public class PanelEquationTree extends JScrollPane
     public void deleteSelected ()
     {
         if (container.locked) return;
-        NodeBase selected = getSelected ();
-        if (selected != null) selected.delete (tree, false);
-    }
 
-    public void watchSelected ()
-    {
-        if (container.locked) return;
-        NodeBase selected = getSelected ();
-        if (! (selected instanceof NodeVariable)) selected = (NodeBase) selected.getParent ();  // Make one attempt to walk up tree, in case an equation or metadata item is selected under a variable.
-        if (! (selected instanceof NodeVariable)) return;
-        if (((NodeVariable) selected).isBinding) return;
+        // Collect and convert selection.
+        TreePath[] paths = tree.getSelectionPaths ();
+        if (paths == null) return;
+        TreePath leadPath = tree.getLeadSelectionPath ();
 
-        // Toggle watch on the selected variable
-        MPart watch = (MPart) selected.source.child ("$metadata", "watch");
-        if (watch != null)
+        List<NodeBase> selection = new ArrayList<NodeBase> ();
+        for (TreePath path : paths) selection.add ((NodeBase) path.getLastPathComponent ());
+
+        NodeBase leadNode = null;
+        if (leadPath != null) leadNode = (NodeBase) leadPath.getLastPathComponent ();
+
+        // Pre-process selection to enforce constraints.
+
+        //   Detect if all equations under a variable are deleted. If so, ensure that the variable is marked for deletion.
+        Map<NodeVariable,List<NodeEquation>> equations = new HashMap<NodeVariable,List<NodeEquation>> ();
+        for (NodeBase n : selection)
         {
-            NodeAnnotation watchNode = (NodeAnnotation) selected.child ("watch");
-            if (watch.isFromTopDocument ())  // currently on, so turn it off
+            if (! (n instanceof NodeEquation)) continue;
+            NodeVariable v = (NodeVariable) n.getParent ();
+            List<NodeEquation> e = equations.get (v);
+            if (e == null)
             {
-                DeleteAnnotation d = new DeleteAnnotation (watchNode, false);
-                d.setSelection = tree.isExpanded (new TreePath (selected.getPath ()));
-                MainFrame.instance.undoManager.add (d);
+                e = new ArrayList<NodeEquation> ();
+                equations.put (v, e);
             }
-            else  // Currently off, because it is not explicitly set in this document. Turn it on by overriding in locally. 
+            e.add ((NodeEquation) n);
+        }
+        for (NodeVariable v : equations.keySet ())
+        {
+            int count = 0;
+            Enumeration<?> children = v.childrenFiltered ();
+            while (children.hasMoreElements ())
             {
-                ChangeAnnotation c = new ChangeAnnotation (watchNode, "watch", "1");
-                MainFrame.instance.undoManager.add (c);
+                if (children.nextElement () instanceof NodeEquation) count++;
+            }
+            if (count == equations.get (v).size ()  &&  ! selection.contains (v))
+            {
+                // Delete containing variable instead. Equations will be removed from selection later.
+                selection.add (v);
+                tree.addSelectionPath (new TreePath (v.getPath ()));  // Needs to actually be in tree selection for parent detection.
             }
         }
-        else  // currently off, so turn it on
+
+        //   Eliminate any selected node that is beneath some other selected node.
+        NodeInherit inherit  = null;
+        List<NodeBase> filteredSelection = new ArrayList<NodeBase> ();
+        for (NodeBase n : selection)
         {
-            AddAnnotation a = new AddAnnotation (selected, selected.getChildCount (), new MVolatile ("", "watch"));
-            a.setSelection = tree.isExpanded (new TreePath (selected.getPath ()));
-            MainFrame.instance.undoManager.add (a);
+            if (n.hasSelectedAncestor (tree)) continue;
+            filteredSelection.add (n);
+            if (n instanceof NodeInherit)
+            {
+                if (inherit == null  ||  inherit.getLevel () > n.getLevel ()) inherit = (NodeInherit) n;
+            }
+        }
+        selection = filteredSelection;
+        if (inherit != null)  // Since deleting $inherit rebuilds whole tree, don't allow any other deletes.
+        {
+            selection.clear ();
+            selection.add (inherit);
+        }
+        else if (leadNode != null)
+        {
+            if (! selection.contains (leadNode)  &&  leadNode instanceof NodeEquation) leadNode = (NodeBase) leadNode.getParent ();
+            if (selection.contains (leadNode))
+            {
+                // Ensure that leadNode is the final edit.
+                selection.remove (leadNode);
+                selection.add (leadNode);
+            }
+            else
+            {
+                leadNode = null;
+            }
+        }
+
+        // Create transaction
+        UndoManager um = MainFrame.instance.undoManager;
+        CompoundEditView compound = null;
+        int count = selection.size ();
+        boolean multi = count > 1;
+        if (multi) um.addEdit (compound = new CompoundEditView (CompoundEditView.CLEAR_TREE));
+        int i = 0;
+        for (NodeBase n : selection)
+        {
+            i++;
+            Undoable u = n.makeDelete (false);
+            if (u == null) continue;
+            if (u instanceof UndoableView)
+            {
+                UndoableView uv = (UndoableView) u;
+                uv.setMulti (multi);
+                if (multi  &&  i == count) uv.setMultiLast (true);
+            }
+            if (multi  &&  i == count) compound.leadPath = n.getKeyPath ();
+            um.apply (u);
+        }
+        um.endCompoundEdit ();
+    }
+
+    public void watchSelected (boolean clearOthers)
+    {
+        if (container.locked) return;
+
+        TreePath[] paths = tree.getSelectionPaths ();
+        if (paths == null) return;
+        TreePath leadPath = tree.getLeadSelectionPath ();
+        NodeVariable leadVariable = null;
+        List<NodeVariable> variables = new ArrayList<NodeVariable> (paths.length);
+        for (TreePath path : paths)
+        {
+            NodeBase n = (NodeBase) path.getLastPathComponent ();
+            if (! (n instanceof NodeVariable)) n = (NodeBase) n.getParent ();  // Make one attempt to walk up tree, in case an equation or metadata item is selected under a variable.
+            if (! (n instanceof NodeVariable)) continue;
+            NodeVariable v = (NodeVariable) n;
+            if (v.isBinding) continue;
+            variables.add (v);
+            if (path.equals (leadPath)) leadVariable = v;
+        }
+
+        if (clearOthers) findExistingWatches (container.root, variables);
+
+        UndoManager um = MainFrame.instance.undoManager;
+        CompoundEditView compound = null;
+        boolean multi = variables.size () > 1;
+        if (multi) um.addEdit (compound = new CompoundEditView (CompoundEditView.CLEAR_TREE));
+        for (NodeVariable v : variables)
+        {
+            // Toggle watch on the selected variable
+            boolean selectVariable =  multi  ||  tree.isCollapsed (new TreePath (v.getPath ()));
+            MPart watch = (MPart) v.source.child ("$metadata", "watch");
+            if (watch != null)
+            {
+                NodeAnnotation watchNode = (NodeAnnotation) v.child ("watch");
+                if (watch.isFromTopDocument ())  // currently on, so turn it off
+                {
+                    DeleteAnnotation d = new DeleteAnnotation (watchNode, false);
+                    d.selectVariable = selectVariable;
+                    if (multi) compound.addEdit (d);
+                    else       um.apply (d);
+                }
+                else  // Currently off, because it is not explicitly set in this document. Turn it on by overriding in locally. 
+                {
+                    ChangeAnnotation c = new ChangeAnnotation (watchNode, "watch", "1");
+                    c.selectVariable = selectVariable;
+                    if (multi) compound.addEdit (c);
+                    else       um.apply (c);
+                }
+            }
+            else  // currently off, so turn it on
+            {
+                AddAnnotation a = new AddAnnotation (v, v.getChildCount (), new MVolatile ("", "watch"));
+                a.selectVariable = selectVariable;
+                if (multi) compound.addEdit (a);
+                else       um.apply (a);
+            }
+        }
+        if (multi)
+        {
+            um.endCompoundEdit ();
+            if (leadVariable != null) compound.leadPath = leadVariable.getKeyPath ();
+            compound.redo ();
+        }
+    }
+
+    public void findExistingWatches (NodePart part, List<NodeVariable> variables)
+    {
+        Enumeration<?> children = part.children ();
+        while (children.hasMoreElements ())
+        {
+            Object o = children.nextElement ();
+            if (o instanceof NodePart)
+            {
+                findExistingWatches ((NodePart) o, variables);
+            }
+            else if (o instanceof NodeVariable)
+            {
+                NodeVariable v = (NodeVariable) o;
+                if (v.source.getFlag ("$metadata", "watch")  &&  ! variables.contains (v)) variables.add (v);
+            }
         }
     }
 
     public void moveSelected (int direction)
     {
         if (container.locked) return;
-        TreePath path = tree.getSelectionPath ();
+        TreePath path = tree.getLeadSelectionPath ();
         if (path == null) return;
 
         NodeBase nodeBefore = (NodeBase) path.getLastPathComponent ();
@@ -694,9 +863,41 @@ public class PanelEquationTree extends JScrollPane
                 NodeBase nodeAfter = (NodeBase) model.getChild (parent, indexAfter);
                 indexBefore = parent.getIndex (nodeBefore);
                 indexAfter  = parent.getIndex (nodeAfter);
-                MainFrame.instance.undoManager.add (new ChangeOrder ((NodePart) parent, indexBefore, indexAfter));
+                MainFrame.instance.undoManager.apply (new ChangeOrder ((NodePart) parent, indexBefore, indexAfter));
             }
         }
+    }
+
+    public void outsourceSelected ()
+    {
+        NodeBase n = getSelected ();
+        if (n == null) return;
+        while (! (n instanceof NodePart)) n = (NodeBase) n.getParent ();
+        outsource ((NodePart) n);
+    }
+
+    /**
+        Does two things:
+        1) Creates a new top-level model with contents of the given part.
+        2) Modifies the part to inherit from the new model.
+    **/
+    public static void outsource (NodePart part)
+    {
+        if (! part.source.isFromTopDocument ()) return;
+
+        // Prepare data
+        MVolatile data = new MVolatile ();
+        data.merge (part.source);  // This takes all data, not just visible nodes.
+        data.clear ("$metadata", "gui", "bounds");
+
+        // Create transaction
+        UndoManager um = MainFrame.instance.undoManager;
+        um.addEdit (new CompoundEdit ());
+        AddDoc a = new AddDoc (part.source.key (), data);
+        a.setSilent ();  // Necessary so that focus stays on part. Outsource ctor examines focus.
+        um.apply (a);
+        um.apply (new Outsource (part, a.name));
+        um.endCompoundEdit ();
     }
 
     public void updateVisibility (TreeNode path[])

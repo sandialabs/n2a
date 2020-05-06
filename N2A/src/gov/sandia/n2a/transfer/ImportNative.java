@@ -33,7 +33,7 @@ public class ImportNative implements Importer
         {
             MVolatile doc = new MVolatile ();
             Schema.readAll (doc, reader);
-            MainFrame.instance.undoManager.add (new AddDoc (source.getFileName ().toString (), doc));
+            MainFrame.instance.undoManager.apply (new AddDoc (source.getFileName ().toString (), doc));
         }
         catch (IOException e)
         {

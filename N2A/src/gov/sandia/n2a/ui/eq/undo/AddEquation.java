@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.TreeSet;
 
 import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
@@ -24,57 +25,49 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
-public class AddEquation extends UndoableView
+public class AddEquation extends UndoableView implements AddEditable
 {
     protected List<String> path;  // to variable node
-    protected int          equationCount;  // before adding this equation
+    protected int          equationCount;  // of subsidiary nodes only; before adding this equation
     protected int          index; // where to insert among siblings
     protected String       name;  // includes the leading @
     protected String       combinerBefore;
     protected String       combinerAfter;
     protected String       value;
-    public    NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
     protected List<String> replacePath;  // If non-null, contains path to NodeVariable that created this action.
+    protected boolean      multi;
+    protected boolean      multiLast;
 
     public AddEquation (NodeVariable parent, int index, MNode data)
     {
         path           = parent.getKeyPath ();
         this.index     = index;
-        combinerBefore = new Variable.ParsedValue (parent.source.get ()).combiner;
+        Variable.ParsedValue pieces = new Variable.ParsedValue (parent.source.get ());
+        combinerBefore = pieces.combiner;
         combinerAfter  = combinerBefore;
 
         TreeSet<String> equations = new TreeSet<String> ();
         for (MNode n : parent.source)
         {
             String key = n.key ();
-            if (key.startsWith ("@")) equations.add (key.substring (1));
+            if (key.startsWith ("@")) equations.add (key);
         }
-        equationCount = equations.size ();
+        equationCount = equations.size ();  // Count of subsidiary nodes only.
+        if (equationCount == 0) equations.add ("@" + pieces.condition);  // single-line variable
 
-        // Select a unique name
-        if (data == null)
+        String prefix = "@";
+        if (data != null)
         {
-            if (equationCount == 0)
-            {
-                Variable.ParsedValue pieces = new Variable.ParsedValue (parent.source.get ());
-                equations.add (pieces.condition);
-            }
-
-            int suffix = equations.size ();
-            while (true)
-            {
-                name = String.valueOf (suffix);
-                if (! equations.contains (name)) break;
-                suffix++;
-            }
-            name = "@" + name;
-        }
-        else
-        {
-            name  = data.key ();  // should include the @
-            value = data.get ();
+            prefix = data.key ();
+            value  = data.get ();
             // When data is provided (from a paste operation), it will not carry its own combiner.
         }
+
+        // Select a unique name
+        int suffix = equations.size ();
+        name = prefix;
+        while (equations.contains (name)) name = prefix + suffix++;
     }
 
     public AddEquation (NodeVariable parent, String name, String combiner, String value)
@@ -95,13 +88,23 @@ public class AddEquation extends UndoableView
         this.replacePath = replacePath;
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
-        destroy (path, equationCount, false, name, combinerBefore);
+        destroy (path, equationCount, false, name, combinerBefore, ! multi  ||  multiLast);
     }
 
-    public static void destroy (List<String> path, int equationCount, boolean canceled, String name, String combinerBefore)
+    public static void destroy (List<String> path, int equationCount, boolean canceled, String name, String combinerBefore, boolean setSelection)
     {
         // Retrieve created node
         NodeBase parent = NodeBase.locateNode (path);
@@ -133,7 +136,7 @@ public class AddEquation extends UndoableView
 
             if (equationCount == 0)  // The node used to be single-line, so fold the last equation back into it.
             {
-                NodeEquation lastEquation = null;
+                NodeEquation lastEquation = null;  // The one remaining equation.
                 Enumeration<?> i = parent.children ();  // unfiltered
                 while (i.hasMoreElements ())
                 {
@@ -165,19 +168,25 @@ public class AddEquation extends UndoableView
             NodeBase grandparent = (NodeBase) parent.getParent ();
             grandparent.invalidateColumns (model);
         }
-        parent.invalidateColumns (model);
+        parent.invalidateColumns (null);
         pet.updateOrder (createdPath);
-        pet.updateVisibility (createdPath, index);
+        pet.updateVisibility (createdPath, index, setSelection);
+        parent.allNodesChanged (model);
         pet.animate ();
     }
 
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, equationCount, index, name, combinerAfter, value);
+        createdNode = create (path, equationCount, index, name, combinerAfter, value, multi);
     }
 
-    public static NodeBase create (List<String> path, int equationCount, int index, String name, String combinerAfter, String value)
+    public NodeBase getCreatedNode ()
+    {
+        return createdNode;
+    }
+
+    public static NodeBase create (List<String> path, int equationCount, int index, String name, String combinerAfter, String value, boolean multi)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -219,8 +228,11 @@ public class AddEquation extends UndoableView
         }
         if (value != null)  // create was merged with change name/value
         {
-            parent.invalidateColumns (model);
-            pet.updateVisibility (createdNode.getPath ());
+            parent.invalidateColumns (null);
+            TreeNode[] createdPath = createdNode.getPath ();
+            pet.updateVisibility (createdPath, -2, ! multi);
+            if (multi) pet.tree.addSelectionPath (new TreePath (createdPath));
+            parent.allNodesChanged (model);
             pet.animate ();
         }
 

@@ -12,7 +12,7 @@ import java.util.List;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.DeleteReferences;
@@ -66,24 +66,29 @@ public class NodeReferences extends NodeContainer
     }
 
     @Override
-    public NodeBase add (String type, JTree tree, MNode data, Point location)
+    public NodeBase containerFor (String type)
+    {
+        if (type.equals ("Reference")) return this;
+        return ((NodeBase) parent).containerFor (type);
+    }
+
+    @Override
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
     {
         if (type.isEmpty ()  ||  type.equals ("Reference"))
         {
             // Add a new reference to our children
             int index = getChildCount () - 1;
-            TreePath path = tree.getSelectionPath ();
+            TreePath path = tree.getLeadSelectionPath ();
             if (path != null)
             {
                 NodeBase selected = (NodeBase) path.getLastPathComponent ();
                 if (isNodeChild (selected)) index = getIndex (selected);  // unfiltered index
             }
             index++;
-            AddReference ar = new AddReference ((NodeBase) getParent (), index, data);
-            MainFrame.instance.undoManager.add (ar);
-            return ar.createdNode;
+            return new AddReference ((NodeBase) getParent (), index, data);
         }
-        return ((NodeBase) getParent ()).add (type, tree, data, location);
+        return ((NodeBase) parent).makeAdd (type, tree, data, location);
     }
 
     @Override
@@ -93,9 +98,9 @@ public class NodeReferences extends NodeContainer
     }
 
     @Override
-    public void delete (JTree tree, boolean canceled)
+    public Undoable makeDelete (boolean canceled)
     {
-        if (! source.isFromTopDocument ()) return;
-        MainFrame.instance.undoManager.add (new DeleteReferences (this));
+        if (source.isFromTopDocument ()) return new DeleteReferences (this);
+        return null;
     }
 }

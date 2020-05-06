@@ -256,7 +256,7 @@ public class GraphParent extends JPanel
                     Rectangle now = getBounds ();
                     if (now.width  != old.width ) boundsParent.set (now.width,  "width");
                     if (now.height != old.height) boundsParent.set (now.height, "height");
-                    if (boundsParent.size () > 0) MainFrame.instance.undoManager.add (new ChangeGUI (part, guiTree));
+                    if (boundsParent.size () > 0) MainFrame.instance.undoManager.apply (new ChangeGUI (part, guiTree));
                 }
             }
 

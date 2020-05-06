@@ -8,6 +8,8 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
+import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
 
@@ -28,6 +30,8 @@ public class ChangeEquation extends UndoableView
     protected String       combinerAfter;
     protected String       valueAfter;
     protected List<String> replacePath;
+    protected boolean      multi;
+    protected boolean      multiLast;
 
     /**
         @param variable The direct container of the node being changed.
@@ -50,19 +54,29 @@ public class ChangeEquation extends UndoableView
         this.replacePath = replacePath;
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
-        apply (nameAfter, nameBefore, combinerBefore, valueBefore);
+        apply (nameAfter, nameBefore, combinerBefore, valueBefore, multi, multiLast);
     }
 
     public void redo ()
     {
         super.redo ();
-        apply (nameBefore, nameAfter, combinerAfter, valueAfter);
+        apply (nameBefore, nameAfter, combinerAfter, valueAfter, multi, multiLast);
     }
 
-    public void apply (String nameBefore, String nameAfter, String combinerAfter, String valueAfter)
+    public void apply (String nameBefore, String nameAfter, String combinerAfter, String valueAfter, boolean multi, boolean multiLast)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -122,8 +136,15 @@ public class ChangeEquation extends UndoableView
         }
 
         nodeAfter.setUserObject ();
-        parent.invalidateColumns (model);
-        pet.updateVisibility (nodeAfter.getPath ());
+        parent.invalidateColumns (null);
+        TreeNode[] afterPath = nodeAfter.getPath ();
+        boolean killed = valueAfter.isEmpty ();
+        boolean setSelection;
+        if (killed) setSelection =  ! multi  ||  multiLast;  // Revoke, which hides the node, so like delete.
+        else        setSelection =  ! multi;
+        pet.updateVisibility (afterPath, -2, setSelection);
+        if (multi  &&  ! killed) pet.tree.addSelectionPath (new TreePath (afterPath));
+        parent.allNodesChanged (model);
         pet.animate ();
     }
 

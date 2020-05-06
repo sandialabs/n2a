@@ -85,13 +85,15 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.UndoManager;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
-import gov.sandia.n2a.ui.eq.undo.AddPartMulti;
-import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
+import gov.sandia.n2a.ui.eq.undo.AddEditable;
+import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
-import gov.sandia.n2a.ui.eq.undo.Outsource;
+import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
+import gov.sandia.n2a.ui.eq.undo.UndoableView;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun;
 import sun.swing.SwingUtilities2;
@@ -113,16 +115,16 @@ public class PanelEquations extends JPanel
     protected JSplitPane               split;
     protected PanelGraph               panelGraph;
     protected JPanel                   panelBreadcrumb;
-    public    BreadcrumbRenderer       breadcrumbRenderer;
     protected boolean                  titleFocused           = true;
     protected boolean                  parentSelected;
     public    PanelEquationGraph       panelEquationGraph;
     public    GraphParent              panelParent;
     public    PanelEquationTree        panelEquationTree;  // For property-panel style display, this is the single tree for editing.
-    protected PanelEquationTree        active;             // Tree which most recently received focus. Could be panelEquationTree or a GraphNode.panelEquations.
-    protected TransferHandler          transferHandler;
+    public    PanelEquationTree        active;             // Tree which most recently received focus. Could be panelEquationTree or a GraphNode.panelEquations.
+    protected TransferHandler          transferHandler        = new EquationTransferHandler ();
     protected EquationTreeCellRenderer renderer               = new EquationTreeCellRenderer ();
     protected EquationTreeCellEditor   editor                 = new EquationTreeCellEditor (renderer);
+    public    BreadcrumbRenderer       breadcrumbRenderer     = new BreadcrumbRenderer ();  // References transferHandler in constructor, so must wait till after transferHandler is constructed.
     protected MVolatile                focusCache             = new MVolatile ();
 
     // Controls
@@ -172,325 +174,6 @@ public class PanelEquations extends JPanel
             }
         });
 
-        transferHandler = new TransferHandler ()
-        {
-            public boolean canImport (TransferSupport xfer)
-            {
-                return ! locked  &&  xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
-            }
-
-            public boolean importData (TransferSupport xfer)
-            {
-                if (locked) return false;
-
-                MNode data = new MVolatile ();
-                Schema schema;
-                TransferableNode xferNode = null;  // used only to detect if the source is an equation tree
-                try
-                {
-                    Transferable xferable = xfer.getTransferable ();
-                    StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
-                    schema = Schema.readAll (data, reader);
-                    if (xferable.isDataFlavorSupported (TransferableNode.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
-                }
-                catch (IOException | UnsupportedFlavorException e)
-                {
-                    return false;
-                }
-
-                // Determine paste/drop target.
-                JTree              tree = null;
-                PanelEquationGraph peg  = null;
-                GraphNode          gn   = null;
-                Component comp = xfer.getComponent ();
-                if      (comp instanceof JTree             ) tree = (JTree)              comp;
-                else if (comp instanceof PanelEquationGraph) peg  = (PanelEquationGraph) comp;
-                else if (comp instanceof BreadcrumbRenderer) peg  = panelEquationGraph;  // There's only one, so should be same as case above.
-                else if (comp instanceof GraphNode.TitleRenderer)
-                {
-                    gn = (GraphNode) comp.getParent ().getParent ();
-                    if (gn.open) tree = gn.panelEquationTree.tree;
-                    else         peg  = gn.container.panelEquationGraph;
-                }
-
-                TreePath path = null;
-                DropLocation dl = null;
-                if (xfer.isDrop ()) dl = xfer.getDropLocation ();
-                if (tree != null)
-                {
-                    if (xfer.isDrop ())
-                    {
-                        path = ((JTree.DropLocation) dl).getPath ();
-                        if (path == null) path = tree.getPathForRow (tree.getRowCount () - 1);
-                    }
-                    else
-                    {
-                        path = tree.getSelectionPath ();
-                        if (path == null  &&  gn != null)
-                        {
-                            Object[] o = new Object[1];
-                            o[0] = gn.node;
-                            path = new TreePath (o);
-                        }
-                    }
-                }
-
-                NodeBase target = null;
-                Point location = null;
-                if (peg != null)
-                {
-                    target = part;
-                    if (dl != null)
-                    {
-                        location = dl.getDropPoint ();
-                        Point vp = peg.vp.getViewPosition ();
-                        location.x += vp.x - peg.graphPanel.offset.x;
-                        location.y += vp.y - peg.graphPanel.offset.y;
-                    }
-                }
-
-                // Handle internal DnD as a node reordering.
-                UndoManager um = MainFrame.instance.undoManager;
-                if (xferNode != null  &&  xferNode.panel == PanelEquations.this  &&  xfer.isDrop ())
-                {
-                    NodeBase source = xferNode.getSource ();
-                    if (source == null) return false;  // Probably can only happen in a DnD between N2A instances.
-
-                    if (path == null)
-                    {
-                        if (! (source instanceof NodePart)) return false;
-                        NodePart sourcePart = (NodePart) source;
-                        if (sourcePart.graph == null) return false;
-
-                        MNode gui = new MVolatile ();
-                        gui.set (location.x, "bounds", "x");
-                        gui.set (location.y, "bounds", "y");
-                        um.add (new ChangeGUI (sourcePart, gui));
-                    }
-                    else  // DnD operation is internal to the tree. (Could also be DnD between N2A windows. For now, reject that case.)
-                    {
-                        target = (NodeBase) path.getLastPathComponent ();
-                        NodeBase targetParent = (NodeBase) target.getParent ();
-                        if (targetParent == null) return false;  // If target is root node
-
-                        NodeBase sourceParent = (NodeBase) source.getParent ();
-                        if (targetParent != sourceParent) return false;  // Don't drag node outside its containing part.
-                        if (! (targetParent instanceof NodePart)) return false;  // Only rearrange children of parts (not of variables or metadata).
-
-                        NodePart parent = (NodePart) targetParent;
-                        int indexBefore = parent.getIndex (source);
-                        int indexAfter  = parent.getIndex (target);
-                        um.add (new ChangeOrder (parent, indexBefore, indexAfter));
-                    }
-
-                    return true;
-                }
-
-                // Determine target node. Create new model if needed.
-                um.addEdit (new CompoundEdit ());
-                if (root == null)
-                {
-                    AddDoc ad = new AddDoc ();
-                    um.add (ad);
-                    target = root;
-                }
-                if (tree != null)
-                {
-                    if (xfer.isDrop ()) tree.setSelectionPath (path);
-                    target = (NodeBase) path.getLastPathComponent ();
-                }
-
-                // Don't drop part directly on parent tree. Instead, deflect to graph panel.
-                if (tree == getParentEquationTree ().tree  &&  schema.type.endsWith ("Part"))
-                {
-                    tree.repaint ();  // hide DnD target highlight
-                    tree = null;
-                }
-
-                // Import the data
-                boolean result = false;
-                int dataSize = data.size ();
-                if (schema.type.equals ("ClipPart")  &&  dataSize > 1  &&  peg != null)  // Multiple part nodes going into equation graph. The "Clip" prefix indicates the data probably came from this same transfer handler.
-                {
-                    result = true;
-
-                    // Determine location
-                    if (location == null) location = panelEquationGraph.getCenter ();
-                    Point center = new Point ();
-                    int count = 0;
-                    for (MNode c : data)
-                    {
-                        MNode bounds = c.child ("$metadata", "gui", "bounds");
-                        if (bounds == null) continue;
-                        count++;
-                        center.x += bounds.getInt ("x");
-                        center.y += bounds.getInt ("y");
-                    }
-                    if (count > 0)
-                    {
-                        // The idea is to subtract off the center-of-mass of the new nodes,
-                        // then add the resulting relative coordinates to the given drop location.
-                        // This should put the new nodes around the drop location.
-                        location.x -= center.x / count;
-                        location.y -= center.y / count;
-                    }
-
-                    AddPartMulti apm = new AddPartMulti (target, data, location);
-                    um.add (apm);
-                }
-                else if (schema.type.startsWith ("Clip"))  // Any node type, from equation panel.
-                {
-                    result = true;
-                    for (MNode c : data)
-                    {
-                        NodeBase added = target.add (schema.type.substring (4), tree, c, location);
-                        if (added == null)
-                        {
-                            result = false;
-                            break;
-                        }
-                    }
-                }
-                else if (schema.type.equals ("Part"))  // From search panel. Could possibly come via an indirect route such as email.
-                {
-                    result = true;
-
-                    // Prepare lists for suggesting connections.
-                    List<NodePart> newParts = new ArrayList<NodePart> ();
-                    List<NodePart> oldParts = new ArrayList<NodePart> ();
-                    Enumeration<?> children = target.children ();
-                    while (children.hasMoreElements ())
-                    {
-                        Object c = children.nextElement ();
-                        if (c instanceof NodePart) oldParts.add ((NodePart) c);
-                    }
-
-                    for (MNode child : data)  // There could be multiple parts, though currently the search panel does not support this.
-                    {
-                        // Import can either be a new node in the tree, or a link (via inheritance) to an existing part.
-                        // In the case of a link, the part may need to be fully imported if it does not already exist in the db.
-                        String key = child.key ();
-                        if (AppData.models.child (key) == null) um.add (new AddDoc (key, child));
-
-                        // Create an include-style part
-                        MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
-                        include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
-                        include.clear ("$inherit");  // get rid of IDs from included part, so they won't override the new $inherit line ...
-                        include.set (key, "$inherit");
-                        NodePart added = (NodePart) target.add ("Part", tree, include, location);  // TODO: keep multiple parts from going to the same location on graph panel.
-                        if (added == null)
-                        {
-                            result = false;
-                            break;
-                        }
-                        newParts.add (added);
-                    }
-
-                    NodePart.suggestConnections (newParts, oldParts);
-                    NodePart.suggestConnections (oldParts, newParts);
-                }
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) um.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
-                return result;
-            }
-
-            public int getSourceActions (JComponent comp)
-            {
-                return COPY_OR_MOVE;
-            }
-
-            boolean dragInitiated;  // This is a horrible hack, but the simplest way to override the default MOVE action chosen internally by Swing.
-            public void exportAsDrag (JComponent comp, InputEvent e, int action)
-            {
-                dragInitiated = true;
-                super.exportAsDrag (comp, e, action);
-            }
-
-            protected Transferable createTransferable (JComponent comp)
-            {
-                boolean drag = dragInitiated;
-                dragInitiated = false;
-
-                NodeBase node = null;
-                if (comp instanceof JTree)
-                {
-                    JTree tree = (JTree) comp;
-                    TreePath path = tree.getSelectionPath ();
-                    if (path != null) node = (NodeBase) path.getLastPathComponent ();
-                    if (node == null) node = (NodeBase) tree.getModel ().getRoot ();
-                }
-                else if (comp instanceof GraphNode.TitleRenderer)
-                {
-                    GraphNode gn = (GraphNode) comp.getParent ().getParent ();
-                    node = gn.node;
-                }
-                if (node == null) return null;
-
-                MVolatile copy = new MVolatile ();
-                node.copy (copy);
-                if (node == root)  // This is the entire document.
-                {
-                    copy.set (null, node.source.key ());  // Remove file information.
-                }
-                else if (node instanceof NodePart  &&  ((NodePart) node).graph != null)  // This is a graph node, so it may have selected siblings which should also be copied.
-                {
-                    NodePart np = (NodePart) node;
-                    List<GraphNode> selected = panelEquationGraph.getSelection ();
-                    selected.remove (np.graph);
-                    for (GraphNode g : selected) g.node.copy (copy);
-                }
-
-                Schema schema = Schema.latest ();
-                schema.type = "Clip" + node.getTypeName ();
-                StringWriter writer = new StringWriter ();
-                try
-                {
-                    schema.write (writer);
-                    for (MNode c : copy) schema.write (c, writer);
-                    writer.close ();
-
-                    TransferableNode result = new TransferableNode (writer.toString (), node, drag, null);
-                    result.panel = PanelEquations.this;
-                    return result;
-                }
-                catch (IOException e)
-                {
-                }
-
-                return null;
-            }
-
-            protected void exportDone (JComponent source, Transferable data, int action)
-            {
-                TransferableNode tn = (TransferableNode) data;
-                if (tn != null  &&  action == MOVE  &&  ! locked)
-                {
-                    // It is possible for the node to be removed from the tree before we get to it.
-                    // For example, a local drop of an $inherit node will cause the tree to rebuild.
-                    NodeBase node = tn.getSource ();
-                    if (node != null)
-                    {
-                        if (tn.drag)
-                        {
-                            if (tn.newPartName != null  &&  node != root  &&  node.source.isFromTopDocument ())
-                            {
-                                // Change this node into an include of the newly-created part.
-                                MainFrame.instance.undoManager.add (new Outsource ((NodePart) node, tn.newPartName));
-                            }
-                        }
-                        else
-                        {
-                            if (source instanceof JTree) node.delete ((JTree) source, false);
-                            else                         node.delete (null,           false);  // works for NodePart
-                        }
-                    }
-                }
-                MainFrame.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
-            }
-        };
-
-        // Need to wait until after transferHandler is constructed before creating breadcrumbRenderer, so that it can get a non-null reference.
-        breadcrumbRenderer = new BreadcrumbRenderer ();
-
         buttonAddModel = new JButton (ImageUtil.getImage ("document.png"));
         buttonAddModel.setMargin (new Insets (2, 2, 2, 2));
         buttonAddModel.setFocusable (false);
@@ -501,7 +184,7 @@ public class PanelEquations extends JPanel
             {
                 stopEditing ();
                 AddDoc add = new AddDoc ();
-                MainFrame.instance.undoManager.add (add);
+                MainFrame.instance.undoManager.apply (add);
             }
         });
 
@@ -1049,17 +732,27 @@ public class PanelEquations extends JPanel
         {
             String type = e.getActionCommand ();
             Point location = null;
+            boolean addPeerPart = false;
             if (e.getSource () == itemAddPart)
             {
-                if (menuPopup.getInvoker () == panelEquationGraph.graphPanel)
+                Component invoker = menuPopup.getInvoker ();
+                if (invoker == panelEquationGraph.graphPanel)
                 {
                     location = panelEquationGraph.graphPanel.popupLocation;
+                }
+                else if (invoker instanceof GraphNode.TitleRenderer)
+                {
+                    // To be strictly consistent, adding a variable (or other non-part type) on a closed
+                    // node should put it in the parent. However, it seems more likely that the
+                    // user expects it to go into the selected graph node, even if closed. OTOH,
+                    // inserting a part on a closed node should always go to the parent.
+                    addPeerPart =  ! active.root.graph.open  &&  type.equals ("Part");
                 }
             }
             if (record == null)
             {
                 AddDoc add = new AddDoc ();
-                MainFrame.instance.undoManager.add (add);
+                MainFrame.instance.undoManager.apply (add);
                 // After load(doc), active is null.
                 // PanelEquationTree focusGained() will set active, but won't be called before the test below.
                 active = getParentEquationTree ();
@@ -1069,9 +762,13 @@ public class PanelEquations extends JPanel
                 if (locked) return;
             }
 
-            if (active == null  ||  location != null)
+            if (active == null  ||  location != null  ||  addPeerPart)
             {
-                NodePart editMe = (NodePart) part.add (type, null, null, location);
+                JTree tree = null;
+                if (view == NODE) tree = panelParent.panelEquationTree.tree;
+                else if (panelEquationTree.root == part) tree = panelEquationTree.tree;
+
+                NodePart editMe = (NodePart) part.add (type, tree, null, location);
                 if (editMe == null) return;
                 EventQueue.invokeLater (new Runnable ()
                 {
@@ -1114,7 +811,7 @@ public class PanelEquations extends JPanel
             if (locked) return;
             if (active == null) return;
             stopEditing ();
-            active.watchSelected ();
+            active.watchSelected ((e.getModifiers () & ActionEvent.SHIFT_MASK) != 0);
         }
     };
 
@@ -1378,6 +1075,499 @@ public class PanelEquations extends JPanel
         }
     };
 
+    public class EquationTransferHandler extends TransferHandler
+    {
+        public boolean canImport (TransferSupport xfer)
+        {
+            return ! locked  &&  xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+        }
+
+        public boolean importData (TransferSupport xfer)
+        {
+            if (locked) return false;
+
+            MNode data = new MVolatile ();
+            Schema schema;
+            TransferableNode xferNode = null;  // used only to detect if the source is an equation tree
+            try
+            {
+                Transferable xferable = xfer.getTransferable ();
+                StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
+                schema = Schema.readAll (data, reader);
+                if (xferable.isDataFlavorSupported (TransferableNode.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
+            }
+            catch (IOException | UnsupportedFlavorException e)
+            {
+                return false;
+            }
+
+            // Determine paste/drop target.
+            JTree              tree = null;  // Will be non-null as much as possible. The following target variables will only be non-null if they actually received the drop or paste.
+            GraphNode          gn   = null;
+            BreadcrumbRenderer br   = null;
+            PanelEquationGraph peg  = null;  // We already know panelEquationGraph. This is used to indicate that it was the drop location.
+            Component comp = xfer.getComponent ();
+            if (comp instanceof JTree)
+            {
+                tree = (JTree) comp;
+            }
+            else if (comp instanceof GraphNode.TitleRenderer)
+            {
+                gn = (GraphNode) comp.getParent ().getParent ();
+                if (view == NODE) tree = gn.panelEquationTree.tree;
+                else if (panelEquationTree.root == gn.node) tree = panelEquationTree.tree;
+                // else there is no tree available
+            }
+            else if (comp instanceof BreadcrumbRenderer)
+            {
+                br = breadcrumbRenderer;
+                if (view == NODE) tree = panelParent.panelEquationTree.tree;
+                else if (panelEquationTree.root == part) tree = panelEquationTree.tree;
+            }
+            else if (comp instanceof PanelEquationGraph)
+            {
+                // The equation graph is basically an extended body for the parent node, so use same tree as for breadcrumbRenderer.
+                peg = panelEquationGraph;
+                if (view == NODE) tree = panelParent.panelEquationTree.tree;
+                else if (panelEquationTree.root == part) tree = panelEquationTree.tree;
+            }
+
+            TreePath path = null;
+            DropLocation dl = null;
+            if (xfer.isDrop ()) dl = xfer.getDropLocation ();
+            if (tree != null)
+            {
+                if (dl instanceof JTree.DropLocation)
+                {
+                    path = ((JTree.DropLocation) dl).getPath ();
+                }
+                else
+                {
+                    path = tree.getLeadSelectionPath ();
+                    if (path == null)
+                    {
+                        // Fake a path to parent title or graph node title. Both of these are effectively the root of their respective tree.
+                        Object[] o = new Object[1];
+                        if (gn != null) o[0] = gn.node;
+                        else if (comp instanceof BreadcrumbRenderer) o[0] = part;
+                        if (o[0] != null) path = new TreePath (o);
+                    }
+                }
+                if (path == null)
+                {
+                    int count = tree.getRowCount ();
+                    if (count > 0) path = tree.getPathForRow (count - 1);
+                }
+            }
+
+            // Handle internal DnD as a node reordering.
+            UndoManager um = MainFrame.instance.undoManager;
+            if (xferNode != null  &&  xferNode.panel == PanelEquations.this  &&  xfer.isDrop ())
+            {
+                if (path == null) return false;
+
+                NodeBase target = (NodeBase) path.getLastPathComponent ();
+                NodeBase targetParent = (NodeBase) target.getParent ();
+                if (targetParent == null) return false;  // If target is root node.
+
+                NodeBase source = xferNode.sources.get (0);  // The first source is the lead selection, if the lead made it into the list at all.
+                NodeBase sourceParent = (NodeBase) source.getParent ();
+                if (targetParent != sourceParent) return false;  // Don't drag node outside its containing part.
+                if (! (targetParent instanceof NodePart)) return false;  // Only rearrange children of parts (not of variables or metadata).
+
+                NodePart parent = (NodePart) targetParent;
+                int indexBefore = parent.getIndex (source);
+                int indexAfter  = parent.getIndex (target);
+                um.apply (new ChangeOrder (parent, indexBefore, indexAfter));
+
+                return true;
+            }
+
+            // Determine target node.
+            NodeBase target = null;
+            um.addEdit (new CompoundEdit ());  // If handling DnD MOVE with TransferableNode, this will be closed by the sending side's exportDone(). Otherwise, we close it at the end of this importData().
+            if (peg != null  ||  br != null)
+            {
+                // Create new model if needed.
+                if (root == null)
+                {
+                    AddDoc ad = new AddDoc ();
+                    um.apply (ad);
+                }
+
+                target = part;
+            }
+            else if (gn != null)
+            {
+                if (view == NODE)
+                {
+                    if (gn.open)
+                    {
+                        target = gn.node;
+                        tree = gn.panelEquationTree.tree;
+                    }
+                    else
+                    {
+                        target = part;
+                        tree = panelParent.panelEquationTree.tree;
+                    }
+                }
+                else  // Property-panel mode. Choose target based on type of user
+                {
+                    boolean allParts = false;
+                    if (schema.type.equals ("Part"))
+                    {
+                        allParts = true;
+                    }
+                    else if (schema.type.equals ("Clip"))
+                    {
+                        allParts = true;
+                        for (MNode c : data)
+                        {
+                            String type = c.get ("$clip");
+                            if (! type.equals ("Part"))
+                            {
+                                allParts = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (allParts)  // Treat as node as closed, and direct paste into parent.
+                    {
+                        target = part;
+                        if (panelEquationTree.root == part) tree = panelEquationTree.tree;
+                    }
+                    else
+                    {
+                        target = gn.node;
+                        if (panelEquationTree.root == gn.node) tree = panelEquationTree.tree;
+                    }
+                }
+            }
+            else if (tree != null)
+            {
+                if (path == null)
+                {
+                    target = (NodePart) tree.getModel ().getRoot ();
+                }
+                else
+                {
+                    if (xfer.isDrop ()) tree.setSelectionPath (path);
+                    target = (NodeBase) path.getLastPathComponent ();
+                }
+            }
+
+            // Determine location
+            Point location = null;
+            if (dl != null)
+            {
+                Point offset = panelEquationGraph.getOffset ();
+                if (peg != null  ||  br == null  &&  gn == null  &&  tree != null  &&  tree == panelParent.panelEquationTree.tree)  // Direct drop to graph, or a drop to parent tree (which is treated like drop to graph).
+                {
+                    Point vp = panelEquationGraph.getViewPosition ();
+                    location = dl.getDropPoint ();
+                    location.x += vp.x - offset.x;
+                    location.y += vp.y - offset.y;
+                }
+                else if (gn != null  &&  ! gn.open)
+                {
+                    Point p = gn.getLocation ();
+                    location = dl.getDropPoint ();
+                    location.x += p.x - offset.x;
+                    location.y += p.y - offset.y;
+                }
+            }
+
+            // Import the data
+            boolean result = false;
+            if (schema.type.equals ("Clip"))  // From equation panel.
+            {
+                result = true;
+
+                // Locate the nearest container sufficient to hold every type of node in the imported data.
+                // Separate parts from other items.
+                MNode parts = new MVolatile ();
+                MNode items = new MVolatile ();
+                for (MNode c : data)
+                {
+                    String type = c.get ("$clip");
+                    target = target.containerFor (type);
+                    if (type.equals ("Part"))
+                    {
+                        c.clear ("$clip");
+                        parts.set (c, c.key ());
+                    }
+                    else
+                    {
+                        items.set (c, c.key ());
+                    }
+                }
+                int itemCount = items.size ();
+                int partCount = parts.size ();
+                int count = partCount + itemCount;
+
+                // Don't paste parts into a closed part.
+                // This situation should only come up if we paste into a tree.
+                // The test here is the same as in NodePart.makeAdd(). Because we are using AddPart.makeMulti(),
+                // we don't end up calling that function, so it needs to be reproduced here.
+                if (partCount > 0  &&  target instanceof NodePart  &&  tree != null  &&  gn == null)
+                {
+                    boolean collapsed   = tree.isCollapsed (new TreePath (target.getPath ()));
+                    boolean hasChildren = ((FilteredTreeModel) tree.getModel ()).getChildCount (target) > 0;
+                    if (collapsed  &&  hasChildren) target = (NodeBase) target.getParent ();  // The node is deliberately closed to indicate user intent.
+                }
+
+                // Process items
+                // Ideally, these would all be packed into a CompoundEditView and executed as a group.
+                // However, some edits rely on the results of others (for example AddEquation), so each needs
+                // to be applied before the next is constructed. The exception to this is parts, which get special
+                // pre-processing by AddPart.makeMulti(). However, they work OK with either approach method, so
+                // we stick with serial application. The drawback is that we have to do a lot of work here
+                // that CompoundEditView would otherwise do for us.
+                CompoundEditView compound = null;
+                boolean multi = count > 1;
+                boolean multiShared = false;
+                if (multi)
+                {
+                    multiShared =  target == part  &&  itemCount > 0;
+                    if (multiShared) switchFocus (false, false);  // Putting focus in the tree produces cleaner undo behavior.
+
+                    int clearMode = CompoundEditView.CLEAR_TREE;
+                    if (target == part  &&  partCount > 0  &&  itemCount == 0) clearMode = CompoundEditView.CLEAR_GRAPH;
+                    compound = new CompoundEditView (clearMode);
+                    um.addEdit (compound);
+                    compound.clearSelection ();
+                }
+                int i = 0;  // One-based index of current item. Pre-increments below.
+                NodeBase lastAdded = null;
+                for (AddPart ap : AddPart.makeMulti ((NodePart) target, parts, location))
+                {
+                    i++;
+                    ap.setMulti (multi);
+                    if (multi  &&  i == count) ap.setMultiLast (true);
+                    ap.multiShared = multiShared;
+                    um.apply (ap);
+                    lastAdded = ap.getCreatedNode ();
+                }
+                for (MNode c : items)
+                {
+                    i++;
+                    String type = c.get ("$clip");
+                    c.clear ("$clip");
+                    Undoable u = target.makeAdd (type, tree, c, location);
+                    if (u == null) continue;  // If the last item fails to add, we won't mark the penultimate item as multiLast. This should happen very rarely, and do little harm.
+                    if (u instanceof UndoableView)
+                    {
+                        UndoableView uv = (UndoableView) u;
+                        uv.setMulti (multi);
+                        if (multi  &&  i == count) uv.setMultiLast (true);
+                    }
+                    um.apply (u);
+                    if (u instanceof AddEditable) lastAdded = ((AddEditable) u).getCreatedNode ();
+                }
+                if (multi)
+                {
+                    compound.end ();  // Must close edit directly, not through undo manager.
+                    if (lastAdded != null)
+                    {
+                        compound.leadPath = lastAdded.getKeyPath ();
+                        compound.selectLead ();
+                    }
+                }
+            }
+            else if (schema.type.equals ("Part"))  // From search panel. Could possibly come via an indirect route such as email.
+            {
+                result = true;
+
+                // Prepare lists for suggesting connections.
+                List<NodePart> newParts = new ArrayList<NodePart> ();
+                List<NodePart> oldParts = new ArrayList<NodePart> ();
+                Enumeration<?> children = target.children ();
+                while (children.hasMoreElements ())
+                {
+                    Object c = children.nextElement ();
+                    if (c instanceof NodePart) oldParts.add ((NodePart) c);
+                }
+
+                int columns = (int) Math.sqrt (data.size ());
+                int i = 0;
+                for (MNode child : data)  // There could be multiple parts, though currently the search panel does not support this.
+                {
+                    // The plan is to create a link (via inheritance) to an existing part.
+                    // The part may need to be fully imported if it does not already exist in the db.
+                    String key = child.key ();
+                    if (AppData.models.child (key) == null)
+                    {
+                        AddDoc a = new AddDoc (key, child);
+                        a.setSilent ();
+                        um.apply (a);
+                    }
+
+                    // Create an include-style part
+                    MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
+                    include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
+                    include.clear ("$inherit");  // get rid of IDs from included part, so they won't override the new $inherit line ...
+                    include.set (key, "$inherit");
+                    Point p = null;
+                    if (location != null) p = new Point (location.x + (i % columns) * 100, location.y + (i / columns) * 100);  // Keep multiple parts from going to the same place on graph panel.
+                    NodePart added = (NodePart) target.add ("Part", tree, include, p);
+                    if (added != null) newParts.add (added);
+                    i++;
+                }
+
+                NodePart.suggestConnections (newParts, oldParts);
+                NodePart.suggestConnections (oldParts, newParts);
+            }
+
+            if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) um.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
+            return result;
+        }
+
+        public int getSourceActions (JComponent comp)
+        {
+            return COPY_OR_MOVE;
+        }
+
+        boolean dragInitiated;  // This is a horrible hack, but the simplest way to override the default MOVE action chosen internally by Swing.
+        public void exportAsDrag (JComponent comp, InputEvent e, int action)
+        {
+            dragInitiated = true;
+            super.exportAsDrag (comp, e, action);
+        }
+
+        protected Transferable createTransferable (JComponent comp)
+        {
+            boolean drag = dragInitiated;
+            dragInitiated = false;
+
+            NodeBase parent = null;  // Lowest node in hierarchy that is parent to all items to be exported.
+            List<NodeBase> export = new ArrayList<NodeBase> ();  // Items to be exported. Must all be immediate children of parent.
+            if (comp instanceof JTree)
+            {
+                // Collect nodes
+                JTree tree = (JTree) comp;
+                TreePath[] paths = tree.getSelectionPaths ();
+                if (paths == null) return null;
+                TreePath leadPath = tree.getLeadSelectionPath ();
+
+                for (TreePath path : paths)
+                {
+                    NodeBase n = (NodeBase) path.getLastPathComponent ();
+                    export.add (n);
+                }
+                if (leadPath != null)
+                {
+                    NodeBase n = (NodeBase) leadPath.getLastPathComponent ();
+                    export.remove (n);
+                    export.add (0, n);
+                }
+
+                // Locate common parent
+                parent = (NodeBase) export.get (0).getParent ();  // Any node that can be selected in a tree has a non-null parent.
+                for (NodeBase n : export)
+                {
+                    while (! parent.isNodeDescendant (n)) parent = (NodeBase) parent.getParent ();  // All nodes in the same tree must share a common ancestor, if only root.
+                }
+                List<NodeBase> filteredExport = new ArrayList<NodeBase> ();
+                for (NodeBase n : export)
+                {
+                    while (n.getParent () != parent) n = (NodeBase) n.getParent ();
+                    if (! filteredExport.contains (n)) filteredExport.add (n);
+                }
+                export = filteredExport;
+            }
+            else if (comp instanceof GraphNode.TitleRenderer)
+            {
+                GraphNode gn = (GraphNode) comp.getParent ().getParent ();
+                parent = part;
+                export.add (gn.node);
+
+                List<GraphNode> selected = panelEquationGraph.getSelection ();
+                selected.remove (gn);
+                for (GraphNode g : selected) export.add (g.node);
+            }
+            else if (comp instanceof BreadcrumbRenderer)  // Graph parent
+            {
+                parent = part.getTrueParent ();  // If root is on display (the usual case), then this will be null.
+                export.add (part);
+            }
+            if (export.isEmpty ()) return null;
+
+            MVolatile copy = new MVolatile ();
+            for (NodeBase n : export)
+            {
+                n.copy (copy);
+                copy.set (n.getTypeName (), n.source.key (), "$clip");  // Embed a hint about node type.
+            }
+            if (parent == null)  // This is the entire document.
+            {
+                copy.set (null, root.source.key ());  // Remove file information.
+            }
+
+            Schema schema = Schema.latest ();
+            schema.type = "Clip";
+            StringWriter writer = new StringWriter ();
+            try
+            {
+                schema.write (writer);
+                for (MNode c : copy) schema.write (c, writer);
+                writer.close ();
+
+                TransferableNode result = new TransferableNode (writer.toString (), export, drag, null);
+                result.panel = PanelEquations.this;
+                return result;
+            }
+            catch (IOException e)
+            {
+                return null;
+            }
+        }
+
+        protected void exportDone (JComponent comp, Transferable data, int action)
+        {
+            // The main job of this function is to delete nodes in a Cut operation.
+            // They have already been copied by createTransferable().
+
+            // Even though importData() leaves a compound edit open during the drop side of a DnD,
+            // we don't currently support any DnD gestures that actually move data. (Notice tn.drag
+            // as one of the conditions below for early-out.) We close the compound edit here
+            // without adding anything further to it. We may create a compound delete below,
+            // but it will be a separate action.
+            UndoManager um = MainFrame.instance.undoManager;
+            um.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
+
+            TransferableNode tn = (TransferableNode) data;
+            if (tn == null  ||  tn.drag  ||  tn.sources == null  ||  tn.sources.isEmpty ()  ||  action != MOVE  ||  locked) return;
+
+            // Since we aren't doing any true DnD gesture, the object identity of the tn.sources should remain valid.
+            // If we add true DnD gestures, which change the tree contents before exportDone() is called, then
+            // tn.sources should be stored as key paths instead of nodes.
+
+            CompoundEditView compound = null;
+            boolean fromTree = comp instanceof JTree;
+            int count = tn.sources.size ();
+            boolean multi = count > 1;
+            if (multi) um.addEdit (compound = new CompoundEditView (fromTree ? CompoundEditView.CLEAR_TREE : CompoundEditView.CLEAR_GRAPH));
+            int i = 0;
+            for (NodeBase n : tn.sources)
+            {
+                i++;
+                Undoable u = n.makeDelete (false);
+                if (u == null) continue;
+                if (u instanceof UndoableView)
+                {
+                    UndoableView uv = (UndoableView) u;
+                    uv.setMulti (multi);
+                    if (multi  &&  i == count) uv.setMultiLast (true);
+                }
+                if (multi  &&  i == count) compound.leadPath = n.getKeyPath ();
+                um.apply (u);
+            }
+            um.endCompoundEdit ();
+        }
+    }
+
     public class RoundedTopBorder extends AbstractBorder
     {
         public int t;
@@ -1506,7 +1696,7 @@ public class PanelEquations extends JPanel
                     else  // parent is closed
                     {
                     	// Add a subpart in the graph
-                        NodePart editMe = (NodePart) part.add ("Part", null, null, null);
+                        NodePart editMe = (NodePart) part.add ("Part", null, null, null);  // We could compute location, but it's not necessary. AddPart does this well enough.
                         if (editMe == null) return;
                         EventQueue.invokeLater (new Runnable ()
                         {
@@ -1522,7 +1712,7 @@ public class PanelEquations extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (! locked) part.delete (null, false);
+                    if (! locked) part.delete (false);
                 }
             });
             actionMap.put ("startEditing", new AbstractAction ()

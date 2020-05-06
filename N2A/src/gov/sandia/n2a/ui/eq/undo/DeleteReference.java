@@ -20,29 +20,41 @@ public class DeleteReference extends UndoableView
     protected String       name;
     protected String       value;
     protected boolean      neutralized;
+    protected boolean      multi;
+    protected boolean      multiLast;
 
     public DeleteReference (NodeBase node, boolean canceled)
     {
         NodeBase container = (NodeBase) node.getParent ();
-        index = container.getIndex (node);
+        index         = container.getIndex (node);
         if (container.source.key ().equals ("$reference")) container = (NodeBase) container.getParent ();
-        path = container.getKeyPath ();
+        path          = container.getKeyPath ();
         this.canceled = canceled;
 
         name  = node.source.key ();
         value = node.source.get ();
     }
 
+    public void setMulti (boolean value)
+    {
+        multi = value;
+    }
+
+    public void setMultiLast (boolean value)
+    {
+        multiLast = value;
+    }
+
     public void undo ()
     {
         super.undo ();
-        AddReference.create (path, index, name, value);
+        AddReference.create (path, index, name, value, multi);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddReference.destroy (path, canceled, name);
+        AddReference.destroy (path, canceled, name, ! multi  ||  multiLast);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

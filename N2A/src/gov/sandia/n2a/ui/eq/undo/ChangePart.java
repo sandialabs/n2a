@@ -182,7 +182,7 @@ public class ChangePart extends UndoableView
             {
                 if (model == null) FilteredTreeModel.removeNodeFromParentStatic (nodeBefore);
                 else               model.removeNodeFromParent (nodeBefore);
-                if (graphParent) peg.removePart (nodeBefore);
+                if (graphParent) peg.removePart (nodeBefore, true);
             }
         }
         else  // Need two nodes

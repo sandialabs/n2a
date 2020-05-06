@@ -4,7 +4,6 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
@@ -16,6 +15,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.ChangeEquation;
 import gov.sandia.n2a.ui.eq.undo.DeleteEquation;
@@ -142,10 +142,10 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
-    public NodeBase add (String type, JTree tree, MNode data, Point location)
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
     {
         if (type.isEmpty ()) type = "Equation";
-        return ((NodeBase) getParent ()).add (type, tree, data, location);
+        return ((NodeBase) parent).makeAdd (type, tree, data, location);
     }
 
     @Override
@@ -155,7 +155,7 @@ public class NodeEquation extends NodeBase
         if (input.isEmpty ())
         {
             boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddEquation");
-            delete (tree, canceled);
+            delete (canceled);
             return;
         }
 
@@ -190,23 +190,18 @@ public class NodeEquation extends NodeBase
         piecesBefore.combiner = parent.source.get ();  // The fact that we are modifying an existing equation node indicates that the variable (parent) should only contain a combiner.
         if (piecesAfter.combiner.isEmpty ()) piecesAfter.combiner = piecesBefore.combiner;
 
-        MainFrame.instance.undoManager.add (new ChangeEquation (parent, piecesBefore.condition, piecesBefore.combiner, piecesBefore.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
+        MainFrame.instance.undoManager.apply (new ChangeEquation (parent, piecesBefore.condition, piecesBefore.combiner, piecesBefore.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
     }
 
     @Override
-    public void delete (JTree tree, boolean canceled)
+    public Undoable makeDelete (boolean canceled)
     {
-        if (source.isFromTopDocument ())
-        {
-            MainFrame.instance.undoManager.add (new DeleteEquation (this, canceled));
-        }
-        else
-        {
-            NodeVariable parent   = (NodeVariable) getParent ();
-            String       combiner = parent.source.get ();
-            String       name     = source.key ().substring (1);  // strip @ from name, as required by ChangeEquation
-            String       value    = source.get ();
-            MainFrame.instance.undoManager.add (new ChangeEquation (parent, name, combiner, value, name, combiner, ""));  // revoke the equation
-        }
+        if (source.isFromTopDocument ()) return new DeleteEquation (this, canceled);
+
+        NodeVariable parent   = (NodeVariable) getParent ();
+        String       combiner = parent.source.get ();
+        String       name     = source.key ().substring (1);  // strip @ from name, as required by ChangeEquation
+        String       value    = source.get ();
+        return new ChangeEquation (parent, name, combiner, value, name, combiner, "");  // revoke the equation
     }
 }

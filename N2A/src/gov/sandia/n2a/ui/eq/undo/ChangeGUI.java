@@ -42,16 +42,10 @@ public class ChangeGUI extends UndoableView
 
     public ChangeGUI (NodeBase parent, MNode guiTree)
     {
-        this (parent, guiTree, false);
-    }
-
-    public ChangeGUI (NodeBase parent, MNode guiTree, boolean multi)
-    {
         super (parent);
 
-        path       = parent.getKeyPath ();
-        doAdd      = guiTree;
-        this.multi = multi;
+        path  = parent.getKeyPath ();
+        doAdd = guiTree;
 
         MNode currentTree = parent.source.child ("$metadata", "gui");
         if (currentTree == null)
@@ -72,6 +66,11 @@ public class ChangeGUI extends UndoableView
             undoAdd   .changes     (currentTree);
             undoRemove.uniqueNodes (currentTree);
         }
+    }
+
+    public void setMulti (boolean value)
+    {
+        multi = value;
     }
 
     public void undo ()
@@ -148,7 +147,6 @@ public class ChangeGUI extends UndoableView
             List<String> expanded = null;
             if (model != null) expanded = AddAnnotation.saveExpandedNodes (pet.tree, metadataNode);
             metadataNode.build ();
-            if (metadataNode instanceof NodeVariable) ((NodeVariable) metadataNode).findConnections ();
             metadataNode.filter (FilteredTreeModel.filterLevel);
             if (model != null  &&  metadataNode.visible (FilteredTreeModel.filterLevel))
             {
