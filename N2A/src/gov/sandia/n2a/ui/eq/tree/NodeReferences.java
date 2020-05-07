@@ -16,18 +16,13 @@ import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.DeleteReferences;
-import gov.sandia.n2a.ui.images.ImageUtil;
-
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.TreePath;
 
 @SuppressWarnings("serial")
 public class NodeReferences extends NodeContainer
 {
-    protected static ImageIcon icon = ImageUtil.getImage ("properties.gif");
-
     public NodeReferences (MPart source)
     {
         this.source = source;
@@ -53,7 +48,6 @@ public class NodeReferences extends NodeContainer
     @Override
     public Icon getIcon (boolean expanded)
     {
-        if (expanded) return icon;
         return NodeReference.icon;
     }
 

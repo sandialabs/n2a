@@ -54,7 +54,7 @@ import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
-import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
+import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
 import sun.swing.SwingUtilities2;
@@ -326,18 +326,18 @@ public class GraphNode extends JPanel
         int step = 1;
         if ((e.getModifiers () & ActionEvent.CTRL_MASK) != 0) step = 10;
 
-        MNode gui = new MVolatile ();
+        MNode metadata = new MVolatile ();
         if (dx != 0)
         {
             int x = getBounds ().x - parent.offset.x + dx * step;
-            gui.set (x, "bounds", "x");
+            metadata.set (x, "gui", "bounds", "x");
         }
         if (dy != 0)
         {
             int y = getBounds ().y - parent.offset.y + dy * step;
-            gui.set (y, "bounds", "y");
+            metadata.set (y, "gui", "bounds", "y");
         }
-        MainFrame.instance.undoManager.apply (new ChangeGUI (node, gui));
+        MainFrame.instance.undoManager.apply (new ChangeAnnotations (node, metadata));
     }
 
     public void updateTitle ()
@@ -1157,8 +1157,8 @@ public class GraphNode extends JPanel
                 else if (cursor != Cursor.DEFAULT_CURSOR)
                 {
                     // Store new bounds in metadata
-                    MNode guiTree = new MVolatile ();
-                    MNode bounds = guiTree.childOrCreate ("bounds");
+                    MNode metadata = new MVolatile ();
+                    MNode bounds = metadata.childOrCreate ("gui", "bounds");
                     Rectangle now = getBounds ();
                     int dx = now.x - old.x;
                     int dy = now.y - old.y;
@@ -1181,24 +1181,24 @@ public class GraphNode extends JPanel
                     {
                         UndoManager um = MainFrame.instance.undoManager;
                         boolean multi =  moved  &&  ! selection.isEmpty ();
-                        ChangeGUI cg = new ChangeGUI (node, guiTree);
+                        ChangeAnnotations ca = new ChangeAnnotations (node, metadata);
                         if (! multi)
                         {
-                            um.apply (cg);
+                            um.apply (ca);
                         }
                         else
                         {
                             CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
                             um.addEdit (compound);
-                            compound.addEdit (cg);  // delayed execution
+                            compound.addEdit (ca);  // delayed execution
                             for (GraphNode g : selection)
                             {
-                                guiTree = new MVolatile ();
-                                bounds = guiTree.childOrCreate ("bounds");
+                                metadata = new MVolatile ();
+                                bounds = metadata.childOrCreate ("gui", "bounds");
                                 now = g.getBounds ();
                                 if (dx != 0) bounds.set (now.x - parent.offset.x, "x");
                                 if (dy != 0) bounds.set (now.y - parent.offset.y, "y");
-                                compound.addEdit (new ChangeGUI (g.node, guiTree));
+                                compound.addEdit (new ChangeAnnotations (g.node, metadata));
                             }
                             um.endCompoundEdit ();
                             compound.redo ();

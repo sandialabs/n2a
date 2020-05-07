@@ -27,7 +27,7 @@ public class AddReferences extends UndoableView
         path = parent.getKeyPath ();
         this.index = index;
 
-        saved = new MVolatile (null, "$references");
+        saved = new MVolatile (null, "$reference");
         saved.merge (data);
     }
 

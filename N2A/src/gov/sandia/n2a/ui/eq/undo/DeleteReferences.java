@@ -27,7 +27,7 @@ public class DeleteReferences extends UndoableView
         path  = container.getKeyPath ();
         index = container.getIndex (node);
 
-        saved = new MVolatile (null, "$references");
+        saved = new MVolatile (null, "$reference");
         saved.merge (node.source.getSource ());  // We only save top-document data. $metadata node is guaranteed to be from top doc, due to guard in NodeAnnotations.delete().
     }
 

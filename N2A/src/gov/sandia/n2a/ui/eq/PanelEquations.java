@@ -1341,14 +1341,17 @@ public class PanelEquations extends JPanel
                 }
                 int i = 0;  // One-based index of current item. Pre-increments below.
                 NodeBase lastAdded = null;
-                for (AddPart ap : AddPart.makeMulti ((NodePart) target, parts, location))
+                if (partCount > 0)
                 {
-                    i++;
-                    ap.setMulti (multi);
-                    if (multi  &&  i == count) ap.setMultiLast (true);
-                    ap.multiShared = multiShared;
-                    um.apply (ap);
-                    lastAdded = ap.getCreatedNode ();
+                    for (AddPart ap : AddPart.makeMulti ((NodePart) target, parts, location))
+                    {
+                        i++;
+                        ap.setMulti (multi);
+                        if (multi  &&  i == count) ap.setMultiLast (true);
+                        ap.multiShared = multiShared;
+                        um.apply (ap);
+                        lastAdded = ap.getCreatedNode ();
+                    }
                 }
                 for (MNode c : items)
                 {

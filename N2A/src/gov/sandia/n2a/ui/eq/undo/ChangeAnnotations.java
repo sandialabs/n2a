@@ -24,36 +24,32 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 /**
-    Applies multiple changes to $metadata.gui.
-    Coordinates graphic editing with tree editing.
-    While this class may seem redundant with ChangeAnnotaton, it serves a slightly different purpose.
-    That class supports direct user interaction with the metadata tree, including merging and splitting
-    of deep node paths. This class deals with behind-the-scenes modification of GUI data.
+    Applies multiple changes to an existing $metadata subtree.
 **/
-public class ChangeGUI extends UndoableView
+public class ChangeAnnotations extends UndoableView
 {
-    protected List<String> path;          // to node that contains the gui metadata
-    protected int          index;         // If we create metadata node, this is where it goes.
-    protected MNode        undoAdd;       // Nodes to apply during undo, starting at $metadata.gui. If "gui" key is absent, then this is null.
-    protected MNode        undoRemove;    // Nodes that should be removed during undo, via MNode.uniqueNodes(). Like undoAdd, this is null if "gui" key is absent.
-    protected MNode        doAdd;         // The nodes being changed. There is no corresponding doRemove.
+    protected List<String> path;          // To node that contains the metadata. $metadata itself may be explicit (for parts) or hidden (for variables).
+    protected int          index;         // If we create $metadata, this is where it goes.
+    protected MNode        undoAdd;       // Nodes to apply during undo, starting at $metadata. If $metadata key is absent, then this is null.
+    protected MNode        undoRemove;    // Nodes that should be removed during undo, via MNode.uniqueNodes(). Like undoAdd, this is null if $metadata key is absent.
+    protected MNode        doAdd;         // The nodes to be changed, rooted at $metadata. There is no corresponding doRemove.
     protected boolean      neutralized;   // Indicates that this edit exactly reverses the previous one, so completely remove both.
     protected boolean      multi;
 
-    public ChangeGUI (NodeBase parent, MNode guiTree)
+    public ChangeAnnotations (NodeBase parent, MNode metadata)
     {
         super (parent);
 
         path  = parent.getKeyPath ();
-        doAdd = guiTree;
+        doAdd = metadata;
 
-        MNode currentTree = parent.source.child ("$metadata", "gui");
+        MNode currentTree = parent.source.child ("$metadata");
         if (currentTree == null)
         {
-            NodeBase metadataNode = parent.child ("$metadata");
-            if (metadataNode == null  &&  parent.getChildCount () > 0)  // We will create a new $metadata node, so determine whether it should appear first or second in tree.
+            // We will create a new $metadata node, so determine whether it should appear first or second in tree.
+            if (parent.getChildCount () > 0)
             {
-                // Test whether the first child is $inherit, and whether it will remain so after the move. In that case, don't put $metadata in front of it.
+                // Test whether the first child is $inherit. In that case, don't put $metadata in front of it.
                 if (((NodeBase) parent.getChildAt (0)).source.key ().equals ("$inherit")) index = 1;  // otherwise it is 0
             }
         }
@@ -61,8 +57,8 @@ public class ChangeGUI extends UndoableView
         {
             undoAdd    = new MVolatile ();
             undoRemove = new MVolatile ();
-            undoAdd   .merge (guiTree);
-            undoRemove.merge (guiTree);
+            undoAdd   .merge (metadata);
+            undoRemove.merge (metadata);
             undoAdd   .changes     (currentTree);
             undoRemove.uniqueNodes (currentTree);
         }
@@ -99,7 +95,6 @@ public class ChangeGUI extends UndoableView
             sp = new StoredPath (pet.tree);
         }
 
-        boolean needBuild = true;
         NodeContainer metadataNode;          // The immediate container of metadata items in the tree.
         MNode         metadataSource = null; // The $metadata node under which all changes are made.
         if (parent instanceof NodeVariable)
@@ -112,22 +107,20 @@ public class ChangeGUI extends UndoableView
             metadataNode = (NodeContainer) parent.child ("$metadata");
             if (metadataNode != null) metadataSource = metadataNode.source;
         }
-        if (add == null)  // Remove the gui node if it exists. Possibly remove $metadata itself.
+
+        boolean needBuild = true;
+        if (add == null)  // This is an undo, and $metadata did not exist before, so remove it.
         {
-            // We can safely assume that mparent is non-null, since we only get here during an undo.
-            metadataSource.clear ("gui");
-            if (metadataSource.size () == 0)  // No siblings of "gui", so get rid of $metadata.
+            // We can safely assume that metadataSource is non-null, since we only get here during an undo.
+            metadataSource.parent ().clear ("$metadata");
+            if (parent instanceof NodePart)
             {
-                metadataSource.parent ().clear ("$metadata");
-                if (parent instanceof NodePart)
-                {
-                    if (model == null) FilteredTreeModel.removeNodeFromParentStatic (metadataNode);
-                    else               model.removeNodeFromParent (metadataNode);
-                    needBuild = false;
-                }
+                if (model == null) FilteredTreeModel.removeNodeFromParentStatic (metadataNode);
+                else               model.removeNodeFromParent (metadataNode);
+                needBuild = false;
             }
         }
-        else  // Update gui node, or add if it doesn't exist. Possibly create $metadata
+        else  // Update $metadata node. Create if it doesn't exist.
         {
             if (metadataSource == null) metadataSource = parent.source.childOrCreate ("$metadata");
             if (metadataNode == null)  // only happens when parent is NodePart
@@ -136,12 +129,10 @@ public class ChangeGUI extends UndoableView
                 if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (metadataNode, parent, index);
                 else               model.insertNodeIntoUnfiltered (metadataNode, parent, index);
             }
-            MNode gui = metadataSource.childOrCreate ("gui");
-            if (remove != null) gui.uniqueNodes (remove);
-            gui.merge (add);
+            if (remove != null) metadataSource.uniqueNodes (remove);
+            metadataSource.merge (add);
         }
 
-        NodeBase updateNode = metadataNode;
         if (needBuild)
         {
             List<String> expanded = null;
@@ -153,12 +144,9 @@ public class ChangeGUI extends UndoableView
                 model.nodeStructureChanged (metadataNode);
                 AddAnnotation.restoreExpandedNodes (pet.tree, metadataNode, expanded);
             }
-
-            updateNode = metadataNode.child ("gui");
-            if (updateNode == null) updateNode = metadataNode;
         }
-        PanelEquationTree.updateVisibility (pet, updateNode.getPath (), -1, false);
-        if (sp != null) sp.restore (pet.tree, true);  // This forces focus back to original location.
+        PanelEquationTree.updateVisibility (pet, metadataNode.getPath (), -1, false);
+        if (! multi  &&  sp != null) sp.restore (pet.tree, true);  // This forces focus back to original location.
 
         // Update graph
         NodePart part;
@@ -173,12 +161,12 @@ public class ChangeGUI extends UndoableView
 
     public boolean addEdit (UndoableEdit edit)
     {
-        if (edit instanceof ChangeGUI)
+        if (edit instanceof ChangeAnnotations)
         {
-            ChangeGUI cg = (ChangeGUI) edit;
-            if (path.equals (cg.path)  &&  doAdd.structureEquals (cg.doAdd))
+            ChangeAnnotations ca = (ChangeAnnotations) edit;
+            if (path.equals (ca.path)  &&  doAdd.structureEquals (ca.doAdd))
             {
-                doAdd = cg.doAdd;  // Replace our values with the new values.
+                doAdd = ca.doAdd;  // Replace our values with the new values.
                 neutralized = undoAdd.equals (doAdd);
                 return true;
             }

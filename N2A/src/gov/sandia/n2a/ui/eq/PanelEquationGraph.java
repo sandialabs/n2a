@@ -56,7 +56,7 @@ import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
-import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
+import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -714,18 +714,18 @@ public class PanelEquationGraph extends JScrollPane
             public void actionPerformed (ActionEvent e)
             {
                 NodeBase n = arrowEdge.nodeFrom.node.child (arrowEdge.alias);
-                MNode gui = new MVolatile ();
+                MNode metadata = new MVolatile ();
                 String action = e.getActionCommand ();
                 if (action.equals ("straight"))
                 {
-                    if (n.source.getFlag ("$metadata", "gui", "arrow", "straight")) gui.set ("0", "arrow", "straight");
-                    else                                                            gui.set ("",  "arrow", "straight");
+                    if (n.source.getFlag ("$metadata", "gui", "arrow", "straight")) metadata.set ("0", "gui", "arrow", "straight");
+                    else                                                            metadata.set ("",  "gui", "arrow", "straight");
                 }
                 else
                 {
-                    gui.set (action, "arrow");
+                    metadata.set (action, "arrow");
                 }
-                MainFrame.instance.undoManager.apply (new ChangeGUI (n, gui));
+                MainFrame.instance.undoManager.apply (new ChangeAnnotations (n, metadata));
             }
         };
     }

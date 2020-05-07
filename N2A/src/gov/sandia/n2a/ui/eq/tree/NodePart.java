@@ -4,7 +4,6 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.EventQueue;
@@ -36,10 +35,12 @@ import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.AddVariable;
+import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
 import gov.sandia.n2a.ui.eq.undo.ChangePart;
+import gov.sandia.n2a.ui.eq.undo.ChangeReferences;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -555,9 +556,17 @@ public class NodePart extends NodeContainer
         {
             return new AddAnnotation (this, metadataIndex, data);  // will automagically insert a $metadata block if needed
         }
+        else if (type.equals ("Annotations"))
+        {
+            return new ChangeAnnotations (this, data);
+        }
         else if (type.equals ("Reference"))
         {
             return new AddReference (this, metadataIndex, data);
+        }
+        else if (type.equals ("References"))
+        {
+            return new ChangeReferences (this, data);
         }
         else if (type.equals ("Part"))
         {

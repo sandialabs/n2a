@@ -31,7 +31,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
-import gov.sandia.n2a.ui.eq.undo.ChangeGUI;
+import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 
 @SuppressWarnings("serial")
 public class GraphParent extends JPanel
@@ -251,12 +251,12 @@ public class GraphParent extends JPanel
                 if (cursor != Cursor.DEFAULT_CURSOR)  // Click on border
                 {
                     // Store new bounds in metadata
-                    MNode guiTree = new MVolatile ();
-                    MNode boundsParent = guiTree.childOrCreate ("bounds", "parent");
+                    MNode metadata = new MVolatile ();
+                    MNode boundsParent = metadata.childOrCreate ("gui", "bounds", "parent");
                     Rectangle now = getBounds ();
                     if (now.width  != old.width ) boundsParent.set (now.width,  "width");
                     if (now.height != old.height) boundsParent.set (now.height, "height");
-                    if (boundsParent.size () > 0) MainFrame.instance.undoManager.apply (new ChangeGUI (part, guiTree));
+                    if (boundsParent.size () > 0) MainFrame.instance.undoManager.apply (new ChangeAnnotations (part, metadata));
                 }
             }
 

@@ -30,7 +30,9 @@ import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddEquation;
 import gov.sandia.n2a.ui.eq.undo.AddInherit;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
+import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.ChangeEquation;
+import gov.sandia.n2a.ui.eq.undo.ChangeReferences;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariableToInherit;
 import gov.sandia.n2a.ui.eq.undo.DeleteVariable;
@@ -366,7 +368,9 @@ public class NodeVariable extends NodeContainer
         {
             case "Equation":
             case "Annotation":
+            case "Annotations":
             case "Reference":
+            case "References":
                 return this;
         }
         return ((NodeBase) parent).containerFor (type);
@@ -441,9 +445,18 @@ public class NodeVariable extends NodeContainer
 
             return new AddAnnotation (this, index, data);
         }
+        else if (type.equals ("Annotations"))
+        {
+            // In this case, everything under this node will be rebuilt, so no need to worry about insertion index.
+            return new ChangeAnnotations (this, data);
+        }
         else if (type.equals ("Reference"))
         {
             return new AddReference (this, getChildCount (), data);
+        }
+        else if (type.equals ("References"))
+        {
+            return new ChangeReferences (this, data);
         }
 
         return ((NodeBase) parent).makeAdd (type, tree, data, location);  // refer all other requests up the tree
