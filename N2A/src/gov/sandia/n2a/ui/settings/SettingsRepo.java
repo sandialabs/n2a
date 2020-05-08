@@ -151,7 +151,7 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected JTextArea      fieldMessage;
     protected JScrollPane    paneMessage;
     protected UndoManager    undoMessage;  // specifically for editing text field
-    protected JLabel         labelProgress;
+    protected JLabel         labelProgress = new JLabel ();
     protected PanelDiff      panelDiff;
 
     // The job of existingModels and existingReferences is to ensure that rebuild() does not create
@@ -542,8 +542,6 @@ public class SettingsRepo extends JScrollPane implements Settings
                 catch (CannotRedoException e) {}
             }
         });
-
-        labelProgress = new JLabel ();
 
         // JGit configuration
         CredentialsProvider.setDefault (new ChainingCredentialsProvider (new NetRCCredentialsProvider (), new CredentialCache (), new CredentialDialog ()));
@@ -1448,6 +1446,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public String getURL ()
         {
+            if (remote == null) return "";
             List<URIish> URIs = remote.getURIs ();
             if (URIs.size () == 0) return "";
             return URIs.get (0).toString ();
@@ -1589,6 +1588,12 @@ public class SettingsRepo extends JScrollPane implements Settings
                 catch (IOException e)
                 {
                     warning (e.getMessage ());
+                }
+                catch (Exception e)
+                {
+                    String message = e.getMessage ();
+                    if (message == null  ||  message.isEmpty ()) message = e.toString ();  // Get class name
+                    error (message);
                 }
             }
             return getDeltas (diff);
