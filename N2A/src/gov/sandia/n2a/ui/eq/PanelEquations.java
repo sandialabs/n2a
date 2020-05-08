@@ -1214,14 +1214,9 @@ public class PanelEquations extends JPanel
                 }
                 else  // Property-panel mode. Choose target based on type of user
                 {
-                    boolean allParts = false;
-                    if (schema.type.equals ("Part"))
+                    boolean allParts = true;
+                    if (schema.type.equals ("Clip"))
                     {
-                        allParts = true;
-                    }
-                    else if (schema.type.equals ("Clip"))
-                    {
-                        allParts = true;
                         for (MNode c : data)
                         {
                             String type = c.get ("$clip");
@@ -1237,11 +1232,13 @@ public class PanelEquations extends JPanel
                     {
                         target = part;
                         if (panelEquationTree.root == part) tree = panelEquationTree.tree;
+                        else                                tree = null;
                     }
                     else
                     {
                         target = gn.node;
                         if (panelEquationTree.root == gn.node) tree = panelEquationTree.tree;
+                        else                                   tree = null;
                     }
                 }
             }
@@ -1269,6 +1266,8 @@ public class PanelEquations extends JPanel
                     location = dl.getDropPoint ();
                     location.x += vp.x - offset.x;
                     location.y += vp.y - offset.y;
+
+                    panelParent.panelEquationTree.tree.clearSelection ();  // Just in case this was a DnD to the parent tree in NODE view.
                 }
                 else if (gn != null  &&  ! gn.open)
                 {
@@ -1829,7 +1828,7 @@ public class PanelEquations extends JPanel
             // In addition to focusGained() and focusLost() above, this method can also be called by GraphParent.setOpen()
             // to update the state of this renderer component. setOpen() can be called as part of the deletion of part,
             // so it is necessary to guard against null here.
-            getTreeCellRendererComponent (getParentEquationTree ().tree, part, selected, panelParent.isVisible (), false, -1, focused);
+            getTreeCellRendererComponent (getParentEquationTree ().tree, part, selected, panelParent.isVisible (), false, -2, focused);
             if (part == null)
             {
                 text = noModel;

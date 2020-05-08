@@ -173,6 +173,11 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         if (margins != null) setBorder (new EmptyBorder (margins));
     }
 
+    /**
+        @param row Used to determine if this cell is the DnD drop target. Usually, this should be >= 0.
+        However, if this is being used to render cells that don't properly exist in the given tree, pass -2.
+        Do not pass -1, as it will produce unexpected results in the logic for identifying DnD cells.
+    **/
     public Component getTreeCellRendererComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
     {
         this.selected = selected;

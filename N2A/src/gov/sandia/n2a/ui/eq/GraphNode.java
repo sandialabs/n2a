@@ -97,7 +97,7 @@ public class GraphNode extends JPanel
         open =  panelEquationTree != null  &&  node.source.getBoolean ("$metadata", "gui", "bounds", "open");
 
         title = new TitleRenderer ();
-        title.getTreeCellRendererComponent (getEquationTree ().tree, node, false, open, false, -1, false);  // Configure JLabel with info from node.
+        title.getTreeCellRendererComponent (getEquationTree ().tree, node, false, open, false, -2, false);  // Configure JLabel with info from node.
         title.setFocusable (true);            // make focusable in general
         title.setRequestFocusEnabled (true);  // make focusable by mouse
 
@@ -271,7 +271,7 @@ public class GraphNode extends JPanel
             remove (panelEquationTree);  // assume that equation tree does not have focus
         }
         boolean focused = title.isFocusOwner ();
-        title.getTreeCellRendererComponent (panelEquationTree.tree, node, focused || selected, open, false, -1, focused);
+        title.getTreeCellRendererComponent (panelEquationTree.tree, node, focused || selected, open, false, -2, focused);
         animate (new Rectangle (getLocation (), getPreferredSize ()));
     }
 
@@ -346,7 +346,7 @@ public class GraphNode extends JPanel
 
         node.setUserObject ();
         boolean focused = title.isFocusOwner ();
-        title.getTreeCellRendererComponent (getEquationTree ().tree, node, focused || selected, open, false, -1, focused);
+        title.getTreeCellRendererComponent (getEquationTree ().tree, node, focused || selected, open, false, -2, focused);
 
         panelTitle.invalidate ();
         setSize (getPreferredSize ());  // GraphLayout won't do this, so we must do it manually.
@@ -798,7 +798,7 @@ public class GraphNode extends JPanel
             {
                 public void focusGained (FocusEvent e)
                 {
-                    getTreeCellRendererComponent (getEquationTree ().tree, node, true, open, false, -1, true);
+                    getTreeCellRendererComponent (getEquationTree ().tree, node, true, open, false, -2, true);
                     restoreFocus ();  // does repaint
                 }
 
@@ -811,7 +811,7 @@ public class GraphNode extends JPanel
                         if (g == null) container.panelEquationGraph.clearSelection ();  // Next focus in not a graph node, so unset all selections. This avoids visual confusion.
                     }
 
-                    getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected, open, false, -1, false);
+                    getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected, open, false, -2, false);
                     GraphNode.this.repaint ();
                 }
             });
@@ -829,7 +829,7 @@ public class GraphNode extends JPanel
             {
                 UIupdated = false;
                 // We are never the focus owner, because updateUI() is triggered from the L&F panel.
-                getTreeCellRendererComponent (getEquationTree ().tree, node, false, open, false, -1, false);
+                getTreeCellRendererComponent (getEquationTree ().tree, node, false, open, false, -2, false);
             }
             return super.getPreferredSize ();
         }
@@ -837,7 +837,7 @@ public class GraphNode extends JPanel
         public void updateSelected ()
         {
             boolean focused = isFocusOwner ();
-            getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected || focused, open, false, -1, focused);
+            getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected || focused, open, false, -2, focused);
             GraphNode.this.repaint ();
         }
 
