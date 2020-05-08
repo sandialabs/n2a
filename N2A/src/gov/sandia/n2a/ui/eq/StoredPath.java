@@ -140,7 +140,8 @@ public class StoredPath
             }
         }
         TreePath path = new TreePath (n.getPath ());
-        if (setSelection) tree.setSelectionPath (path);
+        boolean selectable =  ! n.isRoot ()  ||  tree.isRootVisible ();
+        if (setSelection  &&  selectable) tree.setSelectionPath (path);
         if (expanded) tree.expandPath (path);
         tree.scrollPathToVisible (path);
     }
