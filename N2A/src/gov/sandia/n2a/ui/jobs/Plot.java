@@ -141,19 +141,23 @@ public class Plot extends OutputParser
         plot.setDomainPannable (true);
         plot.setRangePannable  (true);
 
-        int count0 = dataset0.getSeriesCount ();
-        int count = count0;
-        if (dataset1 != null) count += dataset1.getSeriesCount ();
-
         NumberAxis axis0 = (NumberAxis) plot.getRangeAxis ();
         axis0.setAutoRangeIncludesZero (false);
         if (range0 > 0) axis0.setAutoRangeMinimumSize (range0 / 2);
+
+        int count = dataset0.getSeriesCount ();
+        float shift = 0;
+        if (dataset1 != null)
+        {
+            count *= 3;  // So we use only a third of the color range
+            shift = 1.0f - 1.0f / 6.0f;
+        }
 
         XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
         for (int i = 0; i < dataset0.getSeriesCount (); i++)
         {
             renderer.setSeriesShapesVisible (i, false);
-            renderer.setSeriesPaint (i, Color.getHSBColor ((float) i / count, 1.0f, 0.9f));
+            renderer.setSeriesPaint (i, Color.getHSBColor ((float) i / count + shift, 1.0f, 0.9f));
         }
         plot.setRenderer (renderer);
 
@@ -168,11 +172,14 @@ public class Plot extends OutputParser
             axis1.setTickLabelFont (axis0.getTickLabelFont ());
             plot.setRangeAxis (1, axis1);
 
+            count = dataset1.getSeriesCount () * 3;
+            shift = 1.0f / 3.0f;
+
             renderer = new XYLineAndShapeRenderer();
             for (int i = 0; i < dataset1.getSeriesCount (); i++)
             {
                 renderer.setSeriesShapesVisible (i, false);
-                renderer.setSeriesPaint (i, Color.getHSBColor ((float) (i + count0) / count, 1.0f, 0.9f));
+                renderer.setSeriesPaint (i, Color.getHSBColor ((float) i / count + shift, 1.0f, 0.9f));
             }
             plot.setRenderer (1, renderer);
             plot.setDatasetRenderingOrder (DatasetRenderingOrder.REVERSE);
