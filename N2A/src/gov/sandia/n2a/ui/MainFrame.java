@@ -60,6 +60,8 @@ public class MainFrame extends JFrame
         ArrayList<Image> icons = new ArrayList<Image> ();
         icons.add (ImageUtil.getImage ("n2a-16.png").getImage ());
         icons.add (ImageUtil.getImage ("n2a-32.png").getImage ());
+        icons.add (ImageUtil.getImage ("n2a-48.png").getImage ());
+        icons.add (ImageUtil.getImage ("n2a-128.png").getImage ());
         setIconImages (icons);
 
         undoManager = new UndoManager ();
