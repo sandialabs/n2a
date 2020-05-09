@@ -723,7 +723,7 @@ public class PanelEquationGraph extends JScrollPane
                 }
                 else
                 {
-                    metadata.set (action, "arrow");
+                    metadata.set (action, "gui", "arrow");
                 }
                 MainFrame.instance.undoManager.apply (new ChangeAnnotations (n, metadata));
             }

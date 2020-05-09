@@ -167,7 +167,7 @@ public class ChangeAnnotations extends UndoableView
             if (path.equals (ca.path)  &&  doAdd.structureEquals (ca.doAdd))
             {
                 doAdd = ca.doAdd;  // Replace our values with the new values.
-                neutralized = undoAdd.equals (doAdd);
+                neutralized =  undoAdd != null  &&  undoAdd.equals (doAdd);
                 return true;
             }
         }
