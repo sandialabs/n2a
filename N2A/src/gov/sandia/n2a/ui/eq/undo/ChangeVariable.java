@@ -138,7 +138,7 @@ public class ChangeVariable extends UndoableView
                 // "doc" is a collated model, so changes will also be made to references from inherited nodes.
                 // Such changes will be saved as an override.
                 MPart doc = pe.root.source;
-                EquationSet compiled = new EquationSet (doc);
+                EquationSet compiled = new EquationSet (doc);  // TODO: this is a potentially lengthy operation. For very large models, need to reduce load on EDT. Either maintain incremental compilation, or compile on separate thread.
                 List<String> vkeypath = new ArrayList<String> (path.subList (1, path.size ()));
                 Variable vold;
                 Variable vnew;
@@ -335,6 +335,8 @@ public class ChangeVariable extends UndoableView
 
         if (touchedBindings)
         {
+            parent.updateConnections ();
+
             MPart mparent = parent.source;
             if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
         }

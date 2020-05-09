@@ -119,11 +119,16 @@ public class AddVariable extends UndoableView implements AddEditable
             createdNode.build ();
             createdNode.findConnections ();
             createdNode.filter (FilteredTreeModel.filterLevel);
-            if (parent.graph != null)
+
+            if (createdNode.isBinding  ||  wasBinding)
             {
-                if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
-                else if (wasBinding)       parent.graph.killEdge   (name);
-                if ((createdNode.isBinding  ||  wasBinding)  &&  mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
+                parent.updateConnections ();
+                if (parent.graph != null)
+                {
+                    if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
+                    else if (wasBinding)       parent.graph.killEdge   (name);
+                }
+                if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
         }
         parent.invalidateColumns (model);
@@ -176,14 +181,14 @@ public class AddVariable extends UndoableView implements AddEditable
             pet.updateOrder (createdPath);
             parent.invalidateColumns (model);
 
-            if (parent.graph != null)
-            {
-                if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
-                else if (wasBinding)       parent.graph.killEdge   (name);
-            }
-
             if (createdNode.isBinding  ||  wasBinding)
             {
+                parent.updateConnections ();
+                if (parent.graph != null)
+                {
+                    if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
+                    else if (wasBinding)       parent.graph.killEdge   (name);
+                }
                 MPart mparent = parent.source;
                 if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }

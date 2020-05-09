@@ -238,6 +238,14 @@ public class NodePart extends NodeContainer
     }
 
     /**
+        If one of our child variables updates its connection-binding state, then update all child parts as well.
+    **/
+    public void updateConnections ()
+    {
+        for (Object o : children) if (o instanceof NodePart) ((NodePart) o).findConnections ();
+    }
+
+    /**
         Walks to part hierarchy while unpacking the given name path.
         Subroutine of NodeVariable.findConnections()
         @return The tree node, or null if the path does not resolve exactly.
