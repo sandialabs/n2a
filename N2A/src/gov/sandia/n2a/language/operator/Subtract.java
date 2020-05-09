@@ -11,6 +11,7 @@ import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
+import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
@@ -117,6 +118,18 @@ public class Subtract extends OperatorBinary
         operand1.exponentNext = next;
         operand0.determineExponentNext (from);
         operand1.determineExponentNext (from);
+    }
+
+    public void render (Renderer renderer)
+    {
+        if (renderer.render (this)) return;
+
+        // As a matter of style, we don't add any spaces around binary operators.
+        // However, in the special case of minus followed by a negative constant, we add the space
+        // for clarity, and to prevent compilation errors in C++.
+        String middle = "-";
+        if (operand1.getDouble () < 0) middle = "- ";
+        render (renderer, middle);
     }
 
     public Type eval (Instance context)
