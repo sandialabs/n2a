@@ -458,7 +458,6 @@ public class PanelRun extends JPanel
 
                 // Step 2 -- Load data
                 // The exact method depends on node type and the current display mode, selected by pushbuttons and stored in viz
-                displayChart.setChart (null);  // preemtively release old chart
                 if (node.type == NodeFile.Type.Video)
                 {
                     final Video v = new Video (node);

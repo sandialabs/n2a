@@ -57,6 +57,7 @@ public class NodeJob extends NodeBase
     protected Date    dateFinished    = null;
     protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
     protected long    lastLiveCheck   = 0;
+    protected long    lastDisplay     = 0;
     protected boolean deleted;
     protected boolean tryToSelectOutput;
 
@@ -220,7 +221,12 @@ public class NodeJob extends NodeBase
                     else if (panel.displayNode instanceof NodeFile  &&  panel.displayNode.getParent () == NodeJob.this)
                     {
                         panel.buttonStop.setEnabled (complete < 1);
-                        if (panel.displayThread == null  ||  complete >= 1) panel.viewFile (false);
+                        long currentTime = System.currentTimeMillis ();
+                        if (complete >= 1  ||  panel.displayThread == null  &&  currentTime - lastDisplay > 5000)
+                        {
+                            lastDisplay = currentTime;
+                            panel.viewFile (false);
+                        }
                     }
                 }
             });
