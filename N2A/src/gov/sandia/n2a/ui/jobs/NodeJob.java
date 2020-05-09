@@ -211,12 +211,17 @@ public class NodeJob extends NodeBase
             {
                 public void run ()
                 {
+                    panel.model.nodeChanged (NodeJob.this);
                     if (panel.displayNode == NodeJob.this)
                     {
                         panel.buttonStop.setEnabled (complete < 1);
                         panel.viewJob ();
                     }
-                    panel.model.nodeChanged (NodeJob.this);
+                    else if (panel.displayNode instanceof NodeFile  &&  panel.displayNode.getParent () == NodeJob.this)
+                    {
+                        panel.buttonStop.setEnabled (complete < 1);
+                        if (panel.displayThread == null  ||  complete >= 1) panel.viewFile (false);
+                    }
                 }
             });
         }

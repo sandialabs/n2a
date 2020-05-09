@@ -118,7 +118,7 @@ public class PanelRun extends JPanel
                 NodeJob job = null;
                 if (displayNode instanceof NodeFile)
                 {
-                    viewFile ();
+                    viewFile (true);
                     job = (NodeJob) displayNode.getParent ();
                 }
                 else if (displayNode instanceof NodeJob)
@@ -275,7 +275,7 @@ public class PanelRun extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (displayNode instanceof NodeFile) viewFile ();
+                if (displayNode instanceof NodeFile) viewFile (true);
             }
         };
 
@@ -458,6 +458,7 @@ public class PanelRun extends JPanel
 
                 // Step 2 -- Load data
                 // The exact method depends on node type and the current display mode, selected by pushbuttons and stored in viz
+                displayChart.setChart (null);  // preemtively release old chart
                 if (node.type == NodeFile.Type.Video)
                 {
                     final Video v = new Video (node);
@@ -466,10 +467,13 @@ public class PanelRun extends JPanel
                         public void run ()
                         {
                             if (stop) return;
+                            displayChart.buttonBar.setVisible (false);
                             displayPane.setViewportView (v);
                             v.play ();
                         }
                     });
+                    // Don't signal done. That will keep file polling from constantly calling play().
+                    // However, play() also has a guard to avoid restarting the play thread.
                     return;
                 }
                 else if (node.type == NodeFile.Type.Picture)
@@ -480,9 +484,11 @@ public class PanelRun extends JPanel
                         public void run ()
                         {
                             if (stop) return;
+                            displayChart.buttonBar.setVisible (false);
                             displayPane.setViewportView (p);
                         }
                     });
+                    signalDone ();
                     return;
                 }
                 else if (! viz.equals ("Text"))
@@ -544,7 +550,6 @@ public class PanelRun extends JPanel
                             {
                                 displayChart.setChart (plot.createChart ());
                                 panel = displayChart;
-                                displayChart.buttonBar.setVisible (true);
                             }
                         }
                         else if (viz.equals ("Raster"))
@@ -554,11 +559,14 @@ public class PanelRun extends JPanel
                             {
                                 displayChart.setChart (raster.createChart ());
                                 panel = displayChart;
-                                displayChart.buttonBar.setVisible (true);
                             }
                         }
 
-                        if (stop) return;
+                        if (stop)
+                        {
+                            signalDone ();
+                            return;
+                        }
                         if (panel != null)
                         {
                             final Component p = panel;
@@ -567,10 +575,12 @@ public class PanelRun extends JPanel
                                 public void run ()
                                 {
                                     if (stop) return;
+                                    displayChart.buttonBar.setVisible (p == displayChart);
                                     displayPane.setViewportView (p);
                                 }
                             });
 
+                            signalDone ();
                             return;
                         }
                         // Otherwise, fall through ...
@@ -579,7 +589,11 @@ public class PanelRun extends JPanel
 
                 // Default is plain text
                 final String contents = env.getFileContents (node.path.toString ());
-                if (stop) return;
+                if (stop)
+                {
+                    signalDone ();
+                    return;
+                }
 
                 EventQueue.invokeLater (new Runnable ()
                 {
@@ -590,6 +604,8 @@ public class PanelRun extends JPanel
                             if (stop) return;
                             displayText.setText (contents);
                             displayText.setCaretPosition (0);
+                            displayChart.buttonBar.setVisible (false);
+                            displayPane.setViewportView (displayText);
                         }
                     }
                 });
@@ -597,10 +613,20 @@ public class PanelRun extends JPanel
             catch (Exception e)
             {
             }
+
+            signalDone ();
         };
+
+        public void signalDone ()
+        {
+            synchronized (displayText)
+            {
+                if (displayThread == this) displayThread = null;
+            }
+        }
     }
 
-    public void viewFile ()
+    public void viewFile (boolean showLoading)
     {
         synchronized (displayText)
         {
@@ -609,17 +635,13 @@ public class PanelRun extends JPanel
                 displayThread.stop = true;
                 displayThread = null;
             }
-            displayText.setText ("loading...");
+            if (showLoading) displayText.setText ("loading...");
         }
-        Component view = displayPane.getViewport ().getView ();
-        if (view != displayText)
+
+        if (showLoading)
         {
-            if (view == displayChart)
-            {
-                displayChart.setChart (null);  // preemtively release old chart
-                displayChart.buttonBar.setVisible (false);
-            }
-            displayPane.setViewportView (displayText);
+            Component view = displayPane.getViewport ().getView ();
+            if (view != displayText) displayPane.setViewportView (displayText);
         }
 
         String viz = buttons.getSelection ().getActionCommand ();
