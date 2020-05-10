@@ -120,9 +120,12 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
         oneLineEditor.getDocument ().addUndoableEditListener (undoManager);
         InputMap inputMap = oneLineEditor.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");  // For Windows and Linux
+        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");  // For Mac
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
         ActionMap actionMap = oneLineEditor.getActionMap ();
         actionMap.put ("Undo", new AbstractAction ("Undo")
         {
@@ -242,9 +245,12 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         inputMap = multiLineEditor.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "insert-break");
         inputMap.put (KeyStroke.getKeyStroke ("control ENTER"),   "none");
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo"); 
+        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
         actionMap = multiLineEditor.getActionMap ();
         actionMap.put ("Undo", new AbstractAction ("Undo")
         {
@@ -542,38 +548,24 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         else if (event instanceof MouseEvent)
         {
             MouseEvent me = (MouseEvent) event;
+            if (! SwingUtilities.isLeftMouseButton (me)) return false;
+            if (me.getClickCount () != 1) return false;
+            if (me.isControlDown ()) return false;  // On Macintosh, reserve ctrl-click for context menu.
+            if (focusTree == null) return false;
+
             int x = me.getX ();
             int y = me.getY ();
-            int clicks = me.getClickCount ();
-            if (SwingUtilities.isLeftMouseButton (me))
+            final TreePath path = focusTree.getPathForLocation (x, y);
+            if (path != null  &&  path.equals (lastPath))  // Second click on node, but not double-click.
             {
-                if (clicks == 1)
+                // Initiate edit
+                EventQueue.invokeLater (new Runnable ()
                 {
-                    if (focusTree == null) return false;
-                    final TreePath path = focusTree.getPathForLocation (x, y);
-                    if (path != null  &&  path.equals (lastPath))  // Second click on node, but not double-click.
+                    public void run ()
                     {
-                        // Prevent second click from initiating edit if this is the icon of the root node.
-                        // Similar to the logic in PanelEquatonTree tree mouse listener
-                        NodeBase node = (NodeBase) path.getLastPathComponent ();
-                        NodePart root = (NodePart) focusTree.getModel ().getRoot ();
-                        if (node == root)
-                        {
-                            boolean expanded = focusTree.isExpanded (path);
-                            int iconWidth = root.getIcon (expanded).getIconWidth ();  // expanded doesn't really matter to icon width, as NodePart uses only one icon.
-                            if (x < iconWidth) return false;
-                        }
-
-                        // Initiate edit
-                        EventQueue.invokeLater (new Runnable ()
-                        {
-                            public void run ()
-                            {
-                                focusTree.startEditingAtPath (path);
-                            }
-                        });
+                        focusTree.startEditingAtPath (path);
                     }
-                }
+                });
             }
         }
         // Always return false from this method. Instead, initiate editing indirectly.

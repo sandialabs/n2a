@@ -322,7 +322,7 @@ public class NodeVariable extends NodeContainer
 
         if (hasEquations)  // show special mark when multi-line equation is collapsed
         {
-            result.add ("🡰");  // TODO: handle case where arrow is not in font
+            result.add (EquationTreeCellRenderer.leftArrow);
         }
         else
         {

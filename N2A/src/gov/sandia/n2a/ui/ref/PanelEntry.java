@@ -162,13 +162,17 @@ public class PanelEntry extends JPanel
 
         InputMap inputMap = table.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),          "add");
+        inputMap.put (KeyStroke.getKeyStroke ("EQUALS"),          "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),          "delete");
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "startEditing");
         inputMap.put (KeyStroke.getKeyStroke ("TAB"),             "cycleFocus");
         inputMap.put (KeyStroke.getKeyStroke ("shift TAB"),       "cycleFocus");
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");  // For Windows and Linux
+        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");  // For Mac
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
 
         ActionMap actionMap = table.getActionMap ();
         actionMap.put ("add", new AbstractAction ()
@@ -876,9 +880,12 @@ public class PanelEntry extends JPanel
             InputMap inputMap = textArea.getInputMap ();
             inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "none");
             inputMap.put (KeyStroke.getKeyStroke ("control ENTER"),   "insert-break");
-            inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+            inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo"); 
+            inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");
             inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+            inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
             inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+            inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
 
             ActionMap actionMap = textArea.getActionMap ();
             actionMap.put ("Undo", new AbstractAction ("Undo")
@@ -937,8 +944,11 @@ public class PanelEntry extends JPanel
 
             inputMap = textField.getInputMap ();
             inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+            inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");
             inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+            inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
             inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+            inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
 
             actionMap = textField.getActionMap ();
             actionMap.put ("Undo", new AbstractAction ("Undo")

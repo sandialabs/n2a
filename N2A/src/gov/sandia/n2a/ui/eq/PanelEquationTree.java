@@ -141,6 +141,7 @@ public class PanelEquationTree extends JScrollPane
         inputMap.put (KeyStroke.getKeyStroke ("shift ctrl UP"),   "moveUp");       // selectPreviousExtendSelection   shift-UP
         inputMap.put (KeyStroke.getKeyStroke ("shift ctrl DOWN"), "moveDown");     // selectNextExtendSelection       shift-DOWN
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),          "add");
+        inputMap.put (KeyStroke.getKeyStroke ("EQUALS"),          "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),          "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),      "delete");
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "startEditing");
@@ -152,8 +153,9 @@ public class PanelEquationTree extends JScrollPane
         inputMap.put (KeyStroke.getKeyStroke ("ctrl O"),          "outsource");
 
         ActionMap actionMap = tree.getActionMap ();
-        Action selectPrevious = actionMap.get ("selectPrevious");
-        Action selectParent   = actionMap.get ("selectParent");
+        Action selectPrevious   = actionMap.get ("selectPrevious");
+        Action selectParent     = actionMap.get ("selectParent");
+        Action aquaCollapseNode = actionMap.get ("aquaCollapseNode");
         actionMap.put ("selectPrevious", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
@@ -180,6 +182,21 @@ public class PanelEquationTree extends JScrollPane
                 else
                 {
                     selectParent.actionPerformed (e);
+                }
+            }
+        });
+        actionMap.put ("aquaCollapseNode", new AbstractAction ()  // Copy of "selectParent" special for aqua (Mac OS X) L&F.
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                TreePath path = tree.getLeadSelectionPath ();
+                if (path == null  ||  path.getPathCount () == 2  &&  tree.isCollapsed (path))
+                {
+                    switchFocus ();
+                }
+                else
+                {
+                    aquaCollapseNode.actionPerformed (e);
                 }
             }
         });
@@ -323,7 +340,20 @@ public class PanelEquationTree extends JScrollPane
                     if (! r.contains (x, y)) path = null;
                 }
 
-                if (SwingUtilities.isLeftMouseButton (e))
+                if (SwingUtilities.isRightMouseButton (e)  ||  e.isControlDown ())
+                {
+                    if (clicks == 1)  // Show popup menu
+                    {
+                        if (path != null)
+                        {
+                            switchToTree ();
+                            tree.setSelectionPath (path);
+                            takeFocus ();
+                            container.menuPopup.show (tree, x, y);
+                        }
+                    }
+                }
+                else if (SwingUtilities.isLeftMouseButton (e))
                 {
                     if (clicks == 1)
                     {
@@ -351,19 +381,6 @@ public class PanelEquationTree extends JScrollPane
                         }
                         if (part == null) part = root;  // Drill down without selecting a specific node.
                         container.drill (part);
-                    }
-                }
-                else if (SwingUtilities.isRightMouseButton (e))
-                {
-                    if (clicks == 1)  // Show popup menu
-                    {
-                        if (path != null)
-                        {
-                            switchToTree ();
-                            tree.setSelectionPath (path);
-                            takeFocus ();
-                            container.menuPopup.show (tree, x, y);
-                        }
                     }
                 }
             }

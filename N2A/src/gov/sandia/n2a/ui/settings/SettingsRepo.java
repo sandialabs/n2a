@@ -200,15 +200,13 @@ public class SettingsRepo extends JScrollPane implements Settings
         });
 
         InputMap inputMap = repoTable.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),        "moveUp");
-        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),      "moveDown");
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),          "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),          "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),           "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");  // For some reason, repoTable needs explicit key bindings for undo/redo. However, gitTable does not. Need to understand this better.
-        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
-        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),   "moveUp");
+        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"), "moveDown");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
+        inputMap.put (KeyStroke.getKeyStroke ("EQUALS"),     "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),      "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing");
 
         ActionMap actionMap = repoTable.getActionMap ();
         actionMap.put ("moveUp", new AbstractAction ()
@@ -268,24 +266,6 @@ public class SettingsRepo extends JScrollPane implements Settings
                 int row    = repoTable.getSelectedRow ();
                 int column = repoTable.getSelectedColumn ();
                 if (! repoModel.toggle (row, column)) repoTable.editCellAt (row, column, e);
-            }
-        });
-        actionMap.put ("Undo", new AbstractAction ("Undo")
-        {
-            public void actionPerformed (ActionEvent evt)
-            {
-                try {MainFrame.instance.undoManager.undo ();}
-                catch (CannotUndoException e) {}
-                catch (CannotRedoException e) {}
-            }
-        });
-        actionMap.put ("Redo", new AbstractAction ("Redo")
-        {
-            public void actionPerformed (ActionEvent evt)
-            {
-                try {MainFrame.instance.undoManager.redo();}
-                catch (CannotUndoException e) {}
-                catch (CannotRedoException e) {}
             }
         });
 
@@ -522,9 +502,12 @@ public class SettingsRepo extends JScrollPane implements Settings
         undoMessage = new UndoManager ();
         fieldMessage.getDocument ().addUndoableEditListener (undoMessage);
         inputMap = fieldMessage.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");  // For Windows and Linux
+        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");  // For Mac
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
         actionMap = fieldMessage.getActionMap ();
         actionMap.put ("Undo", new AbstractAction ("Undo")
         {
@@ -1175,8 +1158,11 @@ public class SettingsRepo extends JScrollPane implements Settings
             editor.getDocument ().addUndoableEditListener (undoCell);
             InputMap inputMap = editor.getInputMap ();
             inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+            inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");
             inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+            inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
             inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+            inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
             ActionMap actionMap = editor.getActionMap ();
             actionMap.put ("Undo", new AbstractAction ("Undo")
             {

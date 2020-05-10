@@ -522,6 +522,7 @@ public class GraphNode extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("shift INSERT"),     "paste");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl V"),           "paste");
             inputMap.put (KeyStroke.getKeyStroke ("INSERT"),           "add");
+            inputMap.put (KeyStroke.getKeyStroke ("EQUALS"),           "add");
             inputMap.put (KeyStroke.getKeyStroke ("DELETE"),           "delete");
             inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),       "delete");
             inputMap.put (KeyStroke.getKeyStroke ("ENTER"),            "startEditing");
@@ -708,7 +709,16 @@ public class GraphNode extends JPanel
                     int clicks = me.getClickCount ();
                     boolean select =  me.isControlDown ()  ||  me.isShiftDown ();
 
-                    if (SwingUtilities.isLeftMouseButton (me))
+                    if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())
+                    {
+                        if (clicks == 1)  // Show popup menu
+                        {
+                            container.panelEquationGraph.clearSelection ();
+                            switchFocus (true, false);
+                            container.menuPopup.show (title, x, y);
+                        }
+                    }
+                    else if (SwingUtilities.isLeftMouseButton (me))
                     {
                         if (clicks == 1)  // Open/close
                         {
@@ -739,15 +749,6 @@ public class GraphNode extends JPanel
                         else if (clicks == 2)  // Drill down
                         {
                             container.drill (node);
-                        }
-                    }
-                    else if (SwingUtilities.isRightMouseButton (me))
-                    {
-                        if (clicks == 1)  // Show popup menu
-                        {
-                            container.panelEquationGraph.clearSelection ();
-                            switchFocus (true, false);
-                            container.menuPopup.show (title, x, y);
                         }
                     }
                 }

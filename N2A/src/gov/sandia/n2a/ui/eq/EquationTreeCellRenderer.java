@@ -52,14 +52,14 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
     protected boolean nontree;  // Need hack to paint background
 
     // These colors may get changed when look & feel is changed.
-    public static Color colorInherit          = Color.blue;
-    public static Color colorOverride         = Color.black;
-    public static Color colorKill             = Color.red;
-    public static Color colorSelectedInherit  = Color.blue;
-    public static Color colorSelectedOverride = Color.black;
-    public static Color colorSelectedKill     = Color.red;
-
+    public static Color  colorInherit          = Color.blue;
+    public static Color  colorOverride         = Color.black;
+    public static Color  colorKill             = Color.red;
+    public static Color  colorSelectedInherit  = Color.blue;
+    public static Color  colorSelectedOverride = Color.black;
+    public static Color  colorSelectedKill     = Color.red;
     public static String colorHighlight;  // Color name, so it can be used in HTML.
+    public static String leftArrow = "🡰";
 
     protected static Icon    iconClosed;
     protected static Icon    iconOpen;
@@ -150,6 +150,10 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
             colorHighlight = "#" + Integer.toHexString (c);
         }
         // else rely on the fallback colors set above
+
+        Font font = UIManager.getFont ("Tree.font");
+        if (font.canDisplayUpTo ("🡰") < 0) leftArrow = "🡰";
+        else                                leftArrow = "<--";
 
         backgroundFocused         = null;
         backgroundSelected        = null;

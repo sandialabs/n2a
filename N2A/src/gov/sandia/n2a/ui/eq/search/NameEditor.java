@@ -77,9 +77,12 @@ public class NameEditor extends AbstractCellEditor implements TreeCellEditor, Tr
         editor.getDocument ().addUndoableEditListener (undoManager);
 
         InputMap inputMap = editor.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");  // For Windows and Linux
+        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");  // For Mac
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
         ActionMap actionMap = editor.getActionMap ();
         actionMap.put ("Undo", new AbstractAction ("Undo")
         {

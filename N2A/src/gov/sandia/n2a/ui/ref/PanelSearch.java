@@ -75,6 +75,7 @@ public class PanelSearch extends JPanel
 
         InputMap inputMap = list.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
+        inputMap.put (KeyStroke.getKeyStroke ("EQUALS"),     "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"), "delete");
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "select");

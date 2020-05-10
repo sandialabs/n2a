@@ -1644,6 +1644,7 @@ public class PanelEquations extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("shift INSERT"),     "paste");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl V"),           "paste");
             inputMap.put (KeyStroke.getKeyStroke ("INSERT"),           "add");
+            inputMap.put (KeyStroke.getKeyStroke ("EQUALS"),           "add");
             inputMap.put (KeyStroke.getKeyStroke ("DELETE"),           "delete");
             inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),       "delete");
             inputMap.put (KeyStroke.getKeyStroke ("ENTER"),            "startEditing");
@@ -1740,7 +1741,16 @@ public class PanelEquations extends JPanel
                     int y = me.getY ();
                     int clicks = me.getClickCount ();
 
-                    if (SwingUtilities.isLeftMouseButton (me))
+                    if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())
+                    {
+                        if (clicks == 1)  // Show popup menu
+                        {
+                            panelEquationGraph.clearSelection ();
+                            switchFocus (true, false);
+                            menuPopup.show (breadcrumbRenderer, x, y);
+                        }
+                    }
+                    else if (SwingUtilities.isLeftMouseButton (me))
                     {
                         if (clicks == 1)
                         {
@@ -1762,15 +1772,6 @@ public class PanelEquations extends JPanel
                             }
                             panelEquationGraph.clearSelection ();
                             switchFocus (true, false);
-                        }
-                    }
-                    else if (SwingUtilities.isRightMouseButton (me))
-                    {
-                        if (clicks == 1)  // Show popup menu
-                        {
-                            panelEquationGraph.clearSelection ();
-                            switchFocus (true, false);
-                            menuPopup.show (breadcrumbRenderer, x, y);
                         }
                     }
                 }

@@ -159,7 +159,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
 
         public void mousePressed (MouseEvent e)
         {
-            if (SwingUtilities.isRightMouseButton (e))
+            if (SwingUtilities.isRightMouseButton (e)  ||  e.isControlDown ())
             {
                 if (zoomRectangle != null) return;
                 if (! (plot instanceof Zoomable)) return;  // Don't even initiate a zoom region unless it can have an effect. This reduces need to check for Zoomable elsewhere.
@@ -374,18 +374,18 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             boolean domain = true;
             boolean range  = true;
             boolean shift   = e.isShiftDown ();
-            boolean control = e.isControlDown ();
+            boolean control = e.isControlDown ()  &&  ! shift;  // Suppress control when shift is down, for better touchpad interaction.
             if (shift  ||  control)
             {
                 if (z.getOrientation () == PlotOrientation.HORIZONTAL)
                 {
-                    domain = shift;
-                    range  = control;
+                    domain = control;
+                    range  = shift;
                 }
                 else
                 {
-                    domain = control;
-                    range  = shift;
+                    domain = shift;
+                    range  = control;
                 }
             }
             domain = domain  &&  z.isDomainZoomable ();
@@ -396,6 +396,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             if (! pri.getDataArea ().contains (c)) return;
 
             int clicks = e.getWheelRotation ();
+            if (clicks == 0) return;  // Haven't accumulated a full click yet.
             double factor = 1.1;
             if (clicks < 0) factor = 1 / factor;
 

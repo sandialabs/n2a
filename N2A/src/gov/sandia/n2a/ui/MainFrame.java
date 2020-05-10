@@ -63,6 +63,7 @@ public class MainFrame extends JFrame
         icons.add (ImageUtil.getImage ("n2a-48.png").getImage ());
         icons.add (ImageUtil.getImage ("n2a-128.png").getImage ());
         setIconImages (icons);
+        // TODO: make icon appear on Mac. This requires accessing the "dock", which is an arbitrarily different concept than "tray" on every other desktop system, even though it does the same thing.
 
         undoManager = new UndoManager ();
         tabs = new MainTabbedPane ();
@@ -125,9 +126,12 @@ public class MainFrame extends JFrame
         JComponent content = (JComponent) getContentPane ();
 
         InputMap inputMap = content.getInputMap (JComponent.WHEN_IN_FOCUSED_WINDOW);
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");  // For Windows and Linux
+        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");  // For Mac
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
 
         ActionMap actionMap = content.getActionMap ();
         actionMap.put ("Undo", new AbstractAction ("Undo")

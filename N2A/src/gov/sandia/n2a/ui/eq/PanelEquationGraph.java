@@ -921,7 +921,26 @@ public class PanelEquationGraph extends JScrollPane
 
         public void mousePressed (MouseEvent me)
         {
-            if (SwingUtilities.isLeftMouseButton (me))
+            if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())
+            {
+                // Context menus
+                if (container.locked) return;
+                Point p = me.getPoint ();
+                graphPanel.arrowEdge = graphPanel.findTipAt (p);
+                if (graphPanel.arrowEdge != null)
+                {
+                    graphPanel.arrowMenu.show (graphPanel, p.x, p.y);
+                }
+                else
+                {
+                    container.getTitleFocus ().requestFocusInWindow ();
+                    graphPanel.popupLocation = new Point ();
+                    graphPanel.popupLocation.x = p.x - graphPanel.offset.x;
+                    graphPanel.popupLocation.y = p.y - graphPanel.offset.y;
+                    container.menuPopup.show (graphPanel, p.x, p.y);
+                }
+            }
+            else if (SwingUtilities.isLeftMouseButton (me))
             {
                 if (container.locked) return;
                 Point p = me.getPoint ();
@@ -941,25 +960,6 @@ public class PanelEquationGraph extends JScrollPane
             {
                 startPan = me.getPoint ();
                 setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
-            }
-            else if (SwingUtilities.isRightMouseButton (me))
-            {
-                // Context menus
-                if (container.locked) return;
-                Point p = me.getPoint ();
-                graphPanel.arrowEdge = graphPanel.findTipAt (p);
-                if (graphPanel.arrowEdge != null)
-                {
-                    graphPanel.arrowMenu.show (graphPanel, p.x, p.y);
-                }
-                else
-                {
-                    container.getTitleFocus ().requestFocusInWindow ();
-                    graphPanel.popupLocation = new Point ();
-                    graphPanel.popupLocation.x = p.x - graphPanel.offset.x;
-                    graphPanel.popupLocation.y = p.y - graphPanel.offset.y;
-                    container.menuPopup.show (graphPanel, p.x, p.y);
-                }
             }
         }
 
