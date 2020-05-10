@@ -148,9 +148,10 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected JButton        buttonPull;
     protected JButton        buttonPush;
     protected JTextField     fieldAuthor;
+    protected UndoManager    undoAuthor;  // specifically for editing text field
     protected JTextArea      fieldMessage;
     protected JScrollPane    paneMessage;
-    protected UndoManager    undoMessage;  // specifically for editing text field
+    protected UndoManager    undoMessage;
     protected JLabel         labelProgress = new JLabel ();
     protected PanelDiff      panelDiff;
 
@@ -200,13 +201,14 @@ public class SettingsRepo extends JScrollPane implements Settings
         });
 
         InputMap inputMap = repoTable.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),   "moveUp");
-        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"), "moveDown");
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
-        inputMap.put (KeyStroke.getKeyStroke ("EQUALS"),     "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),      "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("shift UP"),          "moveUp");
+        inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),        "moveDown");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),             "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),             "startEditing");
 
         ActionMap actionMap = repoTable.getActionMap ();
         actionMap.put ("moveUp", new AbstractAction ()
@@ -491,6 +493,33 @@ public class SettingsRepo extends JScrollPane implements Settings
         fieldAuthor.setColumns (30);
         fieldAuthor.addFocusListener (rebuildListener);
 
+        undoAuthor = new UndoManager ();
+        fieldAuthor.getDocument ().addUndoableEditListener (undoAuthor);
+        inputMap = fieldAuthor.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");  // For Windows and Linux
+        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");  // For Mac
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
+        actionMap = fieldAuthor.getActionMap ();
+        actionMap.put ("Undo", new AbstractAction ("Undo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {undoAuthor.undo ();}
+                catch (CannotUndoException e) {}
+            }
+        });
+        actionMap.put ("Redo", new AbstractAction ("Redo")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                try {undoAuthor.redo();}
+                catch (CannotRedoException e) {}
+            }
+        });
+
         fieldMessage = new JTextArea ();
         paneMessage = new JScrollPane (fieldMessage);
         fieldMessage.setLineWrap (true);
@@ -502,8 +531,8 @@ public class SettingsRepo extends JScrollPane implements Settings
         undoMessage = new UndoManager ();
         fieldMessage.getDocument ().addUndoableEditListener (undoMessage);
         inputMap = fieldMessage.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");  // For Windows and Linux
-        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");  // For Mac
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
+        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
@@ -1217,11 +1246,10 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public Component getTableCellEditorComponent (JTable table, Object value, boolean isSelected, int row, int column)
         {
-            undoCell.discardAllEdits ();
-
             String valueString = "";
             if (value != null) valueString = value.toString ();
             editor.setText (valueString);
+            undoCell.discardAllEdits ();  // Discard edits after setting contents, so that the set itself is not undoable (resulting in blank).
 
             editor.setFont (table.getFont ());
             editor.setForeground (table.getForeground ());
@@ -1958,7 +1986,6 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
 
             panelDiff.clear ();
-            undoMessage.discardAllEdits ();
             if (repoIndex < 0  ||  repoIndex >= repoModel.gitRepos.size ())
             {
                 current = null;
@@ -1966,6 +1993,8 @@ public class SettingsRepo extends JScrollPane implements Settings
                 deltas.clear ();
                 fieldAuthor .setText ("");
                 fieldMessage.setText ("");
+                undoAuthor .discardAllEdits ();
+                undoMessage.discardAllEdits ();
                 return;
             }
 
@@ -1976,6 +2005,8 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             fieldAuthor .setText (current.getAuthor ());
             fieldMessage.setText (current.message);
+            undoAuthor .discardAllEdits ();
+            undoMessage.discardAllEdits ();
             refreshDiff ();
             refreshTrackUI ();  // Give immediate feedback ...
             Thread thread = new Thread ()  // Then do the (possibly) slower work of refreshing track status.
@@ -2179,7 +2210,12 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
 
             // Give immediate visual feedback that commit has started.
-            if (! files.isEmpty ()) fieldMessage.setText ("");
+            if (! files.isEmpty ())
+            {
+                fieldMessage.getDocument ().removeUndoableEditListener (undoMessage);  // Ignore the next setText().
+                fieldMessage.setText ("");
+                fieldMessage.getDocument ().addUndoableEditListener (undoMessage);  // Then start listening again.
+            }
             List<Delta> oldDeltas = deltas;
             deltas = newDeltas;
             refreshTable ();
@@ -2205,7 +2241,9 @@ public class SettingsRepo extends JScrollPane implements Settings
                         {
                             public void run ()
                             {
+                                fieldMessage.getDocument ().removeUndoableEditListener (undoMessage);
                                 fieldMessage.setText (current.message);
+                                fieldMessage.getDocument ().addUndoableEditListener (undoMessage);
                                 refreshTable ();
                             }
                         });

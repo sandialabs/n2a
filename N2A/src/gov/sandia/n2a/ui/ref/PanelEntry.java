@@ -161,18 +161,19 @@ public class PanelEntry extends JPanel
         table.setSurrendersFocusOnKeystroke (true);
 
         InputMap inputMap = table.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),          "add");
-        inputMap.put (KeyStroke.getKeyStroke ("EQUALS"),          "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),          "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("TAB"),             "cycleFocus");
-        inputMap.put (KeyStroke.getKeyStroke ("shift TAB"),       "cycleFocus");
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");  // For Windows and Linux
-        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");  // For Mac
-        inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
-        inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
-        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
-        inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),             "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("TAB"),               "cycleFocus");
+        inputMap.put (KeyStroke.getKeyStroke ("shift TAB"),         "cycleFocus");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),         "Undo");  // For Windows and Linux
+        inputMap.put (KeyStroke.getKeyStroke ("meta Z"),            "Undo");  // For Mac
+        inputMap.put (KeyStroke.getKeyStroke ("control Y"),         "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("meta Y"),            "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift control Z"),   "Redo");
+        inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),      "Redo");
 
         ActionMap actionMap = table.getActionMap ();
         actionMap.put ("add", new AbstractAction ()

@@ -111,13 +111,13 @@ public class PanelSearch extends JPanel
         UndoManager um = MainFrame.instance.undoManager;
 
         InputMap inputMap = tree.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),     "add");
-        inputMap.put (KeyStroke.getKeyStroke ("EQUALS"),     "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"), "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),      "select");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "select");
-        inputMap.put (KeyStroke.getKeyStroke ("F2"),         "edit");
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("SPACE"),             "select");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),             "select");
+        inputMap.put (KeyStroke.getKeyStroke ("F2"),                "edit");
 
         ActionMap actionMap = tree.getActionMap ();
         Action selectPrevious = actionMap.get ("selectPrevious");

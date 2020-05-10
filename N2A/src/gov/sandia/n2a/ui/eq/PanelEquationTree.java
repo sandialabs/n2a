@@ -133,24 +133,24 @@ public class PanelEquationTree extends JScrollPane
 
         setBorder (BorderFactory.createEmptyBorder ());
 
-        InputMap inputMap = tree.getInputMap ();                                   // Previous definition             also covered by
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl UP"),         "switchFocus");  // selectPreviousChangeLead        ctrl-KP_UP
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl LEFT"),       "switchFocus");  // scrollLeft                      ctrl-KP_LEFT or shift-mouse-wheel
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl DOWN"),       "nothing");      // selectNextChangeLead            ctrl-KP_DOWN
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl RIGHT"),      "nothing");      // scrollRight                     ctrl-KP_RIGHT or shift-mouse-wheel
-        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl UP"),   "moveUp");       // selectPreviousExtendSelection   shift-UP
-        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl DOWN"), "moveDown");     // selectNextExtendSelection       shift-DOWN
-        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),          "add");
-        inputMap.put (KeyStroke.getKeyStroke ("EQUALS"),          "add");
-        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),          "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),      "delete");
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"),      "startEditing");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl D"),          "drillDown");
-        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl D"),    "drillUp");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl W"),          "watch");
-        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl W"),    "watch");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl O"),          "outsource");
+        InputMap inputMap = tree.getInputMap ();                                     // Previous definition             also covered by
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl UP"),           "switchFocus");  // selectPreviousChangeLead        ctrl-KP_UP
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl LEFT"),         "switchFocus");  // scrollLeft                      ctrl-KP_LEFT or shift-mouse-wheel
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl DOWN"),         "nothing");      // selectNextChangeLead            ctrl-KP_DOWN
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl RIGHT"),        "nothing");      // scrollRight                     ctrl-KP_RIGHT or shift-mouse-wheel
+        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl UP"),     "moveUp");       // selectPreviousExtendSelection   shift-UP
+        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl DOWN"),   "moveDown");     // selectNextExtendSelection       shift-DOWN
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),             "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl ENTER"),        "startEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl D"),            "drillDown");
+        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl D"),      "drillUp");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl W"),            "watch");
+        inputMap.put (KeyStroke.getKeyStroke ("shift ctrl W"),      "watch");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl O"),            "outsource");
 
         ActionMap actionMap = tree.getActionMap ();
         Action selectPrevious   = actionMap.get ("selectPrevious");
