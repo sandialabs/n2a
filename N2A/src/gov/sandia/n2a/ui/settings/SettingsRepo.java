@@ -1548,10 +1548,11 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             if (author.equals (getAuthor())) return;  // Avoid adding to local config unless there is a real change.
 
-            String[] pieces = author.split ("<", 2);
-            String name = pieces[0].trim ();
+            String name  = "";
             String email = "";
-            if (pieces.length > 1) email = pieces[1].split (">")[0];
+            String[] pieces = author.split ("<", 2);
+            if (pieces.length > 0) name  = pieces[0].trim ();
+            if (pieces.length > 1) email = pieces[1].split (">", -1)[0].trim ();
 
             config.setString ("user", null, "name",  name);
             config.setString ("user", null, "email", email);
@@ -1865,10 +1866,12 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 status ("Commiting");
                 clearDiff ();
-                String[] pieces = author.split ("<", 2);
-                String name = pieces[0].trim ();
+
+                String name  = "";
                 String email = "";
-                if (pieces.length > 1) email = pieces[1].split (">")[0];
+                String[] pieces = author.split ("<", 2);
+                if (pieces.length > 0) name  = pieces[0].trim ();
+                if (pieces.length > 1) email = pieces[1].split (">", -1)[0].trim ();
 
                 CommitCommand commit = git.commit ();
                 commit.setAuthor (name, email);
