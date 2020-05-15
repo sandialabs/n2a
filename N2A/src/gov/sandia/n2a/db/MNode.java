@@ -140,6 +140,18 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return false;
     }
 
+    public boolean data (String... keys)
+    {
+        MNode c = child (keys);
+        if (c == null) return false;
+        return c.data ();
+    }
+
+    public boolean data (Object... keys)
+    {
+        return data (toStrings (keys));
+    }
+
     /**
         @return This node's value, with "" as default
     **/
