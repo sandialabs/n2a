@@ -311,19 +311,22 @@ public class AddAnnotation extends UndoableView implements AddEditable
                 }
                 pet.animate ();
             }
-
-            while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
-            if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeBase) parent.getParent ();
-            if (parent instanceof NodePart)
-            {
-                NodePart p = (NodePart) parent;
-                if (p.graph != null) p.graph.updateGUI ();
-            }
-            if (parent.getTrueParent () == null  &&  name.endsWith ("category"))
-            {
-                PanelModel.instance.panelSearch.search ();
-            }
         }
+
+        // Do related record-keeping. For the most part, this only applies when nameIsGenerated==false.
+        // However, it also applies when creating a new pin.
+        while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
+        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeBase) parent.getParent ();
+        if (parent instanceof NodePart)
+        {
+            NodePart p = (NodePart) parent;
+            if (p.graph != null) p.graph.updateGUI ();
+        }
+        if (parent.getTrueParent () == null  &&  name.endsWith ("category"))
+        {
+            PanelModel.instance.panelSearch.search ();
+        }
+
         return createdNode;
     }
 

@@ -12,6 +12,8 @@ import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
@@ -75,6 +77,8 @@ public class GraphNode extends JPanel
     protected ResizeListener      resizeListener      = new ResizeListener ();
     protected List<GraphEdge>     edgesOut            = new ArrayList<GraphEdge> ();
     protected List<GraphEdge>     edgesIn             = new ArrayList<GraphEdge> ();
+    protected Rectangle           pinsOutBounds;  // If null, then no out pins exist. If non-null, then must be shifted to left side of node bounds before testing.
+    protected Rectangle           pinsInBounds;   // ditto for in pins and right side
 
     protected static RoundedBorder border = new RoundedBorder (5);
 
@@ -116,6 +120,7 @@ public class GraphNode extends JPanel
             int y = bounds.getInt ("y") + parent.offset.y;
             setLocation (x, y);
         }
+        updatePinBounds ();
 
         addMouseListener (resizeListener);
         addMouseMotionListener (resizeListener);
@@ -310,6 +315,9 @@ public class GraphNode extends JPanel
         d.width  = Math.max (d.width,  w);
         d.height = Math.max (d.height, h);
 
+        if (pinsInBounds  != null) d.height = Math.max (d.height, pinsInBounds .height + 2 * border.t);
+        if (pinsOutBounds != null) d.height = Math.max (d.height, pinsOutBounds.height + 2 * border.t);
+
         // Don't exceed current size of viewport.
         // Should this limit be imposed on user settings as well?
         Dimension extent = ((JViewport) parent.getParent ()).getExtentSize ();
@@ -369,6 +377,7 @@ public class GraphNode extends JPanel
             y += bounds.getInt ("y");
             if (panelEquationTree != null) setOpen (bounds.getBoolean ("open"));
         }
+        updatePinBounds ();
         Dimension d = getPreferredSize ();  // Fetches updated width and height.
         Rectangle r = new Rectangle (x, y, d.width, d.height);
         animate (r);
@@ -459,9 +468,37 @@ public class GraphNode extends JPanel
     **/
     public void animate (Rectangle next)
     {
-        Rectangle paintRegion = next.union (getBounds ());
+        Rectangle current = getBounds ();
+        Rectangle currentWithPins = current;
+        Rectangle nextWithPins    = next;
+        if (pinsInBounds != null)
+        {
+            // There may be a latent bug when the label of pin shrinks or the pin goes away. In that case,
+            // we don't really keep track of the previous region (currentWithPins) properly, because we only
+            // have the current size of the pin bounds. So far this hasn't caused any problems. Not sure why.
+
+            // If node is sized correctly, the following should only change width and x, so this code could be simpler.
+
+            pinsInBounds.y = current.y + border.t;
+            pinsInBounds.x = current.x - pinsInBounds.width;
+            currentWithPins = currentWithPins.union (pinsInBounds);
+            pinsInBounds.y = next.y + border.t;
+            pinsInBounds.x = next.x - pinsInBounds.width;
+            nextWithPins = nextWithPins.union (pinsInBounds);
+        }
+        if (pinsOutBounds != null)
+        {
+            pinsOutBounds.y = current.y + border.t;
+            pinsOutBounds.x = current.x + current.width;
+            currentWithPins = currentWithPins.union (pinsOutBounds);
+            pinsOutBounds.y = next.y + border.t;
+            pinsOutBounds.x = next.x + next.width;
+            nextWithPins = nextWithPins.union (pinsOutBounds);
+        }
+
+        Rectangle paintRegion = nextWithPins.union (currentWithPins);
         setBounds (next);
-        parent.layout.componentMoved (next);
+        parent.layout.componentMoved (nextWithPins);
 
         for (GraphEdge ge : edgesOut)
         {
@@ -485,6 +522,125 @@ public class GraphNode extends JPanel
         }
         validate ();  // Preemptively redo internal layout, so this component will repaint correctly.
         parent.repaint (paintRegion);
+    }
+
+    public void updatePinBounds ()
+    {
+        pinsInBounds = null;
+        pinsOutBounds = null;
+        MNode pin = node.source.child ("$metadata", "gui", "pin");
+        if (pin == null) return;
+
+        Font f = getFont ();
+        FontMetrics fm = getFontMetrics (f);
+        int height = fm.getHeight () + 2 * GraphEdge.padNameTop;
+        int boxWidth = height / 2;
+
+        MNode in = pin.child ("in");
+        if (in != null  &&  in.size () > 0)
+        {
+            pinsInBounds = new Rectangle ();
+            for (MNode c : in)
+            {
+                String name = c.get ();
+                if (name.isEmpty ()) name = c.key ();
+                pinsInBounds.width   = Math.max (pinsInBounds.width, fm.stringWidth (name));
+                pinsInBounds.height += height;
+            }
+            pinsInBounds.width += boxWidth + 2 * GraphEdge.padNameSide;
+        }
+
+        MNode out = pin.child ("out");
+        if (out != null  &&  out.size () > 0)
+        {
+            pinsOutBounds = new Rectangle ();
+            for (MNode c : out)
+            {
+                String name = c.get ();
+                if (name.isEmpty ()) name = c.key ();
+                pinsOutBounds.width   = Math.max (pinsOutBounds.width, fm.stringWidth (name));
+                pinsOutBounds.height += height;
+            }
+            pinsOutBounds.width += boxWidth + 2 * GraphEdge.padNameSide;
+        }
+    }
+
+    public void paintPins (Graphics2D g2, Rectangle clip)
+    {
+        if (pinsInBounds == null  &&  pinsOutBounds == null) return;  // Early-out
+
+        MNode pin = node.source.child ("$metadata", "gui", "pin");
+        Rectangle   bounds     = getBounds ();
+        Font        f          = getFont ();
+        FontMetrics fm         = getFontMetrics (f);
+        int         ascent     = fm.getAscent ();
+        int         lineHeight = fm.getHeight () + 2 * GraphEdge.padNameTop;
+        int         boxSize    = lineHeight / 2;
+
+        if (pinsInBounds != null  &&  pinsInBounds.intersects (clip))
+        {
+            int y = bounds.y + border.t;
+            MNode in = pin.child ("in");
+            for (MNode c : in)
+            {
+                paintPin (true, c, g2, bounds, fm, ascent, lineHeight, boxSize, y);
+                y += lineHeight;
+            }
+        }
+
+        if (pinsOutBounds != null  &&  pinsOutBounds.intersects (clip))
+        {
+            int y = bounds.y + border.t;
+            MNode out = pin.child ("out");
+            for (MNode c : out)
+            {
+                paintPin (false, c, g2, bounds, fm, ascent, lineHeight, boxSize, y);
+                y += lineHeight;
+            }
+        }
+    }
+
+    public void paintPin (boolean in, MNode c, Graphics2D g2, Rectangle bounds, FontMetrics fm, int ascent, int lineHeight, int boxSize, int y)
+    {
+        String name = c.get ();
+        if (name.isEmpty ()) name = c.key ();
+
+        int lineWidth = fm.stringWidth (name) + 2 * GraphEdge.padNameSide;
+        Rectangle textBox = new Rectangle ();
+        if (in) textBox.x = bounds.x - boxSize - lineWidth;
+        else    textBox.x = bounds.x + bounds.width + boxSize;
+        textBox.y = y;
+        textBox.width = lineWidth;
+        textBox.height = lineHeight;
+        int textX = textBox.x + GraphEdge.padNameSide;
+        int textY = textBox.y + GraphEdge.padNameTop + ascent;
+        Rectangle box = new Rectangle ();
+        if (in) box.x = bounds.x - boxSize + 1;
+        else    box.x = bounds.x + bounds.width - 1;
+        box.y = y + boxSize / 2;
+        box.width = box.height = boxSize;
+
+        Color boxBorder = Color.black;
+        String colorName = c.get ("color");
+        if (! colorName.isEmpty ())
+        {
+            try {boxBorder = Color.decode (colorName);}
+            catch (NumberFormatException e) {}
+        }
+
+        Color boxFill;
+        boolean bound = false;  // TODO: determine if pin is bound
+        if (bound) boxFill = boxBorder;
+        else       boxFill = new Color (boxBorder.getRed (), boxBorder.getGreen (), boxBorder.getBlue (), 0x40);  // Semi-transparent version of boxBorder
+
+        g2.setColor (new Color (0xD0FFFFFF, true));
+        g2.fill (textBox);
+        g2.setColor (Color.black);
+        g2.drawString (name, textX, textY);
+        g2.setColor (boxFill);
+        g2.fill (box);
+        g2.setColor (boxBorder);
+        g2.draw (box);
     }
 
     public class TitleRenderer extends EquationTreeCellRenderer implements CellEditorListener

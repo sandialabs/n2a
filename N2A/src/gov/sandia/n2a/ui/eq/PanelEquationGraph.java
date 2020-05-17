@@ -21,6 +21,7 @@ import java.awt.LayoutManager2;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Stroke;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -699,11 +700,19 @@ public class PanelEquationGraph extends JScrollPane
             }
 
             // Draw connection edges
+            Stroke oldStroke = g2.getStroke ();
             g2.setStroke (new BasicStroke (GraphEdge.strokeThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             g2.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             for (GraphEdge e : edges)
             {
                 if (e.bounds.intersects (clip)) e.paintComponent (g2);
+            }
+
+            // Draw pins
+            g2.setStroke (oldStroke);
+            for (Component c : getComponents ())
+            {
+                ((GraphNode) c).paintPins (g2, clip);  // Test clip bounds against pins. Paint pin if any overlap.
             }
 
             g2.dispose ();
