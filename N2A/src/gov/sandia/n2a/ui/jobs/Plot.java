@@ -8,7 +8,9 @@ package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Color;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
@@ -51,11 +53,16 @@ public class Plot extends OutputParser
         }
         Arrays.sort (sorted, new ColumnComparator ());
 
-        int bestIndex = -1;
+        int bestIndex = -1;  // Breakpoint between left and right column sets. This is the index just before the separation.
         double largestRatio = 1;
+        int flatCount = 0;
         for (i = 0; i < columnCount - 1; i++)
         {
-            if (sorted[i].range == 0) continue;
+            if (sorted[i].range == 0)
+            {
+                flatCount++;
+                continue;
+            }
             double ratio = sorted[i+1].range / sorted[i].range;
             if (ratio > largestRatio)
             {
@@ -64,15 +71,70 @@ public class Plot extends OutputParser
             }
         }
 
-        Column[] left  = sorted;
-        Column[] right = null;
-        if (bestIndex >= 0  &&  largestRatio >= 10)
+        List<Column> left  = null;
+        List<Column> right = null;
+        if (bestIndex < 0  ||  largestRatio < 10)
         {
-            int rightCount = bestIndex + 1;
-            right = new Column[rightCount];
-            left  = new Column[columnCount - rightCount];
-            for (i = 0; i < rightCount ; i++) right[i             ] = sorted[i];
-            for (     ; i < columnCount; i++) left [i - rightCount] = sorted[i];
+            left = Arrays.asList (sorted);
+        }
+        else
+        {
+            right             = new ArrayList<Column> (bestIndex + 1);  // Right side gets the smaller ranges, which come first in the sorted list.
+            left              = new ArrayList<Column> (columnCount - bestIndex);
+            List<Column> flat = new ArrayList<Column> (flatCount);
+
+            double leftMin  = Double.POSITIVE_INFINITY;
+            double leftMax  = Double.NEGATIVE_INFINITY;
+            double rightMin = Double.POSITIVE_INFINITY;
+            double rightMax = Double.NEGATIVE_INFINITY;
+
+            for (i = 0; i <= bestIndex ; i++)
+            {
+                Column c = sorted[i];
+                if (c.range == 0)
+                {
+                    flat.add (c);
+                    continue;
+                }
+                right.add (c);
+                rightMin = Math.min (rightMin, c.min);
+                rightMax = Math.max (rightMax, c.max);
+            }
+            for (; i < columnCount; i++)
+            {
+                Column c = sorted[i];
+                if (c.range == 0)
+                {
+                    flat.add (c);
+                    continue;
+                }
+                left.add (c);
+                leftMin = Math.min (leftMin, c.min);
+                leftMax = Math.max (leftMax, c.max);
+            }
+            for (Column c : flat)
+            {
+                // Note that since c.range is zero, c.min==c.max and either one contains the one and only value of c.
+                if (c.min >= leftMin  &&  c.min <= leftMax)
+                {
+                    left.add (c);
+                }
+                else if (c.min >= rightMin  &&  c.min <= rightMax)
+                {
+                    right.add (c);
+                }
+                else
+                {
+                    double leftRange  = leftMax  - leftMin;
+                    double rightRange = rightMax - rightMin;
+                    double leftDistance  = Math.min (Math.abs (c.min - leftMin ), Math.abs (c.min - leftMax ));
+                    double rightDistance = Math.min (Math.abs (c.min - rightMin), Math.abs (c.min - rightMax));
+                    if (leftRange  > 0) leftDistance  /= leftRange;
+                    if (rightRange > 0) rightDistance /= rightRange;
+                    if (leftDistance <= rightDistance) left .add (c);
+                    else                               right.add (c);
+                }
+            }
         }
 
         // Generate data series
@@ -163,6 +225,11 @@ public class Plot extends OutputParser
 
         if (dataset1 != null)
         {
+            Color color0 = Color.getHSBColor (0.0f, 1.0f, 0.8f);
+            axis0.setTickMarkPaint (color0);
+            axis0.setTickLabelPaint (color0);
+            axis0.setAxisLinePaint (color0);
+
             plot.setDataset (1, dataset1);
             plot.mapDatasetToRangeAxis (1, 1);
 
@@ -170,6 +237,10 @@ public class Plot extends OutputParser
             axis1.setAutoRangeIncludesZero (false);
             if (range1 > 0) axis1.setAutoRangeMinimumSize (range1 / 2);
             axis1.setTickLabelFont (axis0.getTickLabelFont ());
+            Color color1 = Color.getHSBColor (0.5f, 1.0f, 0.6f);
+            axis1.setTickMarkPaint (color1);
+            axis1.setTickLabelPaint (color1);
+            axis1.setAxisLinePaint (color1);
             plot.setRangeAxis (1, axis1);
 
             count = dataset1.getSeriesCount () * 3;
