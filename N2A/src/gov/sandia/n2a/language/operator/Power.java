@@ -182,7 +182,8 @@ public class Power extends OperatorBinary
             operand0.render (renderer);
             renderer.result.append (", ");
             operand1.render (renderer);
-            renderer.result.append (", \"" + hint + "\")");
+            if (! hint.isEmpty ()) renderer.result.append (", \"" + hint + "\"");
+            renderer.result.append (")");
         }
     }
 
