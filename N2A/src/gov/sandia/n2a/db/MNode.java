@@ -84,6 +84,18 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
+        Convenience method for iterating over an arbitrary sub-node.
+        If the node doesn't exist, returns a temporary value with no children.
+        The returned value is not attached to any tree, and should not be used for anything except iteration.
+    **/
+    public MNode childOrEmpty (String... keys)
+    {
+        MNode result = child (keys);
+        if (result == null) return new MNode ();
+        return result;
+    }
+
+    /**
         Remove all children.
     **/
     public synchronized void clear ()
