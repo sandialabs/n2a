@@ -49,6 +49,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.MouseInputAdapter;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
@@ -865,7 +866,7 @@ public class GraphNode extends JPanel
                     int clicks = me.getClickCount ();
                     boolean select =  me.isControlDown ()  ||  me.isShiftDown ();
 
-                    if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())
+                    if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ()  &&  HostSystem.isMac ())
                     {
                         if (clicks == 1)  // Show popup menu
                         {

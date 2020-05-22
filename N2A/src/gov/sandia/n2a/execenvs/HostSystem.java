@@ -46,14 +46,8 @@ public abstract class HostSystem
         if (hosts.isEmpty ())
         {
             HostSystem localhost;
-            if (System.getProperty ("os.name").startsWith ("Windows"))
-            {
-                localhost = new Windows ();
-            }
-            else
-            {
-                localhost = new Linux ();
-            }
+            if (isWindows ()) localhost = new Windows ();
+            else              localhost = new Linux ();
             localhost.name = "localhost";
             hosts.put (localhost.name, localhost);
 
@@ -63,6 +57,16 @@ public abstract class HostSystem
         HostSystem result = hosts.get (hostname);
         if (result == null) result = hosts.get ("localhost");
         return result;
+    }
+
+    public static boolean isWindows ()
+    {
+        return System.getProperty ("os.name").toLowerCase ().indexOf ("win") >= 0;
+    }
+
+    public static boolean isMac ()
+    {
+        return System.getProperty ("os.name").toLowerCase ().indexOf ("mac") >= 0;
     }
 
     // TODO: This interface should use NIO as much as possible.
