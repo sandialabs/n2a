@@ -422,10 +422,19 @@ public class ImportJob extends XMLutility
     public void resolve (MNode dependent)
     {
         dependents.remove (dependent);
-        String dkey = dependent.key ();
+
+        boolean isConnect = dependent.get ().contains ("connect(");
+        boolean isChildrenType = false;
         MNode dparent = dependent.parent ();
-        boolean isChildrenType = dparent != null  &&  dparent.key ().equals ("lems")  &&  (dkey.equals ("children")  ||  dkey.equals ("attachments"));
-        boolean isConnect      = dependent.get ().contains ("connect(");
+        if (dparent != null)
+        {
+            String dkey = dparent.key ();
+            if (dkey.equals ("children")  ||  dkey.equals ("attachments"))
+            {
+                dparent = dparent.parent ();
+                isChildrenType =  dparent != null  &&  dparent.key ().equals ("lems");
+            }
+        }
         String childrenExternalName = "";
 
         String dependentInherit = dependent.get ("$inherit");
