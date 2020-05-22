@@ -1,5 +1,5 @@
 /*
-Copyright 2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,8 +7,10 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.eqset;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -110,16 +112,20 @@ public class MPart extends MNode
     **/
     public synchronized void inherit (LinkedList<MNode> visited, MPart root, MNode from)
     {
-        boolean maintainable =  from == root  &&  root.isFromTopDocument ();
+        boolean maintainable =  from == root  &&  root.isFromTopDocument ()  &&  AppData.models.isWriteable (root.getRoot ().source);
         boolean changedName = false;  // Indicates that at least one name changed due to ID resolution. This lets us delay updating the field until all names are processed.
+        boolean changedID   = false;
 
         String[] parentNames = from.get ().split (",");
+        List<String> IDs     = Arrays.asList (from.get ("$metadata", "id").split (",", -1));  // -1 allows for unassigned ID in middle of list
         for (int i = 0; i < parentNames.length; i++)
         {
             String parentName = parentNames[i];
-            String id         = from.get (i);
             parentName = parentName.trim ().replace ("\"", "");
             MNode parentSource = AppData.models.child (parentName);
+
+            String id = "";
+            if (i < IDs.size ()) id = IDs.get (i).trim ();
 
             String parentID = "";
             if (parentSource != null)
@@ -141,7 +147,12 @@ public class MPart extends MNode
             }
             else
             {
-                if (id.isEmpty ()  &&  ! parentID.isEmpty ()  &&  maintainable) root.set (parentID, i);
+                if (id.isEmpty ()  &&  ! parentID.isEmpty ()  &&  maintainable)
+                {
+                    while (IDs.size () <= i) IDs.add ("");
+                    IDs.set (i, parentID);
+                    changedID = true;
+                }
             }
 
             if (parentSource != null  &&  ! visited.contains (parentSource))
@@ -163,6 +174,13 @@ public class MPart extends MNode
             value.append (parentNames[0]);
             for (int i = 1; i < parentNames.length; i++) value.append (", " + parentNames[i]);
             root.source.set (value.toString ());
+        }
+        if (changedID)
+        {
+            StringBuilder value = new StringBuilder ();
+            value.append (IDs.get (0));
+            for (int i = 1; i < IDs.size (); i++) value.append ("," + IDs.get (i));
+            root.source.set (value, "$metadata", "id");
         }
     }
 

@@ -38,11 +38,11 @@ public class NodeInherit extends NodeBase
         setUserObject ();
 
         // Check if all IDs match
-        String value = source.get ();
-        String pieces[] = value.split (",");
-        for (int i = 0; i < pieces.length; i++)
+        String[] names = source.get ().split (",");
+        String[] IDs   = source.get ("$metadata", "id").split (",", -1);
+        for (int i = 0; i < names.length; i++)
         {
-            String parentName = pieces[i].replace ("\"", "");
+            String parentName = names[i].replace ("\"", "");
             MNode  parent     = AppData.models.child (parentName);
             if (parent == null)
             {
@@ -52,7 +52,8 @@ public class NodeInherit extends NodeBase
             else
             {
                 String parentID = parent.get ("$metadata", "id");
-                String childID  = source.get (i);
+                String childID  = "";
+                if (i < IDs.length) childID = IDs[i];
                 if (! parentID.equals (childID))
                 {
                     showID = true;
@@ -60,17 +61,6 @@ public class NodeInherit extends NodeBase
                 }
             }
         }
-    }
-
-    public String IDs ()
-    {
-        String IDs = "";
-        for (MNode i : source)
-        {
-            if (! IDs.isEmpty ()) IDs += ",";
-            IDs += i.get ();
-        }
-        return IDs;
     }
 
     @Override
@@ -95,7 +85,7 @@ public class NodeInherit extends NodeBase
         result.add (source.key ());
         result.add ("=");
         String value = source.get ();
-        if (showID) value = value + " (" + IDs () + ")";
+        if (showID) value = value + " (" + source.get ("$metadata", "id") + ")";
         result.add (value);
         return result;
     }

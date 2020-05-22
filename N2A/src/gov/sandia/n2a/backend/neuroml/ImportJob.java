@@ -445,7 +445,9 @@ public class ImportJob extends XMLutility
             }
         }
 
-        String[] sourceNames = dependentInherit.split (",");
+        String[]     sourceNames = dependentInherit.split (",");
+        List<String> sourceIDs   = Arrays.asList (dependent.get ("$inherit", "$metadata", "id").split (",", -1));
+        while (sourceIDs.size () < sourceNames.length) sourceIDs.add ("");
         for (int sourceIndex = 0; sourceIndex < sourceNames.length; sourceIndex++)
         {
             String sourceName = sourceNames[sourceIndex].replace ("\"", "");
@@ -482,7 +484,7 @@ public class ImportJob extends XMLutility
                     {
                         source.set ("found", "$proxy");
                         String id = parent.get ("$metadata", "id");
-                        if (! id.isEmpty ()) source.set (id, "$inherit", "0");
+                        if (! id.isEmpty ()) source.set (id, "$inherit", "$metadata", "id");
                     }
                 }
                 else
@@ -560,9 +562,8 @@ public class ImportJob extends XMLutility
                     dependent.set ("");
 
                     sourceNames[sourceIndex] = source.get ("$inherit");
-                    String inherit = "";
-                    for (int i = 0; i < sourceNames.length; i++) inherit += "," + sourceNames[i];
-                    inherit = inherit.substring (1);
+                    String inherit = sourceNames[0];
+                    for (int i = 1; i < sourceNames.length; i++) inherit += "," + sourceNames[i];
                     if (inherit.isEmpty ())  // This can happen if source is a Cell, which currently lacks a base class since it is merely a container for segments.
                     {
                         dependent.clear ("$inherit");
@@ -570,7 +571,11 @@ public class ImportJob extends XMLutility
                     else
                     {
                         dependent.set (inherit, "$inherit");
-                        dependent.set (source.get ("$inherit", "0"), "$inherit", sourceIndex);  // Assume single-inheritance in sources
+
+                        sourceIDs.set (sourceIndex, source.get ("$inherit", "$metadata", "id"));  // Assume single-inheritance in sources
+                        String id = sourceIDs.get (0);
+                        for (int i = 1; i < sourceIDs.size (); i++) id += "," + sourceIDs.get (i);
+                        dependent.set (id, "$inherit", "$metadata", "id");
                     }
 
                     for (MNode n : source)
@@ -599,20 +604,26 @@ public class ImportJob extends XMLutility
                 if (isChildrenType)
                 {
                     if (! childrenExternalName.isEmpty ()) inherit += "," + childrenExternalName;
-                    dependent.set (inherit);  // TODO: When hierarchical metadata is implemented, store ID under this node.
+                    dependent.set (inherit);
+                    dependent.set (id, "id");
                 }
                 else if (isConnect)
                 {
                     dependent.set ("connect(" + inherit + ")");
-                    //dependent.set ("0", id);  // TODO: Store ID with abstract connections
+                    dependent.set (id, "$metadata", "id");
                 }
                 else
                 {
                     sourceNames[sourceIndex] = inherit;
-                    inherit = "";
-                    for (int i = 0; i < sourceNames.length; i++) inherit += "," + sourceNames[i];
-                    dependent.set (inherit.substring (1), "$inherit");
-                    dependent.set (id, "$inherit", sourceIndex);
+                    sourceIDs.set (sourceIndex, id);
+
+                    inherit = sourceNames[0];
+                    for (int i = 1; i < sourceNames.length; i++) inherit += "," + sourceNames[i];
+                    dependent.set (inherit, "$inherit");
+
+                    id = sourceIDs.get (0);
+                    for (int i = 1; i < sourceIDs.size (); i++) id += "," + sourceIDs.get (0);
+                    dependent.set (id, "$inherit", "$metadata", "id");
                 }
             }
         }
