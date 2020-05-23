@@ -82,7 +82,7 @@ public class Main
         pluginClassNames.add ("gov.sandia.n2a.backend.neuroml.PluginNeuroML");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuron.PluginNeuron");
         pluginDirs.add (new File (AppData.properties.get ("resourceDir"), "plugins"));
-        if (! PluginManager.initialize (new N2APlugin (), pluginClassNames.toArray (new String[0]), pluginDirs.toArray (new File[0])))
+        if (! PluginManager.initialize (new N2APlugin (), pluginClassNames, pluginDirs))
         {
             System.err.println (PluginManager.getInitializationErrors ());
         }
