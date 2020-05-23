@@ -15,5 +15,5 @@ import java.nio.file.Path;
 public interface Exporter extends ExtensionPoint
 {
     public String getName ();
-    public void   export (MNode document, Path destination);
+    public void   export (MNode document, Path destination) throws Exception;
 }

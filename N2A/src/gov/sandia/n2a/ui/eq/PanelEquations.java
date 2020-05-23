@@ -33,7 +33,9 @@ import java.awt.geom.RoundRectangle2D;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.nio.file.Path;
@@ -53,6 +55,7 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JSplitPane;
@@ -920,7 +923,32 @@ public class PanelEquations extends JPanel
             {
                 Path path = fc.getSelectedFile ().toPath ();
                 ExporterFilter filter = (ExporterFilter) fc.getFileFilter ();
-                filter.exporter.export (record, path);
+                try
+                {
+                    filter.exporter.export (record, path);
+                }
+                catch (Exception error)
+                {
+                    File crashdump = new File (AppData.properties.get ("resourceDir"), "crashdump");
+                    try
+                    {
+                        PrintStream err = new PrintStream (crashdump);
+                        error.printStackTrace (err);
+                        err.close ();
+                    }
+                    catch (FileNotFoundException fnfe) {}
+
+                    JOptionPane.showMessageDialog
+                    (
+                        MainFrame.instance,
+                        "<html><body><p style='width:300px'>"
+                        + error.getMessage () + " Exception has been recorded in "
+                        + crashdump.getAbsolutePath ()
+                        + "</p></body></html>",
+                        "Export Failed",
+                        JOptionPane.WARNING_MESSAGE
+                    );
+                }
             }
         }
     };
