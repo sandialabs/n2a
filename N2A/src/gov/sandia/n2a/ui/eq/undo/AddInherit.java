@@ -64,17 +64,20 @@ public class AddInherit extends UndoableView
         if (parent == pe.part)
         {
             peg.reloadPart ();  // safely disconnects old nodes, even though parent has been rebuilt with new nodes
-            parent.filter (FilteredTreeModel.filterLevel);
+            parent.filter (FilteredTreeModel.filterLevel);  // Ensure that parts are not visible in parent panel.
         }
-        if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
+        if (parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
 
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath, index);
         pet.animate ();
-        if (grandparent == pe.part)
+
+        peg.reconnect ();
+        peg.repaint ();
+
+        if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {
-            peg.reconnect ();
-            peg.repaint ();
+            PanelModel.instance.panelSearch.search ();
         }
     }
 
@@ -111,10 +114,13 @@ public class AddInherit extends UndoableView
         pet.updateOrder (createdPath);
         pet.updateVisibility (createdPath);
         pet.animate ();
-        if (grandparent == pe.part)
+
+        peg.reconnect ();
+        peg.repaint ();
+
+        if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {
-            peg.reconnect ();
-            peg.repaint ();
+            PanelModel.instance.panelSearch.search ();
         }
     }
 

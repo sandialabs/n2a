@@ -354,6 +354,11 @@ public class PanelSearch extends JPanel
         new BuildConnectorIndex ().start ();
     }
 
+    /**
+        Retrieve and display models whose names contain the substring given in textQuery.
+        Has the side effect of rebuilding categories, since they effectively all get
+        filtered in parallel, and only those that contain a selected model will be displayed.
+    **/
     public void search ()
     {
         if (threadSearch != null) threadSearch.stop = true;

@@ -456,7 +456,7 @@ public class MPart extends MNode
         if (couldReset) clearPath ();
         if (source.key ().equals ("$inherit"))  // We changed a $inherit node, so rebuild our subtree.
         {
-            getIDs ();
+            setIDs ();
             container.purge (this, null);  // Undo the effect we had on the subtree.
             container.expand ();
         }
@@ -480,7 +480,7 @@ public class MPart extends MNode
         children.put (index, result);
         if (index.equals ("$inherit"))  // We've created an $inherit line, so load the inherited equations.
         {
-            result.getIDs ();
+            result.setIDs ();
             // Purge is unnecessary because "result" is a new entry. There is no previous $inherit line.
             expand ();
         }
@@ -491,17 +491,28 @@ public class MPart extends MNode
         Subroutine of set() which locates each parent and records its ID.
         Must only be called on an $inherit node in the top-level document.
     **/
-    protected synchronized void getIDs ()
+    protected synchronized void setIDs ()
     {
-        if (children != null) releaseOverrideChildren ();  // Remove children. This will have to change if we ever store other metadata under $inherit (such as a comment).
         String[] parentNames = get ().split (",");
+        if (parentNames.length == 0)
+        {
+            clear ("$metadata", "id");
+            return;
+        }
+
+        List<String> newIDs = new ArrayList<String> (parentNames.length);
         for (int i = 0; i < parentNames.length; i++)
         {
             String parentName = parentNames[i];
             parentName = parentName.trim ().replace ("\"", "");
             MNode parentSource = AppData.models.child (parentName);
-            if (parentSource != null) set (parentSource.get ("$metadata", "id"), i);
+            if (parentSource == null) newIDs.add ("");
+            else                      newIDs.add (parentSource.get ("$metadata", "id"));
         }
+
+        String id = newIDs.get (0);
+        for (int i = 1; i < newIDs.size (); i++) id += "," + newIDs.get (i);
+        set (id, "$metadata", "id");
     }
 
     /**

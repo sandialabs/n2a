@@ -69,16 +69,19 @@ public class ChangeVariableToInherit extends UndoableView
             peg.reloadPart ();
             parent.filter (FilteredTreeModel.filterLevel);
         }
-        if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
+        if (parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child (nameBefore).getPath ();
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
         pet.animate ();
-        if (grandparent == pe.part)
+
+        peg.reconnect ();
+        peg.repaint ();
+
+        if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {
-            peg.reconnect ();
-            peg.repaint ();
+            PanelModel.instance.panelSearch.search ();
         }
     }
 
@@ -117,10 +120,13 @@ public class ChangeVariableToInherit extends UndoableView
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
         pet.animate ();
-        if (grandparent == pe.part)
+
+        peg.reconnect ();
+        peg.repaint ();
+
+        if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {
-            peg.reconnect ();
-            peg.repaint ();
+            PanelModel.instance.panelSearch.search ();
         }
     }
 }

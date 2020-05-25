@@ -31,7 +31,7 @@ public class ChangeInherit extends UndoableView
     **/
     public ChangeInherit (NodeInherit node, String valueAfter)
     {
-        path            = node.getKeyPath ();  // include "$inherit"
+        path            = node.getKeyPath ();  // includes "$inherit"
         valueBefore     = node.source.get ();
         this.valueAfter = valueAfter;
     }
@@ -52,7 +52,7 @@ public class ChangeInherit extends UndoableView
     {
         NodeBase node = NodeBase.locateNode (path);
         if (node == null) throw new CannotRedoException ();
-        NodePart parent = (NodePart) node.getParent ();
+        NodePart parent      = (NodePart) node.getParent ();
         NodePart grandparent = (NodePart) parent.getParent ();
 
         PanelEquations pe = PanelModel.instance.panelEquations;
@@ -69,18 +69,21 @@ public class ChangeInherit extends UndoableView
         if (parent == pe.part)
         {
             peg.reloadPart ();
-            parent.filter (FilteredTreeModel.filterLevel);
+            parent.filter (FilteredTreeModel.filterLevel);  // Ensure that parts are not visible in parent panel.
         }
-        if (parent.graph != null  ||  parent == pe.part  ||  parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
+        if (parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child ("$inherit").getPath ();
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
         pet.animate ();
-        if (grandparent == pe.part)
+
+        peg.reconnect ();
+        peg.repaint ();
+
+        if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {
-            peg.reconnect ();
-            peg.repaint ();
+            PanelModel.instance.panelSearch.search ();
         }
     }
 }
