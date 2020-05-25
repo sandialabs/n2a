@@ -286,6 +286,8 @@ public class NodePart extends NodeContainer
                 return ((NodePart) n).resolveName (nextName);
             }
         }
+        // Treat undefined $variables as local. This will not include $up, because that case is eliminated above.
+        if (nextName.isEmpty ()  &&  ns.startsWith ("$")) return new NodeVariable (null);  // Fake it, just enough to finish NodeVariable.findConnections().
 
         if (parent == null) return null;
         return parent.resolveName (name);

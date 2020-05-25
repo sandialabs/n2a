@@ -438,7 +438,21 @@ public class Operator implements Cloneable
 
     public static Operator parse (String line) throws Exception
     {
-        return getFrom (ExpressionParser.parse (line));
+        try
+        {
+            return getFrom (ExpressionParser.parse (line));
+        }
+        catch (Exception e)
+        {
+            // Make one special exception for connect(). If it contains naked (non-quoted) part names,
+            // then parse will fail. Since connect() shouldn't be in final compile anyway, we could
+            // throw the exception. However, it is useful for partial compiles to ignore the parse
+            // error. The null result returned here is still poisonous. The most likely effect is
+            // that the associated variable will have no equations. Basically, the connect() disappears
+            // from existence.
+            if (containsConnect (line)) return null;
+            throw e;
+        }
     }
 
     public static Operator getFrom (SimpleNode node) throws Exception

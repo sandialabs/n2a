@@ -632,6 +632,8 @@ public class EquationSet implements Comparable<EquationSet>
 
         Variable v = find (new Variable (ns));
         if (v != null) return true;  // The match was found, but it turns out to be a variable, not an equation set. result.endpoint should still be null.
+        // Treat undefined $variables as local. This will never include $up, because that case is eliminated above.
+        if (ns.startsWith ("$")) return true;  // Assert it is a variable, regardless. There is no legal way for this to be a part name, even if it contains a dot.
 
         if (container == null) return false;
         result.addResolution (container);
@@ -2506,11 +2508,6 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
-    public void addAttribute (String attribute, int connection, boolean withOrder, String[] names)
-    {
-        addAttribute (attribute, connection, withOrder, new TreeSet<String> (Arrays.asList (names)));
-    }
-
     /**
         @param attribute The string to add to the tags associated with each given variable.
         @param connection Tri-state: 1 = must be a connection, -1 = must be a compartment, 0 = can be either one
@@ -2519,7 +2516,7 @@ public class EquationSet implements Comparable<EquationSet>
         When false, matches any variable with the same base name.
         @param names A set of variable names to search for and tag.
     **/
-    public void addAttribute (String attribute, int connection, boolean withOrder, Set<String> names)
+    public void addAttribute (String attribute, int connection, boolean withOrder, String... names)
     {
         for (EquationSet s : parts)
         {
