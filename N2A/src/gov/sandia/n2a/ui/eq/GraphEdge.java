@@ -264,7 +264,7 @@ public class GraphEdge
                 // but no sane person would have more than an 8-way connection.
                 int count = nodeFrom.edgesOut.size ();
                 int index = nodeFrom.edgesOut.indexOf (this);
-                double angle = index * Math.PI * 2 / count;
+                double angle = Math.PI + index * Math.PI * 2 / count;
                 tip = new Vector2 (angle);
 
                 // Scale direction vector until it ends far enough from border
