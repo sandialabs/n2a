@@ -428,7 +428,9 @@ public class NodeVariable extends NodeContainer
 
             // Determine index for new equation
             int index = 0;
-            NodeBase child = (NodeBase) tree.getLeadSelectionPath ().getLastPathComponent ();
+            NodeBase child = null;
+            TreePath path = tree.getLeadSelectionPath ();
+            if (path != null) child = (NodeBase) path.getLastPathComponent ();
             if (child != null  &&  child.getParent () == this) index = getIndex (child);
             while (index > 0  &&  ! (getChildAt (index) instanceof NodeEquation)) index--;
             if (index < getChildCount ()  &&  getChildAt (index) instanceof NodeEquation) index++;
