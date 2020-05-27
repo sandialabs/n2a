@@ -301,8 +301,35 @@ public class EquationSet implements Comparable<EquationSet>
                             int suffix = 1;
                             while (find (new Variable (dummy)) != null  ||  source.child (dummy) != null) dummy = "x" + suffix++;
 
+                            // Check for timeScale
+                            EquationSet root = this;
+                            while (root.container != null) root = root.container;
+                            String timeScale = root.source.get ("$metadata", "watch", "timeScale");
+                            String scale = "";
+                            if (v.order > 0  &&  ! timeScale.isEmpty ())
+                            {
+                                try
+                                {
+                                    UnitValue uv = new UnitValue (timeScale);
+                                    if (uv.value == 0) uv.value = 1;
+                                    if (uv.unit == null) uv.unit = AbstractUnit.ONE;
+                                    uv.unit = uv.unit.pow (-v.order);
+                                    uv.value = Math.pow (uv.value, -v.order);
+                                    scale = uv.bareUnit ();
+                                }
+                                catch (Exception ex) {}
+                            }
+
                             // Create output expression
-                            Variable o = new Variable (this, new MVolatile ("output(" + v.nameString () + ")", dummy));
+                            String expression = "output(\"\"," + v.nameString ();
+                            if (! timeScale.isEmpty ())
+                            {
+                                expression += ",\"\",\"timeScale=" + timeScale;
+                                if (! scale.isEmpty ()) expression += ",scale=" + scale;
+                                expression += "\"";
+                            }
+                            expression += ")";
+                            Variable o = new Variable (this, new MVolatile (expression, dummy));
                             variables.add (o);
                         }
                     }

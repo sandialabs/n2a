@@ -288,7 +288,7 @@ class XyceBackend extends Backend
                     {
                         if (op instanceof Output)
                         {
-                            traces.add (((Output) op).operands[0]);
+                            traces.add (((Output) op).operands[1]);
                             return false;
                         }
                         return true;
@@ -306,7 +306,7 @@ class XyceBackend extends Backend
                     }
                     else  // trace is an expression
                     {
-                        if (e.expression instanceof Output  &&  ((Output) e.expression).operands[0] == trace)  // this trace wraps the entire equation
+                        if (e.expression instanceof Output  &&  ((Output) e.expression).operands[1] == trace)  // this trace wraps the entire equation
                         {
                             // simply print the LHS variable, similar to the AccessVariable case above
                             writer.append (renderer.change (v.reference));

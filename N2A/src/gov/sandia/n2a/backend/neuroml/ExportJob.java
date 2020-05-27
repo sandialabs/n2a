@@ -2840,10 +2840,22 @@ public class ExportJob extends XMLutility
             public String dumpColumns (Path jobDir)
             {
                 if (type.equals ("Display")) return "";
+
+                String timeScale = "";
+                for (Line l : lines) if (! l.timeScale.isEmpty ()) timeScale = l.timeScale;
+
                 try (PrintStream ps = new PrintStream (new FileOutputStream (jobDir.resolve (name + ".columns").toFile (), true), false, "UTF-8"))
                 {
-                    ps.println ("$t");  // Because this function is used mainly by the LEMS backend, and LEMS always puts time in first column.
-                    for (Line l : lines) ps.println (l.id);
+                    ps.println ("N2A.schema=2,Columns");
+                    ps.println ("0:$t");  // Because this function is used mainly by the LEMS backend, and LEMS always puts time in first column.
+                    if (! timeScale.isEmpty ()) ps.println (" scale:" + timeScale);
+
+                    int i = 1;
+                    for (Line l : lines)
+                    {
+                        ps.print (i + ":");
+                        l.dumpColumn (ps);
+                    }
                 }
                 catch (Exception e) {}
                 return name;
@@ -2875,6 +2887,14 @@ public class ExportJob extends XMLutility
                         if (! timeScale.isEmpty ()) e.setAttribute ("timeScale", timeScale);
                         if (! color    .isEmpty ()) e.setAttribute ("color",     color);
                     }
+                }
+
+                public void dumpColumn (PrintStream ps)
+                {
+                    ps.println (id);
+                    if (! scale    .isEmpty ()) ps.println (" scale:"     + scale);
+                    if (! timeScale.isEmpty ()) ps.println (" timeScale:" + timeScale);
+                    if (! color    .isEmpty ()) ps.println (" color:"     + color);
                 }
             }
 

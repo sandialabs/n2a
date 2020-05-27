@@ -103,7 +103,7 @@ public class RendererPython extends Renderer
             Type o = c.value;
             if (o instanceof Scalar)
             {
-                result.append (((Scalar) o).value);
+                result.append (print (((Scalar) o).value));
                 return true;
             }
             if (o instanceof Text)
@@ -229,7 +229,7 @@ public class RendererPython extends Renderer
             Output o = (Output) op;
             result.append (o.name + "->trace (Simulator::instance.currentEvent->t, ");
 
-            if (o.operands.length > 2)  // column name is explicit
+            if (o.hasColumnName)  // column name is explicit
             {
                 o.operands[2].render (this);
             }

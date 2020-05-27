@@ -3445,7 +3445,7 @@ public class ImportJob extends XMLutility
                 if (! dimension.isEmpty ())
                 {
                     Unit<?> unit = dimensions.get (dimension);
-                    if (unit != null) value += safeUnit (unit);
+                    if (unit != null) value += UnitValue.safeUnit (unit);
                 }
                 result.set (value);
             }
@@ -4297,7 +4297,7 @@ public class ImportJob extends XMLutility
                         }
 
                         result.append (ImportJob.print (value));
-                        result.append (safeUnit (unit));
+                        result.append (UnitValue.safeUnit (unit));
                     }
                     return true;
                 }

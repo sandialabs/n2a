@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,6 +15,7 @@ import java.util.Map.Entry;
 
 import gov.sandia.n2a.backend.internal.InstanceTemporaries;
 import gov.sandia.n2a.backend.internal.Simulator;
+import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.Variable;
@@ -33,13 +34,14 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class Output extends Function
 {
-    public String variableName;  // Trace needs to know its target variable in order to auto-generate a column name. This value is set by an analysis process.
-    public String variableName0; // As found in operand[0]
-    public String variableName1; // As found in operand[1]
-    public int    index;         // of generated column name in valuesObject array
-    public String name;          // For C backend, the name of the OutputHolder object.
-    public String fileName;      // For C backend, the name of the string variable holding the file name, if any.
-    public String columnName;    // For C backend, the name of the string variable holding the generated column name, if any.
+    public String  variableName;  // Trace needs to know its target variable in order to auto-generate a column name. This value is set by an analysis process.
+    public String  variableName0; // As found in operand[0]
+    public String  variableName1; // As found in operand[1]
+    public boolean hasColumnName; // Indicates that column name is explicitly provided, rather than generated.
+    public int     index;         // For Internal backend, the index of generated column name in valuesObject array.
+    public String  name;          // For C backend, the name of the OutputHolder object.
+    public String  fileName;      // For C backend, the name of the string variable holding the file name, if any.
+    public String  columnName;    // For C backend, the name of the string variable holding the generated column name, if any.
 
     public static Factory factory ()
     {
@@ -74,7 +76,7 @@ public class Output extends Function
     {
         Operator op = operands[1];
         op.determineExponent (from);
-        if (operands.length >= 3) operands[2].determineExponent (from);
+        if (operands.length > 2) operands[2].determineExponent (from);  // In case column index is computed.
         updateExponent (from, op.exponent, op.center);
     }
 
@@ -103,29 +105,33 @@ public class Output extends Function
 
     public static class Holder implements gov.sandia.n2a.backend.internal.Holder
     {
-        public Map<String,Integer> columnMap    = new HashMap<String,Integer> ();  ///< Maps from column name to column position.
-        public List<Float>         columnValues = new ArrayList<Float> ();         ///< Holds current value for each column.
-        public int                 columnsPrevious;                                ///< Number of columns written in previous cycle.
-        public boolean             traceReceived;                                  ///< Indicates that at least one column was touched during the current cycle.
+        public Map<String,Integer> columnMap    = new HashMap<String,Integer> ();  // Maps from column name to column position.
+        public MDoc                columnMode;                                     // Maps from column name to a set of mode flags.
+        public List<Float>         columnValues = new ArrayList<Float> ();         // Holds current value for each column.
+        public int                 columnsPrevious;                                // Number of columns written in previous cycle.
+        public boolean             traceReceived;                                  // Indicates that at least one column was touched during the current cycle.
         public double              t;
         public PrintStream         out;
-        public boolean             raw;  ///< Indicates that column is an exact index.
+        public boolean             raw;                                            // Indicates that column is an exact index.
 
         public Holder (Simulator simulator, String path)
         {
             if (path.isEmpty ())
             {
                 out = simulator.out;
+                columnMode = new MDoc (simulator.jobDir.resolve ("out.columns"));
             }
             else
             {
                 try
                 {
                     out = new PrintStream (simulator.jobDir.resolve (path).toFile (), "UTF-8");
+                    columnMode = new MDoc (simulator.jobDir.resolve (path + ".columns"));
                 }
                 catch (Exception e)
                 {
                     out = simulator.out;
+                    columnMode = new MDoc (simulator.jobDir.resolve ("out.columns"));
                 }
             }
         }
@@ -134,9 +140,10 @@ public class Output extends Function
         {
             writeTrace ();
             out.close ();
+            columnMode.save ();
         }
 
-        public void trace (double now, String column, float value)
+        public void trace (double now, String column, float value, String mode)
         {
             // Detect when time changes and dump any previously traced values.
             if (now > t)
@@ -147,6 +154,7 @@ public class Output extends Function
 
             if (! traceReceived)  // First trace for this cycle
             {
+                traceReceived = true;
                 if (columnValues.isEmpty ())  // slip $t into first column 
                 {
                     columnMap.put ("$t", 0);
@@ -158,27 +166,47 @@ public class Output extends Function
                 }
             }
 
+            boolean newColumn = false;
             Integer index = columnMap.get (column);
-            if (index == null)
+            if (index == null)  // Add new column
             {
+                newColumn = true;
                 if (raw)
                 {
                     int i = Integer.valueOf (column) + 1;  // offset for time in first column
                     while (columnValues.size () < i) columnValues.add (Float.NaN);
-                    columnMap.put (column, i);
+                    index = i;
                 }
                 else
                 {
-                    columnMap.put (column, columnValues.size ());
+                    index = columnValues.size ();
                 }
+                columnMap.put (column, index);
                 columnValues.add (value);
+                columnMode.set (column, index);
             }
-            else
+            else  // Existing column
             {
                 columnValues.set (index, value);
             }
 
-            traceReceived = true;
+            if (mode != null)
+            {
+                String[] hints = mode.split (",");
+                for (String h : hints)
+                {
+                    h = h.trim ();
+                    if (h.isEmpty ()  ||  h.equals ("raw")) continue;
+                    String[] pieces = h.split ("=", 2);
+                    String key = pieces[0].trim ();
+                    String val = "";
+                    if (pieces.length > 1) val = pieces[1].trim ();
+                    if (key.equals ("timeScale")) columnMode.set (val, 0,     "scale");  // Set on time column. 
+                    else                          columnMode.set (val, index, key);
+                }
+            }
+
+            if (newColumn) columnMode.save ();  // Only save when new columns are added, as opposed to merely changes in column hints.
         }
 
         public void writeTrace ()
@@ -188,7 +216,7 @@ public class Output extends Function
             int count = columnValues.size ();
             int last  = count - 1;
 
-            // Write headers if new columns have been added
+            // Write headers if new columns have been added.
             if (! raw  &&  count > columnsPrevious)
             {
                 String headers[] = new String[count];
@@ -210,6 +238,9 @@ public class Output extends Function
                 out.println ();
                 columnsPrevious = count;
             }
+
+            // Write hints if new columns have been added.
+            if (count > columnsPrevious) columnMode.save ();
 
             // Write values
             for (int i = 0; i <= last; i++)
@@ -236,13 +267,18 @@ public class Output extends Function
         Simulator simulator = Simulator.getSimulator (context);
         if (simulator == null) return result;
 
+        String mode = null;
         String path = ((Text) operands[0].eval (context)).value;
         Holder H;
         Object o = simulator.holders.get (path);
         if (o == null)
         {
             H = new Holder (simulator, path);
-            if (operands.length > 3) H.raw = operands[3].eval (context).toString ().contains ("raw");
+            if (operands.length > 3)
+            {
+                mode = operands[3].eval (context).toString ();
+                H.raw = mode.contains ("raw");
+            }
             simulator.holders.put (path, H);
         }
         else if (! (o instanceof Holder))
@@ -252,9 +288,12 @@ public class Output extends Function
         }
         else H = (Holder) o;
 
+        if (operands.length > 3  &&  ! (operands[3] instanceof Constant)) mode = operands[3].eval (context).toString ();
+        // else mode will only be non-null on first call. This will save some processing of column hints inside Holder.
+
         // Determine column name
         String column;
-        if (operands.length > 2)  // column name is specified
+        if (hasColumnName)  // column name is specified
         {
             column = operands[2].eval (context).toString ();
         }
@@ -282,11 +321,11 @@ public class Output extends Function
             int cols = A.columns ();
             if (rows == 1)
             {
-                for (int c = 0; c < cols; c++) H.trace (now, column + "(" + c + ")", (float) A.get (0, c));
+                for (int c = 0; c < cols; c++) H.trace (now, column + "(" + c + ")", (float) A.get (0, c), mode);
             }
             else if (cols == 1)
             {
-                for (int r = 0; r < rows; r++) H.trace (now, column + "(" + r + ")", (float) A.get (r, 0));
+                for (int r = 0; r < rows; r++) H.trace (now, column + "(" + r + ")", (float) A.get (r, 0), mode);
             }
             else
             {
@@ -294,14 +333,14 @@ public class Output extends Function
                 {
                     for (int c = 0; c < cols; c++)
                     {
-                        H.trace (now, column + "(" + r + "," + c + ")", (float) A.get (r, c));
+                        H.trace (now, column + "(" + r + "," + c + ")", (float) A.get (r, c), mode);
                     }
                 }
             }
         }
         else
         {
-            H.trace (now, column, (float) ((Scalar) result).value);
+            H.trace (now, column, (float) ((Scalar) result).value, mode);
         }
 
         return result;
@@ -343,7 +382,8 @@ public class Output extends Function
             variableName = variableName1;
         }
 
-        if (length < 3)  // Column name not specified
+        hasColumnName = operands.length > 2  &&  ! (operands[2] instanceof Constant  &&  ((Constant) operands[2]).value.toString ().isEmpty ());
+        if (! hasColumnName)  // Column name not specified
         {
             if (variableName == null) variableName = v.nameString ();
 

@@ -613,7 +613,7 @@ public class JobC extends Thread
                 if (op instanceof Function)
                 {
                     Function f = (Function) op;
-                    if (f instanceof Output  &&  f.operands.length < 3)  // We need to auto-generate the column name.
+                    if (f instanceof Output  &&  ! ((Output) f).hasColumnName)  // We need to auto-generate the column name.
                     {
                         Output o = (Output) f;
                         o.columnName = "columnName" + stringNames.size ();
@@ -3604,7 +3604,7 @@ public class JobC extends Thread
                 if (op instanceof Output)
                 {
                     Output o = (Output) op;
-                    if (o.operands.length < 3)  // column name is generated
+                    if (! o.hasColumnName)  // column name is generated
                     {
                         BackendDataC bed = (BackendDataC) context.part.backendData;
                         if (context.global ? bed.needGlobalPath : bed.needLocalPath)

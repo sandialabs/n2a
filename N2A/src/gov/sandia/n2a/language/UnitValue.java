@@ -16,6 +16,7 @@ import javax.measure.spi.ServiceProvider;
 import javax.measure.spi.SystemOfUnits;
 
 import gov.sandia.n2a.language.type.Scalar;
+import tech.units.indriya.AbstractUnit;
 
 /**
     Utility class for capturing units of numeric constants during parsing.
@@ -27,6 +28,7 @@ public class UnitValue
     public int     digits;  // number of digits in the textual form of the constant (base 10)
 
     public static Pattern       floatParser   = Pattern.compile ("[-+]?(NaN|Infinity|([0-9]*\\.?[0-9]*([eE][-+]?[0-9]+)?))");
+    public static Pattern       forbiddenUCUM = Pattern.compile ("[.,;><=!&|+\\-*/%\\^~]");
     public static SystemOfUnits systemOfUnits = ServiceProvider.current ().getSystemOfUnitsService ().getSystemOfUnits ("UCUM");
     public static UnitFormat    UCUM          = ServiceProvider.current ().getFormatService ().getUnitFormat ("UCUM");
     public static Unit<?>       seconds       = UCUM.parse ("s");
@@ -60,6 +62,16 @@ public class UnitValue
         }
     }
 
+    public UnitValue (double value, String unitString)
+    {
+        this.value = value;
+        if (! unitString.isEmpty ())
+        {
+            try {unit = UCUM.parse (unitString);}
+            catch (Exception e) {}
+        }
+    }
+
     /**
         Returns the value scaled according to the unit.
         For example, if the input was "1ms", then value=1, unit=milliseconds, and this function returns 0.001
@@ -86,10 +98,39 @@ public class UnitValue
         return m.end ();
     }
 
+    public static String safeUnit (String unit)
+    {
+        if (forbiddenUCUM.matcher (unit).find ()) return "(" + unit + ")";
+        return unit;
+    }
+
+    public static String safeUnit (Unit<?> unit)
+    {
+        String temp = UCUM.format (unit);
+        if (temp.startsWith ("1/")) temp = temp.substring (1);  // Get rid of useless 1 at beginning.
+        return safeUnit (temp);
+    }
+
     public String toString ()
     {
         String result = Scalar.print (value);
-        if (unit != null) result += UCUM.format (unit);
+        if (unit != null  &&  unit != AbstractUnit.ONE) result += safeUnit (unit);
+        return result;
+    }
+
+    /**
+        Like toString(), but returns unit without parenthesis or redundant multiplier.
+    **/
+    public String bareUnit ()
+    {
+        String result = "";
+        if (value != 1) result = Scalar.print (value);
+        if (unit != null  &&  unit != AbstractUnit.ONE)
+        {
+            String temp = UCUM.format (unit);
+            if (temp.startsWith ("1/")) temp = temp.substring (1);
+            result += temp;
+        }
         return result;
     }
 }

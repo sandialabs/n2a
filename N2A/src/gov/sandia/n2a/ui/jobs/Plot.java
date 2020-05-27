@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -39,6 +39,17 @@ public class Plot extends OutputParser
 
     public void createDatasets ()
     {
+        // Convert units
+        for (Column c : columns)  // Includes time column, which can also be scaled.
+        {
+            if (c.scale == null) continue;
+            double scale = c.scale.get ();  // Conversion factor. Only works for simple scaling, not offset. For example, converting from degrees C to F would not work, but kilograms to pounds does work.
+            //if (! raw) c.header += "(" + c.scale + ")";
+            if (scale == 1) continue;
+            int count = c.values.size ();
+            for (int i = 0; i < count; i++) c.values.set (i, (float) (c.values.get (i) / scale));
+        }
+
         // Decide between one or two axis display
 
         columnCount = columns.size () - 1;   // Subtract 1 to account for time column.

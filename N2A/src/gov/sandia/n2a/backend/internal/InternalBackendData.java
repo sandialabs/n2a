@@ -744,7 +744,7 @@ public class InternalBackendData
                         if (op instanceof Output)
                         {
                             Output o = (Output) op;
-                            if (o.operands.length < 3)
+                            if (! o.hasColumnName)
                             {
                                 o.index = countGlobalObject++;
                                 namesGlobalObject.add ("columnName" + o.index);
@@ -800,7 +800,7 @@ public class InternalBackendData
                         if (op instanceof Output)
                         {
                             Output o = (Output) op;
-                            if (o.operands.length < 3)
+                            if (! o.hasColumnName)
                             {
                                 o.index = countLocalObject++;
                                 namesLocalObject.add ("columnName" + o.index);

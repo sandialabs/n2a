@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.jobs;
 
+import java.awt.Color;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,6 +14,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+
+import gov.sandia.n2a.db.MDoc;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.language.UnitValue;
+import tech.units.indriya.AbstractUnit;
 
 public class OutputParser
 {
@@ -91,19 +97,28 @@ public class OutputParser
 
         // If there is a separate columns file, open and parse it.
         Path jobDir = f.getParent ();
-        Path columnFile = jobDir.resolve (f.getFileName ().toString () + ".columns");
-        try (BufferedReader br = Files.newBufferedReader (columnFile))
+        Path columnPath = jobDir.resolve (f.getFileName ().toString () + ".columns");
+        if (Files.isReadable (columnPath))
         {
-            int columnIndex = 0;
-            String line;
-            while (columnIndex < columns.size ()  &&  (line = br.readLine ()) != null)
+            MDoc columnFile = new MDoc (columnPath);
+            for (MNode n : columnFile)
             {
-                Column c = columns.get (columnIndex++);
-                if (c.header.isEmpty ()) c.header = line;
+                int columnIndex = Integer.valueOf (n.key ());
+                if (columnIndex >= columns.size ()) break;
+                Column c = columns.get (columnIndex);
+                if (c.header.isEmpty ()) c.header = n.get ();
+
+                String colorName = n.get ("color");
+                if (! colorName.isEmpty ()) c.color = Color.decode (colorName);
+
+                String scale = n.get ("scale");
+                if (! scale.isEmpty ())
+                {
+                    c.scale = new UnitValue (scale);
+                    if (c.scale.value == 0)    c.scale.value = 1;
+                    if (c.scale.unit  == null) c.scale.unit  = AbstractUnit.ONE;
+                }
             }
-        }
-        catch (IOException e)
-        {
         }
 
         // Determine time column
@@ -167,6 +182,8 @@ public class OutputParser
         public double      min    = Double.POSITIVE_INFINITY;
         public double      max    = Double.NEGATIVE_INFINITY;
         public double      range;
+        public UnitValue   scale;
+        public Color       color;
 
         public void computeStats ()
         {
