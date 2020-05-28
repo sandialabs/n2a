@@ -1,5 +1,6 @@
 import numpy
 import re
+import sys
 
 class Column:
 
@@ -13,6 +14,8 @@ class Column:
         self.minimum   =  numpy.inf
         self.maximum   = -numpy.inf
         self.range     = 0.0
+        self.color     = ''
+        self.scale     = ''
 
     def computeStats(self):
         for f in self.values:
@@ -92,7 +95,6 @@ class OutputParser:
                 if isHeader:
                     if c == len(self.columns):
                         self.columns.append(Column(value))
-                        print("appending:" + value)
                 else:
                     if c == len(self.columns): self.columns.append(Column(""))
                     column = self.columns[c]
@@ -102,8 +104,8 @@ class OutputParser:
                         column.textWidth = max(column.textWidth, len(value))
                         column.value = float(value)
 
-                if next == -1: break
                 c += 1
+                if next == -1: break
                 start = next
 
             if isHeader:
@@ -133,12 +135,26 @@ class OutputParser:
         columnFileName = fileName + ".columns"
         try:
             columnFile = open(columnFileName)
-            for column in self.columns:
-                line = columnFile.readline()
-                if not line: break
-                if line[-1] == "\n": line = line[0:-1]
-                if column.header == "": column.header = line
-            close(columnFile)
+            line = columnFile.readline()
+            if line[0:10] == "N2A.schema":
+                c = None
+                for line in columnFile:
+                    if line[-1] == "\n": line = line[0:-1]
+                    pos = line.find(":")
+                    if pos < 0: pos = len(line)
+                    key = line[0:pos]
+                    value = line[pos+1:]
+                    if key[0] == ' ':
+                        if c is None: continue
+                        setattr(c, key[1:], value)
+                    else:
+                        i = int(key)
+                        if i < 0 or i >= len(self.columns):
+                            c = None
+                            continue
+                        c = self.columns[i]
+                        if column.header == "": column.header = value
+            columnFile.close()
         except OSError: pass
 
         # Determine time column
@@ -177,7 +193,9 @@ class OutputParser:
             if column.header != "": return True
         return False
 
-    def dump(self):
+    def dump(self, out=sys.stdout):
+        """ Dumps parsed data in tabular form. This can be used directly by most software.
+        """
         if len(self.columns) == 0: return
         last = self.columns[-1]
 
@@ -185,17 +203,26 @@ class OutputParser:
             for column in self.columns:
                 if column is last: e = "\n"
                 else:              e = "\t"
-                print(column.header, end = e)
+                print(column.header, end=e, file=out)
 
         if self.hasData():
             for r in range(self.rows):
                 for column in self.columns:
                     if column is last: e = "\n"
                     else:              e = "\t"
-                    print(column.get(r), end = e)
+                    print(column.get(r), end=e, file=out)
+
+    def dumpMode(self, out=sys.stdout):
+        """ Dumps column metadata (from output mode field).
+        """
+        if self.hasHeaders():
+            for column in self.columns:
+                print(column.header, file=out)
+                print("color=" + column.color, file=out)
+                print("scale=" + column.scale, file=out)
 
 if __name__ == "__main__":
     o = OutputParser()
-    o.parse("c:/Users/frothga/n2a/jobs/2019-11-06-134123-0/out")
+    o.parse("C:/Users/frothga/n2a/jobs/2020-05-27-205826-0/out")
     o.dump()
     print ('done')

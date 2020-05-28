@@ -1,6 +1,6 @@
 /*
 A utility class for reading simulation output files.
-Primarily for use by those who wish to write code to analyze these data.
+Primarily for those who wish to write C++ code to analyze these data.
 This is a pure header implementation. No need to build/link extra libraries.
 
 Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -17,6 +17,8 @@ the U.S. Government retains certain rights in this software.
 #include <fstream>
 #include <cmath>
 
+#include <iostream>  // for testing
+
 namespace n2a
 {
     class Column
@@ -31,6 +33,8 @@ namespace n2a
         double             minimum;
         double             maximum;
         double             range;
+        std::string        scale;
+        std::string        color;
 
         Column (const std::string & header)
         :   header (header)
@@ -43,7 +47,7 @@ namespace n2a
             range     = 0;
         }
 
-        computeStats ()
+        void computeStats ()
         {
             for (auto f : values)
             {
@@ -141,9 +145,9 @@ namespace n2a
                 if (isHeader) raw = false;
                 while (true)
                 {
-                    int length;
-                    int next;
-                    int pos = line.find_first_of (" \t", start);
+                    std::string::size_type length;
+                    std::string::size_type next;
+                    std::string::size_type pos = line.find_first_of (" \t", start);
                     if (pos == std::string::npos)
                     {
                         length = std::string::npos;
@@ -171,14 +175,14 @@ namespace n2a
                         }
                         else
                         {
-                            column->textWidth = std::max (column->textWidth, length);
+                            column->textWidth = std::max (column->textWidth, (int) length);
                             std::string text = line.substr (start, length);
                             column->value = atof (text.c_str ());
                         }
                     }
 
-                    if (next == std::string::npos) break;
                     c++;
+                    if (next == std::string::npos) break;
                     start = next;
                 }
 
@@ -222,11 +226,35 @@ namespace n2a
             std::string columnFileName = fileName + ".columns";
             std::ifstream columnFile (columnFileName.c_str ());
             std::string line;
-            for (Column * c : columns)
+            getline (columnFile, line);
+            if (line.substr (0, 10) == "N2A.schema")
             {
-                getline (columnFile, line);
-                if (! columnFile.good ()) break;
-                if (c->header.empty ()) c->header = line;
+                Column * c = 0;
+                while (true)
+                {
+                    getline (columnFile, line);
+                    if (! columnFile.good ()) break;
+                    int pos = line.find_first_of (":");
+                    std::string key   = line.substr (0, pos);
+                    std::string value = line.substr (pos + 1);
+                    if (line[0] == ' ')
+                    {
+                        if (c == 0) continue;
+                        if      (key == " color") c->color = value;
+                        else if (key == " scale") c->scale = value;
+                    }
+                    else
+                    {
+                        int i = atoi (key.c_str ());
+                        if (i < 0  ||  i >= columns.size ())
+                        {
+                            c = 0;
+                            continue;
+                        }
+                        c = columns[i];
+                        if (c->header.empty ()) c->header = value;
+                    }
+                }
             }
 
             // Determine time column
@@ -275,6 +303,7 @@ namespace n2a
             return false;
         }
 
+		/// Dumps parsed data in tabular form. This can be used directly by most software.
         void dump (std::ostream & out)
         {
             if (columns.empty ()) return;
@@ -300,6 +329,20 @@ namespace n2a
                         if (c == last) out << std::endl;
                         else           out << "\t";
                     }
+                }
+            }
+		}
+
+		/// Dumps column metadata (from output mode field).
+		void dumpMode (std::ostream & out)
+		{
+            if (hasHeaders ())
+            {
+                for (Column * c : columns)
+                {
+                    out << c->header << std::endl;
+					out << " color=" << c->color << std::endl;
+					out << " scale=" << c->scale << std::endl;
                 }
             }
         }

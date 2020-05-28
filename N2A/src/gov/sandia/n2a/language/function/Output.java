@@ -159,6 +159,7 @@ public class Output extends Function
                 {
                     columnMap.put ("$t", 0);
                     columnValues.add ((float) t);
+                    columnMode.set ("$t", 0);
                 }
                 else
                 {
