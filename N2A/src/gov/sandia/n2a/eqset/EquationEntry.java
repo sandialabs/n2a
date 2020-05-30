@@ -141,6 +141,14 @@ public class EquationEntry implements Comparable<EquationEntry>
         return renderer.result.toString ();
     }
 
+    public boolean codeEquals (EquationEntry that)
+    {
+        if (! ifString.equals (that.ifString)) return false;  // It would be better to test logical equivalence, but that's much more difficult.
+        if (expression == that.expression) return true;  // In case both are null.
+        if (expression == null  ||  that.expression == null) return false;
+        return expression.toString ().equals (that.expression.toString ());  // Again, a weak test. It is possible to get both false negatives and false positives (depending on how correct the default renderer is relative to a given backend).
+    }
+
     public int compareTo (EquationEntry that)
     {
         if (ifString.equals (that.ifString)) return  0;

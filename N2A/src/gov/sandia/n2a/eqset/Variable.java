@@ -35,6 +35,7 @@ import tech.units.indriya.AbstractUnit;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -1323,6 +1324,19 @@ public class Variable implements Comparable<Variable>, Cloneable
     {
         if (metadata == null) metadata = new MVolatile ();
         return metadata;
+    }
+
+    public boolean codeEquals (Variable that)
+    {
+        if (equations.size () != that.equations.size ()) return false;
+        // Equations should be sorted exactly the same, since they should have exactly the same ifString keys.
+        Iterator<EquationEntry> bit = that.equations.iterator ();
+        for (EquationEntry a : equations)
+        {
+            EquationEntry b = bit.next ();
+            if (! a.codeEquals (b)) return false;
+        }
+        return true;
     }
 
     /**
