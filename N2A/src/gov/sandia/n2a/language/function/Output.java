@@ -167,11 +167,9 @@ public class Output extends Function
                 }
             }
 
-            boolean newColumn = false;
             Integer index = columnMap.get (column);
             if (index == null)  // Add new column
             {
-                newColumn = true;
                 if (raw)
                 {
                     int i = Integer.valueOf (column) + 1;  // offset for time in first column
@@ -184,30 +182,28 @@ public class Output extends Function
                 }
                 columnMap.put (column, index);
                 columnValues.add (value);
-                columnMode.set (column, index);
+
+                columnMode.set (column, index);  // Report all column names, regardless of whether they have any mode flags.
+                if (mode != null)
+                {
+                    String[] hints = mode.split (",");
+                    for (String h : hints)
+                    {
+                        h = h.trim ();
+                        if (h.isEmpty ()  ||  h.equals ("raw")) continue;
+                        String[] pieces = h.split ("=", 2);
+                        String key = pieces[0].trim ();
+                        String val = "";
+                        if (pieces.length > 1) val = pieces[1].trim ();
+                        if (key.equals ("timeScale")) columnMode.set (val, 0,     "scale");  // Set on time column. 
+                        else                          columnMode.set (val, index, key);
+                    }
+                }
             }
             else  // Existing column
             {
                 columnValues.set (index, value);
             }
-
-            if (mode != null)
-            {
-                String[] hints = mode.split (",");
-                for (String h : hints)
-                {
-                    h = h.trim ();
-                    if (h.isEmpty ()  ||  h.equals ("raw")) continue;
-                    String[] pieces = h.split ("=", 2);
-                    String key = pieces[0].trim ();
-                    String val = "";
-                    if (pieces.length > 1) val = pieces[1].trim ();
-                    if (key.equals ("timeScale")) columnMode.set (val, 0,     "scale");  // Set on time column. 
-                    else                          columnMode.set (val, index, key);
-                }
-            }
-
-            if (newColumn) columnMode.save ();  // Only save when new columns are added, as opposed to merely changes in column hints.
         }
 
         public void writeTrace ()
@@ -218,30 +214,31 @@ public class Output extends Function
             int last  = count - 1;
 
             // Write headers if new columns have been added.
-            if (! raw  &&  count > columnsPrevious)
+            if (count > columnsPrevious)
             {
-                String headers[] = new String[count];
-                for (Entry<String,Integer> i : columnMap.entrySet ())
+                if (! raw)
                 {
-                    headers[i.getValue ()] = i.getKey ();
+                    String headers[] = new String[count];
+                    for (Entry<String,Integer> i : columnMap.entrySet ())
+                    {
+                        headers[i.getValue ()] = i.getKey ();
+                    }
+                    out.print (headers[0]);  // Should be $t
+                    int i = 1;
+                    for (; i < columnsPrevious; i++)
+                    {
+                        out.print ("\t");
+                    }
+                    for (; i < count; i++)
+                    {
+                        out.print ("\t");
+                        out.print (headers[i]);
+                    }
+                    out.println ();
                 }
-                out.print (headers[0]);  // Should be $t
-                int i = 1;
-                for (; i < columnsPrevious; i++)
-                {
-                    out.print ("\t");
-                }
-                for (; i < count; i++)
-                {
-                    out.print ("\t");
-                    out.print (headers[i]);
-                }
-                out.println ();
                 columnsPrevious = count;
+                columnMode.save ();
             }
-
-            // Write hints if new columns have been added.
-            if (count > columnsPrevious) columnMode.save ();
 
             // Write values
             for (int i = 0; i <= last; i++)
@@ -269,17 +266,15 @@ public class Output extends Function
         if (simulator == null) return result;
 
         String mode = null;
+        if (operands.length > 3) mode = operands[3].eval (context).toString ();
+
         String path = ((Text) operands[0].eval (context)).value;
         Holder H;
         Object o = simulator.holders.get (path);
         if (o == null)
         {
             H = new Holder (simulator, path);
-            if (operands.length > 3)
-            {
-                mode = operands[3].eval (context).toString ();
-                H.raw = mode.contains ("raw");
-            }
+            if (mode != null) H.raw = mode.contains ("raw");
             simulator.holders.put (path, H);
         }
         else if (! (o instanceof Holder))
@@ -288,9 +283,6 @@ public class Output extends Function
             throw new Backend.AbortRun ();
         }
         else H = (Holder) o;
-
-        if (operands.length > 3  &&  ! (operands[3] instanceof Constant)) mode = operands[3].eval (context).toString ();
-        // else mode will only be non-null on first call. This will save some processing of column hints inside Holder.
 
         // Determine column name
         String column;

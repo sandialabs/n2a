@@ -3,7 +3,7 @@
 
 
 #include "nosys.h"
-#include "String.h"
+#include "StringLite.h"
 #include "matrix.h"
 
 #include <vector>
@@ -117,9 +117,11 @@ template<class T>
 class OutputHolder : public Holder
 {
 public:
-    bool                           raw; ///< Indicates that column is an exact index.
+    bool                           raw;             ///< Indicates that column is an exact index.
     std::ostream *                 out;
+    String                         columnFileName;
     std::unordered_map<String,int> columnMap;
+    std::vector<String>            columnMode;      ///< Already formatted to dump to file, including line endings.
     std::vector<float>             columnValues;
     int                            columnsPrevious; ///< Number of columns written in previous cycle.
     bool                           traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
@@ -128,15 +130,17 @@ public:
     OutputHolder (const String & fileName);
     virtual ~OutputHolder ();
 
-    void trace (T now);  ///< Subroutine for other trace() functions.
+    void trace (T now);               ///< Subroutine for other trace() functions.
+    void addMode (const char * mode); ///< Subroutine for other trace() functions.
 #   ifdef n2a_FP
-    void trace (T now, const String & column, T value, int exponent);
-    void trace (T now, T              column, T value, int exponent);
+    void trace (T now, const String & column, T value, int exponent, const char * mode = 0);
+    void trace (T now, T              column, T value, int exponent, const char * mode = 0);
 #   else
-    void trace (T now, const String & column, T value);
-    void trace (T now, T              column, T value);
+    void trace (T now, const String & column, T value, const char * mode = 0);
+    void trace (T now, T              column, T value, const char * mode = 0);
 #   endif
     void writeTrace ();
+    void writeModes ();
 };
 template<class T> extern OutputHolder<T> * outputHelper (const String & fileName, OutputHolder<T> * oldHandle = 0);
 extern void outputClose ();  ///< Close all OutputHolders

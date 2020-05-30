@@ -3422,8 +3422,22 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Construct
-        ConnectionMatrix cm = new ConnectionMatrix (ct.found);
-        if (cm.rowMapping != null  &&  cm.colMapping != null) connectionMatrix = cm;
+        // It is necessary to scan predicate itself, not merely its deep copy.
+        // This ensures that object identity holds in the finished model, so that
+        // values set in ReadMatrix.name or fileName will be available.
+        predicate.visit (new Visitor ()
+        {
+            public boolean visit (Operator op)
+            {
+                if (op instanceof ReadMatrix)
+                {
+                    ConnectionMatrix cm = new ConnectionMatrix ((ReadMatrix) op);
+                    if (cm.rowMapping != null  &&  cm.colMapping != null) connectionMatrix = cm;
+                    return false;
+                }
+                return true;
+            }
+        });
     }
 
     public int compareTo (EquationSet that)

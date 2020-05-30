@@ -822,6 +822,7 @@ bool
 ConnectMatrix<T>::setProbe (Part<T> * probe)
 {
     c = probe;
+    return false;
 }
 
 template<class T>

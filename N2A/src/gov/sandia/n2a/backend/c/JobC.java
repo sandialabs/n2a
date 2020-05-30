@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -159,7 +159,7 @@ public class JobC extends Thread
                 JobC.class, runtimeDir,
                 "fixedpoint.cc", "fixedpoint.h", "fixedpoint.tcc",
                 "io.cc", "io.h", "io.tcc",
-                "KDTree.h", "String.h",
+                "KDTree.h", "StringLite.h",
                 "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
                 "nosys.h",
                 "runtime.cc", "runtime.h", "runtime.tcc"
@@ -613,20 +613,29 @@ public class JobC extends Thread
                 if (op instanceof Function)
                 {
                     Function f = (Function) op;
-                    if (f instanceof Output  &&  ! ((Output) f).hasColumnName)  // We need to auto-generate the column name.
+                    if (f instanceof Output)  // Handle computed strings
                     {
                         Output o = (Output) f;
-                        o.columnName = "columnName" + stringNames.size ();
-                        stringNames.put (op, o.columnName);
-                        if (global)
+                        if (! o.hasColumnName)  // We need to auto-generate the column name.
                         {
-                            bed.setGlobalNeedPath (s);
-                            bed.globalColumns.add (o.columnName);
+                            o.columnName = "columnName" + stringNames.size ();
+                            stringNames.put (op, o.columnName);
+                            if (global)
+                            {
+                                bed.setGlobalNeedPath (s);
+                                bed.globalColumns.add (o.columnName);
+                            }
+                            else
+                            {
+                                bed.setLocalNeedPath  (s);
+                                bed.localColumns.add (o.columnName);
+                            }
                         }
-                        else
+                        if (o.operands.length > 3  &&  o.operands[3] instanceof Add)  // Mode is calculated
                         {
-                            bed.setLocalNeedPath  (s);
-                            bed.localColumns.add (o.columnName);
+                            Add a = (Add) o.operands[3];
+                            a.name = "columnMode" + stringNames.size ();
+                            stringNames.put (op, a.name);
                         }
                     }
                     // Detect functions that need static handles
@@ -3617,11 +3626,28 @@ public class JobC extends Thread
                             context.result.append (pad + o.columnName + " = \"" + o.variableName + "\";\n");
                         }
                     }
-                    if (o.operands[0] instanceof Constant)
+                    if (o.operands[0] instanceof Constant  &&  o.operands.length > 3)  // Apply "raw" attribute now, if set.
                     {
-                        if (o.operands.length >= 4  &&  o.operands[3].getString ().contains ("raw"))
+                        if (o.operands[3] instanceof Constant)
                         {
-                            context.result.append (pad + o.name + "->raw = true;\n");
+                            if (o.operands[3].getString ().contains ("raw"))
+                            {
+                                context.result.append (pad + o.name + "->raw = true;\n");
+                            }
+                        }
+                        else if (o.operands[3] instanceof Add)  // calculated string
+                        {
+                            // Rather than actually calculate the string, just scan for any component which contains "raw".
+                            // Only a very pathological case would not have this. IE: "r" + "a" + "w"
+                            Add a = (Add) o.operands[3];
+                            for (Operator fa : flattenAdd (a))
+                            {
+                                if (fa.getString ().contains ("raw"))
+                                {
+                                    context.result.append (pad + o.name + "->raw = true;\n");
+                                    break;
+                                }
+                            }
                         }
                     }
                     return true;  // Continue to drill down, because I/O functions can be nested.
@@ -3639,7 +3665,7 @@ public class JobC extends Thread
                         // Detect time flag
                         String mode = "";
                         if      (i.operands.length == 2) mode = i.operands[1].getString ();
-                        else if (i.operands.length >= 4) mode = i.operands[3].getString ();
+                        else if (i.operands.length >  3) mode = i.operands[3].getString ();
                         if (mode.contains ("time"))
                         {
                             context.result.append (pad + i.name + "->time = true;\n");
@@ -3762,9 +3788,28 @@ public class JobC extends Thread
                     if (! (o.operands[0] instanceof Constant))
                     {
                         context.result.append (pad + "OutputHolder<" + T + "> * " + o.name + " = outputHelper<" + T + "> (" + o.fileName + ");\n");
-                        if (o.operands.length >= 4  &&  o.operands[3].getString ().contains ("raw"))
+                        if (o.operands.length > 3)
                         {
-                            context.result.append (pad + o.name + "->raw = true;\n");
+                            if (o.operands[3] instanceof Constant)
+                            {
+                                if (o.operands[3].getString ().contains ("raw"))
+                                {
+                                    context.result.append (pad + o.name + "->raw = true;\n");
+                                }
+                            }
+                            else if (o.operands[3] instanceof Add)
+                            {
+                                // Even though we could check the assembled string in generated code, it's cleaner to check for a constant substring now.
+                                Add a = (Add) o.operands[3];
+                                for (Operator fa : flattenAdd (a))
+                                {
+                                    if (fa.getString ().contains ("raw"))
+                                    {
+                                        context.result.append (pad + o.name + "->raw = true;\n");
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                     return true;

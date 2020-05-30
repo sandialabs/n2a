@@ -708,10 +708,12 @@ OutputHolder<T>::OutputHolder (const String & fileName)
     if (fileName.empty ())
     {
         out = &std::cout;
+        columnFileName = "out.columns";
     }
     else
     {
         out = new std::ofstream (fileName.c_str ());
+        columnFileName = fileName + ".columns";
     }
 }
 
@@ -723,6 +725,8 @@ OutputHolder<T>::~OutputHolder ()
         writeTrace ();
         out->flush ();
         if (out != &std::cout) delete out;
+
+        writeModes ();
     }
 }
 
@@ -747,6 +751,7 @@ OutputHolder<T>::trace (T now)
 #           else
             columnValues.push_back (t);
 #           endif
+            columnMode.push_back ("");
         }
         else
         {
@@ -762,10 +767,51 @@ OutputHolder<T>::trace (T now)
 
 template<class T>
 void
+OutputHolder<T>::addMode (const char * mode)
+{
+    String result;
+    if (mode)
+    {
+        // Assemble output string
+        String space = " ";
+        String nl = "\n";
+        String rest = mode;
+        String hint;
+        while (! rest.empty ())
+        {
+            split (rest, ",", hint, rest);
+            hint.trim ();
+            String key;
+            String value;
+            split (hint, "=", key, value);
+            if (key == "timeScale")
+            {
+                String & c = columnMode[0];
+                c.reserve (16);
+                c = " scale:";
+                c += value;
+                c += nl;
+            }
+            else
+            {
+                result.reserve (result.size () + 16);
+                result += space;
+                result += key;
+                result += ":";
+                result += value;
+                result += nl;
+            }
+        }
+    }
+    columnMode.push_back (result);
+}
+
+template<class T>
+void
 #ifdef n2a_FP
-OutputHolder<T>::trace (T now, const String & column, T rawValue, int exponent)
+OutputHolder<T>::trace (T now, const String & column, T rawValue, int exponent, const char * mode)
 #else
-OutputHolder<T>::trace (T now, const String & column, T value)
+OutputHolder<T>::trace (T now, const String & column, T value, const char * mode)
 #endif
 {
     trace (now);
@@ -779,6 +825,7 @@ OutputHolder<T>::trace (T now, const String & column, T value)
     {
         columnMap[column] = columnValues.size ();
         columnValues.push_back ((float) value);
+        addMode (mode);
     }
     else
     {
@@ -789,9 +836,9 @@ OutputHolder<T>::trace (T now, const String & column, T value)
 template<class T>
 void
 #ifdef n2a_FP
-OutputHolder<T>::trace (T now, T column, T rawValue, int exponent)
+OutputHolder<T>::trace (T now, T column, T rawValue, int exponent, const char * mode)
 #else
-OutputHolder<T>::trace (T now, T column, T value)
+OutputHolder<T>::trace (T now, T column, T value, const char * mode)
 #endif
 {
     trace (now);
@@ -816,6 +863,7 @@ OutputHolder<T>::trace (T now, T column, T value)
         }
         columnMap[columnName] = columnValues.size ();
         columnValues.push_back ((float) value);
+        addMode (mode);
     }
     else
     {
@@ -833,24 +881,28 @@ OutputHolder<T>::writeTrace ()
     const int last  = count - 1;
 
     // Write headers if new columns have been added
-    if (! raw  &&  count > columnsPrevious)
+    if (count > columnsPrevious)
     {
-        std::vector<String> headers (count);
-        for (auto it : columnMap) headers[it.second] = it.first;
+        if (! raw)
+        {
+            std::vector<String> headers (count);
+            for (auto it : columnMap) headers[it.second] = it.first;
 
-        (*out) << headers[0];  // Should be $t
-        int i = 1;
-        for (; i < columnsPrevious; i++)
-        {
-            (*out) << "\t";
+            (*out) << headers[0];  // Should be $t
+            int i = 1;
+            for (; i < columnsPrevious; i++)
+            {
+                (*out) << "\t";
+            }
+            for (; i < count; i++)
+            {
+                (*out) << "\t";
+                (*out) << headers[i];
+            }
+            (*out) << std::endl;
         }
-        for (; i < count; i++)
-        {
-            (*out) << "\t";
-            (*out) << headers[i];
-        }
-        (*out) << std::endl;
         columnsPrevious = count;
+        writeModes ();
     }
 
     // Write values
@@ -864,6 +916,22 @@ OutputHolder<T>::writeTrace ()
     (*out) << std::endl;
 
     traceReceived = false;
+}
+
+template<class T>
+void
+OutputHolder<T>::writeModes ()
+{
+    std::ofstream mo (columnFileName.c_str ());
+    mo << "N2A.schema=2\n";
+    for (auto it : columnMap)
+    {
+        int i = it.second;
+        mo << i << ":" << it.first << "\n";
+        String & mode = columnMode[i];
+        if (! mode.empty ()) mo << mode;  // already include newline characters
+    }
+    // mo should automatically flush and close here
 }
 
 std::vector<Holder *> outputMap;

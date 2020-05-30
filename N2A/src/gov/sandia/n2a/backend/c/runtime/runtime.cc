@@ -1,5 +1,6 @@
 #include "runtime.tcc"
 #include "MatrixFixed.tcc"
+#include "Matrix.tcc"
 
 
 using namespace std;

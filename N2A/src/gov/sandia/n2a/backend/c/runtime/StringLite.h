@@ -7,7 +7,7 @@
 #ifndef n2a_string_h
 #define n2a_string_h
 
-#include <string.h>
+#include <cstring>
 #include <stdio.h>
 #include <cstddef>
 #include <functional>
@@ -16,7 +16,7 @@
 #endif
 
 
-class String    // Note the initial cap. This name will not conflict with stl::string.
+class String    // Note the initial cap. This name will not conflict with std::string.
 {
 public:
     char * memory;
@@ -75,7 +75,7 @@ public:
                 capacity = requiredCapacity;
                 memory = (char *) malloc (capacity);
             }
-            memcpy (memory, value, n);
+            memcpy (memory, value, n);  // Saves space (size of executable) rather than time.
             top = memory + n;
         }
         else
@@ -126,6 +126,26 @@ public:
     size_t max_size () const
     {
         return maxSize;
+    }
+
+    /**
+        @param n Number of bytes to reserve. The number characters that can actually be
+        stored is 1 less than capacity (due to null termination).
+        This is subtly different than std::string.
+    **/
+    void reserve (size_t n = 0)
+    {
+        if (n <= capacity) return;
+        char * temp = memory;
+        char * end  = top;
+        memory   = (char *) malloc (n);
+        top      = memory + (end - temp);
+        capacity = n;
+        if (! temp) return;
+        char * m = memory;
+        char * a = temp;
+        while (a <= end) *m++ = *a++;  // Copies both string and null terminator.
+        free (temp);
     }
 
     const char * c_str () const
@@ -413,7 +433,7 @@ namespace std
             if (value.memory)
             {
                 char * m = value.memory;
-                while (int c = *m++) result = ((result << 5) + result) + c;  // effectively: result * 33 + c
+                while (int c = *m++) result = (result << 5) + result + c;  // effectively: result * 33 + c
             }
             return result;
         }

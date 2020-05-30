@@ -20,7 +20,7 @@ for details.
 
 #include <assert.h>
 #include <stdlib.h>
-#include <string.h>
+#include <cstring>
 #include <stdint.h>
 #include <stddef.h>
 

@@ -16,7 +16,7 @@ the U.S. Government retains certain rights in this software.
 
 
 #include "matrix.h"
-#include "String.h"
+#include "StringLite.h"
 
 
 // class MatrixAbstract<T> --------------------------------------------------

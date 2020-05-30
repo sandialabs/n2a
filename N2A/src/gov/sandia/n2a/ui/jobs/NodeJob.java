@@ -162,6 +162,7 @@ public class NodeJob extends NodeBase
                 }
                 catch (IOException e) {}
                 if (line == null) line = "";
+                else              line = line.trim ();  // Windows tacks a space on end of line, due to the way it interprets echo in .bat files. Rather than hack the bat, just defend against it.
 
                 if (line.length () >= 6  ||  Duration.between (dateFinished.toInstant (), Instant.now ()).abs ().getSeconds () > 10)
                 {

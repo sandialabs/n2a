@@ -4,7 +4,7 @@
 
 #include "nosys.h"
 #include "io.h"
-#include "String.h"
+#include "StringLite.h"
 #include "KDTree.h"
 
 #include <functional>

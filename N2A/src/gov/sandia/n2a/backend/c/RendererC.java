@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,6 +21,8 @@ import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Grid;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Log;
+import gov.sandia.n2a.language.function.Max;
+import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
@@ -217,6 +219,40 @@ public class RendererC extends Renderer
             if (useExponent) result.append (", " + a.exponentNext + ", " + l.exponentNext + ")");
             return true;
         }
+        if (op instanceof Max)
+        {
+            Max m = (Max) op;
+            for (int i = 0; i < m.operands.length - 1; i++)
+            {
+                Operator a = m.operands[i];
+                result.append ("max (");
+                a.render (this);
+                appendType (a);
+                result.append (", ");
+            }
+            Operator b = m.operands[m.operands.length - 1];
+            b.render (this);
+            appendType (b);
+            for (int i = 0; i < m.operands.length - 1; i++) result.append (")");
+            return true;
+        }
+        if (op instanceof Min)
+        {
+            Min m = (Min) op;
+            for (int i = 0; i < m.operands.length - 1; i++)
+            {
+                Operator a = m.operands[i];
+                result.append ("min (");
+                a.render (this);
+                appendType (a);
+                result.append (", ");
+            }
+            Operator b = m.operands[m.operands.length - 1];
+            b.render (this);
+            appendType (b);
+            for (int i = 0; i < m.operands.length - 1; i++) result.append (")");
+            return true;
+        }
         if (op instanceof Modulo)
         {
             Modulo m = (Modulo) op;
@@ -258,6 +294,22 @@ public class RendererC extends Renderer
 
             o.operands[1].render (this);
             if (useExponent) result.append (", " + o.operands[1].exponentNext);
+
+            result.append (", ");
+            if (o.operands.length < 4)  // No mode string
+            {
+                result.append ("0");  // null
+            }
+            else if (o.operands[3] instanceof Constant)  // Mode string is constant
+            {
+                result.append ("\"" + o.operands[3] + "\"");
+            }
+            else if (o.operands[3] instanceof Add)  // Mode string is calculated
+            {
+                Add a = (Add) o.operands[3];
+                result.append (a.name);  // No need for cast or call c_str()
+            }
+            // else badness
             result.append (")");
 
             return true;
@@ -369,6 +421,19 @@ public class RendererC extends Renderer
         String result = Scalar.print (d);
         if ((int) d != d  &&  job.T.equals ("float")) result += "f";  // Tell C compiler that our type is float, not double.
         return result;
+    }
+
+    /**
+        Add the float type indicator that print() omits, in order to overcome type matching
+        problems for certain functions, such as min() and max().
+    **/
+    public void appendType (Operator a)
+    {
+        if (a.isScalar ())
+        {
+            double d = a.getDouble ();
+            if ((int) d == d  &&  job.T.equals ("float")) result.append (".0f");
+        }
     }
 
     public void moduloParam (Operator a)
