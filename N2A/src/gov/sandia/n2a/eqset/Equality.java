@@ -63,11 +63,12 @@ public class Equality
             lhs = eq.operand0;
             rhs = eq.operand1;
             target = vv.found;
+            return;
         }
         eq.operand1.visit (vv);
         lhs = eq.operand1;
         rhs = eq.operand0;
-        target = vv.found;
+        target = vv.found;  // If this is null, then variable was not found on either side of equality. Don't try to solve!
     }
 
     public void solve ()

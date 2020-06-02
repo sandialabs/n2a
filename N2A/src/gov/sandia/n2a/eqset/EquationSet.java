@@ -1267,6 +1267,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         // check contents of $n
         if (n.assignment != Variable.REPLACE) return false;
+        if (n.uses != null  &&  n.uses.size () > 0) return false;  // If $n depends on other variables, we won't be able to evaluate it now.
         if (n.equations.size () != 1) return false;
         EquationEntry ne = n.equations.first ();
 

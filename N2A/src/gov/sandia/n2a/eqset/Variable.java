@@ -493,6 +493,14 @@ public class Variable implements Comparable<Variable>, Cloneable
         return false;  // This statement should never be reached.
     }
 
+    public boolean isConstant ()
+    {
+        if (equations == null  ||  equations.size () != 1) return false;
+        EquationEntry e = equations.first ();
+        if (e.condition != null) return false;
+        return e.expression instanceof Constant;
+    }
+
     public void visit (Visitor visitor)
     {
         if (equations == null) return;
