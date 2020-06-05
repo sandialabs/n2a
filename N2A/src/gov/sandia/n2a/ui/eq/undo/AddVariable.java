@@ -108,7 +108,7 @@ public class AddVariable extends UndoableView implements AddEditable
             if (createdNode.isBinding)
             {
                 if (parent.graph != null) parent.graph.killEdge (name);
-                if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
+                if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
             model.removeNodeFromParent (createdNode);
             parent.findConnections ();
@@ -128,7 +128,7 @@ public class AddVariable extends UndoableView implements AddEditable
                     if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
                     else if (wasBinding)       parent.graph.killEdge   (name);
                 }
-                if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
+                if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
         }
         parent.invalidateColumns (model);
@@ -190,7 +190,7 @@ public class AddVariable extends UndoableView implements AddEditable
                     else if (wasBinding)       parent.graph.killEdge   (name);
                 }
                 MPart mparent = parent.source;
-                if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
+                if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
         }
         pet.updateVisibility (createdPath, -2, ! multi);

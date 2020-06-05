@@ -36,6 +36,18 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return null;
     }
 
+    public MNode root ()
+    {
+        MNode result = this;
+        while (true)
+        {
+            MNode parent = result.parent ();
+            if (parent == null) break;
+            result = parent;
+        }
+        return result;
+    }
+
     /**
         Returns the child indicated by the given key, or null if it doesn't exist.
         This function is separate from child(String...) for ease of implementing subclasses.

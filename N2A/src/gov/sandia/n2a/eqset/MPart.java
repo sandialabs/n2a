@@ -66,7 +66,7 @@ public class MPart extends MNode
     public synchronized void expand ()
     {
         LinkedList<MNode> visited = new LinkedList<MNode> ();
-        visited.push (getRoot ().source);
+        visited.push (((MPart) root ()).source);
         expand (visited);
     }
 
@@ -112,7 +112,7 @@ public class MPart extends MNode
     **/
     public synchronized void inherit (LinkedList<MNode> visited, MPart root, MNode from)
     {
-        boolean maintainable =  from == root  &&  root.isFromTopDocument ()  &&  AppData.models.isWriteable (root.getRoot ().source);
+        boolean maintainable =  from == root  &&  root.isFromTopDocument ()  &&  AppData.models.isWriteable (((MPart) root.root ()).source);
         boolean changedName = false;  // Indicates that at least one name changed due to ID resolution. This lets us delay updating the field until all names are processed.
         boolean changedID   = false;
 
@@ -296,13 +296,6 @@ public class MPart extends MNode
     public MPart parent ()
     {
         return container;
-    }
-
-    public MPart getRoot ()
-    {
-        MPart result = this;
-        while (result.container != null) result = result.container;
-        return result;
     }
 
     public MNode getSource ()

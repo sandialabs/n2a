@@ -338,7 +338,7 @@ public class ChangeVariable extends UndoableView
             parent.updateConnections ();
 
             MPart mparent = parent.source;
-            if (mparent.getRoot () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
+            if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
         }
     }
 
