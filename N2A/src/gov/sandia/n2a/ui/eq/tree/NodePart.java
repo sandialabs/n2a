@@ -62,7 +62,7 @@ public class NodePart extends NodeContainer
     protected List<UnsatisfiedConnection> unsatisfiedConnections;
     protected boolean                     connectionTarget;    // Some other part connects to us.
     public    GraphNode                   graph;
-    public    PanelEquationTree           pet;                 // If this part is not bound to a graph node, it may be bound to a full-view tree. If not bound to either, then no tree operations are necessary.
+    public    PanelEquationTree           pet;                 // If non-null, this part is the root of a currently-displayed tree. If null, then no tree operations are necessary.
     protected NodePart                    trueParent;
     public    boolean                     hide;                // visible() should return false. Used to temporarily suppress node when adding to graph. Allows us to avoid tampering with "parent" field.
 
