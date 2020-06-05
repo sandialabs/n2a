@@ -422,16 +422,8 @@ public class EquationSet implements Comparable<EquationSet>
         EquationSet result = this;
         for (String key : keyPath)
         {
-            // Search for part with exact key match. findPart() has a different use-case, not suitable for this.
-            EquationSet eqForKey = null;
-            for (EquationSet p : result.parts)
-            {
-                if (p.name.equals (key))
-                {
-                    eqForKey = p;
-                    break;
-                }
-            }
+            // Search for part with exact key match.
+            EquationSet eqForKey = result.findPart (key);
             if (eqForKey != null)
             {
                 result = eqForKey;
