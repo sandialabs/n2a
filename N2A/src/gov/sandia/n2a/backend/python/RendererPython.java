@@ -26,8 +26,10 @@ import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
+import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Modulo;
+import gov.sandia.n2a.language.operator.OR;
 import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
@@ -91,6 +93,12 @@ public class RendererPython extends Renderer
             result.append (job.resolve (av.reference, this, false));
             return true;
         }
+        if (op instanceof AND)
+        {
+            AND and = (AND) op;
+            and.render (this, " and ");
+            return true;
+        }
         if (op instanceof BuildMatrix)
         {
             BuildMatrix b = (BuildMatrix) op;
@@ -130,7 +138,7 @@ public class RendererPython extends Renderer
         {
             Exp e = (Exp) op;
             Operator a = e.operands[0];
-            result.append ("exp (");
+            result.append ("exp(");
             a.render (this);
             result.append (")");
             return true;
@@ -138,7 +146,7 @@ public class RendererPython extends Renderer
         if (op instanceof Gaussian)
         {
             Gaussian g = (Gaussian) op;
-            result.append ("gaussian (");
+            result.append ("gaussian(");
             if (g.operands.length > 0)
             {
                 g.operands[0].render (this);
@@ -154,7 +162,7 @@ public class RendererPython extends Renderer
 
             result.append ("grid");
             if (raw) result.append ("Raw");
-            result.append (" (");
+            result.append ("(");
 
             int count = Math.min (4, g.operands.length);
             if (count > 0) g.operands[0].render (this);
@@ -184,9 +192,9 @@ public class RendererPython extends Renderer
             {
                 Operator op1 = i.operands[1];
                 Operator op2 = i.operands[2];
-                result.append (i.name + "->get");
+                result.append (i.name + ".get");
                 if (mode.contains ("raw")) result.append ("Raw");
-                result.append (" (");
+                result.append ("(");
                 op1.render (this);
                 result.append (", ");
                 op2.render (this);
@@ -199,7 +207,7 @@ public class RendererPython extends Renderer
         {
             Log l = (Log) op;
             Operator a = l.operands[0];
-            result.append ("log (");
+            result.append ("log(");
             a.render (this);
             return true;
         }
@@ -217,11 +225,17 @@ public class RendererPython extends Renderer
         {
             Norm n = (Norm) op;
             Operator A = n.operands[0];
-            result.append ("numpy.linalg.norm (");
+            result.append ("numpy.linalg.norm(");
             A.render (this);
             result.append (", ");
             n.operands[1].render (this);
             result.append (")");
+            return true;
+        }
+        if (op instanceof OR)
+        {
+            OR or = (OR) op;
+            or.render (this, " or ");
             return true;
         }
         if (op instanceof Output)
@@ -249,7 +263,7 @@ public class RendererPython extends Renderer
             Power p = (Power) op;
             Operator a = p.operand0;
             Operator b = p.operand1;
-            result.append ("pow (");
+            result.append ("pow(");
             a.render (this);
             result.append (", ");
             b.render (this);
@@ -286,7 +300,7 @@ public class RendererPython extends Renderer
             {
                 result.append (r.name + "->get");
                 if (mode.equals ("raw")) result.append ("Raw");
-                result.append (" (");
+                result.append ("(");
                 r.operands[1].render (this);
                 result.append (", ");
                 r.operands[2].render (this);
@@ -299,7 +313,7 @@ public class RendererPython extends Renderer
         {
             SquareRoot s = (SquareRoot) op;
             Operator a = s.operands[0];
-            result.append ("sqrt (");
+            result.append ("sqrt(");
             a.render (this);
             return true;
         }
@@ -307,7 +321,7 @@ public class RendererPython extends Renderer
         {
             Tangent t = (Tangent) op;
             Operator a = t.operands[0];
-            result.append ("tan (");
+            result.append ("tan(");
             a.render (this);
             result.append (")");
             return true;
@@ -315,7 +329,7 @@ public class RendererPython extends Renderer
         if (op instanceof Uniform)
         {
             Uniform u = (Uniform) op;
-            result.append ("uniform (");
+            result.append ("uniform(");
             if (u.operands.length > 0)
             {
                 u.operands[0].render (this);
