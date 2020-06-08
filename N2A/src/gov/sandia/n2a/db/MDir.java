@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -87,9 +88,14 @@ public class MDir extends MNode
 
     public static String validFilenameFrom (String name)
     {
-        // TODO: This is only sufficient for Linux. What else is needed for Windows?
         name = name.replace ("\\", "-");
         name = name.replace ("/", "-");
+
+        // For Windows, certain file names are forbidden due to its archaic roots in DOS.
+        String upperName = name.toUpperCase ();
+        HashSet<String> forbidden = new HashSet<String> (Arrays.asList ("CON", "PRN", "AUX", "NUL"));
+        if (forbidden.contains (upperName)  ||  upperName.matches ("(LPT|COM)\\d")) name += "_";
+
         return name;
     }
 

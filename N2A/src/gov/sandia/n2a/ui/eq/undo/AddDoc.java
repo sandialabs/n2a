@@ -13,6 +13,7 @@ import javax.swing.tree.TreePath;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
@@ -38,7 +39,7 @@ public class AddDoc extends Undoable
 
     public AddDoc (String name, MNode saved)
     {
-        this.name  = uniqueName (name);
+        this.name  = uniqueName (MDir.validFilenameFrom (name));
         this.saved = saved;
 
         PanelModel pm   = PanelModel.instance;
