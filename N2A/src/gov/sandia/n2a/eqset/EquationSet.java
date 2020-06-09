@@ -484,6 +484,36 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Collect the keys of all db parts that are somewhere in the given child's
+        inheritance tree.
+    **/
+    public Set<String> collectAncestors ()
+    {
+        return collectAncestors (source);
+    }
+
+    public static Set<String> collectAncestors (MNode child)
+    {
+        Set<String> result = new HashSet<String> ();
+        collectAncestors (child, result);
+        return result;
+    }
+
+    public static void collectAncestors (MNode child, Set<String> ancestors)
+    {
+        ancestors.add (child.key ());
+        String[] inherits = child.get ("$inherit").split (",");
+        for (String inherit : inherits)
+        {
+            inherit = inherit.trim ().replace ("\"", "");
+            if (inherit.isEmpty ()) continue;
+            if (ancestors.contains (inherit)) continue;
+            MNode parent = AppData.models.child (inherit);
+            if (parent != null) collectAncestors (parent, ancestors);
+        }
+    }
+
+    /**
         Find instance variables (that in other languages might be called pointers) and move them
         into the connectionBindings structure.
         Dependencies: This function must be the very first thing run after constructing the full
