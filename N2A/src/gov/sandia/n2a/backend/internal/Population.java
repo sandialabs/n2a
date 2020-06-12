@@ -161,7 +161,7 @@ public class Population extends Instance
         // Structural dynamics
         if (bed.populationCanResize)
         {
-            int newN = (int) ((Scalar) get (bed.n)).value;  // This is the finalized value of $n.
+            int newN = Math.max (0, (int) ((Scalar) get (bed.n)).value);  // This is the finalized value of $n.
             if (bed.populationCanGrowOrDie)  // $n shares control with other specials, so coordinate them.
             {
                 if (bed.n.derivative == null)
