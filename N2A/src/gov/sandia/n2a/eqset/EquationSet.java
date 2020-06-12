@@ -514,6 +514,64 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Determines if this equation set has a fixed size of 1.
+        @param strict false indicates to make an exception for the top-level part, allowing
+        it to be a singleton even though it (most likely) uses $p to terminate simulation.
+    **/
+    public boolean isSingleton (boolean strict)
+    {
+        // No connections
+        // The population size of a connection depends on other objects, so can't be a singleton.
+        if (connectionBindings != null) return false;
+
+        // Limit sources of structural dynamics
+        // These tests are good heuristics, but they're actually too strict. Some relaxations would be:
+        // * If $p is constant 1, then part won't die. (But then, why write that?)
+        // * If $type always has exactly one instance of original part, then part remains a singleton. (Again, why write that?)
+        if (find (new Variable ("$p")) != null  &&  (strict  ||  container != null)) return false;
+        if (find (new Variable ("$type")) != null) return false;
+        Variable n = new Variable ("$n", 0);
+        Variable nn = variables.higher (n);
+        if (nn != null  &&  nn.name.equals ("$n")) return false;  // higher orders means $n is dynamic
+
+        n = find (n);
+        if (n == null) return true;  // We only do more work if $n exists. Non-existent $n is the same as $n==1
+
+        // check contents of $n
+        if (n.assignment != Variable.REPLACE) return false;
+        if (n.uses != null  &&  n.uses.size () > 0) return false;  // If $n depends on other variables, we won't be able to evaluate it now.
+        if (n.equations.size () != 1) return false;
+        EquationEntry ne = n.equations.first ();
+
+        // Ideally we would evaluate the expression, but that's not possible when isSingleton() is called
+        // before resolveRHS(). Instead, we do a simple check for constant 1.
+        if (! ne.ifString.isEmpty ()  &&  ! ne.ifString.equals ("$init")) return false;  // Any condition besides $init indicates the potential to change during run.
+        if (ne.expression == null) return true;  // Treat missing expression as 1.
+        return ne.expression.getDouble () == 1;
+    }
+
+    public boolean isConnection ()
+    {
+        return connectionBindings != null;
+    }
+
+    /**
+        Tests if this part is contained in the proposed parent or any of its ancestors.
+        The childOf relationship does not include self. If the proposed parent equals this part,
+        then the result is false.
+    **/
+    public boolean isChildOf (EquationSet proposedParent)
+    {
+        EquationSet p = container;
+        while (p != null)
+        {
+            if (p == proposedParent) return true;
+            p = p.container;
+        }
+        return false;
+    }
+
+    /**
         Find instance variables (that in other languages might be called pointers) and move them
         into the connectionBindings structure.
         Dependencies: This function must be the very first thing run after constructing the full
@@ -555,6 +613,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             // Detect instance variables
             if (v.order > 0) continue;
+            if (v.name.contains ("$")  ||  v.name.contains ("\\.")) continue;
             if (v.equations.size () != 1) continue;
             if (v.assignment != Variable.REPLACE) continue;
             EquationEntry ee = v.equations.first ();
@@ -1261,48 +1320,6 @@ public class EquationSet implements Comparable<EquationSet>
             result.append ("  " + v.nameString () + " " + v.attributeString () + className + "\n");
         }
         for (EquationSet s : parts) s.dumpVariableAttributes (result);
-    }
-
-    /**
-        Determines if this equation set has a fixed size of 1.
-        @param strict false indicates to make an exception for the top-level part, allowing
-        it to be a singleton even though it (most likely) uses $p to terminate simulation.
-    **/
-    public boolean isSingleton (boolean strict)
-    {
-        // No connections
-        // The population size of a connection depends on other objects, so can't be a singleton.
-        if (connectionBindings != null) return false;
-
-        // Limit sources of structural dynamics
-        // These tests are good heuristics, but they're actually too strict. Some relaxations would be:
-        // * If $p is constant 1, then part won't die. (But then, why write that?)
-        // * If $type always has exactly one instance of original part, then part remains a singleton. (Again, why write that?)
-        if (find (new Variable ("$p")) != null  &&  (strict  ||  container != null)) return false;
-        if (find (new Variable ("$type")) != null) return false;
-        Variable n = new Variable ("$n", 0);
-        Variable nn = variables.higher (n);
-        if (nn != null  &&  nn.name.equals ("$n")) return false;  // higher orders means $n is dynamic
-
-        n = find (n);
-        if (n == null) return true;  // We only do more work if $n exists. Non-existent $n is the same as $n==1
-
-        // check contents of $n
-        if (n.assignment != Variable.REPLACE) return false;
-        if (n.uses != null  &&  n.uses.size () > 0) return false;  // If $n depends on other variables, we won't be able to evaluate it now.
-        if (n.equations.size () != 1) return false;
-        EquationEntry ne = n.equations.first ();
-
-        // Ideally we would evaluate the expression, but that's not possible when isSingleton() is called
-        // before resolveRHS(). Instead, we do a simple check for constant 1.
-        if (! ne.ifString.isEmpty ()  &&  ! ne.ifString.equals ("$init")) return false;  // Any condition besides $init indicates the potential to change during run.
-        if (ne.expression == null) return true;  // Treat missing expression as 1.
-        return ne.expression.getDouble () == 1;
-    }
-
-    public boolean isConnection ()
-    {
-        return connectionBindings != null;
     }
 
     /**
