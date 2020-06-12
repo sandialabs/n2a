@@ -501,6 +501,7 @@ public class JobC extends Thread
         else                  context = new RendererC   (this, result);
 
         result.append ("#include \"" + runtimeDir.resolve ("runtime.h") + "\"\n");
+        result.append ("#include \"" + runtimeDir.resolve ("Matrix.tcc") + "\"\n");
         result.append ("\n");
         result.append ("#include <iostream>\n");
         result.append ("#include <vector>\n");
@@ -1442,9 +1443,9 @@ public class JobC extends Thread
             if (bed.canResize  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate with them
             {
                 // $n may be assigned during the regular update cycle, so we need to monitor it.
-                result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") Simulator<" + T + ">::instance.resize (this, " + mangle ("next_", "$n"));
+                result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") Simulator<" + T + ">::instance.resize (this, max (0, " + mangle ("next_", "$n"));
                 if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
-                result.append (");\n");
+                result.append ("));\n");
                 result.append ("  else Simulator<" + T + ">::instance.resize (this, -1);\n");
             }
 
@@ -1471,9 +1472,9 @@ public class JobC extends Thread
                             result.append ("  if (n == 0) return false;\n");
                             returnN = false;
                         }
-                        result.append ("  Simulator<" + T + ">::instance.resize (this, " + mangle ("$n"));
+                        result.append ("  Simulator<" + T + ">::instance.resize (this, max (0, " + mangle ("$n"));
                         if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
-                        result.append (");\n");
+                        result.append ("));\n");
                     }
                 }
                 else  // $n is the only kind of structural dynamics, so simply do a resize() when needed
@@ -1483,9 +1484,10 @@ public class JobC extends Thread
                         result.append ("  if (n == 0) return false;\n");
                         returnN = false;
                     }
-                    result.append ("  int floorN = ");
-                    if (context.useExponent) result.append (mangle ("$n") + context.printShift (bed.n.exponent - Operator.MSB) + ";");
+                    result.append ("  int floorN = max (0, ");
+                    if (context.useExponent) result.append (mangle ("$n") + context.printShift (bed.n.exponent - Operator.MSB));
                     else                     result.append ("(int) " + mangle ("$n"));
+                    result.append (");\n");
                     result.append ("  if (n != floorN) Simulator<" + T + ">::instance.resize (this, floorN);\n");
                 }
             }
