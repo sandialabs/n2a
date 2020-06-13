@@ -30,6 +30,7 @@ import javax.swing.AbstractAction;
 import javax.swing.AbstractCellEditor;
 import javax.swing.ActionMap;
 import javax.swing.InputMap;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JScrollBar;
@@ -82,6 +83,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected JScrollPane              multiLinePane;      // provides scrolling for multiLineEditor, and acts as the editingComponent
     protected JComboBox<String>        choiceEditor;
     protected JScrollBar               rangeEditor;
+    protected JCheckBox                flagEditor;
     protected JLabel                   iconHolder   = new JLabel ();
     protected List<JLabel>             labels       = new ArrayList<JLabel> ();
 
@@ -323,20 +325,22 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),  "finishEditing");
         inputMap.put (KeyStroke.getKeyStroke ("ESCAPE"), "cancelEditing");
         actionMap = choiceEditor.getActionMap ();
-        actionMap.put ("finishEditing", new AbstractAction ()
+        AbstractAction finishEditing = new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
                 stopCellEditing ();
             }
-        });
-        actionMap.put ("cancelEditing", new AbstractAction ()
+        };
+        actionMap.put ("finishEditing", finishEditing);
+        AbstractAction cancelEditing = new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
             {
                 cancelCellEditing ();
             }
-        });
+        };
+        actionMap.put ("cancelEditing", cancelEditing);
 
         choiceEditor.addFocusListener (focusListener);
 
@@ -347,22 +351,22 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),  "finishEditing");
         inputMap.put (KeyStroke.getKeyStroke ("ESCAPE"), "cancelEditing");
         actionMap = rangeEditor.getActionMap ();
-        actionMap.put ("finishEditing", new AbstractAction ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                stopCellEditing ();
-            }
-        });
-        actionMap.put ("cancelEditing", new AbstractAction ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                cancelCellEditing ();
-            }
-        });
+        actionMap.put ("finishEditing", finishEditing);
+        actionMap.put ("cancelEditing", cancelEditing);
 
         rangeEditor.addFocusListener (focusListener);
+
+
+        flagEditor = new JCheckBox ();
+
+        inputMap = flagEditor.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),  "finishEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("ESCAPE"), "cancelEditing");
+        actionMap = flagEditor.getActionMap ();
+        actionMap.put ("finishEditing", finishEditing);
+        actionMap.put ("cancelEditing", cancelEditing);
+
+        flagEditor.addFocusListener (focusListener);
     }
 
     public static void staticUpdateUI ()
@@ -434,7 +438,13 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
         // Update editing component
         if (editingComponent != null) editingContainer.remove (editingComponent);
-        if (param.contains (","))  // Dropdown list with fixed set of options.
+        if (param.equals ("flag"))
+        {
+            editingComponent = flagEditor;
+            boolean isFalse =  text.isEmpty ()  ||  text.equals ("0");
+            flagEditor.setSelected (! isFalse);
+        }
+        else if (param.contains (","))  // Dropdown list with fixed set of options.
         {
             editingComponent = choiceEditor;
             choiceEditor.removeAllItems ();
@@ -497,6 +507,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         if      (editingComponent == choiceEditor)  value = choiceEditor.getSelectedItem ().toString ();
         else if (editingComponent == oneLineEditor) value = oneLineEditor.getText ();
         else if (editingComponent == multiLinePane) value = multiLineEditor.getText ();
+        else if (editingComponent == flagEditor)    value = flagEditor.isSelected () ? "1" : "0";
         else                      // rangeEditor
         {
             double c = rangeEditor.getValue () * rangeStepSize + rangeLo;
