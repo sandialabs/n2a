@@ -245,8 +245,7 @@ public class PanelRun extends JPanel
                 setFont (new Font (Font.MONOSPACED, Font.PLAIN, f.getSize ()));
             }
         };
-        displayText.setEditable(false);
-        displayPane.setViewportView (displayText);
+        displayText.setEditable (false);
 
         buttonStop = new JButton (ImageUtil.getImage ("stop.gif"));
         buttonStop.setMargin (new Insets (2, 2, 2, 2));
@@ -320,7 +319,8 @@ public class PanelRun extends JPanel
         buttons.add (buttonTableSorted);
         buttons.add (buttonGraph);
         buttons.add (buttonRaster);
-        buttonText.setSelected (true);
+        buttonGraph.setSelected (true);
+        displayPane.setViewportView (displayChart);
 
         displayChart.buttonBar.setVisible (false);
 

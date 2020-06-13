@@ -247,7 +247,9 @@ public class NodeJob extends NodeBase
         // Only handle local resources.
         // If a job runs remotely, then we need to fetch its files to view them, so assume they will be downloaded to local dir when requested.
 
-        NodeBase selected = (NodeBase) tree.getLeadSelectionPath ().getLastPathComponent ();
+        NodeBase selected = null;
+        TreePath path = tree.getLeadSelectionPath ();
+        if (path != null) selected = (NodeBase) path.getLastPathComponent ();
         TreeMap<Path,NodeFile> existing = new TreeMap<Path,NodeFile> ();
         if (children != null)
         {
