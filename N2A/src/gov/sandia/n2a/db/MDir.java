@@ -88,8 +88,8 @@ public class MDir extends MNode
 
     public static String validFilenameFrom (String name)
     {
-        name = name.replace ("\\", "-");
-        name = name.replace ("/", "-");
+        String[] forbiddenChars = new String[] {"\\", "/", ":", "*", "\"", "<", ">", "|"};
+        for (String c : forbiddenChars) name = name.replace (c, "-");
 
         // For Windows, certain file names are forbidden due to its archaic roots in DOS.
         String upperName = name.toUpperCase ();

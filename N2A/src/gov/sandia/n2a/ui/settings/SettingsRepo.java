@@ -963,7 +963,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             switch (column)
             {
                 case 3:
-                    String newName = value.toString ();
+                    String newName = MDir.validFilenameFrom (value.toString ());
                     String oldName = key;
                     if (newName.isEmpty ()  ||  newName.equals (oldName)) return;
                     if (AppData.repos.child (newName) != null) return;
