@@ -332,21 +332,44 @@ public class GraphNode extends JPanel
     {
         if (container.locked) return;
 
-        int step = 1;
-        if ((e.getModifiers () & ActionEvent.CTRL_MASK) != 0) step = 10;
+        if ((e.getModifiers () & ActionEvent.CTRL_MASK) != 0)
+        {
+            dx *= 10;
+            dy *= 10;
+        }
 
         MNode metadata = new MVolatile ();
-        if (dx != 0)
+        MNode bounds = metadata.childOrCreate ("gui", "bounds");
+        Rectangle now = getBounds ();
+        if (dx != 0) metadata.set (now.x - parent.offset.x + dx, "gui", "bounds", "x");
+        if (dy != 0) metadata.set (now.y - parent.offset.y + dy, "gui", "bounds", "y");
+
+        List<GraphNode> selection = container.panelEquationGraph.getSelection ();
+        selection.remove (this);
+
+        UndoManager um = MainFrame.instance.undoManager;
+        ChangeAnnotations ca = new ChangeAnnotations (node, metadata);
+        if (selection.isEmpty ())
         {
-            int x = getBounds ().x - parent.offset.x + dx * step;
-            metadata.set (x, "gui", "bounds", "x");
+            um.apply (ca);
         }
-        if (dy != 0)
+        else
         {
-            int y = getBounds ().y - parent.offset.y + dy * step;
-            metadata.set (y, "gui", "bounds", "y");
+            CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
+            um.addEdit (compound);
+            compound.addEdit (ca);  // delayed execution
+            for (GraphNode g : selection)
+            {
+                metadata = new MVolatile ();
+                bounds = metadata.childOrCreate ("gui", "bounds");
+                now = g.getBounds ();
+                if (dx != 0) bounds.set (now.x - parent.offset.x + dx, "x");
+                if (dy != 0) bounds.set (now.y - parent.offset.y + dy, "y");
+                compound.addEdit (new ChangeAnnotations (g.node, metadata));
+            }
+            um.endCompoundEdit ();
+            compound.redo ();
         }
-        MainFrame.instance.undoManager.apply (new ChangeAnnotations (node, metadata));
     }
 
     public void updateTitle ()
@@ -690,6 +713,15 @@ public class GraphNode extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("SPACE"),             "toggleSelection");
 
             ActionMap actionMap = getActionMap ();
+            actionMap.put ("nothing", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    // Literally, we do nothing.
+                    // This is necessary to kill the keystroke.
+                    // In the case of up-arrow, we don't want it to move the scroll pane.
+                }
+            });
             actionMap.put ("close", new AbstractAction ()
             {
                 public void actionPerformed (ActionEvent e)
