@@ -1117,12 +1117,17 @@ public class PanelEquations extends JPanel
             MNode data = new MVolatile ();
             Schema schema;
             TransferableNode xferNode = null;  // used only to detect if the source is an equation tree
+            int modifiers = 0;
             try
             {
                 Transferable xferable = xfer.getTransferable ();
                 StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
                 schema = Schema.readAll (data, reader);
-                if (xferable.isDataFlavorSupported (TransferableNode.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
+                if (xferable.isDataFlavorSupported (TransferableNode.nodeFlavor))
+                {
+                    xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
+                    modifiers = xferNode.modifiers;
+                }
             }
             catch (IOException | UnsupportedFlavorException e)
             {
@@ -1417,7 +1422,11 @@ public class PanelEquations extends JPanel
                 while (children.hasMoreElements ())
                 {
                     Object c = children.nextElement ();
-                    if (c instanceof NodePart) oldParts.add ((NodePart) c);
+                    if (c instanceof NodePart)
+                    {
+                        NodePart p = (NodePart) c;
+                        if (! p.source.getFlag ("$metadata", "gui", "pin")) oldParts.add (p);
+                    }
                 }
 
                 int columns = (int) Math.sqrt (data.size ());
@@ -1446,8 +1455,11 @@ public class PanelEquations extends JPanel
                     i++;
                 }
 
-                NodePart.suggestConnections (newParts, oldParts);
-                NodePart.suggestConnections (oldParts, newParts);
+                if ((modifiers & (InputEvent.CTRL_MASK | InputEvent.SHIFT_MASK)) == 0)  // Could filter on drop action instead. However, this allows us to discriminate any combination of modifiers, not just Swings interpretation of them.
+                {
+                    NodePart.suggestConnections (newParts, oldParts);
+                    NodePart.suggestConnections (oldParts, newParts);
+                }
             }
 
             if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) um.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
@@ -1456,7 +1468,7 @@ public class PanelEquations extends JPanel
 
         public int getSourceActions (JComponent comp)
         {
-            return COPY_OR_MOVE;
+            return LINK | COPY | MOVE;
         }
 
         boolean dragInitiated;  // This is a horrible hack, but the simplest way to override the default MOVE action chosen internally by Swing.

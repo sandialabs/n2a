@@ -36,6 +36,7 @@ import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
+import java.awt.event.InputEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -266,7 +267,14 @@ public class PanelSearch extends JPanel
 
             public int getSourceActions (JComponent comp)
             {
-                return COPY;
+                return LINK | COPY | MOVE;
+            }
+
+            int modifiers;
+            public void exportAsDrag (JComponent comp, InputEvent e, int action)
+            {
+                modifiers = e.getModifiers ();
+                super.exportAsDrag (comp, e, action);
             }
 
             protected Transferable createTransferable (JComponent comp)
@@ -276,6 +284,8 @@ public class PanelSearch extends JPanel
                 if (n == null) return null;
                 TransferableNode result = n.createTransferable ();
                 result.panel = PanelSearch.this;
+                result.modifiers = modifiers;
+                modifiers = 0;
                 return result;
             }
 

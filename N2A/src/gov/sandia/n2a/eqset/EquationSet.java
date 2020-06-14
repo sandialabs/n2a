@@ -484,32 +484,44 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Collect the keys of all db parts that are somewhere in the given child's
-        inheritance tree.
+        Collect the keys of all db parts that are somewhere in our inheritance tree.
+        Includes our own key.
     **/
     public Set<String> collectAncestors ()
     {
         return collectAncestors (source);
     }
 
+    /**
+        Collect the keys of all db parts that are somewhere in the given child's
+        inheritance tree. Includes the child's own key.
+    **/
     public static Set<String> collectAncestors (MNode child)
     {
         Set<String> result = new HashSet<String> ();
+        result.add (child.key ());
         collectAncestors (child, result);
         return result;
     }
 
+    /**
+        Collect the keys of all db parts that are somewhere in the given child's
+        inheritance tree.
+    **/
     public static void collectAncestors (MNode child, Set<String> ancestors)
     {
-        ancestors.add (child.key ());
-        String[] inherits = child.get ("$inherit").split (",");
-        for (String inherit : inherits)
+        String inherit = child.get ("$inherit");
+        if (inherit.isEmpty ()) return;
+        String[] inherits = inherit.split (",");
+        for (String i : inherits)
         {
-            inherit = inherit.trim ().replace ("\"", "");
-            if (inherit.isEmpty ()) continue;
-            if (ancestors.contains (inherit)) continue;
-            MNode parent = AppData.models.child (inherit);
-            if (parent != null) collectAncestors (parent, ancestors);
+            i = i.trim ().replace ("\"", "");
+            if (i.isEmpty ()) continue;
+            if (ancestors.add (i))
+            {
+                MNode parent = AppData.models.child (i);
+                if (parent != null) collectAncestors (parent, ancestors);
+            }
         }
     }
 

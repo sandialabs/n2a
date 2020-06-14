@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.tree;
 
+import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Point;
@@ -23,6 +24,7 @@ import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.MainFrame;
@@ -31,6 +33,7 @@ import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
@@ -297,24 +300,8 @@ public class NodePart extends NodeContainer
     {
         if (ancestors != null) return ancestors;
         ancestors = new HashSet<String> ();
-        findAncestors (source);
+        EquationSet.collectAncestors (source, ancestors);
         return ancestors;
-    }
-
-    public void findAncestors (MNode child)
-    {
-        String inherit = child.get ("$inherit");
-        if (inherit.isEmpty ()) return;
-        String[] inherits = inherit.split (",");
-        for (String i : inherits)
-        {
-            i = i.trim ().replace ("\"", "");
-            if (ancestors.add (i))
-            {
-                MNode parent = AppData.models.child (i);
-                if (parent != null) findAncestors (parent);
-            }
-        }
     }
 
     public List<UnsatisfiedConnection> getUnsatisfiedConnections ()
@@ -371,6 +358,8 @@ public class NodePart extends NodeContainer
         }
 
         // Scan for matches
+        Dimension viewSize = PanelModel.instance.panelEquations.panelEquationGraph.getExtentSize ();
+        double limit = viewSize.width + viewSize.height;  // Anything beyond this is too far out of sight to allow automatic connection.
         for (NodePart fromPart : fromParts)
         {
             // Collect candidates for each unsatisfied connection.
@@ -416,7 +405,12 @@ public class NodePart extends NodeContainer
                         sorted.put (distance, toPart);
                     }
                     u.candidates.clear ();
-                    for (NodePart p : sorted.values ()) u.candidates.add (0, p);
+                    for (Entry<Double,NodePart> e : sorted.entrySet ())
+                    {
+                        double distance = e.getKey ();
+                        if (distance < Double.MAX_VALUE  &&  distance > limit) continue;
+                        u.candidates.add (0, e.getValue ());
+                    }
                 }
             }
 
@@ -475,7 +469,7 @@ public class NodePart extends NodeContainer
                 }
             }
 
-            // If all endpoints go to nodes that area already connected, then don't connect at all.
+            // If all endpoints go to nodes that are already connected, then don't connect at all.
             // (Instead, assume that user is started a new constellation, and simply inserted the connection object first.)
             boolean targetsFull = true;
             for (UnsatisfiedConnection u : unsatisfied)
