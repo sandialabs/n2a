@@ -22,6 +22,7 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
@@ -667,16 +668,23 @@ public class GraphNode extends JPanel
         g2.draw (box);
     }
 
-    public class TitleRenderer extends EquationTreeCellRenderer implements CellEditorListener
+    public class TitleRenderer extends EquationTreeCellRenderer implements CellEditorListener, ActionListener
     {
         protected Component editingComponent;
         protected boolean   UIupdated;
+        protected Timer     timer;
 
         public TitleRenderer ()
         {
             nontree = true;
 
             setTransferHandler (container.transferHandler);
+
+            int interval = 500;
+            Object intervalProperty = Toolkit.getDefaultToolkit ().getDesktopProperty ("awt.multiClickInterval");
+            if (intervalProperty instanceof Integer) interval = (Integer) intervalProperty;
+            timer = new Timer (interval, this);
+            timer.setRepeats (false);
 
             InputMap inputMap = getInputMap ();
             inputMap.put (KeyStroke.getKeyStroke ("UP"),                "nothing");
@@ -893,6 +901,8 @@ public class GraphNode extends JPanel
 
                 public void mouseClicked (MouseEvent me)
                 {
+                    timer.stop ();
+
                     int x = me.getX ();
                     int y = me.getY ();
                     int clicks = me.getClickCount ();
@@ -923,7 +933,7 @@ public class GraphNode extends JPanel
                                 if (selection.contains (GraphNode.this)) selection.remove (GraphNode.this);
                                 if (selection.isEmpty ())  // Nothing else is selected, so OK to edit.
                                 {
-                                    startEditing ();
+                                    timer.start ();
                                     return;
                                 }
                             }
@@ -1034,6 +1044,16 @@ public class GraphNode extends JPanel
             boolean focused = isFocusOwner ();
             getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected || focused, open, false, -2, focused);
             GraphNode.this.repaint ();
+        }
+
+        /**
+            Receive timer event to start editing.
+        **/
+        public void actionPerformed (ActionEvent e)
+        {
+            // The check for focus owner is probably not necessary.
+            // Just a little extra paranoia to prevent any race conditions.
+            if (isFocusOwner ()) startEditing ();
         }
 
         /**
