@@ -864,7 +864,7 @@ public class GraphNode extends JPanel
                     int x = me.getX ();
                     int y = me.getY ();
                     int clicks = me.getClickCount ();
-                    boolean select =  me.isControlDown ()  ||  me.isShiftDown ();
+                    boolean extendSelection =  me.isControlDown ()  ||  me.isShiftDown ();
 
                     if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ()  &&  HostSystem.isMac ())
                     {
@@ -886,14 +886,19 @@ public class GraphNode extends JPanel
                             }
                             else if (isFocusOwner ())
                             {
-                                startEditing ();
-                                return;
+                                // Check if anything else is selected. Don't edit when there are multiple nodes selected.
+                                List<GraphNode> selection = container.panelEquationGraph.getSelection ();
+                                if (selection.contains (GraphNode.this)) selection.remove (GraphNode.this);
+                                if (selection.isEmpty ())  // Nothing else is selected, so OK to edit.
+                                {
+                                    startEditing ();
+                                    return;
+                                }
                             }
-                            if (select)
+                            if (extendSelection)
                             {
                                 GraphNode.this.selected = true;
-                                // We are not the focus owner (implied by above code), so we should ensure that
-                                // the current focus owner is selected. A simple way is to assume that the "active" tree is up-to-date.
+                                // In case we are not the focus, ensure that the current focus is also selected.
                                 GraphNode g = PanelModel.getGraphNode (KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ());
                                 if (g != null) g.setSelected (true);
                             }
@@ -1086,6 +1091,9 @@ public class GraphNode extends JPanel
             if (container.locked) return;
             if (! SwingUtilities.isLeftMouseButton (me)) return;
 
+            boolean extendSelection =  me.isShiftDown ()  ||  me.isControlDown ();
+            if (HostSystem.isMac ()  &&  me.isControlDown ()) extendSelection = false;  // If shift and control are held down together, the shift key will be ignored in this case.
+
             // All mouse event coordinates are relative to the bounds of this component.
             parent.setComponentZOrder (GraphNode.this, 0);
             start   = me.getPoint ();
@@ -1096,8 +1104,32 @@ public class GraphNode extends JPanel
             cursor  = border.getCursor (me);
             setCursor (Cursor.getPredefinedCursor (cursor));
 
+            // To understand this code, note that there are three kinds of graph nodes (for the purpose of dragging):
+            // focused  -- has keyboard focus and a special mark; also appears as if selected, but might not actually be flagged as part of selection.
+            // selected -- tagged as part of the selection
+            // targeted -- The node that actually received the mousePressed event, and which might get dragged.
+            // Focused should move with the selection, whether it is actually selected or not.
+            // If targeted is neither focused nor selected, then only targeted should be moved.
+            //     Selection is cleared and focus is ignored. Afterward, targeted becomes new focus.
             selection = container.panelEquationGraph.getSelection ();
-            selection.remove (GraphNode.this);
+            if (selection.contains (GraphNode.this))  // Target is in selection.
+            {
+                // The code that handles drag expects that the target is not included in selection.
+                selection.remove (GraphNode.this);
+
+                // If focused node is not the target, then ensure it gets moved along with selection.
+                GraphNode g = PanelModel.getGraphNode (KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ());
+                if (g != null  &&  g != GraphNode.this  &&  ! selection.contains (g)) selection.add (g);
+            }
+            else  // Target is not selected.
+            {
+                if (! title.isFocusOwner ()  &&  ! extendSelection)  // Target is also not the focus, and we don't wish to extend selection.
+                {
+                    // Clear selection and don't drag it along with target.
+                    container.panelEquationGraph.clearSelection ();
+                    selection.clear ();
+                }
+            }
         }
 
         public void mouseDragged (MouseEvent me)
