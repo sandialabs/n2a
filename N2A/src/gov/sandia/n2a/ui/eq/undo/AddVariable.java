@@ -56,7 +56,7 @@ public class AddVariable extends UndoableView implements AddEditable
             nameIsGenerated = false;  // Because we don't go into edit mode on a drop or paste. If that changes, then always set nameIsGenerated to true.
         }
 
-        if (FilteredTreeModel.filterLevel == FilteredTreeModel.PARAM)
+        if (FilteredTreeModel.showParam  &&  ! FilteredTreeModel.showLocal)
         {
             // Force variable to be a parameter, so it will be visible when going into edit mode.
             if (! createSubtree.getFlag ("$metadata", "param")) createSubtree.set ("", "$metadata", "param");
@@ -118,7 +118,7 @@ public class AddVariable extends UndoableView implements AddEditable
             boolean wasBinding = createdNode.isBinding;
             createdNode.build ();
             createdNode.findConnections ();
-            createdNode.filter (FilteredTreeModel.filterLevel);
+            createdNode.filter ();
 
             if (createdNode.isBinding  ||  wasBinding)
             {
@@ -177,7 +177,7 @@ public class AddVariable extends UndoableView implements AddEditable
         {
             createdNode.build ();
             createdNode.findConnections ();
-            createdNode.filter (FilteredTreeModel.filterLevel);
+            createdNode.filter ();
             pet.updateOrder (createdPath);
             parent.invalidateColumns (model);
 

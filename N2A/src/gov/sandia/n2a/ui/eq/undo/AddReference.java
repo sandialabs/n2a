@@ -127,7 +127,7 @@ public class AddReference extends UndoableView implements AddEditable
         }
         else  // Just exposed an overridden value, so update display.
         {
-            if (container.visible (FilteredTreeModel.filterLevel))  // We are always visible, but our parent could disappear.
+            if (container.visible ())  // We are always visible, but our parent could disappear.
             {
                 createdNode.setUserObject ();
             }

@@ -46,15 +46,6 @@ public class NodeReference extends NodeBase
     }
 
     @Override
-    public boolean visible (int filterLevel)
-    {
-        if (filterLevel <= FilteredTreeModel.ALL)   return true;
-        if (filterLevel == FilteredTreeModel.PARAM) return false;
-        // FilteredTreeModel.LOCAL ...
-        return source.isFromTopDocument ();
-    }
-
-    @Override
     public Icon getIcon (boolean expanded)
     {
         return icon;

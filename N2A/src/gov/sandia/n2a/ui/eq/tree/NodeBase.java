@@ -48,16 +48,34 @@ public class NodeBase extends DefaultMutableTreeNode
     /**
         Indicates whether this node is visible under the given criteria.
     **/
-    public boolean visible (int filterLevel)
+    public boolean visible ()
     {
-        return true;
+        if (isRevoked ()) return FilteredTreeModel.showRevoked;
+        if (FilteredTreeModel.showParam  &&  isParam ()) return true;
+        if (isLocal ())   return FilteredTreeModel.showLocal;
+        else              return FilteredTreeModel.showInherited;
+    }
+
+    public boolean isRevoked ()
+    {
+        return source.get ().startsWith ("$kill");
+    }
+
+    public boolean isLocal ()
+    {
+        return source.isFromTopDocument ();
+    }
+
+    public boolean isParam ()
+    {
+        return source.getFlag ("$metadata", "param");
     }
 
     /**
         Prepares this node and all its descendants to answer the getFiltered() call
         for a given filter level.
     **/
-    public void filter (int filterLevel)
+    public void filter ()
     {
     }
 
@@ -98,7 +116,7 @@ public class NodeBase extends DefaultMutableTreeNode
         }
 
         insertFiltered (filteredIndex, childIndex, false);
-        child.filter (FilteredTreeModel.filterLevel);
+        child.filter ();
 
         if (model != null)
         {

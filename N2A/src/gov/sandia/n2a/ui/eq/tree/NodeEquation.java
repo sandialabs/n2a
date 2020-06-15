@@ -52,15 +52,10 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
-    public boolean visible (int filterLevel)
+    public boolean isRevoked ()
     {
-        if (filterLevel == FilteredTreeModel.REVOKED)         return true;
         String value = source.get ();
-        if (value.isEmpty ()  ||  value.startsWith ("$kill")) return false;
-        if (filterLevel == FilteredTreeModel.LOCAL)           return source.isFromTopDocument ();
-        if (filterLevel == FilteredTreeModel.PARAM)           return false;
-        // ALL ...
-        return true;
+        return  value.isEmpty ()  ||  value.startsWith ("$kill");
     }
 
     @Override
@@ -202,6 +197,6 @@ public class NodeEquation extends NodeBase
         String       combiner = parent.source.get ();
         String       name     = source.key ().substring (1);  // strip @ from name, as required by ChangeEquation
         String       value    = source.get ();
-        return new ChangeEquation (parent, name, combiner, value, name, combiner, "");  // revoke the equation
+        return new ChangeEquation (parent, name, combiner, value, name, combiner, "$kill");  // revoke the equation
     }
 }

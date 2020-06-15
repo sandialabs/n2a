@@ -60,13 +60,13 @@ public class AddInherit extends UndoableView
         parent.build ();  // Handles all cases (complete deletion or exposed hidden node)
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
-        parent.filter (FilteredTreeModel.filterLevel);
+        parent.filter ();
         if (parent == pe.part)
         {
             peg.reloadPart ();  // safely disconnects old nodes, even though parent has been rebuilt with new nodes
-            parent.filter (FilteredTreeModel.filterLevel);  // Ensure that parts are not visible in parent panel.
+            parent.filter ();  // Ensure that parts are not visible in parent panel.
         }
-        if (parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
+        if (parent.visible ()) model.nodeStructureChanged (parent);
 
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath, index);
@@ -102,11 +102,11 @@ public class AddInherit extends UndoableView
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
-        parent.filter (FilteredTreeModel.filterLevel);
+        parent.filter ();
         if (parent == pe.part)
         {
             peg.reloadPart ();
-            parent.filter (FilteredTreeModel.filterLevel);
+            parent.filter ();
         }
         model.nodeStructureChanged (parent);  // Since $inherit is being added, parent will almost certainly become visible, if it's not already.
 

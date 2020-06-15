@@ -17,11 +17,10 @@ import javax.swing.tree.TreeNode;
 @SuppressWarnings("serial")
 public class FilteredTreeModel extends DefaultTreeModel
 {
-    public static final int REVOKED = -1;
-    public static final int ALL     = 0;
-    public static final int PARAM   = 1;
-    public static final int LOCAL   = 2;
-    public static int filterLevel = ALL;  // Only one filter level shared across entire app.
+    public static boolean showRevoked   = false;
+    public static boolean showInherited = true;
+    public static boolean showLocal     = true;
+    public static boolean showParam     = true;
 
     public FilteredTreeModel (NodeBase root)
     {
@@ -31,7 +30,7 @@ public class FilteredTreeModel extends DefaultTreeModel
 
     public void setRoot (NodeBase root)
     {
-        if (root != null) root.filter (filterLevel);
+        if (root != null) root.filter ();
         super.setRoot (root);
     }
 
@@ -88,8 +87,8 @@ public class FilteredTreeModel extends DefaultTreeModel
         NodeBase c = (NodeBase) newChild;
 
         p.insert (c, childrenIndex);
-        c.filter (filterLevel);  // If c brings a new subtree, ensure it is filtered.
-        if (! c.visible (filterLevel))  // Don't send any event
+        c.filter ();  // If c brings a new subtree, ensure it is filtered.
+        if (! c.visible ())  // Don't send any event
         {
             p.insertFiltered (-1, childrenIndex, true);
             return -1;  // Indicate early-out
@@ -127,8 +126,8 @@ public class FilteredTreeModel extends DefaultTreeModel
         else                                       childrenIndex = p.getChildCount ();
         p.insert (c, childrenIndex);
 
-        c.filter (filterLevel);
-        if (! c.visible (filterLevel))
+        c.filter ();
+        if (! c.visible ())
         {
             p.insertFiltered (-1, childrenIndex, true);
             return;

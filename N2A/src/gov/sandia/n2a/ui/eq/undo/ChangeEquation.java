@@ -122,8 +122,8 @@ public class ChangeEquation extends UndoableView
                     nodeAfter = new NodeEquation (newPart);
                     model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
                 }
-                if (nodeBefore.visible (FilteredTreeModel.filterLevel)) model.nodeChanged (nodeBefore);
-                else                                                    parent.hide (nodeBefore, model);
+                if (nodeBefore.visible ()) model.nodeChanged (nodeBefore);
+                else                       parent.hide (nodeBefore, model);
             }
         }
 

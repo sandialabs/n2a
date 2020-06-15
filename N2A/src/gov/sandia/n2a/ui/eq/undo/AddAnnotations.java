@@ -76,7 +76,7 @@ public class AddAnnotations extends UndoableView
         else  // Just exposed an overridden node
         {
             node.build ();  // Necessary to remove all overridden nodes
-            node.filter (FilteredTreeModel.filterLevel);
+            node.filter ();
         }
         pet.updateVisibility (nodePath, index, setSelected);
         pet.animate ();
@@ -116,7 +116,7 @@ public class AddAnnotations extends UndoableView
             model.insertNodeIntoUnfiltered (node, parent, index);
         }
         node.build ();  // Replaces all nodes, so they are set to require tab initialization.
-        node.filter (FilteredTreeModel.filterLevel);
+        node.filter ();
         TreeNode[] nodePath = node.getPath ();
         pet.updateVisibility (nodePath, -2, ! multi);
         if (multi) pet.tree.addSelectionPath (new TreePath (nodePath));

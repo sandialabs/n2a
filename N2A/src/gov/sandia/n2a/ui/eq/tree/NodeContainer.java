@@ -27,7 +27,7 @@ public class NodeContainer extends NodeBase
     // Filtering -------------------------------------------------------------
 
     @Override
-    public void filter (int filterLevel)
+    public void filter ()
     {
         invalidateColumns (null);  // force columns to be updated for new subset of children
         if (children == null)
@@ -42,8 +42,8 @@ public class NodeContainer extends NodeBase
         for (Object o : children)
         {
             NodeBase c = (NodeBase) o;
-            c.filter (filterLevel);
-            if (c.visible (filterLevel)) filtered.add (childIndex);
+            c.filter ();
+            if (c.visible ()) filtered.add (childIndex);
             childIndex++;  // always increment
         }
         if (filtered.size () == count) filtered = null;  // all children are visible, so don't bother

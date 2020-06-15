@@ -13,7 +13,6 @@ import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.Undoable;
-import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.DeleteReferences;
 import javax.swing.Icon;
@@ -34,15 +33,6 @@ public class NodeReferences extends NodeContainer
     {
         removeAllChildren ();
         for (MNode c : source) add (new NodeReference ((MPart) c));
-    }
-
-    @Override
-    public boolean visible (int filterLevel)
-    {
-        if (filterLevel <= FilteredTreeModel.ALL)   return true;
-        if (filterLevel == FilteredTreeModel.PARAM) return false;
-        // FilteredTreeModel.LOCAL ...
-        return source.isFromTopDocument ();
     }
 
     @Override

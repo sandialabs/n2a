@@ -253,8 +253,8 @@ public class ChangeVariable extends UndoableView
                 boolean wasBinding = nodeBefore.isBinding;
                 nodeBefore.build ();
                 nodeBefore.findConnections ();
-                nodeBefore.filter (FilteredTreeModel.filterLevel);
-                if (nodeBefore.visible (FilteredTreeModel.filterLevel))
+                nodeBefore.filter ();
+                if (nodeBefore.visible ())
                 {
                     if (model != null) model.nodeStructureChanged (nodeBefore);
                 }
@@ -277,7 +277,7 @@ public class ChangeVariable extends UndoableView
         boolean wasBinding = nodeAfter.isBinding;
         nodeAfter.build ();
         nodeAfter.findConnections ();
-        nodeAfter.filter (FilteredTreeModel.filterLevel);
+        nodeAfter.filter ();
         Set<PanelEquationTree> needAnimate = new HashSet<PanelEquationTree> ();
         if (pet != null)
         {
@@ -302,8 +302,8 @@ public class ChangeVariable extends UndoableView
             // Rebuild n, because equations and/or their conditions may have changed.
             n.build ();
             n.findConnections ();
-            n.filter (FilteredTreeModel.filterLevel);
-            if (n.visible (FilteredTreeModel.filterLevel))  // n's visibility won't change
+            n.filter ();
+            if (n.visible ())  // n's visibility won't change
             {
                 PanelEquationTree subpet = n.getTree ();
                 if (subpet == null) continue;

@@ -189,13 +189,15 @@ public class NodePart extends NodeContainer
     }
 
     @Override
-    public boolean visible (int filterLevel)
+    public boolean visible ()
     {
         // Under "parent" graph node, don't display child parts, as these will have separate graph nodes.
         if (hide  ||  parent == null) return false;
 
-        if (filterLevel >= FilteredTreeModel.LOCAL) return source.isFromTopDocument ();
-        return true;  // Almost always visible, except for most stringent filter mode.
+        if (isRevoked ()) return FilteredTreeModel.showRevoked;  // TODO: implement a way to revoke parts
+        if (FilteredTreeModel.showParam) return true;  // Even if we don't contain parameters.
+        if (isLocal ())   return FilteredTreeModel.showLocal;
+        else              return FilteredTreeModel.showInherited;
     }
 
     @Override

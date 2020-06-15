@@ -112,7 +112,7 @@ public class PanelEquationTree extends JScrollPane
 
             public void updateUI ()
             {
-                if (root != null) root.filter (FilteredTreeModel.filterLevel);  // Force (later) update to tab stops, in case font has changed. This can also affect cell size.
+                if (root != null) root.filter ();  // Force (later) update to tab stops, in case font has changed. This can also affect cell size.
                 super.updateUI ();  // Causes tree to poll for cell sizes.
             }
         };
@@ -620,7 +620,7 @@ public class PanelEquationTree extends JScrollPane
     public void updateFilterLevel ()
     {
         if (root == null) return;
-        root.filter (FilteredTreeModel.filterLevel);
+        root.filter ();
         StoredPath sp = new StoredPath (tree);
         model.reload (root);
         animate ();
@@ -643,7 +643,8 @@ public class PanelEquationTree extends JScrollPane
         if (selected == null) return;  // empty tree (should only occur in tree view); could create new model here, but better to do that from search list
 
         // Don't allow insertion of types that will be invisible at current filter level.
-        if (FilteredTreeModel.filterLevel == FilteredTreeModel.PARAM)
+        if (! FilteredTreeModel.showLocal  &&  ! FilteredTreeModel.showParam) return;  // Can't show any user-defined values, so give up.
+        if (! FilteredTreeModel.showLocal  &&    FilteredTreeModel.showParam)   // Can only show parameters.
         {
             switch (type)
             {
@@ -981,7 +982,7 @@ public class PanelEquationTree extends JScrollPane
             if (c.getParent () == null) continue;  // skip deleted nodes
             int filteredIndex = FilteredTreeModel.getIndexOfChildStatic (p, c);
             boolean filteredOut = filteredIndex < 0;
-            if (c.visible (FilteredTreeModel.filterLevel))
+            if (c.visible ())
             {
                 if (filteredOut)
                 {
@@ -1043,7 +1044,7 @@ public class PanelEquationTree extends JScrollPane
         {
             NodeBase c = (NodeBase) path[i];
             if (c.getParent () == null) break;
-            if (! c.visible (FilteredTreeModel.filterLevel)) break;
+            if (! c.visible ()) break;
         }
         i--;  // Choose the last good node
         NodeBase c = (NodeBase) path[i];
@@ -1154,7 +1155,7 @@ public class PanelEquationTree extends JScrollPane
         for (int i = 0; i < count; i++)
         {
             NodeBase n = (NodeBase) node.getChildAt (i);
-            if (! n.visible (FilteredTreeModel.filterLevel)) continue;
+            if (! n.visible ()) continue;
 
             boolean needsRepaint = false;
             if (n instanceof NodePart)

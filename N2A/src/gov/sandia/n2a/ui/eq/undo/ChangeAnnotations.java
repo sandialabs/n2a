@@ -138,8 +138,8 @@ public class ChangeAnnotations extends UndoableView
             List<String> expanded = null;
             if (model != null) expanded = AddAnnotation.saveExpandedNodes (pet.tree, metadataNode);
             metadataNode.build ();
-            metadataNode.filter (FilteredTreeModel.filterLevel);
-            if (model != null  &&  metadataNode.visible (FilteredTreeModel.filterLevel))
+            metadataNode.filter ();
+            if (model != null  &&  metadataNode.visible ())
             {
                 model.nodeStructureChanged (metadataNode);
                 AddAnnotation.restoreExpandedNodes (pet.tree, metadataNode, expanded);

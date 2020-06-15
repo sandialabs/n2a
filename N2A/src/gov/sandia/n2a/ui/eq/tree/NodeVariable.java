@@ -210,17 +210,6 @@ public class NodeVariable extends NodeContainer
     }
 
     @Override
-    public boolean visible (int filterLevel)
-    {
-        if (filterLevel == FilteredTreeModel.REVOKED) return true;
-        if (source.get ().startsWith ("$kill"))       return false;
-        if (filterLevel == FilteredTreeModel.ALL)     return true;
-        if (filterLevel == FilteredTreeModel.PARAM)   return source.getFlag ("$metadata", "param");
-        // LOCAL ...
-        return source.isFromTopDocument ();
-    }
-
-    @Override
     public Icon getIcon (boolean expanded)
     {
         if (isBinding) return iconBinding;

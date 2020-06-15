@@ -139,8 +139,8 @@ public class ChangeAnnotation extends UndoableView
         List<String> expanded = null;
         if (model != null) expanded = AddAnnotation.saveExpandedNodes (pet.tree, parent);
         parent.build ();
-        parent.filter (FilteredTreeModel.filterLevel);
-        if (model != null  &&  parent.visible (FilteredTreeModel.filterLevel))
+        parent.filter ();
+        if (model != null  &&  parent.visible ())
         {
             model.nodeStructureChanged (parent);
             AddAnnotation.restoreExpandedNodes (pet.tree, parent, expanded);

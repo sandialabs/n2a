@@ -143,8 +143,8 @@ public class ChangeReferences extends UndoableView
         if (needBuild)
         {
             referenceNode.build ();
-            referenceNode.filter (FilteredTreeModel.filterLevel);
-            if (model != null  &&  referenceNode.visible (FilteredTreeModel.filterLevel))
+            referenceNode.filter ();
+            if (model != null  &&  referenceNode.visible ())
             {
                 model.nodeStructureChanged (referenceNode);
             }

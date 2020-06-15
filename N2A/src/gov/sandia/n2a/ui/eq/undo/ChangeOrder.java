@@ -102,8 +102,8 @@ public class ChangeOrder extends UndoableView
         {
             List<String> expanded = AddAnnotation.saveExpandedNodes (pet.tree, metadataNode);
             metadataNode.build ();
-            metadataNode.filter (FilteredTreeModel.filterLevel);
-            if (metadataNode.visible (FilteredTreeModel.filterLevel))
+            metadataNode.filter ();
+            if (metadataNode.visible ())
             {
                 model.nodeStructureChanged (metadataNode);
                 AddAnnotation.restoreExpandedNodes (pet.tree, metadataNode, expanded);

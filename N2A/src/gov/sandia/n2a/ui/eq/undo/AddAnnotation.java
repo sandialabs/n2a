@@ -191,8 +191,8 @@ public class AddAnnotation extends UndoableView implements AddEditable
             List<String> expanded = null;
             if (model != null) expanded = saveExpandedNodes (pet.tree, parent);
             parent.build ();
-            parent.filter (FilteredTreeModel.filterLevel);
-            if (model != null  &&  parent.visible (FilteredTreeModel.filterLevel))
+            parent.filter ();
+            if (model != null  &&  parent.visible ())
             {
                 model.nodeStructureChanged (parent);
                 restoreExpandedNodes (pet.tree, parent, expanded);
@@ -288,8 +288,8 @@ public class AddAnnotation extends UndoableView implements AddEditable
             List<String> expanded = null;
             if (model != null) expanded = saveExpandedNodes (pet.tree, container);
             container.build ();
-            container.filter (FilteredTreeModel.filterLevel);
-            if (model != null  &&  container.visible (FilteredTreeModel.filterLevel))
+            container.filter ();
+            if (model != null  &&  container.visible ())
             {
                 model.nodeStructureChanged (container);
                 restoreExpandedNodes (pet.tree, container, expanded);

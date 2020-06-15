@@ -199,8 +199,8 @@ public class ChangePart extends UndoableView
 
             nodeBefore.build ();
             nodeBefore.findConnections ();
-            nodeBefore.filter (FilteredTreeModel.filterLevel);
-            if (nodeBefore.visible (FilteredTreeModel.filterLevel))
+            nodeBefore.filter ();
+            if (nodeBefore.visible ())
             {
                 if (graphParent)  // Need to update entire model under fake root.
                 {
@@ -226,7 +226,7 @@ public class ChangePart extends UndoableView
         nodeAfter.build ();
         if (graphParent) parent   .findConnections ();
         else             nodeAfter.findConnections ();
-        nodeAfter.filter (FilteredTreeModel.filterLevel);
+        nodeAfter.filter ();
 
         pe.resetBreadcrumbs ();
         TreeNode[] nodePath = nodeAfter.getPath ();
@@ -251,8 +251,8 @@ public class ChangePart extends UndoableView
             // Rebuild n, because equations and/or their conditions may have changed.
             n.build ();
             n.findConnections ();
-            n.filter (FilteredTreeModel.filterLevel);
-            if (n.visible (FilteredTreeModel.filterLevel))  // n's visibility won't change
+            n.filter ();
+            if (n.visible ())  // n's visibility won't change
             {
                 PanelEquationTree subpet = n.getTree ();
                 if (subpet == null) continue;

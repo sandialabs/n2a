@@ -299,7 +299,7 @@ public class AddPart extends UndoableView implements AddEditable
         {
             createdNode.build ();  // Does not change the fake-root status of this node.
             parent.findConnections ();
-            createdNode.filter (FilteredTreeModel.filterLevel);
+            createdNode.filter ();
             if (graphParent)  // Need to update entire model under fake root.
             {
                 PanelEquationTree subpet = createdNode.getTree ();
@@ -379,7 +379,7 @@ public class AddPart extends UndoableView implements AddEditable
         }
         createdNode.build ();
         parent.findConnections ();  // Other nodes besides immediate siblings can also refer to us, so to be strictly correct, should run findConnectins() on root of tree.
-        createdNode.filter (FilteredTreeModel.filterLevel);
+        createdNode.filter ();
 
         if (nameIsGenerated) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
         TreeNode[] createdPath = createdNode.getPath ();

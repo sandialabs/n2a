@@ -59,6 +59,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JSplitPane;
+import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
@@ -131,29 +132,27 @@ public class PanelEquations extends JPanel
     protected MVolatile                focusCache             = new MVolatile ();
 
     // Controls
-    protected JButton buttonAddModel;
-    protected JButton buttonAddPart;
-    protected JButton buttonAddVariable;
-    protected JButton buttonAddEquation;
-    protected JButton buttonAddAnnotation;
-    protected JButton buttonAddReference;
-    protected JButton buttonWatch;
-    protected JButton buttonFilter;
-    protected JButton buttonView;
-    protected JButton buttonRun;
-    protected JButton buttonExport;
-    protected JButton buttonImport;
+    protected JButton       buttonAddModel;
+    protected JButton       buttonAddPart;
+    protected JButton       buttonAddVariable;
+    protected JButton       buttonAddEquation;
+    protected JButton       buttonAddAnnotation;
+    protected JButton       buttonAddReference;
+    protected JButton       buttonWatch;
+    protected JToggleButton buttonFilterInherited;
+    protected JToggleButton buttonFilterLocal;
+    protected JToggleButton buttonFilterParam;
+    protected JToggleButton buttonFilterRevoked;
+    protected JButton       buttonView;
+    protected JButton       buttonRun;
+    protected JButton       buttonExport;
+    protected JButton       buttonImport;
 
     protected JMenuItem  itemAddPart;
     protected JPopupMenu menuPopup;
     protected JPopupMenu menuView;
     protected JPopupMenu menuFilter;
     protected long       menuCanceledAt = 0;
-
-    protected static ImageIcon iconFilterRevoked = ImageUtil.getImage ("filterRevoked.png");
-    protected static ImageIcon iconFilterAll     = ImageUtil.getImage ("filter.png");
-    protected static ImageIcon iconFilterParam   = ImageUtil.getImage ("filterParam.png");
-    protected static ImageIcon iconFilterLocal   = ImageUtil.getImage ("filterLocal.png");
 
     protected static ImageIcon iconViewNode   = ImageUtil.getImage ("viewGraph.png");
     protected static ImageIcon iconViewSide   = ImageUtil.getImage ("viewSide.png");
@@ -232,28 +231,38 @@ public class PanelEquations extends JPanel
         buttonWatch.setToolTipText ("Watch Variable");
         buttonWatch.addActionListener (listenerWatch);
 
-        buttonFilter = new JButton ();
-        FilteredTreeModel.filterLevel = AppData.state.getOrDefault (FilteredTreeModel.ALL, "PanelModel", "filter");
-        switch (FilteredTreeModel.filterLevel)
-        {
-            case FilteredTreeModel.REVOKED: buttonFilter.setIcon (iconFilterRevoked); break;
-            case FilteredTreeModel.ALL:     buttonFilter.setIcon (iconFilterAll);     break;
-            case FilteredTreeModel.PARAM:   buttonFilter.setIcon (iconFilterParam);   break;
-            case FilteredTreeModel.LOCAL:   buttonFilter.setIcon (iconFilterLocal);   break;
-        }
-        buttonFilter.setMargin (new Insets (2, 2, 2, 2));
-        buttonFilter.setFocusable (false);
-        buttonFilter.setToolTipText ("Filter Equations");
-        buttonFilter.addActionListener (new ActionListener ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                if (System.currentTimeMillis () - menuCanceledAt > 500)  // A really ugly way to prevent the button from re-showing the menu if it was canceled by clicking the button.
-                {
-                    menuFilter.show (buttonFilter, 0, buttonFilter.getHeight ());
-                }
-            }
-        });
+        FilteredTreeModel.showInherited = AppData.state.getOrDefault (true,  "PanelModel", "filter", "inherited");
+        FilteredTreeModel.showLocal     = AppData.state.getOrDefault (true,  "PanelModel", "filter", "local");
+        FilteredTreeModel.showParam     = AppData.state.getOrDefault (true,  "PanelModel", "filter", "param");
+        FilteredTreeModel.showRevoked   = AppData.state.getOrDefault (false, "PanelModel", "filter", "revoked");
+
+        buttonFilterInherited = new JToggleButton (ImageUtil.getImage ("filterInherited.png"));
+        buttonFilterInherited.setMargin (new Insets (2, 2, 2, 2));
+        buttonFilterInherited.setFocusable (false);
+        buttonFilterInherited.setSelected (FilteredTreeModel.showInherited);
+        buttonFilterInherited.setToolTipText ("Show Inherited Equations");
+        buttonFilterInherited.addActionListener (listenerFilter);
+
+        buttonFilterLocal = new JToggleButton (ImageUtil.getImage ("filterLocal.png"));
+        buttonFilterLocal.setMargin (new Insets (2, 2, 2, 2));
+        buttonFilterLocal.setFocusable (false);
+        buttonFilterLocal.setSelected (FilteredTreeModel.showLocal);
+        buttonFilterLocal.setToolTipText ("Show Local Equations");
+        buttonFilterLocal.addActionListener (listenerFilter);
+
+        buttonFilterParam = new JToggleButton (ImageUtil.getImage ("filter.png"));
+        buttonFilterParam.setMargin (new Insets (2, 2, 2, 2));
+        buttonFilterParam.setFocusable (false);
+        buttonFilterParam.setSelected (FilteredTreeModel.showParam);
+        buttonFilterParam.setToolTipText ("Show Parameters");
+        buttonFilterParam.addActionListener (listenerFilter);
+
+        buttonFilterRevoked = new JToggleButton (ImageUtil.getImage ("filterRevoked.png"));
+        buttonFilterRevoked.setMargin (new Insets (2, 2, 2, 2));
+        buttonFilterRevoked.setFocusable (false);
+        buttonFilterRevoked.setSelected (FilteredTreeModel.showRevoked);
+        buttonFilterRevoked.setToolTipText ("Show Revoked Equations");
+        buttonFilterRevoked.addActionListener (listenerFilter);
 
         buttonView = new JButton ();
         switch (view)
@@ -306,7 +315,10 @@ public class PanelEquations extends JPanel
                 Box.createHorizontalStrut (15),
                 buttonWatch,
                 Box.createHorizontalStrut (15),
-                buttonFilter,
+                buttonFilterInherited,
+                buttonFilterLocal,
+                buttonFilterParam,
+                buttonFilterRevoked,
                 buttonView,
                 Box.createHorizontalStrut (15),
                 buttonRun,
@@ -428,32 +440,6 @@ public class PanelEquations extends JPanel
             }
         };
         menuView.addPopupMenuListener (rememberCancelTime);
-
-
-        // Filter menu
-
-        JMenuItem itemFilterRevoked = new JMenuItem ("Revoked", iconFilterRevoked);
-        itemFilterRevoked.setActionCommand ("Revoked");
-        itemFilterRevoked.addActionListener (listenerFilter);
-
-        JMenuItem itemFilterAll = new JMenuItem ("All", iconFilterAll);
-        itemFilterAll.setActionCommand ("All");
-        itemFilterAll.addActionListener (listenerFilter);
-
-        JMenuItem itemFilterParameters = new JMenuItem ("Parameters", iconFilterParam);
-        itemFilterParameters.setActionCommand ("Parameters");
-        itemFilterParameters.addActionListener (listenerFilter);
-
-        JMenuItem itemFilterLocal = new JMenuItem ("Local", iconFilterLocal);
-        itemFilterLocal.setActionCommand ("Local");
-        itemFilterLocal.addActionListener (listenerFilter);
-
-        menuFilter = new JPopupMenu ();
-        menuFilter.add (itemFilterRevoked);
-        menuFilter.add (itemFilterAll);
-        menuFilter.add (itemFilterParameters);
-        menuFilter.add (itemFilterLocal);
-        menuFilter.addPopupMenuListener (rememberCancelTime);
 
 
         // Load initial model
@@ -1073,26 +1059,15 @@ public class PanelEquations extends JPanel
         {
             panelEquationTree.tree.stopEditing ();
 
-            switch (e.getActionCommand ())
-            {
-                case "Revoked":
-                    FilteredTreeModel.filterLevel = FilteredTreeModel.REVOKED;
-                    buttonFilter.setIcon (iconFilterRevoked);
-                    break;
-                case "All":
-                    FilteredTreeModel.filterLevel = FilteredTreeModel.ALL;
-                    buttonFilter.setIcon (iconFilterAll);
-                    break;
-                case "Parameters":
-                    FilteredTreeModel.filterLevel = FilteredTreeModel.PARAM;
-                    buttonFilter.setIcon (iconFilterParam);
-                    break;
-                case "Local":
-                    FilteredTreeModel.filterLevel = FilteredTreeModel.LOCAL;
-                    buttonFilter.setIcon (iconFilterLocal);
-                    break;
-            }
-            AppData.state.set (FilteredTreeModel.filterLevel, "PanelModel", "filter");
+            FilteredTreeModel.showInherited = buttonFilterInherited.isSelected ();
+            FilteredTreeModel.showLocal     = buttonFilterLocal    .isSelected ();
+            FilteredTreeModel.showParam     = buttonFilterParam    .isSelected ();
+            FilteredTreeModel.showRevoked   = buttonFilterRevoked  .isSelected ();
+
+            AppData.state.set (FilteredTreeModel.showInherited, "PanelModel", "filter", "inherited");
+            AppData.state.set (FilteredTreeModel.showLocal,     "PanelModel", "filter", "local");
+            AppData.state.set (FilteredTreeModel.showParam,     "PanelModel", "filter", "param");
+            AppData.state.set (FilteredTreeModel.showRevoked,   "PanelModel", "filter", "revoked");
 
             if (panelEquationTree.isVisible ()) panelEquationTree.updateFilterLevel ();
             if (view == NODE)

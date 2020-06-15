@@ -63,13 +63,13 @@ public class ChangeVariableToInherit extends UndoableView
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
-        parent.filter (FilteredTreeModel.filterLevel);
+        parent.filter ();
         if (parent == pe.part)
         {
             peg.reloadPart ();
-            parent.filter (FilteredTreeModel.filterLevel);
+            parent.filter ();
         }
-        if (parent.visible (FilteredTreeModel.filterLevel)) model.nodeStructureChanged (parent);
+        if (parent.visible ()) model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child (nameBefore).getPath ();
         pet.updateOrder (nodePath);
@@ -108,11 +108,11 @@ public class ChangeVariableToInherit extends UndoableView
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
-        parent.filter (FilteredTreeModel.filterLevel);
+        parent.filter ();
         if (parent == pe.part)
         {
             peg.reloadPart ();
-            parent.filter (FilteredTreeModel.filterLevel);
+            parent.filter ();
         }
         model.nodeStructureChanged (parent);
 

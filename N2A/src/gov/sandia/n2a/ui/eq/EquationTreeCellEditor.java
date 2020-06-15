@@ -409,8 +409,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
         String text;
         String param;
-        // A variable is only visible in parameter mode if it is actually parameter, so no need to check for "param" in metadata. 
-        if (editingNode instanceof NodeVariable  &&  FilteredTreeModel.filterLevel == FilteredTreeModel.PARAM)
+        if (FilteredTreeModel.showParam  &&  editingNode instanceof NodeVariable  &&  editingNode.isParam ()  &&  ! ((NodeVariable) editingNode).hasEquations ())
         {
             // Add static labels for all columns except the value. See EquationTreeCellRenderer.getTreeCellRendererComponent()
             NodeBase      p            = editingNode.getTrueParent ();

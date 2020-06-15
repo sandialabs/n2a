@@ -86,15 +86,6 @@ public class NodeAnnotation extends NodeContainer
     }
 
     @Override
-    public boolean visible (int filterLevel)
-    {
-        if (filterLevel <= FilteredTreeModel.ALL)   return true;
-        if (filterLevel == FilteredTreeModel.PARAM) return false;
-        // FilteredTreeModel.LOCAL ...
-        return source.isFromTopDocument ();  // It shouldn't make a difference whether we check source or folded.
-    }
-
-    @Override
     public Icon getIcon (boolean expanded)
     {
         return icon;
