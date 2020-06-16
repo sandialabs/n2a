@@ -12,7 +12,6 @@ import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.EventQueue;
-import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -393,6 +392,7 @@ public class GraphNode extends JPanel
     **/
     public void updateGUI ()
     {
+        // Determine new position
         int x = parent.offset.x;
         int y = parent.offset.y;
         MNode bounds = node.source.child ("$metadata", "gui", "bounds");
@@ -402,8 +402,12 @@ public class GraphNode extends JPanel
             y += bounds.getInt ("y");
             if (panelEquationTree != null) setOpen (bounds.getBoolean ("open"));
         }
+
+        // Determine new size
         updatePinBounds ();
         Dimension d = getPreferredSize ();  // Fetches updated width and height.
+
+        // Apply
         Rectangle r = new Rectangle (x, y, d.width, d.height);
         animate (r);
         parent.scrollRectToVisible (r);
@@ -556,8 +560,7 @@ public class GraphNode extends JPanel
         MNode pin = node.source.child ("$metadata", "gui", "pin");
         if (pin == null) return;
 
-        Font f = getFont ();
-        FontMetrics fm = getFontMetrics (f);
+        FontMetrics fm = getFontMetrics (getFont ());
         int height = fm.getHeight () + 2 * GraphEdge.padNameTop;
         int boxWidth = height / 2;
 
@@ -596,31 +599,40 @@ public class GraphNode extends JPanel
 
         MNode pin = node.source.child ("$metadata", "gui", "pin");
         Rectangle   bounds     = getBounds ();
-        Font        f          = getFont ();
-        FontMetrics fm         = getFontMetrics (f);
+        FontMetrics fm         = getFontMetrics (getFont ());
         int         ascent     = fm.getAscent ();
         int         lineHeight = fm.getHeight () + 2 * GraphEdge.padNameTop;
         int         boxSize    = lineHeight / 2;
 
-        if (pinsInBounds != null  &&  pinsInBounds.intersects (clip))
+        if (pinsInBounds != null)
         {
-            int y = bounds.y + border.t;
-            MNode in = pin.child ("in");
-            for (MNode c : in)
+            pinsInBounds.x = bounds.x - pinsInBounds.width;
+            pinsInBounds.y = bounds.y + border.t;
+            if (pinsInBounds.intersects (clip))
             {
-                paintPin (true, c, g2, bounds, fm, ascent, lineHeight, boxSize, y);
-                y += lineHeight;
+                int y = pinsInBounds.y;
+                MNode in = pin.child ("in");
+                for (MNode c : in)
+                {
+                    paintPin (true, c, g2, bounds, fm, ascent, lineHeight, boxSize, y);
+                    y += lineHeight;
+                }
             }
         }
 
-        if (pinsOutBounds != null  &&  pinsOutBounds.intersects (clip))
+        if (pinsOutBounds != null)
         {
-            int y = bounds.y + border.t;
-            MNode out = pin.child ("out");
-            for (MNode c : out)
+            pinsOutBounds.x = bounds.x + bounds.width;
+            pinsOutBounds.y = bounds.y + border.t;
+            if (pinsOutBounds.intersects (clip))
             {
-                paintPin (false, c, g2, bounds, fm, ascent, lineHeight, boxSize, y);
-                y += lineHeight;
+                int y = pinsOutBounds.y;
+                MNode out = pin.child ("out");
+                for (MNode c : out)
+                {
+                    paintPin (false, c, g2, bounds, fm, ascent, lineHeight, boxSize, y);
+                    y += lineHeight;
+                }
             }
         }
     }
@@ -640,8 +652,8 @@ public class GraphNode extends JPanel
         int textX = textBox.x + GraphEdge.padNameSide;
         int textY = textBox.y + GraphEdge.padNameTop + ascent;
         Rectangle box = new Rectangle ();
-        if (in) box.x = bounds.x - boxSize + 1;
-        else    box.x = bounds.x + bounds.width - 1;
+        if (in) box.x = bounds.x - boxSize;
+        else    box.x = bounds.x + bounds.width - 1;  // The extra 1-pixel offset is to move the square pin box under the edge of the node. This is true of both boxes and both labels, but their natural offsets already work for this.
         box.y = y + boxSize / 2;
         box.width = box.height = boxSize;
 

@@ -16,6 +16,8 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.StoredPath;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -156,6 +158,15 @@ public class ChangeAnnotations extends UndoableView
         {
             part.graph.updateGUI ();
             if (multi) part.graph.setSelected (true);
+        }
+        else
+        {
+            PanelEquations pe = PanelModel.instance.panelEquations;
+            if (part == pe.part)
+            {
+                pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
+                pe.panelEquationGraph.updateGUI ();
+            }
         }
     }
 

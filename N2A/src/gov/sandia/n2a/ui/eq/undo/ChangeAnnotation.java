@@ -162,13 +162,23 @@ public class ChangeAnnotation extends UndoableView
         }
 
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
-        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeContainer) parent.getParent ();  // So arrowhead can update.
+        NodeVariable binding = null;
+        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding)
+        {
+            binding = (NodeVariable) parent;
+            parent = (NodeContainer) parent.getParent ();  // So arrowhead can update.
+        }
         if (parent instanceof NodePart)
         {
             NodePart p = (NodePart) parent;
             if (p.graph != null)
             {
-                p.graph.updateGUI ();
+                if (binding != null)
+                {
+                    String alias = binding.source.key ();
+                    p.graph.updateEdge (alias, p.connectionBindings.get (alias));
+                }
+                p.graph.updateGUI ();  // Could save a little graphic work here by doing more work to detect whether the part moved or not.
             }
             else
             {

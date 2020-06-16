@@ -22,6 +22,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
@@ -208,11 +209,33 @@ public class AddAnnotation extends UndoableView implements AddEditable
         }
 
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
-        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeContainer) parent.getParent ();  // So arrowhead can update.
+        NodeVariable binding = null;
+        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding)
+        {
+            binding = (NodeVariable) parent;
+            parent = (NodeContainer) parent.getParent ();  // So arrowhead can update.
+        }
         if (parent instanceof NodePart)
         {
             NodePart p = (NodePart) parent;
-            if (p.graph != null) p.graph.updateGUI ();
+            if (p.graph != null)
+            {
+                if (binding != null)
+                {
+                    String alias = binding.source.key ();
+                    p.graph.updateEdge (alias, p.connectionBindings.get (alias));
+                }
+                p.graph.updateGUI ();
+            }
+            else
+            {
+                PanelEquations pe = PanelModel.instance.panelEquations;
+                if (p == pe.part)
+                {
+                    pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
+                    pe.panelEquationGraph.updateGUI ();
+                }
+            }
         }
         if (parent.getTrueParent () == null  &&  name.endsWith ("category"))  // root node, so update categories in search list
         {
@@ -316,11 +339,33 @@ public class AddAnnotation extends UndoableView implements AddEditable
         // Do related record-keeping. For the most part, this only applies when nameIsGenerated==false.
         // However, it also applies when creating a new pin.
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
-        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding) parent = (NodeBase) parent.getParent ();
+        NodeVariable binding = null;
+        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding)
+        {
+            binding = (NodeVariable) parent;
+            parent = (NodeBase) parent.getParent ();
+        }
         if (parent instanceof NodePart)
         {
             NodePart p = (NodePart) parent;
-            if (p.graph != null) p.graph.updateGUI ();
+            if (p.graph != null)
+            {
+                if (binding != null)
+                {
+                    String alias = binding.source.key ();
+                    p.graph.updateEdge (alias, p.connectionBindings.get (alias));
+                }
+                p.graph.updateGUI ();
+            }
+            else
+            {
+                PanelEquations pe = PanelModel.instance.panelEquations;
+                if (p == pe.part)
+                {
+                    pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
+                    pe.panelEquationGraph.updateGUI ();
+                }
+            }
         }
         if (parent.getTrueParent () == null  &&  name.endsWith ("category"))
         {
