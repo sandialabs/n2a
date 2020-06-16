@@ -108,6 +108,17 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
+        Convenience method for retrieving node at an ordinal position without knowing the specific key.
+        Children are traversed in the usual key order.
+        If index is out of range, then result is null.
+    **/
+    public synchronized MNode childAt (int index)
+    {
+        for (MNode c : this) if (index-- == 0) return c;
+        return null;
+    }
+
+    /**
         Remove all children.
     **/
     public synchronized void clear ()

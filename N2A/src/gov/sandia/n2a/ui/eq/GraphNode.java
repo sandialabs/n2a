@@ -593,6 +593,36 @@ public class GraphNode extends JPanel
         }
     }
 
+    /**
+        If the point falls on a pin, then return pin identifier. Otherwise return null.
+        The identifier is in the same format used to mark connection endpoints: <in/out>.<pin name>
+    **/
+    public String findPinAt (Point p)
+    {
+        MNode       pin        = node.source.child ("$metadata", "gui", "pin");
+        FontMetrics fm         = getFontMetrics (getFont ());
+        int         lineHeight = fm.getHeight () + 2 * GraphEdge.padNameTop;
+        if (pinsInBounds != null  &&  pinsInBounds.contains (p))
+        {
+            int y = p.y - pinsInBounds.y;
+            int i = y / lineHeight;
+            MNode c = pin.child ("in").childAt (i);
+            String name = c.get ();
+            if (name.isEmpty ()) name = c.key ();
+            return "in." + name;
+        }
+        if (pinsOutBounds != null  &&  pinsOutBounds.contains (p))
+        {
+            int y = p.y - pinsOutBounds.y;
+            int i = y / lineHeight;
+            MNode c = pin.child ("out").childAt (i);
+            String name = c.get ();
+            if (name.isEmpty ()) name = c.key ();
+            return "out." + name;
+        }
+        return null;
+    }
+
     public void paintPins (Graphics2D g2, Rectangle clip)
     {
         if (pinsInBounds == null  &&  pinsOutBounds == null) return;  // Early-out
@@ -1393,7 +1423,7 @@ public class GraphNode extends JPanel
                         parent.edges.remove (edge);
                         parent.repaint (edge.bounds);
 
-                        GraphNode gn = parent.findNodeAt (new Point (getX () + me.getX (), getY () + me.getY ()));
+                        GraphNode gn = parent.findNodeAt (new Point (getX () + me.getX (), getY () + me.getY ()), false);
                         if (gn != null)
                         {
                             List<NodePart> query = new ArrayList<NodePart> ();

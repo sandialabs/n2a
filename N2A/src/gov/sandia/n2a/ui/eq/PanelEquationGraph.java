@@ -50,6 +50,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
@@ -628,12 +629,16 @@ public class PanelEquationGraph extends JScrollPane
             return null;
         }
 
-        public GraphNode findNodeAt (Point p)
+        public GraphNode findNodeAt (Point p, boolean includePins)
         {
             for (Component c : getComponents ())
             {
-                // p is relative to the container, whereas Component.contains() is relative to the component itself.
-                if (c.contains (p.x - c.getX (), p.y - c.getY ())) return (GraphNode) c;
+                GraphNode g = (GraphNode) c;
+                Rectangle bounds = g.getBounds ();
+                if (bounds.contains (p)) return g;
+                if (! includePins) return null;
+                if (g.pinsInBounds  != null  &&  g.pinsInBounds .contains (p)) return g;
+                if (g.pinsOutBounds != null  &&  g.pinsOutBounds.contains (p)) return g;
             }
             return null;
         }
@@ -1058,7 +1063,8 @@ public class PanelEquationGraph extends JScrollPane
                 NodePart partFrom = nodeFrom.node;
                 NodeVariable variable = (NodeVariable) partFrom.child (edge.alias);  // There should always be a variable with the alias as its name.
 
-                GraphNode nodeTo = graphPanel.findNodeAt (me.getPoint ());
+                Point p = me.getPoint ();
+                GraphNode nodeTo = graphPanel.findNodeAt (p, true);
                 if (nodeTo == null  ||  nodeTo == nodeFrom)  // Disconnect the edge
                 {
                     String value = "connect()";
@@ -1072,7 +1078,16 @@ public class PanelEquationGraph extends JScrollPane
                 }
                 else  // Connect to new endpoint
                 {
+                    String pin = nodeTo.findPinAt (p);
+                    if (pin != null) um.addEdit (new CompoundEdit ());
                     um.apply (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
+                    if (pin != null)
+                    {
+                        MNode data = new MVolatile ();
+                        data.set (pin, "gui", "pin");
+                        um.apply (new ChangeAnnotations (variable, data));
+                        um.endCompoundEdit ();
+                    }
                 }
                 edge = null;
             }

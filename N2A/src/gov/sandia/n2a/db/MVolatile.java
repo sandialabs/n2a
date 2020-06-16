@@ -14,18 +14,18 @@ import java.util.TreeMap;
 public class MVolatile extends MNode
 {
     protected String                     name;
-	protected Object                     value;
+    protected Object                     value;
     protected MNode                      parent;
-	protected NavigableMap<String,MNode> children;
+    protected NavigableMap<String,MNode> children;
 
-	public MVolatile ()
-	{
-	}
+    public MVolatile ()
+    {
+    }
 
-	public MVolatile (String value)
-	{
-	    this.value = value;
-	}
+    public MVolatile (String value)
+    {
+        this.value = value;
+    }
 
     public MVolatile (String value, String name)
     {
@@ -61,16 +61,16 @@ public class MVolatile extends MNode
         return result;
     }
 
-	protected synchronized MNode getChild (String key)
+    protected synchronized MNode getChild (String key)
     {
         if (children == null) return null;
         return children.get (key);
     }
 
-	public synchronized void clear ()
-	{
-	    if (children != null) children.clear ();
-	}
+    public synchronized void clear ()
+    {
+        if (children != null) children.clear ();
+    }
 
     protected synchronized void clearChild (String key)
     {
@@ -78,18 +78,18 @@ public class MVolatile extends MNode
         children.remove (key);
     }
 
-	public synchronized int size ()
-	{
-	    if (children == null) return 0;
-	    return children.size ();
-	}
+    public synchronized int size ()
+    {
+        if (children == null) return 0;
+        return children.size ();
+    }
 
-	public boolean data ()
-	{
-	    return value != null;
-	}
+    public boolean data ()
+    {
+        return value != null;
+    }
 
-	public synchronized String getOrDefault (String defaultValue)
+    public synchronized String getOrDefault (String defaultValue)
     {
         if (value == null) return defaultValue;
         String result = value.toString ();

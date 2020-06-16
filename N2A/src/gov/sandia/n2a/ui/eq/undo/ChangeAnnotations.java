@@ -152,10 +152,23 @@ public class ChangeAnnotations extends UndoableView
 
         // Update graph
         NodePart part;
-        if (parent instanceof NodePart) part = (NodePart) parent;
-        else                            part = (NodePart) parent.getParent ();  // Presumably this is a NodeVariable, so our immediate parent is a NodePart.
+        NodeVariable binding = null;
+        if (parent instanceof NodePart)
+        {
+            part = (NodePart) parent;
+        }
+        else  // Presumably this is a NodeVariable, so our immediate parent is a NodePart.
+        {
+            binding = (NodeVariable) parent;  // If parent is not a NodeVariable, it is a bug in the code that made this ChangeAnnotations, and this line will throw a class cast exception.
+            part = (NodePart) parent.getParent ();
+        }
         if (part.graph != null)
         {
+            if (binding != null)
+            {
+                String alias = binding.source.key ();
+                part.graph.updateEdge (alias, part.connectionBindings.get (alias));
+            }
             part.graph.updateGUI ();
             if (multi) part.graph.setSelected (true);
         }
