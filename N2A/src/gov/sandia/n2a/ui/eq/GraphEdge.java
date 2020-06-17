@@ -25,7 +25,6 @@ import java.awt.image.BufferedImage;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 
-import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
@@ -145,20 +144,17 @@ public class GraphEdge
                 // Determine tip position and angle
                 //   Determine vertical position down side of part.
                 int y = Abounds.y + GraphNode.border.t + boxSize;  // vertical center of first pin
-                for (MNode p : nodeTo.node.source.child ("$metadata", "gui", "pin", pinSide))
-                {
-                    if (p.key ().equals (pinKey)) break;
-                    y += lineHeight;
-                }
                 //   Determine horizontal position and tip angle
                 if (pinSide.equals ("in"))
                 {
+                    y += lineHeight * nodeTo.pinIn.getInt (pinKey, "order");
                     tip = new Vector2 (Abounds.x - boxSize - 1, y);
                     tipAngle = Math.PI;
                     tipAway = new Vector2 (-1, 0);
                 }
                 else  // out
                 {
+                    y += lineHeight * nodeTo.pinOut.getInt (pinKey, "order");
                     tip = new Vector2 (Abounds.x + Abounds.width + boxSize, y);
                     tipAngle = 0;
                     tipAway = new Vector2 (1, 0);
@@ -189,18 +185,15 @@ public class GraphEdge
                 {
                     Bbounds.grow (padTip, 0);
                     int y = Bbounds.y + GraphNode.border.t + boxSize;
-                    for (MNode p : edgeOther.nodeTo.node.source.child ("$metadata", "gui", "pin", edgeOther.pinSide))
-                    {
-                        if (p.key ().equals (edgeOther.pinKey)) break;
-                        y += lineHeight;
-                    }
                     if (edgeOther.pinSide.equals ("in"))
                     {
+                        y += lineHeight * edgeOther.nodeTo.pinIn.getInt (edgeOther.pinKey, "order");
                         b = new Vector2 (Bbounds.x - boxSize, y);
                         flip = -1;
                     }
                     else
                     {
+                        y += lineHeight * edgeOther.nodeTo.pinOut.getInt (edgeOther.pinKey, "order");
                         b = new Vector2 (Bbounds.x + Bbounds.width + boxSize, y);
                         flip = 1;
                     }

@@ -55,11 +55,14 @@ import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
+import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
+import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 @SuppressWarnings("serial")
@@ -637,8 +640,8 @@ public class PanelEquationGraph extends JScrollPane
                 Rectangle bounds = g.getBounds ();
                 if (bounds.contains (p)) return g;
                 if (! includePins) return null;
-                if (g.pinsInBounds  != null  &&  g.pinsInBounds .contains (p)) return g;
-                if (g.pinsOutBounds != null  &&  g.pinsOutBounds.contains (p)) return g;
+                if (g.pinInBounds  != null  &&  g.pinInBounds .contains (p)) return g;
+                if (g.pinOutBounds != null  &&  g.pinOutBounds.contains (p)) return g;
             }
             return null;
         }
@@ -1070,24 +1073,50 @@ public class PanelEquationGraph extends JScrollPane
                     String value = "connect()";
                     String original = variable.source.getOriginal ().get ();
                     if (Operator.containsConnect (original)) value = original;
+
+                    NodeBase pin = AddAnnotation.resolve (variable, "gui.pin");
+                    if (pin != variable)  // found something
+                    {
+                        MNode m = ((NodeAnnotation) pin).folded;
+                        if (! m.key ().equals ("pin")  ||  ! m.parent ().key ().equals ("gui")) pin = null;  // Verify that pin is actually "gui.pin"
+                    }
+
+                    if (pin != null)
+                    {
+                        um.addEdit (new CompoundEdit ());
+                        um.apply (new DeleteAnnotation ((NodeAnnotation) pin, false));
+                    }
                     um.apply (new ChangeVariable (variable, edge.alias, value));
+                    if (pin != null) um.endCompoundEdit ();
                 }
-                else if (nodeTo == edge.nodeTo)  // No change
+                else if (nodeTo == edge.nodeTo)  // No change in target node
                 {
-                    edge.animate (null);
+                    String pinOld = variable.source.get ("$metadata", "gui", "pin");
+                    String pinNew = nodeTo.findPinAt (p);
+                    if (! pinNew.equals (pinOld))  // pin has changed
+                    {
+                        MNode data = new MVolatile ();
+                        data.set (pinNew, "gui", "pin");
+                        um.apply (new ChangeAnnotations (variable, data));
+                    }
+                    else  // No change in pin
+                    {
+                        // Stop drag mode and restore connection to normal.
+                        edge.animate (null);
+                    }
                 }
                 else  // Connect to new endpoint
                 {
                     String pin = nodeTo.findPinAt (p);
-                    if (pin != null) um.addEdit (new CompoundEdit ());
-                    um.apply (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
                     if (pin != null)
                     {
+                        um.addEdit (new CompoundEdit ());
                         MNode data = new MVolatile ();
                         data.set (pin, "gui", "pin");
                         um.apply (new ChangeAnnotations (variable, data));
-                        um.endCompoundEdit ();
                     }
+                    um.apply (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
+                    if (pin != null) um.endCompoundEdit ();
                 }
                 edge = null;
             }

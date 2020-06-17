@@ -78,8 +78,12 @@ public class GraphNode extends JPanel
     protected ResizeListener      resizeListener      = new ResizeListener ();
     protected List<GraphEdge>     edgesOut            = new ArrayList<GraphEdge> ();
     protected List<GraphEdge>     edgesIn             = new ArrayList<GraphEdge> ();
-    protected Rectangle           pinsOutBounds;  // If null, then no out pins exist. If non-null, then must be shifted to left side of node bounds before testing.
-    protected Rectangle           pinsInBounds;   // ditto for in pins and right side
+    protected MNode               pinOut;        // Deep copy of gui.pin.out. Null if no out pins.
+    protected MNode               pinIn;         // ditto for in pins
+    protected List<MNode>         pinOutOrder;   // Maps from position down right side to associated pin info. Null if no out pins.
+    protected List<MNode>         pinInOrder;    // ditto for in pins
+    protected Rectangle           pinOutBounds;  // Surrounds graphic representation of pins. Null if no out pins.
+    protected Rectangle           pinInBounds;   // ditto for in pins
 
     protected static RoundedBorder border = new RoundedBorder (5);
 
@@ -121,7 +125,7 @@ public class GraphNode extends JPanel
             int y = bounds.getInt ("y") + parent.offset.y;
             setLocation (x, y);
         }
-        updatePinBounds ();
+        updatePins ();
 
         addMouseListener (resizeListener);
         addMouseMotionListener (resizeListener);
@@ -316,8 +320,8 @@ public class GraphNode extends JPanel
         d.width  = Math.max (d.width,  w);
         d.height = Math.max (d.height, h);
 
-        if (pinsInBounds  != null) d.height = Math.max (d.height, pinsInBounds .height + 2 * border.t);
-        if (pinsOutBounds != null) d.height = Math.max (d.height, pinsOutBounds.height + 2 * border.t);
+        if (pinInBounds  != null) d.height = Math.max (d.height, pinInBounds .height + 2 * border.t);
+        if (pinOutBounds != null) d.height = Math.max (d.height, pinOutBounds.height + 2 * border.t);
 
         // Don't exceed current size of viewport.
         // Should this limit be imposed on user settings as well?
@@ -404,7 +408,7 @@ public class GraphNode extends JPanel
         }
 
         // Determine new size
-        updatePinBounds ();
+        updatePins ();
         Dimension d = getPreferredSize ();  // Fetches updated width and height.
 
         // Apply
@@ -500,7 +504,7 @@ public class GraphNode extends JPanel
         Rectangle current = getBounds ();
         Rectangle currentWithPins = current;
         Rectangle nextWithPins    = next;
-        if (pinsInBounds != null)
+        if (pinInBounds != null)
         {
             // There may be a latent bug when the label of pin shrinks or the pin goes away. In that case,
             // we don't really keep track of the previous region (currentWithPins) properly, because we only
@@ -508,21 +512,21 @@ public class GraphNode extends JPanel
 
             // If node is sized correctly, the following should only change width and x, so this code could be simpler.
 
-            pinsInBounds.y = current.y + border.t;
-            pinsInBounds.x = current.x - pinsInBounds.width;
-            currentWithPins = currentWithPins.union (pinsInBounds);
-            pinsInBounds.y = next.y + border.t;
-            pinsInBounds.x = next.x - pinsInBounds.width;
-            nextWithPins = nextWithPins.union (pinsInBounds);
+            pinInBounds.y = current.y + border.t;
+            pinInBounds.x = current.x - pinInBounds.width;
+            currentWithPins = currentWithPins.union (pinInBounds);
+            pinInBounds.y = next.y + border.t;
+            pinInBounds.x = next.x - pinInBounds.width;
+            nextWithPins = nextWithPins.union (pinInBounds);
         }
-        if (pinsOutBounds != null)
+        if (pinOutBounds != null)
         {
-            pinsOutBounds.y = current.y + border.t;
-            pinsOutBounds.x = current.x + current.width;
-            currentWithPins = currentWithPins.union (pinsOutBounds);
-            pinsOutBounds.y = next.y + border.t;
-            pinsOutBounds.x = next.x + next.width;
-            nextWithPins = nextWithPins.union (pinsOutBounds);
+            pinOutBounds.y = current.y + border.t;
+            pinOutBounds.x = current.x + current.width;
+            currentWithPins = currentWithPins.union (pinOutBounds);
+            pinOutBounds.y = next.y + border.t;
+            pinOutBounds.x = next.x + next.width;
+            nextWithPins = nextWithPins.union (pinOutBounds);
         }
 
         Rectangle paintRegion = nextWithPins.union (currentWithPins);
@@ -553,10 +557,14 @@ public class GraphNode extends JPanel
         parent.repaint (paintRegion);
     }
 
-    public void updatePinBounds ()
+    public void updatePins ()
     {
-        pinsInBounds = null;
-        pinsOutBounds = null;
+        pinIn        = null;
+        pinOut       = null;
+        pinInOrder   = null;
+        pinOutOrder  = null;
+        pinInBounds  = null;
+        pinOutBounds = null;
         MNode pin = node.source.child ("$metadata", "gui", "pin");
         if (pin == null) return;
 
@@ -567,29 +575,51 @@ public class GraphNode extends JPanel
         MNode in = pin.child ("in");
         if (in != null  &&  in.size () > 0)
         {
-            pinsInBounds = new Rectangle ();
-            for (MNode c : in)
+            pinIn        = new MVolatile ();
+            pinIn.merge (in);
+            pinInOrder   = new ArrayList<MNode> ();
+            pinInBounds  = new Rectangle ();
+            MNode sorted = new MVolatile ();
+            for (MNode c : pinIn)
+            {
+                String name = c.key ();
+                String order = c.getOrDefault (name, "order");
+                sorted.set (name, order);
+                pinInBounds.width   = Math.max (pinInBounds.width, fm.stringWidth (name));
+                pinInBounds.height += height;
+            }
+            for (MNode c : sorted)
             {
                 String name = c.get ();
-                if (name.isEmpty ()) name = c.key ();
-                pinsInBounds.width   = Math.max (pinsInBounds.width, fm.stringWidth (name));
-                pinsInBounds.height += height;
+                pinIn.set (pinInOrder.size (), name, "order");
+                pinInOrder.add (pinIn.child (name));
             }
-            pinsInBounds.width += boxWidth + 2 * GraphEdge.padNameSide;
+            pinInBounds.width += boxWidth + 2 * GraphEdge.padNameSide;
         }
 
         MNode out = pin.child ("out");
         if (out != null  &&  out.size () > 0)
         {
-            pinsOutBounds = new Rectangle ();
+            pinOut       = new MVolatile ();
+            pinOut.merge (out);
+            pinOutOrder  = new ArrayList<MNode> ();
+            pinOutBounds = new Rectangle ();
+            MNode sorted = new MVolatile ();
             for (MNode c : out)
             {
-                String name = c.get ();
-                if (name.isEmpty ()) name = c.key ();
-                pinsOutBounds.width   = Math.max (pinsOutBounds.width, fm.stringWidth (name));
-                pinsOutBounds.height += height;
+                String name = c.key ();
+                String order = c.getOrDefault (name, "order");
+                sorted.set (name, order);
+                pinOutBounds.width   = Math.max (pinOutBounds.width, fm.stringWidth (name));
+                pinOutBounds.height += height;
             }
-            pinsOutBounds.width += boxWidth + 2 * GraphEdge.padNameSide;
+            for (MNode c : sorted)
+            {
+                String name = c.get ();
+                pinOut.set (pinOutOrder.size (), name, "order");
+                pinOutOrder.add (pinOut.child (name));
+            }
+            pinOutBounds.width += boxWidth + 2 * GraphEdge.padNameSide;
         }
     }
 
@@ -599,50 +629,41 @@ public class GraphNode extends JPanel
     **/
     public String findPinAt (Point p)
     {
-        MNode       pin        = node.source.child ("$metadata", "gui", "pin");
         FontMetrics fm         = getFontMetrics (getFont ());
         int         lineHeight = fm.getHeight () + 2 * GraphEdge.padNameTop;
-        if (pinsInBounds != null  &&  pinsInBounds.contains (p))
+        if (pinInBounds != null  &&  pinInBounds.contains (p))
         {
-            int y = p.y - pinsInBounds.y;
-            int i = y / lineHeight;
-            MNode c = pin.child ("in").childAt (i);
-            String name = c.get ();
-            if (name.isEmpty ()) name = c.key ();
-            return "in." + name;
+            int y = p.y - pinInBounds.y;
+            MNode c = pinInOrder.get (y / lineHeight);
+            return "in." + c.key ();
         }
-        if (pinsOutBounds != null  &&  pinsOutBounds.contains (p))
+        if (pinOutBounds != null  &&  pinOutBounds.contains (p))
         {
-            int y = p.y - pinsOutBounds.y;
-            int i = y / lineHeight;
-            MNode c = pin.child ("out").childAt (i);
-            String name = c.get ();
-            if (name.isEmpty ()) name = c.key ();
-            return "out." + name;
+            int y = p.y - pinOutBounds.y;
+            MNode c = pinOutOrder.get (y / lineHeight);
+            return "out." + c.key ();
         }
         return null;
     }
 
     public void paintPins (Graphics2D g2, Rectangle clip)
     {
-        if (pinsInBounds == null  &&  pinsOutBounds == null) return;  // Early-out
+        if (pinInBounds == null  &&  pinOutBounds == null) return;  // Early-out
 
-        MNode pin = node.source.child ("$metadata", "gui", "pin");
         Rectangle   bounds     = getBounds ();
         FontMetrics fm         = getFontMetrics (getFont ());
         int         ascent     = fm.getAscent ();
         int         lineHeight = fm.getHeight () + 2 * GraphEdge.padNameTop;
         int         boxSize    = lineHeight / 2;
 
-        if (pinsInBounds != null)
+        if (pinInBounds != null)
         {
-            pinsInBounds.x = bounds.x - pinsInBounds.width;
-            pinsInBounds.y = bounds.y + border.t;
-            if (pinsInBounds.intersects (clip))
+            pinInBounds.x = bounds.x - pinInBounds.width;
+            pinInBounds.y = bounds.y + border.t;
+            if (pinInBounds.intersects (clip))
             {
-                int y = pinsInBounds.y;
-                MNode in = pin.child ("in");
-                for (MNode c : in)
+                int y = pinInBounds.y;
+                for (MNode c : pinInOrder)
                 {
                     paintPin (true, c, g2, bounds, fm, ascent, lineHeight, boxSize, y);
                     y += lineHeight;
@@ -650,15 +671,14 @@ public class GraphNode extends JPanel
             }
         }
 
-        if (pinsOutBounds != null)
+        if (pinOutBounds != null)
         {
-            pinsOutBounds.x = bounds.x + bounds.width;
-            pinsOutBounds.y = bounds.y + border.t;
-            if (pinsOutBounds.intersects (clip))
+            pinOutBounds.x = bounds.x + bounds.width;
+            pinOutBounds.y = bounds.y + border.t;
+            if (pinOutBounds.intersects (clip))
             {
-                int y = pinsOutBounds.y;
-                MNode out = pin.child ("out");
-                for (MNode c : out)
+                int y = pinOutBounds.y;
+                for (MNode c : pinOutOrder)
                 {
                     paintPin (false, c, g2, bounds, fm, ascent, lineHeight, boxSize, y);
                     y += lineHeight;
