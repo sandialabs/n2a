@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq;
 
+import java.awt.AlphaComposite;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -16,6 +17,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.RenderingHints;
@@ -30,6 +32,7 @@ import java.awt.event.FocusListener;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
+import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
@@ -162,6 +165,21 @@ public class PanelEquations extends JPanel
 
     protected int jobCount = 0;  // for launching jobs
 
+    public static ImageIcon colorize (ImageIcon mask, Color color)
+    {
+        Image image = mask.getImage ();
+        int w = image.getWidth (null);
+        int h = image.getHeight (null);
+        BufferedImage result = new BufferedImage (w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = result.createGraphics ();
+        g.drawImage (image, 0, 0, null);
+        g.setComposite (AlphaComposite.SrcAtop);
+        g.setColor (color);
+        g.fillRect (0, 0, w, h);
+        g.dispose ();
+        return new ImageIcon (result);
+    }
+
     public PanelEquations ()
     {
         InputMap inputMap = getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
@@ -236,28 +254,37 @@ public class PanelEquations extends JPanel
         FilteredTreeModel.showParam     = AppData.state.getOrDefault (true,  "PanelModel", "filter", "param");
         FilteredTreeModel.showRevoked   = AppData.state.getOrDefault (false, "PanelModel", "filter", "revoked");
 
-        buttonFilterInherited = new JToggleButton (ImageUtil.getImage ("filterInherited.png"));
+        ImageIcon iconFilter       = ImageUtil.getImage ("filter.png");
+        ImageIcon iconFilterFilled = ImageUtil.getImage ("filterFilled.png");
+
+        buttonFilterInherited = new JToggleButton (colorize (iconFilter, Color.blue));
+        buttonFilterInherited.setSelectedIcon (colorize (iconFilterFilled, Color.blue));
         buttonFilterInherited.setMargin (new Insets (2, 2, 2, 2));
         buttonFilterInherited.setFocusable (false);
         buttonFilterInherited.setSelected (FilteredTreeModel.showInherited);
         buttonFilterInherited.setToolTipText ("Show Inherited Equations");
         buttonFilterInherited.addActionListener (listenerFilter);
 
-        buttonFilterLocal = new JToggleButton (ImageUtil.getImage ("filterLocal.png"));
+        buttonFilterLocal = new JToggleButton (iconFilter);  // black
+        buttonFilterLocal.setSelectedIcon (iconFilterFilled);
         buttonFilterLocal.setMargin (new Insets (2, 2, 2, 2));
         buttonFilterLocal.setFocusable (false);
         buttonFilterLocal.setSelected (FilteredTreeModel.showLocal);
         buttonFilterLocal.setToolTipText ("Show Local Equations");
         buttonFilterLocal.addActionListener (listenerFilter);
 
-        buttonFilterParam = new JToggleButton (ImageUtil.getImage ("filter.png"));
+        Color darkGreen = new Color (0, 128, 0);
+        buttonFilterParam = new JToggleButton (colorize (iconFilter, darkGreen));
+        buttonFilterParam.setSelectedIcon (colorize (iconFilterFilled, darkGreen));
         buttonFilterParam.setMargin (new Insets (2, 2, 2, 2));
         buttonFilterParam.setFocusable (false);
         buttonFilterParam.setSelected (FilteredTreeModel.showParam);
         buttonFilterParam.setToolTipText ("Show Parameters");
         buttonFilterParam.addActionListener (listenerFilter);
 
-        buttonFilterRevoked = new JToggleButton (ImageUtil.getImage ("filterRevoked.png"));
+        Color darkRed = new Color (192, 0, 0);
+        buttonFilterRevoked = new JToggleButton (colorize (iconFilter, darkRed));
+        buttonFilterRevoked.setSelectedIcon (colorize (iconFilterFilled, darkRed));
         buttonFilterRevoked.setMargin (new Insets (2, 2, 2, 2));
         buttonFilterRevoked.setFocusable (false);
         buttonFilterRevoked.setSelected (FilteredTreeModel.showRevoked);
