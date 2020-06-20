@@ -188,6 +188,17 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
+        Determines if the given key exists anywhere in the hierarchy.
+        This is a deep query. For a shallow (one-level) query, use child() instead.
+    **/
+    public boolean containsKey (String key)
+    {
+        if (child (key) != null) return true;
+        for (MNode c : this) if (c.containsKey (key)) return true;
+        return false;
+    }
+
+    /**
         @return This node's value, with "" as default
     **/
     public String get ()

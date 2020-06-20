@@ -30,20 +30,22 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 **/
 public class ChangeAnnotations extends UndoableView
 {
-    protected List<String> path;          // To node that contains the metadata. $metadata itself may be explicit (for parts) or hidden (for variables).
+    protected List<String> path;          // To node that contains the $metadata node. $metadata itself may be explicit (for parts) or hidden (for variables).
     protected int          index;         // If we create $metadata, this is where it goes.
     protected MNode        undoAdd;       // Nodes to apply during undo, starting at $metadata. If $metadata key is absent, then this is null.
     protected MNode        undoRemove;    // Nodes that should be removed during undo, via MNode.uniqueNodes(). Like undoAdd, this is null if $metadata key is absent.
     protected MNode        doAdd;         // The nodes to be changed, rooted at $metadata. There is no corresponding doRemove.
     protected boolean      neutralized;   // Indicates that this edit exactly reverses the previous one, so completely remove both.
     protected boolean      multi;
+    protected boolean      touchesPin;
 
     public ChangeAnnotations (NodeBase parent, MNode metadata)
     {
         super (parent);
 
-        path  = parent.getKeyPath ();
-        doAdd = metadata;
+        path       = parent.getKeyPath ();
+        doAdd      = metadata;
+        touchesPin = metadata.containsKey ("pin");
 
         MNode currentTree = parent.source.child ("$metadata");
         if (currentTree == null)
@@ -159,22 +161,31 @@ public class ChangeAnnotations extends UndoableView
         }
         else  // Presumably this is a NodeVariable, so our immediate parent is a NodePart.
         {
-            binding = (NodeVariable) parent;  // If parent is not a NodeVariable, it is a bug in the code that made this ChangeAnnotations, and this line will throw a class cast exception.
+            binding = (NodeVariable) parent;  // If parent is not a NodeVariable, it is a bug in the code that instantiated this ChangeAnnotations, and this line will throw a class cast exception.
+            if (! binding.isBinding) binding = null;
             part = (NodePart) parent.getParent ();
         }
+        PanelEquations pe = PanelModel.instance.panelEquations;
         if (part.graph != null)
         {
-            if (binding != null)
+            if (binding == null)
+            {
+                part.graph.updateGUI ();
+                if (touchesPin)
+                {
+                    pe.panelEquationGraph.reconnect ();
+                    pe.panelEquationGraph.repaint ();
+                }
+            }
+            else
             {
                 String alias = binding.source.key ();
                 part.graph.updateEdge (alias, part.connectionBindings.get (alias));
             }
-            part.graph.updateGUI ();
             if (multi) part.graph.setSelected (true);
         }
         else
         {
-            PanelEquations pe = PanelModel.instance.panelEquations;
             if (part == pe.part)
             {
                 pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().

@@ -39,6 +39,7 @@ public class ChangeAnnotation extends UndoableView
     protected MNode        savedTree;      // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
     protected boolean      multi;          // Add to existing selection rather than blowing it away.
     public    boolean      selectVariable; // Select containing variable rather than specific metadata node. Implies the relevant node is directly under a variable.
+    protected boolean      touchesPin;
 
     public ChangeAnnotation (NodeAnnotation node, String nameAfter, String valueAfter)
     {
@@ -82,6 +83,8 @@ public class ChangeAnnotation extends UndoableView
         {
             prefixAfter = (prefixAfter + "." + nameAfters[i]).substring (1);
         }
+
+        touchesPin =  nameAfter.equals ("pin")  ||  path.contains ("pin");  // Crude heuristic to see if this changes pin metadata.
     }
 
     public void setMulti (boolean value)
@@ -170,19 +173,27 @@ public class ChangeAnnotation extends UndoableView
         }
         if (parent instanceof NodePart)
         {
+            PanelEquations pe = PanelModel.instance.panelEquations;
             NodePart p = (NodePart) parent;
             if (p.graph != null)
             {
-                if (binding != null)
+                if (binding == null)
+                {
+                    p.graph.updateGUI ();  // Could save a little graphic work here by doing more work to detect whether the part moved or not.
+                    if (touchesPin)
+                    {
+                        pe.panelEquationGraph.reconnect ();
+                        pe.panelEquationGraph.repaint ();
+                    }
+                }
+                else
                 {
                     String alias = binding.source.key ();
                     p.graph.updateEdge (alias, p.connectionBindings.get (alias));
                 }
-                p.graph.updateGUI ();  // Could save a little graphic work here by doing more work to detect whether the part moved or not.
             }
             else
             {
-                PanelEquations pe = PanelModel.instance.panelEquations;
                 if (p == pe.part)
                 {
                     pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().

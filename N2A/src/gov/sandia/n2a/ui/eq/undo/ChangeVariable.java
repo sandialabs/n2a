@@ -161,7 +161,13 @@ public class ChangeVariable extends UndoableView
 
                 try
                 {
+                    // This will throw an AbortRun if any connection is not properly bound.
+                    // However, not every connection binding necessarily leads to this variable.
                     compiled.resolveConnectionBindings ();
+                }
+                catch (Exception e) {}
+                try
+                {
                     compiled.resolveLHS ();
                     // This will very likely throw an AbortRun exception to report unresolved variables.
                     // This will do no harm. All we need is that other equations resolve to this variable.

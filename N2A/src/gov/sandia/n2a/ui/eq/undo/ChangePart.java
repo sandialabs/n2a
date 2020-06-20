@@ -26,10 +26,12 @@ import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.GraphEdge;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
@@ -95,7 +97,7 @@ public class ChangePart extends UndoableView
         MPart oldPart = (MPart) mparent.child (nameBefore);
         MPart newPart = (MPart) mparent.child (nameAfter);
 
-        //   Change connection bindings.
+        //   Change connection bindings to this part.
         //   See ChangeVariable.apply() for a similar procedure. More detailed comments appear there.
         //   We make use of static functions in that class to do the heavy work of emitting code with name changes.
         //   TODO: This approach will probably fail on parts that contain references to themselves.
@@ -126,6 +128,10 @@ public class ChangePart extends UndoableView
             try
             {
                 compiled.resolveConnectionBindings ();
+            }
+            catch (Exception e) {}
+            try
+            {
                 compiled.resolveLHS ();
                 compiled.resolveRHS ();
             }
@@ -159,6 +165,20 @@ public class ChangePart extends UndoableView
             }
         }
         catch (Exception e) {}
+
+        //   Change pin links to this part.
+        List<GraphEdge> rebindEdges = new ArrayList<GraphEdge> ();
+        if (nodeBefore.graph != null)
+        {
+            for (GraphEdge ge : nodeBefore.graph.edgesIn)
+            {
+                if (ge.pinKeyFrom == null  ||  ge.pinKeyTo == null) continue;  // Must be a pin link.
+                if (ge.nodeFrom != nodeBefore.graph) continue;  // We must be the output side.
+                MNode pin = ge.nodeTo.node.source.child ("$metadata", "gui", "pin", "in", ge.pinKeyTo);
+                pin.set (nameAfter, "bind");
+                rebindEdges.add (ge);
+            }
+        }
 
         // Update GUI
 
@@ -261,6 +281,29 @@ public class ChangePart extends UndoableView
                 NodeBase subparent = (NodeBase) n.getParent ();
 
                 submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
+                subparent.invalidateColumns (submodel);
+                needAnimate.add (subpet);
+            }
+        }
+
+        for (GraphEdge ge : rebindEdges)
+        {
+            ge.nodeTo.updatePins ();
+
+            // Retrieve GUI metadata node so it can be updated to match DB.
+            NodeBase metadata = ge.nodeTo.node.child ("$metadata");
+            NodeBase nodeBind = (NodeAnnotation) AddAnnotation.resolve (metadata, "gui.pin.in." + ge.pinKeyTo + ".bind");
+            nodeBind.setUserObject ();
+
+            // Update display tree
+            PanelEquationTree subpet = nodeBind.getTree ();
+            if (subpet != null)
+            {
+                JTree subtree = subpet.tree;
+                FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
+                NodeBase subparent = (NodeBase) nodeBind.getParent ();
+
+                submodel.nodeChanged (nodeBind);
                 subparent.invalidateColumns (submodel);
                 needAnimate.add (subpet);
             }

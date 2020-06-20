@@ -19,7 +19,6 @@ import java.awt.geom.CubicCurve2D;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
-import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 
 import javax.swing.Icon;
@@ -30,13 +29,15 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class GraphEdge
 {
-    protected GraphNode nodeFrom;  // The connection
-    protected GraphNode nodeTo;    // The endpoint that this edge goes to
-    protected String    nameTo;    // Name of external (not in current graph) part that edge goes to. Will only be set if nodeTo is null. If both are null, this is an unconnected edge.
-    protected GraphEdge edgeOther; // For binary connections only, the edge to the other endpoint. Used to coordinate a smooth curve through the connection node.
-    protected String    alias;     // Name of endpoint variable in connection part.
-    protected String    pinSide;   // If attached to a pin, then which side the pin is on ("in" or "out"). null for a regular (non-pin) connection.
-    protected String    pinKey;    // If attached to a pin, then the key of the pin. null for regular connection.
+    public    GraphNode nodeFrom;    // The connection part. In the case of a pin-to-pin link, this can also be a peer part.
+    public    GraphNode nodeTo;      // The endpoint that this edge goes to
+    protected String    nameTo;      // Name of external (not in current graph) part that edge goes to. Will only be set if nodeTo is null. If both are null, this is an unconnected edge.
+    protected GraphEdge edgeOther;   // For binary connections only, the edge to the other endpoint. Used to coordinate a smooth curve through the connection node.
+    protected String    alias;       // Name of endpoint variable in connection part. Empty if this is a pin-to-pin link.
+    protected String    pinSideTo;   // If attached to a pin, then which side the pin is on ("in" or "out"). null for a regular (non-pin) connection.
+    public    String    pinKeyTo;    // If attached to a pin, then the key of the pin. null for regular connection.
+    protected String    pinSideFrom; // For pin-to-pin link, this identifies the output pin.
+    public    String    pinKeyFrom;  // ditto
 
     protected Shape     line;      // The edge itself, along with any additional strokes to paint the arrowhead, if its shape is open.
     protected Shape     head;      // A closed shape. May be null.
@@ -46,6 +47,7 @@ public class GraphEdge
     protected Vector2   labelTo;
     protected Rectangle textBoxTo;
     protected Rectangle bounds = new Rectangle (0, 0, -1, -1);  // empty. Allows call to animate() on brand-new edges that have not previously called updateShape().
+    protected Vector2   root;
     protected Vector2   tip;
     protected boolean   tipDrag;
     protected Point     anchor;  // When non-null, use this as start for tip drag. Value is relative to the upper-left corner of nodeFrom. Mainly for aesthetics.
@@ -88,9 +90,57 @@ public class GraphEdge
             String inout = pieces[0];
             String key   = pieces[1];
             if (nodeTo.node.source.child ("$metadata", "gui", "pin", inout, key) == null) return;  // pin doesn't exist
-            pinSide = inout;
-            pinKey  = key;
+            pinSideTo = inout;
+            pinKeyTo  = key;
         }
+    }
+
+    /**
+        For pin-to-pin link.
+        @param nodeTo If null, then this is a drag edge. In that case, pinSize & pinKey refers to the pin on the "from" side.
+        If non-null, then this is a completed edge. In that case, nodeTo must always be an input pin.
+        pinSize & pinKey refer to the pin on the "to" side, and the pin metadata will contain the identity of the
+        pin on the "from" side.
+    **/
+    public GraphEdge (GraphNode nodeFrom, GraphNode nodeTo, String pinSide, String pinKey)
+    {
+        this.nodeFrom = nodeFrom;
+        this.nodeTo   = nodeTo;
+        alias = "";
+
+        if (nodeTo == null)  // drag edge
+        {
+            pinSideFrom = pinSide;
+            pinKeyFrom  = pinKey;
+        }
+        else  // Complete connection. In this case, client code is required to correctly configure metadata.
+        {
+            pinSideTo   = "in";  // "pinSide" is ignored in this case
+            pinKeyTo    = pinKey;
+            pinSideFrom = "out";
+            pinKeyFrom  = nodeTo.pinIn.get (pinKey, "bind", "pin");
+        }
+    }
+
+    /**
+        Prepare edge for dragging when the anchor needs to be on an input pin.
+        Drag is always on the "to" side of the edge. However, a finished pin-to-pin edge
+        is always from output to input. In order to show the drag, the edge must be
+        temporarily reconfigured to go in the opposite direction, so the correct end is
+        free to drag.
+    **/
+    public void reversePins ()
+    {
+        GraphNode tempNode = nodeFrom;
+        String    tempKey  = pinKeyFrom;
+        String    tempSide = pinSideFrom;
+        nodeFrom    = nodeTo;
+        pinKeyFrom  = pinKeyTo;
+        pinSideFrom = pinSideTo;
+        nodeTo    = tempNode;
+        pinKeyTo  = tempKey;
+        pinSideTo = tempSide;
+        // Must call updateShape() to fully implement the changes.
     }
 
     /**
@@ -103,6 +153,7 @@ public class GraphEdge
         label      = null;
         textBoxTo  = null;
         bounds     = new Rectangle (0, 0, -1, -1);  // empty, so won't affect union(), and will return false from intersects()
+        root       = null;
 
         int padTip = 0;  // Distance from boundary of nodeTo to target the tip. Varies depending on arrow type.
         String headType = nodeFrom.node.source.get (alias, "$metadata", "gui", "arrow");
@@ -132,7 +183,7 @@ public class GraphEdge
         else if (nodeTo != null)
         {
             Abounds = nodeTo.getBounds ();
-            if (pinKey == null)
+            if (pinKeyTo == null)
             {
                 a = new Vector2 (Abounds.getCenterX (), Abounds.getCenterY ());
                 Abounds.grow (padTip, padTip);
@@ -145,16 +196,16 @@ public class GraphEdge
                 //   Determine vertical position down side of part.
                 int y = Abounds.y + GraphNode.border.t + boxSize;  // vertical center of first pin
                 //   Determine horizontal position and tip angle
-                if (pinSide.equals ("in"))
+                if (pinSideTo.equals ("in"))
                 {
-                    y += lineHeight * nodeTo.pinIn.getInt (pinKey, "order");
+                    y += lineHeight * nodeTo.pinIn.getInt (pinKeyTo, "order");
                     tip = new Vector2 (Abounds.x - boxSize - 1, y);
                     tipAngle = Math.PI;
                     tipAway = new Vector2 (-1, 0);
                 }
                 else  // out
                 {
-                    y += lineHeight * nodeTo.pinOut.getInt (pinKey, "order");
+                    y += lineHeight * nodeTo.pinOut.getInt (pinKeyTo, "order");
                     tip = new Vector2 (Abounds.x + Abounds.width + boxSize, y);
                     tipAngle = 0;
                     tipAway = new Vector2 (1, 0);
@@ -166,7 +217,7 @@ public class GraphEdge
 
         Vector2 ba = null;  // Non-null for binary connections that also need a curve rather than straight line.
         Vector2 c2c = null;
-        if (! straight  &&  nodeTo != null  &&  edgeOther != null  &&  edgeOther.nodeTo != null)
+        if (! straight  &&  nodeTo != null  &&  edgeOther != null  &&  edgeOther.nodeTo != null)  // curve passing through a connection
         {
             Vector2 b;
             double flip = 0;  // Similar role to tipAway, but for edgeOther.
@@ -177,7 +228,7 @@ public class GraphEdge
             else
             {
                 Rectangle Bbounds = edgeOther.nodeTo.getBounds ();
-                if (edgeOther.pinKey == null)
+                if (edgeOther.pinKeyTo == null)
                 {
                     b = new Vector2 (Bbounds.getCenterX (), Bbounds.getCenterY ());
                 }
@@ -185,15 +236,15 @@ public class GraphEdge
                 {
                     Bbounds.grow (padTip, 0);
                     int y = Bbounds.y + GraphNode.border.t + boxSize;
-                    if (edgeOther.pinSide.equals ("in"))
+                    if (edgeOther.pinSideTo.equals ("in"))
                     {
-                        y += lineHeight * edgeOther.nodeTo.pinIn.getInt (edgeOther.pinKey, "order");
+                        y += lineHeight * edgeOther.nodeTo.pinIn.getInt (edgeOther.pinKeyTo, "order");
                         b = new Vector2 (Bbounds.x - boxSize, y);
                         flip = -1;
                     }
                     else
                     {
-                        y += lineHeight * edgeOther.nodeTo.pinOut.getInt (edgeOther.pinKey, "order");
+                        y += lineHeight * edgeOther.nodeTo.pinOut.getInt (edgeOther.pinKeyTo, "order");
                         b = new Vector2 (Bbounds.x + Bbounds.width + boxSize, y);
                         flip = 1;
                     }
@@ -219,7 +270,7 @@ public class GraphEdge
                     // The "A" edge goes to the right side of c2c, while "B" goes to the left.
                     if (nodeFrom.edgesOut.get (0) == this) ba = ba.multiply (-1);
 
-                    if (pinSide == null)  // We are an ordinary connection.
+                    if (pinSideTo == null)  // We are an ordinary connection.
                     {
                         // If other edge is a pin connection, go away from it.
                         if (ba.x * flip > 0) ba = ba.multiply (-1);
@@ -256,12 +307,8 @@ public class GraphEdge
             if (updateOther) edgeOther.updateShape (false);
         }
 
-        Graphics g = nodeFrom.getGraphics ();  // Since we're creating this graphics context, we dispose it below.
-        Rectangle2D tb = fm.getStringBounds (alias, g);
-        double tw = tb.getWidth ();
-        double th = tb.getHeight ();
-
-        Vector2 root = null;
+        double tw = fm.stringWidth (alias);
+        double th = fm.getHeight ();
         double nodeAngle = Math.atan ((double) Cbounds.height / Cbounds.width);
 
         if (nameTo != null)  // External endpoint
@@ -305,9 +352,8 @@ public class GraphEdge
 
                 // Determine text box. Need text height to locate arrowhead, so might as well calculate it all now.
                 Rectangle vp = nodeFrom.container.panelEquationGraph.vp.getViewRect ();
-                Rectangle2D eb = fm.getStringBounds (nameTo, g);
-                double ew = eb.getWidth ();
-                double eh = eb.getHeight ();
+                double ew = fm.stringWidth (nameTo);
+                double eh = fm.getHeight ();
                 labelTo = new Vector2 (c.x + offsetTo - ew / 2, vp.y + padNameTop);
 
                 textBoxTo = new Rectangle ();
@@ -322,8 +368,7 @@ public class GraphEdge
                 }
 
                 bounds = bounds.union (textBoxTo);
-                labelTo.x -= eb.getX ();
-                labelTo.y -= eb.getY ();
+                labelTo.y += fm.getAscent ();
 
                 tip = new Vector2 (c.x + offsetTo, vp.y + textBoxTo.height + padTip);
 
@@ -336,6 +381,53 @@ public class GraphEdge
                 root = intersection (spline, Cbounds);  // on boundary of c
                 if (root == null) return;
                 tipAngle = Math.PI / 2;
+            }
+        }
+        else if (pinKeyFrom != null)  // pin-to-pin, or possibly dragging from pin
+        {
+            int y = Cbounds.y + GraphNode.border.t + boxSize;
+            if (pinSideFrom.equals ("in"))
+            {
+                y += lineHeight * nodeFrom.pinIn.getInt (pinKeyFrom, "order");
+                c = new Vector2 (Cbounds.x - boxSize, y);
+                ba = new Vector2 (-1, 0);
+            }
+            else
+            {
+                y += lineHeight * nodeFrom.pinOut.getInt (pinKeyFrom, "order");
+                c = new Vector2 (Cbounds.x + Cbounds.width + boxSize, y);
+                ba = new Vector2 (1, 0);
+            }
+
+            root = c;
+            if (tipDrag  ||  nodeTo != nodeFrom)  // Usual case: single segment between two separate parts (or part to drag-tip).
+            {
+                Vector2 tc = c.subtract (tip);
+                double length = tc.length () / 3;
+                if (tipDrag) tipAway = tc.normalize ();
+                Vector2 w1 = tip.add (tipAway.multiply (length));
+                Vector2 w2 = c.add (ba.multiply (length));
+                line = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
+            }
+            else  // Self connection, so create two segments to wrap around top of part.
+            {
+                // The central point will act as endpoint to both segments.
+                int order = nodeTo.pinIn.getInt (pinKeyTo, "order");
+                Rectangle bounds = nodeTo.getBounds ();
+                int halfWidth = bounds.width / 2;
+                Vector2 m = new Vector2 (bounds.x + halfWidth, bounds.y - (lineHeight * (order + 1)));
+                double length  = bounds.width / 3 + lineHeight * order * 1.5;  // The fudge factor at the end is to make the vertical run of the Bezier curves appear to have the same spacing as the horizontal run across the top. It is arbitrary and subjective.
+                double length2 = halfWidth + boxSize + length;
+
+                Vector2 w1 = tip.add (tipAway.multiply (length));
+                Vector2 w2 = c.add (ba.multiply (length));
+                Vector2 m1 = new Vector2 (m.x - length2, m.y);
+                Vector2 m2 = new Vector2 (m.x + length2, m.y);
+
+                Path2D path = new Path2D.Double ();
+                path.append (new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, m1.x, m1.y, m.x, m.y), false);
+                path.append (new CubicCurve2D.Double (m.x, m.y, m2.x, m2.y, w2.x, w2.y, c.x, c.y), false);
+                line = path;
             }
         }
         else if (nodeTo == null)  // Unconnected endpoint
@@ -369,20 +461,20 @@ public class GraphEdge
             line = new Line2D.Double (c.x, c.y, tip.x, tip.y);
             tipAngle = new Segment2 (tip, c).angle ();
         }
-        else if (pinKey != null  &&  ! tipDrag)  // Pin connection
+        else if (pinKeyTo != null  &&  ! tipDrag)  // from connection to pin. (If dragging, then handled by other cases below.)
         {
             Vector2 ct = tip.subtract (c);
             double length = ct.length () / 3;
             tipAway = tipAway.multiply (length);
             Vector2 w1 = tip.add (tipAway);
+
             if (ba == null)  // Straight line from C to A
             {
-                Segment2 s = new Segment2 (a, c);
-                root = intersection (s, Cbounds);  // root can be null if a is inside Cbounds
-                if (root == null) return;
-
                 Vector2 w2 = c.add (ct.divide (3));
                 line = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
+
+                Segment2 s = new Segment2 (a, c);
+                root = intersection (s, Cbounds);  // root can be null if a is inside Cbounds
             }
             else  // Curve passing through C then toward A
             {
@@ -391,8 +483,8 @@ public class GraphEdge
 
                 Spline spline = new Spline ((CubicCurve2D) line);
                 root = intersection (spline, Cbounds);  // on boundary of c
-                if (root == null) return;
             }
+            if (root == null) return;
         }
         else if (ba == null)  // Draw straight line.
         {
@@ -456,33 +548,31 @@ public class GraphEdge
         bounds.grow (t, t);
 
         // Name
-        label = new Vector2 (0, 0);
-        double absAngle = root.subtract (c).absAngle ();
-        if (absAngle > nodeAngle)  // top or bottom
+        if (! alias.isEmpty ())
         {
-            label.x = root.x - tw / 2;
-            if (root.y < c.y) label.y = root.y - th - padNameTop;
-            else              label.y = root.y      + padNameTop;
-        }
-        else  // left or right
-        {
-            if (root.x < c.x) label.x = root.x - tw - padNameSide;
-            else              label.x = root.x      + padNameSide;
-            label.y = root.y - th / 2;
-        }
+            label = new Vector2 (0, 0);
+            double absAngle = root.subtract (c).absAngle ();
+            if (absAngle > nodeAngle)  // top or bottom
+            {
+                label.x = root.x - tw / 2;
+                if (root.y < c.y) label.y = root.y - th - padNameTop;
+                else              label.y = root.y      + padNameTop;
+            }
+            else  // left or right
+            {
+                if (root.x < c.x) label.x = root.x - tw - padNameSide;
+                else              label.x = root.x      + padNameSide;
+                label.y = root.y - th / 2;
+            }
 
-        textBox = new Rectangle ();
-        textBox.x      = (int) label.x - padNameSide;
-        textBox.y      = (int) label.y - padNameTop;
-        textBox.width  = (int) Math.ceil (tw) + 2 * padNameSide;
-        textBox.height = (int) Math.ceil (th) + 2 * padNameTop;
-        bounds = bounds.union (textBox);
-        // tb gives position of top-left corner relative to baseline.
-        // We want baseline, so subtract to reverse vector.
-        label.x -= tb.getX ();
-        label.y -= tb.getY ();
-
-        g.dispose ();
+            textBox = new Rectangle ();
+            textBox.x      = (int) label.x - padNameSide;
+            textBox.y      = (int) label.y - padNameTop;
+            textBox.width  = (int) Math.ceil (tw) + 2 * padNameSide;
+            textBox.height = (int) Math.ceil (th) + 2 * padNameTop;
+            bounds = bounds.union (textBox);
+            label.y += fm.getAscent ();
+        }
     }
 
     /**

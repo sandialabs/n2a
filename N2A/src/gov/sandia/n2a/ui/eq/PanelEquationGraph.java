@@ -522,27 +522,55 @@ public class PanelEquationGraph extends JScrollPane
             for (Component c : getComponents ())
             {
                 GraphNode gn = (GraphNode) c;
-                if (gn.node.connectionBindings == null) continue;
 
-                for (Entry<String,NodePart> e : gn.node.connectionBindings.entrySet ())
+                // Build connection edges
+                if (gn.node.connectionBindings != null)
                 {
-                    NodePart np = e.getValue ();
-                    GraphEdge ge = new GraphEdge (gn, np, e.getKey ());
+                    for (Entry<String,NodePart> e : gn.node.connectionBindings.entrySet ())
+                    {
+                        NodePart np = e.getValue ();
+                        GraphEdge ge = new GraphEdge (gn, np, e.getKey ());
+                        edges.add (ge);
+                        gn.edgesOut.add (ge);
+                        if (ge.nodeTo != null) ge.nodeTo.edgesIn.add (ge);
+                    }
+                    if (gn.edgesOut.size () == 2)
+                    {
+                        GraphEdge A = gn.edgesOut.get (0);  // Not necessarily same as endpoint variable named "A" in part.
+                        GraphEdge B = gn.edgesOut.get (1);
+                        A.edgeOther = B;
+                        B.edgeOther = A;
+                    }
+                    for (GraphEdge ge : gn.edgesOut)
+                    {
+                        ge.updateShape (false);
+                        if (ge.bounds != null) layout.bounds = layout.bounds.union (ge.bounds);
+                    }
+                }
+
+                // Build pin edges
+                if (gn.pinIn == null) continue;
+                NodePart parent = (NodePart) gn.node.getTrueParent ();  // never null for a graph node
+                for (MNode pin : gn.pinIn)
+                {
+                    // Find peer part
+                    String bind = pin.get ("bind");
+                    if (bind.isEmpty ()) continue;
+                    NodeBase nb = parent.child (bind);
+                    if (! (nb instanceof NodePart)) continue;
+                    GraphNode peer = ((NodePart) nb).graph;
+
+                    // Validate pin metadata
+                    String bindPin = pin.get ("bind", "pin");
+                    if (bindPin.isEmpty ()) continue;
+                    if (peer.pinOut == null  ||  peer.pinOut.child (bindPin) == null) continue;
+
+                    // Create edge
+                    GraphEdge ge = new GraphEdge (peer, gn, "in", pin.key ());
+                    gn.edgesIn.add (ge);
+                    peer.edgesIn.add (ge);  // Treat as an incoming edge on both sides of the link.
                     edges.add (ge);
-                    gn.edgesOut.add (ge);
-                    if (ge.nodeTo != null) ge.nodeTo.edgesIn.add (ge);
-                }
-                if (gn.edgesOut.size () == 2)
-                {
-                    GraphEdge A = gn.edgesOut.get (0);  // Not necessarily same as endpoint variable named "A" in part.
-                    GraphEdge B = gn.edgesOut.get (1);
-                    A.edgeOther = B;
-                    B.edgeOther = A;
-                }
-                for (GraphEdge ge : gn.edgesOut)
-                {
                     ge.updateShape (false);
-                    if (ge.bounds != null) layout.bounds = layout.bounds.union (ge.bounds);
                 }
             }
             revalidate ();
@@ -627,9 +655,46 @@ public class PanelEquationGraph extends JScrollPane
             Vector2 p2 = new Vector2 (p.x, p.y);
             for (GraphEdge e : edges)
             {
-                if (e.tip != null  &&  e.tip.distance (p2) < GraphEdge.arrowheadLength) return e;
+                if (e.tip  != null  &&  e.tip.distance (p2) < GraphEdge.arrowheadLength) return e;
+                // These tests extend the clickable area to include the full width of the pin zone.
+                if (e.pinKeyFrom != null  &&  findTipAtPin (p, e.nodeFrom, e.pinSideFrom, e.pinKeyFrom)) return e;
+                if (e.pinKeyTo   != null  &&  findTipAtPin (p, e.nodeTo,   e.pinSideTo,   e.pinKeyTo  )) return e;
             }
             return null;
+        }
+
+        /**
+            Subroutine of findTipAt()
+        **/
+        public boolean findTipAtPin (Point p, GraphNode g, String pinSide, String pinKey)
+        {
+            if (pinSide.equals ("in"))
+            {
+                if (g.pinInBounds != null  &&  g.pinInBounds.contains (p))
+                {
+                    MNode pin = g.pinIn.child (pinKey);
+                    if (pin != null)
+                    {
+                        int lineHeight = g.pinInBounds.height / g.pinIn.size ();
+                        int y = p.y - g.pinInBounds.y;
+                        if (pin.getInt ("order") == y / lineHeight) return true;
+                    }
+                }
+            }
+            else  // pinSide is "out"
+            {
+                if (g.pinOutBounds != null  &&  g.pinOutBounds.contains (p))
+                {
+                    MNode pin = g.pinOut.child (pinKey);
+                    if (pin != null)
+                    {
+                        int lineHeight = g.pinOutBounds.height / g.pinOut.size ();
+                        int y = p.y - g.pinOutBounds.y;
+                        if (pin.getInt ("order") == y / lineHeight) return true;
+                    }
+                }
+            }
+            return false;
         }
 
         public GraphNode findNodeAt (Point p, boolean includePins)
@@ -639,7 +704,7 @@ public class PanelEquationGraph extends JScrollPane
                 GraphNode g = (GraphNode) c;
                 Rectangle bounds = g.getBounds ();
                 if (bounds.contains (p)) return g;
-                if (! includePins) return null;
+                if (! includePins) continue;
                 if (g.pinInBounds  != null  &&  g.pinInBounds .contains (p)) return g;
                 if (g.pinOutBounds != null  &&  g.pinOutBounds.contains (p)) return g;
             }
@@ -711,10 +776,7 @@ public class PanelEquationGraph extends JScrollPane
             Stroke oldStroke = g2.getStroke ();
             g2.setStroke (new BasicStroke (GraphEdge.strokeThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             g2.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            for (GraphEdge e : edges)
-            {
-                if (e.bounds.intersects (clip)) e.paintComponent (g2);
-            }
+            for (GraphEdge e : edges) if (e.bounds.intersects (clip)) e.paintComponent (g2);
 
             // Draw pins
             g2.setStroke (oldStroke);
@@ -943,9 +1005,11 @@ public class PanelEquationGraph extends JScrollPane
                 // Context menus
                 if (container.locked) return;
                 Point p = me.getPoint ();
-                graphPanel.arrowEdge = graphPanel.findTipAt (p);
-                if (graphPanel.arrowEdge != null)
+                GraphEdge e = graphPanel.findTipAt (p);
+                if (e != null  &&  e.pinKeyFrom != null) e = null;  // Don't show arrow menu for pin-to-pin links.
+                if (e != null)
                 {
+                    graphPanel.arrowEdge = e;
                     graphPanel.arrowMenu.show (graphPanel, p.x, p.y);
                 }
                 else
@@ -962,15 +1026,58 @@ public class PanelEquationGraph extends JScrollPane
                 if (container.locked) return;
                 Point p = me.getPoint ();
                 edge = graphPanel.findTipAt (p);
-                if (edge == null)  // bare background
+                if (edge == null)
                 {
-                    selectStart = p;
-                    selectRegion = new Rectangle (p);
+                    // Check if a pin region is under the click.
+                    GraphNode node = graphPanel.findNodeAt (p, true);  // Only a click in the pin zone will return non-null here. If it were in the graph node proper, the click would have been routed there instead.
+                    if (node == null)  // bare background
+                    {
+                        selectStart = p;
+                        selectRegion = new Rectangle (p);
+                    }
+                    else  // In pin zone, and pin is not currently bound to an edge. If it were connected, it would have been caught by findTipAt().
+                    {
+                        // Determine which pin it is.
+                        if (node.pinInBounds != null  &&  node.pinInBounds.contains (p))
+                        {
+                            int lineHeight = node.pinInBounds.height / node.pinIn.size ();
+                            int y = p.y - node.pinInBounds.y;
+                            MNode pin = node.pinInOrder.get (y / lineHeight);
+                            edge = new GraphEdge (node, null, "in", pin.key ());
+                        }
+                        else if (node.pinOutBounds != null  &&  node.pinOutBounds.contains (p))
+                        {
+                            int lineHeight = node.pinOutBounds.height / node.pinOut.size ();
+                            int y = p.y - node.pinOutBounds.y;
+                            MNode pin = node.pinOutOrder.get (y / lineHeight);
+                            edge = new GraphEdge (node, null, "out", pin.key ());
+                        }
+                        if (edge != null)  // Finish constructing transient edge. It will be deleted by mouseRelease().
+                        {
+                            //edge.anchor = p;  // Position in this component where drag started.
+                            edge.tip = new Vector2 (0, 0);  // This is normally created by GraphEdge.updateShape(), but we don't call that first.
+                            graphPanel.edges.add (edge);
+                        }
+                    }
                 }
-                else  // arrowhead
+                else  // arrowhead or pin
+                {
+                    if (edge.pinKeyFrom != null)  // originates from a pin, so may need to reconfigure edge for dragging
+                    {
+                        // Which end is under the cursor?
+                        Vector2 p2 = new Vector2 (p.x, p.y);
+                        if (edge.root.distance (p2) < edge.tip.distance (p2))  // near root
+                        {
+                            // Since root is always the output pin in a completed edge, we need to reverse it.
+                            // During the drag, the edge will instead originate from the input pin.
+                            edge.reversePins ();
+                        }
+                    }
+                }
+                if (edge != null)
                 {
                     setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
-                    edge.animate (p);
+                    edge.animate (p);  // Activates tipDrag
                 }
             }
             else if (SwingUtilities.isMiddleMouseButton (me))
@@ -1059,64 +1166,219 @@ public class PanelEquationGraph extends JScrollPane
 
             if (edge != null)  // Finish assigning endpoint
             {
-                edge.tipDrag = false;
+                edge.tipDrag = false;  // For those cases where edge will continue to be used, rather than evaporate or be replaced.
 
                 UndoManager um = MainFrame.instance.undoManager;
                 GraphNode nodeFrom = edge.nodeFrom;
                 NodePart partFrom = nodeFrom.node;
-                NodeVariable variable = (NodeVariable) partFrom.child (edge.alias);  // There should always be a variable with the alias as its name.
+                NodeVariable variable = (NodeVariable) partFrom.child (edge.alias);  // This can be null if alias is empty (in the case of a pin-to-pin link).
 
                 Point p = me.getPoint ();
                 GraphNode nodeTo = graphPanel.findNodeAt (p, true);
-                if (nodeTo == null  ||  nodeTo == nodeFrom)  // Disconnect the edge
+                if (nodeTo == null  ||  nodeTo == nodeFrom  &&  ! edge.alias.isEmpty ())  // Disconnect the edge
                 {
-                    String value = "connect()";
-                    String original = variable.source.getOriginal ().get ();
-                    if (Operator.containsConnect (original)) value = original;
-
-                    NodeBase pin = AddAnnotation.resolve (variable, "gui.pin");
-                    if (pin != variable)  // found something
+                    if (variable == null)  // pin-to-pin
                     {
-                        MNode m = ((NodeAnnotation) pin).folded;
-                        if (! m.key ().equals ("pin")  ||  ! m.parent ().key ().equals ("gui")) pin = null;  // Verify that pin is actually "gui.pin"
+                        // Remove edge
+                        if (edge.pinSideTo == null)  // transient edge that did not get completed
+                        {
+                            graphPanel.edges.remove (edge);
+                            graphPanel.repaint (edge.bounds);
+                        }
+                        else  // previously-existing edge that has been disconnected
+                        {
+                            NodePart part;
+                            String   pin;
+                            if (edge.pinSideFrom.equals ("in"))
+                            {
+                                part = partFrom;
+                                pin  = edge.pinKeyFrom;
+                            }
+                            else  // edge.pinSideFrom is "out"
+                            {
+                                part = edge.nodeTo.node;
+                                pin  = edge.pinKeyTo;
+                            }
+                            MNode data = new MVolatile ();
+                            data.set ("", "gui", "pin", "in", pin, "bind");  // This node won't actually be deleted, simply rendered inert.
+                            data.set ("", "gui", "pin", "in", pin, "bind", "pin");
+                            um.apply (new ChangeAnnotations (part, data));
+                        }
                     }
-
-                    if (pin != null)
+                    else  // regular connector, possibly bound to pin
                     {
-                        um.addEdit (new CompoundEdit ());
-                        um.apply (new DeleteAnnotation ((NodeAnnotation) pin, false));
+                        // Change to disconnected state
+
+                        String value = "connect()";
+                        String original = variable.source.getOriginal ().get ();
+                        if (Operator.containsConnect (original)) value = original;
+
+                        NodeBase pin = AddAnnotation.resolve (variable, "gui.pin");
+                        if (pin == variable)
+                        {
+                            pin = null;
+                        }
+                        else  // found something
+                        {
+                            MNode m = ((NodeAnnotation) pin).folded;
+                            if (! m.key ().equals ("pin")  ||  ! m.parent ().key ().equals ("gui")) pin = null;  // Verify that pin is actually "gui.pin"
+                        }
+
+                        if (pin != null)
+                        {
+                            um.addEdit (new CompoundEdit ());
+                            um.apply (new DeleteAnnotation ((NodeAnnotation) pin, false));
+                        }
+                        um.apply (new ChangeVariable (variable, edge.alias, value));
+                        um.endCompoundEdit ();
                     }
-                    um.apply (new ChangeVariable (variable, edge.alias, value));
-                    if (pin != null) um.endCompoundEdit ();
                 }
                 else if (nodeTo == edge.nodeTo)  // No change in target node
                 {
-                    String pinOld = variable.source.get ("$metadata", "gui", "pin");
+                    // Usually, there is nothing to do but end the drag.
+                    // However, if the target is specifically a pin, then need to update metadata.
+                    boolean handled = false;
                     String pinNew = nodeTo.findPinAt (p);
-                    if (! pinNew.equals (pinOld))  // pin has changed
+                    if (variable == null)  // from pin
                     {
-                        MNode data = new MVolatile ();
-                        data.set (pinNew, "gui", "pin");
-                        um.apply (new ChangeAnnotations (variable, data));
+                        // In general, if a gesture is forbidden, then leave the pin unchanged (as opposed to deleting it).
+                        // There are several ways for that to happen in this case.
+                        if (! pinNew.isEmpty ())
+                        {
+                            String[] pieces = pinNew.split ("\\.", 2);
+                            String newSide = pieces[0];
+                            String newKey  = pieces[1];
+                            if (! newKey.equals (edge.pinKeyTo)  &&  newSide.equals (edge.pinSideTo))  // Only do something if pin changed, but don't change sides.
+                            {
+                                // Move to new input pin.
+                                // Must clear the old binding and set the new binding.
+                                MNode data = new MVolatile ();
+                                NodePart partTo = nodeTo.node;
+                                if (edge.pinSideTo.equals ("in"))  // selected a different input
+                                {
+                                    String nameFrom = partFrom.source.key ();
+                                    data.set ("",              "gui", "pin", "in", edge.pinKeyTo, "bind");
+                                    data.set ("",              "gui", "pin", "in", edge.pinKeyTo, "bind", "pin");
+                                    data.set (nameFrom,        "gui", "pin", "in", newKey,        "bind");
+                                    data.set (edge.pinKeyFrom, "gui", "pin", "in", newKey,        "bind", "pin");
+                                    um.apply (new ChangeAnnotations (partTo, data));
+                                }
+                                else  // edge.pinSideTo is "out" --> Selected a different output to draw from, while input pin remains the same.
+                                {
+                                    String nameTo = partTo.source.key ();
+                                    data.set (nameTo, "gui", "pin", "in", edge.pinKeyFrom, "bind");
+                                    data.set (newKey, "gui", "pin", "in", edge.pinKeyFrom, "bind", "pin");
+                                    // The edge would need to be reversed, except that we regenerate all edges in ChangeAnnotations. 
+                                    um.apply (new ChangeAnnotations (partFrom, data));
+                                }
+                                handled = true;
+                            }
+                            else if (edge.pinSideTo.equals ("out"))  // Edge goes back to original pin. May need to un-reverse the edge.
+                            {
+                                edge.reversePins ();
+                            }
+                        }
                     }
-                    else  // No change in pin
+                    else  // from connection
                     {
-                        // Stop drag mode and restore connection to normal.
-                        edge.animate (null);
+                        String pinOld = variable.source.get ("$metadata", "gui", "pin");
+                        if (! pinNew.equals (pinOld))  // target pin has changed
+                        {
+                            if (pinNew.isEmpty ())  // Possibly switched from pin to part
+                            {
+                                // Find pin metadata
+                                NodeBase pin = AddAnnotation.resolve (variable, "gui.pin");
+                                if (pin != variable)
+                                {
+                                    MNode m = ((NodeAnnotation) pin).folded;
+                                    if (m.key ().equals ("pin")  &&  m.parent ().key ().equals ("gui"))
+                                    {
+                                        um.apply (new DeleteAnnotation ((NodeAnnotation) pin, false));
+                                        handled = true;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                MNode data = new MVolatile ();
+                                data.set (pinNew, "gui", "pin");
+                                um.apply (new ChangeAnnotations (variable, data));
+                                handled = true;
+                            }
+                        }
                     }
+
+                    if (! handled) edge.animate (null);  // Stop drag mode and restore connection to normal.
                 }
                 else  // Connect to new endpoint
                 {
-                    String pin = nodeTo.findPinAt (p);
-                    if (pin != null)
+                    String pinNew = nodeTo.findPinAt (p);
+                    if (variable == null)  // from pin
                     {
-                        um.addEdit (new CompoundEdit ());
-                        MNode data = new MVolatile ();
-                        data.set (pin, "gui", "pin");
-                        um.apply (new ChangeAnnotations (variable, data));
+                        boolean handled = false;
+                        if (! pinNew.isEmpty ())
+                        {
+                            String[] pieces = pinNew.split ("\\.", 2);
+                            String newSide = pieces[0];
+                            String newKey  = pieces[1];
+                            if (! newSide.equals (edge.pinSideFrom))  // Only connect to opposite type of pin.
+                            {
+                                GraphNode nodeAfter;  // Graph node that receives changes for new connection.
+                                MNode connect = new MVolatile ();
+                                if (newSide.equals ("in"))
+                                {
+                                    nodeAfter = nodeTo;
+                                    String nameFrom = partFrom.source.key ();
+                                    connect.set (nameFrom,        "gui", "pin", "in", newKey, "bind");
+                                    connect.set (edge.pinKeyFrom, "gui", "pin", "in", newKey, "bind", "pin");
+
+                                    if (edge.nodeTo != null)  // Need to disconnect previous link. We already know that edge.nodeTo != nodeTo from higher-level test.
+                                    {
+                                        MNode disconnect = new MVolatile ();
+                                        disconnect.set ("", "gui", "pin", "in", edge.pinKeyTo, "bind");
+                                        disconnect.set ("", "gui", "pin", "in", edge.pinKeyTo, "bind", "pin");
+                                        um.addEdit (new CompoundEdit ());
+                                        um.apply (new ChangeAnnotations (edge.nodeTo.node, disconnect));
+                                    }
+                                }
+                                else  // newSide is "out", which means input pin stays the same, and it is linked to a diferent output pin.
+                                {
+                                    nodeAfter = nodeFrom;
+                                    String nameTo = nodeTo.node.source.key ();
+                                    connect.set (nameTo, "gui", "pin", "in", edge.pinKeyFrom, "bind");
+                                    connect.set (newKey, "gui", "pin", "in", edge.pinKeyFrom, "bind", "pin");
+                                }
+
+                                um.apply (new ChangeAnnotations (nodeAfter.node, connect));
+                                um.endCompoundEdit ();
+                                handled = true;
+                            }
+                        }
+                        if (! handled)
+                        {
+                            if (edge.pinSideTo == null)  // transient edge that did not get completed
+                            {
+                                graphPanel.edges.remove (edge);
+                                graphPanel.repaint (edge.bounds);
+                            }
+                            else
+                            {
+                                edge.animate (null);
+                            }
+                        }
                     }
-                    um.apply (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
-                    if (pin != null) um.endCompoundEdit ();
+                    else  // from connection
+                    {
+                        if (pinNew != null)
+                        {
+                            um.addEdit (new CompoundEdit ());
+                            MNode data = new MVolatile ();
+                            data.set (pinNew, "gui", "pin");
+                            um.apply (new ChangeAnnotations (variable, data));
+                        }
+                        um.apply (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
+                        um.endCompoundEdit ();
+                    }
                 }
                 edge = null;
             }

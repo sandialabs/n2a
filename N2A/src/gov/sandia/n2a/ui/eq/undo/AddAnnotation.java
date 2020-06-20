@@ -43,6 +43,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
     protected boolean      multi;           // Add to existing selection rather than blowing it away.
     protected boolean      multiLast;       // Set selection during delete, but add to selection during create.
     public    boolean      selectVariable;  // Select containing variable rather than specific metadata node. Implies the relevant node is directly under a variable.
+    protected boolean      touchesPin;
 
     /**
         @param parent Direct container of the new node, even if not a $metadata node.
@@ -114,6 +115,8 @@ public class AddAnnotation extends UndoableView implements AddEditable
 
             nameIsGenerated = false;
         }
+
+        touchesPin =  path.contains ("pin")  ||  name.contains ("pin")  ||  createSubtree.containsKey ("pin");
     }
 
     public String uniqueName (MNode mparent, String prefix, boolean allowEmptySuffix)
@@ -140,10 +143,10 @@ public class AddAnnotation extends UndoableView implements AddEditable
     public void undo ()
     {
         super.undo ();
-        destroy (path, false, name, prefix, multi, multiLast, selectVariable);
+        destroy (path, false, name, prefix, multi, multiLast, selectVariable, touchesPin);
     }
 
-    public static void destroy (List<String> path, boolean canceled, String name, String prefix, boolean multi, boolean multiLast, boolean selectVariable)
+    public static void destroy (List<String> path, boolean canceled, String name, String prefix, boolean multi, boolean multiLast, boolean selectVariable, boolean touchesPin)
     {
         // Retrieve created node
         NodeContainer parent = (NodeContainer) NodeBase.locateNode (path);
@@ -217,19 +220,27 @@ public class AddAnnotation extends UndoableView implements AddEditable
         }
         if (parent instanceof NodePart)
         {
+            PanelEquations pe = PanelModel.instance.panelEquations;
             NodePart p = (NodePart) parent;
             if (p.graph != null)
             {
-                if (binding != null)
+                if (binding == null)
+                {
+                    p.graph.updateGUI ();
+                    if (touchesPin)
+                    {
+                        pe.panelEquationGraph.reconnect ();
+                        pe.panelEquationGraph.repaint ();
+                    }
+                }
+                else
                 {
                     String alias = binding.source.key ();
                     p.graph.updateEdge (alias, p.connectionBindings.get (alias));
                 }
-                p.graph.updateGUI ();
             }
             else
             {
-                PanelEquations pe = PanelModel.instance.panelEquations;
                 if (p == pe.part)
                 {
                     pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
@@ -246,7 +257,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, selectVariable);
+        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, selectVariable, touchesPin);
     }
 
     public NodeBase getCreatedNode ()
@@ -254,7 +265,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
         return createdNode;
     }
 
-    public static NodeBase create (List<String> path, int index, String name, MNode createSubtree, boolean nameIsGenerated, boolean multi, boolean selectVariable)
+    public static NodeBase create (List<String> path, int index, String name, MNode createSubtree, boolean nameIsGenerated, boolean multi, boolean selectVariable, boolean touchesPin)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null)
@@ -347,19 +358,27 @@ public class AddAnnotation extends UndoableView implements AddEditable
         }
         if (parent instanceof NodePart)
         {
+            PanelEquations pe = PanelModel.instance.panelEquations;
             NodePart p = (NodePart) parent;
             if (p.graph != null)
             {
-                if (binding != null)
+                if (binding == null)
+                {
+                    p.graph.updateGUI ();
+                    if (touchesPin)
+                    {
+                        pe.panelEquationGraph.reconnect ();
+                        pe.panelEquationGraph.repaint ();
+                    }
+                }
+                else
                 {
                     String alias = binding.source.key ();
                     p.graph.updateEdge (alias, p.connectionBindings.get (alias));
                 }
-                p.graph.updateGUI ();
             }
             else
             {
-                PanelEquations pe = PanelModel.instance.panelEquations;
                 if (p == pe.part)
                 {
                     pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().

@@ -28,6 +28,7 @@ public class DeleteAnnotation extends UndoableView
     protected boolean      multi;         // See AddAnnotation for explanation of multi and kin.
     protected boolean      multiLast;
     public    boolean      selectVariable;
+    protected boolean      touchesPin;
 
     public DeleteAnnotation (NodeAnnotation node, boolean canceled)
     {
@@ -59,6 +60,8 @@ public class DeleteAnnotation extends UndoableView
 
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.folded.getSource ());
+
+        touchesPin =  path.contains ("pin")  ||  savedSubtree.containsKey ("pin");
     }
 
     public void setMulti (boolean value)
@@ -74,13 +77,13 @@ public class DeleteAnnotation extends UndoableView
     public void undo ()
     {
         super.undo ();
-        AddAnnotation.create (path, index, name, savedSubtree, false, multi, selectVariable);
+        AddAnnotation.create (path, index, name, savedSubtree, false, multi, selectVariable, touchesPin);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddAnnotation.destroy (path, canceled, name, prefix, multi, multiLast, selectVariable);
+        AddAnnotation.destroy (path, canceled, name, prefix, multi, multiLast, selectVariable, touchesPin);
     }
 
     public boolean replaceEdit (UndoableEdit edit)
