@@ -118,7 +118,7 @@ public class GraphEdge
             pinSideTo   = "in";  // "pinSide" is ignored in this case
             pinKeyTo    = pinKey;
             pinSideFrom = "out";
-            pinKeyFrom  = nodeTo.pinIn.get (pinKey, "bind", "pin");
+            pinKeyFrom  = nodeTo.node.pinIn.get (pinKey, "bind", "pin");
         }
     }
 
@@ -198,14 +198,14 @@ public class GraphEdge
                 //   Determine horizontal position and tip angle
                 if (pinSideTo.equals ("in"))
                 {
-                    y += lineHeight * nodeTo.pinIn.getInt (pinKeyTo, "order");
+                    y += lineHeight * nodeTo.node.pinIn.getInt (pinKeyTo, "order");
                     tip = new Vector2 (Abounds.x - boxSize - 1, y);
                     tipAngle = Math.PI;
                     tipAway = new Vector2 (-1, 0);
                 }
                 else  // out
                 {
-                    y += lineHeight * nodeTo.pinOut.getInt (pinKeyTo, "order");
+                    y += lineHeight * nodeTo.node.pinOut.getInt (pinKeyTo, "order");
                     tip = new Vector2 (Abounds.x + Abounds.width + boxSize, y);
                     tipAngle = 0;
                     tipAway = new Vector2 (1, 0);
@@ -238,13 +238,13 @@ public class GraphEdge
                     int y = Bbounds.y + GraphNode.border.t + boxSize;
                     if (edgeOther.pinSideTo.equals ("in"))
                     {
-                        y += lineHeight * edgeOther.nodeTo.pinIn.getInt (edgeOther.pinKeyTo, "order");
+                        y += lineHeight * edgeOther.nodeTo.node.pinIn.getInt (edgeOther.pinKeyTo, "order");
                         b = new Vector2 (Bbounds.x - boxSize, y);
                         flip = -1;
                     }
                     else
                     {
-                        y += lineHeight * edgeOther.nodeTo.pinOut.getInt (edgeOther.pinKeyTo, "order");
+                        y += lineHeight * edgeOther.nodeTo.node.pinOut.getInt (edgeOther.pinKeyTo, "order");
                         b = new Vector2 (Bbounds.x + Bbounds.width + boxSize, y);
                         flip = 1;
                     }
@@ -388,13 +388,13 @@ public class GraphEdge
             int y = Cbounds.y + GraphNode.border.t + boxSize;
             if (pinSideFrom.equals ("in"))
             {
-                y += lineHeight * nodeFrom.pinIn.getInt (pinKeyFrom, "order");
+                y += lineHeight * nodeFrom.node.pinIn.getInt (pinKeyFrom, "order");
                 c = new Vector2 (Cbounds.x - boxSize, y);
                 ba = new Vector2 (-1, 0);
             }
             else
             {
-                y += lineHeight * nodeFrom.pinOut.getInt (pinKeyFrom, "order");
+                y += lineHeight * nodeFrom.node.pinOut.getInt (pinKeyFrom, "order");
                 c = new Vector2 (Cbounds.x + Cbounds.width + boxSize, y);
                 ba = new Vector2 (1, 0);
             }
@@ -412,7 +412,7 @@ public class GraphEdge
             else  // Self connection, so create two segments to wrap around top of part.
             {
                 // The central point will act as endpoint to both segments.
-                int order = nodeTo.pinIn.getInt (pinKeyTo, "order");
+                int order = nodeTo.node.pinIn.getInt (pinKeyTo, "order");
                 Rectangle bounds = nodeTo.getBounds ();
                 int halfWidth = bounds.width / 2;
                 Vector2 m = new Vector2 (bounds.x + halfWidth, bounds.y - (lineHeight * (order + 1)));

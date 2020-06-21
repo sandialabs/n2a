@@ -68,6 +68,10 @@ public class NodePart extends NodeContainer
     public    PanelEquationTree           pet;                 // If non-null, this part is the root of a currently-displayed tree. If null, then no tree operations are necessary.
     protected NodePart                    trueParent;
     public    boolean                     hide;                // visible() should return false. Used to temporarily suppress node when adding to graph. Allows us to avoid tampering with "parent" field.
+    public    MNode                       pinOut;        // Deep copy of gui.pin.out. Null if no out pins.
+    public    MNode                       pinIn;         // ditto for in pins
+    public    List<MNode>                 pinOutOrder;   // Maps from position down right side to associated pin info. Null if no out pins.
+    public    List<MNode>                 pinInOrder;    // ditto for in pins
 
     public NodePart (MPart source)
     {
@@ -244,6 +248,7 @@ public class NodePart extends NodeContainer
 
     /**
         If one of our child variables updates its connection-binding state, then update all child parts as well.
+        This locates inner connections that pass through the connection binding.
     **/
     public void updateConnections ()
     {
@@ -492,6 +497,157 @@ public class NodePart extends NodeContainer
                 NodeVariable v = (NodeVariable) fromPart.child (u.alias);  // This must exist.
                 MainFrame.instance.undoManager.apply (new ChangeVariable (v, u.alias, toPart.source.key ()));
                 toPart.connectionTarget = true;
+            }
+        }
+    }
+
+    /**
+        Determines the pins in each child part, then the pins in this part. This call
+        recurses down the tree to every leaf.
+    **/
+    public void findPins ()
+    {
+        if (children != null)
+        {
+            for (Object o : children) if ((o instanceof NodePart)) ((NodePart) o).findPins ();
+        }
+        analyzePins ();
+    }
+
+    /**
+        Determines the pins in this part, assuming that children are current, then notifies
+        container to update itself. This call ripples all the way up to true root.
+    **/
+    public void updatePins ()
+    {
+        analyzePins ();
+        NodePart p = getTrueParent ();
+        if (p != null) p.updatePins ();
+    }
+
+    /**
+        Convenience method that does all pin processing needed after build() is called for
+        incremental maintenance of a tree.
+    **/
+    public void rebuildPins ()
+    {
+        findPins ();
+        NodePart p = getTrueParent ();
+        if (p != null) p.updatePins ();
+    }
+
+    /**
+        Determines the set of pins exposed by this part, assuming that child parts are already analyzed.
+        Exposed pins are specifically those displayed down the side of a part as an external interface.
+        A part that flags itself as an exposed population or connection does not generally display a pin on its side.
+        That is, an inner part exposed as a pin is not the same thing as a part that exposes such a pin. The part that
+        exposes a pin is usually a container with several sub-populations, some of which are tagged to be exposed.
+        findConnections() must be called first, as we use the results to decide if a given tagged connection
+        has an unbound endpoint that can be exposed.
+    **/
+    public void analyzePins ()
+    {
+        pinIn       = null;
+        pinOut      = null;
+        pinInOrder  = null;
+        pinOutOrder = null;
+
+        if (children != null)
+        {
+            // Collect exposures.
+            pinIn = new MVolatile ();
+            pinOut = new MVolatile ();
+            for (Object o : children)
+            {
+                if (! (o instanceof NodePart)) continue;
+                NodePart n = (NodePart) o;
+
+                MNode pin = n.source.child ("$metadata", "gui", "pin");
+                if (pin != null)
+                {
+                    String partName = n.source.key ();
+                    String pinName = pin.getOrDefault (partName);
+                    if (connectionBindings == null  ||  connectionBindings.values ().contains (null))  // compartment, or connection with unbound endpoint
+                    {
+                        pinOut.set (pin, pinName);  // Merge the entire tree. There may be some extraneous keys, but the relevant ones make sense to share across all subscribers.
+                        pinOut.set (partName, pinName, "part");  // Note this child part as a subscriber.
+                    }
+                }
+            }
+            if (pinIn .size () == 0) pinIn  = null;
+            if (pinOut.size () == 0) pinOut = null;
+
+            // Mark bound pins.
+            // This information is used elsewhere to create edges from unbound inner outputs.
+            for (Object o : children)
+            {
+                if (! (o instanceof NodePart)) continue;
+                NodePart toPart = (NodePart) o;
+                if (toPart.pinIn == null) continue;
+                for (MNode pin : toPart.pinIn)
+                {
+                    String bind = pin.get ("bind");
+                    if (bind.isEmpty ()) continue;
+                    String bindPin = pin.get ("bind", "pin");
+                    if (bindPin.isEmpty ()) continue;
+                    NodeBase from = child (bind);
+                    if (! (from instanceof NodePart)) continue;
+                    NodePart fromPart = (NodePart) from;
+                    if (fromPart.pinOut == null) continue;
+                    MNode fromPin = fromPart.pinOut.child (bindPin);
+                    if (fromPin != null) fromPin.set ("", "bound");
+                }
+            }
+        }
+
+        // Post-process pins
+        //   Apply overrides from our own pin metadata.
+        MNode in = source.child ("$metadata", "gui", "pin", "in");
+        if (in != null  &&  in.size () > 0)
+        {
+            if (pinIn == null) pinIn = new MVolatile ();  // This could create a phantom pin (not backed by actual part) or it could authorize the exposure of an inner pin.
+            pinIn.merge (in);
+        }
+        //   Establish order down side of part.
+        if (pinIn != null)
+        {
+            pinInOrder   = new ArrayList<MNode> ();
+            MNode sorted = new MVolatile ();
+            for (MNode c : pinIn)
+            {
+                String name = c.key ();
+                String order = c.getOrDefault (name, "order");
+                sorted.set (name, order);
+            }
+            for (MNode c : sorted)
+            {
+                String name = c.get ();
+                pinIn.set (pinInOrder.size (), name, "order");
+                pinInOrder.add (pinIn.child (name));
+            }
+        }
+        //   Ditto for output pins
+        MNode out = source.child ("$metadata", "gui", "pin", "out");
+        if (out != null  &&  out.size () > 0)
+        {
+            if (pinOut == null) pinOut = new MVolatile ();
+            pinOut.merge (out);
+        }
+        if (pinOut != null)
+        {
+            pinOutOrder  = new ArrayList<MNode> ();
+            MNode sorted = new MVolatile ();
+            for (MNode c : pinOut)
+            {
+                String name = c.key ();
+                String order = c.getOrDefault (name, "order");
+                sorted.set (name, order);
+            }
+            for (MNode c : sorted)
+            {
+                String name = c.get ();
+                pinOut.set (pinOutOrder.size (), name, "order");
+                pinOutOrder.add (pinOut.child (name));
             }
         }
     }

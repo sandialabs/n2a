@@ -8,6 +8,8 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
+import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 
@@ -16,8 +18,6 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelEquations;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.StoredPath;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -149,49 +149,16 @@ public class ChangeAnnotations extends UndoableView
                 AddAnnotation.restoreExpandedNodes (pet.tree, metadataNode, expanded);
             }
         }
-        PanelEquationTree.updateVisibility (pet, metadataNode.getPath (), -1, false);
-        if (! multi  &&  sp != null) sp.restore (pet.tree, true);  // This forces focus back to original location.
+        if (pet != null)
+        {
+            TreeNode[] path = metadataNode.getPath ();
+            PanelEquationTree.updateVisibility (pet, path, -2, ! multi);
+            if (multi) pet.tree.addSelectionPath (new TreePath (path));
+            else       sp.restore (pet.tree, true);  // This forces focus back to original location.       
+            pet.animate ();
+        }
 
-        // Update graph
-        NodePart part;
-        NodeVariable binding = null;
-        if (parent instanceof NodePart)
-        {
-            part = (NodePart) parent;
-        }
-        else  // Presumably this is a NodeVariable, so our immediate parent is a NodePart.
-        {
-            binding = (NodeVariable) parent;  // If parent is not a NodeVariable, it is a bug in the code that instantiated this ChangeAnnotations, and this line will throw a class cast exception.
-            if (! binding.isBinding) binding = null;
-            part = (NodePart) parent.getParent ();
-        }
-        PanelEquations pe = PanelModel.instance.panelEquations;
-        if (part.graph != null)
-        {
-            if (binding == null)
-            {
-                part.graph.updateGUI ();
-                if (touchesPin)
-                {
-                    pe.panelEquationGraph.reconnect ();
-                    pe.panelEquationGraph.repaint ();
-                }
-            }
-            else
-            {
-                String alias = binding.source.key ();
-                part.graph.updateEdge (alias, part.connectionBindings.get (alias));
-            }
-            if (multi) part.graph.setSelected (true);
-        }
-        else
-        {
-            if (part == pe.part)
-            {
-                pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
-                pe.panelEquationGraph.updateGUI ();
-            }
-        }
+        AddAnnotations.updateGraph (parent, touchesPin);
     }
 
     public boolean addEdit (UndoableEdit edit)

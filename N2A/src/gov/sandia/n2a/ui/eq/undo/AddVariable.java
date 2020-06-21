@@ -131,6 +131,7 @@ public class AddVariable extends UndoableView implements AddEditable
                 if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
         }
+        parent.updatePins ();  // Actually, this could start at grandparent, because parent's pin structure hasn't changed. However, this is convenient and simple.
         parent.invalidateColumns (model);
 
         pet.updateOrder (createdPath);
@@ -192,6 +193,7 @@ public class AddVariable extends UndoableView implements AddEditable
                 MPart mparent = parent.source;
                 if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
+            parent.updatePins ();
         }
         pet.updateVisibility (createdPath, -2, ! multi);
         if (multi) pet.tree.addSelectionPath (new TreePath (createdPath));

@@ -174,9 +174,15 @@ public class ChangePart extends UndoableView
             {
                 if (ge.pinKeyFrom == null  ||  ge.pinKeyTo == null) continue;  // Must be a pin link.
                 if (ge.nodeFrom != nodeBefore.graph) continue;  // We must be the output side.
+
+                // Update "bind" key in both database and NodePart.
+                // Note that edges will be rebuilt below, so no need to modify ge directly.
                 MNode pin = ge.nodeTo.node.source.child ("$metadata", "gui", "pin", "in", ge.pinKeyTo);
                 pin.set (nameAfter, "bind");
-                rebindEdges.add (ge);
+                pin = ge.nodeTo.node.pinIn.child (ge.pinKeyTo);
+                pin.set (nameAfter, "bind");
+
+                rebindEdges.add (ge);  // mostly to update display text in visible tree
             }
         }
 
@@ -219,6 +225,7 @@ public class ChangePart extends UndoableView
 
             nodeBefore.build ();
             nodeBefore.findConnections ();
+            nodeBefore.rebuildPins ();
             nodeBefore.filter ();
             if (nodeBefore.visible ())
             {
@@ -246,6 +253,7 @@ public class ChangePart extends UndoableView
         nodeAfter.build ();
         if (graphParent) parent   .findConnections ();
         else             nodeAfter.findConnections ();
+        nodeAfter.rebuildPins ();
         nodeAfter.filter ();
 
         pe.resetBreadcrumbs ();
@@ -288,8 +296,6 @@ public class ChangePart extends UndoableView
 
         for (GraphEdge ge : rebindEdges)
         {
-            ge.nodeTo.updatePins ();
-
             // Retrieve GUI metadata node so it can be updated to match DB.
             NodeBase metadata = ge.nodeTo.node.child ("$metadata");
             NodeBase nodeBind = (NodeAnnotation) AddAnnotation.resolve (metadata, "gui.pin.in." + ge.pinKeyTo + ".bind");

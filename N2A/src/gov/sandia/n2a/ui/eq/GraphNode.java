@@ -56,7 +56,6 @@ import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
-import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
@@ -79,10 +78,6 @@ public class GraphNode extends JPanel
     protected ResizeListener      resizeListener      = new ResizeListener ();
     protected List<GraphEdge>     edgesOut            = new ArrayList<GraphEdge> ();
     public    List<GraphEdge>     edgesIn             = new ArrayList<GraphEdge> ();
-    protected MNode               pinOut;        // Deep copy of gui.pin.out. Null if no out pins.
-    public    MNode               pinIn;         // ditto for in pins
-    protected List<MNode>         pinOutOrder;   // Maps from position down right side to associated pin info. Null if no out pins.
-    protected List<MNode>         pinInOrder;    // ditto for in pins
     protected Rectangle           pinOutBounds;  // Surrounds graphic representation of pins. Null if no out pins.
     protected Rectangle           pinInBounds;   // ditto for in pins
 
@@ -413,83 +408,9 @@ public class GraphNode extends JPanel
         Dimension d = getPreferredSize ();  // Fetches updated width and height.
 
         // Apply
-        updatePinEdges ();
         Rectangle r = new Rectangle (x, y, d.width, d.height);
         animate (r);
         parent.scrollRectToVisible (r);
-    }
-
-    /**
-        Subroutine of updateGUI() to add or remove pin edges as needed.
-    **/
-    public void updatePinEdges ()
-    {
-        // Check for removed edges. These need to be marked for repaint here, because animate() won't see them anymore.
-        Rectangle paintRegion = new Rectangle (0, 0, -1, -1);
-        List<GraphEdge> temp = new ArrayList<GraphEdge> (edgesIn);
-        for (GraphEdge ge : temp)
-        {
-            if (ge.pinKeyFrom == null  ||  ge.pinKeyTo == null) continue;  // Must be a pin link.
-            if (ge.nodeTo != this) continue;  // We must be the input side.
-
-            // Verify that the associated input pin still exists.
-            boolean found = false;
-            if (pinIn != null)
-            {
-                String bind = pinIn.get (ge.pinKeyTo, "bind");
-                if (ge.nodeFrom.node.source.key ().equals (bind))
-                {
-                    String bindPin = pinIn.get (ge.pinKeyTo, "bind", "pin");
-                    if (bindPin.equals (ge.pinKeyFrom)) found = true;
-                }
-            }
-            if (found) continue;
-
-            // Input pin has been removed, so remove edge.
-            edgesIn.remove (ge);
-            parent.edges.remove (ge);
-            paintRegion = paintRegion.union (ge.bounds);
-        }
-        if (! paintRegion.isEmpty ()) parent.repaint (paintRegion);
-
-        // Check for added edges. animate() will correctly mark these for repaint.
-        // This is similar to PanelEquationGraph.GraphPanel.buildEdges(), except we only add edges that don't already exist.
-        if (pinIn == null) return;
-        NodePart nodeParent = (NodePart) node.getTrueParent ();
-        for (MNode pin : pinIn)
-        {
-            // Find peer part
-            String bind = pin.get ("bind");
-            if (bind.isEmpty ()) continue;
-            NodeBase nb = nodeParent.child (bind);
-            if (! (nb instanceof NodePart)) continue;
-            GraphNode peer = ((NodePart) nb).graph;
-
-            // Validate pin metadata
-            String bindPin = pin.get ("bind", "pin");
-            if (bindPin.isEmpty ()) continue;
-            if (peer.pinOut == null  ||  peer.pinOut.child (bindPin) == null) continue;
-
-            // Check for existence
-            boolean found = false;
-            for (GraphEdge ge : edgesIn)
-            {
-                if (ge.pinKeyFrom == null  ||  ge.pinKeyTo == null) continue;
-                if (ge.nodeTo != this) continue;
-                if (bindPin.equals (ge.pinKeyFrom))
-                {
-                    found = true;
-                    break;
-                }
-            }
-            if (found) continue;
-
-            // Create edge
-            GraphEdge ge = new GraphEdge (peer, this, "in", pin.key ());
-            edgesIn.add (ge);
-            peer.edgesIn.add (ge);  // Treat as an incoming edge on both sides of the link.
-            parent.edges.add (ge);
-        }
     }
 
     public void killEdge (String alias)
@@ -634,65 +555,34 @@ public class GraphNode extends JPanel
 
     public void updatePins ()
     {
-        pinIn        = null;
-        pinOut       = null;
-        pinInOrder   = null;
-        pinOutOrder  = null;
         pinInBounds  = null;
         pinOutBounds = null;
-        MNode pin = node.source.child ("$metadata", "gui", "pin");
-        if (pin == null) return;
+        if (node.pinIn == null  &&  node.pinOut == null) return;
 
         FontMetrics fm = getFontMetrics (getFont ());
         int height = fm.getHeight () + 2 * GraphEdge.padNameTop;
         int boxWidth = height / 2;
 
-        MNode in = pin.child ("in");
-        if (in != null  &&  in.size () > 0)
+        if (node.pinIn != null)
         {
-            pinIn        = new MVolatile ();
-            pinIn.merge (in);
-            pinInOrder   = new ArrayList<MNode> ();
-            pinInBounds  = new Rectangle ();
-            MNode sorted = new MVolatile ();
-            for (MNode c : pinIn)
+            pinInBounds = new Rectangle ();
+            for (MNode c : node.pinIn)
             {
                 String name = c.key ();
-                String order = c.getOrDefault (name, "order");
-                sorted.set (name, order);
                 pinInBounds.width   = Math.max (pinInBounds.width, fm.stringWidth (name));
                 pinInBounds.height += height;
-            }
-            for (MNode c : sorted)
-            {
-                String name = c.get ();
-                pinIn.set (pinInOrder.size (), name, "order");
-                pinInOrder.add (pinIn.child (name));
             }
             pinInBounds.width += boxWidth + 2 * GraphEdge.padNameSide;
         }
 
-        MNode out = pin.child ("out");
-        if (out != null  &&  out.size () > 0)
+        if (node.pinOut != null)
         {
-            pinOut       = new MVolatile ();
-            pinOut.merge (out);
-            pinOutOrder  = new ArrayList<MNode> ();
             pinOutBounds = new Rectangle ();
-            MNode sorted = new MVolatile ();
-            for (MNode c : out)
+            for (MNode c : node.pinOut)
             {
                 String name = c.key ();
-                String order = c.getOrDefault (name, "order");
-                sorted.set (name, order);
                 pinOutBounds.width   = Math.max (pinOutBounds.width, fm.stringWidth (name));
                 pinOutBounds.height += height;
-            }
-            for (MNode c : sorted)
-            {
-                String name = c.get ();
-                pinOut.set (pinOutOrder.size (), name, "order");
-                pinOutOrder.add (pinOut.child (name));
             }
             pinOutBounds.width += boxWidth + 2 * GraphEdge.padNameSide;
         }
@@ -709,13 +599,13 @@ public class GraphNode extends JPanel
         if (pinInBounds != null  &&  pinInBounds.contains (p))
         {
             int y = p.y - pinInBounds.y;
-            MNode c = pinInOrder.get (y / lineHeight);
+            MNode c = node.pinInOrder.get (y / lineHeight);
             return "in." + c.key ();
         }
         if (pinOutBounds != null  &&  pinOutBounds.contains (p))
         {
             int y = p.y - pinOutBounds.y;
-            MNode c = pinOutOrder.get (y / lineHeight);
+            MNode c = node.pinOutOrder.get (y / lineHeight);
             return "out." + c.key ();
         }
         return "";
@@ -738,7 +628,7 @@ public class GraphNode extends JPanel
             if (pinInBounds.intersects (clip))
             {
                 int y = pinInBounds.y;
-                for (MNode c : pinInOrder)
+                for (MNode c : node.pinInOrder)
                 {
                     paintPin (true, c, g2, bounds, fm, ascent, lineHeight, boxSize, y);
                     y += lineHeight;
@@ -753,7 +643,7 @@ public class GraphNode extends JPanel
             if (pinOutBounds.intersects (clip))
             {
                 int y = pinOutBounds.y;
-                for (MNode c : pinOutOrder)
+                for (MNode c : node.pinOutOrder)
                 {
                     paintPin (false, c, g2, bounds, fm, ascent, lineHeight, boxSize, y);
                     y += lineHeight;

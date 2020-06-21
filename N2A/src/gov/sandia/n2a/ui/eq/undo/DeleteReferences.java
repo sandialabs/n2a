@@ -51,12 +51,12 @@ public class DeleteReferences extends UndoableView
                 return new NodeReferences (part);
             }
         };
-        AddAnnotations.create (path, index, saved, factory, multi);
+        AddAnnotations.create (path, index, saved, factory, multi, false);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddAnnotations.destroy (path, saved.key (), ! multi  ||  multiLast);
+        AddAnnotations.destroy (path, saved.key (), ! multi  ||  multiLast, false);
     }
 }

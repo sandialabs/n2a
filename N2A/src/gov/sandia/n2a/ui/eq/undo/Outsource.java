@@ -78,6 +78,7 @@ public class Outsource extends UndoableView
         // Update GUI
         node.build ();
         node.findConnections ();
+        node.rebuildPins ();
         node.filter ();
         // The caller of this Undoable promises to only use it on top-level nodes.
         // Thus, node retains exactly the same visibility as before, so no need for full update.

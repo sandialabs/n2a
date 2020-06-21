@@ -211,27 +211,41 @@ public class AddAnnotation extends UndoableView implements AddEditable
             pet.animate ();
         }
 
-        while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
+        update (parent, name, touchesPin);
+    }
+
+    /**
+        Do related record-keeping. For the most part, this only applies when nameIsGenerated==false.
+        However, it also applies when creating a new pin.
+    **/
+    public static void update (NodeBase parent, String name, boolean touchesPin)
+    {
+        while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
         NodeVariable binding = null;
         if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding)
         {
             binding = (NodeVariable) parent;
-            parent = (NodeContainer) parent.getParent ();  // So arrowhead can update.
+            parent = (NodeBase) parent.getParent ();  // So arrowhead can update.
         }
         if (parent instanceof NodePart)
         {
             PanelEquations pe = PanelModel.instance.panelEquations;
             NodePart p = (NodePart) parent;
+            if (touchesPin) p.updatePins ();
             if (p.graph != null)
             {
                 if (binding == null)
                 {
-                    p.graph.updateGUI ();
                     if (touchesPin)
                     {
+                        // reconnect() has to come before updateGUI(). Otherwise, graph node might operate on edges
+                        // that no longer have pin metadata.
+                        // If the node has also moved, reconnect() will set up all edges at the old location,
+                        // then they will be redrawn at the new location.
                         pe.panelEquationGraph.reconnect ();
                         pe.panelEquationGraph.repaint ();
                     }
+                    p.graph.updateGUI ();  // Could save a little graphic work here by doing more work to detect whether the part moved or not.
                 }
                 else
                 {
@@ -243,6 +257,11 @@ public class AddAnnotation extends UndoableView implements AddEditable
             {
                 if (p == pe.part)
                 {
+                    if (touchesPin)
+                    {
+                        pe.panelEquationGraph.reconnect ();
+                        pe.panelEquationGraph.repaint ();
+                    }
                     pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
                     pe.panelEquationGraph.updateGUI ();
                 }
@@ -347,49 +366,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
             }
         }
 
-        // Do related record-keeping. For the most part, this only applies when nameIsGenerated==false.
-        // However, it also applies when creating a new pin.
-        while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
-        NodeVariable binding = null;
-        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding)
-        {
-            binding = (NodeVariable) parent;
-            parent = (NodeBase) parent.getParent ();
-        }
-        if (parent instanceof NodePart)
-        {
-            PanelEquations pe = PanelModel.instance.panelEquations;
-            NodePart p = (NodePart) parent;
-            if (p.graph != null)
-            {
-                if (binding == null)
-                {
-                    p.graph.updateGUI ();
-                    if (touchesPin)
-                    {
-                        pe.panelEquationGraph.reconnect ();
-                        pe.panelEquationGraph.repaint ();
-                    }
-                }
-                else
-                {
-                    String alias = binding.source.key ();
-                    p.graph.updateEdge (alias, p.connectionBindings.get (alias));
-                }
-            }
-            else
-            {
-                if (p == pe.part)
-                {
-                    pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
-                    pe.panelEquationGraph.updateGUI ();
-                }
-            }
-        }
-        if (parent.getTrueParent () == null  &&  name.endsWith ("category"))
-        {
-            PanelModel.instance.panelSearch.search ();
-        }
+        update (parent, name, touchesPin);
 
         return createdNode;
     }

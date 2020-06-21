@@ -549,9 +549,9 @@ public class PanelEquationGraph extends JScrollPane
                 }
 
                 // Build pin edges
-                if (gn.pinIn == null) continue;
+                if (gn.node.pinIn == null) continue;
                 NodePart parent = (NodePart) gn.node.getTrueParent ();  // never null for a graph node
-                for (MNode pin : gn.pinIn)
+                for (MNode pin : gn.node.pinIn)
                 {
                     // Find peer part
                     String bind = pin.get ("bind");
@@ -563,7 +563,7 @@ public class PanelEquationGraph extends JScrollPane
                     // Validate pin metadata
                     String bindPin = pin.get ("bind", "pin");
                     if (bindPin.isEmpty ()) continue;
-                    if (peer.pinOut == null  ||  peer.pinOut.child (bindPin) == null) continue;
+                    if (peer.node.pinOut == null  ||  peer.node.pinOut.child (bindPin) == null) continue;
 
                     // Create edge
                     GraphEdge ge = new GraphEdge (peer, gn, "in", pin.key ());
@@ -672,10 +672,10 @@ public class PanelEquationGraph extends JScrollPane
             {
                 if (g.pinInBounds != null  &&  g.pinInBounds.contains (p))
                 {
-                    MNode pin = g.pinIn.child (pinKey);
+                    MNode pin = g.node.pinIn.child (pinKey);
                     if (pin != null)
                     {
-                        int lineHeight = g.pinInBounds.height / g.pinIn.size ();
+                        int lineHeight = g.pinInBounds.height / g.node.pinIn.size ();
                         int y = p.y - g.pinInBounds.y;
                         if (pin.getInt ("order") == y / lineHeight) return true;
                     }
@@ -685,10 +685,10 @@ public class PanelEquationGraph extends JScrollPane
             {
                 if (g.pinOutBounds != null  &&  g.pinOutBounds.contains (p))
                 {
-                    MNode pin = g.pinOut.child (pinKey);
+                    MNode pin = g.node.pinOut.child (pinKey);
                     if (pin != null)
                     {
-                        int lineHeight = g.pinOutBounds.height / g.pinOut.size ();
+                        int lineHeight = g.pinOutBounds.height / g.node.pinOut.size ();
                         int y = p.y - g.pinOutBounds.y;
                         if (pin.getInt ("order") == y / lineHeight) return true;
                     }
@@ -1029,8 +1029,8 @@ public class PanelEquationGraph extends JScrollPane
                 if (edge == null)
                 {
                     // Check if a pin region is under the click.
-                    GraphNode node = graphPanel.findNodeAt (p, true);  // Only a click in the pin zone will return non-null here. If it were in the graph node proper, the click would have been routed there instead.
-                    if (node == null)  // bare background
+                    GraphNode g = graphPanel.findNodeAt (p, true);  // Only a click in the pin zone will return non-null here. If it were in the graph node proper, the click would have been routed there instead.
+                    if (g == null)  // bare background
                     {
                         selectStart = p;
                         selectRegion = new Rectangle (p);
@@ -1038,19 +1038,19 @@ public class PanelEquationGraph extends JScrollPane
                     else  // In pin zone, and pin is not currently bound to an edge. If it were connected, it would have been caught by findTipAt().
                     {
                         // Determine which pin it is.
-                        if (node.pinInBounds != null  &&  node.pinInBounds.contains (p))
+                        if (g.pinInBounds != null  &&  g.pinInBounds.contains (p))
                         {
-                            int lineHeight = node.pinInBounds.height / node.pinIn.size ();
-                            int y = p.y - node.pinInBounds.y;
-                            MNode pin = node.pinInOrder.get (y / lineHeight);
-                            edge = new GraphEdge (node, null, "in", pin.key ());
+                            int lineHeight = g.pinInBounds.height / g.node.pinIn.size ();
+                            int y = p.y - g.pinInBounds.y;
+                            MNode pin = g.node.pinInOrder.get (y / lineHeight);
+                            edge = new GraphEdge (g, null, "in", pin.key ());
                         }
-                        else if (node.pinOutBounds != null  &&  node.pinOutBounds.contains (p))
+                        else if (g.pinOutBounds != null  &&  g.pinOutBounds.contains (p))
                         {
-                            int lineHeight = node.pinOutBounds.height / node.pinOut.size ();
-                            int y = p.y - node.pinOutBounds.y;
-                            MNode pin = node.pinOutOrder.get (y / lineHeight);
-                            edge = new GraphEdge (node, null, "out", pin.key ());
+                            int lineHeight = g.pinOutBounds.height / g.node.pinOut.size ();
+                            int y = p.y - g.pinOutBounds.y;
+                            MNode pin = g.node.pinOutOrder.get (y / lineHeight);
+                            edge = new GraphEdge (g, null, "out", pin.key ());
                         }
                         if (edge != null)  // Finish constructing transient edge. It will be deleted by mouseRelease().
                         {

@@ -65,6 +65,7 @@ public class ChangeInherit extends UndoableView
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
+        parent.rebuildPins ();
         parent.filter ();
         if (parent == pe.part)
         {

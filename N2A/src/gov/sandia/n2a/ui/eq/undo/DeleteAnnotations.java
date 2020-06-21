@@ -20,6 +20,7 @@ public class DeleteAnnotations extends UndoableView
     protected MVolatile    saved; // subtree under $metadata
     protected boolean      multi;
     protected boolean      multiLast;
+    protected boolean      touchesPin;
 
     public DeleteAnnotations (NodeBase node)
     {
@@ -29,6 +30,8 @@ public class DeleteAnnotations extends UndoableView
 
         saved = new MVolatile (null, "$metadata");
         saved.merge (node.source.getSource ());  // We only save top-document data. $metadata node is guaranteed to be from top doc, due to guard in NodeAnnotations.delete().
+
+        touchesPin = saved.containsKey ("pin");
     }
 
     public void setMulti (boolean value)
@@ -51,12 +54,12 @@ public class DeleteAnnotations extends UndoableView
                 return new NodeAnnotations (part);
             }
         };
-        AddAnnotations.create (path, index, saved, factory, multi);
+        AddAnnotations.create (path, index, saved, factory, multi, touchesPin);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddAnnotations.destroy (path, saved.key (), ! multi  ||  multiLast);
+        AddAnnotations.destroy (path, saved.key (), ! multi  ||  multiLast, touchesPin);
     }
 }

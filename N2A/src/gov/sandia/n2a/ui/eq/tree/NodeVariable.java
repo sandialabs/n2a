@@ -199,14 +199,8 @@ public class NodeVariable extends NodeContainer
 
         if (! isBinding) return;
         if (parent.connectionBindings == null) parent.connectionBindings = new HashMap<String,NodePart> ();
-        if (referent == null  ||  referent instanceof NodePart)
-        {
-            parent.connectionBindings.put (name, (NodePart) referent);  // If referent is null, there this is an unconnected endpoint.
-        }
-        else
-        {
-            parent.connectionBindings.put (name, null);
-        }
+        if (referent instanceof NodePart) parent.connectionBindings.put (name, (NodePart) referent);
+        else                              parent.connectionBindings.put (name, null);  // Unconnected endpoint.
     }
 
     @Override

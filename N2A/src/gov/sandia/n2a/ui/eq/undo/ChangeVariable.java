@@ -342,6 +342,7 @@ public class ChangeVariable extends UndoableView
         if (touchedBindings)
         {
             parent.updateConnections ();
+            parent.updatePins ();
 
             MPart mparent = parent.source;
             if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);

@@ -18,13 +18,9 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelEquations;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
-import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeContainer;
-import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeAnnotation extends UndoableView
@@ -164,47 +160,7 @@ public class ChangeAnnotation extends UndoableView
             pet.animate ();
         }
 
-        while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeContainer) parent.getParent ();
-        NodeVariable binding = null;
-        if (parent instanceof NodeVariable  &&  ((NodeVariable) parent).isBinding)
-        {
-            binding = (NodeVariable) parent;
-            parent = (NodeContainer) parent.getParent ();  // So arrowhead can update.
-        }
-        if (parent instanceof NodePart)
-        {
-            PanelEquations pe = PanelModel.instance.panelEquations;
-            NodePart p = (NodePart) parent;
-            if (p.graph != null)
-            {
-                if (binding == null)
-                {
-                    p.graph.updateGUI ();  // Could save a little graphic work here by doing more work to detect whether the part moved or not.
-                    if (touchesPin)
-                    {
-                        pe.panelEquationGraph.reconnect ();
-                        pe.panelEquationGraph.repaint ();
-                    }
-                }
-                else
-                {
-                    String alias = binding.source.key ();
-                    p.graph.updateEdge (alias, p.connectionBindings.get (alias));
-                }
-            }
-            else
-            {
-                if (p == pe.part)
-                {
-                    pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
-                    pe.panelEquationGraph.updateGUI ();
-                }
-            }
-        }
-        if (parent.getTrueParent () == null  &&  nameAfter.endsWith ("category"))  // root node, so update categories in search list
-        {
-            PanelModel.instance.panelSearch.search ();
-        }
+        AddAnnotation.update (parent, nameAfter, touchesPin);
     }
 
     /**

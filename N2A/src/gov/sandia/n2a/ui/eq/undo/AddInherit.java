@@ -60,6 +60,7 @@ public class AddInherit extends UndoableView
         parent.build ();  // Handles all cases (complete deletion or exposed hidden node)
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
+        parent.rebuildPins ();
         parent.filter ();
         if (parent == pe.part)
         {
@@ -102,6 +103,7 @@ public class AddInherit extends UndoableView
         parent.build ();
         if (grandparent == null) parent     .findConnections ();
         else                     grandparent.findConnections ();
+        parent.rebuildPins ();
         parent.filter ();
         if (parent == pe.part)
         {
