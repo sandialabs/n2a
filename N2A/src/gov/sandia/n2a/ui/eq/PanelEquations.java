@@ -501,6 +501,7 @@ public class PanelEquations extends JPanel
             root = new NodePart (new MPart (record));
             root.build ();
             root.findConnections ();
+            root.findPins ();
             loadPart (root);
             AppData.state.set (record.key (), "PanelModel", "lastUsed");
         }
