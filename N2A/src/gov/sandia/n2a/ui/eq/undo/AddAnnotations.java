@@ -18,13 +18,9 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
-import gov.sandia.n2a.ui.eq.PanelEquations;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeContainer;
-import gov.sandia.n2a.ui.eq.tree.NodePart;
-import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class AddAnnotations extends UndoableView
 {
@@ -88,59 +84,7 @@ public class AddAnnotations extends UndoableView
         pet.updateVisibility (nodePath, index, setSelected);
         pet.animate ();
 
-        if (blockName.equals ("$metadata")) updateGraph (parent, touchesPin);
-    }
-
-    public static void updateGraph (NodeBase parent, boolean touchesPin)
-    {
-        NodePart part;
-        NodeVariable binding = null;
-        if (parent instanceof NodePart)
-        {
-            part = (NodePart) parent;
-        }
-        else  // The only other possibility is NodeVariable. If not, then it is a bug in the calling code.
-        {
-            binding = (NodeVariable) parent;
-            if (! binding.isBinding) binding = null;
-            part = (NodePart) parent.getParent ();
-        }
-        PanelEquations pe = PanelModel.instance.panelEquations;
-        if (touchesPin) part.updatePins ();
-        if (part.graph != null)
-        {
-            if (binding == null)
-            {
-                if (touchesPin)
-                {
-                    // reconnect() has to come before updateGUI(). Otherwise, graph node might operate on edges
-                    // that no longer have pin metadata.
-                    // If the node has also moved, reconnect() will set up all edges at the old location,
-                    // then they will be redrawn at the new location.
-                    pe.panelEquationGraph.reconnect ();
-                    pe.panelEquationGraph.repaint ();
-                }
-                part.graph.updateGUI ();
-            }
-            else
-            {
-                String alias = binding.source.key ();
-                part.graph.updateEdge (alias, part.connectionBindings.get (alias));
-            }
-        }
-        else
-        {
-            if (part == pe.part)
-            {
-                if (touchesPin)
-                {
-                    pe.panelEquationGraph.reconnect ();
-                    pe.panelEquationGraph.repaint ();
-                }
-                pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
-                pe.panelEquationGraph.updateGUI ();
-            }
-        }
+        if (blockName.equals ("$metadata")) AddAnnotation.update (parent, touchesPin);
     }
 
     public void redo ()
@@ -183,6 +127,6 @@ public class AddAnnotations extends UndoableView
         if (multi) pet.tree.addSelectionPath (new TreePath (nodePath));
         pet.animate ();
 
-        if (blockName.equals ("$metadata")) updateGraph (parent, touchesPin);
+        if (blockName.equals ("$metadata")) AddAnnotation.update (parent, touchesPin);
     }
 }

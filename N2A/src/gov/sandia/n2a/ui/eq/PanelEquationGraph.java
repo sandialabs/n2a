@@ -202,6 +202,11 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel.layout.shiftViewport (focus);
     }
 
+    public void updatePins ()
+    {
+        graphPanel.updatePins ();
+    }
+
     public void updateFilterLevel ()
     {
         graphPanel.updateFilterLevel ();
@@ -586,6 +591,14 @@ public class PanelEquationGraph extends JScrollPane
             }
             edges.clear ();
             buildEdges ();
+        }
+
+        public void updatePins ()
+        {
+            for (Component c : getComponents ())
+            {
+                ((GraphNode) c).updatePins ();
+            }
         }
 
         /**

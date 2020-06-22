@@ -61,7 +61,7 @@ public class DeleteAnnotation extends UndoableView
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.folded.getSource ());
 
-        touchesPin =  path.contains ("pin")  ||  savedSubtree.containsKey ("pin");
+        touchesPin =  path.contains ("pin")  ||  name.contains ("pin")  ||  savedSubtree.containsKey ("pin");
     }
 
     public void setMulti (boolean value)

@@ -158,7 +158,7 @@ public class ChangeAnnotations extends UndoableView
             pet.animate ();
         }
 
-        AddAnnotations.updateGraph (parent, touchesPin);
+        AddAnnotation.update (parent, touchesPin);
     }
 
     public boolean addEdit (UndoableEdit edit)

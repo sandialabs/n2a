@@ -242,7 +242,7 @@ public class NodePart extends NodeContainer
         connectionBindings = null;
         unsatisfiedConnections = null;
         if (children == null) return;
-        for (Object o : children) if (o instanceof NodeVariable) ((NodeVariable) o).findConnections ();  // Checks if variable is a connection binding. If so, sets isBinding on the variable and also sets our isConnection member.
+        for (Object o : children) if (o instanceof NodeVariable) ((NodeVariable) o).findConnections ();  // Checks if variable is a connection binding. If so, sets isBinding on the variable and also sets our connectionBindings member.
         for (Object o : children) if (o instanceof NodePart)     ((NodePart)     o).findConnections ();  // Recurses down to sub-parts, so everything gets examined.
     }
 
@@ -547,55 +547,78 @@ public class NodePart extends NodeContainer
     **/
     public void analyzePins ()
     {
-        pinIn       = null;
-        pinOut      = null;
+        pinIn       = new MVolatile ();
+        pinOut      = new MVolatile ();
         pinInOrder  = null;
         pinOutOrder = null;
 
         if (children != null)
         {
+            // Forwarded outputs. These take lowest precedence, so process them first.
+            MNode out = source.child ("$metadata", "gui", "pin", "out");
+            if (out != null)
+            {
+                for (MNode op : out)
+                {
+                    String partName = op.get ("bind");  // Name of inner part whose pin gets forwarded as an output.
+                    if (partName.isEmpty ()) continue;
+                    String bindPin = op.get ("bind", "pin");
+                    if (bindPin.isEmpty ()) continue;
+                    NodeBase o = child (partName);
+                    if (! (o instanceof NodePart)) continue;
+
+                    NodePart n = (NodePart) o;
+                    MNode pin = n.source.child ("$metadata", "gui", "pin", "out", bindPin);
+                    if (pin == null) continue;
+                    String pinName = op.key ();  // The pin name is determined by our out list, not the inner part's out list.
+
+                    pinOut.set ("", pinName, "part", partName);  // List this part as a subscriber to the pin.
+                    pinOut.set (pin.get ("order"), pinName, "order");  // No harm in setting these blank if the attribute is missing.
+                    pinOut.set (pin.get ("notes"), pinName, "notes");
+                    pinOut.set (pin.get ("color"), pinName, "color");
+                }
+            }
+
             // Collect exposures.
-            pinIn = new MVolatile ();
-            pinOut = new MVolatile ();
             for (Object o : children)
             {
                 if (! (o instanceof NodePart)) continue;
                 NodePart n = (NodePart) o;
+                String partName = n.source.key ();
 
-                MNode pin = n.source.child ("$metadata", "gui", "pin");
-                if (pin != null)
+                // Forwarded inputs. These also take lowest precedence, and do not overlap with forwarded outputs.
+                if (n.pinIn != null)
                 {
-                    String partName = n.source.key ();
-                    String pinName = pin.getOrDefault (partName);
-                    if (connectionBindings == null  ||  connectionBindings.values ().contains (null))  // compartment, or connection with unbound endpoint
+                    for (MNode pin : n.pinIn)
                     {
-                        pinOut.set (pin, pinName);  // Merge the entire tree. There may be some extraneous keys, but the relevant ones make sense to share across all subscribers.
-                        pinOut.set (partName, pinName, "part");  // Note this child part as a subscriber.
+                        String bind = pin.get ("bind");
+                        if (! bind.isEmpty ()) continue;  // A blank value indicates a forwarded input. Skip everything else.
+                        String pinName = pin.get ("bind", "pin");
+                        if (pinName.isEmpty ()) continue;
+                        pinIn.set ("", pinName, "part", partName);
+                        pinIn.set (pin.get ("order"), pinName, "order");
+                        pinIn.set (pin.get ("notes"), pinName, "notes");
+                        pinIn.set (pin.get ("color"), pinName, "color");
+                        // Forwarding is a kind of binding. In particular, the auto attribute is never forwarded.
+                        // Instead, one auto position is consumed by the binding. Exactly which one remains to be determined.
                     }
                 }
-            }
-            if (pinIn .size () == 0) pinIn  = null;
-            if (pinOut.size () == 0) pinOut = null;
 
-            // Mark bound pins.
-            // This information is used elsewhere to create edges from unbound inner outputs.
-            for (Object o : children)
-            {
-                if (! (o instanceof NodePart)) continue;
-                NodePart toPart = (NodePart) o;
-                if (toPart.pinIn == null) continue;
-                for (MNode pin : toPart.pinIn)
+                // Regular parts
+                MNode pin = n.source.child ("$metadata", "gui", "pin");
+                if (pin != null  &&  (! pin.get ().isEmpty ()  ||  pin.child ("in") == null  &&  pin.child ("out") == null))  // pin must be explicit, or both "in" and "out" must be absent.
                 {
-                    String bind = pin.get ("bind");
-                    if (bind.isEmpty ()) continue;
-                    String bindPin = pin.get ("bind", "pin");
-                    if (bindPin.isEmpty ()) continue;
-                    NodeBase from = child (bind);
-                    if (! (from instanceof NodePart)) continue;
-                    NodePart fromPart = (NodePart) from;
-                    if (fromPart.pinOut == null) continue;
-                    MNode fromPin = fromPart.pinOut.child (bindPin);
-                    if (fromPin != null) fromPin.set ("", "bound");
+                    MNode side = null;
+                    if (n.connectionBindings == null)                        side = pinOut; // compartment
+                    else if (n.connectionBindings.values ().contains (null)) side = pinIn;  // connection with unbound endpoint
+                    if (side != null)
+                    {
+                        String pinName = pin.getOrDefault (partName);
+                        side.set ("", pinName, "part", partName);
+                        side.set (pin.get ("order"), pinName, "order");
+                        side.set (pin.get ("notes"), pinName, "notes");
+                        side.set (pin.get ("color"), pinName, "color");
+                    }
                 }
             }
         }
@@ -603,13 +626,13 @@ public class NodePart extends NodeContainer
         // Post-process pins
         //   Apply overrides from our own pin metadata.
         MNode in = source.child ("$metadata", "gui", "pin", "in");
-        if (in != null  &&  in.size () > 0)
-        {
-            if (pinIn == null) pinIn = new MVolatile ();  // This could create a phantom pin (not backed by actual part) or it could authorize the exposure of an inner pin.
-            pinIn.merge (in);
-        }
+        if (in != null) pinIn.merge (in);
         //   Establish order down side of part.
-        if (pinIn != null)
+        if (pinIn.size () == 0)
+        {
+            pinIn = null;
+        }
+        else
         {
             pinInOrder   = new ArrayList<MNode> ();
             MNode sorted = new MVolatile ();
@@ -628,12 +651,12 @@ public class NodePart extends NodeContainer
         }
         //   Ditto for output pins
         MNode out = source.child ("$metadata", "gui", "pin", "out");
-        if (out != null  &&  out.size () > 0)
+        if (out != null) pinOut.merge (out);
+        if (pinOut.size () == 0)
         {
-            if (pinOut == null) pinOut = new MVolatile ();
-            pinOut.merge (out);
+            pinOut = null;
         }
-        if (pinOut != null)
+        else
         {
             pinOutOrder  = new ArrayList<MNode> ();
             MNode sorted = new MVolatile ();

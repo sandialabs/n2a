@@ -211,14 +211,14 @@ public class AddAnnotation extends UndoableView implements AddEditable
             pet.animate ();
         }
 
-        update (parent, name, touchesPin);
+        update (parent, touchesPin);
     }
 
     /**
-        Do related record-keeping. For the most part, this only applies when nameIsGenerated==false.
-        However, it also applies when creating a new pin.
+        Do related record-keeping.
+        This function is shared by all undo classes that modify $metadata.
     **/
-    public static void update (NodeBase parent, String name, boolean touchesPin)
+    public static void update (NodeBase parent, boolean touchesPin)
     {
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
         NodeVariable binding = null;
@@ -232,7 +232,22 @@ public class AddAnnotation extends UndoableView implements AddEditable
             PanelEquations pe = PanelModel.instance.panelEquations;
             NodePart p = (NodePart) parent;
             if (touchesPin) p.updatePins ();
-            if (p.graph != null)
+            if (p.graph == null)  // It's either the parent node, or a node below the current level of graph.
+            {
+                if (touchesPin)
+                {
+                    // A change in pin structure can affect any level of graph above the current node.
+                    pe.panelEquationGraph.updatePins ();
+                    pe.panelEquationGraph.reconnect ();
+                    pe.panelEquationGraph.repaint ();
+                }
+                if (p == pe.part)
+                {
+                    pe.panelParent.animate ();           // Sets size of parent panel from metadata, in getPreferredSize().
+                    pe.panelEquationGraph.updateGUI ();  // Updates canvas position.
+                }
+            }
+            else
             {
                 if (binding == null)
                 {
@@ -253,23 +268,14 @@ public class AddAnnotation extends UndoableView implements AddEditable
                     p.graph.updateEdge (alias, p.connectionBindings.get (alias));
                 }
             }
-            else
-            {
-                if (p == pe.part)
-                {
-                    if (touchesPin)
-                    {
-                        pe.panelEquationGraph.reconnect ();
-                        pe.panelEquationGraph.repaint ();
-                    }
-                    pe.panelParent.animate ();  // Reads latest metadata in getPreferredSize().
-                    pe.panelEquationGraph.updateGUI ();
-                }
-            }
         }
-        if (parent.getTrueParent () == null  &&  name.endsWith ("category"))  // root node, so update categories in search list
+        if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {
-            PanelModel.instance.panelSearch.search ();
+            MNode metadata = parent.source.child ("$metadata");
+            if (metadata == null  ||  metadata.containsKey ("category"))  // In the unusual situation that $metadata has just been completely deleted, we guess that it may have contained "category" and update anyway.
+            {
+                PanelModel.instance.panelSearch.search ();
+            }
         }
     }
 
@@ -366,7 +372,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
             }
         }
 
-        update (parent, name, touchesPin);
+        update (parent, touchesPin);
 
         return createdNode;
     }
@@ -451,6 +457,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
                 name            = change.nameAfter;
                 prefix          = change.prefixAfter;
                 nameIsGenerated = false;
+                touchesPin      = change.touchesPin;
                 createSubtree.merge (change.savedTree);  // Generally, there should be nothing in savedTree. Just being thorough.
                 createSubtree.set (change.valueAfter);
                 return true;

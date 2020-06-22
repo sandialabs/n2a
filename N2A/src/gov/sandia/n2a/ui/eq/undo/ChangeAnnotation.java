@@ -80,7 +80,7 @@ public class ChangeAnnotation extends UndoableView
             prefixAfter = (prefixAfter + "." + nameAfters[i]).substring (1);
         }
 
-        touchesPin =  nameAfter.equals ("pin")  ||  path.contains ("pin");  // Crude heuristic to see if this changes pin metadata.
+        touchesPin =  path.contains ("pin")  ||  nameBefore.contains ("pin")  ||  nameAfter.contains ("pin");  // Crude heuristic to see if this changes pin metadata.
     }
 
     public void setMulti (boolean value)
@@ -160,7 +160,7 @@ public class ChangeAnnotation extends UndoableView
             pet.animate ();
         }
 
-        AddAnnotation.update (parent, nameAfter, touchesPin);
+        AddAnnotation.update (parent, touchesPin);
     }
 
     /**
