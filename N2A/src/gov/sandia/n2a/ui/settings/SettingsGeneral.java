@@ -102,14 +102,16 @@ public class SettingsGeneral extends JPanel implements Settings
     {
         JPanel constants = addField ("constants", "Model that provides global constants", 40, "Constants");
         JPanel dimension = addCombo ("dimension", "How to handle inconsistent dimensions", 1, "Don't check", "Warning", "Error");
-        JPanel proxyHost = addFieldSystemProperty ("httpsProxyHost", "HTTPS Proxy Host", 40, "https.proxyHost");
-        JPanel proxyPort = addFieldSystemProperty ("httpsProxyPort", "HTTPS Proxy Port", 5,  "https.proxyPort");
+        JPanel proxyHost     = addFieldSystemProperty ("httpsProxyHost",    "HTTPS Proxy Host", 40, "https.proxyHost");
+        JPanel proxyPort     = addFieldSystemProperty ("httpsProxyPort",    "HTTPS Proxy Port",  5, "https.proxyPort");
+        JPanel nonProxyHosts = addFieldSystemProperty ("httpNonProxyHosts", "Non-Proxy Hosts",  40, "http.nonProxyHosts");
         JPanel form = Lay.BxL
         (
             constants,
             dimension,
             proxyHost,
-            proxyPort
+            proxyPort,
+            nonProxyHosts
         );
         Lay.BLtg (this, "N", form);
     }
