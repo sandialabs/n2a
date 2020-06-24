@@ -391,6 +391,8 @@ public class PanelEquationGraph extends JScrollPane
         protected JPopupMenu         arrowMenu;
         protected GraphEdge          arrowEdge;                            // Most recent edge when arrowMenu was activated.
         protected Point              popupLocation;
+        protected GraphNode          pinIn;
+        protected GraphNode          pinOut;
 
         public GraphPanel ()
         {
@@ -466,6 +468,8 @@ public class PanelEquationGraph extends JScrollPane
 
             // Flush all data
             removeAll ();
+            pinIn = null;  // Don't care about the fake NodePart attached to these graph nodes.
+            pinOut = null;
             edges.clear ();
         }
 
@@ -478,7 +482,7 @@ public class PanelEquationGraph extends JScrollPane
                 Object c = children.nextElement ();
                 if (c instanceof NodePart)
                 {
-                    GraphNode gn = new GraphNode (this, (NodePart) c);
+                    GraphNode gn = new GraphNode (this, (NodePart) c, null);
                     if (gn.open) add (gn, 0);  // Put open nodes at top of z order
                     else         add (gn);
                     if (gn.getX () == 0  &&  gn.getY () == 0) needLayout.add (gn);
@@ -514,6 +518,37 @@ public class PanelEquationGraph extends JScrollPane
                 }
             }
 
+            if (container.part.pinIn != null  ||  container.part.pinOut != null)
+            {
+                Rectangle tightBounds = new Rectangle (0, 0, -1, -1);  // Needed for placing pins. layout.bounds includes (0,0) so it is not tight enough a fit round the components.
+                for (Component c : getComponents ()) tightBounds = tightBounds.union (c.getBounds ());
+                int y = tightBounds.y + tightBounds.height / 2;
+
+                if (container.part.pinIn != null)
+                {
+                    pinIn = new GraphNode (this, null, "in");
+                    if (pinIn.getX () == 0  &&  pinIn.getY () == 0)
+                    {
+                        Dimension d = pinIn.getPreferredSize ();
+                        int x = tightBounds.x - 100 - pinIn.pinOutBounds.width - d.width;
+                        pinIn.setLocation (x, y - d.height / 2);
+                    }
+                    add (pinIn);
+                }
+
+                if (container.part.pinOut != null)
+                {
+                    pinOut = new GraphNode (this, null, "out");
+                    if (pinOut.getX () == 0  &&  pinOut.getY () == 0)
+                    {
+                        int x = tightBounds.x + tightBounds.width + 100 + pinOut.pinInBounds.width;
+                        Dimension d = pinOut.getPreferredSize ();
+                        pinOut.setLocation (x, y - d.height / 2);
+                    }
+                    add (pinOut);
+                }
+            }
+
             buildEdges ();
             validate ();  // Runs layout, so negative focus locations can work, or so that origin (0,0) is meaningful.
         }
@@ -529,7 +564,20 @@ public class PanelEquationGraph extends JScrollPane
                 GraphNode gn = (GraphNode) c;
 
                 // Build connection edges
-                if (gn.node.connectionBindings != null)
+                if (gn.node.connectionBindings == null)
+                {
+                    MNode pin = gn.node.source.child ("$metadata", "gui", "pin");
+                    if (pin != null  &&  (! pin.get ().isEmpty ()  ||  pin.child ("in") == null  &&  pin.child ("out") == null))  // This is an output population.
+                    {
+                        String pinName = pin.getOrDefault (gn.node.source.key ());
+                        GraphEdge ge = new GraphEdge (gn, pinOut, "", pinName);
+                        edges.add (ge);
+                        gn.edgesIn.add (ge);
+                        pinOut.edgesIn.add (ge);
+                        ge.updateShape (false);
+                    }
+                }
+                else
                 {
                     for (Entry<String,NodePart> e : gn.node.connectionBindings.entrySet ())
                     {
@@ -555,19 +603,25 @@ public class PanelEquationGraph extends JScrollPane
 
                 // Build pin edges
                 if (gn.node.pinIn == null) continue;
-                NodePart parent = (NodePart) gn.node.getTrueParent ();  // never null for a graph node
                 for (MNode pin : gn.node.pinIn)
                 {
-                    // Find peer part
-                    String bind = pin.get ("bind");
-                    if (bind.isEmpty ()) continue;
-                    NodeBase nb = parent.child (bind);
-                    if (! (nb instanceof NodePart)) continue;
-                    GraphNode peer = ((NodePart) nb).graph;
-
-                    // Validate pin metadata
                     String bindPin = pin.get ("bind", "pin");
                     if (bindPin.isEmpty ()) continue;
+
+                    // Find peer part
+                    GraphNode peer = null;
+                    String bind = pin.get ("bind");
+                    if (bind.isEmpty ())  // signifies a link to input block
+                    {
+                        if (pinIn == null) continue;
+                        peer = pinIn;
+                    }
+                    else  // regular node
+                    {
+                        NodeBase nb = container.part.child (bind);
+                        if (! (nb instanceof NodePart)) continue;  // could be null (not found) or a variable
+                        peer = ((NodePart) nb).graph;
+                    }
                     if (peer.node.pinOut == null  ||  peer.node.pinOut.child (bindPin) == null) continue;
 
                     // Create edge
@@ -595,6 +649,90 @@ public class PanelEquationGraph extends JScrollPane
 
         public void updatePins ()
         {
+            // Since NodePart.updatePins() rebuilds NodePart.pinIn and pinOut, our references to them are
+            // no longer valid. Need to re-copy. Also need to update node position, in case it changed.
+
+            Rectangle tightBounds = new Rectangle (0, 0, -1, -1);
+            for (Component c : getComponents ())
+                if (c != pinIn  &&  c != pinOut)
+                    tightBounds = tightBounds.union (c.getBounds ());
+            int y = tightBounds.y + tightBounds.height / 2;
+
+            if (container.part.pinIn == null)
+            {
+                if (pinIn != null)
+                {
+                    remove (pinIn);  // Assume that rebuildEdges() will be called after this, so no need to remove dangling edges.
+                    pinIn = null;
+                }
+            }
+            else
+            {
+                if (pinIn == null)
+                {
+                    pinIn = new GraphNode (this, null, "in");
+                    add (pinIn);
+                }
+                else
+                {
+                    pinIn.node.pinOut      = container.part.pinIn;
+                    pinIn.node.pinOutOrder = container.part.pinInOrder;
+                }
+                MNode bounds = container.part.source.child ("$metadata", "gui", "pin", "bounds", "in");
+                if (bounds == null)
+                {
+                    Dimension d = pinIn.getPreferredSize ();
+                    int x = tightBounds.x - 100 - pinIn.pinOutBounds.width - d.width;
+                    pinIn.setLocation (x, y - d.height / 2);
+                }
+                else  // Make the fairly safe assumption that x and y are both set to something meaningful.
+                {
+                    Point location = new Point ();
+                    location.x = bounds.getInt ("x") + offset.x;
+                    location.y = bounds.getInt ("y") + offset.y;
+                    pinIn.setLocation (location);
+                }
+                layout.bounds = layout.bounds.union (pinIn.getBounds ());
+            }
+
+            if (container.part.pinOut == null)
+            {
+                if (pinOut != null)
+                {
+                    remove (pinOut);
+                    pinOut = null;
+                }
+            }
+            else
+            {
+                if (pinOut == null)
+                {
+                    pinOut = new GraphNode (this, null, "out");
+                    add (pinOut);
+                }
+                else
+                {
+                    pinOut.node.pinIn      = container.part.pinOut;
+                    pinOut.node.pinInOrder = container.part.pinOutOrder;
+                }
+                MNode bounds = container.part.source.child ("$metadata", "gui", "pin", "bounds", "out");
+                if (bounds == null)
+                {
+                    int x = tightBounds.x + tightBounds.width + 100 + pinOut.pinInBounds.width;
+                    Dimension d = pinOut.getPreferredSize ();
+                    pinOut.setLocation (x, y - d.height / 2);
+                }
+                else
+                {
+                    Point location = new Point ();
+                    location.x = bounds.getInt ("x") + offset.x;
+                    location.y = bounds.getInt ("y") + offset.y;
+                    pinOut.setLocation (location);
+                }
+                layout.bounds = layout.bounds.union (pinOut.getBounds ());
+            }
+
+            // Rebuild bounds around pin blocks.
             for (Component c : getComponents ())
             {
                 ((GraphNode) c).updatePins ();
@@ -608,7 +746,7 @@ public class PanelEquationGraph extends JScrollPane
         **/
         public void addPart (NodePart node)
         {
-            GraphNode gn = new GraphNode (this, node);
+            GraphNode gn = new GraphNode (this, node, null);
             add (gn, 0);  // put at top of z-order, so user can find it easily
             layout.bounds = layout.bounds.union (gn.getBounds ());
             revalidate ();
@@ -747,6 +885,7 @@ public class PanelEquationGraph extends JScrollPane
             double bestDistance = Double.POSITIVE_INFINITY;
             for (GraphNode g : nodes)
             {
+                if (g == pinIn  ||  g == pinOut) continue;
                 double d = p.distance (g.getLocation ());
                 if (d < bestDistance)
                 {
@@ -762,7 +901,7 @@ public class PanelEquationGraph extends JScrollPane
             for (Component c : getComponents ())
             {
                 GraphNode gn = (GraphNode) c;
-                if (gn.node.source.key ().equals (name)) return gn;
+                if (gn.node.source.key ().equals (name)  &&  gn != pinIn  &&  gn != pinOut) return gn;
             }
             return null;
         }
@@ -824,7 +963,7 @@ public class PanelEquationGraph extends JScrollPane
 
     public class GraphLayout implements LayoutManager2
     {
-        public Rectangle bounds = new Rectangle ();
+        public Rectangle bounds = new Rectangle ();  // anchored at (0,0)
         public boolean   UIupdated;
 
         public void addLayoutComponent (String name, Component comp)

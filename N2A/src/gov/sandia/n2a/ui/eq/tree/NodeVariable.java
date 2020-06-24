@@ -47,7 +47,7 @@ import javax.swing.tree.TreePath;
 public class NodeVariable extends NodeContainer
 {
     protected static ImageIcon iconVariable = ImageUtil.getImage ("delta.png");
-    protected static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
+    public    static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
     protected static ImageIcon iconWatch    = ImageUtil.getImage ("watch.png");  // gets modified in static section below
 
     public    boolean       isBinding;

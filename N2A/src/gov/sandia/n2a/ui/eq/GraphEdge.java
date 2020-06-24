@@ -24,6 +24,7 @@ import java.awt.image.BufferedImage;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
@@ -63,7 +64,21 @@ public class GraphEdge
         this.nodeFrom = nodeFrom;
         this.alias    = alias;
 
-        if (partTo == null) return;  // Unconnected edge
+        if (partTo == null)
+        {
+            MNode pin = nodeFrom.node.source.child ("$metadata", "gui", "pin");
+            if (pin == null) return;  // Simply an unconnected edge
+            if (nodeFrom.node.connectionBindings == null) return;
+            int unconnected = 0;
+            for (NodePart np : nodeFrom.node.connectionBindings.values ()) if (np == null) unconnected++;
+            if (unconnected != 1) return;
+
+            // Edge to pin IO block
+            nodeTo    = nodeFrom.container.panelEquationGraph.graphPanel.pinIn;
+            pinSideTo = "out";
+            pinKeyTo  = pin.getOrDefault (nodeFrom.node.source.key ());
+            return;
+        }
 
         // See if partTo or any of its parents is a graph node. If so, that should be the endpoint of this edge.
         NodePart p = partTo;
@@ -76,7 +91,7 @@ public class GraphEdge
             }
             p = (NodePart) p.getParent ();
         }
-        if (nodeTo == null)  // partTo must be outside the current container.
+        if (nodeTo == null)  // partTo is outside the current container.
         {
             nameTo = partTo.source.key ();
         }
@@ -97,10 +112,13 @@ public class GraphEdge
 
     /**
         For pin-to-pin link.
-        @param nodeTo If null, then this is a drag edge. In that case, pinSize & pinKey refers to the pin on the "from" side.
-        If non-null, then this is a completed edge. In that case, nodeTo must always be an input pin.
-        pinSize & pinKey refer to the pin on the "to" side, and the pin metadata will contain the identity of the
-        pin on the "from" side.
+        @param nodeTo If null, then this is a drag edge. In this case, pinSize & pinKey refers to the pin on the "from" side.
+        If non-null, then this is a completed edge. In this case, nodeTo must always be an input pin.
+        pinKey refers to the pin on the "to" side, and the pin metadata will provide the identity of the
+        pin on the "from" side. pinSide is redundant, since it must always be "in".
+        If pinSide is "", then this is an output pin that needs to be visually linked to the IO block.
+        In this case, the output node have a pin to connect, so the IO block cannot refer back to it.
+        Instead, we treat this like a unary connection that is bound to a pin.
     **/
     public GraphEdge (GraphNode nodeFrom, GraphNode nodeTo, String pinSide, String pinKey)
     {
@@ -113,12 +131,18 @@ public class GraphEdge
             pinSideFrom = pinSide;
             pinKeyFrom  = pinKey;
         }
-        else  // Complete connection. In this case, client code is required to correctly configure metadata.
+        else if (pinSide.equals ("in"))  // pin-to-pin connection
         {
             pinSideTo   = "in";  // "pinSide" is ignored in this case
             pinKeyTo    = pinKey;
             pinSideFrom = "out";
             pinKeyFrom  = nodeTo.node.pinIn.get (pinKey, "bind", "pin");
+        }
+        else  // output
+        {
+            pinSideTo = "in";
+            pinKeyTo  = pinKey;
+            // pinSideFrom and pinKeyFrom are null, just like a connector. The distinction is that alias is empty.
         }
     }
 
@@ -383,20 +407,28 @@ public class GraphEdge
                 tipAngle = Math.PI / 2;
             }
         }
-        else if (pinKeyFrom != null)  // pin-to-pin, or possibly dragging from pin
+        else if (alias.isEmpty ())  // pin-to-pin, output-to-pin, or dragging from pin
         {
-            int y = Cbounds.y + GraphNode.border.t + boxSize;
-            if (pinSideFrom.equals ("in"))
+            if (pinKeyFrom == null)
             {
-                y += lineHeight * nodeFrom.node.pinIn.getInt (pinKeyFrom, "order");
-                c = new Vector2 (Cbounds.x - boxSize, y);
-                ba = new Vector2 (-1, 0);
+                c = new Vector2 (Cbounds.x + Cbounds.width, Cbounds.y + Cbounds.height / 2);
+                ba = new Vector2 (1, 0);
             }
             else
             {
-                y += lineHeight * nodeFrom.node.pinOut.getInt (pinKeyFrom, "order");
-                c = new Vector2 (Cbounds.x + Cbounds.width + boxSize, y);
-                ba = new Vector2 (1, 0);
+                int y = Cbounds.y + GraphNode.border.t + boxSize;
+                if (pinSideFrom.equals ("in"))
+                {
+                    y += lineHeight * nodeFrom.node.pinIn.getInt (pinKeyFrom, "order");
+                    c = new Vector2 (Cbounds.x - boxSize, y);
+                    ba = new Vector2 (-1, 0);
+                }
+                else  // pinSideFrom is "out"
+                {
+                    y += lineHeight * nodeFrom.node.pinOut.getInt (pinKeyFrom, "order");
+                    c = new Vector2 (Cbounds.x + Cbounds.width + boxSize, y);
+                    ba = new Vector2 (1, 0);
+                }
             }
 
             root = c;

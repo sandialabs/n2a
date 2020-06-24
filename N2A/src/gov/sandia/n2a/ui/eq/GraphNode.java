@@ -49,6 +49,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.MouseInputAdapter;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
@@ -57,6 +58,7 @@ import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
@@ -80,14 +82,50 @@ public class GraphNode extends JPanel
     public    List<GraphEdge>     edgesIn             = new ArrayList<GraphEdge> ();
     protected Rectangle           pinOutBounds;  // Surrounds graphic representation of pins. Null if no out pins.
     protected Rectangle           pinInBounds;   // ditto for in pins
+    protected String              side;          // Only non-null if this is a pin I/O block. In that case, this is one of "in" or "out".
 
     protected static RoundedBorder border = new RoundedBorder (5);
 
-    public GraphNode (GraphPanel parent, NodePart node)
+    /**
+        Constructs both regular graph nodes and pin I/O blocks.
+        @param node If a child of container.part, then we are an ordinary graph node.
+        If null, then we are a pin I/O block that uses a fake part.
+        @param side For pin I/O blocks only, indicates which side of container.part we represent.
+        This is the side as seen from outside of container.part.
+    **/
+    public GraphNode (GraphPanel parent, NodePart node, String side)
     {
-        container   = PanelModel.instance.panelEquations;  // "container" is merely a convenient shortcut
+        container = PanelModel.instance.panelEquations;  // "container" is merely a convenient shortcut
+
+        MNode bounds;
+        if (node == null)
+        {
+            MNode source;
+            if (side.equals ("in")) source = new MVolatile (null, "Inputs");
+            else                    source = new MVolatile (null, "Outputs");
+            node = new NodePart (new MPart (source));  // fake source
+            node.setParent (container.part);  // No real hierarchy established. In particular, container.part does not get node added to its children.
+            node.iconCustom16 = NodeVariable.iconBinding;
+            if (side.equals ("in"))
+            {
+                node.pinOut      = container.part.pinIn;
+                node.pinOutOrder = container.part.pinInOrder;
+            }
+            else
+            {
+                node.pinIn      = container.part.pinOut;
+                node.pinInOrder = container.part.pinOutOrder;
+            }
+            bounds = container.part.source.child ("$metadata", "gui", "pin", "bounds", side);
+        }
+        else
+        {
+            bounds = node.source.child ("$metadata", "gui", "bounds");
+        }
+
         this.parent = parent;
         this.node   = node;
+        this.side   = side;
         node.graph  = this;
 
         node.fakeRoot (true);
@@ -103,8 +141,9 @@ public class GraphNode extends JPanel
 
         title = new TitleRenderer ();
         title.getTreeCellRendererComponent (getEquationTree ().tree, node, false, open, false, -2, false);  // Configure JLabel with info from node.
-        title.setFocusable (true);            // make focusable in general
-        title.setRequestFocusEnabled (true);  // make focusable by mouse
+        boolean focusable =  side == null;
+        title.setFocusable (focusable);            // make focusable in general
+        title.setRequestFocusEnabled (focusable);  // make focusable by mouse
 
         panelTitle = Lay.BL ("N", title);
         panelTitle.setOpaque (false);
@@ -114,7 +153,6 @@ public class GraphNode extends JPanel
         setBorder (border);
         setOpaque (false);
 
-        MNode bounds = node.source.child ("$metadata", "gui", "bounds");
         if (bounds != null)
         {
             int x = bounds.getInt ("x") + parent.offset.x;
@@ -854,6 +892,9 @@ public class GraphNode extends JPanel
 
                     List<GraphNode> selected = parent.getSelection ();
                     selected.remove (GraphNode.this);
+                    selected.remove (container.panelEquationGraph.graphPanel.pinIn);
+                    selected.remove (container.panelEquationGraph.graphPanel.pinOut);
+                    container.panelEquationGraph.clearSelection ();  // In case pinIn or pinOut were selected. After delete, nothing should be selected.
 
                     UndoManager um = MainFrame.instance.undoManager;
                     if (selected.isEmpty ())
@@ -865,7 +906,6 @@ public class GraphNode extends JPanel
                         selected.add (GraphNode.this);  // Now at end of list, which is where we want it.
                         CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
                         compound.leadPath = node.getKeyPath ();
-                        // No need to clear selection, because all nodes are going away.
                         um.addEdit (compound);
                         int last = selected.size () - 1;
                         int i = 0;
@@ -929,6 +969,7 @@ public class GraphNode extends JPanel
                 public void mouseClicked (MouseEvent me)
                 {
                     timer.stop ();
+                    if (side != null) return;  // Don't allow edit or drill-down on pin I/O blocks.
 
                     int x = me.getX ();
                     int y = me.getY ();
@@ -1427,30 +1468,46 @@ public class GraphNode extends JPanel
                 {
                     // Store new bounds in metadata
                     MNode metadata = new MVolatile ();
-                    MNode bounds = metadata.childOrCreate ("gui", "bounds");
+                    NodePart np;
+                    MNode bounds;
                     Rectangle now = getBounds ();
+                    if (GraphNode.this == container.panelEquationGraph.graphPanel.pinIn)
+                    {
+                        np = container.part;
+                        bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
+                    }
+                    else if (GraphNode.this == container.panelEquationGraph.graphPanel.pinOut)
+                    {
+                        np = container.part;
+                        bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
+                    }
+                    else
+                    {
+                        np = node;
+                        bounds = metadata.childOrCreate ("gui", "bounds");
+                        if (open)
+                        {
+                            MNode boundsOpen = bounds.childOrCreate ("open");
+                            if (now.width  != old.width ) boundsOpen.set (now.width,  "width");
+                            if (now.height != old.height) boundsOpen.set (now.height, "height");
+                            if (boundsOpen.size () == 0) bounds.clear ("open");
+                        }
+                        else
+                        {
+                            if (now.width  != old.width ) bounds.set (now.width,  "width");
+                            if (now.height != old.height) bounds.set (now.height, "height");
+                        }
+                    }
                     int dx = now.x - old.x;
                     int dy = now.y - old.y;
                     boolean moved =  dx != 0  ||  dy != 0;
                     if (dx != 0) bounds.set (now.x - parent.offset.x, "x");
                     if (dy != 0) bounds.set (now.y - parent.offset.y, "y");
-                    if (open)
-                    {
-                        MNode boundsOpen = bounds.childOrCreate ("open");
-                        if (now.width  != old.width ) boundsOpen.set (now.width,  "width");
-                        if (now.height != old.height) boundsOpen.set (now.height, "height");
-                        if (boundsOpen.size () == 0) bounds.clear ("open");
-                    }
-                    else
-                    {
-                        if (now.width  != old.width ) bounds.set (now.width,  "width");
-                        if (now.height != old.height) bounds.set (now.height, "height");
-                    }
                     if (bounds.size () > 0)
                     {
                         UndoManager um = MainFrame.instance.undoManager;
                         boolean multi =  moved  &&  ! selection.isEmpty ();
-                        ChangeAnnotations ca = new ChangeAnnotations (node, metadata);
+                        ChangeAnnotations ca = new ChangeAnnotations (np, metadata);
                         if (! multi)
                         {
                             um.apply (ca);
@@ -1463,11 +1520,25 @@ public class GraphNode extends JPanel
                             for (GraphNode g : selection)
                             {
                                 metadata = new MVolatile ();
-                                bounds = metadata.childOrCreate ("gui", "bounds");
+                                if (g == container.panelEquationGraph.graphPanel.pinIn)
+                                {
+                                    np = container.part;
+                                    bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
+                                }
+                                else if (g == container.panelEquationGraph.graphPanel.pinOut)
+                                {
+                                    np = container.part;
+                                    bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
+                                }
+                                else
+                                {
+                                    np = g.node;
+                                    bounds = metadata.childOrCreate ("gui", "bounds");
+                                }
                                 now = g.getBounds ();
                                 if (dx != 0) bounds.set (now.x - parent.offset.x, "x");
                                 if (dy != 0) bounds.set (now.y - parent.offset.y, "y");
-                                compound.addEdit (new ChangeAnnotations (g.node, metadata));
+                                compound.addEdit (new ChangeAnnotations (np, metadata));
                             }
                             um.endCompoundEdit ();
                             compound.redo ();

@@ -1530,6 +1530,8 @@ public class PanelEquations extends JPanel
 
                 List<GraphNode> selected = panelEquationGraph.getSelection ();
                 selected.remove (gn);
+                selected.remove (panelEquationGraph.graphPanel.pinIn);
+                selected.remove (panelEquationGraph.graphPanel.pinOut);
                 for (GraphNode g : selected) export.add (g.node);
             }
             else if (comp instanceof BreadcrumbRenderer)  // Graph parent

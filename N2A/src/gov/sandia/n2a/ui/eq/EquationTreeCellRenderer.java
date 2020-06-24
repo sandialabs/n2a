@@ -33,6 +33,7 @@ import javax.swing.plaf.basic.BasicGraphicsUtils;
 import javax.swing.tree.TreeCellRenderer;
 
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 /**
     Extends the standard tree cell renderer to get icon and text style from NodeBase.
@@ -49,7 +50,8 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
     protected boolean selected;
     protected boolean hasFocus;
     protected boolean isDropCell;
-    protected boolean nontree;  // Need hack to paint background
+    protected boolean nontree;  // Need hack to paint background. Also indicates that it's OK to use icons larger than 16x16.
+    protected boolean hideIcon; // Completely suppress the icon for this node.
 
     // These colors may get changed when look & feel is changed.
     public static Color  colorInherit          = Color.blue;
@@ -202,7 +204,7 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         Font  fontBase  = tree.getFont ();
         Font  fontPlain = n.getPlainFont (fontBase);
 
-        iconHolder.setIcon (getIconFor (n, expanded, leaf));
+        iconHolder.setIcon (getIconFor (n, expanded, leaf));  // If icon is null, this should result in a zero-sized label.
 
         List<Integer> columnWidths = null;
         FontMetrics fm = getFontMetrics (n.getStyledFont (fontBase));
@@ -278,7 +280,13 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
 
     public Icon getIconFor (NodeBase node, boolean expanded, boolean leaf)
     {
-        Icon result = node.getIcon (expanded);  // A node knows whether it should hold other nodes or not, so don't pass leaf to it.
+        if (hideIcon) return null;
+        if (nontree)  // OK to use icon larger than 16x16. Implies that node is a NodePart.
+        {
+            NodePart np = (NodePart) node;
+            if (np.iconCustom != null) return np.iconCustom;
+        }
+        Icon result = node.getIcon (expanded);  // A node knows whether it should hold other nodes or not, so no need to pass leaf to it.
         if (result != null) return result;
         if (leaf)     return iconLeaf;
         if (expanded) return iconOpen;

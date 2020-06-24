@@ -9,8 +9,13 @@ package gov.sandia.n2a.ui.eq.tree;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
+import java.awt.Image;
 import java.awt.Point;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
@@ -47,6 +52,7 @@ import gov.sandia.n2a.ui.eq.undo.ChangeReferences;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
+import javax.imageio.ImageIO;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
@@ -58,6 +64,8 @@ public class NodePart extends NodeContainer
 {
     protected static ImageIcon iconCompartment = ImageUtil.getImage ("comp.gif");
     protected static ImageIcon iconConnection  = ImageUtil.getImage ("connection.png");
+    public           ImageIcon iconCustom;   // User-supplied icon for this part. If present, it is used in node titles.
+    public           ImageIcon iconCustom16; // Version of iconCustom that is no larger than 16x16, used for tree rendering.
 
     protected String                      inheritName = "";
     protected Set<String>                 ancestors;           // All parts we inherit from, whether directly or indirectly. Used to propose connections.
@@ -91,10 +99,48 @@ public class NodePart extends NodeContainer
         }
     }
 
+    /**
+        Extracts icon from $metadata.gui.icon, if it exists.
+        Otherwise, iconCustom is left null and standard icons are used.
+    **/
+    public void setIcon ()
+    {
+        iconCustom   = null;
+        iconCustom16 = null;
+        String base64 = source.get ("$metadata", "gui", "icon");
+        if (base64.isEmpty ()) return;
+
+        byte[] bytes = Base64.getDecoder ().decode (base64);
+        try
+        {
+            BufferedImage image = ImageIO.read (new ByteArrayInputStream (bytes));
+            iconCustom = new ImageIcon (image);
+
+            // Create scaled instance, if needed.
+            double w = image.getWidth ();
+            double h = image.getHeight ();
+            if (w > 16)
+            {
+                h *= 16 / w;
+                w  = 16;
+            }
+            if (h > 16)
+            {
+                w *= 16 / h;
+                h  = 16;
+            }
+            int width  = (int) Math.round (w);
+            int height = (int) Math.round (h);
+            iconCustom16 = new ImageIcon (image.getScaledInstance (width, height, Image.SCALE_SMOOTH));
+        }
+        catch (IOException e) {}
+    }
+
     @Override
     public void build ()
     {
         setUserObject ();
+        setIcon ();
         removeAllChildren ();
         ancestors = null;
 
@@ -207,6 +253,7 @@ public class NodePart extends NodeContainer
     @Override
     public Icon getIcon (boolean expanded)
     {
+        if (iconCustom16 != null) return iconCustom16;
         if (connectionBindings == null) return iconCompartment;
         else                            return iconConnection;
     }

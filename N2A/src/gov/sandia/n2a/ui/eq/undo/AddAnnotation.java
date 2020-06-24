@@ -231,16 +231,16 @@ public class AddAnnotation extends UndoableView implements AddEditable
         {
             PanelEquations pe = PanelModel.instance.panelEquations;
             NodePart p = (NodePart) parent;
-            if (touchesPin) p.updatePins ();
+            if (touchesPin)
+            {
+                p.updatePins ();
+                // A change in pin structure can affect any level of graph above the current node.
+                pe.panelEquationGraph.updatePins ();
+                pe.panelEquationGraph.reconnect ();
+                pe.panelEquationGraph.repaint ();
+            }
             if (p.graph == null)  // It's either the parent node, or a node below the current level of graph.
             {
-                if (touchesPin)
-                {
-                    // A change in pin structure can affect any level of graph above the current node.
-                    pe.panelEquationGraph.updatePins ();
-                    pe.panelEquationGraph.reconnect ();
-                    pe.panelEquationGraph.repaint ();
-                }
                 if (p == pe.part)
                 {
                     pe.panelParent.animate ();           // Sets size of parent panel from metadata, in getPreferredSize().
@@ -251,21 +251,19 @@ public class AddAnnotation extends UndoableView implements AddEditable
             {
                 if (binding == null)
                 {
-                    if (touchesPin)
-                    {
-                        // reconnect() has to come before updateGUI(). Otherwise, graph node might operate on edges
-                        // that no longer have pin metadata.
-                        // If the node has also moved, reconnect() will set up all edges at the old location,
-                        // then they will be redrawn at the new location.
-                        pe.panelEquationGraph.reconnect ();
-                        pe.panelEquationGraph.repaint ();
-                    }
+                    // PanelEquationGraph.reconnect() has to come before updateGUI(). Otherwise, graph node might
+                    // operate on edges that no longer have pin metadata. If the node has also moved, reconnect() will
+                    // set up all edges at the old location, then they will be redrawn at the new location.
                     p.graph.updateGUI ();  // Could save a little graphic work here by doing more work to detect whether the part moved or not.
                 }
                 else
                 {
-                    String alias = binding.source.key ();
-                    p.graph.updateEdge (alias, p.connectionBindings.get (alias));
+                    if (! touchesPin)
+                    {
+                        String alias = binding.source.key ();
+                        p.graph.updateEdge (alias, p.connectionBindings.get (alias));
+                    }
+                    // otherwise all edges in the graph have been updated above, so need to do incremental update here.
                 }
             }
         }
