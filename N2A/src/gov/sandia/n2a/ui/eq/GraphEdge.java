@@ -20,6 +20,7 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
+import java.util.Map.Entry;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -69,14 +70,32 @@ public class GraphEdge
             MNode pin = nodeFrom.node.source.child ("$metadata", "gui", "pin");
             if (pin == null) return;  // Simply an unconnected edge
             if (nodeFrom.node.connectionBindings == null) return;
-            int unconnected = 0;
-            for (NodePart np : nodeFrom.node.connectionBindings.values ()) if (np == null) unconnected++;
-            if (unconnected != 1) return;
 
-            // Edge to pin IO block
-            nodeTo    = nodeFrom.container.panelEquationGraph.graphPanel.pinIn;
-            pinSideTo = "out";
-            pinKeyTo  = pin.getOrDefault (nodeFrom.node.source.key ());
+            // Determine order of unbound endpoint(s)
+            String first = null;
+            String second = null;
+            for (Entry<String,NodePart> e : nodeFrom.node.connectionBindings.entrySet ())
+            {
+                if (e.getValue () != null) continue;
+                if      (first  == null) first  = e.getKey ();
+                else if (second == null) second = e.getKey ();
+                else break;
+            }
+
+            // Edge from first unbound endpoint to pin input block.
+            String pinName = pin.getOrDefault (nodeFrom.node.source.key ());
+            if (alias.equals (first))
+            {
+                nodeTo    = nodeFrom.container.panelEquationGraph.graphPanel.pinIn;
+                pinSideTo = "out";
+                pinKeyTo  = pinName;
+            }
+            else if (alias.equals (second)  &&  pin.child ("pass") != null)
+            {
+                nodeTo    = nodeFrom.container.panelEquationGraph.graphPanel.pinOut;
+                pinSideTo = "in";
+                pinKeyTo  = pin.getOrDefault (pinName, "pass");
+            }
             return;
         }
 

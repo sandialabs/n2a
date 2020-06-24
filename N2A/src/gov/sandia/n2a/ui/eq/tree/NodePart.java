@@ -656,8 +656,16 @@ public class NodePart extends NodeContainer
                 if (pin != null  &&  (! pin.get ().isEmpty ()  ||  pin.child ("in") == null  &&  pin.child ("out") == null))  // pin must be explicit, or both "in" and "out" must be absent.
                 {
                     MNode side = null;
-                    if (n.connectionBindings == null)                        side = pinOut; // compartment
-                    else if (n.connectionBindings.values ().contains (null)) side = pinIn;  // connection with unbound endpoint
+                    MNode pass = null;
+                    if (n.connectionBindings == null)  // compartment
+                    {
+                        side = pinOut;
+                    }
+                    else if (n.connectionBindings.values ().contains (null))  // connection with unbound endpoint
+                    {
+                        side = pinIn;
+                        pass = pin.child ("pass");
+                    }
                     if (side != null)
                     {
                         String pinName = pin.getOrDefault (partName);
@@ -665,6 +673,16 @@ public class NodePart extends NodeContainer
                         side.set (pin.get ("order"), pinName, "order");
                         side.set (pin.get ("notes"), pinName, "notes");
                         side.set (pin.get ("color"), pinName, "color");
+
+                        // Pass-through pins
+                        if (side == pinIn  &&  pass != null)
+                        {
+                            pinName = pass.getOrDefault (pinName);  // Using input pinName as default for output pinName.
+                            pinOut.set ("", pinName, "part", partName);
+                            pinOut.set (pin.get ("order"), pinName, "order");
+                            pinOut.set (pin.get ("notes"), pinName, "notes");
+                            pinOut.set (pin.get ("color"), pinName, "color");
+                        }
                     }
                 }
             }
