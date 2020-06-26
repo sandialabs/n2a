@@ -647,7 +647,10 @@ public class NodePart extends NodeContainer
                         pinIn.set (pin.get ("notes"), pinName, "notes");
                         pinIn.set (pin.get ("color"), pinName, "color");
                         // Forwarding is a kind of binding. In particular, the auto attribute is never forwarded.
-                        // Instead, one auto position is consumed by the binding. Exactly which one remains to be determined.
+                        // Instead, one auto position is consumed by the binding. This should already be baked in.
+                        // IE: This forwarded input could be a specific copy of an auto pin. It can't be the auto pin itself.
+                        // Also, if an inner part forwards its input to an outer pin that is auto, then the inner part
+                        // will be duplicated, just like a connection would be.
                     }
                 }
 
@@ -673,6 +676,7 @@ public class NodePart extends NodeContainer
                         side.set (pin.get ("order"), pinName, "order");
                         side.set (pin.get ("notes"), pinName, "notes");
                         side.set (pin.get ("color"), pinName, "color");
+                        if (side == pinIn  &&  pin.getFlag ("auto")) side.set ("", pinName, "auto");  // Effectively an OR between individual subscribers.
 
                         // Pass-through pins
                         if (side == pinIn  &&  pass != null)
