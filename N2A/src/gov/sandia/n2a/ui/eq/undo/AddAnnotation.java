@@ -234,7 +234,8 @@ public class AddAnnotation extends UndoableView implements AddEditable
             if (touchesPin)
             {
                 p.updatePins ();
-                // A change in pin structure can affect any level of graph above the current node.
+                // A change in pin structure can affect any level of graph above the current node,
+                // so always refresh display.
                 pe.panelEquationGraph.updatePins ();
                 pe.panelEquationGraph.reconnect ();
                 pe.panelEquationGraph.repaint ();
@@ -400,6 +401,23 @@ public class AddAnnotation extends UndoableView implements AddEditable
                     return resolve (a, name.substring (key.length () + 1));  // The +1 removes the next dot in the path
                 }
             }
+        }
+        return container;
+    }
+
+    /**
+        Utility routine for finding the deepest node that exists along a given path.
+        Takes into account node folding. This is similar to resolve(), except that
+        it doesn't give up when the target does not exist. Instead, this routine goes
+        along the path as far as possible.
+    **/
+    public static NodeBase findDeepest (NodeBase container, String... names)
+    {
+        for (String name : names)
+        {
+            NodeBase nb = resolve (container, name);
+            if (nb == container) return container;  // If can't go any deeper, then stop.
+            container = nb;
         }
         return container;
     }

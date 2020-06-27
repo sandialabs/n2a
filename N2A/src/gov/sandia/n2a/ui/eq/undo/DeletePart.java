@@ -25,6 +25,7 @@ public class DeletePart extends UndoableView
     protected boolean      neutralized;
     protected boolean      multi;          // Indicates that this is one of several parts being deleted at the same time. During undo, set selected.
     protected boolean      multiLast;      // Indicates this is the focused item in the selection.
+    protected boolean      touchesPin;
 
     public DeletePart (NodePart node, boolean canceled)
     {
@@ -43,6 +44,8 @@ public class DeletePart extends UndoableView
 
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source.getSource ());  // Only take the top-doc data, not the collated tree.
+
+        touchesPin =  savedSubtree.child ("$metadata", "gui", "pin") != null;
     }
 
     public void setMulti (boolean value)
@@ -58,13 +61,13 @@ public class DeletePart extends UndoableView
     public void undo ()
     {
         super.undo ();
-        AddPart.create (path, index, name, savedSubtree, false, multi, multiLast, false);
+        AddPart.create (path, index, name, savedSubtree, false, multi, multiLast, false, touchesPin);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddPart.destroy (path, canceled, name, ! multi  ||  multiLast, false);
+        AddPart.destroy (path, canceled, name, ! multi  ||  multiLast, false, touchesPin);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

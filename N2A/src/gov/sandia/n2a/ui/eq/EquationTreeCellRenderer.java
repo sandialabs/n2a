@@ -36,7 +36,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 /**
-    Extends the standard tree cell renderer to get icon and text style from NodeBase.
+    Complete implementation of TreeCellRenderer that works with our NodeBase.
     This is the core code that makes NodeBase work as a tree node representation.
 **/
 @SuppressWarnings("serial")

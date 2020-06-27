@@ -47,9 +47,10 @@ import javax.swing.border.AbstractBorder;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.MouseInputAdapter;
+import javax.swing.tree.TreePath;
+
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
@@ -57,8 +58,10 @@ import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
+import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeIO;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
-import gov.sandia.n2a.ui.eq.tree.NodeVariable;
+import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
@@ -100,22 +103,7 @@ public class GraphNode extends JPanel
         MNode bounds;
         if (node == null)
         {
-            MNode source;
-            if (side.equals ("in")) source = new MVolatile (null, "Inputs");
-            else                    source = new MVolatile (null, "Outputs");
-            node = new NodePart (new MPart (source));  // fake source
-            node.setParent (container.part);  // No real hierarchy established. In particular, container.part does not get node added to its children.
-            node.iconCustom16 = NodeVariable.iconBinding;
-            if (side.equals ("in"))
-            {
-                node.pinOut      = container.part.pinIn;
-                node.pinOutOrder = container.part.pinInOrder;
-            }
-            else
-            {
-                node.pinIn      = container.part.pinOut;
-                node.pinInOrder = container.part.pinOutOrder;
-            }
+            node = new NodeIO (side, container.part);
             bounds = container.part.source.child ("$metadata", "gui", "pin", "bounds", side);
         }
         else
@@ -692,8 +680,7 @@ public class GraphNode extends JPanel
 
     public void paintPin (boolean in, MNode c, Graphics2D g2, Rectangle bounds, FontMetrics fm, int ascent, int lineHeight, int boxSize, int y)
     {
-        String name = c.get ();
-        if (name.isEmpty ()) name = c.key ();
+        String name = c.key ();
 
         int lineWidth = fm.stringWidth (name) + 2 * GraphEdge.padNameSide;
         Rectangle textBox = new Rectangle ();
@@ -969,7 +956,16 @@ public class GraphNode extends JPanel
                 public void mouseClicked (MouseEvent me)
                 {
                     timer.stop ();
-                    if (side != null) return;  // Don't allow edit or drill-down on pin I/O blocks.
+
+                    if (side != null)  // This is a pin IO block.
+                    {
+                        // Shift focus to $metadata.gui.pin.side in parent part.
+                        container.switchFocus (false, false);  // Select the parent tree.
+                        NodeBase metadata = container.part.child ("$metadata");
+                        metadata = AddAnnotation.findDeepest (metadata, "gui", "pin", side);
+                        container.getParentEquationTree ().tree.setSelectionPath (new TreePath (metadata.getPath ()));
+                        return;  // Don't allow edit or drill-down.
+                    }
 
                     int x = me.getX ();
                     int y = me.getY ();

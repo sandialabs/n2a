@@ -86,6 +86,10 @@ public class NodePart extends NodeContainer
         this.source = source;
     }
 
+    protected NodePart ()
+    {
+    }
+
     @Override
     public void setUserObject ()
     {
@@ -620,9 +624,9 @@ public class NodePart extends NodeContainer
                     String pinName = op.key ();  // The pin name is determined by our out list, not the inner part's out list.
 
                     pinOut.set ("", pinName, "part", partName);  // List this part as a subscriber to the pin.
-                    pinOut.set (pin.get ("order"), pinName, "order");  // No harm in setting these blank if the attribute is missing.
-                    pinOut.set (pin.get ("notes"), pinName, "notes");
-                    pinOut.set (pin.get ("color"), pinName, "color");
+                    // Forward a limited subset of pin attributes.
+                    if (pin.data ("notes")) pinOut.set (pin.get ("notes"), pinName, "notes");
+                    if (pin.data ("color")) pinOut.set (pin.get ("color"), pinName, "color");
                 }
             }
 
@@ -643,14 +647,14 @@ public class NodePart extends NodeContainer
                         String pinName = pin.get ("bind", "pin");
                         if (pinName.isEmpty ()) continue;
                         pinIn.set ("", pinName, "part", partName);
-                        pinIn.set (pin.get ("order"), pinName, "order");
-                        pinIn.set (pin.get ("notes"), pinName, "notes");
-                        pinIn.set (pin.get ("color"), pinName, "color");
-                        // Forwarding is a kind of binding. In particular, the auto attribute is never forwarded.
-                        // Instead, one auto position is consumed by the binding. This should already be baked in.
-                        // IE: This forwarded input could be a specific copy of an auto pin. It can't be the auto pin itself.
-                        // Also, if an inner part forwards its input to an outer pin that is auto, then the inner part
-                        // will be duplicated, just like a connection would be.
+                        if (pin.data ("notes")) pinIn.set (pin.get ("notes"), pinName, "notes");
+                        if (pin.data ("color")) pinIn.set (pin.get ("color"), pinName, "color");
+
+                        // Forwarding is a kind of binding. This forwarded input could be a regular pin
+                        // or a specific copy of an auto pin. It can't be the auto pin itself.
+
+                        // In the other direction, if an inner part forwards its input to an outer pin that is marked auto,
+                        // then the inner part will be duplicated, just like a connection part would be.
                     }
                 }
 
@@ -673,19 +677,12 @@ public class NodePart extends NodeContainer
                     {
                         String pinName = pin.getOrDefault (partName);
                         side.set ("", pinName, "part", partName);
-                        side.set (pin.get ("order"), pinName, "order");
-                        side.set (pin.get ("notes"), pinName, "notes");
-                        side.set (pin.get ("color"), pinName, "color");
-                        if (side == pinIn  &&  pin.getFlag ("auto")) side.set ("", pinName, "auto");  // Effectively an OR between individual subscribers.
 
                         // Pass-through pins
                         if (side == pinIn  &&  pass != null)
                         {
                             pinName = pass.getOrDefault (pinName);  // Using input pinName as default for output pinName.
                             pinOut.set ("", pinName, "part", partName);
-                            pinOut.set (pin.get ("order"), pinName, "order");
-                            pinOut.set (pin.get ("notes"), pinName, "notes");
-                            pinOut.set (pin.get ("color"), pinName, "color");
                         }
                     }
                 }

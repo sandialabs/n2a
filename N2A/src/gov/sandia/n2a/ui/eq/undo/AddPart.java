@@ -42,6 +42,7 @@ public class AddPart extends UndoableView implements AddEditable
     protected boolean      multi;
     protected boolean      multiLast;
     public    boolean      multiShared;    // Do not adjust selection or focus at all. Our tree node is not visible because our parent is also the graph parent. Our graph node is visible, but focus should remain in tree.
+    protected boolean      touchesPin;
 
     public AddPart (NodePart parent, int index, MNode data, Point location)
     {
@@ -67,6 +68,8 @@ public class AddPart extends UndoableView implements AddEditable
         MNode bounds = createSubtree.childOrCreate ("$metadata", "gui", "bounds");
         bounds.set (location.x, "x");
         bounds.set (location.y, "y");
+
+        touchesPin =  createSubtree.child ("$metadata", "gui", "pin") != null;
     }
 
     public AddPart (NodePart parent, MNode data)
@@ -78,6 +81,8 @@ public class AddPart extends UndoableView implements AddEditable
 
         createSubtree = new MVolatile ();
         createSubtree.merge (data);
+
+        touchesPin =  createSubtree.child ("$metadata", "gui", "pin") != null;
     }
 
     public static String uniqueName (NodeBase parent, String prefix, int suffix, boolean allowEmptySuffix)
@@ -266,10 +271,10 @@ public class AddPart extends UndoableView implements AddEditable
     public void undo ()
     {
         super.undo ();
-        destroy (path, false, name, ! multi  ||  multiLast, multiShared);
+        destroy (path, false, name, ! multi  ||  multiLast, multiShared, touchesPin);
     }
 
-    public static void destroy (List<String> path, boolean canceled, String name, boolean setSelected, boolean multiShared)
+    public static void destroy (List<String> path, boolean canceled, String name, boolean setSelected, boolean multiShared, boolean touchesPin)
     {
         // Retrieve created node
         NodePart parent = (NodePart) NodeBase.locateNode (path);
@@ -294,6 +299,7 @@ public class AddPart extends UndoableView implements AddEditable
             if (model == null) FilteredTreeModel.removeNodeFromParentStatic (createdNode);
             else               model.removeNodeFromParent (createdNode);
             if (graphParent) peg.removePart (createdNode, setSelected  &&  ! multiShared);
+            parent.updatePins ();
         }
         else  // Just exposed an overridden node
         {
@@ -327,10 +333,13 @@ public class AddPart extends UndoableView implements AddEditable
             pet.updateVisibility (createdPath, index, setSelected);  // includes nodeStructureChanged(), if necessary
             pet.animate ();
         }
-        if (graphParent)
+        if (graphParent  ||  touchesPin)
         {
             peg.reconnect ();
             peg.repaint ();
+        }
+        if (graphParent)
+        {
             if (pe.view == PanelEquations.NODE  &&  peg.isEmpty ()) pe.panelParent.setOpen (true);
             if (setSelected  &&  multiShared) pe.switchFocus (false, false);
         }
@@ -339,7 +348,7 @@ public class AddPart extends UndoableView implements AddEditable
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, multiLast, multiShared);
+        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, multiLast, multiShared, touchesPin);
     }
 
     public NodeBase getCreatedNode ()
@@ -347,7 +356,7 @@ public class AddPart extends UndoableView implements AddEditable
         return createdNode;
     }
 
-    public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated, boolean multi, boolean multiLast, boolean multiShared)
+    public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated, boolean multi, boolean multiLast, boolean multiShared, boolean touchesPin)
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -424,6 +433,9 @@ public class AddPart extends UndoableView implements AddEditable
                 peg.clearSelection ();
                 createdNode.graph.takeFocusOnTitle ();
             }
+        }
+        if (graphParent  ||  touchesPin)
+        {
             if (! multi  ||  multiLast)
             {
                 peg.reconnect ();

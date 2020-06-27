@@ -652,13 +652,7 @@ public class PanelEquationGraph extends JScrollPane
         public void updatePins ()
         {
             // Since NodePart.updatePins() rebuilds NodePart.pinIn and pinOut, our references to them are
-            // no longer valid. Need to re-copy. Also need to update node position, in case it changed.
-
-            Rectangle tightBounds = new Rectangle (0, 0, -1, -1);
-            for (Component c : getComponents ())
-                if (c != pinIn  &&  c != pinOut)
-                    tightBounds = tightBounds.union (c.getBounds ());
-            int y = tightBounds.y + tightBounds.height / 2;
+            // no longer valid. Need to re-copy.
 
             if (container.part.pinIn == null)
             {
@@ -680,21 +674,6 @@ public class PanelEquationGraph extends JScrollPane
                     pinIn.node.pinOut      = container.part.pinIn;
                     pinIn.node.pinOutOrder = container.part.pinInOrder;
                 }
-                MNode bounds = container.part.source.child ("$metadata", "gui", "pin", "bounds", "in");
-                if (bounds == null)
-                {
-                    Dimension d = pinIn.getPreferredSize ();
-                    int x = tightBounds.x - 100 - pinIn.pinOutBounds.width - d.width;
-                    pinIn.setLocation (x, y - d.height / 2);
-                }
-                else  // Make the fairly safe assumption that x and y are both set to something meaningful.
-                {
-                    Point location = new Point ();
-                    location.x = bounds.getInt ("x") + offset.x;
-                    location.y = bounds.getInt ("y") + offset.y;
-                    pinIn.setLocation (location);
-                }
-                layout.bounds = layout.bounds.union (pinIn.getBounds ());
             }
 
             if (container.part.pinOut == null)
@@ -717,11 +696,50 @@ public class PanelEquationGraph extends JScrollPane
                     pinOut.node.pinIn      = container.part.pinOut;
                     pinOut.node.pinInOrder = container.part.pinOutOrder;
                 }
+            }
+
+            // Rebuild bounds around pin blocks.
+            for (Component c : getComponents ())
+            {
+                ((GraphNode) c).updatePins ();
+            }
+
+            // Update IO block layout
+
+            Rectangle tightBounds = new Rectangle (0, 0, -1, -1);
+            for (Component c : getComponents ())
+                if (c != pinIn  &&  c != pinOut)
+                    tightBounds = tightBounds.union (c.getBounds ());
+            int y = tightBounds.y + tightBounds.height / 2;
+
+            if (pinIn != null)
+            {
+                Dimension d = pinIn.getPreferredSize ();
+                MNode bounds = container.part.source.child ("$metadata", "gui", "pin", "bounds", "in");
+                if (bounds == null)
+                {
+                    int x = tightBounds.x - 100 - pinIn.pinOutBounds.width - d.width;
+                    pinIn.setLocation (x, y - d.height / 2);
+                }
+                else  // Make the fairly safe assumption that x and y are both set to something meaningful.
+                {
+                    Point location = new Point ();
+                    location.x = bounds.getInt ("x") + offset.x;
+                    location.y = bounds.getInt ("y") + offset.y;
+                    pinIn.setLocation (location);
+                }
+                pinIn.setSize (d);  // Only necessary for previously-existing node, but we don't bother remembering whether it is new or existing.
+                layout.bounds = layout.bounds.union (pinIn.getBounds ());
+                pinIn.title.updateSelected ();  // In case override status changed.
+            }
+
+            if (pinOut != null)
+            {
+                Dimension d = pinOut.getPreferredSize ();
                 MNode bounds = container.part.source.child ("$metadata", "gui", "pin", "bounds", "out");
                 if (bounds == null)
                 {
                     int x = tightBounds.x + tightBounds.width + 100 + pinOut.pinInBounds.width;
-                    Dimension d = pinOut.getPreferredSize ();
                     pinOut.setLocation (x, y - d.height / 2);
                 }
                 else
@@ -731,13 +749,9 @@ public class PanelEquationGraph extends JScrollPane
                     location.y = bounds.getInt ("y") + offset.y;
                     pinOut.setLocation (location);
                 }
+                pinOut.setSize (d);
                 layout.bounds = layout.bounds.union (pinOut.getBounds ());
-            }
-
-            // Rebuild bounds around pin blocks.
-            for (Component c : getComponents ())
-            {
-                ((GraphNode) c).updatePins ();
+                pinOut.title.updateSelected ();
             }
         }
 
@@ -1365,7 +1379,7 @@ public class PanelEquationGraph extends JScrollPane
                     else  // regular connector, possibly bound to pin
                     {
                         // Change to disconnected state
-                        String pinName = disconnect (um, variable);
+                        String pinName = disconnect (um, variable, false);
                         if (pinName != null) clearConnection (um, edge.nodeTo.node, pinName);
                     }
                 }
@@ -1406,7 +1420,7 @@ public class PanelEquationGraph extends JScrollPane
                                 }
                                 handled = true;
                             }
-                            else if (edge.pinSideTo.equals ("out"))  // Edge goes back to original pin. May need to un-reverse the edge.
+                            else if (edge.pinSideTo.equals ("out"))  // Edge goes back to original pin. In the case where destination is "out", the edge needs to be un-reversed.
                             {
                                 edge.reversePins ();
                             }
@@ -1421,28 +1435,11 @@ public class PanelEquationGraph extends JScrollPane
                         {
                             if (pinNew.isEmpty ())  // Possibly switched from pin to part
                             {
-                                // Find pin metadata
-                                NodeBase pin = AddAnnotation.resolve (variable, "gui.pin");
-                                if (pin != variable)
-                                {
-                                    MNode m = ((NodeAnnotation) pin).folded;
-                                    if (m.key ().equals ("pin")  &&  m.parent ().key ().equals ("gui"))
-                                    {
-                                        um.apply (new DeleteAnnotation ((NodeAnnotation) pin, false));
-                                        handled = true;
-                                    }
-                                }
+                                disconnect (um, variable, true);
                             }
                             else  // switched to a pin, possibly from another pin
                             {
-                                // Record in destination.
-                                setConnection (um, variable, partTo, pinNew);
-
-                                // Record in source.
-                                MNode data = new MVolatile ();
-                                data.set (pinNew, "gui", "pin");
-                                um.apply (new ChangeAnnotations (variable, data));
-
+                                connectionToPin (um, variable, partTo, pinNew);
                                 handled = true;
                             }
                             // clearConnection() must come after setConnection() on same node, so that (in the case of auto pins)
@@ -1453,13 +1450,15 @@ public class PanelEquationGraph extends JScrollPane
 
                     if (! handled) edge.animate (null);  // Stop drag mode and restore connection to normal.
                 }
-                else  // Connect to new endpoint
+                else  // Connect to new endpoint (nodeTo != edge.nodeTo  &&  nodeTo != null)
                 {
                     String pinNew = nodeTo.findPinAt (p);
                     if (variable == null)  // from pin
                     {
                         boolean handled = false;
-                        if (! pinNew.isEmpty ())
+                        boolean fromIO =  nodeFrom == graphPanel.pinIn  ||  nodeFrom == graphPanel.pinOut;
+                        boolean toIO   =  nodeTo   == graphPanel.pinIn  ||  nodeTo   == graphPanel.pinOut;
+                        if (! pinNew.isEmpty ()  &&  ! (fromIO  &&  toIO))  // must fall on a pin, not part itself; must not be a direct link between input and output IO blocks
                         {
                             String[] pieces = pinNew.split ("\\.", 2);
                             String newSide = pieces[0];
@@ -1477,33 +1476,38 @@ public class PanelEquationGraph extends JScrollPane
 
                                     if (edge.nodeTo != null)  // Need to disconnect previous link. We already know that edge.nodeTo != nodeTo from higher-level test.
                                     {
-                                        NodePart partTo = edge.nodeTo.node;
-                                        if (! removeAuto (um, partTo, edge.pinKeyTo))
+                                        if (! removeAuto (um, edge.nodeTo.node, edge.pinKeyTo))
                                         {
                                             MNode disconnect = new MVolatile ();
                                             clearBinding (disconnect, edge.pinKeyTo);
-                                            um.apply (new ChangeAnnotations (partTo, disconnect));
+                                            um.apply (new ChangeAnnotations (edge.nodeTo.node, disconnect));
                                         }
                                     }
                                 }
-                                else  // newSide is "out", which means input pin stays the same, and it is linked to a different output pin.
+                                else  // newSide is "out"
                                 {
                                     nodeAfter = nodeFrom;
-                                    setBinding (connect, edge.pinKeyFrom, nodeTo.node.source.key (), newKey);
+                                    String pinName = edge.pinKeyFrom;
+                                    if (edge.nodeTo == null)  // new link, similar to "in" case above
+                                    {
+                                        pinName = addAuto (um, edge.nodeFrom.node, pinName);
+                                    }
+                                    // else this simply changes which output pin is linked to the input pin
+                                    setBinding (connect, pinName, nodeTo.node.source.key (), newKey);
                                 }
 
                                 um.apply (new ChangeAnnotations (nodeAfter.node, connect));
                                 handled = true;
                             }
                         }
-                        if (! handled)
+                        if (! handled)  // because something about the connection was illegal
                         {
-                            if (edge.pinSideTo == null)  // transient edge that did not get completed
+                            if (edge.pinSideTo == null)  // transient edge
                             {
                                 graphPanel.edges.remove (edge);
                                 graphPanel.repaint (edge.bounds);
                             }
-                            else
+                            else  // existing edge
                             {
                                 edge.animate (null);
                             }
@@ -1511,16 +1515,14 @@ public class PanelEquationGraph extends JScrollPane
                     }
                     else  // from connection
                     {
-                        // TODO: release connection at old target
+                        String pinOld = variable.source.get ("$metadata", "gui", "pin");
+                        if (! pinOld.isEmpty ())  // release connection at old target
+                        {
+                            clearConnection (um, edge.nodeTo.node, pinOld);
+                        }
                         if (! pinNew.isEmpty ())
                         {
-                            // Record in destination.
-                            setConnection (um, variable, nodeTo.node, pinNew);
-
-                            // Record in source.
-                            MNode data = new MVolatile ();
-                            data.set (pinNew, "gui", "pin");
-                            um.apply (new ChangeAnnotations (variable, data));
+                            connectionToPin (um, variable, nodeTo.node, pinNew);
                         }
                         um.apply (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
                     }
@@ -1624,15 +1626,16 @@ public class PanelEquationGraph extends JScrollPane
         }
 
         /**
-            Sets a connection-to-pin on the target part.
-            @param variable The binding variable in the connectin part.
+            Sets a connection-to-pin on the target part. Subroutine of connectionToPin(), which handles both sides.
+            @param variable The binding variable in the connection part.
             @param partTo The part that exports the bin being bound.
             @param pinRef In the format <in/out>.<pin name>, as stored in the binding variable gui.pin entry.
             This function only does something if the prefix is "in". We do the test here as a convenience to the caller.
+            @return The pin reference, possibly modified to point to a newly-created copy of an auto pin.
         **/
-        public void setConnection (UndoManager um, NodeVariable variable, NodePart partTo, String pinRef)
+        public String setConnection (UndoManager um, NodeVariable variable, NodePart partTo, String pinRef)
         {
-            if (! pinRef.startsWith ("in.")) return;
+            if (! pinRef.startsWith ("in.")) return pinRef;
             String pinName = pinRef.substring (3);
 
             pinName = addAuto (um, partTo, pinName);
@@ -1646,6 +1649,8 @@ public class PanelEquationGraph extends JScrollPane
             data.set ("",       "gui", "pin", "in", pinName, "bind", "pin");  // displace any existing pin-to-pin binding
             data.set (alias,    "gui", "pin", "in", pinName, "bind", "alias");
             um.apply (new ChangeAnnotations (partTo, data));
+
+            return "in." + pinName;
         }
 
         /**
@@ -1664,7 +1669,25 @@ public class PanelEquationGraph extends JScrollPane
             if (! (nb instanceof NodePart)) return;
             nb = nb.child (alias);
             if (! (nb instanceof NodeVariable)) return;
-            disconnect (um, (NodeVariable) nb);
+            disconnect (um, (NodeVariable) nb, false);
+        }
+
+        /**
+            Records pin metadata both sides to establish a connection-to-pin. Does not set the binding
+            variable itself. The caller does that when necessary.
+            @param variable The binding variable in the connection part.
+            @param partTo The part that exports the bin being bound.
+            @param pinRef In the format <in/out>.<pin name>, as stored in the binding variable gui.pin entry.
+        **/
+        public void connectionToPin (UndoManager um, NodeVariable variable, NodePart partTo, String pinRef)
+        {
+            // Record in destination.
+            pinRef = setConnection (um, variable, partTo, pinRef);
+
+            // Record in source.
+            MNode data = new MVolatile ();
+            data.set (pinRef, "gui", "pin");
+            um.apply (new ChangeAnnotations (variable, data));
         }
 
         /**
@@ -1672,12 +1695,8 @@ public class PanelEquationGraph extends JScrollPane
             @return The name of the destination pin, or null if none. The caller may need to
             release the destination side of the binding.
         **/
-        public String disconnect (UndoManager um, NodeVariable variable)
+        public String disconnect (UndoManager um, NodeVariable variable, boolean pinOnly)
         {
-            String value = "connect()";
-            String original = variable.source.getOriginal ().get ();
-            if (Operator.containsConnect (original)) value = original;
-
             NodeBase pin = AddAnnotation.resolve (variable, "gui.pin");
             if (pin == variable)
             {
@@ -1688,13 +1707,17 @@ public class PanelEquationGraph extends JScrollPane
                 MNode m = ((NodeAnnotation) pin).folded;
                 if (! m.key ().equals ("pin")  ||  ! m.parent ().key ().equals ("gui")) pin = null;  // Verify that pin is actually "gui.pin"
             }
-
             String pinName = null;
             if (pin != null)
             {
                 pinName = pin.source.get ();
                 um.apply (new DeleteAnnotation ((NodeAnnotation) pin, false));
             }
+            if (pinOnly) return pinName;  // early-out
+
+            String value = "connect()";
+            String original = variable.source.getOriginal ().get ();
+            if (Operator.containsConnect (original)) value = original;
             um.apply (new ChangeVariable (variable, variable.source.key (), value));
             return pinName;
         }
@@ -1707,11 +1730,13 @@ public class PanelEquationGraph extends JScrollPane
         **/
         public String addAuto (UndoManager um, NodePart node, String pinName)
         {
-            if (! node.pinIn.getFlag (pinName, "auto")) return pinName;
+            if (! pinName.endsWith ("#")) return pinName;
+            String pinBase = pinName.substring (0, pinName.length () - 1);
 
             // Scan for highest-index of existing copies.
             int index = 1;
-            while (node.pinIn.child (pinName + index) != null) index++;
+            while (node.pinIn.child (pinBase + index) != null) index++;
+            String pinBaseI = pinBase + index;
 
             // Create associated part(s).
             MNode parts = node.pinIn.child (pinName, "part");  // The subscribers to the auto pin.
@@ -1726,19 +1751,45 @@ public class PanelEquationGraph extends JScrollPane
                 int y = np.source.getInt ("$metadata", "gui", "bounds", "y");
                 data.set (x + 20 * index, "$metadata", "gui", "bounds", "x");
                 data.set (y + 20 * index, "$metadata", "gui", "bounds", "y");
+
+                // Update input bindings
+                //   for connections
+                MNode pin = np.source.child ("$metadata", "gui", "pin");
+                if (pin.get ().equals (pinName))  // must match auto pin name
+                {
+                    data.set (pinBaseI, "$metadata", "gui", "pin");
+                }
+                //   for parts that forward inputs
+                MNode in = np.source.child ("$metadata", "gui", "pin", "in");
+                if (in != null)
+                {
+                    for (MNode b : in)
+                    {
+                        if (b.get ("bind").isEmpty ()  &&  b.get ("bind", "pin").equals (pinName))  // must bind to IO block and match the auto pin name
+                        {
+                            data.set (pinBaseI, "$metadata", "gui", "pin", "in", b.key (), "bind", "pin");
+                        }
+                    }
+                }
+
                 um.apply (new AddPart (node, data));
             }
 
-            if (parts.size () == 0)  // phantom pin
+            // Set metadata on outer part, but only if needed.
+            MNode data = new MVolatile ();
+            // "notes" and "order" should not be copied. At present, no other keys need to be copied.
+            MNode color = node.pinIn.child (pinName, "color");
+            if (color != null)
             {
-                MNode data = new MVolatile ();
-                String color = node.source.get ("$metadata", "gui", "pin", "in", pinName, "color");
-                data.set (color, "gui", "pin", "in", pinName + index, "color");
-                // "notes" and "order" should not be copied. At present, no other keys need to be copied.
-                um.apply (new ChangeAnnotations (node, data));
+                data.set (color.get (), "gui", "pin", "in", pinBaseI, "color");
             }
+            else if (parts.size () == 0)  // pin is not backed by inner parts
+            {
+                data.set ("", "gui", "pin", "in", pinBaseI);  // force pin to exist anyway
+            }
+            if (data.size () > 0) um.apply (new ChangeAnnotations (node, data));
 
-            return pinName + index;
+            return pinBaseI;
         }
 
         /**
@@ -1750,16 +1801,16 @@ public class PanelEquationGraph extends JScrollPane
             int last = pinName.length () - 1;
             int i = last;
             while (i >= 0  &&  Character.isDigit (pinName.charAt (i))) i--;
-            if (i <= 0  ||  i == last) return false;  // illegal identifier or no suffix
-            String baseName = pinName.substring (0, i);
-            int index = Integer.valueOf (pinName.substring (i));
+            if (i < 0  ||  i == last) return false;  // illegal identifier or no suffix
+            String baseName = pinName.substring (0, i + 1);
+            int index = Integer.valueOf (pinName.substring (i + 1));
 
-            if (! node.pinIn.getFlag (baseName, "auto")) return false;  // Not an auto-pin
+            if (node.pinIn.child (baseName + "#"        ) == null) return false;  // Not an auto-pin
             if (node.pinIn.child (baseName + (index + 1)) != null) return false;  // There is another generated pin above us, so don't delete.
 
             // Delete all contiguous unbound pins, in reverse order.
             NodeBase metadata = (NodeBase) node.child ("$metadata");
-            MNode parts = node.pinIn.child (baseName, "part");  // The subscribers to the auto pin.
+            MNode parts = node.pinIn.child (baseName + "#", "part");  // The subscribers to the auto pin.
             for (i = index; i >= 1; i--)
             {
                 // Is the current pin deletable?
@@ -1773,21 +1824,12 @@ public class PanelEquationGraph extends JScrollPane
                 {
                     String partName = p.key () + i;
                     NodePart np = (NodePart) node.child (partName);
-                    um.apply (new DeletePart (np, false));
+                    if (np != null) um.apply (new DeletePart (np, false));
                 }
 
-                if (parts.size () == 0)  // phantom pin
-                {
-                    NodeBase nb = AddAnnotation.resolve (metadata, "gui.pin.in." + baseNameI);
-                    if (nb != metadata)
-                    {
-                        MNode m = ((NodeAnnotation) nb).folded;
-                        if (m.key ().equals (baseNameI)  &&  m.parent ().key ().equals ("in"))
-                        {
-                            um.apply (new DeleteAnnotation ((NodeAnnotation) nb, false));
-                        }
-                    }
-                }
+                // Delete pin metadata on node itself.
+                NodeBase nb = AddAnnotation.resolve (metadata, "gui.pin.in." + baseNameI);
+                if (nb != metadata) um.apply (new DeleteAnnotation ((NodeAnnotation) nb, false));
             }
             return true;
         }
