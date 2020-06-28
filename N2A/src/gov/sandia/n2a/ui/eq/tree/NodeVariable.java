@@ -191,7 +191,7 @@ public class NodeVariable extends NodeContainer
             }
 
             // Scan for the referent.
-            referent = parent.resolveName (value);
+            referent = parent.resolveName (this, null, value);
             if      (referent == null)                 isBinding = ! value.contains (".");  // Ambiguous, so we make an arbitrary call that it is an unresolved variable reference rather than unresolved part reference.
             else if (referent instanceof NodePart)     isBinding = true;
             else if (referent instanceof NodeVariable) isBinding = ((NodeVariable) referent).isBinding;  // probably a sub-reference

@@ -20,6 +20,8 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map.Entry;
 
 import javax.swing.Icon;
@@ -28,6 +30,7 @@ import javax.swing.ImageIcon;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class GraphEdge
 {
@@ -59,6 +62,7 @@ public class GraphEdge
     protected static float  strokeThickness = 3;
     protected static int    padNameTop      = 1;
     protected static int    padNameSide     = 2;
+    protected static int    padNameBetween  = 10;
 
     public GraphEdge (GraphNode nodeFrom, NodePart partTo, String alias)
     {
@@ -112,7 +116,8 @@ public class GraphEdge
         }
         if (nodeTo == null)  // partTo is outside the current container.
         {
-            nameTo = partTo.source.key ();
+            NodeVariable v = (NodeVariable) nodeFrom.node.child (alias);
+            nameTo = v.source.get ();
         }
         else  // partTo is inside the current container. Now check if the connection is to a pin.
         {
@@ -366,8 +371,8 @@ public class GraphEdge
             else
             {
                 // Determine offset
-                // TODO: estimate the text width of each "nameTo"
-                int count = 0;
+                List<Integer> widths = new ArrayList<Integer> ();
+                int totalWidth = 0;
                 int index = 0;
                 for (String key : nodeFrom.node.connectionBindings.keySet ())
                 {
@@ -387,46 +392,50 @@ public class GraphEdge
                     }
                     if (hasGraph) continue;
 
-                    if (key.equals (alias)) index = count;
-                    count++;
+                    if (key.equals (alias)) index = widths.size ();
+                    NodeVariable v = (NodeVariable) nodeFrom.node.child (key);
+                    int width = fm.stringWidth (v.source.get ());
+                    widths.add (width);
+                    totalWidth += width;
                 }
-                int offsetTo = 0;
-                if (count > 1) offsetTo = (int) ((index - (count - 1) / 2.0) * 50);  // pixels
+                double offset = 0;
+                int count = widths.size ();
+                if (count > 1)
+                {
+                    totalWidth += (count - 1) * padNameBetween;  // pad between each label
+                    for (int i = 0; i < index; i++) offset += widths.get (i) + padNameBetween;  // Add widths and padding for all labels that precede this one.
+                    offset += widths.get (index) / 2.0;  // Add half of this label, to reach its center.
+                    offset -= totalWidth / 2.0;  // Offset to center the whole thing over the node.
+                }
+                int x = (int) (c.x + offset);
 
                 // Determine text box. Need text height to locate arrowhead, so might as well calculate it all now.
-                Rectangle vp = nodeFrom.container.panelEquationGraph.vp.getViewRect ();
                 double ew = fm.stringWidth (nameTo);
                 double eh = fm.getHeight ();
-                labelTo = new Vector2 (c.x + offsetTo - ew / 2, vp.y + padNameTop);
+                labelTo = new Vector2 (x - ew / 2, Cbounds.y - 3 * eh - 2 * arrowheadLength);
 
                 textBoxTo = new Rectangle ();
                 textBoxTo.x      = (int) labelTo.x - padNameSide;
-                textBoxTo.y      = vp.y;
+                textBoxTo.y      = (int) labelTo.y - padNameTop;
                 textBoxTo.width  = (int) Math.ceil (ew) + 2 * padNameSide;
                 textBoxTo.height = (int) Math.ceil (eh) + 2 * padNameTop;
-                if (textBoxTo.intersects (Cbounds)  ||  c.y < vp.y  ||  c.y > vp.y + vp.height)
-                {
-                    textBoxTo = null;
-                    return;
-                }
 
                 bounds = bounds.union (textBoxTo);
                 labelTo.y += fm.getAscent ();
 
-                tip = new Vector2 (c.x + offsetTo, vp.y + textBoxTo.height + padTip);
+                tip = new Vector2 (x, textBoxTo.y + textBoxTo.height + padTip);
 
-                double length = c.distance (tip) / 3;
-                Vector2 w1 = tip.add (new Vector2 (0, length));
-                Vector2 w2 = c.add (new Vector2 (offsetTo, 0));
+                Vector2 w1 = tip.add (new Vector2 (0, Cbounds.y - tip.y));
+                Vector2 w2 = c.add (new Vector2 (offset, 0));
                 line = new CubicCurve2D.Double (tip.x, tip.y, w1.x, w1.y, w2.x, w2.y, c.x, c.y);
 
                 Spline spline = new Spline ((CubicCurve2D) line);
                 root = intersection (spline, Cbounds);  // on boundary of c
-                if (root == null) return;
+                if (root == null) return;   // This should never happen in current arrangement, since target is at fixed distance above us.
                 tipAngle = Math.PI / 2;
             }
         }
-        else if (alias.isEmpty ())  // pin-to-pin, output-to-pin, or dragging from pin
+        else if (alias.isEmpty ()  &&  (pinKeyFrom != null  ||  pinKeyTo != null))  // pin-to-pin, output-to-pin, or dragging from pin
         {
             if (pinKeyFrom == null)
             {

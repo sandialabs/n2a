@@ -70,16 +70,17 @@ public class NodePart extends NodeContainer
     protected String                      inheritName = "";
     protected Set<String>                 ancestors;           // All parts we inherit from, whether directly or indirectly. Used to propose connections.
     public    Map<String,NodePart>        connectionBindings;  // non-null if this is a connection
+    public    Set<NodePart>               transitConnections;  // connections which pass up through this node to a peer node to begin descent
     protected List<UnsatisfiedConnection> unsatisfiedConnections;
     protected boolean                     connectionTarget;    // Some other part connects to us.
     public    GraphNode                   graph;
     public    PanelEquationTree           pet;                 // If non-null, this part is the root of a currently-displayed tree. If null, then no tree operations are necessary.
     protected NodePart                    trueParent;
     public    boolean                     hide;                // visible() should return false. Used to temporarily suppress node when adding to graph. Allows us to avoid tampering with "parent" field.
-    public    MNode                       pinOut;        // Deep copy of gui.pin.out. Null if no out pins.
-    public    MNode                       pinIn;         // ditto for in pins
-    public    List<MNode>                 pinOutOrder;   // Maps from position down right side to associated pin info. Null if no out pins.
-    public    List<MNode>                 pinInOrder;    // ditto for in pins
+    public    MNode                       pinOut;              // Deep copy of gui.pin.out. Null if no out pins.
+    public    MNode                       pinIn;               // ditto for in pins
+    public    List<MNode>                 pinOutOrder;         // Maps from position down right side to associated pin info. Null if no out pins.
+    public    List<MNode>                 pinInOrder;          // ditto for in pins
 
     public NodePart (MPart source)
     {
@@ -309,9 +310,11 @@ public class NodePart extends NodeContainer
     /**
         Walks to part hierarchy while unpacking the given name path.
         Subroutine of NodeVariable.findConnections()
+        @param from The NodeVariable that originated this search.
+        @param sibling If this call came from child part, then reference to that part. Otherwise null.
         @return The tree node, or null if the path does not resolve exactly.
     **/
-    public NodeBase resolveName (String name)
+    public NodeBase resolveName (NodeVariable from, NodePart upFrom, String name)
     {
         if (name.isEmpty ()) return this;
         String[] pieces = name.split ("\\.", 2);
@@ -324,7 +327,7 @@ public class NodePart extends NodeContainer
         if (ns.equals ("$up"))  // Don't bother with local checks if we know we are going up
         {
             if (parent == null) return null;
-            return parent.resolveName (nextName);
+            return parent.resolveName (from, this, nextName);
         }
 
         Enumeration<?> i = children ();
@@ -337,21 +340,28 @@ public class NodePart extends NodeContainer
                 if (((NodeVariable) n).isBinding  &&  connectionBindings != null)
                 {
                     NodePart p = connectionBindings.get (ns);
-                    if (p != null) return p.resolveName (nextName);
+                    if (p != null) return p.resolveName (from, null, nextName);  // Tunnel through connection binding.
                 }
                 if (nextName.isEmpty ()) return n;  // fully resolved
                 return null;  // failed to resolve
             }
             else if (n instanceof NodePart)
             {
-                return ((NodePart) n).resolveName (nextName);
+                // Descend into child part.
+                if (upFrom != null  &&  upFrom != from.getParent ())
+                {
+                    if (upFrom.transitConnections == null) upFrom.transitConnections = new HashSet<NodePart> ();
+                    // If there are multiple climbing connections to the same target, one will overwrite the others.
+                    upFrom.transitConnections.add ((NodePart) n);
+                }
+                return ((NodePart) n).resolveName (from, null, nextName);
             }
         }
         // Treat undefined $variables as local. This will not include $up, because that case is eliminated above.
         if (nextName.isEmpty ()  &&  ns.startsWith ("$")) return new NodeVariable (null);  // Fake it, just enough to finish NodeVariable.findConnections().
 
         if (parent == null) return null;
-        return parent.resolveName (name);
+        return parent.resolveName (from, this, name);
     }
 
     public Set<String> getAncestors ()

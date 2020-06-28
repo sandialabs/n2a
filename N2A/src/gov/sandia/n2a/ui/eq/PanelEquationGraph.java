@@ -566,7 +566,7 @@ public class PanelEquationGraph extends JScrollPane
                 GraphNode gn = (GraphNode) c;
 
                 // Build connection edges
-                if (gn.node.connectionBindings == null)
+                if (gn.node.connectionBindings == null)  // Special case: check for edge from output node to IO block
                 {
                     MNode pin = gn.node.source.child ("$metadata", "gui", "pin");
                     if (pin != null  &&  (! pin.get ().isEmpty ()  ||  pin.child ("in") == null  &&  pin.child ("out") == null))  // This is an output population.
@@ -579,7 +579,7 @@ public class PanelEquationGraph extends JScrollPane
                         ge.updateShape (false);
                     }
                 }
-                else
+                else  // Connection edges
                 {
                     for (Entry<String,NodePart> e : gn.node.connectionBindings.entrySet ())
                     {
@@ -603,35 +603,50 @@ public class PanelEquationGraph extends JScrollPane
                     }
                 }
 
-                // Build pin edges
-                if (gn.node.pinIn == null) continue;
-                for (MNode pin : gn.node.pinIn)
+                // Build transit edges
+                if (gn.node.transitConnections != null)
                 {
-                    String bindPin = pin.get ("bind", "pin");
-                    if (bindPin.isEmpty ()) continue;
-
-                    // Find peer part
-                    GraphNode peer = null;
-                    String bind = pin.get ("bind");
-                    if (bind.isEmpty ())  // signifies a link to input block
+                    for (NodePart np : gn.node.transitConnections)
                     {
-                        if (pinIn == null) continue;
-                        peer = pinIn;
+                        GraphEdge ge = new GraphEdge (gn, np, "");
+                        edges.add (ge);
+                        gn.edgesIn.add (ge);
+                        np.graph.edgesIn.add (ge);
+                        ge.updateShape (false);
                     }
-                    else  // regular node
-                    {
-                        NodeBase nb = container.part.child (bind);
-                        if (! (nb instanceof NodePart)) continue;  // could be null (not found) or a variable
-                        peer = ((NodePart) nb).graph;
-                    }
-                    if (peer.node.pinOut == null  ||  peer.node.pinOut.child (bindPin) == null) continue;
+                }
 
-                    // Create edge
-                    GraphEdge ge = new GraphEdge (peer, gn, "in", pin.key ());
-                    gn.edgesIn.add (ge);
-                    peer.edgesIn.add (ge);  // Treat as an incoming edge on both sides of the link.
-                    edges.add (ge);
-                    ge.updateShape (false);
+                // Build pin edges
+                if (gn.node.pinIn != null)
+                {
+                    for (MNode pin : gn.node.pinIn)
+                    {
+                        String bindPin = pin.get ("bind", "pin");
+                        if (bindPin.isEmpty ()) continue;
+
+                        // Find peer part
+                        GraphNode peer = null;
+                        String bind = pin.get ("bind");
+                        if (bind.isEmpty ())  // signifies a link to input block
+                        {
+                            if (pinIn == null) continue;
+                            peer = pinIn;
+                        }
+                        else  // regular node
+                        {
+                            NodeBase nb = container.part.child (bind);
+                            if (! (nb instanceof NodePart)) continue;  // could be null (not found) or a variable
+                            peer = ((NodePart) nb).graph;
+                        }
+                        if (peer.node.pinOut == null  ||  peer.node.pinOut.child (bindPin) == null) continue;
+
+                        // Create edge
+                        GraphEdge ge = new GraphEdge (peer, gn, "in", pin.key ());
+                        gn.edgesIn.add (ge);
+                        peer.edgesIn.add (ge);  // Treat as an incoming edge on both sides of the link.
+                        edges.add (ge);
+                        ge.updateShape (false);
+                    }
                 }
             }
             revalidate ();
