@@ -227,48 +227,48 @@ public class AddAnnotation extends UndoableView implements AddEditable
             binding = (NodeVariable) parent;
             parent = (NodeBase) parent.getParent ();  // So arrowhead can update.
         }
-        if (parent instanceof NodePart)
+
+        if (! (parent instanceof NodePart)) return;
+        NodePart p = (NodePart) parent;
+
+        boolean touchesImage =  p.iconCustom != null  ||  p.source.child ("$metadata", "gui", "icon") != null;
+        if (touchesImage) p.setIcon ();
+
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        if (touchesPin)
         {
-            PanelEquations pe = PanelModel.instance.panelEquations;
-            NodePart p = (NodePart) parent;
-            if (touchesPin)
+            p.updatePins ();
+            // A change in pin structure can affect any level of graph above the current node,
+            // so always refresh display.
+            pe.panelEquationGraph.updatePins ();
+            pe.panelEquationGraph.reconnect ();
+            pe.panelEquationGraph.repaint ();
+        }
+        if (p.graph == null)  // It's either the parent node, or a node below the current level of graph.
+        {
+            if (p == pe.part) pe.updateGUI ();
+        }
+        else
+        {
+            if (binding == null)  // Target is parent itself.
             {
-                p.updatePins ();
-                // A change in pin structure can affect any level of graph above the current node,
-                // so always refresh display.
-                pe.panelEquationGraph.updatePins ();
-                pe.panelEquationGraph.reconnect ();
-                pe.panelEquationGraph.repaint ();
+                // PanelEquationGraph.reconnect() must come before updateGUI(). Otherwise, graph node might
+                // operate on edges that no longer have pin metadata.
+                p.graph.updateGUI ();
             }
-            if (p.graph == null)  // It's either the parent node, or a node below the current level of graph.
+            else  // Target is variable under parent, likely a connection binding.
             {
-                if (p == pe.part)
+                if (! touchesPin)
                 {
-                    pe.panelParent.animate ();           // Sets size of parent panel from metadata, in getPreferredSize().
-                    pe.panelEquationGraph.updateGUI ();  // Updates canvas position.
+                    String alias = binding.source.key ();
+                    p.graph.updateEdge (alias, p.connectionBindings.get (alias));
                 }
-            }
-            else
-            {
-                if (binding == null)
-                {
-                    // PanelEquationGraph.reconnect() has to come before updateGUI(). Otherwise, graph node might
-                    // operate on edges that no longer have pin metadata. If the node has also moved, reconnect() will
-                    // set up all edges at the old location, then they will be redrawn at the new location.
-                    p.graph.updateGUI ();  // Could save a little graphic work here by doing more work to detect whether the part moved or not.
-                }
-                else
-                {
-                    if (! touchesPin)
-                    {
-                        String alias = binding.source.key ();
-                        p.graph.updateEdge (alias, p.connectionBindings.get (alias));
-                    }
-                    // otherwise all edges in the graph have been updated above, so need to do incremental update here.
-                }
+                // otherwise all edges in the graph have been updated above, so need to do incremental update here.
             }
         }
-        if (parent.getTrueParent () == null)  // root node, so update categories in search list
+
+        // Update categories in search list.
+        if (parent.getTrueParent () == null)  // must be root node
         {
             MNode metadata = parent.source.child ("$metadata");
             if (metadata == null  ||  metadata.containsKey ("category"))  // In the unusual situation that $metadata has just been completely deleted, we guess that it may have contained "category" and update anyway.

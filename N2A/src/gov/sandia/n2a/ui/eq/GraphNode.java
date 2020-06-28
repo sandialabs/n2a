@@ -418,6 +418,8 @@ public class GraphNode extends JPanel
     **/
     public void updateGUI ()
     {
+        title.updateSelected ();  // In case icon changed.
+
         // Determine new position
         int x = parent.offset.x;
         int y = parent.offset.y;
@@ -729,6 +731,7 @@ public class GraphNode extends JPanel
         public TitleRenderer ()
         {
             nontree = true;
+            bigIcon = true;
 
             setTransferHandler (container.transferHandler);
 

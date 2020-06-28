@@ -50,7 +50,8 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
     protected boolean selected;
     protected boolean hasFocus;
     protected boolean isDropCell;
-    protected boolean nontree;  // Need hack to paint background. Also indicates that it's OK to use icons larger than 16x16.
+    protected boolean nontree;  // Need hack to paint background.
+    protected boolean bigIcon;  // OK to use icons larger than 16x16.
     protected boolean hideIcon; // Completely suppress the icon for this node.
 
     // These colors may get changed when look & feel is changed.
@@ -281,7 +282,7 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
     public Icon getIconFor (NodeBase node, boolean expanded, boolean leaf)
     {
         if (hideIcon) return null;
-        if (nontree)  // OK to use icon larger than 16x16. Implies that node is a NodePart.
+        if (bigIcon)  // OK to use icon larger than 16x16. Implies that node is a NodePart.
         {
             NodePart np = (NodePart) node;
             if (np.iconCustom != null) return np.iconCustom;

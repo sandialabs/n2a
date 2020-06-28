@@ -35,6 +35,7 @@ import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -44,11 +45,13 @@ import java.io.StringWriter;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
 
+import javax.imageio.ImageIO;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.Box;
@@ -98,6 +101,7 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.AddEditable;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
+import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.UndoableView;
@@ -743,6 +747,13 @@ public class PanelEquations extends JPanel
         if (parent != null) drill (parent);
     }
 
+    public void updateGUI ()
+    {
+        breadcrumbRenderer.updateSelected (); // Update icon.
+        panelParent.animate ();               // Sets size of parent panel from metadata, in getPreferredSize().
+        panelEquationGraph.updateGUI ();      // Updates canvas position.
+    }
+
     ActionListener listenerAdd = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
@@ -1110,26 +1121,38 @@ public class PanelEquations extends JPanel
     {
         public boolean canImport (TransferSupport xfer)
         {
-            return ! locked  &&  xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+            if (locked) return false;
+            if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor)) return true;
+            if (xfer.isDataFlavorSupported (DataFlavor.imageFlavor )) return true;
+            return false;
         }
 
         public boolean importData (TransferSupport xfer)
         {
             if (locked) return false;
 
+            // Extract data
             MNode data = new MVolatile ();
-            Schema schema;
+            Schema schema = null;
             TransferableNode xferNode = null;  // used only to detect if the source is an equation tree
             int modifiers = 0;
+            BufferedImage image = null;
             try
             {
                 Transferable xferable = xfer.getTransferable ();
-                StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
-                schema = Schema.readAll (data, reader);
+                if (xferable.isDataFlavorSupported (DataFlavor.stringFlavor))
+                {
+                    StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
+                    schema = Schema.readAll (data, reader);
+                }
                 if (xferable.isDataFlavorSupported (TransferableNode.nodeFlavor))
                 {
                     xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
                     modifiers = xferNode.modifiers;
+                }
+                if (xferable.isDataFlavorSupported (DataFlavor.imageFlavor))
+                {
+                    image = (BufferedImage) xferable.getTransferData (DataFlavor.imageFlavor);
                 }
             }
             catch (IOException | UnsupportedFlavorException e)
@@ -1251,7 +1274,7 @@ public class PanelEquations extends JPanel
                 else  // Property-panel mode. Choose target based on type of user
                 {
                     boolean allParts = true;
-                    if (schema.type.equals ("Clip"))
+                    if (schema != null  &&  schema.type.equals ("Clip"))
                     {
                         for (MNode c : data)
                         {
@@ -1289,6 +1312,31 @@ public class PanelEquations extends JPanel
                     if (xfer.isDrop ()) tree.setSelectionPath (path);
                     target = (NodeBase) path.getLastPathComponent ();
                 }
+            }
+
+            // Image
+            if (image != null)
+            {
+                target = target.containerFor ("image");
+
+                // Convert image to base64 coding
+                ByteArrayOutputStream stream = new ByteArrayOutputStream ();
+                try
+                {
+                    ImageIO.write (image, "png", stream);
+                }
+                catch (IOException e)
+                {
+                    return false;
+                }
+                String base64 = Base64.getEncoder ().encodeToString (stream.toByteArray ());
+
+                // Save image in $metadata.gui.icon
+                MNode metadata = new MVolatile ();
+                metadata.set (base64, "gui", "icon");
+                um.apply (new ChangeAnnotations (target, metadata));
+                um.endCompoundEdit ();
+                return true;
             }
 
             // Determine location

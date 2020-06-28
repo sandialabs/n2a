@@ -441,7 +441,7 @@ public class NodeBase extends DefaultMutableTreeNode
 
     /**
         Locates the nearest node in the hierarchy at or above this node which can contain the given type.
-        The choice logic is equivalent to add().
+        The choice logic is equivalent to add(). However, we cheat by allowing "image" as a type as well.
     **/
     public NodeBase containerFor (String type)
     {
