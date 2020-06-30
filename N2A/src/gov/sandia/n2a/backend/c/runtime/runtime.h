@@ -10,6 +10,7 @@
 #include <functional>
 #include <queue>
 #include <vector>
+#include <map>
 
 
 // General functions ---------------------------------------------------------
@@ -102,6 +103,7 @@ template<class T> class EventSpikeMultiLatch;
 template<class T> class Visitor;
 template<class T> class VisitorStep;
 template<class T> class VisitorSpikeMulti;
+template<class T> class DelayBuffer;
 
 
 /**
@@ -556,6 +558,22 @@ public:
     VisitorSpikeMulti (EventSpikeMulti<T> * event);
 
     virtual void visit (std::function<void (Visitor<T> * visitor)> f);
+};
+
+// TODO: This implementation using std::map is quite inefficient in both memory and time.
+// If we can assume constant delay and constant dt, then a fixed-size ring buffer would be best.
+// Maybe we can have two implementations: one general and one efficient. The code generator
+// could choose between them base on whether the above conditions are met.
+template<class T>
+class DelayBuffer
+{
+public:
+    T             value;
+    std::map<T,T> buffer;
+
+    DelayBuffer ();
+
+    T step (T now, T delay, T value, T initialValue);
 };
 
 

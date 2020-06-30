@@ -227,7 +227,6 @@ public class InternalBackend extends Backend
 
         e.resolveConnectionBindings ();
         e.flatten (backend);
-        e.sortParts ();
         e.addGlobalConstants ();
         e.addSpecials ();  // $connect, $index, $init, $n, $t, $t'
         e.addAttribute ("global",        0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
@@ -238,6 +237,7 @@ public class InternalBackend extends Backend
         e.fillIntegratedVariables ();
         e.findIntegrated ();
         e.resolveRHS ();
+        e.sortParts ();
         e.checkUnits ();
         e.findConstants ();
         e.determineTraceVariableName ();

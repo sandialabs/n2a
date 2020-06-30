@@ -1062,7 +1062,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             s.resolveRHS (unresolved);
         }
-    
+
         class Resolver implements Transformer
         {
             public Variable from;
@@ -1186,7 +1186,7 @@ public class EquationSet implements Comparable<EquationSet>
         }
         Resolver resolver = new Resolver ();
         resolver.unresolved = unresolved;
-    
+
         for (Variable v : variables)
         {
             resolver.from = v;

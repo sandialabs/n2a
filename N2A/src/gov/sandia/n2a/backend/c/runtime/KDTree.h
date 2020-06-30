@@ -223,8 +223,8 @@ public:
 
     void set (std::vector<Entry *> & data)
     {
-        ::clear (lo,  INFINITY);
-        ::clear (hi, -INFINITY);
+        ::clear (lo, (T)  INFINITY);
+        ::clear (hi, (T) -INFINITY);
 
         typename std::vector<Entry *>::iterator t = data.begin ();
         for (; t != data.end (); t++)

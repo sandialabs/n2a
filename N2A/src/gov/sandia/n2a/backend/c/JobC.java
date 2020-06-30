@@ -27,6 +27,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
@@ -293,7 +294,6 @@ public class JobC extends Thread
     {
         model.resolveConnectionBindings ();
         model.flatten ("c");
-        model.sortParts ();
         model.addGlobalConstants ();
         model.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
         model.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
@@ -302,6 +302,7 @@ public class JobC extends Thread
         model.fillIntegratedVariables ();
         model.findIntegrated ();
         model.resolveRHS ();
+        model.sortParts ();
         model.checkUnits ();
         model.findConstants ();
         model.determineTraceVariableName ();
@@ -657,7 +658,9 @@ public class JobC extends Thread
                                     {
                                         r.name = "Matrix" + matrixNames.size ();
                                         matrixNames.put (fileName, r.name);
-                                        result.append ("MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (\"" + fileName + "\");\n");
+                                        result.append ("MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (\"" + fileName + "\"");
+                                        if (T.equals ("int")) result.append (", " + r.exponent);
+                                        result.append (");\n");
                                     }
                                 }
                                 else if (f instanceof Input)
@@ -668,7 +671,9 @@ public class JobC extends Thread
                                     {
                                         i.name = "Input" + inputNames.size ();
                                         inputNames.put (fileName, i.name);
-                                        result.append ("InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (\"" + fileName + "\");\n");
+                                        result.append ("InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (\"" + fileName + "\"");
+                                        if (T.equals ("int")) result.append (", " + i.exponent);
+                                        result.append (");\n");
                                     }
                                 }
                                 else if (f instanceof Output)
@@ -1040,6 +1045,12 @@ public class JobC extends Thread
         if (! bed.localFlagType.isEmpty ())
         {
             result.append ("  " + bed.localFlagType + " flags;\n");
+        }
+        int i = 0;
+        for (Delay d : bed.delays)
+        {
+            d.index = i++;
+            result.append ("  DelayBuffer<" + T + "> delay" + d.index + ";\n");
         }
         result.append ("\n");
 
@@ -3492,7 +3503,7 @@ public class JobC extends Thread
                     // However, buffered variables with simple assignment (REPLACE) need
                     // to copy forward the current buffered value.
                     if (   v.assignment == Variable.REPLACE
-                        && v.reference.variable == v
+                        && v.reference.variable.container == v.container   // local to the equation set, not a reference to an outside variable
                         && v.equations.size () > 0
                         && v.hasAny ("cycle", "externalRead")
                         && ! v.hasAttribute ("initOnly"))
@@ -3754,7 +3765,9 @@ public class JobC extends Thread
                     ReadMatrix r = (ReadMatrix) op;
                     if (! (r.operands[0] instanceof Constant))
                     {
-                        context.result.append (pad + "MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (" + r.fileName + ", " + r.exponent + ");\n");
+                        context.result.append (pad + "MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (" + r.fileName);
+                        if (T.equals ("int")) context.result.append (", " + r.exponent);
+                        context.result.append (");\n");
                     }
                     return false;
                 }
@@ -3763,11 +3776,9 @@ public class JobC extends Thread
                     Input i = (Input) op;
                     if (! (i.operands[0] instanceof Constant))
                     {
-                        context.result.append (pad + "InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (" + i.fileName + ");\n");
-                        if (T.equals ("int"))
-                        {
-                            context.result.append (pad + i.name + "->exponent = " + i.exponent + ";\n");
-                        }
+                        context.result.append (pad + "InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (" + i.fileName);
+                        if (T.equals ("int")) context.result.append (", " + i.exponent);
+                        context.result.append (");\n");
 
                         // Detect time flag
                         String mode = "";

@@ -111,7 +111,11 @@ public:
     T    get        (T row, T column);
     T    getRaw     (T row, T column);
 };
-template<class T> extern InputHolder<T> * inputHelper (const String & fileName, InputHolder<T> * oldHandle = 0);
+#ifdef n2a_FP
+template<class T> extern InputHolder<T> * inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle = 0);
+#else
+template<class T> extern InputHolder<T> * inputHelper (const String & fileName,               InputHolder<T> * oldHandle = 0);
+#endif
 
 template<class T>
 class OutputHolder : public Holder

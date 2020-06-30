@@ -682,13 +682,20 @@ std::vector<Holder *> inputMap;
 
 template<class T>
 InputHolder<T> *
-inputHelper (const String & fileName, InputHolder<T> * oldHandle)
+#ifdef n2a_FP
+inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle)
+#else
+inputHelper (const String & fileName,               InputHolder<T> * oldHandle)
+#endif
 {
     InputHolder<T> * handle = (InputHolder<T> *) holderHelper (inputMap, fileName, oldHandle);
     if (! handle)
     {
         handle = new InputHolder<T> (fileName);
         inputMap.push_back (handle);
+#       ifdef n2a_FP
+        handle->exponent = exponent;
+#       endif
     }
     return handle;
 }
@@ -811,7 +818,7 @@ void
 #ifdef n2a_FP
 OutputHolder<T>::trace (T now, const String & column, T rawValue, int exponent, const char * mode)
 #else
-OutputHolder<T>::trace (T now, const String & column, T value, const char * mode)
+OutputHolder<T>::trace (T now, const String & column, T value,                  const char * mode)
 #endif
 {
     trace (now);
@@ -838,7 +845,7 @@ void
 #ifdef n2a_FP
 OutputHolder<T>::trace (T now, T column, T rawValue, int exponent, const char * mode)
 #else
-OutputHolder<T>::trace (T now, T column, T value, const char * mode)
+OutputHolder<T>::trace (T now, T column, T value,                  const char * mode)
 #endif
 {
     trace (now);

@@ -256,7 +256,7 @@ public class Output extends Function
 
     public Type getType ()
     {
-        return new Scalar ();
+        return operands[1].getType ();
     }
 
     public Type eval (Instance context)

@@ -69,8 +69,10 @@ template<>
 int
 uniform ()
 {
-#if RAND_MAX == 2147483647
+#if RAND_MAX == 0x7FFFFFFF
     return rand ();  // exponent=-1; This version can never actually reach 1, only [0,1). However, this shouldn't make any algorithmic difference to callers.
+#elif RAND_MAX == 0x7FFF
+    return rand () << 16;
 #else
 # error Need support for unique size of RAND_MAX
 #endif
@@ -133,6 +135,28 @@ gaussian (int sigma)
 }
 
 #endif
+
+namespace n2a
+{
+#   ifdef n2a_FP
+
+    inline bool isnan (int a)
+    {
+        return a == NAN;
+    }
+
+    inline bool isinf (int a)
+    {
+        return abs (a) == INFINITY;
+    }
+
+#   else
+
+    using std::isnan;
+    using std::isinf;
+
+#   endif    
+}
 
 template<class T>
 MatrixFixed<T,3,1>
@@ -1653,6 +1677,32 @@ VisitorSpikeMulti<T>::visit (std::function<void (Visitor<T> * visitor)> f)
         this->part = target;
         f (this);
     }
+}
+
+
+// class DelayBuffer ---------------------------------------------------------
+
+template<class T>
+DelayBuffer<T>::DelayBuffer ()
+{
+    value = NAN;
+}
+
+template<class T>
+T
+DelayBuffer<T>::step (T now, T delay, T futureValue, T initialValue)
+{
+    if (n2a::isnan (value)) value = initialValue;
+    buffer.emplace (now + delay, futureValue);
+    while (true)
+    {
+        typename std::map<T,T>::iterator it = buffer.begin ();
+        if (it->first > now) break;
+        value = it->second;
+        buffer.erase (it);
+        if (buffer.empty ()) break;
+    }
+    return value;
 }
 
 

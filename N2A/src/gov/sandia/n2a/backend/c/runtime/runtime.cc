@@ -71,3 +71,4 @@ template class EventSpikeMultiLatch<n2a_T>;
 template class Visitor<n2a_T>;
 template class VisitorStep<n2a_T>;
 template class VisitorSpikeMulti<n2a_T>;
+template class DelayBuffer<n2a_T>;

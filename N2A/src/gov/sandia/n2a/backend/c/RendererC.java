@@ -15,6 +15,7 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
@@ -127,6 +128,19 @@ public class RendererC extends Renderer
                 return true;
             }
             return false;
+        }
+        if (op instanceof Delay)
+        {
+            Delay d = (Delay) op;
+            result.append ("delay" + d.index + ".step (Simulator<" + job.T + ">::instance.currentEvent->t, ");
+            d.operands[1].render (this);
+            result.append (", ");
+            d.operands[0].render (this);
+            result.append (", ");
+            if (d.operands.length > 2) d.operands[2].render (this);
+            else                       result.append ("0");
+            result.append (")");
+            return true;
         }
         if (op instanceof Event)
         {
@@ -432,7 +446,11 @@ public class RendererC extends Renderer
         if (a.isScalar ())
         {
             double d = a.getDouble ();
-            if ((int) d == d  &&  job.T.equals ("float")) result.append (".0f");
+            if ((int) d == d)
+            {
+                if      (job.T.equals ("float" )) result.append (".0f");
+                else if (job.T.equals ("double")) result.append (".0");
+            }
         }
     }
 

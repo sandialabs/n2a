@@ -23,8 +23,7 @@ public class VariableReference
     {
         for (Object o : resolution)
         {
-            if (! (o instanceof ConnectionBinding)) continue;
-            v.addDependencyOn (((ConnectionBinding) o).variable);
+            if (o instanceof ConnectionBinding) v.addDependencyOn (((ConnectionBinding) o).variable);
         }
     }
 
@@ -35,8 +34,7 @@ public class VariableReference
     {
         for (Object o : resolution)
         {
-            if (! (o instanceof ConnectionBinding)) continue;
-            v.removeDependencyOn (((ConnectionBinding) o).variable);
+            if (o instanceof ConnectionBinding) v.removeDependencyOn (((ConnectionBinding) o).variable);
         }
     }
 

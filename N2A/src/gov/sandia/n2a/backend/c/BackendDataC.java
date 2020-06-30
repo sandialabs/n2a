@@ -15,6 +15,7 @@ import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
+import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 
@@ -94,6 +95,7 @@ public class BackendDataC
     public List<EventTarget> eventTargets    = new ArrayList<EventTarget> ();
     public List<EventSource> eventSources    = new ArrayList<EventSource> ();
     public List<Variable>    eventReferences = new ArrayList<Variable> ();
+    public List<Delay>       delays          = new ArrayList<Delay> ();
 
     public String localFlagType = "";  // empty string indicates that flags are not required
     public int    liveFlag = -1;  // -1 means $live is not stored
@@ -103,7 +105,7 @@ public class BackendDataC
 
     public void analyzeEvents (final EquationSet s)
     {
-        InternalBackendData.analyzeEvents (s, eventTargets, eventReferences);
+        InternalBackendData.analyzeEvents (s, eventTargets, eventReferences, delays);
 
         int eventIndex = 0;
         for (EventTarget et : eventTargets)

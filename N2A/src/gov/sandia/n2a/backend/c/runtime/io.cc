@@ -19,10 +19,11 @@ template class InputHolder<n2a_T>;
 template class OutputHolder<n2a_T>;
 #ifdef n2a_FP
 template MatrixInput<n2a_T> *  matrixHelper (const String & fileName, int exponent, MatrixInput<n2a_T> *  oldHandle);
+template InputHolder<n2a_T> *  inputHelper  (const String & fileName, int exponent, InputHolder<n2a_T> *  oldHandle);
 #else
 template MatrixInput<n2a_T> *  matrixHelper (const String & fileName,               MatrixInput<n2a_T> *  oldHandle);
-#endif
 template InputHolder<n2a_T> *  inputHelper  (const String & fileName,               InputHolder<n2a_T> *  oldHandle);
+#endif
 template OutputHolder<n2a_T> * outputHelper (const String & fileName,               OutputHolder<n2a_T> * oldHandle);
 
 

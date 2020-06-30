@@ -20,6 +20,7 @@ import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.type.Instance;
@@ -103,6 +104,7 @@ public class InternalBackendData
     public List<EventTarget> eventTargets    = new ArrayList<EventTarget> ();
     public List<EventSource> eventSources    = new ArrayList<EventSource> ();
     public List<Variable>    eventReferences = new ArrayList<Variable> ();  // Variables in referenced parts that need to be finalized when this part executes due to a zero-delay event.
+    public List<Delay>       delays          = new ArrayList<Delay> ();     // Not related to events, but processed in a similar manner.
 
     public boolean singleton;               // $n=1 always; No structural dynamics.
     public boolean populationCanGrowOrDie;  // by structural dynamics other than $n
@@ -370,9 +372,9 @@ public class InternalBackendData
     **/
     public void analyzeEvents (EquationSet s)
     {
-        analyzeEvents (s, eventTargets, eventReferences);
+        analyzeEvents (s, eventTargets, eventReferences, delays);
 
-        // Allocate storage
+        // Allocate storage for Event
         int valueIndex = -1;
         int mask       = 0;
         int eventIndex = 0;
@@ -412,9 +414,16 @@ public class InternalBackendData
 
             eventIndex++;
         }
+
+        // Allocate storage for Delay
+        int i = 0;
+        for (Delay d : delays)
+        {
+            d.index = allocateLocalObject ("delay" + i++);
+        }
     }
 
-    public static void analyzeEvents (final EquationSet s, final List<EventTarget> eventTargets, final List<Variable> eventReferences)
+    public static void analyzeEvents (EquationSet s, List<EventTarget> eventTargets, List<Variable> eventReferences, List<Delay> delays)
     {
         class EventVisitor implements Visitor
         {
@@ -422,7 +431,11 @@ public class InternalBackendData
 
             public boolean visit (Operator op)
             {
-                if (op instanceof Event)
+                if (op instanceof Delay)
+                {
+                    delays.add ((Delay) op);
+                }
+                else if (op instanceof Event)
                 {
                     found = true;
                     Event de = (Event) op;
