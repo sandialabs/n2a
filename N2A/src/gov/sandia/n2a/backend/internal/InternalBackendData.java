@@ -28,7 +28,6 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
-import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.ArrayList;
@@ -59,9 +58,8 @@ public class InternalBackendData
     public List<Variable> globalBufferedExternalWrite  = new ArrayList<Variable> ();
     public List<Variable> globalIntegrated             = new ArrayList<Variable> ();
 
-    public ReferenceComparator referenceComparator = new ReferenceComparator ();
-    public TreeSet<VariableReference> localReference   = new TreeSet<VariableReference> (referenceComparator);
-    public TreeSet<VariableReference> globalReference  = new TreeSet<VariableReference> (referenceComparator);
+    public TreeSet<VariableReference> localReference   = new TreeSet<VariableReference> ();
+    public TreeSet<VariableReference> globalReference  = new TreeSet<VariableReference> ();
 
     // The following arrays have exactly the same order as EquationSet.connectionBindings
     public int      endpoints;           // Position in valuesObject of first reference to a connected instance. References are allocated as a contiguous block.
@@ -317,40 +315,6 @@ public class InternalBackendData
         {
             this.container = container;
             this.target    = target;
-        }
-    }
-
-    public class ReferenceComparator implements Comparator<VariableReference>
-    {
-        public int compare (VariableReference arg0, VariableReference arg1)
-        {
-            int count = arg0.resolution.size ();
-            int result = count - arg1.resolution.size ();
-            if (result != 0) return result;
-
-            for (int i = 0; i < count; i++)
-            {
-                Object o0 = arg0.resolution.get (i);
-                Object o1 = arg1.resolution.get (i);
-                if (! o0.getClass ().equals (o1.getClass ())) return o0.getClass ().hashCode () - o1.getClass ().hashCode ();
-
-                if (o0 instanceof EquationSet)
-                {
-                    result = ((EquationSet) o0).compareTo ((EquationSet) o1);
-                    if (result != 0) return result;
-                }
-                else if (o0 instanceof ConnectionBinding)
-                {
-                    ConnectionBinding c0 = (ConnectionBinding) o0;
-                    ConnectionBinding c1 = (ConnectionBinding) o1;
-                    result = c0.alias.compareTo (c1.alias);
-                    if (result != 0) return result;
-                    result = c0.endpoint.compareTo (c1.endpoint);
-                    if (result != 0) return result;
-                }
-            }
-
-            return 0;
         }
     }
 
@@ -1014,7 +978,7 @@ public class InternalBackendData
                         }
                     }
 
-                    final TreeSet<VariableReference> references = new TreeSet<VariableReference> (referenceComparator);
+                    final TreeSet<VariableReference> references = new TreeSet<VariableReference> ();
                     class ProjectVisitor implements Visitor
                     {
                         public boolean visit (Operator op)

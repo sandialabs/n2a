@@ -10,7 +10,7 @@ import java.util.ArrayList;
 
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 
-public class VariableReference
+public class VariableReference implements Comparable<VariableReference>
 {
     public Variable          variable;
     public ArrayList<Object> resolution = new ArrayList<Object> ();  // Trail of objects followed to resolve the variable. The first one is always variable.container, so it is not included in the list.
@@ -91,6 +91,37 @@ public class VariableReference
         }
         if (! result.isEmpty ()) result = result.substring (2);
         return variable.fullName () + " " + dumpResolution ();
+    }
+
+    public int compareTo (VariableReference that)
+    {
+        int count = resolution.size ();
+        int result = count - that.resolution.size ();
+        if (result != 0) return result;
+
+        for (int i = 0; i < count; i++)
+        {
+            Object o0 =      resolution.get (i);
+            Object o1 = that.resolution.get (i);
+            if (! o0.getClass ().equals (o1.getClass ())) return o0.getClass ().hashCode () - o1.getClass ().hashCode ();
+
+            if (o0 instanceof EquationSet)
+            {
+                result = ((EquationSet) o0).compareTo ((EquationSet) o1);
+                if (result != 0) return result;
+            }
+            else if (o0 instanceof ConnectionBinding)
+            {
+                ConnectionBinding c0 = (ConnectionBinding) o0;
+                ConnectionBinding c1 = (ConnectionBinding) o1;
+                result = c0.alias.compareTo (c1.alias);
+                if (result != 0) return result;
+                result = c0.endpoint.compareTo (c1.endpoint);
+                if (result != 0) return result;
+            }
+        }
+
+        return 0;
     }
 
     public boolean equals (Object o)
