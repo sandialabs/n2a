@@ -1,7 +1,7 @@
 options
 {
     STATIC = false;
-    JAVA_UNICODE_ESCAPE = true;
+    UNICODE_INPUT = true;
     MULTI = true;
     NODE_DEFAULT_VOID = true;          // Only create Node classes for the #Tokens
 }
@@ -98,7 +98,7 @@ TOKEN_MGR_DECLS:
     | <RRND:    ")" >
 
     | <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>|".")*("'")*>
-    | <#LETTER: ["$", "A"-"Z", "_", "a"-"z", "\u0080"-"\u221d", "\u221f"-"\uffff"]>  // Past lower-ASCII we don't care about character class (but skip infinity (221e)).
+    | <#LETTER: ["$", "A"-"Z", "_", "a"-"z", "\u0080"-"\u221d", "\u221f"-"\uffff"]>  // Past lower-ASCII we don't care about character class, but skip infinity (\u221e).
     | <#DIGIT:  ["0"-"9"]>
 
     | <NUMBER:
@@ -108,7 +108,7 @@ TOKEN_MGR_DECLS:
         | "0" ("x"|"X") (<DIGIT>|"a"|"A"|"b"|"B"|"c"|"C"|"d"|"D"|"e"|"E"|"f"|"F")+
         | "." ("i"|"I") ("n"|"N") ("f"|"F")
         | "." ("n"|"N") ("a"|"A") ("n"|"N")
-        | "∞"  // 0x221e
+        | "\u221e"  // infinity
         > : PossibleUnit
     | <#EXPONENT: ["e","E"] (["+","-"])? (<DIGIT>)+>
 
@@ -378,11 +378,11 @@ void Constant() #Constant : {Token t; Token u; String unitName = "";}
         {
             String image = t.image.toLowerCase ();
             boolean hex = image.startsWith ("0x");
-            if      (hex                  ) result.value = Integer.decode (t.image);
-            else if (image.equals (".inf")) result.value = Double.POSITIVE_INFINITY;
-            else if (image.equals ("∞"   )) result.value = Double.POSITIVE_INFINITY;
-            else if (image.equals (".nan")) result.value = Double.NaN;
-            else                            result.value = Double.parseDouble (t.image);
+            if      (hex                    ) result.value = Integer.decode (t.image);
+            else if (image.equals (".inf")  ) result.value = Double.POSITIVE_INFINITY;
+            else if (image.equals ("\u221e")) result.value = Double.POSITIVE_INFINITY;
+            else if (image.equals (".nan")  ) result.value = Double.NaN;
+            else                              result.value = Double.parseDouble (t.image);
             if (hex) image = image.substring (2);  // Get rid of 0x
             else     image = image.split ("e")[0];  // Get rid of exponent
             image = image.replace ("-", "");
