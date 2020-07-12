@@ -360,7 +360,9 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Search for the given variable within this specific equation set. If not found, return null.
+        Search for a variable within this equation set that matches the query's name and (if specified) order.
+        Order can be made no-care by setting negative.
+        Returns null if match is not found.
     **/
     public Variable find (Variable v)
     {
@@ -842,7 +844,7 @@ public class EquationSet implements Comparable<EquationSet>
         // Check $variables
         if (v.name.startsWith ("$"))
         {
-            if (v.name.startsWith ("$up."))  // Probably not be a true $variable, just an up-reference.
+            if (v.name.startsWith ("$up."))  // Probably not a true $variable, just an up-reference.
             {
                 if (container == null) return null;  // Unresolved! We can't go up any farther.
                 v.name = v.name.substring (4);
@@ -855,8 +857,8 @@ public class EquationSet implements Comparable<EquationSet>
             if (! create) return null;
 
             // Usually, the important $variables have already been created by addSpecials(),
-            // so v is probably an unusual derivative or a user-defined variable
-            // (which really shouldn't have a $ prefix).
+            // so v is probably an unusual derivative. The alternative is a user-defined variable
+            // which really shouldn't have a $ prefix.
             Variable cv = new Variable (v.name, v.order);
             add (cv);
             cv.reference = new VariableReference ();
@@ -994,13 +996,6 @@ public class EquationSet implements Comparable<EquationSet>
             Variable target = v.reference.variable;
             if (target != v  &&  target != null)
             {
-                v.addAttribute ("reference");
-                target.addAttribute ("externalWrite");
-                if (target.hasAttribute ("temporary"))
-                {
-                    //Backend.err.get ().println ("WARNING: Variable " + target.container.prefix () + "." + target.nameString () + " receives an external write, so cannot be temporary.");
-                    target.removeAttribute ("temporary");
-                }
                 target.addDependencyOn (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
                 v.reference.addDependencies (v);  // A variable depends on its connection bindings. This isn't necessary for execution, but does support analysis during GUI editing.
                 target.container.referenced = true;
@@ -1129,15 +1124,6 @@ public class EquationSet implements Comparable<EquationSet>
                         {
                             Variable target = query.reference.variable;
                             from.addDependencyOn (target);
-                            if (from.container != target.container)
-                            {
-                                target.addAttribute ("externalRead");
-                                if (target.hasAttribute ("temporary"))
-                                {
-                                    //Backend.err.get ().println ("WARNING: Variable " + target.container.prefix () + "." + target.nameString () + " has an external read, so cannot be temporary.");
-                                    target.removeAttribute ("temporary");
-                                }
-                            }
                         }
                     }
                     av.reference = query.reference;
@@ -1233,7 +1219,7 @@ public class EquationSet implements Comparable<EquationSet>
         return dump (showNamespace, "");
     }
 
-    public String dump (boolean showNamespace, String prefix)
+    public String dump (boolean showNamespace, String pad)
     {
         Renderer renderer;
         if (showNamespace)
@@ -1262,13 +1248,13 @@ public class EquationSet implements Comparable<EquationSet>
             renderer = new Renderer ();
         }
 
-        renderer.result.append (prefix + name + "\n");
-        prefix = prefix + " ";
+        renderer.result.append (pad + name + "\n");
+        pad = pad + " ";
         if (connectionBindings != null)
         {
             for (ConnectionBinding c : connectionBindings)
             {
-                renderer.result.append (prefix + c.alias + " = ");
+                renderer.result.append (pad + c.alias + " = ");
                 EquationSet s = c.endpoint;
                 if (showNamespace)
                 {
@@ -1286,7 +1272,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             if (v.equations.size () > 0)  // If no equations, then this is an implicit variable, so no need to list here.
             {
-                renderer.result.append (prefix + v.nameString ());
+                renderer.result.append (pad + v.nameString ());
                 renderer.result.append (" =" + v.combinerString ());
                 if (v.equations.size () == 1)
                 {
@@ -1299,7 +1285,7 @@ public class EquationSet implements Comparable<EquationSet>
                     renderer.result.append ("\n");
                     for (EquationEntry e : v.equations)
                     {
-                        renderer.result.append (prefix + " ");
+                        renderer.result.append (pad + " ");
                         e.render (renderer);
                         renderer.result.append ("\n");
                     }
@@ -1309,7 +1295,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (EquationSet e : parts)
         {
-            renderer.result.append (e.dump (showNamespace, prefix));
+            renderer.result.append (e.dump (showNamespace, pad));
         }
 
         return renderer.result.toString ();
@@ -1339,6 +1325,7 @@ public class EquationSet implements Comparable<EquationSet>
         (and satisfying a few other conditions) is merged into its containing part.
         Equations with combiners (=+, =*, and so on) are joined together into one long equation
         with the appropriate operator.
+        Depends on results of: resolveLHS(), resolveRHS() -- Object identity of variables should already be established.
         @param backend Prefix for metadata keys specific to the engine selected to execute this model.
         Where such keys exists, the parts should not be flattened.
     **/
@@ -1358,21 +1345,27 @@ public class EquationSet implements Comparable<EquationSet>
 
             // Check if $n==1
             if (! s.isSingleton (true)) continue;
-            s.variables.remove (new Variable ("$n", 0));  // We don't want $n in the merged set. (Because s is singleton, no higher orders of $n exist in it.)
+            s.variables.remove (new Variable ("$n", 0));  // We don't want to overwrite our own $n, so remove it from the sub-part. This won't change its singleton status.
 
             // Don't merge if there are any conflicting $variables.
+            // Regular variables never conflict, because they get a unique prefix when flattened.
+            // However, $variables cannot be prefixed. Their semantics are strongly bound to their
+            // current equation set.
             boolean conflict = false;
             for (Variable v : s.variables)
             {
-                if (! v.name.startsWith ("$")  ||  v.name.startsWith ("$up")) continue;
+                if (! v.name.startsWith ("$")) continue;
+                if (v.reference.variable.container == EquationSet.this) continue;  // Not a conflict if LHS is an up-reference to this equation set. These equations will get merged.
                 Variable d = find (v);
-                if (d != null  &&  d.name.equals (v.name))  // for this match we don't care about order; that is, any differential order on either side causes a conflict
-                {
-                    conflict = true;
-                    break;
-                }
+                if (d == null) continue;  // Not a conflict unless v exists in this equation set.
+                if (s.source.child (v.nameString ()) == null) continue;  // Not a conflict if v is a $variable added by processing.
+                conflict = true;
+                break;
             }
             if (conflict) continue;
+            // No conflicts. However, there may still be overlapping $variables. Only $variables unique
+            // to s will be moved up. For those that do overlap, any references will be redirected to
+            // the equivalent variable in this container.
 
             // Merge
 
@@ -1380,57 +1373,252 @@ public class EquationSet implements Comparable<EquationSet>
             parts.remove (s);
 
             //   Variables
-            final TreeSet<String> names = new TreeSet<String> ();
-            for (Variable v : s.variables) names.add (v.name);  // Naked name will match any order.
 
-            class Prefixer implements Transformer
+            //     Pass 1 -- Change RHS references originating from variables within s so they function within this container instead.
+            //     Need to do this before variables get moved, because we depend on the identity of their current container.
+            Visitor prefixer = new Visitor ()
             {
-                public Operator transform (Operator op)
+                public boolean visit (Operator op)
                 {
-                    if (! (op instanceof AccessVariable)) return null;
+                    if (! (op instanceof AccessVariable)) return true;
                     AccessVariable av = (AccessVariable) op;
-                    if (av.name.startsWith ("$"))
-                    {
-                        if (av.name.startsWith ("$up."))
-                        {
-                            av.name = av.name.substring (4);
-                        }
-                        // otherwise, don't modify references to $variables
-                    }
-                    else if (names.contains (av.getName ()))  // Naked name, so matches any order.
-                    {
-                        av.name = prefix + "." + av.name;  // Full name, including order.
-                    }
-                    return av;
-                }
-            }
-            Prefixer prefixer = new Prefixer ();
 
+                    if (av.reference.variable.container == s)  // internal reference
+                    {
+                        if (! av.name.startsWith ("$")) av.name = prefix + "." + av.name;  // cosmetic change
+                    }
+                    else  // external reference
+                    {
+                        if (av.name.startsWith ("$up.")) av.name = av.name.substring (4);  // cosmetic change
+                        List<Object> r = av.reference.resolution;
+                        if (r.get (0) == EquationSet.this) r.remove (0);  // If first step of resolution is parent, then remove it, because variable is about to become part of parent.
+                    }
+
+                    return false;
+                }
+            };
             for (Variable v : s.variables)
             {
-                if (v.name.startsWith ("$"))
+                v.visit (prefixer);
+            }
+
+            //     Pass 2 -- Move the variables up to this container.
+            //     Requires changes to external references to the variables of s.
+            //     Requires changes to resolution paths.
+
+            //     Modify references to variable "from" so they point to variable "to" instead.
+            //     The expectation is that "from" will be forgotten.
+            class Redirector implements Visitor
+            {
+                Variable from;  // original reference target, in child part
+                Variable to;    // new reference target, in parent part
+                Variable user;  // current variable being processed; the one that makes the reference
+
+                public boolean visit (Operator op)
                 {
-                    if (v.name.startsWith ("$up."))
+                    if (! (op instanceof AccessVariable)) return true;
+                    AccessVariable av = (AccessVariable) op;
+                    if (av.reference.variable != from) return false;
+
+                    if (from != to)
                     {
-                        v.name = v.name.substring (4);
+                        user.removeDependencyOn (from);
+                        user.addDependencyOn (to);
                     }
-                    // otherwise merge all $variables with containing set
+                    adjustReference (av.reference);
+                    return false;
                 }
-                else
+
+                public void adjustReference (VariableReference reference)
                 {
-                    v.name = prefix + "." + v.name;
+                    reference.variable = to;
+
+                    List<Object> r = reference.resolution;
+                    int last = r.size () - 1;
+                    if (last >= 0)  // The resolution path has something in it.
+                    {
+                        r.remove (last--);  // The last entry should always be from.container. The only other case, of a connection binding, is eliminated by early tests in the flatten() function.
+                        // There are two possible cases.
+                        // 1) Descending reference from parent or higher parents. The parent will be he last entry in the path, and thus no further change is needed.
+                        // 2) Ascending reference from deeper children. parent needs to be added, effectively replacing child as the final destination.
+                        // The problem is how to distinguish these cases ...
+                        if (last >= 0)  // Path was more than 1 step, so check if parent is now last entry.
+                        {
+                            if (r.get (last) != to.container) r.add (to.container);  // parent was not last entry, so need to add it
+                        }
+                        else  // Path was 1-step, so check whether descending or ascending.
+                        {
+                            if (user.container.container == from.container) r.add (to.container);  // ascending, so add parent
+                        }
+                    }
                 }
-                v.transform (prefixer);
-                Variable v2 = find (v);
-                if (v2 == null)
+
+                public void redirect (Variable from, Variable to)
                 {
-                    add (v);
-                }
-                else
-                {
-                    v2.flattenExpressions (v);
+                    this.from = from;
+                    this.to   = to;
+
+                    // Duplicate list, so we can safely modify the original below.
+                    List<Object> usedBy;
+                    if (from.usedBy == null) usedBy = new ArrayList<Object> ();
+                    else                     usedBy = new ArrayList<Object> (from.usedBy);
+
+                    // Check variables that "from" uses. Some of these may be external writers to "from", which don't necessarily show up in usedBy.
+                    if (from.uses != null)
+                    {
+                        List<Variable> uses = new ArrayList<Variable> (from.uses.keySet ());  // duplicate, in case it gets modified
+                        for (Variable v : uses)
+                        {
+                            if (v.reference.variable != from) continue;  // Must be one of our external writers.
+                            user = v;
+                            if (from != to)
+                            {
+                                from.removeDependencyOn (user);
+                                to.addDependencyOn (user);
+                            }
+                            adjustReference (v.reference);
+                        }
+                    }
+
+                    // Check variables that use "from".
+                    for (Object o : usedBy)
+                    {
+                        if (o instanceof Variable)
+                        {
+                            user = (Variable) o;
+                            user.visit (this);  // for direct references
+                        }
+                        else if (o instanceof EquationSet)
+                        {
+                            // This case should not occur. Currently, only addSpecials() creates such a
+                            // dependency, and it is for a non-singleton.
+                            from.removeUser (o);
+                            if (o == from.container) to.addUser (to.container);
+                            else                     to.addUser (o);
+                        }
+                    }
                 }
             }
+            Redirector redirector = new Redirector ();
+
+            //     For each variable v, one of 3 things will happen:
+            //     1) v is an up-reference --> equations will be merged.
+            //     2) v matches an existing $variable --> dependent references will be redirected, and v with be forgotten.
+            //     3) v is unique --> v will be moved from s to this container. All dependent references remain valid, but resolution paths must be updated.
+            //          Note that v may have the same name as a variable in this container. Prefixing will make the name unique.
+            for (Variable v : s.variables)
+            {
+                // Adjust LHS references to work in this container.
+                if (v.reference.variable == v)  // internal reference, which for LHS is exactly same as self-reference
+                {
+                    if (v.name.startsWith ("$"))
+                    {
+                        if (! v.hasUsers ()  &&  s.source.child (v.nameString ()) == null) continue;  // Ignore automatically-added $variables that are not used.
+
+                        // Check if this is a conflicting $variable.
+                        Variable d = find (v);
+                        if (d != null)  // Already exists in this container, so redirect any references in v's dependents to d.
+                        {
+                            redirector.redirect (v, d);  // Only does something if v has users.
+                            continue;  // Don't process v further
+                        }
+                    }
+                    else
+                    {
+                        v.name = prefix + "." + v.name;
+                    }
+                }
+                else  // external reference
+                {
+                    if (v.name.startsWith ("$up.")) v.name = v.name.substring (4);
+                    List<Object> r = v.reference.resolution;
+                    if (r.get (0) == EquationSet.this) r.remove (0);
+                }
+
+                if (v.reference.variable.container == this)  // An up-reference that needs to be merged.
+                {
+                    Variable v2 = v.reference.variable;
+                    v.removeDependenciesOfReferences ();
+                    v2.removeDependenciesOfReferences ();
+                    v2.removeDependencyOn (v);  // Nothing should refer to v except a dependency from v2 because v is an external writer.
+                    v2.flattenExpressions (v);
+                    v2.addDependenciesOfReferences ();
+                }
+                else  // A distinct variable that needs to be moved up.
+                {
+                    add (v);                     // Changes v.container, used by redirector.
+                    redirector.redirect (v, v);  // Adjust resolution paths of v's users.
+                }
+            }
+
+            //     Adjusts resolution paths that go through s.
+            //     These paths do not target s itself, but rather its parents or deeper children.
+            class Resolver implements Visitor
+            {
+                EquationSet child;  // The container being eliminated (same as "s" in outer code).
+                EquationSet parent; // Holds "child". Remains after child is eliminated.
+                Variable    target; // The variable in "child" that should be the destination of the resolution path. If null, don't filter (process every reference).
+
+                public boolean visit (Operator op)
+                {
+                    if (! (op instanceof AccessVariable)) return true;
+                    AccessVariable av = (AccessVariable) op;
+                    if (target != null  &&  av.reference.variable != target) return true;
+                    adjustResolution (av.reference.resolution);
+                    return false;
+                }
+
+                public void adjustResolution (List<Object> r)
+                {
+                    // If the path has been maintained in simplest form, then it passes through child only once.
+                    // Our task is to find that point (if it exists) and elide child.
+                    int last = r.size () - 1;
+                    for (int i = 0; i <= last; i++)
+                    {
+                        Object o = r.get (i);
+                        if (o != child) continue;
+                        // Found child in path. Now update it.
+                        r.remove (i);  // Always remove child
+                        if (i == last) r.add (parent);  // The original path targeted child, so it should now target parent.
+                        break;
+                    }
+                }
+
+                public void resolve (EquationSet child, EquationSet parent)
+                {
+                    this.child  = child;
+                    this.parent = parent;
+                    // The variables of child itself do not need to be processed. They are handled in other ways by the outer code.
+                    // Instead, we immediately descend to child parts.
+                    for (EquationSet p : child.parts) resolveRecursive (p);
+                }
+
+                public void resolveRecursive (EquationSet current)
+                {
+                    for (Variable v : current.variables)
+                    {
+                        if (v.reference.variable != v) adjustResolution (v.reference.resolution);
+                        target = null;
+                        v.visit (this);
+                        if (v.usedBy == null) continue;
+                        target = v;
+                        for (Object o : v.usedBy)
+                        {
+                            if (o instanceof Variable)
+                            {
+                                Variable user = (Variable) o;
+                                if (user.reference.variable != user) adjustResolution (user.reference.resolution);
+                                user.visit (this);
+                            }
+                            // else if (o instanceof EquationSet)  // should not be a relevant case.
+                            //   A possibility is o==s. However, this should not occur if flatten() is run immediately after resolveRHS().
+                        }
+                    }
+                    for (EquationSet p : current.parts) resolveRecursive (p);
+                }
+            }
+            Resolver resolver = new Resolver ();
+            resolver.resolve (s, this);
 
             //   Parts
             for (EquationSet sp : s.parts)
@@ -1456,6 +1644,49 @@ public class EquationSet implements Comparable<EquationSet>
                     if (! dependentConnections.contains (c)) dependentConnections.add (c);
                 }
             }
+        }
+    }
+
+    /**
+        Marks variables with "externalRead" and "externalWrite", as needed.
+        Depends on results of:
+            resolveLHS(), resolveRHS() -- Establishes references and dependencies between variables.
+            flatten() -- Changes references and dependencies. In some cases, folds expressions together so dependencies go away.
+    **/
+    public void findExternal ()
+    {
+        for (EquationSet p : parts) p.findExternal ();
+
+        class Externalizer implements Visitor
+        {
+            Variable v;
+            public boolean visit (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    Variable target = av.reference.variable;
+                    if (target.container != v.container)
+                    {
+                        target.addAttribute ("externalRead");
+                        target.removeAttribute ("temporary");
+                    }
+                }
+                return true;
+            }
+        }
+        Externalizer externalizer = new Externalizer ();
+
+        for (Variable v : variables)
+        {
+            if (v.reference.variable != v)  // v references something other than itself, which implies that the target is outside this equation set.
+            {
+                v.addAttribute ("reference");
+                v.reference.variable.addAttribute ("externalWrite");
+                v.reference.variable.removeAttribute ("temporary");
+            }
+            externalizer.v = v;
+            v.visit (externalizer);
         }
     }
 
@@ -3270,7 +3501,7 @@ public class EquationSet implements Comparable<EquationSet>
                 boolean canGrowOrDie =  lethalN  ||  lethalP  ||  canGrow ();
                 boolean stored = ! v.hasAttribute ("constant");  // TODO: need a better way to decide if the variable is (or should be) stored
                 // Issues with deciding whether $n is stored:
-                // * setting "externalRead" below forces $n to be stored, if it weren't already
+                // * setting "externalRead" below forces $n to be stored, if it isn't already
                 // * the reason for "externalRead" is to allow us to detect changes in $n due to direct dynamics
                 // * canGrowOrDie implies $n will change, but not necessarily that it should be stored
                 // * $n should be stored if it is used by other equations or if it has direct dynamics

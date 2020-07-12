@@ -7,13 +7,11 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Scalar;
 
 public class Divide extends OperatorBinary
 {
@@ -43,25 +41,18 @@ public class Divide extends OperatorBinary
         Operator result = super.simplify (from);
         if (result != this) return result;
 
-        if (operand0 instanceof Constant)
+        if (operand0.isScalar ()  &&  operand0.getDouble () == 0)
         {
-            Type c0 = ((Constant) operand0).value;
-            if (c0 instanceof Scalar  &&  ((Scalar) c0).value == 0)
-            {
-                from.changed = true;
-                operand0.parent = parent;
-                return operand0;
-            }
+            from.changed = true;
+            operand1.releaseDependencies (from);
+            operand0.parent = parent;
+            return operand0;  // Return the constant 0. No need to make a new object for this.
         }
-        if (operand1 instanceof Constant)
+        if (operand1.isScalar ()  &&  operand1.getDouble () == 1)
         {
-            Type c1 = ((Constant) operand1).value;
-            if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 1)
-            {
-                from.changed = true;
-                operand0.parent = parent;
-                return operand0;
-            }
+            from.changed = true;
+            operand0.parent = parent;
+            return operand0;
         }
         return this;
     }

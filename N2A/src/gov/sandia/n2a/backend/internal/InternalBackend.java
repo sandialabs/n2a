@@ -226,7 +226,6 @@ public class InternalBackend extends Backend
         else                    backend = "backend." + backend;
 
         e.resolveConnectionBindings ();
-        e.flatten (backend);
         e.addGlobalConstants ();
         e.addSpecials ();  // $connect, $index, $init, $n, $t, $t'
         e.addAttribute ("global",        0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
@@ -237,6 +236,8 @@ public class InternalBackend extends Backend
         e.fillIntegratedVariables ();
         e.findIntegrated ();
         e.resolveRHS ();
+        e.flatten (backend);
+        e.findExternal ();
         e.sortParts ();
         e.checkUnits ();
         e.findConstants ();

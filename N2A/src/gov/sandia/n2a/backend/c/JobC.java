@@ -293,7 +293,6 @@ public class JobC extends Thread
     public void digestModel () throws Exception
     {
         model.resolveConnectionBindings ();
-        model.flatten ("c");
         model.addGlobalConstants ();
         model.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
         model.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
@@ -302,6 +301,8 @@ public class JobC extends Thread
         model.fillIntegratedVariables ();
         model.findIntegrated ();
         model.resolveRHS ();
+        model.flatten ("c");
+        model.findExternal ();
         model.sortParts ();
         model.checkUnits ();
         model.findConstants ();

@@ -14,7 +14,6 @@ import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Scalar;
 
 public class Subtract extends OperatorBinary
 {
@@ -44,15 +43,11 @@ public class Subtract extends OperatorBinary
         Operator result = super.simplify (from);
         if (result != this) return result;
 
-        if (operand1 instanceof Constant)
+        if (operand1.isScalar ()  &&  operand1.getDouble () == 0)
         {
-            Type c1 = ((Constant) operand1).value;
-            if (c1 instanceof Scalar  &&  ((Scalar) c1).value == 0)
-            {
-                from.changed = true;
-                operand0.parent = parent;
-                return operand0;
-            }
+            from.changed = true;
+            operand0.parent = parent;
+            return operand0;
         }
         else if (operand1 instanceof AccessVariable)
         {
@@ -62,9 +57,8 @@ public class Subtract extends OperatorBinary
                 AccessVariable av1 = (AccessVariable) operand1;
                 if (av0.reference.equals (av1.reference))
                 {
-                    operand0.releaseDependencies (from);
-                    operand1.releaseDependencies (from);
                     from.changed = true;
+                    releaseDependencies (from);
                     result = new Constant (0);
                     result.parent = parent;
                     return result;

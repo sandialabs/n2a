@@ -1434,7 +1434,7 @@ public class InternalBackendData
                         }
                         i++;
                     }
-                    if (i >= current.parts.size ()) throw new EvaluationException ("Could not find connection target.");
+                    if (i >= current.parts.size ()) throw new EvaluationException ("Could not find resolution target " + next.name + " in " + current.name);
                 }
                 current = next;
             }

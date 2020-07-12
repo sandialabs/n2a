@@ -7,13 +7,11 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.operator;
 
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Scalar;
 
 public class MultiplyElementwise extends OperatorBinary
 {
@@ -43,33 +41,17 @@ public class MultiplyElementwise extends OperatorBinary
         Operator result = super.simplify (from);
         if (result != this) return result;
 
-        if (operand0 instanceof Constant)
+        if (operand0.isScalar ()  &&  operand0.getDouble () == 1)
         {
-            Type c0 = ((Constant) operand0).value;
-            if (c0 instanceof Scalar)
-            {
-                double value = ((Scalar) c0).value;
-                if (value == 1)
-                {
-                    from.changed = true;
-                    operand1.parent = parent;
-                    return operand1;
-                }
-            }
+            from.changed = true;
+            operand1.parent = parent;
+            return operand1;
         }
-        else if (operand1 instanceof Constant)
+        else if (operand1.isScalar ()  &&  operand1.getDouble () == 1)
         {
-            Type c1 = ((Constant) operand1).value;
-            if (c1 instanceof Scalar)
-            {
-                double value = ((Scalar) c1).value;
-                if (value == 1)
-                {
-                    from.changed = true;
-                    operand0.parent = parent;
-                    return operand0;
-                }
-            }
+            from.changed = true;
+            operand0.parent = parent;
+            return operand0;
         }
         return this;
     }

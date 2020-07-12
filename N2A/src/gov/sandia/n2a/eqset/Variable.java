@@ -943,7 +943,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     }
 
     /**
-        Record what other variables this variable depends on.
+        Record other variables that this variable depends on.
     **/
     public void addDependencyOn (Variable whatWeNeed)
     {
@@ -975,6 +975,39 @@ public class Variable implements Comparable<Variable>, Cloneable
                 uses.remove (whatWeDontNeedAnymore);
                 whatWeDontNeedAnymore.removeUser (this);
             }
+        }
+    }
+
+    /**
+        Assuming none of our equations currently have their dependencies set, add dependencies on
+        our direct references or the connection bindings they pass through. Used when rewriting
+        equations in a way that to complex to conveniently track as incremental changes.
+        1) removeDepenciesFromReferences() to clear dependencies
+        2) Do complex changes to equation structure (such as merging another variable) without
+           updating dependencies.
+        3) this function to apply new dependencies
+    **/
+    public void addDependenciesOfReferences ()
+    {
+        if (equations == null) return;
+        for (EquationEntry e : equations)
+        {
+            if (e.expression != null) e.expression.addDependencies (this);
+            if (e.condition  != null) e.condition .addDependencies (this);
+        }
+    }
+
+    /**
+        Removes only those dependencies created by our direct references or the connection
+        bindings they pass through.
+    **/
+    public void removeDependenciesOfReferences ()
+    {
+        if (equations == null) return;
+        for (EquationEntry e : equations)
+        {
+            if (e.expression != null) e.expression.releaseDependencies (this);
+            if (e.condition  != null) e.condition .releaseDependencies (this);
         }
     }
 

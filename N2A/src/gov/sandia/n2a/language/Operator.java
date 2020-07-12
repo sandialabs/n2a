@@ -261,6 +261,31 @@ public class Operator implements Cloneable
     }
 
     /**
+        Assuming no dependencies of "from" are currently marked, add them.
+        This includes direct references to variables, and also the containers of connection bindings
+        on each reference's resolution path.
+        This method is only used when incremental updates are too complex to be worth it.
+        In that case, removeDependencies() should be called before changes are made to expression structure.
+    **/
+    public void addDependencies (final Variable from)
+    {
+        visit (new Visitor ()
+        {
+            public boolean visit (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    from.addDependencyOn (av.reference.variable); // for direct reference
+                    av.reference.addDependencies (from);          // for resolution path
+                    return false;
+                }
+                return true;
+            }
+        });
+    }
+
+    /**
         Remove the dependency of "from" on each variable accessed within the expression tree. 
     **/
     public void releaseDependencies (final Variable from)

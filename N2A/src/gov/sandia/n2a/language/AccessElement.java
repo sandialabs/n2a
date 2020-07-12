@@ -77,7 +77,7 @@ public class AccessElement extends Function
                 return result;
             }
         }
-        else
+        else  // If not constant (above), then operands[0] should always be an AccessVariable.
         {
             // Try to unpack the target variable and see if the specific element we want is constant
             AccessVariable av = (AccessVariable) operands[0];
@@ -87,15 +87,14 @@ public class AccessElement extends Function
                 if (v.equations != null  &&  v.equations.size () == 1)
                 {
                     EquationEntry e = v.equations.first ();
-                    if (e.expression instanceof BuildMatrix)  // Ideally, we would also ensure e.condition is satisfied. However, only weird code would have a condition at all.
+                    if (e.expression instanceof BuildMatrix  &&  (e.condition == null  ||  e.condition.getDouble () != 0))  // Only weird code would have a condition at all.
                     {
                         BuildMatrix b = (BuildMatrix) e.expression;
                         Operator element = b.getElement (row, col);
                         if (element != null  &&  element instanceof Constant)
                         {
                             from.changed = true;
-                            e.expression.releaseDependencies (from);
-                            if (e.condition != null) e.condition.releaseDependencies (from);
+                            operands[0].releaseDependencies (from);
                             element.parent = parent;
                             return element;
                         }

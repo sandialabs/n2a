@@ -13,7 +13,6 @@ import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.OperatorLogical;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Scalar;
 import tech.units.indriya.AbstractUnit;
 
 public class OR extends OperatorBinary implements OperatorLogical
@@ -44,31 +43,29 @@ public class OR extends OperatorBinary implements OperatorLogical
         Operator result = super.simplify (from);
         if (result != this) return result;
 
-        if (operand0 instanceof Constant)
+        if (operand0.isScalar ())
         {
-            Type c0 = ((Constant) operand0).value;
-            if (c0 instanceof Scalar)
+            from.changed = true;
+            result = operand1;
+            if (operand0.getDouble () != 0)
             {
-                from.changed = true;
-                double value = ((Scalar) c0).value;
-                if (value == 0) result = operand1;
-                else            result = new Constant (1);
-                result.parent = parent;
-                return result;
+                operand1.releaseDependencies (from);
+                result = new Constant (1);
             }
+            result.parent = parent;
+            return result;
         }
-        else if (operand1 instanceof Constant)
+        else if (operand1.isScalar ())
         {
-            Type c1 = ((Constant) operand1).value;
-            if (c1 instanceof Scalar)
+            from.changed = true;
+            result = operand0;
+            if (operand1.getDouble () != 0)
             {
-                from.changed = true;
-                double value = ((Scalar) c1).value;
-                if (value == 0) result = operand0;
-                else            result = new Constant (1);
-                result.parent = parent;
-                return result;
+                operand0.releaseDependencies (from);
+                result = new Constant (1);
             }
+            result.parent = parent;
+            return result;
         }
         return this;
     }

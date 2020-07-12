@@ -7,12 +7,10 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Scalar;
 
 public class AccessVariable extends Operator
 {
@@ -69,9 +67,7 @@ public class AccessVariable extends Operator
         if (e.condition != null)
         {
             if (! (e.condition instanceof Constant)) return this;
-            // Check for nonzero constant
-            Type value = ((Constant) e.condition).value;
-            if (! (value instanceof Scalar)  ||  ((Scalar) value).value == 0) return this;
+            if (e.condition.getDouble () == 0) return this;  // must be nonzero
         }
 
         if (! (e.expression instanceof Constant))
@@ -89,9 +85,8 @@ public class AccessVariable extends Operator
 
         if (e.expression instanceof Constant)
         {
-            from.removeDependencyOn (v);
-            reference.removeDependencies (from);
             from.changed = true;
+            releaseDependencies (from);
             Operator result = e.expression.deepCopy ();
             result.parent = parent;
             return result;
@@ -104,33 +99,11 @@ public class AccessVariable extends Operator
             if (v2.hasAttribute ("temporary")  &&  v2.container != from.container) return this;  // Can't reference a temporary outside the current equation set.
 
             // Fold aliased variable
-            from.removeDependencyOn (v);
-            reference.removeDependencies (from);
-            from.addDependencyOn (v2);
             from.changed = true;
+            releaseDependencies (from);
+            from.addDependencyOn (v2);
             reference.variable = v2;
-            //   Merge resolution paths
-            //   Our current resolution path should end with the equation set that contains v.
-            //   Thus, any resolution from v to v2 could simply be tacked onto the end.
-            //   However, we want to avoid doubling back. This occurs if our penultimate
-            //   resolution step matches the first step of v2's path. In that case,
-            //   delete both our last step and the first step from v2's path.
-            int last = reference.resolution.size () - 1;
-            for (Object o2 : av.reference.resolution)
-            {
-                if (last > 0)
-                {
-                    Object o = reference.resolution.get (last - 1);
-                    if (o instanceof ConnectionBinding) o = ((ConnectionBinding) o).endpoint;
-                    if (o == o2)
-                    {
-                        reference.resolution.remove (last--);
-                        continue;  // Keeps from adding the next step from v2's path.
-                    }
-                    last = 0;  // Stop checking
-                }
-                reference.resolution.add (o2);
-            }
+            reference.mergeResolutionPath (av.reference);
             reference.addDependencies (from);
         }
         return this;

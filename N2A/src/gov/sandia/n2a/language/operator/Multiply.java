@@ -43,48 +43,40 @@ public class Multiply extends OperatorBinary
         Operator result = super.simplify (from);
         if (result != this) return result;
 
-        if (operand0 instanceof Constant)
+        if (operand0.isScalar ())
         {
-            Type c0 = ((Constant) operand0).value;
-            if (c0 instanceof Scalar)
+            double value = operand0.getDouble ();
+            if (value == 1)
             {
-                double value = ((Scalar) c0).value;
-                if (value == 1)
-                {
-                    from.changed = true;
-                    operand1.parent = parent;
-                    return operand1;
-                }
-                if (value == 0)
-                {
-                    operand1.releaseDependencies (from);
-                    from.changed = true;
-                    result = new Constant (0);
-                    result.parent = parent;
-                    return result;
-                }
+                from.changed = true;
+                operand1.parent = parent;
+                return operand1;
+            }
+            if (value == 0)
+            {
+                from.changed = true;
+                operand1.releaseDependencies (from);
+                result = new Constant (0);
+                result.parent = parent;
+                return result;
             }
         }
-        else if (operand1 instanceof Constant)
+        else if (operand1.isScalar ())
         {
-            Type c1 = ((Constant) operand1).value;
-            if (c1 instanceof Scalar)
+            double value = operand1.getDouble ();
+            if (value == 1)
             {
-                double value = ((Scalar) c1).value;
-                if (value == 1)
-                {
-                    from.changed = true;
-                    operand0.parent = parent;
-                    return operand0;
-                }
-                if (value == 0)
-                {
-                    operand0.releaseDependencies (from);
-                    from.changed = true;
-                    result = new Constant (0);
-                    result.parent = parent;
-                    return result;
-                }
+                from.changed = true;
+                operand0.parent = parent;
+                return operand0;
+            }
+            if (value == 0)
+            {
+                from.changed = true;
+                operand0.releaseDependencies (from);
+                result = new Constant (0);
+                result.parent = parent;
+                return result;
             }
         }
         return this;
