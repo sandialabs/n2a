@@ -3233,7 +3233,8 @@ public class EquationSet implements Comparable<EquationSet>
         <li>not integrated
         <li>one of:
             <ul>
-            <li>all equations are conditional, and no condition is true when $init=0 (that is, during update)
+            <li>no condition is true when $init=0 (that is, during update). Implies that all equations have a non-empty condition.
+            <li>all equations and their conditions depend only on "constant" or "initOnly" variables.
             <li>the same equation always fires during both init and update, and it depends only on "constant" or "initOnly" variables.
             Why only one equation? Multiple equations imply the value could change via conditional selection.
             </ul>
@@ -3275,14 +3276,14 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 AccessVariable av = (AccessVariable) op;
 
-                // Since constants have already been located (via simplify), we can be certain that any symbolic
-                // constant has already been replaced. Therefore, only the "initOnly" attribute matters here.
                 if (av.reference == null  ||  av.reference.variable == null)  // guard against failed resolution. TODO: is this check really necessary?
                 {
                     isInitOnly = false;
                 }
                 else  // successful resolution
                 {
+                    // Since constants have already been located (via simplify), we can be certain that any symbolic
+                    // constant has already been replaced. Therefore, only the "initOnly" attribute matters here.
                     Variable r = av.reference.variable;
                     if (! r.hasAttribute ("initOnly")) isInitOnly = false;
                 }
@@ -3359,6 +3360,7 @@ public class EquationSet implements Comparable<EquationSet>
                 }
             }
 
+            int count = v.equations.size ();
             if (firesDuringUpdate == 0)
             {
                 if (firesDuringInit > 0  &&  v.derivative == null)
@@ -3373,6 +3375,16 @@ public class EquationSet implements Comparable<EquationSet>
                 visitor.isInitOnly = true;
                 if (update.condition != null) update.condition.visit (visitor);
                 if (visitor.isInitOnly) update.expression.visit (visitor);
+                if (visitor.isInitOnly)
+                {
+                    v.addAttribute ("initOnly");
+                    changed = true;
+                }
+            }
+            else if (count > 0  &&  firesDuringInit == count  &&  firesDuringUpdate == count)
+            {
+                visitor.isInitOnly = true;
+                for (EquationEntry e : v.equations) e.visit (visitor);
                 if (visitor.isInitOnly)
                 {
                     v.addAttribute ("initOnly");
