@@ -834,6 +834,8 @@ public class EquationSet implements Comparable<EquationSet>
         <li>$up skips one level.
         <li>A prefix that references the endpoint of a connection will be referred to that part.
         </ul>
+        Resolution is done before flattening, so all names should have simple structure. In particular,
+        neither equation set names nor LHS variable names should contain dots.
         @param v Variable.name will be modified until it matches the name in the resolved EquationSet.
         Variable.reference must already exist.
         Any EquationSets visited after this one will be appended to Variable.reference.resolution.
@@ -857,7 +859,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (! create) return null;
 
             // Usually, the important $variables have already been created by addSpecials(),
-            // so v is probably an unusual derivative. The alternative is a user-defined variable
+            // so v is probably an unusual derivative. The alternative is a user-defined variable,
             // which really shouldn't have a $ prefix.
             Variable cv = new Variable (v.name, v.order);
             add (cv);
@@ -876,9 +878,9 @@ public class EquationSet implements Comparable<EquationSet>
             return this;
         }
 
-        // Check namespace references. These take precedence over variable names.
+        // Check namespace references.
         String[] ns = v.name.split ("\\.", 2);
-        if (ns.length > 1)
+        if (ns.length > 1)  // Has a namespace prefix.
         {
             ConnectionBinding c = findConnection (ns[0]);
             if (c != null)
@@ -888,14 +890,10 @@ public class EquationSet implements Comparable<EquationSet>
                 return c.endpoint.resolveEquationSet (v, create);
             }
 
-            int vlength = v.name.length ();
-            EquationSet down = findPartPrefix (v.name);
+            EquationSet down = findPart (ns[0]);
             if (down != null)
             {
-                int length = down.name.length ();
-                if (length == vlength) return null;  // This is a naked reference to a child part which has been flattened. Naked references are forbidden (see below for similar trap when dot is absent).
-
-                v.name = v.name.substring (length + 1);  // skip the dot
+                v.name = ns[1];
                 v.reference.resolution.add (down);
                 return down.resolveEquationSet (v, create);
             }
@@ -903,59 +901,44 @@ public class EquationSet implements Comparable<EquationSet>
             // Check if prefix matches this current equation set name.
             // This is equivalent to referring the variable up to our container, which in turn finds that the prefix matches us.
             // However, we don't want those extra steps in the resolution path.
-            if (v.name.startsWith (name))  // prefix matches
+            if (name.equals (ns[0]))  // prefix matches
             {
-                int length = name.length ();
-                if (length == vlength) return null;  // Naked reference to this equation set. Forbidden.
-                if (v.name.charAt (length) == '.')  // Legitimate name path.
-                {
-                    v.name = v.name.substring (length + 1);
-                    // Don't add this to the resolution path!
-                    return resolveEquationSet (v, create);
-                }
-            }
-
-            // Check for reference to variable in peer equation set.
-            // Since this is effectively a down-reference into the peer, the peer must be a singleton.
-            if (container != null)
-            {
-                int last = v.reference.resolution.size ();
-                v.reference.resolution.add (container);
-                EquationSet peer = container.resolveEquationSet (v, false);
-                if (peer != null) return peer;
-                while (v.reference.resolution.size () > last) v.reference.resolution.remove (last);  // Restore resolution path, since container didn't contain what we're looking for.
+                v.name = ns[1];
+                // Don't add this to the resolution path!
+                return resolveEquationSet (v, create);
             }
         }
-
-        // Check connections
-        ConnectionBinding c = findConnection (v.name);
-        if (c != null)
+        else  // This is a simple variable name, with no namespace prefix.
         {
-            v.reference.resolution.add (c);  // same kind of resolution path as if we went into connected part, but ...
-            v.name = "";                     // don't match any variables within the connected part
-            v.addAttribute ("instance");
-            return c.endpoint;               // and terminate as if we found a variable there
-        }
+            // Check connections
+            ConnectionBinding c = findConnection (v.name);
+            if (c != null)
+            {
+                v.reference.resolution.add (c);  // same kind of resolution path as if we went into connected part, but ...
+                v.name = "";                     // don't match any variables within the connected part
+                v.addAttribute ("instance");
+                return c.endpoint;               // and terminate as if we found a variable there
+            }
 
-        // Check variable names
-        if (variables.contains (v)) return this;  // found it!
+            // Check variable names
+            if (variables.contains (v)) return this;  // found it!
 
-        // Guard against direct reference to a child part.
-        // Similar to a "down" reference, except without a variable.
-        EquationSet part = parts.floor (new EquationSet (v.name));
-        if (part != null  &&  part.name.equals (v.name)) return null;
+            // Guard against direct reference to a child part.
+            // Similar to a "down" reference, except without a variable.
+            EquationSet part = parts.floor (new EquationSet (v.name));
+            if (part != null  &&  part.name.equals (v.name)) return null;
 
-        if (create)
-        {
-            // Create a self-referencing variable with no equations
-            // TODO: what attributes or equations should this have?
-            Variable cv = new Variable (v.name, v.order);
-            add (cv);
-            cv.reference = new VariableReference ();
-            cv.reference.variable = cv;
-            cv.equations = new TreeSet<EquationEntry> ();
-            cv.assignment = v.assignment;
-            return this;
+            if (create)
+            {
+                // Create a self-referencing variable with no equations
+                Variable cv = new Variable (v.name, v.order);
+                add (cv);
+                cv.reference = new VariableReference ();
+                cv.reference.variable = cv;
+                cv.equations = new TreeSet<EquationEntry> ();
+                cv.assignment = v.assignment;
+                return this;
+            }
         }
 
         // Look up the containment hierarchy
@@ -1058,7 +1041,7 @@ public class EquationSet implements Comparable<EquationSet>
             s.resolveRHS (unresolved);
         }
 
-        class Resolver implements Transformer
+        class Resolver implements Visitor
         {
             public Variable from;
             public LinkedList<UnresolvedVariable> unresolved;
@@ -1070,7 +1053,7 @@ public class EquationSet implements Comparable<EquationSet>
                 return result + from.nameString ();
             }
 
-            public Operator transform (Operator op)
+            public boolean visit (Operator op)
             {
                 if (op instanceof AccessVariable)
                 {
@@ -1128,7 +1111,7 @@ public class EquationSet implements Comparable<EquationSet>
                     }
                     av.reference = query.reference;
                     av.reference.addDependencies (from);
-                    return av;
+                    return false;
                 }
                 if (op instanceof Split)
                 {
@@ -1165,9 +1148,9 @@ public class EquationSet implements Comparable<EquationSet>
                             unresolved.add (new UnresolvedVariable (partName, fromName ()));
                         }
                     }
-                    return split;
+                    return false;
                 }
-                return null;
+                return true;
             }
         }
         Resolver resolver = new Resolver ();
@@ -1176,7 +1159,7 @@ public class EquationSet implements Comparable<EquationSet>
         for (Variable v : variables)
         {
             resolver.from = v;
-            v.transform (resolver);
+            v.visit (resolver);
         }
     }
 
@@ -1373,6 +1356,19 @@ public class EquationSet implements Comparable<EquationSet>
             parts.remove (s);
 
             //   Variables
+            //   In addition to simply moving the variables up to this container, we need to do incremental maintenance of:
+            //   * Display names, for debugging.
+            //   * Resolution paths.
+            //   Of those, resolution paths are the most difficult, because many different objects are affected:
+            //   * References to variables in s
+            //     - from this container or our parents
+            //     - from children of s
+            //   * References to variables in children of s
+            //   * References from s to other sets
+            //   * References from children of s
+            //     - to s
+            //     - to other sets
+            //   It is necessary to handle both LHS and RHS references.
 
             //     Pass 1 -- Change RHS references originating from variables within s so they function within this container instead.
             //     Need to do this before variables get moved, because we depend on the identity of their current container.
