@@ -1160,11 +1160,12 @@ public class PanelEquationTree extends JScrollPane
             boolean needsRepaint = false;
             if (n instanceof NodePart)
             {
-                updateHighlights ((NodePart) n, name);
+                updateHighlights (n, name);
             }
             else if (n instanceof NodeVariable)
             {
                 needsRepaint = ((NodeVariable) n).findHighlights (name);
+                updateHighlights (n, name);
             }
             else if (n instanceof NodeEquation)
             {
