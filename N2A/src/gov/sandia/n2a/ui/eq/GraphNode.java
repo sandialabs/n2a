@@ -1470,13 +1470,33 @@ public class GraphNode extends JPanel
                     NodePart np;
                     MNode bounds;
                     Rectangle now = getBounds ();
-                    if (GraphNode.this == container.panelEquationGraph.graphPanel.pinIn)
+                    boolean moved =  now.x != old.x  ||  now.y != old.y;
+                    GraphPanel gp = container.panelEquationGraph.graphPanel;
+                    if (GraphNode.this == gp.pinIn)
                     {
+                        // If this is a naked canvas with both IO blocks, then store coordinates for other block too.
+                        // This keeps it from swimming around on screen as a result of our move.
+                        if (moved  &&  gp.pinOut != null  &&  gp.getComponentCount () == 2)
+                        {
+                            Rectangle now2 = gp.pinOut.getBounds ();
+                            bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
+                            bounds.set (now2.x - parent.offset.x, "x");
+                            bounds.set (now2.y - parent.offset.y, "y");
+                        }
+
                         np = container.part;
                         bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
                     }
-                    else if (GraphNode.this == container.panelEquationGraph.graphPanel.pinOut)
+                    else if (GraphNode.this == gp.pinOut)
                     {
+                        if (moved  &&  gp.pinIn != null  &&  gp.getComponentCount () == 2)
+                        {
+                            Rectangle now2 = gp.pinIn.getBounds ();
+                            bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
+                            bounds.set (now2.x - parent.offset.x, "x");
+                            bounds.set (now2.y - parent.offset.y, "y");
+                        }
+
                         np = container.part;
                         bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
                     }
@@ -1497,11 +1517,11 @@ public class GraphNode extends JPanel
                             if (now.height != old.height) bounds.set (now.height, "height");
                         }
                     }
-                    int dx = now.x - old.x;
-                    int dy = now.y - old.y;
-                    boolean moved =  dx != 0  ||  dy != 0;
-                    if (dx != 0) bounds.set (now.x - parent.offset.x, "x");
-                    if (dy != 0) bounds.set (now.y - parent.offset.y, "y");
+                    if (moved)
+                    {
+                        bounds.set (now.x - parent.offset.x, "x");
+                        bounds.set (now.y - parent.offset.y, "y");
+                    }
                     if (bounds.size () > 0)
                     {
                         UndoManager um = MainFrame.instance.undoManager;
@@ -1519,13 +1539,29 @@ public class GraphNode extends JPanel
                             for (GraphNode g : selection)
                             {
                                 metadata = new MVolatile ();
-                                if (g == container.panelEquationGraph.graphPanel.pinIn)
+                                if (g == gp.pinIn)
                                 {
+                                    if (gp.pinOut != null  &&  gp.getComponentCount () == 2)
+                                    {
+                                        Rectangle now2 = gp.pinOut.getBounds ();
+                                        bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
+                                        bounds.set (now2.x - parent.offset.x, "x");
+                                        bounds.set (now2.y - parent.offset.y, "y");
+                                    }
+
                                     np = container.part;
                                     bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
                                 }
                                 else if (g == container.panelEquationGraph.graphPanel.pinOut)
                                 {
+                                    if (gp.pinIn != null  &&  gp.getComponentCount () == 2)
+                                    {
+                                        Rectangle now2 = gp.pinIn.getBounds ();
+                                        bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
+                                        bounds.set (now2.x - parent.offset.x, "x");
+                                        bounds.set (now2.y - parent.offset.y, "y");
+                                    }
+
                                     np = container.part;
                                     bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
                                 }
@@ -1535,8 +1571,8 @@ public class GraphNode extends JPanel
                                     bounds = metadata.childOrCreate ("gui", "bounds");
                                 }
                                 now = g.getBounds ();
-                                if (dx != 0) bounds.set (now.x - parent.offset.x, "x");
-                                if (dy != 0) bounds.set (now.y - parent.offset.y, "y");
+                                bounds.set (now.x - parent.offset.x, "x");
+                                bounds.set (now.y - parent.offset.y, "y");
                                 compound.addEdit (new ChangeAnnotations (np, metadata));
                             }
                             um.endCompoundEdit ();
