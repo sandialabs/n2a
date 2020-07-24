@@ -65,7 +65,7 @@ public class EquationSet implements Comparable<EquationSet>
     public MNode                               source;
     public EquationSet                         container;
     public NavigableSet<Variable>              variables;
-    public NavigableSet<EquationSet>           parts;
+    public List<EquationSet>                   parts;
     public List<ConnectionBinding>             connectionBindings;     // non-null iff this is a connection
     public boolean                             connected;
     public NavigableSet<AccountableConnection> accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
@@ -86,6 +86,8 @@ public class EquationSet implements Comparable<EquationSet>
     public boolean                             referenced;             // Some other equation set writes to one of our variables. If we can die, then exercise care not to reuse this part while other parts are still writing to it. Otherwise our reincarnated part might get written with values from our previous life.
     public ConnectionMatrix                    connectionMatrix;       // If non-null, this is a connection whose existence depends primarily on elements of a matrix.
     public Object                              backendData;            // holder for extra data associated with each equation set by a given backend
+
+    public static final List<String> endpointSpecials = Arrays.asList ("$count", "$k", "$max", "$min", "$project", "$radius");  // $variables that appear after an endpoint identifier
 
     public static class ConnectionBinding
     {
@@ -235,7 +237,7 @@ public class EquationSet implements Comparable<EquationSet>
         this.name      = name;
         this.container = container;
         variables      = new TreeSet<Variable> ();
-        parts          = new TreeSet<EquationSet> ();
+        parts          = new ArrayList<EquationSet> ();
         metadata       = new MVolatile ();
     }
 
@@ -261,7 +263,7 @@ public class EquationSet implements Comparable<EquationSet>
         this.source    = source;
         this.container = container;
         variables      = new TreeSet<Variable> ();
-        parts          = new TreeSet<EquationSet> ();
+        parts          = new ArrayList<EquationSet> ();
         metadata       = new MVolatile ();
 
         // Sort equations by object-oriented operation
@@ -925,8 +927,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             // Guard against direct reference to a child part.
             // Similar to a "down" reference, except without a variable.
-            EquationSet part = parts.floor (new EquationSet (v.name));
-            if (part != null  &&  part.name.equals (v.name)) return null;
+            if (findPart (v.name) != null) return null;
 
             if (create)
             {
@@ -1123,8 +1124,8 @@ public class EquationSet implements Comparable<EquationSet>
                     {
                         EquationSet part;
                         if (partName.equals (self.name)) part = self;  // This allows for $type in top-level model, where no higher container is available to search in.
-                        else                             part = family.parts.floor (new EquationSet (partName));
-                        if (part != null  &&  part.name.equals (partName))
+                        else                             part = family.findPart (partName);
+                        if (part != null)
                         {
                             split.parts.add (part);
 
@@ -1368,7 +1369,7 @@ public class EquationSet implements Comparable<EquationSet>
             //   * References from children of s
             //     - to s
             //     - to other sets
-            //   It is necessary to handle both LHS and RHS references.
+            //   And it is necessary to handle both LHS and RHS references.
 
             //     Pass 1 -- Change RHS references originating from variables within s so they function within this container instead.
             //     Need to do this before variables get moved, because we depend on the identity of their current container.
@@ -1444,7 +1445,10 @@ public class EquationSet implements Comparable<EquationSet>
                         }
                         else  // Path was 1-step, so check whether descending or ascending.
                         {
-                            if (user.container.container == from.container) r.add (to.container);  // ascending, so add parent
+                            EquationSet p = user.container;  // The user's immediate equation set.
+                            if (                p != null) p = p.container;  // The parent of the user's equation set. Conceptually, this is the value to check to see if we are ascending.
+                            if (from == to  &&  p != null) p = p.container;  // If redirecting to the same variable, then "from" has already been moved up, so we need the grandparent instead.
+                            if (p == from.container) r.add (to.container);  // ascending, so add parent
                         }
                     }
                 }
@@ -1482,7 +1486,16 @@ public class EquationSet implements Comparable<EquationSet>
                         if (o instanceof Variable)
                         {
                             user = (Variable) o;
-                            user.visit (this);  // for direct references
+                            user.visit (this);  // RHS references
+                            if (from.reference.variable == user)  // "user" has "from" as an external writer
+                            {
+                                if (from != to)
+                                {
+                                    user.removeDependencyOn (from);
+                                    user.addDependencyOn (to);
+                                }
+                                // Since "from" is going away, we don't bother adjusting its reference to "user".
+                            }
                         }
                         else if (o instanceof EquationSet)
                         {
@@ -1498,13 +1511,14 @@ public class EquationSet implements Comparable<EquationSet>
             Redirector redirector = new Redirector ();
 
             //     For each variable v, one of 3 things will happen:
-            //     1) v is an up-reference --> equations will be merged.
-            //     2) v matches an existing $variable --> dependent references will be redirected, and v with be forgotten.
+            //     1) v matches an existing $variable --> dependent references will be redirected, and v with be forgotten.
+            //     2) v is a reference that matches an existing variable --> equations will be merged.
             //     3) v is unique --> v will be moved from s to this container. All dependent references remain valid, but resolution paths must be updated.
             //          Note that v may have the same name as a variable in this container. Prefixing will make the name unique.
             for (Variable v : s.variables)
             {
                 // Adjust LHS references to work in this container.
+                boolean couldNeedMerge = false;
                 if (v.reference.variable == v)  // internal reference, which for LHS is exactly same as self-reference
                 {
                     if (v.name.startsWith ("$"))
@@ -1528,23 +1542,40 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     if (v.name.startsWith ("$up.")) v.name = v.name.substring (4);
                     List<Object> r = v.reference.resolution;
-                    if (r.get (0) == EquationSet.this) r.remove (0);
+                    if (r.get (0) == EquationSet.this)
+                    {
+                        couldNeedMerge = true;
+                        r.remove (0);
+                    }
                 }
 
-                if (v.reference.variable.container == this)  // An up-reference that needs to be merged.
+                if (couldNeedMerge)  // An external reference whose first resolution step is this container.
                 {
-                    Variable v2 = v.reference.variable;
-                    v.removeDependenciesOfReferences ();
-                    v2.removeDependenciesOfReferences ();
-                    v2.removeDependencyOn (v);  // Nothing should refer to v except a dependency from v2 because v is an external writer.
-                    v2.flattenExpressions (v);
-                    v2.addDependenciesOfReferences ();
+                    Variable v2 = find (v);
+                    if (v2 != null)  // There is a matching variable, so must merge. The match could be (and often is) the direct target of the reference.
+                    {
+                        // Since this is an external reference, some other variable depends on v as an external writer.
+                        // This user must be redirected appropriately.
+                        if (v2 == v.reference.variable)  // direct up-reference
+                        {
+                            v2.removeDependencyOn (v);  // But don't replace with dependency from v2 to itself.
+                        }
+                        else  // Some other variable depends on v.
+                        {
+                            // v should only have one user.
+                            redirector.redirect (v, v2);
+                        }
+
+                        v2.flattenExpressions (v);
+                        continue;
+                    }
+                    // else fall through ...
                 }
-                else  // A distinct variable that needs to be moved up.
-                {
-                    add (v);                     // Changes v.container, used by redirector.
-                    redirector.redirect (v, v);  // Adjust resolution paths of v's users.
-                }
+
+                // A distinct variable that needs to be moved up.
+                // This is either an internal reference (always unique) or an external reference that does not overlap an existing variable.
+                add (v);                     // Changes v.container, used by redirector.
+                redirector.redirect (v, v);  // Adjust resolution paths of v's users.
             }
 
             //     Adjusts resolution paths that go through s.
@@ -1889,7 +1920,13 @@ public class EquationSet implements Comparable<EquationSet>
 
             // Even if a $variable has no direct users, we must respect any statements about it.
             // However, remove $index if it was created constant by addSpecials().
-            if (v.equations.size () > 0  &&  (v.name.startsWith ("$")  ||  v.name.contains (".$"))  &&  ! v.name.equals ("$index")) continue;
+            if (v.equations.size () > 0  &&  v.name.contains ("$")  &&  ! v.name.equals ("$index"))
+            {
+                if (v.name.startsWith ("$")) continue;
+                String[] pieces = v.name.split ("\\.");
+                if (pieces.length == 2  &&  endpointSpecials.contains (pieces[1])) continue;
+                // else fall through ...
+            }
 
             // Scan AST for any special output functions.
             boolean output = false;
@@ -2816,37 +2853,26 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         @param attribute The string to add to the tags associated with each given variable.
-        @param connection Tri-state: 1 = must be a connection, -1 = must be a compartment, 0 = can be either one
         @param withOrder Restricts name matching to exactly the same order of derivative,
         that is, how many "prime" marks are appended to the variable name.
         When false, matches any variable with the same base name.
-        @param names A set of variable names to search for and tag.
+        @param withPrefix Matches variable names that end with dot followed by one of the target names.
+        @param names A set of targets to search for and tag.
     **/
-    public void addAttribute (String attribute, int connection, boolean withOrder, String... names)
+    public void addAttribute (String attribute, boolean withOrder, boolean withPrefix, String... names)
     {
         for (EquationSet s : parts)
         {
-            s.addAttribute (attribute, connection, withOrder, names);
+            s.addAttribute (attribute, withOrder, withPrefix, names);
         }
 
-        if (connectionBindings == null)
-        {
-            if (connection == 1) return;
-        }
-        else
-        {
-            if (connection == -1) return;
-        }
         for (Variable v : variables)
         {
             String vname = v.name;
-            if (withOrder)
-            {
-                vname = v.nameString ();
-            }
+            if (withOrder) vname = v.nameString ();
             for (String n : names)
             {
-                if (n.equals (vname)  ||  vname.endsWith ("." + n))
+                if (n.equals (vname)  ||  withPrefix  &&  vname.endsWith ("." + n))
                 {
                     v.addAttribute (attribute);
                     break;

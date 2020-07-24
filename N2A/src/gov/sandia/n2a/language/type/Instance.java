@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.TreeSet;
 
 import gov.sandia.n2a.backend.internal.InternalBackendData;
+import gov.sandia.n2a.backend.internal.Part;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.backend.internal.Population;
 import gov.sandia.n2a.backend.internal.Wrapper;
@@ -55,18 +56,33 @@ public class Instance extends Type
         for (VariableReference r : references)
         {
             Instance result = this;
+            Object last = r.resolution.get (r.resolution.size () - 1);
             for (Object o : r.resolution)
             {
                 result = ((Resolver) o).resolve (result);
-                if (result instanceof Population)
+                if (o == last  &&  r.variable.global)  // Resolution is done and this is a global variable.
                 {
-                    InternalBackendData bed = (InternalBackendData) result.equations.backendData;
-                    if (! bed.singleton)
+                    if (result instanceof Part)
                     {
-                        Backend.err.get ().println ("ERROR: Ambiguous reference to " + result.equations.prefix () + "." + result.equations.name);
-                        throw new Backend.AbortRun ();
+                        // Need to locate our population.
+                        InternalBackendData bed = (InternalBackendData) result.equations.backendData;
+                        result = (Instance) result.container.valuesObject[bed.populationIndex];
                     }
-                    result = (Instance) result.valuesObject[bed.instances];
+                }
+                else
+                {
+                    if (result instanceof Population)
+                    {
+                        // Need to drill down to an instance of the population.
+                        // This is only possible with a singleton.
+                        InternalBackendData bed = (InternalBackendData) result.equations.backendData;
+                        if (! bed.singleton)
+                        {
+                            Backend.err.get ().println ("ERROR: Ambiguous reference to " + result.equations.prefix ());
+                            throw new Backend.AbortRun ();
+                        }
+                        result = (Instance) result.valuesObject[bed.instances];
+                    }
                 }
             }
             valuesObject[r.index] = result;

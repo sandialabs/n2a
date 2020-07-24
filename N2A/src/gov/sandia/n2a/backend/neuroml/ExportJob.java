@@ -2620,9 +2620,10 @@ public class ExportJob extends XMLutility
             try
             {
                 // Finish preparing equations for init cycle
-                equations.addAttribute ("global",      0, false, new String[] {"$max", "$min", "$k", "$n", "$radius"});
-                equations.addAttribute ("preexistent", 0, true,  new String[] {"$t'", "$t"});  // variables that are not stored because Instance.get/set intercepts them
-                equations.addAttribute ("readOnly",    0, true,  new String[] {"$t"});
+                equations.addAttribute ("global",      false, true,  "$max", "$min", "$k", "$radius");
+                equations.addAttribute ("global",      false, false, "$n");
+                equations.addAttribute ("preexistent", true,  false, "$t'", "$t");  // variables that are not stored because Instance.get/set intercepts them
+                equations.addAttribute ("readOnly",    true,  false, "$t");
                 equations.collectSplits ();
                 equations.determineOrder ();
                 equations.findDerivative ();

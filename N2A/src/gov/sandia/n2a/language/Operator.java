@@ -133,6 +133,11 @@ public class Operator implements Cloneable
     {
     }
 
+    /**
+        Duplicates all objects in the AST, including the leaves.
+        The returned object has the parent field in its operands set correctly to itself.
+        However, the parent field of the returned object must be set by the caller.
+    **/
     public Operator deepCopy ()
     {
         try

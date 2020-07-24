@@ -361,6 +361,9 @@ public class Variable implements Comparable<Variable>, Cloneable
 
     public void flattenExpressions (Variable v)
     {
+        removeDependenciesOfReferences ();
+        v.removeDependenciesOfReferences ();
+
         if (   assignment != v.assignment
             && ! (   (assignment == MULTIPLY  &&  v.assignment == DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
                   || (assignment == DIVIDE    &&  v.assignment == MULTIPLY)))
@@ -426,6 +429,8 @@ public class Variable implements Comparable<Variable>, Cloneable
                         e.condition = and;
                         and.operand0 = e0.condition.deepCopy ();
                         and.operand1 = e1.condition.deepCopy ();
+                        and.operand0.parent = and;
+                        and.operand1.parent = and;
                     }
                     if (e.condition != null) e.ifString = e.condition.render ();
 
@@ -454,12 +459,17 @@ public class Variable implements Comparable<Variable>, Cloneable
                         {
                             op.operand0 = e0.expression.deepCopy ();
                             op.operand1 = e1.expression.deepCopy ();
+                            op.operand0.parent = op;
+                            op.operand1.parent = op;
                             e.expression = op;
                         }
                         else if (f != null)
                         {
+                            f.operands = new Operator[2];  // Because neither Min nor Max allocate their operand array directly.
                             f.operands[0] = e0.expression.deepCopy ();
                             f.operands[1] = e1.expression.deepCopy ();
+                            f.operands[0].parent = f;
+                            f.operands[1].parent = f;
                             e.expression = f;
                         }
                     }
@@ -468,6 +478,7 @@ public class Variable implements Comparable<Variable>, Cloneable
             }
         }
 
+        addDependenciesOfReferences ();
         v.equations.clear ();
     }
 
@@ -526,7 +537,6 @@ public class Variable implements Comparable<Variable>, Cloneable
 
     public boolean simplify ()
     {
-        if (equations == null) return false;
         changed = false;
         TreeSet<EquationEntry> nextEquations = new TreeSet<EquationEntry> ();
         TreeSet<EquationEntry> alwaysTrue    = new TreeSet<EquationEntry> ();
@@ -579,6 +589,54 @@ public class Variable implements Comparable<Variable>, Cloneable
         {
             equations = nextEquations;
         }
+
+        // Check for constant combiner.
+        // This is a special case needed by some models that use pins.
+        if ((assignment == MIN  ||  assignment == MAX)  &&  hasAttribute ("externalWrite"))
+        {
+            // Determine if self is constant.
+            boolean constant = equations.isEmpty ();
+            double value = 0;
+            if (! constant  &&  equations.size () == 1)
+            {
+                EquationEntry e = equations.first ();
+                if (e.condition == null  &&  e.expression.isScalar ())
+                {
+                    constant = true;
+                    value = e.expression.getDouble ();
+                }
+            }
+            if (constant)
+            {
+                // Scan all our writers to see if they are constant.
+                for (Variable u : uses.keySet ())
+                {
+                    if (! u.hasAttribute ("constant"))
+                    {
+                        constant = false;
+                        break;
+                    }
+                    double uvalue = u.equations.first ().expression.getDouble ();
+                    if (assignment == MIN) value = Math.min (value, uvalue);
+                    else                   value = Math.max (value, uvalue);
+                }
+            }
+            if (constant)
+            {
+                changed = true;
+                EquationEntry e = equations.first ();
+                if (e == null)
+                {
+                    e = new EquationEntry (this, "");
+                    equations.add (e);
+                }
+                e.expression = new Constant (value);
+                addAttribute ("constant");
+                removeAttribute ("externalWrite");
+                removeDependencies ();
+            }
+        }
+
         return changed;
     }
 

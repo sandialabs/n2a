@@ -641,12 +641,21 @@ public class InternalBackendData
     public void addReferenceLocal (VariableReference r, EquationSet s)
     {
         // Avoid redundancy between references and connections, since many references simply target connection endpoints.
-        Object o = r.resolution.get (r.resolution.size () - 1);  // There should always be at least one entry. This is enforced by the caller.
-        if (o instanceof ConnectionBinding  &&  s.connectionBindings.contains (o))
+        Object last = r.resolution.get (r.resolution.size () - 1);  // There should always be at least one entry. This is enforced by the caller.
+        if (last instanceof ConnectionBinding  &&  s.connectionBindings.contains (last))
         {
-            r.index = endpoints + ((ConnectionBinding) o).index;
+            r.index = endpoints + ((ConnectionBinding) last).index;
             return;
         }
+
+        // Don't do resolution if target is an immediate down-reference to a global variable (rare case).
+        if (last instanceof EquationSet  &&  r.variable.hasAttribute ("global"))
+        {
+            r.index = s.parts.indexOf (last);  // This search may fail.
+            if (r.index >= 0) return;  // This is an immediate down-reference, so done.
+            // else fall through to usual case ...
+        }
+
         // TODO: Avoid redundant reference to our container.
         // Right now, if any variable references our container, an entry is made in valuesObject.
         // That entry is redundant with Instance.container. However, the options for avoiding it both
@@ -917,11 +926,7 @@ public class InternalBackendData
         populationIndex = 0;
         if (s.container != null  &&  s.container.parts != null)  // check for null specifically to guard against the Wrapper equation set (which is not fully constructed)
         {
-            for (EquationSet p : s.container.parts)
-            {
-                if (p == s) break;
-                populationIndex++;
-            }
+            populationIndex = s.container.parts.indexOf (s);
         }
 
         if (s.connectionBindings != null)  // connection-specific stuff
@@ -1388,17 +1393,9 @@ public class InternalBackendData
                 }
                 else  // descend to one of our contained populations
                 {
-                    int i = 0;
-                    for (EquationSet p : current.parts)
-                    {
-                        if (p == next)
-                        {
-                            newResolution.add (new ResolvePart (i));
-                            break;
-                        }
-                        i++;
-                    }
-                    if (i >= current.parts.size ()) throw new EvaluationException ("Could not find resolution target " + next.name + " in " + current.name);
+                    int i = current.parts.indexOf (next);
+                    if (i < 0) throw new EvaluationException ("Could not find resolution target " + next.name + " in " + current.name);
+                    newResolution.add (new ResolvePart (i));
                 }
                 current = next;
             }
