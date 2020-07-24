@@ -151,8 +151,8 @@ public class OutputParser
                 {
                     xmin = (float) n.getOrDefault (xmin, "xmin");
                     xmax = (float) n.getOrDefault (xmax, "xmax");
-                    ymin = (float) n.getOrDefault (xmin, "ymin");
-                    ymax = (float) n.getOrDefault (xmin, "ymax");
+                    ymin = (float) n.getOrDefault (ymin, "ymin");
+                    ymax = (float) n.getOrDefault (ymax, "ymax");
                 }
             }
         }

@@ -229,6 +229,7 @@ public class Plot extends OutputParser
         NumberAxis axis0 = (NumberAxis) plot.getRangeAxis ();
         axis0.setAutoRangeIncludesZero (false);
         if (range0 > 0) axis0.setAutoRangeMinimumSize (range0 / 2);
+        else            axis0.setAutoRangeMinimumSize (1);
         if (! (Double.isNaN (ymin)  &&  Double.isNaN (ymax)))  // range locked
         {
             axis0.setRange (new Range (ymin, ymax));
@@ -263,6 +264,7 @@ public class Plot extends OutputParser
             NumberAxis axis1 = new NumberAxis ();
             axis1.setAutoRangeIncludesZero (false);
             if (range1 > 0) axis1.setAutoRangeMinimumSize (range1 / 2);
+            else            axis1.setAutoRangeMinimumSize (1);
             axis1.setTickLabelFont (axis0.getTickLabelFont ());
             Color color1 = Color.getHSBColor (0.5f, 1.0f, 0.6f);
             axis1.setTickMarkPaint (color1);
