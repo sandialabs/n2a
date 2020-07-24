@@ -45,8 +45,8 @@ public class OutputParser
         isXycePRN         = false;
         time              = null;
         this.defaultValue = defaultValue;
-        xmin              = Double.NaN;
-        xmax              = Double.NaN;
+        xmin              = Double.NEGATIVE_INFINITY;
+        xmax              = Double.POSITIVE_INFINITY;
         ymin              = Double.NaN;
         ymax              = Double.NaN;
 
