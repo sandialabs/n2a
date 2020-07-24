@@ -195,8 +195,20 @@ public class Output extends Function
                         String key = pieces[0].trim ();
                         String val = "";
                         if (pieces.length > 1) val = pieces[1].trim ();
-                        if (key.equals ("timeScale")) columnMode.set (val, 0,     "scale");  // Set on time column. 
-                        else                          columnMode.set (val, index, key);
+                        switch (key)
+                        {
+                            case "timeScale":
+                                columnMode.set (val, 0, "scale");  // Set on time column.
+                                break;
+                            case "xmax":
+                            case "xmin":
+                            case "ymax":
+                            case "ymin":
+                                columnMode.set (val, 0, key);  // All chart-wide parameters go on time column.
+                                break;
+                            default:
+                                columnMode.set (val, index, key);
+                        }
                     }
                 }
             }

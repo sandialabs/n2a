@@ -28,6 +28,10 @@ public class OutputParser
     public Column       time;
     public boolean      timeFound;  // Indicates that time is a properly-labeled column, rather than a fallback.
     public float        defaultValue;
+    public double       xmin;  // Bounds for chart. If not specified, then simply fit to data.
+    public double       xmax;  // Note that "x" is always time.
+    public double       ymin;
+    public double       ymax;
 
     public void parse (Path f)
     {
@@ -41,6 +45,10 @@ public class OutputParser
         isXycePRN         = false;
         time              = null;
         this.defaultValue = defaultValue;
+        xmin              = Double.NaN;
+        xmax              = Double.NaN;
+        ymin              = Double.NaN;
+        ymax              = Double.NaN;
 
         try (BufferedReader br = Files.newBufferedReader (f))
         {
@@ -95,6 +103,26 @@ public class OutputParser
 		}
         if (columns.size () == 0) return;
 
+        // Determine time column
+        time = columns.get (0);  // fallback, in case we don't find it by name
+        int timeMatch = 0;
+        for (Column c : columns)
+        {
+            int potentialMatch = 0;
+            if      (c.header.equals ("t"   )) potentialMatch = 1;
+            else if (c.header.equals ("TIME")) potentialMatch = 2;
+            else if (c.header.equals ("$t"  )) potentialMatch = 3;
+            if (potentialMatch > timeMatch)
+            {
+                timeMatch = potentialMatch;
+                time = c;
+                timeFound = true;
+            }
+        }
+
+        // Get rid of Index column. No subclass uses it.
+        if (isXycePRN) columns.remove (0);
+
         // If there is a separate columns file, open and parse it.
         Path jobDir = f.getParent ();
         Path columnPath = jobDir.resolve (f.getFileName ().toString () + ".columns");
@@ -118,28 +146,16 @@ public class OutputParser
                     if (c.scale.value == 0)    c.scale.value = 1;
                     if (c.scale.unit  == null) c.scale.unit  = AbstractUnit.ONE;
                 }
+
+                if (c == time)
+                {
+                    xmin = (float) n.getOrDefault (xmin, "xmin");
+                    xmax = (float) n.getOrDefault (xmax, "xmax");
+                    ymin = (float) n.getOrDefault (xmin, "ymin");
+                    ymax = (float) n.getOrDefault (xmin, "ymax");
+                }
             }
         }
-
-        // Determine time column
-        time = columns.get (0);  // fallback, in case we don't find it by name
-        int timeMatch = 0;
-        for (Column c : columns)
-        {
-            int potentialMatch = 0;
-            if      (c.header.equals ("t"   )) potentialMatch = 1;
-            else if (c.header.equals ("TIME")) potentialMatch = 2;
-            else if (c.header.equals ("$t"  )) potentialMatch = 3;
-            if (potentialMatch > timeMatch)
-            {
-                timeMatch = potentialMatch;
-                time = c;
-                timeFound = true;
-            }
-        }
-
-        // Get rid of Index column. No subclass uses it.
-        if (isXycePRN) columns.remove (0);
     }
 
     public Column getColumn (String columnName)

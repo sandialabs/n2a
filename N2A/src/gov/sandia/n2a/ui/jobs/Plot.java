@@ -20,6 +20,7 @@ import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.chart.title.LegendTitle;
+import org.jfree.data.Range;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 
@@ -67,18 +68,22 @@ public class Plot extends OutputParser
         int bestIndex = -1;  // Breakpoint between left and right column sets. This is the index just before the separation.
         double largestRatio = 1;
         int flatCount = 0;
-        for (i = 0; i < columnCount - 1; i++)
+        boolean rangeLocked =  ! (Double.isNaN (ymin)  &&  Double.isNaN (ymax));
+        if (! rangeLocked)
         {
-            if (sorted[i].range == 0)
+            for (i = 0; i < columnCount - 1; i++)
             {
-                flatCount++;
-                continue;
-            }
-            double ratio = sorted[i+1].range / sorted[i].range;
-            if (ratio > largestRatio)
-            {
-                largestRatio = ratio;
-                bestIndex = i;
+                if (sorted[i].range == 0)
+                {
+                    flatCount++;
+                    continue;
+                }
+                double ratio = sorted[i+1].range / sorted[i].range;
+                if (ratio > largestRatio)
+                {
+                    largestRatio = ratio;
+                    bestIndex = i;
+                }
             }
         }
 
@@ -166,6 +171,13 @@ public class Plot extends OutputParser
             min = Math.min (min, c.min);
             max = Math.max (max, c.max);
         }
+        if (rangeLocked)
+        {
+            if (Double.isNaN (ymin)) ymin = min;
+            else                     min  = ymin;
+            if (Double.isNaN (ymax)) ymax = max;
+            else                     max = ymax;
+        }
     	range0 = max - min;
 
     	if (right != null)
@@ -217,6 +229,10 @@ public class Plot extends OutputParser
         NumberAxis axis0 = (NumberAxis) plot.getRangeAxis ();
         axis0.setAutoRangeIncludesZero (false);
         if (range0 > 0) axis0.setAutoRangeMinimumSize (range0 / 2);
+        if (! (Double.isNaN (ymin)  &&  Double.isNaN (ymax)))  // range locked
+        {
+            axis0.setRange (new Range (ymin, ymax));
+        }
 
         int count = dataset0.getSeriesCount ();
         float shift = 0;
