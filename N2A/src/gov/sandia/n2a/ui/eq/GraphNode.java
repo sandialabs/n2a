@@ -1207,11 +1207,16 @@ public class GraphNode extends JPanel
 
         public void mousePressed (MouseEvent me)
         {
+            if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())
+            {
+                takeFocusOnTitle ();  // Because this method won't be called unless the tree portion is empty.
+                container.menuPopup.show (GraphNode.this, me.getX (), me.getY ());
+                return;
+            }
+
             if (container.locked) return;
             if (! SwingUtilities.isLeftMouseButton (me)) return;
-
-            boolean extendSelection =  me.isShiftDown ()  ||  me.isControlDown ();
-            if (HostSystem.isMac ()  &&  me.isControlDown ()) extendSelection = false;  // If shift and control are held down together, the shift key will be ignored in this case.
+            boolean extendSelection = me.isShiftDown ();
 
             // All mouse event coordinates are relative to the bounds of this component.
             parent.setComponentZOrder (GraphNode.this, 0);

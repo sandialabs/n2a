@@ -145,6 +145,7 @@ public class PanelEquations extends JPanel
     protected JButton       buttonAddEquation;
     protected JButton       buttonAddAnnotation;
     protected JButton       buttonAddReference;
+    protected JButton       buttonMakePin;
     protected JButton       buttonWatch;
     protected JToggleButton buttonFilterInherited;
     protected JToggleButton buttonFilterLocal;
@@ -247,6 +248,12 @@ public class PanelEquations extends JPanel
         buttonAddReference.setActionCommand ("Reference");
         buttonAddReference.addActionListener (listenerAdd);
 
+        buttonMakePin = new JButton (ImageUtil.getImage ("pin.png"));
+        buttonMakePin.setMargin (new Insets (2, 2, 2, 2));
+        buttonMakePin.setFocusable (false);
+        buttonMakePin.setToolTipText ("Make Pin");
+        buttonMakePin.addActionListener (listenerMakePin);
+
         buttonWatch = new JButton (ImageUtil.getImage ("watch.png"));
         buttonWatch.setMargin (new Insets (2, 2, 2, 2));
         buttonWatch.setFocusable (false);
@@ -343,6 +350,7 @@ public class PanelEquations extends JPanel
                 buttonAddEquation,
                 buttonAddAnnotation,
                 buttonAddReference,
+                buttonMakePin,
                 Box.createHorizontalStrut (15),
                 buttonWatch,
                 Box.createHorizontalStrut (15),
@@ -423,6 +431,9 @@ public class PanelEquations extends JPanel
         itemAddReference.setActionCommand ("Reference");
         itemAddReference.addActionListener (listenerAdd);
 
+        JMenuItem itemMakePin = new JMenuItem ("Make Pin", ImageUtil.getImage ("pin.png"));
+        itemMakePin.addActionListener (listenerMakePin);
+
         JMenuItem itemWatch = new JMenuItem ("Watch", ImageUtil.getImage ("watch.png"));
         itemWatch.addActionListener (listenerWatch);
 
@@ -432,6 +443,7 @@ public class PanelEquations extends JPanel
         menuPopup.add (itemAddEquation);
         menuPopup.add (itemAddAnnotation);
         menuPopup.add (itemAddReference);
+        menuPopup.add (itemMakePin);
         menuPopup.addSeparator ();
         menuPopup.add (itemWatch);
 
@@ -818,6 +830,41 @@ public class PanelEquations extends JPanel
                     }
                 });
             }
+        }
+    };
+
+    ActionListener listenerMakePin = new ActionListener ()
+    {
+        public void actionPerformed (ActionEvent e)
+        {
+            // Determine context
+            NodePart context = null;
+            if (e.getSource () == buttonMakePin)  // From button bar, so use keyboard focus.
+            {
+                if (active != null) context = active.root;
+            }
+            else  // From popup menu, so use invoking object.
+            {
+                Component invoker = menuPopup.getInvoker ();
+                if (invoker instanceof JTree)
+                {
+                    context = (NodePart) ((JTree) invoker).getModel ().getRoot ();
+                }
+                else if (invoker instanceof GraphNode  ||  invoker instanceof GraphNode.TitleRenderer)
+                {
+                    GraphNode gn = PanelModel.getGraphNode (invoker);
+                    context = gn.node;
+                }
+            }
+            if (context == null  ||  context == part) return;  // Only process graph nodes, not parent node.
+            if (context.pinIn != null  ||  context.pinOut != null) return;  // Existing pin structure indicates that there is nothing to do for this part.
+            if (context.source.child ("$metadata", "gui", "pin") != null) return;  // ditto
+
+            // Bind part to an IO pin
+            UndoManager um = MainFrame.instance.undoManager;
+            MNode metadata = new MVolatile ();
+            metadata.set ("", "gui", "pin");  // Activates default pin behavior appropriate for the part.
+            um.apply (new ChangeAnnotations (context, metadata));
         }
     };
 
