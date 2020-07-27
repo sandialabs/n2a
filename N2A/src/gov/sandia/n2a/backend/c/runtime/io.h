@@ -121,15 +121,15 @@ template<class T>
 class OutputHolder : public Holder
 {
 public:
-    bool                           raw;             ///< Indicates that column is an exact index.
-    std::ostream *                 out;
-    String                         columnFileName;
-    std::unordered_map<String,int> columnMap;
-    std::vector<String>            columnMode;      ///< Already formatted to dump to file, including line endings.
-    std::vector<float>             columnValues;
-    int                            columnsPrevious; ///< Number of columns written in previous cycle.
-    bool                           traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
-    T                              t;
+    bool                                   raw;             ///< Indicates that column is an exact index.
+    std::ostream *                         out;
+    String                                 columnFileName;
+    std::unordered_map<String,int>         columnMap;
+    std::vector<std::map<String,String> *> columnMode;
+    std::vector<float>                     columnValues;
+    int                                    columnsPrevious; ///< Number of columns written in previous cycle.
+    bool                                   traceReceived;   ///< Indicates that at least one column was touched during the current cycle.
+    T                                      t;
 
     OutputHolder (const String & fileName);
     virtual ~OutputHolder ();

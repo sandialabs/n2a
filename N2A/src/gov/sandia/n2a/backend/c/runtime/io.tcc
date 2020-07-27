@@ -735,6 +735,7 @@ OutputHolder<T>::~OutputHolder ()
 
         writeModes ();
     }
+    for (auto it : columnMode) delete it;
 }
 
 template<class T>
@@ -758,7 +759,7 @@ OutputHolder<T>::trace (T now)
 #           else
             columnValues.push_back (t);
 #           endif
-            columnMode.push_back ("");
+            columnMode.push_back (new std::map<String,String>);
         }
         else
         {
@@ -776,12 +777,10 @@ template<class T>
 void
 OutputHolder<T>::addMode (const char * mode)
 {
-    String result;
+    std::map<String,String> * result = new std::map<String,String>;
+    columnMode.push_back (result);
     if (mode)
     {
-        // Assemble output string
-        String space = " ";
-        String nl = "\n";
         String rest = mode;
         String hint;
         while (! rest.empty ())
@@ -793,24 +792,20 @@ OutputHolder<T>::addMode (const char * mode)
             split (hint, "=", key, value);
             if (key == "timeScale")
             {
-                String & c = columnMode[0];
-                c.reserve (16);
-                c = " scale:";
-                c += value;
-                c += nl;
+                std::map<String,String> * c = columnMode[0];
+                (*c)["scale"] = value;
+            }
+            else if (key == "ymin"  ||  key == "ymax"  ||  key == "xmin"  ||  key == "xmax")
+            {
+                std::map<String,String> * c = columnMode[0];
+                (*c)[key] = value;
             }
             else
             {
-                result.reserve (result.size () + 16);
-                result += space;
-                result += key;
-                result += ":";
-                result += value;
-                result += nl;
+                (*result)[key] = value;
             }
         }
     }
-    columnMode.push_back (result);
 }
 
 template<class T>
@@ -935,8 +930,8 @@ OutputHolder<T>::writeModes ()
     {
         int i = it.second;
         mo << i << ":" << it.first << "\n";
-        String & mode = columnMode[i];
-        if (! mode.empty ()) mo << mode;  // already include newline characters
+        auto mode = columnMode[i];
+        for (auto nv : *mode) mo << " " << nv.first << ":" << nv.second << "\n";
     }
     // mo should automatically flush and close here
 }
