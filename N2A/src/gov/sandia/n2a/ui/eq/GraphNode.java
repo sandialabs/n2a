@@ -1446,6 +1446,7 @@ public class GraphNode extends JPanel
 
             if (SwingUtilities.isLeftMouseButton (me))
             {
+                UndoManager um = MainFrame.instance.undoManager;
                 if (connect)
                 {
                     if (edge != null)
@@ -1453,13 +1454,55 @@ public class GraphNode extends JPanel
                         parent.edges.remove (edge);
                         parent.repaint (edge.bounds);
 
-                        GraphNode gn = parent.findNodeAt (new Point (getX () + me.getX (), getY () + me.getY ()), false);
+                        Point p = new Point (getX () + me.getX (), getY () + me.getY ());
+                        GraphNode gn = parent.findNodeAt (p, true);
                         if (gn != null)
                         {
-                            List<NodePart> query = new ArrayList<NodePart> ();
-                            query.add (node);
-                            query.add (gn.node);
-                            PanelModel.instance.panelSearch.search (query);
+                            String pinNew = gn.findPinAt (p);
+                            if (gn.node instanceof NodeIO)
+                            {
+                                if (node.source.child ("$metadata", "gui", "pin") == null)
+                                {
+                                    String pin = "";
+                                    boolean OK;
+                                    if (gn == container.panelEquationGraph.graphPanel.pinIn)
+                                    {
+                                        OK =  node.connectionBindings != null;
+                                    }
+                                    else  // graphPanel.pinOut
+                                    {
+                                        OK =  node.connectionBindings == null;
+                                    }
+                                    if (OK  &&  ! pinNew.isEmpty ())
+                                    {
+                                        String pieces[] = pinNew.split ("\\.", 2);
+                                        String side = pieces[0];
+                                        pin         = pieces[1];
+                                        if (gn == container.panelEquationGraph.graphPanel.pinIn)
+                                        {
+                                            OK = side.equals ("out");
+                                        }
+                                        else  // graphPanel.pinOut
+                                        {
+                                            OK = side.equals ("in");
+                                        }
+                                    }
+                                    if (OK)
+                                    {
+                                        MNode metadata = new MVolatile ();
+                                        metadata.set (pin, "gui", "pin");
+                                        // If topic needs to be set, the user must do it manually.
+                                        um.apply (new ChangeAnnotations (node, metadata));
+                                    }
+                                }
+                            }
+                            else if (pinNew.isEmpty ())  // NodePart
+                            {
+                                List<NodePart> query = new ArrayList<NodePart> ();
+                                query.add (node);
+                                query.add (gn.node);
+                                PanelModel.instance.panelSearch.search (query);
+                            }
                         }
 
                         edge = null;
@@ -1529,7 +1572,6 @@ public class GraphNode extends JPanel
                     }
                     if (bounds.size () > 0)
                     {
-                        UndoManager um = MainFrame.instance.undoManager;
                         boolean multi =  moved  &&  ! selection.isEmpty ();
                         ChangeAnnotations ca = new ChangeAnnotations (np, metadata);
                         if (! multi)

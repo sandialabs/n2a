@@ -15,6 +15,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class DeleteAnnotation extends UndoableView
 {
@@ -62,6 +63,18 @@ public class DeleteAnnotation extends UndoableView
         savedSubtree.merge (node.folded.getSource ());
 
         touchesPin =  path.contains ("pin")  ||  name.contains ("pin")  ||  savedSubtree.containsKey ("pin");
+    }
+
+    /**
+        Constructs an edit action which remove the referenced metadata item from the given part.
+        If the metadata item does not exist, then the return value is null.
+    **/
+    public static DeleteAnnotation withName (NodePart part, String name)
+    {
+        NodeAnnotations metadata = (NodeAnnotations) part.child ("$metadata");
+        NodeBase target = AddAnnotation.resolve (metadata, name);
+        if (target == metadata) return null;
+        return new DeleteAnnotation ((NodeAnnotation) target, false);
     }
 
     public void setMulti (boolean value)
