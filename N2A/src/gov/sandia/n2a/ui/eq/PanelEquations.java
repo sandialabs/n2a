@@ -96,6 +96,7 @@ import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
@@ -776,9 +777,12 @@ public class PanelEquations extends JPanel
             if (e.getSource () == itemAddPart)
             {
                 Component invoker = menuPopup.getInvoker ();
-                if (invoker == panelEquationGraph.graphPanel)
+                GraphPanel gp = panelEquationGraph.graphPanel;
+                if (invoker == gp)
                 {
-                    location = panelEquationGraph.graphPanel.popupLocation;
+                    location = gp.popupLocation;
+                    location.x -= gp.offset.x;
+                    location.y -= gp.offset.y;
                 }
                 else if (invoker instanceof GraphNode.TitleRenderer)
                 {
@@ -839,6 +843,7 @@ public class PanelEquations extends JPanel
         {
             // Determine context
             NodePart context = null;
+            String   pin     = null;
             if (e.getSource () == buttonMakePin)  // From button bar, so use keyboard focus.
             {
                 if (active != null) context = active.root;
@@ -846,6 +851,7 @@ public class PanelEquations extends JPanel
             else  // From popup menu, so use invoking object.
             {
                 Component invoker = menuPopup.getInvoker ();
+                GraphPanel gp = panelEquationGraph.graphPanel;
                 if (invoker instanceof JTree)
                 {
                     context = (NodePart) ((JTree) invoker).getModel ().getRoot ();
@@ -855,16 +861,54 @@ public class PanelEquations extends JPanel
                     GraphNode gn = PanelModel.getGraphNode (invoker);
                     context = gn.node;
                 }
+                else if (invoker == gp)
+                {
+                    GraphNode gn = gp.findNodeAt (gp.popupLocation, true);
+                    if (gn != null)
+                    {
+                        pin = gn.findPinAt (gp.popupLocation);
+                        context = gn.node;
+                    }
+                }
             }
             if (context == null  ||  context == part) return;  // Only process graph nodes, not parent node.
-            if (context.pinIn != null  ||  context.pinOut != null) return;  // Existing pin structure indicates that there is nothing to do for this part.
-            if (context.source.child ("$metadata", "gui", "pin") != null) return;  // ditto
 
             // Bind part to an IO pin
             UndoManager um = MainFrame.instance.undoManager;
-            MNode metadata = new MVolatile ();
-            metadata.set ("", "gui", "pin");  // Activates default pin behavior appropriate for the part.
-            um.apply (new ChangeAnnotations (context, metadata));
+            if (pin == null)
+            {
+                if (context.source.child ("$metadata", "gui", "pin") == null)
+                {
+                    MNode metadata = new MVolatile ();
+                    metadata.set ("", "gui", "pin");  // Activate default pin behavior appropriate for the part.
+                    um.apply (new ChangeAnnotations (context, metadata));
+                }
+            }
+            else
+            {
+                String[] pieces = pin.split ("\\.", 2);
+                String pinSide = pieces[0];
+                String pinKey  = pieces[1];
+
+                MNode metadata = new MVolatile ();
+                if (pinSide.equals ("in"))
+                {
+                    // Out of sheer laziness, we won't displace a connection-to-pin.
+                    // Everything else is fair game.
+                    if (context.source.child ("$metadata", "gui", "pin", "in", pinKey, "bind", "alias") == null)
+                    {
+                        metadata.set ("",     "gui", "pin", "in", pinKey, "bind");
+                        metadata.set (pinKey, "gui", "pin", "in", pinKey, "bind", "pin");
+                        um.apply (new ChangeAnnotations (context, metadata));
+                    }
+                }
+                else  // pinSide is "out"
+                {
+                    metadata.set (context.source.key (), "gui", "pin", "out", pinKey, "bind");
+                    metadata.set (pinKey,                "gui", "pin", "out", pinKey, "bind", "pin");
+                    um.apply (new ChangeAnnotations (part, metadata));
+                }
+            }
         }
     };
 

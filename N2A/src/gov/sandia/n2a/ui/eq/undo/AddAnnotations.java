@@ -22,7 +22,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeContainer;
 
-public class AddAnnotations extends UndoableView
+public class AddAnnotations extends UndoableView implements AddEditable   // The added node is not actually editable, but sometimes there is a use in retrieving it anyway.
 {
     protected List<String> path;  // to parent of $metadata node
     protected int          index; // Position within parent node
@@ -30,6 +30,7 @@ public class AddAnnotations extends UndoableView
     protected boolean      multi;
     protected boolean      multiLast;
     protected boolean      touchesPin;
+    protected NodeBase     createdNode;
 
     public AddAnnotations (NodeBase parent, int index, MNode metadata)
     {
@@ -97,10 +98,15 @@ public class AddAnnotations extends UndoableView
                 return new NodeAnnotations (part);
             }
         };
-        create (path, index, saved, factory, multi, touchesPin);
+        createdNode = create (path, index, saved, factory, multi, touchesPin);
     }
 
-    public static void create (List<String> path, int index, MNode saved, NodeFactory factory, boolean multi, boolean touchesPin)
+    public NodeBase getCreatedNode ()
+    {
+        return createdNode;
+    }
+
+    public static NodeBase create (List<String> path, int index, MNode saved, NodeFactory factory, boolean multi, boolean touchesPin)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -128,5 +134,7 @@ public class AddAnnotations extends UndoableView
         pet.animate ();
 
         if (blockName.equals ("$metadata")) AddAnnotation.update (parent, touchesPin);
+
+        return node;
     }
 }

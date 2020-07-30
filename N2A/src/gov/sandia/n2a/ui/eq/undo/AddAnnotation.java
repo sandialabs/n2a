@@ -20,6 +20,7 @@ import javax.swing.undo.UndoableEdit;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
@@ -151,7 +152,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
         // Retrieve created node
         NodeContainer parent = (NodeContainer) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
-        NodeBase createdNode = resolve (parent, name);
+        NodeBase createdNode = findClosest (parent, name.split ("\\."));
         if (createdNode == parent) throw new CannotUndoException ();
 
         // Update database
@@ -353,7 +354,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
                 restoreExpandedNodes (pet.tree, container, expanded);
             }
 
-            createdNode = resolve (container, name);
+            createdNode = findClosest (container, names);
             if (pet != null)
             {
                 TreeNode[] parentPath      = parent     .getPath ();
@@ -376,50 +377,129 @@ public class AddAnnotation extends UndoableView implements AddEditable
         return createdNode;
     }
 
-    /**
-        Returns the closest node that contains the given name.
-    **/
-    public static NodeBase resolve (NodeBase container, String name)
+    public static NodeBase findClosest (NodeBase container, String... names)
     {
-        int count = container.getChildCount ();
-        if (count > 0)
-        {
-            String[] names = name.split ("\\.");
-            for (int i = 0; i < count; i++)
-            {
-                NodeBase a = (NodeBase) container.getChildAt (i);  // unfiltered
-                if (! (a instanceof NodeAnnotation)) continue;  // For example, an equation at the same level as annotation under a variable.
-                String key = ((NodeAnnotation) a).key ();
-                String[] keys = key.split ("\\.");
-                int length = Math.min (names.length, keys.length);
-                int j = 0;
-                for (; j < length; j++) if (! names[j].equals (keys[j])) break;
-                if (j > 0)  // At least one element of path matched
-                {
-                    if (j < length  ||  length == names.length) return a;  // Partial match, or name is fully matched.
-                    // key is fully matched, but some suffix of name remains, so keep searching in sub-node.
-                    return resolve (a, name.substring (key.length () + 1));  // The +1 removes the next dot in the path
-                }
-            }
-        }
-        return container;
+        return findClosest (container, 0, names);
     }
 
     /**
-        Utility routine for finding the deepest node that exists along a given path.
-        Takes into account node folding. This is similar to resolve(), except that
-        it doesn't give up when the target does not exist. Instead, this routine goes
-        along the path as far as possible.
+        Returns the node with the longest path prefix in common with the given path.
+        The target may be folded into a child node, in which case the child node is returned.
+        If the target is absent, the result may be a parent or sibling.
+        The sibling case might be considered a problem, except that it may be required by the
+        ChangeAnnotations constructor to determine prefix. Most other places it is not an issue
+        because the target node is known to exist.
     **/
-    public static NodeBase findDeepest (NodeBase container, String... names)
+    public static NodeBase findClosest (NodeBase container, int offset, String... names)
     {
-        for (String name : names)
+        String name = names[offset];
+        NodeBase a = container.child (name);
+        if (! (a instanceof NodeAnnotation)) return container;  // Not found. Result is parent of target.
+        String[] keys = ((NodeAnnotation) a).keys ();
+
+        int namesLength = names.length - offset;
+        int length = Math.min (namesLength, keys.length);
+        // The first name in the path was already matched above.
+        for (int i = 1; i < length; i++) if (! names[offset+i].equals (keys[i])) return a;  // partial match (sibling)
+        if (length == namesLength) return a;  // target is fully matched (exact match or child)
+
+        // key is fully matched, but the target path is longer, so keep searching in sub-node.
+        return findClosest (a, offset + keys.length, names);
+    }
+
+    public static NodeBase findExact (NodeBase container, boolean allowFolded, String... names)
+    {
+        return findExact (container, allowFolded, 0, names);
+    }
+
+    /**
+        Returns the NodeAnnotation whose folded field points to the exact node specified by the path.
+        Otherwise, returns null. Neither folded children nor parents nor siblings are allowed.
+        @param allowFolded Indicates the a node with folded children is OK. Parents are siblings
+        are still forbidden.
+    **/
+    public static NodeBase findExact (NodeBase container, boolean allowFolded, int offset, String... names)
+    {
+        String name = names[offset];
+        NodeBase a = container.child (name);
+        if (! (a instanceof NodeAnnotation)) return null;  // Not found.
+        String[] keys = ((NodeAnnotation) a).keys ();
+
+        int namesLength = names.length - offset;
+        int length = Math.min (namesLength, keys.length);
+        for (int i = 1; i < length; i++) if (! names[offset+i].equals (keys[i])) return null;  // Partial mismatch
+        if (keys.length < namesLength) return findExact (a, allowFolded, offset + keys.length, names);  // This level matches, but the target path is longer, so descend a level.
+        if (keys.length > namesLength  &&  ! allowFolded) return null;  // forbid folded child
+        return a;  // exact match; may also be folded child, if allowed
+    }
+
+    /**
+        Returns a node that is guaranteed to edit the exact metadata key specified.
+        Creates $metadata if it does not already exist. Searches the specified path.
+        If the path ends short, then adds the necessary node to reach the key.
+        If the path runs long (because folding goes past the exact key), then
+        adds a new node that unfolds the tree at the required point.
+        Will create at most one edit action.
+        TODO: This could be generalized to handle NodeVariable containers as well.
+    **/
+    public static NodeAnnotation findOrCreate (UndoManager um, NodePart part, String... names)
+    {
+        // Get or create the $metadata node.
+        NodeBase metadata = part.child ("$metadata");
+        if (metadata == null)
         {
-            NodeBase nb = resolve (container, name);
-            if (nb == container) return container;  // If can't go any deeper, then stop.
-            container = nb;
+            int index = 0;
+            if (part.getChildCount () > 0)
+            {
+                NodeBase sibling = (NodeBase) part.getChildAt (0);
+                if (sibling.toString ().startsWith ("$inherit")) index = 1;
+            }
+            MNode mdata = new MVolatile ();
+            mdata.set ("", names);
+            AddAnnotations aa = new AddAnnotations (part, index, mdata);
+            um.apply (aa);
+            metadata = aa.getCreatedNode ();
         }
-        return container;
+
+        // Find the GUI node, or determine that it needs to be created.
+        // It is possible that the DB node exists, but is folded into a GUI node.
+        // That case requires that a new GUI node be created to inject a value.
+        NodeBase parent = metadata;  // If we create a new node, this will be its parent.
+        int      offset = 0;         // The name of the created node will start at this position in the specified path.
+        while (offset < names.length)
+        {
+            // Find the node that starts with the current name within the current parent.
+            String name = names[offset];
+            NodeAnnotation na = (NodeAnnotation) parent.child (name);
+            if (na == null) break;  // Can't go any deeper.
+
+            String[] keys = na.keys ();
+            if (keys.length > names.length - offset) break;  // folded in a child, or na is a sibling
+            boolean allMatch = true;
+            for (int i = 1; i < keys.length; i++)  // First key was already matched by child(String) call above.
+            {
+                if (! keys[i].equals (names[offset+i]))
+                {
+                    allMatch = false;
+                    break;
+                }
+            }
+            if (! allMatch) break;
+
+            offset += keys.length;
+            if (offset == names.length) return na;  // Exact match
+            parent = na;
+        }
+
+        int length = names.length - offset;
+        String[] path = new String[length];
+        for (int i = 0; i < length; i++) path[i] = names[offset+i];
+
+        MNode data = new MVolatile ();
+        data.set (" ", path);  // The space is to keep the path from re-folding, at least for this session.
+        AddAnnotation aa = new AddAnnotation (parent, 0, data.child (path[0]));  // It is necessary that the top-level key be the actual beginning of the path, rather than the blank key created by the MVolatile() constructor.
+        um.apply (aa);
+        return (NodeAnnotation) aa.getCreatedNode ();
     }
 
     public static List<String> saveExpandedNodes (JTree tree, NodeBase parent)
@@ -455,7 +535,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
     {
         for (String n : names)
         {
-            NodeBase node = resolve (parent, n);
+            NodeBase node = findClosest (parent, n.split ("\\."));
             if (node != parent) tree.expandPath (new TreePath (node.getPath ()));
         }
     }

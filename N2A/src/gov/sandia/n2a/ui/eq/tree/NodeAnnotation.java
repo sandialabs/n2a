@@ -85,6 +85,19 @@ public class NodeAnnotation extends NodeContainer
         return result;
     }
 
+    public String[] keys ()
+    {
+        List<String> result = new ArrayList<String> ();
+        MPart p = folded;
+        result.add (p.key ());
+        while (p != source)
+        {
+            p = p.parent ();
+            result.add (0, p.key ());  // Since we are working backwards, insert at start of array.
+        }
+        return result.toArray (new String[result.size ()]);
+    }
+
     @Override
     public Icon getIcon (boolean expanded)
     {

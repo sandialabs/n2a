@@ -1131,18 +1131,15 @@ public class PanelEquationTree extends JScrollPane
         }
         if (metadataNode == null) return;
 
-        NodeBase a = AddAnnotation.resolve (metadataNode, "gui.order");
-        if (a != metadataNode)  // found
+        NodeBase a = AddAnnotation.findExact (metadataNode, false, "gui", "order");
+        if (a != null)  // found
         {
             MNode m = ((NodeAnnotation) a).folded;
-            if (m.key ().equals ("order")  &&  m.parent ().key ().equals ("gui"))  // is actually "gui.order". This check is necessary to avoid overwriting a pre-existing node folded under "gui" (for example, gui.bounds).
+            m.set (order);  // Value is in last column, so no need to invalidate columns.
+            if (tree != null)
             {
-                m.set (order);  // Value is in last column, so no need to invalidate columns.
-                if (tree != null)
-                {
-                    a.setUserObject ();  // Cause gui.order to update it's text.
-                    ((FilteredTreeModel) tree.getModel ()).nodeChanged (a);
-                }
+                a.setUserObject ();  // Cause gui.order to update it's text.
+                ((FilteredTreeModel) tree.getModel ()).nodeChanged (a);
             }
         }
     }

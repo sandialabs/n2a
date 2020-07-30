@@ -25,6 +25,8 @@ import java.awt.Stroke;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.util.ArrayList;
@@ -32,11 +34,16 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Map.Entry;
 
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.JColorChooser;
 import javax.swing.JComponent;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.JTree;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -45,13 +52,14 @@ import javax.swing.UIManager;
 import javax.swing.ViewportLayout;
 import javax.swing.border.LineBorder;
 import javax.swing.event.MouseInputAdapter;
-
+import javax.swing.tree.TreePath;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.NTextField;
 import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.GraphEdge.Vector2;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
@@ -393,6 +401,7 @@ public class PanelEquationGraph extends JScrollPane
         protected JPopupMenu         arrowMenu;
         protected GraphEdge          arrowEdge;                            // Most recent edge when arrowMenu was activated.
         protected Point              popupLocation;
+        protected JPopupMenu         pinMenu;
         protected GraphNode          pinIn;
         protected GraphNode          pinOut;
 
@@ -435,6 +444,31 @@ public class PanelEquationGraph extends JScrollPane
             arrowMenu.add (itemArrowCircleFill);
             arrowMenu.addSeparator ();
             arrowMenu.add (itemStraight);
+
+            // Pin menu
+
+            JMenuItem itemPinColor = new JMenuItem ("Color");
+            itemPinColor.setActionCommand ("Color");
+            itemPinColor.addActionListener (listenerPin);
+
+            JMenuItem itemPinNotes = new JMenuItem ("Notes");
+            itemPinNotes.setActionCommand ("Notes");
+            itemPinNotes.addActionListener (listenerPin);
+
+            JMenuItem itemPinName = new JMenuItem ("Name");
+            itemPinName.setActionCommand ("Name");
+            itemPinName.addActionListener (listenerPin);
+
+            JMenuItem itemPinDelete = new JMenuItem ("Delete");
+            itemPinDelete.setActionCommand ("Delete");
+            itemPinDelete.addActionListener (listenerPin);
+
+            pinMenu = new JPopupMenu ();
+            pinMenu.add (itemPinColor);
+            pinMenu.add (itemPinNotes);
+            pinMenu.add (itemPinName);
+            pinMenu.addSeparator ();
+            pinMenu.add (itemPinDelete);
         }
 
         public void updateUI ()
@@ -462,6 +496,7 @@ public class PanelEquationGraph extends JScrollPane
             // Disconnect graph nodes from tree nodes
             for (Component c : getComponents ())
             {
+                if (! (c instanceof GraphNode)) continue;
                 GraphNode gn = (GraphNode) c;
                 if (gn.panelEquationTree != null) gn.panelEquationTree.clear ();
                 gn.node.graph = null;
@@ -563,6 +598,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
+                if (! (c instanceof GraphNode)) continue;
                 GraphNode gn = (GraphNode) c;
 
                 // Build connection edges
@@ -656,6 +692,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
+                if (! (c instanceof GraphNode)) continue;
                 GraphNode gn = (GraphNode) c;
                 gn.edgesIn.clear ();
                 gn.edgesOut.clear ();
@@ -716,7 +753,7 @@ public class PanelEquationGraph extends JScrollPane
             // Rebuild bounds around pin blocks.
             for (Component c : getComponents ())
             {
-                ((GraphNode) c).updatePins ();
+                if (c instanceof GraphNode) ((GraphNode) c).updatePins ();
             }
 
             // Update IO block layout
@@ -801,7 +838,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
-                ((GraphNode) c).panelEquationTree.updateLock ();
+                if (c instanceof GraphNode) ((GraphNode) c).panelEquationTree.updateLock ();
             }
         }
 
@@ -809,7 +846,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
-                ((GraphNode) c).panelEquationTree.updateFilterLevel ();
+                if (c instanceof GraphNode) ((GraphNode) c).panelEquationTree.updateFilterLevel ();
             }
         }
 
@@ -817,7 +854,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
-                ((GraphNode) c).setSelected (false);
+                if (c instanceof GraphNode) ((GraphNode) c).setSelected (false);
             }
         }
 
@@ -826,6 +863,7 @@ public class PanelEquationGraph extends JScrollPane
             List<GraphNode> result = new ArrayList<GraphNode> ();
             for (Component c : getComponents ())
             {
+                if (! (c instanceof GraphNode)) continue;
                 GraphNode g = (GraphNode) c;
                 if (g.selected) result.add (g);
             }
@@ -883,6 +921,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
+                if (! (c instanceof GraphNode)) continue;
                 GraphNode g = (GraphNode) c;
                 Rectangle bounds = g.getBounds ();
                 if (bounds.contains (p)) return g;
@@ -898,7 +937,7 @@ public class PanelEquationGraph extends JScrollPane
             List<GraphNode> result = new ArrayList<GraphNode> ();
             for (Component c : getComponents ())
             {
-                if (r.intersects (c.getBounds ())) result.add ((GraphNode) c);
+                if (c instanceof GraphNode  &&  r.intersects (c.getBounds ())) result.add ((GraphNode) c);
             }
             return result;
         }
@@ -906,7 +945,7 @@ public class PanelEquationGraph extends JScrollPane
         public GraphNode findNodeClosest (Point p)
         {
             List<GraphNode> nodes = new ArrayList<GraphNode> ();
-            for (Component c : getComponents ()) nodes.add ((GraphNode) c);
+            for (Component c : getComponents ()) if (c instanceof GraphNode) nodes.add ((GraphNode) c);
             return findNodeClosest (p, nodes);
         }
 
@@ -931,6 +970,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             for (Component c : getComponents ())
             {
+                if (! (c instanceof GraphNode)) continue;
                 GraphNode gn = (GraphNode) c;
                 if (gn.node.source.key ().equals (name)  &&  gn != pinIn  &&  gn != pinOut) return gn;
             }
@@ -965,7 +1005,7 @@ public class PanelEquationGraph extends JScrollPane
             g2.setStroke (oldStroke);
             for (Component c : getComponents ())
             {
-                ((GraphNode) c).paintPins (g2, clip);  // Test clip bounds against pins. Paint pin if any overlap.
+                if (c instanceof GraphNode) ((GraphNode) c).paintPins (g2, clip);  // Test clip bounds against pins. Paint pin if any overlap.
             }
 
             g2.dispose ();
@@ -990,6 +1030,283 @@ public class PanelEquationGraph extends JScrollPane
                 MainFrame.instance.undoManager.apply (new ChangeAnnotations (n, metadata));
             }
         };
+
+        ActionListener listenerPin = new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                GraphNode g = (GraphNode) pinMenu.getInvoker ();
+                String pinSide;
+                String pinKey;
+                Point location;
+                if (g == graphPanel.pinIn)
+                {
+                    int lineHeight = g.pinOutBounds.height / container.part.pinIn.size ();
+                    int y = graphPanel.popupLocation.y - GraphNode.border.t;
+                    int index = y / lineHeight;
+                    pinKey = container.part.pinInOrder.get (index).key ();
+                    pinSide = "in";
+                    location = new Point (g.pinOutBounds.x + lineHeight / 2, g.pinOutBounds.y + index * lineHeight);
+                }
+                else  // g is pinOut
+                {
+                    int lineHeight = g.pinInBounds.height / container.part.pinOut.size ();
+                    int y = graphPanel.popupLocation.y - GraphNode.border.t;
+                    int index = y / lineHeight;
+                    pinKey = container.part.pinOutOrder.get (index).key ();
+                    pinSide = "out";
+                    location = new Point (g.pinInBounds.x, g.pinInBounds.y + index * lineHeight);
+                }
+
+                UndoManager um = MainFrame.instance.undoManager;
+                switch (e.getActionCommand ())
+                {
+                    case "Color":
+                    {
+                        Color initialColor = Color.black;
+                        String colorName = container.part.source.get ("$metadata", "gui", "pin", pinSide, pinKey, "color");
+                        if (! colorName.isEmpty ())
+                        {
+                            try {initialColor = Color.decode (colorName);}
+                            catch (NumberFormatException error) {}
+                        }
+
+                        Color chosenColor = JColorChooser.showDialog (MainFrame.instance, "", initialColor);
+                        if (chosenColor != null  &&  ! chosenColor.equals (initialColor))
+                        {
+                            colorName = "#" + Integer.toHexString (chosenColor.getRGB () & 0xFFFFFF);
+                            MNode metadata = new MVolatile ();
+                            metadata.set (colorName, "gui", "pin", pinSide, pinKey, "color");
+                            um.apply (new ChangeAnnotations (container.part, metadata));
+                        }
+                        break;
+                    }
+                    case "Notes":
+                    {
+                        container.switchFocus (false, false);  // Ensure that parent node is showing.
+                        NodeAnnotation notes = AddAnnotation.findOrCreate (um, container.part, "gui", "pin", pinSide, pinKey, "notes");
+                        JTree tree = container.getParentEquationTree ().tree;
+                        tree.startEditingAtPath (new TreePath (notes.getPath ()));
+                        break;
+                    }
+                    case "Name":
+                    {
+                        // Show dialog to get new name.
+                        JTextField editor = new NTextField (pinKey, Math.max (10, pinKey.length ()));
+
+                        ActionMap actionMap = editor.getActionMap ();
+                        actionMap.put ("Cancel", new AbstractAction ("Cancel")
+                        {
+                            public void actionPerformed (ActionEvent evt)
+                            {
+                                graphPanel.remove (editor);
+                                graphPanel.repaint (editor.getBounds ());
+                            }
+                        });
+
+                        editor.addActionListener (new ActionListener ()
+                        {
+                            public void actionPerformed (ActionEvent e)
+                            {
+                                graphPanel.remove (editor);
+                                graphPanel.repaint (editor.getBounds ());
+                                applyPinNameChange (pinSide, pinKey, editor.getText ());
+                            }
+                        });
+
+                        editor.addFocusListener (new FocusListener ()
+                        {
+                            public void focusGained (FocusEvent e)
+                            {
+                            }
+
+                            public void focusLost (FocusEvent e)
+                            {
+                                if (editor.getParent () == graphPanel)
+                                {
+                                    graphPanel.remove (editor);
+                                    graphPanel.repaint (editor.getBounds ());
+                                    applyPinNameChange (pinSide, pinKey, editor.getText ());
+                                }
+                            }
+                        });
+
+                        editor.setLocation (location);
+                        graphPanel.add (editor);
+                        graphPanel.setComponentZOrder (editor, 0);
+                        editor.requestFocusInWindow ();
+                        break;
+                    }
+                    case "Delete":
+                    {
+                        um.addEdit (new CompoundEdit ());
+                        GraphMouseListener gml = graphPanel.mouseListener;
+                        if (pinSide.equals ("in"))
+                        {
+                            // Remove pin annotations from subscribers, as this info is one thing
+                            // that sustains the existence of a pin.
+                            MNode subscribers = container.part.pinIn.child (pinKey, "part");
+                            if (subscribers != null)
+                            {
+                                for (MNode p : subscribers)
+                                {
+                                    // Retrieve the GUI node.
+                                    NodePart part = (NodePart) container.part.child (p.key ());
+                                    if (part.connectionBindings == null)  // Regular part, so this is an exported inner pin.
+                                    {
+                                        // Find the originating pin. Could be more than one.
+                                        for (MNode q : part.pinIn)
+                                        {
+                                            if (! q.get ("bind", "pin").equals (pinKey)) continue;
+                                            if (! q.get ("bind").isEmpty ()) continue;
+
+                                            String pinFrom = q.key ();
+                                            if (! gml.removeAuto (um, part, pinFrom))
+                                            {
+                                                MNode metadata = new MVolatile ();
+                                                gml.clearBinding (metadata, pinFrom);
+                                                um.apply (new ChangeAnnotations (part, metadata));
+                                            }
+                                        }
+                                    }
+                                    else   // Connection, so this is an exposure.
+                                    {
+                                        DeleteAnnotation da = DeleteAnnotation.withName (part, "gui", "pin");
+                                        if (da != null) um.apply (da);
+                                    }
+                                }
+                            }
+
+                            // Remove pin annotations from container itself.
+                            DeleteAnnotation da = DeleteAnnotation.withName (container.part, "gui", "pin", "in", pinKey);
+                            if (da != null) um.apply (da);
+                        }
+                        else  // pinSide is "out"
+                        {
+                            MNode subscribers = container.part.pinOut.child (pinKey, "part");
+                            if (subscribers != null)
+                            {
+                                for (MNode p : subscribers)
+                                {
+                                    NodePart part = (NodePart) container.part.child (p.key ());
+                                    if (part.connectionBindings == null)
+                                    {
+                                        DeleteAnnotation da = DeleteAnnotation.withName (part, "gui", "pin");
+                                        if (da != null) um.apply (da);
+                                    }
+                                    else
+                                    {
+                                        DeleteAnnotation da = DeleteAnnotation.withName (part, "gui", "pin", "pass");
+                                        if (da != null) um.apply (da);
+                                    }
+                                }
+                            }
+
+                            DeleteAnnotation da = DeleteAnnotation.withName (container.part, "gui", "pin", "out", pinKey);
+                            if (da != null) um.apply (da);
+                        }
+                        um.endCompoundEdit ();
+                        break;
+                    }
+                }
+            }
+        };
+
+        public void applyPinNameChange (String pinSide, String pinKey, String newKey)
+        {
+            // Verify that name does not conflict
+            if (newKey.isEmpty ()) return;
+            MNode pinData;
+            if (pinSide.equals ("in")) pinData = container.part.pinIn;
+            else                       pinData = container.part.pinOut;
+            for (MNode p : pinData) if (newKey.equals (p.key ())) return;   // Abort change if any key matches. If the name has not changed, this includes its own value.
+
+            // Apply change
+            UndoManager um = MainFrame.instance.undoManager;
+            um.addEdit (new CompoundEdit ());
+            if (pinSide.equals ("in"))
+            {
+                // Rename in subscribers, since they can cause the pin to exist.
+                MNode subscribers = container.part.pinIn.child (pinKey, "part");
+                if (subscribers != null)
+                {
+                    for (MNode p : subscribers)
+                    {
+                        NodePart part = (NodePart) container.part.child (p.key ());
+                        if (part.connectionBindings == null)  // Regular part, so this is an exported inner pin.
+                        {
+                            // Find the originating pin. Could be more than one.
+                            for (MNode q : part.pinIn)
+                            {
+                                if (! q.get ("bind", "pin").equals (pinKey)) continue;
+                                if (! q.get ("bind").isEmpty ()) continue;
+
+                                String pinFrom = q.key ();
+                                MNode metadata = new MVolatile ();
+                                metadata.set (newKey, "gui", "pin", "in", pinFrom, "bind", "pin");
+                                um.apply (new ChangeAnnotations (part, metadata));
+                            }
+                        }
+                        else   // Connection, so this is an exposure.
+                        {
+                            MNode metadata = new MVolatile ();
+                            metadata.set (newKey, "gui", "pin");
+                            um.apply (new ChangeAnnotations (part, metadata));
+                        }
+                    }
+                }
+
+                // Rename pin annotations in container itself.
+                MNode child = container.part.source.child ("$metadata", "gui", "pin", "in", pinKey);
+                if (child != null)  // There actually is a container-level pin annotation.
+                {
+                    // Ideally we would use MNode.move(), but that would require a new kind of undo class.
+                    // Instead, use edit actions that are on hand. A move is equivalent to a delete plus a create.
+
+                    MNode metadata = new MVolatile ();
+                    metadata.set (child, "gui", "pin", "in", newKey);
+
+                    DeleteAnnotation da = DeleteAnnotation.withName (container.part, "gui", "pin", "in", pinKey);
+                    if (da != null) um.apply (da);
+
+                    um.apply (new ChangeAnnotations (container.part, metadata));
+                }
+            }
+            else  // pinSide is "out"
+            {
+                MNode subscribers = container.part.pinOut.child (pinKey, "part");
+                if (subscribers != null)
+                {
+                    for (MNode p : subscribers)
+                    {
+                        NodePart part = (NodePart) container.part.child (p.key ());
+                        MNode metadata = new MVolatile ();
+                        if (part.connectionBindings == null)
+                        {
+                            metadata.set (newKey, "gui", "pin");
+                        }
+                        else
+                        {
+                            metadata.set (newKey, "gui", "pin", "pass");
+                        }
+                        um.apply (new ChangeAnnotations (part, metadata));
+                    }
+                }
+
+                MNode child = container.part.source.child ("$metadata", "gui", "pin", "out", pinKey);
+                if (child != null)
+                {
+                    MNode metadata = new MVolatile ();
+                    metadata.set (child, "gui", "pin", "out", newKey);
+
+                    DeleteAnnotation da = DeleteAnnotation.withName (container.part, "gui", "pin", "out", pinKey);
+                    if (da != null) um.apply (da);
+
+                    um.apply (new ChangeAnnotations (container.part, metadata));
+                }
+            }
+            um.endCompoundEdit ();
+        }
     }
 
     public class GraphLayout implements LayoutManager2
@@ -1147,6 +1464,7 @@ public class PanelEquationGraph extends JScrollPane
     {
         Point      startPan;
         GraphEdge  edge;
+        String     orderPin;
         Point      selectStart;
         Rectangle  selectRegion;
         MouseEvent lastEvent;
@@ -1183,37 +1501,62 @@ public class PanelEquationGraph extends JScrollPane
 
         public void mousePressed (MouseEvent me)
         {
-            if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())
+            Point p = me.getPoint ();
+
+            if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())  // Context menus
             {
-                // Context menus
                 if (container.locked) return;
-                Point p = me.getPoint ();
-                GraphEdge e = graphPanel.findTipAt (p);
-                if (e != null  &&  e.pinKeyFrom != null) e = null;  // Don't show arrow menu for pin-to-pin links.
-                if (e != null)
+
+                GraphNode g = graphPanel.findNodeAt (p, true);  // Only a click in the pin zone will return non-null here. If it were in the graph node proper, the click would have been routed there instead.
+                if (g != null  &&  (g == graphPanel.pinIn  ||  g == graphPanel.pinOut))
                 {
-                    graphPanel.arrowEdge = e;
-                    graphPanel.arrowMenu.show (graphPanel, p.x, p.y);
+                    Point q = g.getLocation ();
+                    p.x -= q.x;
+                    p.y -= q.y;
+                    graphPanel.popupLocation = p;
+                    graphPanel.pinMenu.show (g, p.x, p.y);
                 }
                 else
                 {
-                    container.getTitleFocus ().requestFocusInWindow ();
-                    graphPanel.popupLocation = new Point ();
-                    graphPanel.popupLocation.x = p.x - graphPanel.offset.x;
-                    graphPanel.popupLocation.y = p.y - graphPanel.offset.y;
-                    container.menuPopup.show (graphPanel, p.x, p.y);
+                    GraphEdge e = graphPanel.findTipAt (p);
+                    if (e != null  &&  e.pinKeyFrom != null) e = null;  // Don't show arrow menu for pin-to-pin links.
+                    if (e == null)
+                    {
+                        container.getTitleFocus ().requestFocusInWindow ();
+                        graphPanel.popupLocation = p;
+                        container.menuPopup.show (graphPanel, p.x, p.y);
+                    }
+                    else
+                    {
+                        graphPanel.arrowEdge = e;
+                        graphPanel.arrowMenu.show (graphPanel, p.x, p.y);
+                    }
                 }
             }
             else if (SwingUtilities.isLeftMouseButton (me))
             {
                 if (container.locked) return;
-                Point p = me.getPoint ();
-                edge = graphPanel.findTipAt (p);
+
+                // Probe for edges and pins.
+                edge = null;
+                GraphNode g = null;
+                boolean shift = me.isShiftDown ();
+                if (shift)  // When shift is down, prioritize pin over edge.
+                {
+                    g = graphPanel.findNodeAt (p, true);  // Only a click in the pin zone will return non-null here. If it were in the graph node proper, the click would have been routed there instead.
+                    if (g == null) edge = graphPanel.findTipAt (p);
+                }
+                else  // Otherwise, prioritize edge over pin.
+                {
+                    edge = graphPanel.findTipAt (p);
+                    if (edge == null) g = graphPanel.findNodeAt (p, true);
+                }
+
+                // Prepare for dragging.
                 if (edge == null)
                 {
                     // Check if a pin region is under the click.
-                    GraphNode g = graphPanel.findNodeAt (p, true);  // Only a click in the pin zone will return non-null here. If it were in the graph node proper, the click would have been routed there instead.
-                    if (g == null)  // bare background
+                    if (g == null)  // Bare background --> do selection
                     {
                         selectStart = p;
                         selectRegion = new Rectangle (p);
@@ -1226,14 +1569,16 @@ public class PanelEquationGraph extends JScrollPane
                             int lineHeight = g.pinInBounds.height / g.node.pinIn.size ();
                             int y = p.y - g.pinInBounds.y;
                             MNode pin = g.node.pinInOrder.get (y / lineHeight);
-                            edge = new GraphEdge (g, null, "in", pin.key ());
+                            if (shift  &&  g == graphPanel.pinOut) orderPin = "out." + pin.key ();
+                            else                                   edge = new GraphEdge (g, null, "in", pin.key ());
                         }
                         else if (g.pinOutBounds != null  &&  g.pinOutBounds.contains (p))
                         {
                             int lineHeight = g.pinOutBounds.height / g.node.pinOut.size ();
                             int y = p.y - g.pinOutBounds.y;
                             MNode pin = g.node.pinOutOrder.get (y / lineHeight);
-                            edge = new GraphEdge (g, null, "out", pin.key ());
+                            if (shift  &&  g == graphPanel.pinIn) orderPin = "in." + pin.key ();
+                            else                                  edge = new GraphEdge (g, null, "out", pin.key ());
                         }
                         if (edge != null)  // Finish constructing transient edge. It will be deleted by mouseRelease().
                         {
@@ -1257,7 +1602,11 @@ public class PanelEquationGraph extends JScrollPane
                         }
                     }
                 }
-                if (edge != null)
+                if (orderPin != null)
+                {
+                    setCursor (Cursor.getPredefinedCursor (Cursor.HAND_CURSOR));
+                }
+                else if (edge != null)
                 {
                     setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
                     edge.animate (p);  // Activates tipDrag
@@ -1265,7 +1614,7 @@ public class PanelEquationGraph extends JScrollPane
             }
             else if (SwingUtilities.isMiddleMouseButton (me))
             {
-                startPan = me.getPoint ();
+                startPan = p;
                 setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
             }
         }
@@ -1376,7 +1725,7 @@ public class PanelEquationGraph extends JScrollPane
                                 if (edge.pinKeyFrom == null)  // population marked as output pin
                                 {
                                     DeleteAnnotation da = null;
-                                    da = DeleteAnnotation.withName (partFrom, "gui.pin");
+                                    da = DeleteAnnotation.withName (partFrom, "gui", "pin");
                                     if (da != null) um.apply (da);
                                 }
                                 else  // exported inner pin
@@ -1424,12 +1773,12 @@ public class PanelEquationGraph extends JScrollPane
                             if (edge.nodeTo != null  &&  edge.nodeTo == graphPanel.pinOut)
                             {
                                 // Kill only the output side of a pass-through connection
-                                da = DeleteAnnotation.withName (partFrom, "gui.pin.pass");
+                                da = DeleteAnnotation.withName (partFrom, "gui", "pin", "pass");
                             }
                             else
                             {
                                 // Stop acting as an input pin. This will also kill the output side of a pass-through connection.
-                                da = DeleteAnnotation.withName (partFrom, "gui.pin");
+                                da = DeleteAnnotation.withName (partFrom, "gui", "pin");
                             }
                             if (da != null) um.apply (da);
                         }
@@ -1595,11 +1944,7 @@ public class PanelEquationGraph extends JScrollPane
                         }
                         else
                         {
-                            if (nodeTo == graphPanel.pinIn  &&  newSide.isEmpty ())  // Landed on node rather than pin, so use pin name from other end of link.
-                            {
-                                newSide = "out";
-                                newKey  = edge.pinKeyFrom;
-                            }
+                            if (nodeTo == graphPanel.pinIn  &&  newSide.isEmpty ()) newSide = "out";  // Landed on node rather than pin, so use pin name from other end of link.
 
                             if (! newSide.isEmpty ()  &&  ! newSide.equals (edge.pinSideFrom))  // Only connect to opposite type of pin.
                             {
@@ -1636,6 +1981,7 @@ public class PanelEquationGraph extends JScrollPane
                                 else  // newSide is "out"
                                 {
                                     nodeAfter = nodeFrom;
+
                                     String pinName = edge.pinKeyFrom;
                                     if (edge.nodeTo == null)  // new link, similar to "in" case above
                                     {
@@ -1643,9 +1989,12 @@ public class PanelEquationGraph extends JScrollPane
                                     }
                                     // else this simply changes which output pin is linked to the input pin
 
+                                    if (newKey.isEmpty ()) newKey = pinName;
+
                                     String partFromName;
                                     if (nodeTo == graphPanel.pinIn) partFromName = "";
                                     else                            partFromName = nodeTo.node.source.key ();
+
                                     setBinding (connect, pinName, partFromName, newKey);
                                 }
 
@@ -1677,11 +2026,11 @@ public class PanelEquationGraph extends JScrollPane
                             DeleteAnnotation da = null;
                             if (edge.nodeTo == graphPanel.pinIn)
                             {
-                                da = DeleteAnnotation.withName (partFrom, "gui.pin");
+                                da = DeleteAnnotation.withName (partFrom, "gui", "pin");
                             }
                             else if (edge.nodeTo == graphPanel.pinOut)
                             {
-                                da = DeleteAnnotation.withName (partFrom, "gui.pin.pass");
+                                da = DeleteAnnotation.withName (partFrom, "gui", "pin", "pass");
                             }
                             if (da != null) um.apply (da);
                         }
@@ -1772,6 +2121,48 @@ public class PanelEquationGraph extends JScrollPane
 
                 graphPanel.repaint (old.union (r));
             }
+            else if (orderPin != null)
+            {
+                String[] pieces = orderPin.split ("\\.");
+                String pinSide = pieces[0];
+                String pinKey  = pieces[1];
+                orderPin = null;
+
+                MNode       pinData;
+                List<MNode> pinOrder;
+                Rectangle   bounds;
+                if (pinSide.equals ("in"))
+                {
+                    pinData  = container.part.pinIn;
+                    pinOrder = container.part.pinInOrder;
+                    bounds   = graphPanel.pinIn.pinOutBounds;
+                }
+                else  // pinSide is "out"
+                {
+                    pinData  = container.part.pinOut;
+                    pinOrder = container.part.pinOutOrder;
+                    bounds   = graphPanel.pinOut.pinInBounds;
+                }
+
+                int count = pinData.size ();
+                int lineHeight = bounds.height / count;
+                int y = me.getY () - bounds.y;
+                int newIndex = y / lineHeight;
+                newIndex = Math.min (count - 1, newIndex);
+                newIndex = Math.max (0,         newIndex);
+                MNode pin = pinData.child (pinKey);
+                int oldIndex = pinOrder.indexOf (pin);
+
+                if (newIndex != oldIndex)
+                {
+                    pinOrder.remove (oldIndex);
+                    pinOrder.add (newIndex, pin);
+
+                    MNode metadata = new MVolatile ();
+                    for (int i = 0; i < count; i++) metadata.set (i, "gui", "pin", pinSide, pinOrder.get (i).key (), "order");
+                    MainFrame.instance.undoManager.apply (new ChangeAnnotations (container.part, metadata));
+                }
+            }
         }
 
         public void clearBinding (MNode metadata, String pinName)
@@ -1790,22 +2181,30 @@ public class PanelEquationGraph extends JScrollPane
         **/
         public void clearBindingOut (UndoManager um, String pinName)
         {
-            boolean hasAttributes = false;
-            MNode pin = container.part.source.child ("$metadata", "gui", "pin", "out", pinName);  // This should always exist at this point.
-            if (pin.child ("color") != null) hasAttributes = true;
-            if (pin.child ("notes") != null) hasAttributes = true;
-            if (pin.child ("order") != null) hasAttributes = true;
-
             DeleteAnnotation da = null;
-            if (hasAttributes)
+            if (hasAttributes ("out", pinName))
             {
-                da = DeleteAnnotation.withName (container.part, "gui.pin.out." + pinName + ".bind");
+                da = DeleteAnnotation.withName (container.part, "gui", "pin", "out", pinName, "bind");
             }
             else
             {
-                da = DeleteAnnotation.withName (container.part, "gui.pin.out." + pinName);
+                da = DeleteAnnotation.withName (container.part, "gui", "pin", "out", pinName);
             }
             if (da != null) um.apply (da);
+        }
+
+        /**
+            Checks if the given pin has any manually-created information.
+            This indicates that it should not be deleted simply because a binding is removed.
+        **/
+        public boolean hasAttributes (String pinSide, String pinName)
+        {
+            MNode pin = container.part.source.child ("$metadata", "gui", "pin", pinSide, pinName);
+            if (pin == null) return false;
+            if (pin.child ("color") != null) return true;
+            if (pin.child ("notes") != null) return true;
+            if (pin.child ("order") != null) return true;
+            return false;
         }
 
         public void setBinding (MNode metadata, String pinName, String fromNode, String fromPin)
@@ -1916,17 +2315,8 @@ public class PanelEquationGraph extends JScrollPane
         **/
         public String disconnect (UndoManager um, NodeVariable variable, boolean pinOnly)
         {
-            NodeBase pin = AddAnnotation.resolve (variable, "gui.pin");
-            if (pin == variable)
-            {
-                pin = null;
-            }
-            else  // found something
-            {
-                MNode m = ((NodeAnnotation) pin).folded;
-                if (! m.key ().equals ("pin")  ||  ! m.parent ().key ().equals ("gui")) pin = null;  // Verify that pin is actually "gui.pin"
-            }
             String pinName = null;
+            NodeBase pin = AddAnnotation.findExact (variable, false, "gui", "pin");
             if (pin != null)
             {
                 pinName = pin.source.get ();
@@ -2051,8 +2441,8 @@ public class PanelEquationGraph extends JScrollPane
                 }
 
                 // Delete pin metadata on node itself.
-                NodeBase nb = AddAnnotation.resolve (metadata, "gui.pin.in." + baseNameI);
-                if (nb != metadata) um.apply (new DeleteAnnotation ((NodeAnnotation) nb, false));
+                NodeBase nb = AddAnnotation.findExact (metadata, true, "gui", "pin", "in", baseNameI);
+                if (nb != null) um.apply (new DeleteAnnotation ((NodeAnnotation) nb, false));
             }
             return true;
         }

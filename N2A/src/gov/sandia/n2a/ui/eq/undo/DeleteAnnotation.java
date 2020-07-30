@@ -66,14 +66,19 @@ public class DeleteAnnotation extends UndoableView
     }
 
     /**
-        Constructs an edit action which remove the referenced metadata item from the given part.
+        Constructs an edit action which removes the referenced metadata item from the given part.
         If the metadata item does not exist, then the return value is null.
+        This method is a bit imprecise. If the given path appears in a folded child, then
+        it is possible that the delete will go further up the tree than the specified path.
+        This could damage metadata structures where the parents of the specified node are
+        acting as flags merely by their existence.
     **/
-    public static DeleteAnnotation withName (NodePart part, String name)
+    public static DeleteAnnotation withName (NodePart part, String... names)
     {
         NodeAnnotations metadata = (NodeAnnotations) part.child ("$metadata");
-        NodeBase target = AddAnnotation.resolve (metadata, name);
-        if (target == metadata) return null;
+        if (metadata == null) return null;
+        NodeBase target = AddAnnotation.findExact (metadata, true, names);
+        if (target == null) return null;
         return new DeleteAnnotation ((NodeAnnotation) target, false);
     }
 

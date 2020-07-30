@@ -298,7 +298,7 @@ public class ChangePart extends UndoableView
         {
             // Retrieve GUI metadata node so it can be updated to match DB.
             NodeBase metadata = ge.nodeTo.node.child ("$metadata");
-            NodeBase nodeBind = (NodeAnnotation) AddAnnotation.resolve (metadata, "gui.pin.in." + ge.pinKeyTo + ".bind");
+            NodeBase nodeBind = (NodeAnnotation) AddAnnotation.findExact (metadata, false, "gui", "pin", "in", ge.pinKeyTo, "bind");
             nodeBind.setUserObject ();
 
             // Update display tree

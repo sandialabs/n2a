@@ -54,14 +54,14 @@ public class ChangeAnnotation extends UndoableView
         else                               prefixBefore = nameBefore.split ("\\.")[0];
 
         prefixAfter = "";
-        NodeBase prefixNode = AddAnnotation.resolve (parent, nameAfter);
+        String[] nameAfters = nameAfter.split ("\\.");
+        NodeBase prefixNode = AddAnnotation.findClosest (parent, nameAfters);
         while (prefixNode != parent)
         {
             prefixAfter = ((NodeAnnotation) prefixNode).key () + "." + prefixAfter;
             prefixNode = (NodeBase) prefixNode.getParent ();
         }
         if (! prefixAfter.isEmpty ()) prefixAfter = prefixAfter.substring (0, prefixAfter.length () - 1);
-        String[] nameAfters   = nameAfter.  split ("\\.");
         String[] prefixAfters = prefixAfter.split ("\\.");
         prefixAfter = "";
         int length = Math.min (nameAfters.length, prefixAfters.length);
@@ -145,7 +145,7 @@ public class ChangeAnnotation extends UndoableView
             AddAnnotation.restoreExpandedNodes (pet.tree, parent, expanded);
         }
 
-        NodeBase nodeAfter = AddAnnotation.resolve (parent, nameAfter);
+        NodeBase nodeAfter = AddAnnotation.findClosest (parent, names);
         if (pet != null)
         {
             TreeNode[] afterPath  = nodeAfter.getPath ();
@@ -171,7 +171,7 @@ public class ChangeAnnotation extends UndoableView
     public void rebase ()
     {
         NodeBase parent    = NodeBase.locateNode (path);
-        NodeBase node      = AddAnnotation.resolve (parent, nameAfter);
+        NodeBase node      = AddAnnotation.findClosest (parent, nameAfter.split ("\\."));
         NodeBase container = (NodeBase) node.getParent ();
         if (   container != parent  &&  container.getChildCount () == 2  // node has exactly one sibling
             && ! prefixAfter.isEmpty ()  // node will be deleted during undo

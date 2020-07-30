@@ -965,8 +965,11 @@ public class GraphNode extends JPanel
                         // Shift focus to $metadata.gui.pin.side in parent part.
                         container.switchFocus (false, false);  // Select the parent tree.
                         NodeBase metadata = container.part.child ("$metadata");
-                        metadata = AddAnnotation.findDeepest (metadata, "gui", "pin", side);
-                        container.getParentEquationTree ().tree.setSelectionPath (new TreePath (metadata.getPath ()));
+                        if (metadata != null)
+                        {
+                            metadata = AddAnnotation.findClosest (metadata, "gui", "pin", side);
+                            container.getParentEquationTree ().tree.setSelectionPath (new TreePath (metadata.getPath ()));
+                        }
                         return;  // Don't allow edit or drill-down.
                     }
 
