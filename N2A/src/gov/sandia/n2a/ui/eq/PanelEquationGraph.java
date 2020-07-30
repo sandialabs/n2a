@@ -217,6 +217,11 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel.updatePins ();
     }
 
+    public GraphNode getPinOut ()
+    {
+        return graphPanel.pinOut;
+    }
+
     public void updateFilterLevel ()
     {
         graphPanel.updateFilterLevel ();
@@ -602,7 +607,7 @@ public class PanelEquationGraph extends JScrollPane
                 GraphNode gn = (GraphNode) c;
 
                 // Build connection edges
-                if (gn.node.connectionBindings == null)  // Special case: check for edge from output node to IO block
+                if (gn.node.connectionBindings == null)  // Population. Might be exposed as a pin, in which case there should be an edge to the IO block.
                 {
                     MNode pin = gn.node.source.child ("$metadata", "gui", "pin");
                     if (pin != null  &&  (! pin.get ().isEmpty ()  ||  pin.child ("in") == null  &&  pin.child ("out") == null))  // This is an output population.

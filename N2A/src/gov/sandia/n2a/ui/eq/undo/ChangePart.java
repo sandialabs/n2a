@@ -27,6 +27,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphEdge;
+import gov.sandia.n2a.ui.eq.GraphNode;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
@@ -168,6 +169,8 @@ public class ChangePart extends UndoableView
 
         //   Change pin links to this part.
         List<GraphEdge> rebindEdges = new ArrayList<GraphEdge> ();
+        PanelEquationGraph peg = pe.panelEquationGraph;  // Only used if graphParent is true.
+        GraphNode pinOut = peg.getPinOut ();
         if (nodeBefore.graph != null)
         {
             for (GraphEdge ge : nodeBefore.graph.edgesIn)
@@ -175,12 +178,21 @@ public class ChangePart extends UndoableView
                 if (ge.pinKeyFrom == null  ||  ge.pinKeyTo == null) continue;  // Must be a pin link.
                 if (ge.nodeFrom != nodeBefore.graph) continue;  // We must be the output side.
 
-                // Update "bind" key in both database and NodePart.
+                // Update "bind" key in both database and GUI.
                 // Note that edges will be rebuilt below, so no need to modify ge directly.
-                MNode pin = ge.nodeTo.node.source.child ("$metadata", "gui", "pin", "in", ge.pinKeyTo);
-                pin.set (nameAfter, "bind");
-                pin = ge.nodeTo.node.pinIn.child (ge.pinKeyTo);
-                pin.set (nameAfter, "bind");
+                if (ge.nodeTo == pinOut)  // Special case for output block
+                {
+                    MNode pin = pe.part.source.child ("$metadata", "gui", "pin", "out", ge.pinKeyTo);
+                    pin.set (nameAfter, "bind");
+                    // NodeIO collated pin data will be rebuilt below by call to peg.updatePins()
+                }
+                else  // Regular graph node
+                {
+                    MNode pin = ge.nodeTo.node.source.child ("$metadata", "gui", "pin", "in", ge.pinKeyTo);
+                    pin.set (nameAfter, "bind");
+                    pin = ge.nodeTo.node.pinIn.child (ge.pinKeyTo);
+                    pin.set (nameAfter, "bind");
+                }
 
                 rebindEdges.add (ge);  // mostly to update display text in visible tree
             }
@@ -192,7 +204,6 @@ public class ChangePart extends UndoableView
         PanelEquationTree pet = graphParent ? null : parent.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
-        PanelEquationGraph peg = pe.panelEquationGraph;  // Only used if graphParent is true.
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
         boolean addGraphNode = false;
@@ -297,8 +308,17 @@ public class ChangePart extends UndoableView
         for (GraphEdge ge : rebindEdges)
         {
             // Retrieve GUI metadata node so it can be updated to match DB.
-            NodeBase metadata = ge.nodeTo.node.child ("$metadata");
-            NodeBase nodeBind = (NodeAnnotation) AddAnnotation.findExact (metadata, false, "gui", "pin", "in", ge.pinKeyTo, "bind");
+            NodeBase nodeBind;
+            if (ge.nodeTo == pinOut)  // special case for output block
+            {
+                NodeBase metadata = pe.part.child ("$metadata");
+                nodeBind = (NodeAnnotation) AddAnnotation.findExact (metadata, false, "gui", "pin", "out", ge.pinKeyTo, "bind");
+            }
+            else
+            {
+                NodeBase metadata = ge.nodeTo.node.child ("$metadata");
+                nodeBind = (NodeAnnotation) AddAnnotation.findExact (metadata, false, "gui", "pin", "in", ge.pinKeyTo, "bind");
+            }
             nodeBind.setUserObject ();
 
             // Update display tree
@@ -335,6 +355,7 @@ public class ChangePart extends UndoableView
             }
             nodeAfter.hide = false;
             nodeAfter.graph.takeFocusOnTitle ();
+            peg.updatePins ();
             peg.reconnect ();
             peg.repaint ();
         }
