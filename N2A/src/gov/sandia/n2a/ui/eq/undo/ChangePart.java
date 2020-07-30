@@ -7,8 +7,11 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.swing.JTree;
@@ -26,8 +29,6 @@ import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
-import gov.sandia.n2a.ui.eq.GraphEdge;
-import gov.sandia.n2a.ui.eq.GraphNode;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
@@ -168,34 +169,44 @@ public class ChangePart extends UndoableView
         catch (Exception e) {}
 
         //   Change pin links to this part.
-        List<GraphEdge> rebindEdges = new ArrayList<GraphEdge> ();
-        PanelEquationGraph peg = pe.panelEquationGraph;  // Only used if graphParent is true.
-        GraphNode pinOut = peg.getPinOut ();
-        if (nodeBefore.graph != null)
+        //   Scan peer parts (which is the only place a pin link can be declared) and check for "bind" keys that reference nameBefore.
+        Map<NodePart,List<String>> rebind = new HashMap<NodePart,List<String>> ();  // for updating GUI later
+        Enumeration<?> peers = parent.children ();
+        while (peers.hasMoreElements ())
         {
-            for (GraphEdge ge : nodeBefore.graph.edgesIn)
+            Object o = peers.nextElement ();
+            if (! (o instanceof NodePart)) continue;
+            NodePart peer = (NodePart) o;
+            MNode pins = peer.source.child ("$metadata", "gui", "pin", "in");
+            if (pins == null) continue;
+            List<String> bound = null;
+            for (MNode pin : pins)
             {
-                if (ge.pinKeyFrom == null  ||  ge.pinKeyTo == null) continue;  // Must be a pin link.
-                if (ge.nodeFrom != nodeBefore.graph) continue;  // We must be the output side.
-
-                // Update "bind" key in both database and GUI.
-                // Note that edges will be rebuilt below, so no need to modify ge directly.
-                if (ge.nodeTo == pinOut)  // Special case for output block
+                if (pin.get ("bind").equals (nameBefore))
                 {
-                    MNode pin = pe.part.source.child ("$metadata", "gui", "pin", "out", ge.pinKeyTo);
                     pin.set (nameAfter, "bind");
-                    // NodeIO collated pin data will be rebuilt below by call to peg.updatePins()
+                    peer.pinIn.set (nameAfter, pin.key (), "bind");  // Also set the new name in collated pin data.
+                    if (bound == null) bound = new ArrayList<String> ();
+                    bound.add (pin.key ());
                 }
-                else  // Regular graph node
-                {
-                    MNode pin = ge.nodeTo.node.source.child ("$metadata", "gui", "pin", "in", ge.pinKeyTo);
-                    pin.set (nameAfter, "bind");
-                    pin = ge.nodeTo.node.pinIn.child (ge.pinKeyTo);
-                    pin.set (nameAfter, "bind");
-                }
-
-                rebindEdges.add (ge);  // mostly to update display text in visible tree
             }
+            if (bound != null) rebind.put (peer, bound);
+        }
+        //   Check parent for pin exports.
+        MNode pins = parent.source.child ("$metadata", "gui", "pin", "out");
+        if (pins != null)
+        {
+            List<String> bound = null;
+            for (MNode pin : pins)
+            {
+                if (pin.get ("bind").equals (nameBefore))
+                {
+                    pin.set (nameAfter, "bind");
+                    if (bound == null) bound = new ArrayList<String> ();
+                    bound.add (pin.key ());
+                }
+            }
+            if (bound != null) rebind.put (parent, bound);
         }
 
         // Update GUI
@@ -204,6 +215,7 @@ public class ChangePart extends UndoableView
         PanelEquationTree pet = graphParent ? null : parent.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
+        PanelEquationGraph peg = pe.panelEquationGraph;  // Only used if graphParent is true.
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
         boolean addGraphNode = false;
@@ -305,33 +317,31 @@ public class ChangePart extends UndoableView
             }
         }
 
-        for (GraphEdge ge : rebindEdges)
+        for (NodePart peer : rebind.keySet ())
         {
-            // Retrieve GUI metadata node so it can be updated to match DB.
-            NodeBase nodeBind;
-            if (ge.nodeTo == pinOut)  // special case for output block
+            PanelEquationTree subpet = peer.getTree ();
+            NodeBase metadata = peer.child ("$metadata");  // also works for parent
+            for (String pinKey : rebind.get (peer))
             {
-                NodeBase metadata = pe.part.child ("$metadata");
-                nodeBind = (NodeAnnotation) AddAnnotation.findExact (metadata, false, "gui", "pin", "out", ge.pinKeyTo, "bind");
-            }
-            else
-            {
-                NodeBase metadata = ge.nodeTo.node.child ("$metadata");
-                nodeBind = (NodeAnnotation) AddAnnotation.findExact (metadata, false, "gui", "pin", "in", ge.pinKeyTo, "bind");
-            }
-            nodeBind.setUserObject ();
+                // Retrieve GUI metadata node so it can be updated to match DB.
+                NodeBase nodeBind;
+                if (peer == parent) nodeBind = (NodeAnnotation) AddAnnotation.findExact (metadata, false, "gui", "pin", "out", pinKey, "bind");
+                else                nodeBind = (NodeAnnotation) AddAnnotation.findExact (metadata, false, "gui", "pin", "in",  pinKey, "bind");
+                nodeBind.setUserObject ();
 
-            // Update display tree
-            PanelEquationTree subpet = nodeBind.getTree ();
-            if (subpet != null)
-            {
-                JTree subtree = subpet.tree;
-                FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
-                NodeBase subparent = (NodeBase) nodeBind.getParent ();
+                // Update display tree.
+                if (subpet != null)
+                {
+                    // For simplicity, look up subtree, submodel and subparent each time,
+                    // even though they could be done just once per peer part.
+                    JTree subtree = subpet.tree;
+                    FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
+                    NodeBase subparent = (NodeBase) nodeBind.getParent ();
 
-                submodel.nodeChanged (nodeBind);
-                subparent.invalidateColumns (submodel);
-                needAnimate.add (subpet);
+                    submodel.nodeChanged (nodeBind);
+                    subparent.invalidateColumns (submodel);
+                    needAnimate.add (subpet);
+                }
             }
         }
 
