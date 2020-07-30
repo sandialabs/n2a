@@ -69,6 +69,7 @@ import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.border.AbstractBorder;
@@ -1811,6 +1812,7 @@ public class PanelEquations extends JPanel
             label.setIcon (null);
             setFocusable (false);
             setTransferHandler (transferHandler);
+            ToolTipManager.sharedInstance ().registerComponent (this);
 
             InputMap inputMap = getInputMap ();
             inputMap.put (KeyStroke.getKeyStroke ("UP"),                "nothing");
@@ -1995,6 +1997,12 @@ public class PanelEquations extends JPanel
         {
             super.updateUI ();
             UIupdated = true;
+        }
+
+        public String getToolTipText ()
+        {
+            FontMetrics fm = getFontMetrics (getFont ());
+            return part.getToolTipText (fm);
         }
 
         public Dimension getPreferredSize ()

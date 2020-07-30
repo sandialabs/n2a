@@ -13,6 +13,7 @@ import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FocusTraversalPolicy;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.KeyboardFocusManager;
@@ -47,6 +48,7 @@ import javax.swing.JTree;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.ViewportLayout;
@@ -415,6 +417,8 @@ public class PanelEquationGraph extends JScrollPane
             super (new GraphLayout ());
             layout = (GraphLayout) getLayout ();
 
+            ToolTipManager.sharedInstance ().registerComponent (this);
+
             mouseListener = new GraphMouseListener ();
             addMouseListener (mouseListener);
             addMouseMotionListener (mouseListener);
@@ -486,6 +490,24 @@ public class PanelEquationGraph extends JScrollPane
         {
             // Because parts can overlap, we must return false.
             return false;
+        }
+
+        public String getToolTipText (MouseEvent me)
+        {
+            Point p = me.getPoint ();
+            GraphNode gn = findNodeAt (p, true);
+            if (gn == null) return null;
+            String pinName = gn.findPinAt (p);
+            if (pinName.isEmpty ()) return null;
+
+            String notes;
+            String[] pieces = pinName.split ("\\.");
+            if (pieces[0].equals ("in")) notes = gn.node.pinIn.get (pieces[1], "notes");
+            else                         notes = gn.node.pinOut.get (pieces[1], "notes");
+            if (notes.isEmpty ()) return null;
+
+            FontMetrics fm = getFontMetrics (getFont ());
+            return NodeBase.formatToolTipText (notes, fm);
         }
 
         public void clear ()

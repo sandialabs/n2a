@@ -33,7 +33,6 @@ import gov.sandia.n2a.ui.eq.undo.UndoableView;
 
 import java.awt.Component;
 import java.awt.Dimension;
-import java.awt.FontMetrics;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
@@ -93,21 +92,7 @@ public class PanelEquationTree extends JScrollPane
                 TreePath path = getPathForLocation (e.getX (), e.getY ());
                 if (path == null) return null;
                 NodeBase node = (NodeBase) path.getLastPathComponent ();
-                if (! (node instanceof NodeVariable)) return null;
-
-                MPart source = node.source;
-                String notes = source.get ("$metadata", "notes");
-                if (notes.isEmpty ()) notes = source.get ("$metadata", "note");
-                if (notes.isEmpty ()) return null;
-
-                int paneWidth = PanelEquationTree.this.getWidth ();
-                FontMetrics fm = getFontMetrics (getFont ());
-                int notesWidth = fm.stringWidth (notes);
-                if (notesWidth < paneWidth) return notes;
-
-                paneWidth = Math.max (300, paneWidth);
-                notes = notes.replace ("\n", "<br>");
-                return "<html><p  width=\"" + paneWidth + "\">" + notes + "</p></html>";
+                return node.getToolTipText (getFontMetrics (getFont ()));
             }
 
             public void updateUI ()

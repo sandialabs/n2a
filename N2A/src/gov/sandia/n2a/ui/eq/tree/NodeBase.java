@@ -203,6 +203,25 @@ public class NodeBase extends DefaultMutableTreeNode
 
     // Appearance in tree ----------------------------------------------------
 
+    public String getToolTipText (FontMetrics fm)
+    {
+        String notes = source.get ("$metadata", "notes");
+        if (notes.isEmpty ()) notes = source.get ("$metadata", "note");
+        if (notes.isEmpty ()) return null;
+        return formatToolTipText (notes, fm);
+    }
+
+    public static String formatToolTipText (String text, FontMetrics fm)
+    {
+        int frameWidth = Math.min (800, MainFrame.instance.getWidth ());
+        frameWidth = Math.max (300, frameWidth);
+        int notesWidth = fm.stringWidth (text);
+        if (notesWidth < frameWidth) return text;
+
+        text = text.replace ("\n", "<br>");
+        return "<html><p  width=\"" + frameWidth + "\">" + text + "</p></html>";
+    }
+
     public Icon getIcon (boolean expanded)
     {
         return null;

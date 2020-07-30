@@ -41,6 +41,7 @@ import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.border.AbstractBorder;
@@ -149,6 +150,7 @@ public class GraphNode extends JPanel
         }
         updatePins ();
 
+        ToolTipManager.sharedInstance ().registerComponent (this);
         addMouseListener (resizeListener);
         addMouseMotionListener (resizeListener);
 
@@ -175,6 +177,12 @@ public class GraphNode extends JPanel
         if (open) return;
         if (hr                != null) SwingUtilities.updateComponentTreeUI (hr);
         if (panelEquationTree != null) SwingUtilities.updateComponentTreeUI (panelEquationTree);
+    }
+
+    public String getToolTipText ()
+    {
+        FontMetrics fm = getFontMetrics (getFont ());
+        return node.getToolTipText (fm);
     }
 
     public PanelEquationTree getEquationTree ()
@@ -734,6 +742,7 @@ public class GraphNode extends JPanel
             bigIcon = true;
 
             setTransferHandler (container.transferHandler);
+            ToolTipManager.sharedInstance ().registerComponent (this);
 
             int interval = 500;
             Object intervalProperty = Toolkit.getDefaultToolkit ().getDesktopProperty ("awt.multiClickInterval");
@@ -1096,6 +1105,12 @@ public class GraphNode extends JPanel
         {
             super.updateUI ();
             UIupdated = true;
+        }
+
+        public String getToolTipText ()
+        {
+            FontMetrics fm = getFontMetrics (getFont ());
+            return node.getToolTipText (fm);
         }
 
         public Dimension getPreferredSize ()

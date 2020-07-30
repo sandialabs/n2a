@@ -29,6 +29,7 @@ import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 
 import java.awt.Component;
 import java.awt.EventQueue;
+import java.awt.FontMetrics;
 import java.awt.Point;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
@@ -81,7 +82,7 @@ public class PanelSearch extends JPanel
     protected JTextField       textQuery;
     protected NodeBase         root          = new NodeBase ();
     protected DefaultTreeModel model         = new DefaultTreeModel (root);
-    public    JTree            tree          = new JTree (model);
+    public    JTree            tree;
     protected MNodeRenderer    renderer      = new MNodeRenderer ();
     public    NameEditor       nameEditor    = new NameEditor (renderer);
     public    TransferHandler  transferHandler;
@@ -95,6 +96,27 @@ public class PanelSearch extends JPanel
 
     public PanelSearch ()
     {
+        tree = new JTree (model)
+        {
+            public String getToolTipText (MouseEvent e)
+            {
+                TreePath path = getPathForLocation (e.getX (), e.getY ());
+                if (path == null) return null;
+                Object o = path.getLastPathComponent ();
+                if (! (o instanceof NodeModel)) return null;
+                NodeModel node = (NodeModel) o;
+
+                MNode doc = AppData.models.child (node.key);
+                if (doc == null) return null;
+                MPart source = new MPart (doc);
+                String notes = source.get ("$metadata", "notes");
+                if (notes.isEmpty ()) notes = source.get ("$metadata", "note");
+                if (notes.isEmpty ()) return null;
+
+                FontMetrics fm = getFontMetrics (getFont ());
+                return gov.sandia.n2a.ui.eq.tree.NodeBase.formatToolTipText (notes, fm);
+            }
+        };
         tree.setRootVisible (false);
         tree.setExpandsSelectedPaths (true);
         tree.setScrollsOnExpand (true);
