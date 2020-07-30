@@ -1967,6 +1967,17 @@ public class PanelEquationGraph extends JScrollPane
                                 MNode metadata = new MVolatile ();
                                 setBindingOut (metadata, pinName, partFrom.source.key (), edge.pinKeyFrom);
                                 um.apply (new ChangeAnnotations (container.part, metadata));
+
+                                if (edge.nodeTo != null)
+                                {
+                                    if (! removeAuto (um, edge.nodeTo.node, edge.pinKeyTo))
+                                    {
+                                        MNode disconnect = new MVolatile ();
+                                        clearBinding (disconnect, edge.pinKeyTo);
+                                        um.apply (new ChangeAnnotations (edge.nodeTo.node, disconnect));
+                                    }
+                                }
+
                                 handled = true;
                             }
                         }
