@@ -93,12 +93,14 @@ public class GraphEdge
                 nodeTo    = nodeFrom.container.panelEquationGraph.graphPanel.pinIn;
                 pinSideTo = "out";
                 pinKeyTo  = pinName;
+                nodeTo.node.pinOut.set ("", pinKeyTo, "bound");
             }
             else if (alias.equals (second)  &&  pin.child ("pass") != null)
             {
                 nodeTo    = nodeFrom.container.panelEquationGraph.graphPanel.pinOut;
                 pinSideTo = "in";
                 pinKeyTo  = pin.getOrDefault (pinName, "pass");
+                nodeTo.node.pinIn.set ("", pinKeyTo, "bound");
             }
             return;
         }
@@ -131,6 +133,8 @@ public class GraphEdge
             if (nodeTo.node.source.child ("$metadata", "gui", "pin", inout, key) == null) return;  // pin doesn't exist
             pinSideTo = inout;
             pinKeyTo  = key;
+            if (inout.equals ("in")) nodeTo.node.pinIn .set ("", key, "bound");
+            else                     nodeTo.node.pinOut.set ("", key, "bound");
         }
     }
 
@@ -161,12 +165,31 @@ public class GraphEdge
             pinKeyTo    = pinKey;
             pinSideFrom = "out";
             pinKeyFrom  = nodeTo.node.pinIn.get (pinKey, "bind", "pin");
+
+            nodeFrom.node.pinOut.set ("", pinKeyFrom, "bound");
+            nodeTo  .node.pinIn .set ("", pinKey,     "bound");
         }
         else  // output
         {
             pinSideTo = "in";
             pinKeyTo  = pinKey;
             // pinSideFrom and pinKeyFrom are null, just like a connector. The distinction is that alias is empty.
+
+            nodeTo.node.pinIn.set ("", pinKey, "bound");
+        }
+    }
+
+    public void clearBound ()
+    {
+        if (pinKeyFrom != null)
+        {
+            if (pinSideFrom.equals ("in")) nodeFrom.node.pinIn .clear (pinKeyFrom, "bound");
+            else                           nodeFrom.node.pinOut.clear (pinKeyFrom, "bound");
+        }
+        if (pinKeyTo != null)
+        {
+            if (pinSideTo.equals ("in")) nodeTo.node.pinIn .clear (pinKeyTo, "bound");
+            else                         nodeTo.node.pinOut.clear (pinKeyTo, "bound");
         }
     }
 

@@ -716,7 +716,7 @@ public class GraphNode extends JPanel
         }
 
         Color boxFill;
-        boolean bound = false;  // TODO: determine if pin is bound
+        boolean bound = c.getFlag ("bound");
         if (bound) boxFill = boxBorder;
         else       boxFill = new Color (boxBorder.getRed (), boxBorder.getGreen (), boxBorder.getBlue (), 0x40);  // Semi-transparent version of boxBorder
 

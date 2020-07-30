@@ -724,6 +724,7 @@ public class PanelEquationGraph extends JScrollPane
                 gn.edgesIn.clear ();
                 gn.edgesOut.clear ();
             }
+            for (GraphEdge e : edges) e.clearBound ();
             edges.clear ();
             buildEdges ();
         }
@@ -2343,11 +2344,11 @@ public class PanelEquationGraph extends JScrollPane
         public String disconnect (UndoManager um, NodeVariable variable, boolean pinOnly)
         {
             String pinName = null;
-            NodeBase pin = AddAnnotation.findExact (variable, false, "gui", "pin");
+            NodeAnnotation pin = (NodeAnnotation) AddAnnotation.findExact (variable, false, "gui", "pin");
             if (pin != null)
             {
-                pinName = pin.source.get ();
-                um.apply (new DeleteAnnotation ((NodeAnnotation) pin, false));
+                pinName = pin.folded.get ();
+                um.apply (new DeleteAnnotation (pin, false));
             }
             if (pinOnly) return pinName;  // early-out
 
