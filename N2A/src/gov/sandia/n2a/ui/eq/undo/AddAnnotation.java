@@ -264,7 +264,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
                     String alias = binding.source.key ();
                     p.graph.updateEdge (alias, p.connectionBindings.get (alias));
                 }
-                // otherwise all edges in the graph have been updated above, so need to do incremental update here.
+                // otherwise all edges in the graph have been updated above, so no need to do incremental update here.
             }
         }
 

@@ -27,12 +27,10 @@ import gov.sandia.n2a.ui.eq.PanelEquations.StoredView;
     Combines UndoableView edits into a single transaction where the view.restore()
     function is only called once for the whole set.
 
-    The edits will be executed in the same order they are added, so the last-added edit
-    has final say over focus. This also implies that the edits should not depend on each
-    other.
-
     Optionally, the current selection will be cleared before running the transaction.
     This allows member edits to compose a new selection specific to this compound edit.
+
+    Optionally, the lead selection (effective focus) can be set after the transaction is done.
 **/
 @SuppressWarnings("serial")
 public class CompoundEditView extends CompoundEdit

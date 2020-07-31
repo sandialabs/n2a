@@ -372,34 +372,70 @@ public class GraphNode extends JPanel
             dy *= 10;
         }
 
-        MNode metadata = new MVolatile ();
-        MNode bounds = metadata.childOrCreate ("gui", "bounds");
-        Rectangle now = getBounds ();
-        if (dx != 0) metadata.set (now.x - parent.offset.x + dx, "gui", "bounds", "x");
-        if (dy != 0) metadata.set (now.y - parent.offset.y + dy, "gui", "bounds", "y");
-
         List<GraphNode> selection = container.panelEquationGraph.getSelection ();
         selection.remove (this);
 
+        MNode metadata = new MVolatile ();
+        NodePart np;
+        MNode bounds;
+        GraphPanel gp = container.panelEquationGraph.graphPanel;
+        if (this == gp.pinIn)
+        {
+            np = container.part;
+            bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
+        }
+        else if (this == gp.pinOut)
+        {
+            np = container.part;
+            bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
+        }
+        else
+        {
+            np = node;
+            bounds = metadata.childOrCreate ("gui", "bounds");
+        }
+        Rectangle now = getBounds ();
+        if (dx != 0  ||  np != node) metadata.set (now.x - parent.offset.x + dx, "gui", "bounds", "x");
+        if (dy != 0  ||  np != node) metadata.set (now.y - parent.offset.y + dy, "gui", "bounds", "y");
+        ChangeAnnotations ca = new ChangeAnnotations (np, metadata);
+
         UndoManager um = MainFrame.instance.undoManager;
-        ChangeAnnotations ca = new ChangeAnnotations (node, metadata);
         if (selection.isEmpty ())
         {
             um.apply (ca);
         }
         else
         {
+            ca.multiGraph = true;
             CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
             um.addEdit (compound);
             compound.addEdit (ca);  // delayed execution
+            if (np == node) compound.leadPath = np.getKeyPath ();
             for (GraphNode g : selection)
             {
                 metadata = new MVolatile ();
-                bounds = metadata.childOrCreate ("gui", "bounds");
+                if (g == gp.pinIn)
+                {
+                    np = container.part;
+                    bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
+                }
+                else if (g == gp.pinOut)
+                {
+                    np = container.part;
+                    bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
+                }
+                else
+                {
+                    np = g.node;
+                    bounds = metadata.childOrCreate ("gui", "bounds");
+                    if (compound.leadPath == null) compound.leadPath = np.getKeyPath ();
+                }
                 now = g.getBounds ();
-                if (dx != 0) bounds.set (now.x - parent.offset.x + dx, "x");
-                if (dy != 0) bounds.set (now.y - parent.offset.y + dy, "y");
-                compound.addEdit (new ChangeAnnotations (g.node, metadata));
+                if (dx != 0  ||  np != node) bounds.set (now.x - parent.offset.x + dx, "x");
+                if (dy != 0  ||  np != node) bounds.set (now.y - parent.offset.y + dy, "y");
+                ca = new ChangeAnnotations (np, metadata);
+                ca.multiGraph = true;
+                compound.addEdit (ca);
             }
             um.endCompoundEdit ();
             compound.redo ();
@@ -1540,29 +1576,11 @@ public class GraphNode extends JPanel
                     GraphPanel gp = container.panelEquationGraph.graphPanel;
                     if (GraphNode.this == gp.pinIn)
                     {
-                        // If this is a naked canvas with both IO blocks, then store coordinates for other block too.
-                        // This keeps it from swimming around on screen as a result of our move.
-                        if (moved  &&  gp.pinOut != null  &&  gp.getComponentCount () == 2)
-                        {
-                            Rectangle now2 = gp.pinOut.getBounds ();
-                            bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
-                            bounds.set (now2.x - parent.offset.x, "x");
-                            bounds.set (now2.y - parent.offset.y, "y");
-                        }
-
                         np = container.part;
                         bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
                     }
                     else if (GraphNode.this == gp.pinOut)
                     {
-                        if (moved  &&  gp.pinIn != null  &&  gp.getComponentCount () == 2)
-                        {
-                            Rectangle now2 = gp.pinIn.getBounds ();
-                            bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
-                            bounds.set (now2.x - parent.offset.x, "x");
-                            bounds.set (now2.y - parent.offset.y, "y");
-                        }
-
                         np = container.part;
                         bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
                     }
@@ -1598,35 +1616,21 @@ public class GraphNode extends JPanel
                         }
                         else
                         {
+                            ca.multiGraph = true;
                             CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
                             um.addEdit (compound);
                             compound.addEdit (ca);  // delayed execution
+                            if (np == node) compound.leadPath = np.getKeyPath ();
                             for (GraphNode g : selection)
                             {
                                 metadata = new MVolatile ();
                                 if (g == gp.pinIn)
                                 {
-                                    if (gp.pinOut != null  &&  gp.getComponentCount () == 2)
-                                    {
-                                        Rectangle now2 = gp.pinOut.getBounds ();
-                                        bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
-                                        bounds.set (now2.x - parent.offset.x, "x");
-                                        bounds.set (now2.y - parent.offset.y, "y");
-                                    }
-
                                     np = container.part;
                                     bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
                                 }
-                                else if (g == container.panelEquationGraph.graphPanel.pinOut)
+                                else if (g == gp.pinOut)
                                 {
-                                    if (gp.pinIn != null  &&  gp.getComponentCount () == 2)
-                                    {
-                                        Rectangle now2 = gp.pinIn.getBounds ();
-                                        bounds = metadata.childOrCreate ("gui", "pin", "bounds", "in");
-                                        bounds.set (now2.x - parent.offset.x, "x");
-                                        bounds.set (now2.y - parent.offset.y, "y");
-                                    }
-
                                     np = container.part;
                                     bounds = metadata.childOrCreate ("gui", "pin", "bounds", "out");
                                 }
@@ -1634,11 +1638,14 @@ public class GraphNode extends JPanel
                                 {
                                     np = g.node;
                                     bounds = metadata.childOrCreate ("gui", "bounds");
+                                    if (compound.leadPath == null) compound.leadPath = np.getKeyPath ();
                                 }
                                 now = g.getBounds ();
                                 bounds.set (now.x - parent.offset.x, "x");
                                 bounds.set (now.y - parent.offset.y, "y");
-                                compound.addEdit (new ChangeAnnotations (np, metadata));
+                                ca = new ChangeAnnotations (np, metadata);
+                                ca.multiGraph = true;
+                                compound.addEdit (ca);
                             }
                             um.endCompoundEdit ();
                             compound.redo ();

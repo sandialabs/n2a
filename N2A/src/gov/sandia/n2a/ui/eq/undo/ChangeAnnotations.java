@@ -37,6 +37,7 @@ public class ChangeAnnotations extends UndoableView
     protected MNode        doAdd;         // The nodes to be changed, rooted at $metadata. There is no corresponding doRemove.
     protected boolean      neutralized;   // Indicates that this edit exactly reverses the previous one, so completely remove both.
     protected boolean      multi;
+    public    boolean      multiGraph;    // hint that "multi" applies to graph nodes rather than tree nodes. In this case, don't do anything with focus in tree. Instead, focus should be pulled on to active graph node.
     protected boolean      touchesPin;
 
     public ChangeAnnotations (NodeBase parent, MNode metadata)
@@ -153,9 +154,20 @@ public class ChangeAnnotations extends UndoableView
         {
             TreeNode[] path = metadataNode.getPath ();
             PanelEquationTree.updateVisibility (pet, path, -2, ! multi);
-            if (multi) pet.tree.addSelectionPath (new TreePath (path));
-            else       sp.restore (pet.tree, true);  // This forces focus back to original location.       
+            if (multi)
+            {
+                if (! multiGraph) pet.tree.addSelectionPath (new TreePath (path));
+            }
+            else
+            {
+                sp.restore (pet.tree, true);  // This forces focus back to original location.       
+            }
             pet.animate ();
+        }
+        if (multi  &&  parent instanceof NodePart)
+        {
+            NodePart np = (NodePart) parent;
+            if (np.graph != null) np.graph.setSelected (true);
         }
 
         AddAnnotation.update (parent, touchesPin);
