@@ -171,13 +171,15 @@ public class ChangePart extends UndoableView
         //   Change pin links to this part.
         //   Scan peer parts (which is the only place a pin link can be declared) and check for "bind" keys that reference nameBefore.
         Map<NodePart,List<String>> rebind = new HashMap<NodePart,List<String>> ();  // for updating GUI later
-        Enumeration<?> peers = parent.children ();
-        while (peers.hasMoreElements ())
+        Enumeration<?> siblings = parent.children ();
+        while (siblings.hasMoreElements ())
         {
-            Object o = peers.nextElement ();
+            Object o = siblings.nextElement ();
             if (! (o instanceof NodePart)) continue;
-            NodePart peer = (NodePart) o;
-            MNode pins = peer.source.child ("$metadata", "gui", "pin", "in");
+            NodePart sibling = (NodePart) o;
+            MNode pins;
+            if (sibling == nodeBefore) pins = parent .source.child (nameAfter, "$metadata", "gui", "pin", "in");  // because the old source is no longer attached to document
+            else                       pins = sibling.source.child (           "$metadata", "gui", "pin", "in");
             if (pins == null) continue;
             List<String> bound = null;
             for (MNode pin : pins)
@@ -185,12 +187,12 @@ public class ChangePart extends UndoableView
                 if (pin.get ("bind").equals (nameBefore))
                 {
                     pin.set (nameAfter, "bind");
-                    peer.pinIn.set (nameAfter, pin.key (), "bind");  // Also set the new name in collated pin data.
+                    sibling.pinIn.set (nameAfter, pin.key (), "bind");  // Also set the new name in collated pin data.
                     if (bound == null) bound = new ArrayList<String> ();
                     bound.add (pin.key ());
                 }
             }
-            if (bound != null) rebind.put (peer, bound);
+            if (bound != null) rebind.put (sibling, bound);
         }
         //   Check parent for pin exports.
         MNode pins = parent.source.child ("$metadata", "gui", "pin", "out");

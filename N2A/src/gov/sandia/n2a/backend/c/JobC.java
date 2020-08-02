@@ -292,6 +292,12 @@ public class JobC extends Thread
 
     public void digestModel () throws Exception
     {
+        if (model.source.containsKey ("pin"))
+        {
+            model.collectPins ();
+            model.resolvePins ();
+            model.purgeAutoPins ();
+        }
         model.resolveConnectionBindings ();
         model.addGlobalConstants ();
         model.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type

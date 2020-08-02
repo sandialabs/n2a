@@ -335,6 +335,7 @@ public class AddPart extends UndoableView implements AddEditable
         }
         if (graphParent  ||  touchesPin)
         {
+            peg.updatePins ();
             peg.reconnect ();
             peg.repaint ();
         }
@@ -438,6 +439,7 @@ public class AddPart extends UndoableView implements AddEditable
         {
             if (! multi  ||  multiLast)
             {
+                peg.updatePins ();
                 peg.reconnect ();
                 peg.repaint ();
             }

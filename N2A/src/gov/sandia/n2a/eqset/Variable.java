@@ -282,6 +282,22 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
     }
 
+    public Variable deepCopy ()
+    {
+        Variable result = null;
+        try
+        {
+            result = (Variable) clone ();
+        }
+        catch (CloneNotSupportedException e) {}  // Since we do support clone(), this exception will never be thrown, and result will always be defined.
+
+        TreeSet<EquationEntry> newEquations = new TreeSet<EquationEntry> ();
+        for (EquationEntry e : result.equations) newEquations.add (e.deepCopy (result));
+        result.equations = newEquations;
+
+        return result;
+    }
+
     /**
         Replaces each variable in a given subset, such that the result can be
         modified by optimization procedures without damaging the original equation set.

@@ -66,6 +66,8 @@ public class EquationSet implements Comparable<EquationSet>
     public EquationSet                         container;
     public NavigableSet<Variable>              variables;
     public List<EquationSet>                   parts;
+    public MNode                               pinIn;                  // partial collection of input pins (does not include inner input pins which are exported)
+    public MNode                               pinOut;                 // collection of output pins
     public List<ConnectionBinding>             connectionBindings;     // non-null iff this is a connection
     public boolean                             connected;
     public NavigableSet<AccountableConnection> accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
@@ -89,6 +91,16 @@ public class EquationSet implements Comparable<EquationSet>
 
     public static final List<String> endpointSpecials = Arrays.asList ("$count", "$k", "$max", "$min", "$project", "$radius");  // $variables that appear after an endpoint identifier
 
+    /**
+        Connection terminology:
+        connection -- a type of equation set that references into (reads and writes) other equation sets
+        instance variable -- a type of variable that can point to equation-set instances; used to express references
+        alias -- name of the instance variable
+        endpoint -- the destination equation set; at run-time this can also refer to the specific instance
+        binding -- association between instance variable and endpoint
+        bound -- when an instance variable is assigned a path to an actual equation set
+        unbound -- when an instance variable is tagged as such via the "connect()" notation
+    **/
     public static class ConnectionBinding
     {
         public int         index;  // position in connectionBindings array
@@ -530,6 +542,40 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Finds the last common ancestor (LCA) between this equation set and the given one.
+        If the equation tree is coherent and both this and that are members of it, then
+        this will always return a valid result. It may be the root of the tree.
+    **/
+    public EquationSet findLCA (EquationSet that)
+    {
+        // Mark our own path.
+        EquationSet p = this;
+        while (p != null)
+        {
+            p.visited = null;
+            p = p.container;
+        }
+
+        // Mark the other path.
+        p = that;
+        while (p != null)
+        {
+            p.visited = this;
+            p = p.container;
+        }
+
+        // Check our own path.
+        p = this;
+        while (p != null)
+        {
+            if (p.visited == this) return p;
+            p = p.container;
+        }
+
+        return null;  // This case should never be reached.
+    }
+
+    /**
         Determines if this equation set has a fixed size of 1.
         @param strict false indicates to make an exception for the top-level part, allowing
         it to be a singleton even though it (most likely) uses $p to terminate simulation.
@@ -588,10 +634,314 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Collects pin exposures and exports into lists for use by resolvePins() and purgeAutoPins().
+        Compare this code with NodePart.analyzePins()
+        Depends on: none -- This function must be the very first thing run after constructing the
+        full equation set hierarchy. However, if it is known that no equation set uses pins,
+        then it is possible to skip straight to resolveConnections().
+    **/
+    public void collectPins ()
+    {
+        // Process everything below this level of the hierarchy first.
+        for (EquationSet s : parts) s.collectPins ();
+
+        pinIn  = new MVolatile ();
+        pinOut = new MVolatile ();
+
+        // Collect pins from sub-parts
+        for (EquationSet s : parts)
+        {
+            MNode pin = s.metadata.child ("gui", "pin");
+            if (pin == null) continue;
+
+            // Forwarded input
+            MNode in = pin.child ("in");
+            if (in != null)
+            {
+                for (MNode i : in)
+                {
+                    String pinName = i.get ("bind", "pin");
+                    if (pinName.isEmpty ()) continue;
+                    if (i.get ("bind").isEmpty ()) pinIn.set ("", pinName, s.name);  // A blank value indicates a forwarded input.
+                }
+            }
+
+            // Exposure
+            // If more than one part supplies the same topic for a given output pin, then it is completely
+            // arbitrary which one is selected.
+            if (pin.get ().isEmpty ()  &&  (in != null  ||  pin.child ("out") != null)) continue;  // pin must be explicit, or both "in" and "out" must be absent.
+
+            // Determine if this is a connection (since resolveConnectionBindings() has not been called yet).
+            // The pin interface requires that at least one alias be unbound and thus tagged with "connect()".
+            // The simplest way to find this is to scan the source code.
+            for (MNode c : s.source)
+            {
+                if (Operator.containsConnect (c.get ()))
+                {
+                    s.connectionBindings = new ArrayList<ConnectionBinding> ();  // Use existence of empty list as flag. This should be filled later by resolveConnectionBindings()
+                    s.metadata.set (c.key (), "gui", "pin", "alias");  // Note the chosen alias for this connection.
+                    break;
+                }
+            }
+
+            String pinName = pin.getOrDefault (s.name);
+            String topic = pin.getOrDefault ("data", "topic");
+            if (s.connectionBindings == null)  // population (output)
+            {
+                pinOut.set (s.name, pinName, "topic", topic);
+            }
+            else  // connection (input)
+            {
+                pinIn.set ("", pinName, s.name);  // pinIn is just a collection of subscribers to each pin
+
+                // pass-through to output
+                MNode pass = pin.child ("pass");
+                if (pass != null)
+                {
+                    pinName = pass.getOrDefault (pinName);  // "pass" can override the exposure name
+                    pinOut.set (s.name, pinName, "topic", topic);
+                }
+            }
+        }
+
+        // Forwarded outputs
+        for (MNode pin : metadata.childOrEmpty ("gui", "pin", "out"))
+        {
+            String bind = pin.get ("bind");
+            if (bind.isEmpty ()) continue;
+            String bindPin = pin.get ("bind", "pin");
+            if (bindPin.isEmpty ()) continue;
+            EquationSet s = findPart (bind);
+            if (s == null) continue;
+            if (s.pinOut == null  ||  s.pinOut.child (bindPin) == null) continue;
+
+            String pinName = pin.key ();
+            pinOut.set (bind,    pinName, "bind");
+            pinOut.set (bindPin, pinName, "bind", "pin");
+        }
+    }
+
+    /**
+        Converts dangling connections exposed as pins into regular connections with well-defined
+        bindings. Folds pass-through connections onto their downstream counterparts.
+        The resulting model should be interpretable without reference to metadata or any knowledge
+        of pin structure. However, auto pins and pass-through connections may still remain.
+        These are eliminated in a separate step.
+        Depends on results of: collectPins
+    **/
+    public void resolvePins () throws Exception
+    {
+        LinkedList<String> unresolved = new LinkedList<String> ();
+        resolvePins (unresolved);
+        if (unresolved.size () > 0)
+        {
+            PrintStream ps = Backend.err.get ();
+            ps.println ("Unresolved pin links:");
+            for (String v : unresolved) ps.println ("  " + v);
+            throw new Backend.AbortRun ();
+        }
+    }
+
+    public void resolvePins (List<String> unresolved) throws Exception
+    {
+        for (EquationSet s : parts)
+        {
+            // Process inner structure of part, regardless of type.
+            // If this is a connection, then any internal pin structure should not ascend out of the part.
+            s.resolvePins ();
+
+            // Connections with an unbound alias.
+            // For each unbound alias, walk the part hierarchy to find the right target population.
+            if (s.connectionBindings == null) continue;  // Only connections allowed.
+            if (s.metadata.child ("gui", "pin", "pass") != null) continue;  // Pass-through connections are not allowed.
+
+            String alias = s.metadata.get ("gui", "pin", "alias");
+            PinBinding result = new PinBinding ();
+            result.resolve (s);
+            if (result.unresolved != null)
+            {
+                unresolved.add (s.prefix () + "." + alias + " --> " + result.unresolved);
+            }
+            else
+            {
+                s.override (alias + "=" + result.path ());
+            }
+        }
+    }
+
+    public static class PinBinding
+    {
+        EquationSet C;          // The connection part we are trying to resolve.
+        String      pinName;    // current name of pin exposing the connection; can change during traversal
+        String      topic;      // topic that connection requests; remains the same
+        EquationSet endpoint;   // if non-null, then this is the target of the connection (and implicitly, resolution succeeded).
+        String      unresolved; // if non-null, then this message describes how the resolution failed
+
+        public void resolve (EquationSet s)
+        {
+            C       = s;
+            pinName = s.metadata.getOrDefault (s.name, "gui", "pin");
+            topic   = s.metadata.getOrDefault ("data", "gui", "pin", "topic");
+            s       = s.container;
+
+            // Examine the given input pin of s
+            // Possible outcomes: 1) ascend to container of s; 2) move to bound pin on peer of s
+            while (true)  // Could ascend several times before reaching resolution.
+            {
+                String bindPin = s.metadata.get ("gui", "pin", "in", pinName, "bind", "pin");
+                if (bindPin.isEmpty ())
+                {
+                    unresolved = s.prefix () + " input pin '" + pinName + "' not bound";
+                    return;
+                }
+                String bind = s.metadata.get ("gui", "pin", "in", pinName, "bind");
+                if (bind.isEmpty ())  // ascend to container of s
+                {
+                    pinName = bindPin;
+                    s = s.container;
+                }
+                else  // lateral move to peer of s
+                {
+                    // Examine the output pin of peer
+                    // Possible outcomes: 1) match the topic with a population inside peer; 2) pass-through connection to an input of peer; 3) descend to an inner part
+                    EquationSet container = s.container;
+                    boolean passThrough = false;
+                    while (! passThrough)  // Could descend several times before reaching resolution.
+                    {
+                        // Find the peer
+                        EquationSet peer = container.findPart (bind);
+                        if (peer == null)
+                        {
+                            unresolved = "'" + bind + "' is not a part in " + container.prefix ();
+                            return;
+                        }
+
+                        // Find the specified pin
+                        MNode pin = peer.pinOut.child (bindPin);
+                        if (pin == null)
+                        {
+                            unresolved = "'" + bindPin + "' is not an output pin of " + peer.prefix ();
+                            return;
+                        }
+
+                        // Search for topic
+                        String targetName = pin.get ("topic", topic);
+                        if (targetName.isEmpty ())  // No matching topic, so attempt to follow an exported inner pin.
+                        {
+                            String outputPinName = bindPin;  // for error reporting, if needed
+                            bind    = pin.get ("bind");
+                            bindPin = pin.get ("bind", "pin");
+                            if (bind.isEmpty ()  ||  bindPin.isEmpty ())  // No options left
+                            {
+                                unresolved = "topc '" + topic + "' not available from part '" + peer.prefix () + "' output pin '" + outputPinName + "'";
+                                return;
+                            }
+                            // else descend.
+                            // The binding we just retrieved will be used in the context of peer to find the inner part.
+                            container = peer;
+                        }
+                        else  // matched topic
+                        {
+                            EquationSet target = peer.findPart (targetName);
+                            if (target.connectionBindings == null)  // Done! A true output population.
+                            {
+                                endpoint = target;
+                                return;
+                            }
+                            else  // A pass-through connection to peer's inputs.
+                            {
+                                passThrough = true;
+                                s = peer;
+                                pinName = target.metadata.getOrDefault (targetName, "gui", "pin");
+
+                                // The main purpose of a pass-through connection is to supply a weight
+                                // matrix to an inner connection. As a generalization, we overwrite any
+                                // variables which are explicitly defined in the pass-through part.
+                                // This does not include anything that could change structure, such as
+                                // $inherit or the connection bindings. It is best if the pass-through
+                                // connection be of the same type as its downstream counterpart.
+                                for (Variable v : target.variables)
+                                {
+                                    if (v.name.equals ("$inherit")) continue;
+                                    if (target.isConnectionBinding (v) != null) continue;  // No connection bindings allowed.
+                                    MPart vsource = (MPart) target.source.child (v.nameString ());
+                                    if (vsource.isFromTopDocument ()) C.override (v.deepCopy ());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Construct a binding path based on the source and destination parts.
+        public String path ()
+        {
+            if (C == null  ||  endpoint == null) return "";
+
+            // Since this is mainly for computing models rather than human viewing, it does not need
+            // to be the simplest string possible. Instead, we use a simple-but-ugly generation method.
+
+            EquationSet LCA = C.findLCA (endpoint);
+
+            // Walk up the path from C to LCA
+            String up = "";
+            EquationSet p = C;
+            while (p != LCA)
+            {
+                up += "$up.";
+                p = p.container;
+            }
+
+            // Walk up the path from endpoint to LCA, reversing the steps.
+            String down = "";
+            p = endpoint;
+            while (p != LCA)
+            {
+                down = p.name + "." + down;
+                p = p.container;
+            }
+            if (! down.isEmpty ()) down = down.substring (0, down.length () - 1);  // remove trailing dot
+
+            return up + down;
+        }
+    }
+
+    /**
+        Removes auto pins (those whose name ends with #) and all structures that subscribe to them.
+        Each structure functions as a template for generating new pins, but itself is never bound.
+        Thus it can't function at run time and would otherwise produce compiler errors.
+        Also removes pass-through connections, for similar reasons.
+        This could be folded into collectPins(), but it is kept separate to allow partial compilation
+        where the client code wishes to analyze the templates themselves.
+        Depends on results of: collectPins, resolvePins
+    **/
+    public void purgeAutoPins ()
+    {
+        for (MNode pin : pinIn)
+        {
+            if (pin.key ().endsWith ("#"))  // auto-pin
+            {
+                // Delete all parts that subscribe to auto pin.
+                for (MNode p : pin) parts.remove (findPart (p.key ()));
+            }
+        }
+
+        List<EquationSet> tempParts = new ArrayList<EquationSet> (parts);
+        for (EquationSet s : tempParts)
+        {
+            MNode pass = s.metadata.child ("gui", "pin", "pass");
+            if (pass == null) s.purgeAutoPins ();
+            else              parts.remove (s);
+        }
+    }
+
+    /**
         Find instance variables (that in other languages might be called pointers) and move them
         into the connectionBindings structure.
-        Dependencies: This function must be the very first thing run after constructing the full
-        equation set hierarchy. Other resolve functions depend on it.
+        Depends on results of
+            resolvePins -- Provides the link path for each dangling connection that is exposed as an input pins.
+            purgeAutoPins -- Removes template structures that can't be resolved.
     **/
     public void resolveConnectionBindings () throws Exception
     {
@@ -628,16 +978,8 @@ public class EquationSet implements Comparable<EquationSet>
             Variable v = it.next ();
 
             // Detect instance variables
-            if (v.order > 0) continue;
-            if (v.name.contains ("$")  ||  v.name.contains ("\\.")) continue;
-            if (v.equations.size () != 1) continue;
-            if (v.assignment != Variable.REPLACE) continue;
-            EquationEntry ee = v.equations.first ();
-            if (ee.condition != null) continue;
-            if (! (ee.expression instanceof AccessVariable)) continue;
-            AccessVariable av = (AccessVariable) ee.expression;
-            if (av.getOrder () > 0) continue;
-            if (find (new Variable (av.getName ())) != null) continue;
+            AccessVariable av = isConnectionBinding (v);
+            if (av == null) continue;
 
             // Resolve connection endpoint to a specific equation set
             ConnectionBinding result = new ConnectionBinding ();
@@ -694,6 +1036,27 @@ public class EquationSet implements Comparable<EquationSet>
         {
             s.resolveConnectionBindings (unresolved);
         }
+    }
+
+    /**
+        Given a variable v from this equation set, determine if it meets the heuristics for a connection
+        binding. The only way to be 100% certain is to resolve it.
+        @return The AccessVariable object that contains the actual reference to the desired endpoint.
+        If this is not a connection binding, then the result is null.
+    **/
+    public AccessVariable isConnectionBinding (Variable v)
+    {
+        if (v.order > 0) return null;
+        if (v.name.contains ("$")  ||  v.name.contains ("\\.")) return null;
+        if (v.equations.size () != 1) return null;
+        if (v.assignment != Variable.REPLACE) return null;
+        EquationEntry ee = v.equations.first ();
+        if (ee.condition != null) return null;
+        if (! (ee.expression instanceof AccessVariable)) return null;
+        AccessVariable av = (AccessVariable) ee.expression;
+        if (av.getOrder () > 0) return null;
+        if (find (new Variable (av.getName ())) != null) return null;
+        return av;
     }
 
     /**

@@ -225,6 +225,12 @@ public class InternalBackend extends Backend
         if (backend.isEmpty ()) backend = "none";  // Should not match any backend metadata entries, since they are all supposed to start with "backend".
         else                    backend = "backend." + backend;
 
+        if (e.source.containsKey ("pin"))  // crude heuristic that may save some time for regular (non-dataflow) models
+        {
+            e.collectPins ();
+            e.resolvePins ();
+            e.purgeAutoPins ();
+        }
         e.resolveConnectionBindings ();
         e.addGlobalConstants ();
         e.addSpecials ();  // $connect, $index, $init, $n, $t, $t'
