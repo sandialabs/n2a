@@ -1791,28 +1791,23 @@ public class PanelEquationGraph extends JScrollPane
                     else  // regular connector, possibly bound to pin
                     {
                         // Change to disconnected state
-                        String pinName = disconnect (um, variable, false);
+                        disconnect (um, variable);
 
                         // Handle any changes in pin structure.
-                        if (pinName == null)  // variable does not reference pin
+                        if (edge.nodeTo != null)
                         {
-                            // but the connection itself might be configured as an input pin
                             DeleteAnnotation da = null;
-                            if (edge.nodeTo != null  &&  edge.nodeTo == graphPanel.pinOut)
+                            if (edge.nodeTo == graphPanel.pinOut)
                             {
                                 // Kill only the output side of a pass-through connection
                                 da = DeleteAnnotation.withName (partFrom, "gui", "pin", "pass");
                             }
-                            else
+                            else if (edge.nodeTo == graphPanel.pinIn)
                             {
                                 // Stop acting as an input pin. This will also kill the output side of a pass-through connection.
                                 da = DeleteAnnotation.withName (partFrom, "gui", "pin");
                             }
                             if (da != null) um.apply (da);
-                        }
-                        else  // variable does reference pin
-                        {
-                            clearConnection (um, edge.nodeTo.node, pinName);
                         }
                     }
                 }
@@ -1862,7 +1857,6 @@ public class PanelEquationGraph extends JScrollPane
                                         else                              partFromName = partFrom.source.key ();
 
                                         String pinName = addAuto (um, partTo, newKey);
-                                        displaceConnection (um, partTo, pinName);
                                         setBinding (data, pinName, partFromName, edge.pinKeyFrom);
                                         if (! removeAuto (um, partTo, edge.pinKeyTo)) clearBinding (data, edge.pinKeyTo);
                                         um.apply (new ChangeAnnotations (partTo, data));
@@ -1895,7 +1889,7 @@ public class PanelEquationGraph extends JScrollPane
                     else  // from connection
                     {
                         // In general, there is nothing to do for connections.
-                        // However, if the connection also specified a pin, then that may have changed.
+                        // However, if this is a pass-through connection, then a target pin may have changed.
                         boolean pass =  nodeTo == graphPanel.pinOut;
                         if (nodeTo == graphPanel.pinIn  ||  pass)
                         {
@@ -1908,25 +1902,6 @@ public class PanelEquationGraph extends JScrollPane
                                 else      metadata.set (newKey, "gui", "pin");
                                 um.apply (new ChangeAnnotations (partFrom, metadata));
                                 handled = true;
-                            }
-                        }
-                        else
-                        {
-                            String pinOld = variable.source.get ("$metadata", "gui", "pin");
-                            if (! pinNew.equals (pinOld))
-                            {
-                                if (pinNew.isEmpty ())  // Possibly switched from pin to part
-                                {
-                                    disconnect (um, variable, true);
-                                }
-                                else  // switched to a pin, possibly from another pin
-                                {
-                                    connectionToPin (um, variable, partTo, pinNew);
-                                    handled = true;
-                                }
-                                // clearConnection() must come after setConnection() on same node, so that (in the case of auto pins)
-                                // we don't remove the target pin before binding to it.
-                                if (! pinOld.isEmpty ()  &&  clearConnection (um, partTo, pinOld)) handled = true;
                             }
                         }
                     }
@@ -1992,7 +1967,6 @@ public class PanelEquationGraph extends JScrollPane
                                 if (newSide.equals ("in"))
                                 {
                                     newKey = addAuto (um, nodeTo.node, newKey);
-                                    displaceConnection (um, nodeTo.node, newKey);
                                     nodeAfter = nodeTo;
 
                                     String partFromName;
@@ -2059,9 +2033,6 @@ public class PanelEquationGraph extends JScrollPane
                         // Release previous pin, if any.
                         if (edge.nodeTo != null)
                         {
-                            String pinOld = variable.source.get ("$metadata", "gui", "pin");
-                            if (pinOld != null) clearConnection (um, edge.nodeTo.node, pinOld);
-
                             DeleteAnnotation da = null;
                             if (edge.nodeTo == graphPanel.pinIn)
                             {
@@ -2074,12 +2045,10 @@ public class PanelEquationGraph extends JScrollPane
                             if (da != null) um.apply (da);
                         }
 
-                        // Bind to new pin, if any.
-                        boolean setEndpoint = true;
+                        // Bind to new target.
                         if (nodeTo == graphPanel.pinIn  ||  nodeTo == graphPanel.pinOut)  // Tag connection as an input pin.
                         {
-                            disconnect (um, variable, false);
-                            setEndpoint = false;
+                            disconnect (um, variable);
 
                             String[] pieces = pinNew.split ("\\.", 2);
                             String pinName = "";
@@ -2090,13 +2059,10 @@ public class PanelEquationGraph extends JScrollPane
                             else                             metadata.set (pinName, "gui", "pin");
                             um.apply (new ChangeAnnotations (partFrom, metadata));
                         }
-                        else if (! pinNew.isEmpty ())  // Bind endpoint to pin.
+                        else  // Change endpoint
                         {
-                            connectionToPin (um, variable, nodeTo.node, pinNew);
+                            um.apply (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
                         }
-
-                        // Change endpoint
-                        if (setEndpoint) um.apply (new ChangeVariable (variable, edge.alias, nodeTo.node.source.key ()));
                     }
                 }
 
@@ -2250,7 +2216,6 @@ public class PanelEquationGraph extends JScrollPane
         {
             metadata.set (fromNode, "gui", "pin", "in", pinName, "bind");
             metadata.set (fromPin,  "gui", "pin", "in", pinName, "bind", "pin");
-            metadata.set ("",       "gui", "pin", "in", pinName, "bind", "alias");
         }
 
         public void setBindingOut (MNode metadata, String pinName, String fromNode, String fromPin)
@@ -2260,109 +2225,10 @@ public class PanelEquationGraph extends JScrollPane
         }
 
         /**
-            Releases a connection-to-pin on the target part.
-            This is a little different than pin-to-pin, because the "in" pin does not directly manage the edge.
-            Instead, the target part just keeps a notation in bind and bind.alias that a connection is referencing it.
-            @param partTo The part that exports the pin being unbound.
-            @param pinName In the format <in/out>.<name>, as stored in connection biding gui.pin entry.
-            @return true if action was taken, false otherwise. This depend entirely on whether the given
-            pinName is "in" rather than "out".
+            Releases a connection binding.
         **/
-        public boolean clearConnection (UndoManager um, NodePart partTo, String pinName)
+        public void disconnect (UndoManager um, NodeVariable variable)
         {
-            if (! pinName.startsWith ("in.")) return false;
-            pinName = pinName.substring (3);
-            if (! removeAuto (um, partTo, pinName))
-            {
-                MNode data = new MVolatile ();
-                data.set ("", "gui", "pin", "in", pinName, "bind");          // Name of connection part. Similar meaning as for pin-to-pin.
-                data.set ("", "gui", "pin", "in", pinName, "bind", "alias"); // Name of binding variable within connection part.
-                um.apply (new ChangeAnnotations (partTo, data));
-            }
-            return true;
-        }
-
-        /**
-            Sets a connection-to-pin on the target part. Subroutine of connectionToPin(), which handles both sides.
-            @param variable The binding variable in the connection part.
-            @param partTo The part that exports the bin being bound.
-            @param pinRef In the format <in/out>.<pin name>, as stored in the binding variable gui.pin entry.
-            This function only does something if the prefix is "in". We do the test here as a convenience to the caller.
-            @return The pin reference, possibly modified to point to a newly-created copy of an auto pin.
-        **/
-        public String setConnection (UndoManager um, NodeVariable variable, NodePart partTo, String pinRef)
-        {
-            if (! pinRef.startsWith ("in.")) return pinRef;
-            String pinName = pinRef.substring (3);
-
-            pinName = addAuto (um, partTo, pinName);
-            displaceConnection (um, partTo, pinName);
-
-            String partFrom = ((NodeBase) variable.getParent ()).source.key ();
-            String alias    = variable.source.key ();
-
-            MNode data = new MVolatile ();
-            data.set (partFrom, "gui", "pin", "in", pinName, "bind");
-            data.set ("",       "gui", "pin", "in", pinName, "bind", "pin");  // displace any existing pin-to-pin binding
-            data.set (alias,    "gui", "pin", "in", pinName, "bind", "alias");
-            um.apply (new ChangeAnnotations (partTo, data));
-
-            return "in." + pinName;
-        }
-
-        /**
-            Checks if attaching pin-to-pin on the given target would displace an existing connection-to-pin.
-            If so, does the bookkeeping to release the source side of the connection-to-pin.
-            Caller should remove alias on the destination side as part of a metadata update there.
-            @param partTo The part that exports the pin being checked.
-            @param pinName The simple name of the pin, which is assumed to be an input.
-        **/
-        public void displaceConnection (UndoManager um, NodePart partTo, String pinName)
-        {
-            String alias = partTo.source.get ("$metadata", "gui", "pin", "in", pinName, "bind", "alias");
-            if (alias.isEmpty ()) return;
-            String bind = partTo.source.get ("$metadata", "gui", "pin", "in", pinName, "bind");
-            NodeBase nb = container.part.child (bind);
-            if (! (nb instanceof NodePart)) return;
-            nb = nb.child (alias);
-            if (! (nb instanceof NodeVariable)) return;
-            disconnect (um, (NodeVariable) nb, false);
-        }
-
-        /**
-            Records pin metadata on both sides to establish a connection-to-pin. Does not set the binding
-            variable itself. The caller does that when necessary.
-            @param variable The binding variable in the connection part.
-            @param partTo The part that exports the bin being bound.
-            @param pinRef In the format <in/out>.<pin name>, as stored in the binding variable gui.pin entry.
-        **/
-        public void connectionToPin (UndoManager um, NodeVariable variable, NodePart partTo, String pinRef)
-        {
-            // Record in destination.
-            pinRef = setConnection (um, variable, partTo, pinRef);
-
-            // Record in source.
-            MNode data = new MVolatile ();
-            data.set (pinRef, "gui", "pin");
-            um.apply (new ChangeAnnotations (variable, data));
-        }
-
-        /**
-            Releases the source side of a connection binding, including any pin metadata.
-            @return The name of the destination pin, or null if none. The caller may need to
-            release the destination side of the binding.
-        **/
-        public String disconnect (UndoManager um, NodeVariable variable, boolean pinOnly)
-        {
-            String pinName = null;
-            NodeAnnotation pin = (NodeAnnotation) AddAnnotation.findExact (variable, false, "gui", "pin");
-            if (pin != null)
-            {
-                pinName = pin.folded.get ();
-                um.apply (new DeleteAnnotation (pin, false));
-            }
-            if (pinOnly) return pinName;  // early-out
-
             String value = "connect()";
             String original = variable.source.getOriginal ().get ();
             if (Operator.containsConnect (original)) value = original;
@@ -2370,8 +2236,6 @@ public class PanelEquationGraph extends JScrollPane
             {
                 um.apply (new ChangeVariable (variable, variable.source.key (), value));
             }
-
-            return pinName;
         }
 
         /**
