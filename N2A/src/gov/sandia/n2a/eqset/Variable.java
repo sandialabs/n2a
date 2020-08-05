@@ -207,9 +207,14 @@ public class Variable implements Comparable<Variable>, Cloneable
         return new Variable (null, new MPersistent (null, key, value));
     }
 
+    /**
+        Convenience class for making queries.
+        A properly-formed variable requires different processing.
+    **/
     public static Variable fromLHS (String lhs)
     {
         lhs = lhs.trim ();
+        lhs = stripContextPrefix (lhs);
         int order = 0;
         while (lhs.endsWith ("'"))
         {
@@ -217,6 +222,13 @@ public class Variable implements Comparable<Variable>, Cloneable
             lhs = lhs.substring (0, lhs.length () - 1);
         }
         return new Variable (lhs, order);
+    }
+
+    public static String stripContextPrefix (String name)
+    {
+        if (name.startsWith ("$all." )) return name.substring (5);
+        if (name.startsWith ("$each.")) return name.substring (6);
+        return name;
     }
 
     /**

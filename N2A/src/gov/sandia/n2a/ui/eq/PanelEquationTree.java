@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.eq;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.MainFrame;
@@ -1133,6 +1134,7 @@ public class PanelEquationTree extends JScrollPane
     // TODO: run this on a separate thread, if the need arises
     public void updateHighlights (NodeBase node, String name)
     {
+        name = Variable.stripContextPrefix (name);  // TODO: organize this code better, so that name is only stripped once.
         int count = node.getChildCount ();
         for (int i = 0; i < count; i++)
         {

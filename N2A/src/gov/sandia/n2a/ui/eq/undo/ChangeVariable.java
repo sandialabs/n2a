@@ -149,11 +149,11 @@ public class ChangeVariable extends UndoableView
                     vold.equations = new TreeSet<EquationEntry> ();
                     if (nodeBefore.isBinding) vold.equations.add (new EquationEntry (newPart.get ()));
                     p.add (vold);
-                    vkeypath.add (nameAfter);
+                    vkeypath.add (Variable.stripContextPrefix (nameAfter));
                 }
                 else
                 {
-                    vkeypath.add (nameBefore);
+                    vkeypath.add (Variable.stripContextPrefix (nameBefore));
                     vold = (Variable) compiled.getObject (vkeypath);
                     vkeypath.set (vkeypath.size () - 1, nameAfter);
                 }

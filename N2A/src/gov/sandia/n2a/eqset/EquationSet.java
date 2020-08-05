@@ -1259,6 +1259,7 @@ public class EquationSet implements Comparable<EquationSet>
             cv.reference.variable = cv;
             cv.equations = new TreeSet<EquationEntry> ();
             cv.assignment = v.assignment;  // hinted combiner type
+            if (v.hasAttribute ("global")) cv.addAttribute ("global");
             return this;
         }
         if (   v.name.endsWith (".$k")
@@ -1328,6 +1329,7 @@ public class EquationSet implements Comparable<EquationSet>
                 cv.reference.variable = cv;
                 cv.equations = new TreeSet<EquationEntry> ();
                 cv.assignment = v.assignment;
+                if (v.hasAttribute ("global")) cv.addAttribute ("global");
                 return this;
             }
         }
@@ -1361,7 +1363,9 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
+            boolean global = v.hasAttribute ("global");
             Variable query = new Variable (v.name, v.order);
+            if (global) query.addAttribute ("global");  // as a hint
             query.reference = new VariableReference ();
             query.assignment = v.assignment;  // If referent is created in target eqset, then this hints the correct combiner type.
             EquationSet dest = resolveEquationSet (query, true);
@@ -1373,12 +1377,19 @@ public class EquationSet implements Comparable<EquationSet>
                 target.addDependencyOn (v);  // v.reference.variable receives an external write from v, and therefore its value depends on v
                 v.reference.addDependencies (v);  // A variable depends on its connection bindings. This isn't necessary for execution, but does support analysis during GUI editing.
                 target.container.referenced = true;
+
                 if (   target.assignment != v.assignment
                     && ! (   (target.assignment == Variable.MULTIPLY  &&  v.assignment == Variable.DIVIDE)  // This line and the next say that * and / are compatible with each other, so ignore that case.
                           || (target.assignment == Variable.DIVIDE    &&  v.assignment == Variable.MULTIPLY)))
                 {
-                    Backend.err.get ().println ("WARNING: Reference " + prefix () + "." + v.nameString () + " has different combining operator than target variable (" + target.container.prefix () + "." + target.nameString () + "). Resolving in favor of higher-precedence operator.");
+                    Backend.err.get ().println ("WARNING: Reference " + v.fullName () + " has different combining operator than target variable (" + target.fullName () + "). Resolving in favor of higher-precedence operator.");
                     v.assignment = target.assignment = Math.max (v.assignment, target.assignment);
+                }
+
+                if (global  &&  ! target.hasAttribute ("global"))
+                {
+                    Backend.err.get ().println ("WARNING: Reference " + v.fullName () + " cannot execute in global context, because its target variable (" + target.fullName () + ") is stored in local context.");
+                    v.removeAttribute ("global");
                 }
             }
         }

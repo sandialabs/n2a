@@ -2321,16 +2321,16 @@ public class PanelEquationGraph extends JScrollPane
                         if (append != null)
                         {
                             data.set (":" + Bname + ".autoBase" + index, "autoBase");
-                            data.set (Aname + ".$n",                     Bname + ".autoN" + index);
+                            data.set (Aname + ".$n",                     "$all." + Bname + ".autoN" + index);
                         }
 
                         // Set variables in B part
-                        changeOrCreate (um, Bpart, "autoCount", String.valueOf (index), false);
+                        changeOrCreate (um, Bpart, "$all.autoCount", String.valueOf (index), false);
                         if (append != null)
                         {
                             int index1 = index - 1;
-                            if (index > 1) changeOrCreate (um, Bpart, "autoBase" + index, "autoBase" + index1 + "+autoN" + index1, true);
-                            else           changeOrCreate (um, Bpart, "autoBase1", autoBase, true);
+                            if (index > 1) changeOrCreate (um, Bpart, "$all.autoBase" + index, "autoBase" + index1 + "+autoN" + index1, true);
+                            else           changeOrCreate (um, Bpart, "$all.autoBase1",        autoBase,                                true);
                             String n = Bpart.source.get ("$n");
                             if (n.isEmpty ()  ||  n.startsWith ("autoBase")) changeOrCreate (um, Bpart, "$n", "autoBase" + index + "+autoN" + index, false);
                         }
@@ -2435,7 +2435,7 @@ public class PanelEquationGraph extends JScrollPane
                             MNode append = node.source.child (partBaseName, "$metadata", "gui", "pin", "append");
                             if (append != null)
                             {
-                                NodeBase nb = Bpart.child ("autoBase" + i);
+                                NodeBase nb = Bpart.child ("$all.autoBase" + i);
                                 if (nb instanceof NodeVariable) um.apply (new DeleteVariable ((NodeVariable) nb, false));
                             }
                             break;
@@ -2464,7 +2464,7 @@ public class PanelEquationGraph extends JScrollPane
                     {
                         String partName = partBaseName + j;
                         NodePart np = (NodePart) node.child (partName);
-                        if (np != null) changeOrCreate (um, np, "autoCount", String.valueOf (i), false);
+                        if (np != null) changeOrCreate (um, np, "$all.autoCount", String.valueOf (i), false);
                     }
                 }
                 else
@@ -2477,14 +2477,14 @@ public class PanelEquationGraph extends JScrollPane
                         NodeVariable n = (NodeVariable) Bpart.child ("$n");
                         if (i < 1)  // Since the last instance is going away, "autoCount" is no longer needed.
                         {
-                            NodeBase nb = Bpart.child ("autoCount");
+                            NodeBase nb = Bpart.child ("$all.autoCount");
                             if (nb instanceof NodeVariable) um.apply (new DeleteVariable ((NodeVariable) nb, false));
 
                             if (n != null  &&  n.source.get ().startsWith ("autoBase")) um.apply (new DeleteVariable (n, false));
                         }
                         else  // "autoCount" is still needed, so update the value
                         {
-                            changeOrCreate (um, Bpart, "autoCount", String.valueOf (i), false);
+                            changeOrCreate (um, Bpart, "$all.autoCount", String.valueOf (i), false);
 
                             if (n == null  ||  n.source.get ().startsWith ("autoBase"))
                             {
