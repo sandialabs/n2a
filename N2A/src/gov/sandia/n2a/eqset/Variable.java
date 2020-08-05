@@ -56,6 +56,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     public NavigableSet<EquationEntry>  equations;
     public int                          assignment;
     public MNode                        metadata;
+    public boolean                      killed;     // Indicates to EquationSet constructor that this variable was explicitly removed.
 
     // resolution
     public EquationSet                  container;  // non-null iff this variable is contained in an EquationSet.variables collection
@@ -119,6 +120,11 @@ public class Variable implements Comparable<Variable>, Cloneable
             if (! rhs.isEmpty ())
             {
                 rhs = parseAssignment (rhs);
+                if (rhs.startsWith ("$kill"))
+                {
+                    killed = true;
+                    return;
+                }
                 EquationEntry e = new EquationEntry (rhs);
                 if (e.expression != null) add (e);
             }
@@ -173,6 +179,17 @@ public class Variable implements Comparable<Variable>, Cloneable
     public void parseLHS (String lhs)
     {
         name = lhs.trim ();
+        if (name.startsWith ("$all."))
+        {
+            name = name.substring (5);
+            addAttribute ("global");
+        }
+        else if (name.startsWith ("$each."))
+        {
+            name = name.substring (6);
+            addAttribute ("local");
+        }
+
         order = 0;
         while (name.endsWith ("'"))
         {
@@ -208,7 +225,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     **/
     public String parseAssignment (String rhs)
     {
-        assignment = REPLACE;  // Assuming that an = was found before calling this function.
+        assignment = REPLACE;  // Assuming that an equals sign was found before calling this function.
 
         rhs = rhs.trim ();
         char first;
@@ -606,12 +623,42 @@ public class Variable implements Comparable<Variable>, Cloneable
             equations = nextEquations;
         }
 
+        // Check if we have become eligible to execute in the global context.
+        // Only applies to external write references.
+        Variable rv = reference.variable;  // for convenience
+        if (rv.container != container  &&  rv.hasAttribute ("global")  &&  ! hasAny ("global", "local"))
+        {
+            class CheckGlobal implements Visitor
+            {
+                boolean allGlobal = true;
+                public boolean visit (Operator op)
+                {
+                    if (op instanceof AccessVariable)
+                    {
+                        AccessVariable av = (AccessVariable) op;
+                        Variable target = av.reference.variable;
+                        if (! target.hasAttribute ("global")) allGlobal = false;
+                    }
+                    return allGlobal;
+                }
+            }
+            CheckGlobal check = new CheckGlobal ();
+            visit (check);
+            if (check.allGlobal)
+            {
+                changed = true;
+                addAttribute ("global");
+                convertToGlobal ();
+            }
+        }
+
         // Check for constant combiner.
         // This is a special case needed by some models that use pins.
-        if ((assignment == MIN  ||  assignment == MAX)  &&  hasAttribute ("externalWrite"))
+        if (uses != null  &&  hasAttribute ("externalWrite"))  // Note: uses can be null when "externalWrite" is set. This can happen during EquationSet.simplify().
         {
             // Determine if self is constant.
             boolean constant = equations.isEmpty ();
+            boolean replaced = false;
             double value = 0;
             if (! constant  &&  equations.size () == 1)
             {
@@ -619,6 +666,7 @@ public class Variable implements Comparable<Variable>, Cloneable
                 if (e.condition == null  &&  e.expression.isScalar ())
                 {
                     constant = true;
+                    replaced = true;
                     value = e.expression.getDouble ();
                 }
             }
@@ -627,24 +675,56 @@ public class Variable implements Comparable<Variable>, Cloneable
                 // Scan all our writers to see if they are constant.
                 for (Variable u : uses.keySet ())
                 {
+                    if (   (assignment == ADD  ||  assignment == MULTIPLY  ||  assignment == DIVIDE)
+                        && ! u.isSingletonRelativeTo (container))
+                    {
+                        // Can't predict how many of these operations there will be at run time,
+                        // so can't predict result.
+                        constant = false;
+                        break;
+                    }
                     if (! u.hasAttribute ("constant"))
                     {
                         constant = false;
                         break;
                     }
                     double uvalue = u.equations.first ().expression.getDouble ();
-                    if (assignment == MIN) value = Math.min (value, uvalue);
-                    else                   value = Math.max (value, uvalue);
+                    switch (assignment)
+                    {
+                        case ADD:      value += uvalue;                   break;
+                        case MULTIPLY: value *= uvalue;                   break;
+                        case DIVIDE:   value /= uvalue;                   break;
+                        case MIN:      value  = Math.min (value, uvalue); break;
+                        case MAX:      value  = Math.max (value, uvalue); break;
+                        default:  // REPLACE
+                            if (value != uvalue)
+                            {
+                                if (replaced)
+                                {
+                                    constant = false;  // Can only set the value once.
+                                }
+                                else
+                                {
+                                    replaced = true;
+                                    value = uvalue;
+                                }
+                            }
+                    }
+                    if (! constant) break;
                 }
             }
             if (constant)
             {
                 changed = true;
-                EquationEntry e = equations.first ();
-                if (e == null)
+                EquationEntry e;
+                if (equations.isEmpty ())
                 {
                     e = new EquationEntry (this, "");
                     equations.add (e);
+                }
+                else
+                {
+                    e = equations.first ();
                 }
                 e.expression = new Constant (value);
                 addAttribute ("constant");
@@ -654,6 +734,41 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
 
         return changed;
+    }
+
+    public boolean isSingletonRelativeTo (EquationSet that)
+    {
+        // EquationSet.isSingletonRelativeTo() is slightly too restrictive for connections.
+        // If it can be proven that all sides of a connection are singletons, then the
+        // connection is a singleton too.
+        if (hasAttribute ("global"))
+        {
+            if (container.container == null) return true;
+            return container.container.isSingletonRelativeTo (that);
+        }
+        return container.isSingletonRelativeTo (that);
+    }
+
+    /**
+        If resolution path starts with a connection, then convert it to a walk through containers instead.
+    **/
+    public void convertToGlobal ()
+    {
+        reference.convertToGlobal (this);
+
+        visit (new Visitor ()
+        {
+            public boolean visit (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    av.reference.convertToGlobal (Variable.this);
+                    return false;
+                }
+                return true;
+            }
+        });
     }
 
     public Type eval (Instance instance) throws EvaluationException
@@ -1318,6 +1433,9 @@ public class Variable implements Comparable<Variable>, Cloneable
         <dl>
             <dt>global</dt>
                 <dd>shared by all instances of a part</dd>
+            <dt>local</dt>
+                <dd>prevents this variable from being tagged "global".
+                Since not-global is the default state, this tag is only used in special circumstances.</dd>
             <dt>constant</dt>
                 <dd>value is known at generation time, so can be hard-coded</dd>
             <dt>initOnly</dt>

@@ -301,7 +301,7 @@ public class EquationSet implements Comparable<EquationSet>
                 else
                 {
                     Variable v = new Variable (this, e);
-                    if (v.equations.size () > 0) variables.add (v);
+                    if (! v.killed) variables.add (v);
 
                     // Add a watch expression, if requested.
                     MNode p = getTopDocumentNode ();
@@ -600,7 +600,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (n == null) return true;  // We only do more work if $n exists. Non-existent $n is the same as $n==1
 
         // check contents of $n
-        if (n.assignment != Variable.REPLACE) return false;
+        if (n.hasAttribute ("externalWrite")) return false;
         if (n.uses != null  &&  n.uses.size () > 0) return false;  // If $n depends on other variables, we won't be able to evaluate it now.
         if (n.equations.size () != 1) return false;
         EquationEntry ne = n.equations.first ();
@@ -610,6 +610,30 @@ public class EquationSet implements Comparable<EquationSet>
         if (! ne.ifString.isEmpty ()  &&  ! ne.ifString.equals ("$init")) return false;  // Any condition besides $init indicates the potential to change during run.
         if (ne.expression == null) return true;  // Treat missing expression as 1.
         return ne.expression.getDouble () == 1;
+    }
+
+    /**
+        Determines whether this equation set is a singleton within the context determined by the
+        given "cousin". An equation set may have multiple instances within the context of the model
+        as a whole, and yet only have one instance within a given sub-part. To determine the sub-part,
+        we find the LCA of this equation set and the given part. We use the term "cousin" loosely to
+        mean any part that is not an ancestor or descendant.
+        Notice that this function is more strict than isSingleton(), because we are taking
+        into account not only instances created by the immediate part, but also that created by
+        some subset of its ancestors. Put another way, isSingleton() is roughly equivalent to
+        this.isSingletonRelativeTo(this).
+    **/
+    public boolean isSingletonRelativeTo (EquationSet that)
+    {
+        EquationSet LCA = findLCA (that);
+        EquationSet p = this;
+        while (true)
+        {
+            if (! isSingleton (true)) return false;
+            if (p == LCA) break;
+            p = p.container;
+        }
+        return true;
     }
 
     public boolean isConnection ()
@@ -679,7 +703,7 @@ public class EquationSet implements Comparable<EquationSet>
                 if (Operator.containsConnect (c.get ()))
                 {
                     s.connectionBindings = new ArrayList<ConnectionBinding> ();  // Use existence of empty list as flag. This should be filled later by resolveConnectionBindings()
-                    s.metadata.set (c.key (), "gui", "pin", "alias");  // Note the chosen alias for this connection.
+                    s.metadata.set (c.key (), "gui", "pin", "alias");  // Remember the chosen alias for this connection.
                     break;
                 }
             }
@@ -754,15 +778,16 @@ public class EquationSet implements Comparable<EquationSet>
             // For each unbound alias, walk the part hierarchy to find the right target population.
             if (s.connectionBindings == null) continue;  // Only connections allowed.
             if (s.metadata.child ("gui", "pin", "pass") != null) continue;  // Pass-through connections are not allowed.
+            String alias = s.metadata.get ("gui", "pin", "alias");  // This value only exists if there is an unbound instance variable.
+            if (alias.isEmpty ()) continue;  // Must be unbound.
 
-            String alias = s.metadata.get ("gui", "pin", "alias");
             PinBinding result = new PinBinding ();
             result.resolve (s);
             if (result.unresolved != null)
             {
                 unresolved.add (s.prefix () + "." + alias + " --> " + result.unresolved);
             }
-            else
+            else if (result.endpoint != null)  // endpoint will only be defined for a proper pin, not an auto-pin template
             {
                 s.override (alias + "=" + result.path ());
             }
@@ -779,8 +804,9 @@ public class EquationSet implements Comparable<EquationSet>
 
         public void resolve (EquationSet s)
         {
-            C       = s;
             pinName = s.metadata.getOrDefault (s.name, "gui", "pin");
+            if (pinName.endsWith ("#")) return;
+            C       = s;
             topic   = s.metadata.getOrDefault ("data", "gui", "pin", "topic");
             s       = s.container;
 
@@ -789,6 +815,7 @@ public class EquationSet implements Comparable<EquationSet>
             while (true)  // Could ascend several times before reaching resolution.
             {
                 String bindPin = s.metadata.get ("gui", "pin", "in", pinName, "bind", "pin");
+                if (bindPin.endsWith ("#")) return;  // Auto-pin. Not an error, but not resolved either.
                 if (bindPin.isEmpty ())
                 {
                     unresolved = s.prefix () + " input pin '" + pinName + "' not bound";
@@ -1568,32 +1595,26 @@ public class EquationSet implements Comparable<EquationSet>
 
     public String dump (boolean showNamespace, String pad)
     {
-        Renderer renderer;
-        if (showNamespace)
+        Renderer renderer = new Renderer ()
         {
-            class Prefixer extends Renderer
+            public boolean render (Operator op)
             {
-                public boolean render (Operator op)
+                if (! (op instanceof AccessVariable)) return false;
+
+                AccessVariable av = (AccessVariable) op;
+                if (av.reference == null  ||  av.reference.variable == null)
                 {
-                    if (! (op instanceof AccessVariable)) return false;
-                    AccessVariable av = (AccessVariable) op;
-                    if (av.reference == null  ||  av.reference.variable == null)
-                    {
-                        result.append ("<unresolved!>" + av.name);
-                    }
-                    else
-                    {
-                        result.append ("<" + av.reference.variable.container.prefix () + ">" + av.reference.variable.nameString ());
-                    }
-                    return true;
+                    if (showNamespace) result.append ("<unresolved!>");
+                    result.append (av.name);
                 }
+                else
+                {
+                    if (showNamespace) result.append ("<" + av.reference.variable.container.prefix () + ">");
+                    result.append (av.reference.variable.nameString ());
+                }
+                return true;
             }
-            renderer = new Prefixer ();
-        }
-        else
-        {
-            renderer = new Renderer ();
-        }
+        };
 
         renderer.result.append (pad + name + "\n");
         pad = pad + " ";
@@ -1617,25 +1638,25 @@ public class EquationSet implements Comparable<EquationSet>
         }
         for (Variable v : variables)
         {
-            if (v.equations.size () > 0)  // If no equations, then this is an implicit variable, so no need to list here.
+            if (v.equations.size () == 0) continue;  // If no equations, then this is an implicit variable, so no need to list here.
+            if (v.name.equals ("$connect")  ||  v.name.equals ("$init")  ||  v.name.equals ("$live")) continue;  // Phase indicators are always present, and thus uninformative.
+
+            renderer.result.append (pad + v.nameString ());
+            renderer.result.append (" =" + v.combinerString ());
+            if (v.equations.size () == 1)
             {
-                renderer.result.append (pad + v.nameString ());
-                renderer.result.append (" =" + v.combinerString ());
-                if (v.equations.size () == 1)
+                renderer.result.append (" ");
+                v.equations.first ().render (renderer);
+                renderer.result.append ("\n");
+            }
+            else
+            {
+                renderer.result.append ("\n");
+                for (EquationEntry e : v.equations)
                 {
-                    renderer.result.append (" ");
-                    v.equations.first ().render (renderer);
+                    renderer.result.append (pad + " ");
+                    e.render (renderer);
                     renderer.result.append ("\n");
-                }
-                else
-                {
-                    renderer.result.append ("\n");
-                    for (EquationEntry e : v.equations)
-                    {
-                        renderer.result.append (pad + " ");
-                        e.render (renderer);
-                        renderer.result.append ("\n");
-                    }
                 }
             }
         }
@@ -2039,6 +2060,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Marks variables with "externalRead" and "externalWrite", as needed.
+        Determines whether an external write should be evaluated in the local or global context.
         Depends on results of:
             resolveLHS(), resolveRHS() -- Establishes references and dependencies between variables.
             flatten() -- Changes references and dependencies. In some cases, folds expressions together so dependencies go away.
@@ -2050,17 +2072,20 @@ public class EquationSet implements Comparable<EquationSet>
         class Externalizer implements Visitor
         {
             Variable v;
+            boolean allGlobal;
+
             public boolean visit (Operator op)
             {
                 if (op instanceof AccessVariable)
                 {
                     AccessVariable av = (AccessVariable) op;
                     Variable target = av.reference.variable;
-                    if (target.container != v.container)
+                    if (target.container != v.container)  // v references something other than itself, which implies that the target is outside this equation set.
                     {
                         target.addAttribute ("externalRead");
                         target.removeAttribute ("temporary");
                     }
+                    if (! target.hasAny ("global", "constant")) allGlobal = false;
                 }
                 return true;
             }
@@ -2069,14 +2094,22 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : variables)
         {
-            if (v.reference.variable != v)  // v references something other than itself, which implies that the target is outside this equation set.
+            externalizer.v = v;
+            externalizer.allGlobal = true;
+            v.visit (externalizer);
+
+            Variable vr = v.reference.variable;  // for convenience
+            if (vr != v)
             {
                 v.addAttribute ("reference");
-                v.reference.variable.addAttribute ("externalWrite");
-                v.reference.variable.removeAttribute ("temporary");
+                vr.addAttribute ("externalWrite");
+                vr.removeAttribute ("temporary");
+                if (externalizer.allGlobal  &&  ! v.hasAttribute ("local")  &&  vr.hasAttribute ("global"))
+                {
+                    v.addAttribute ("global");
+                    v.convertToGlobal ();
+                }
             }
-            externalizer.v = v;
-            v.visit (externalizer);
         }
     }
 

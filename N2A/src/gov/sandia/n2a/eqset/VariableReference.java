@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.eqset;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 
@@ -49,22 +50,56 @@ public class VariableReference implements Comparable<VariableReference>
     **/
     public void mergeResolutionPath (VariableReference r2)
     {
-        int last = resolution.size () - 1;
-        for (Object o2 : r2.resolution)
+        mergeResolutionPaths (resolution, r2.resolution);
+    }
+
+    /**
+        Modifies resolution1 by merging in resolution2. See mergeResolutionPath(VariableReference)
+        for a detailed explanation of the motivation for this processing.
+        @param resolution1 Receives the merged path.
+        @param resolution2 Remains unchanged.
+    **/
+    public static void mergeResolutionPaths (List<Object> resolution1, List<Object> resolution2)
+    {
+        int last = resolution1.size () - 1;
+        for (Object o2 : resolution2)
         {
             if (last > 0)
             {
-                Object o = resolution.get (last - 1);
+                Object o = resolution1.get (last - 1);
                 if (o instanceof ConnectionBinding) o = ((ConnectionBinding) o).endpoint;
                 if (o == o2)
                 {
-                    resolution.remove (last--);
+                    resolution1.remove (last--);
                     continue;  // Keeps from adding the next step of r2.
                 }
                 last = 0;  // Stop checking
             }
-            resolution.add (o2);
+            resolution1.add (o2);
         }
+    }
+
+    /**
+        Ensure the path does not rely on a connection endpoint as its first step.
+        This is needed when a reference within a connection part is executed at
+        the global scope, but also uses a connection binding to find the target population.
+        The connection binding is not available at the global scope and also not necessary. 
+        @param v The variable where the path starts. We remove the connection as
+        a dependency of this variable. See removeDependencies(Variable)
+    **/
+    public void convertToGlobal (Variable v)
+    {
+        int count = resolution.size ();
+        if (count == 0) return;
+        Object o = resolution.get (0);
+        if (! (o instanceof ConnectionBinding)) return;
+
+        ConnectionBinding cb = (ConnectionBinding) o;
+        removeDependencies (v);
+        ArrayList<Object> newResolution = new ArrayList<Object> (cb.resolution);
+        if (count > 1) mergeResolutionPaths (newResolution, resolution.subList (1, count));
+        resolution = newResolution;
+        addDependencies (v);
     }
 
     public String dumpResolution ()

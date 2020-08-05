@@ -13,7 +13,6 @@ import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Scalar;
 
 public class Multiply extends OperatorBinary
 {

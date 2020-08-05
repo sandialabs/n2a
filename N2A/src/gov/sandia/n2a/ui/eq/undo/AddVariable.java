@@ -95,7 +95,8 @@ public class AddVariable extends UndoableView implements AddEditable
         NodeVariable createdNode = (NodeVariable) parent.child (name);
 
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
 
         TreeNode[] createdPath = createdNode.getPath ();
         int index = parent.getIndexFiltered (createdNode);
@@ -110,7 +111,8 @@ public class AddVariable extends UndoableView implements AddEditable
                 if (parent.graph != null) parent.graph.killEdge (name);
                 if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
-            model.removeNodeFromParent (createdNode);
+            if (model == null) FilteredTreeModel.removeNodeFromParentStatic (createdNode);
+            else               model.removeNodeFromParent (createdNode);
             parent.findConnections ();
         }
         else  // Just exposed an overridden node
@@ -132,11 +134,14 @@ public class AddVariable extends UndoableView implements AddEditable
             }
         }
         parent.updatePins ();  // Actually, this could start at grandparent, because parent's pin structure hasn't changed. However, this is convenient and simple.
-        parent.invalidateColumns (model);
 
-        pet.updateOrder (createdPath);
-        pet.updateVisibility (createdPath, index, setSelection);  // includes nodeStructureChanged(), if necessary
-        pet.animate ();
+        if (pet != null)
+        {
+            parent.invalidateColumns (model);
+            pet.updateOrder (createdPath);
+            pet.updateVisibility (createdPath, index, setSelection);  // includes nodeStructureChanged(), if necessary
+            pet.animate ();
+        }
     }
 
     public void redo ()
@@ -165,13 +170,18 @@ public class AddVariable extends UndoableView implements AddEditable
         // Update GUI
 
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
 
         boolean alreadyExists = createdNode != null;
         boolean wasBinding =  alreadyExists  &&  createdNode.isBinding;
         if (! alreadyExists) createdNode = new NodeVariable (createdPart);
         if (nameIsGenerated) createdNode.setUserObject ("");  // pure create, so about to go into edit mode. This should only happen on first application of the create action, and should only be possible if visibility is already correct.
-        if (! alreadyExists) model.insertNodeIntoUnfiltered (createdNode, parent, index);
+        if (! alreadyExists)
+        {
+            if (model == null) FilteredTreeModel.insertNodeIntoUnfilteredStatic (createdNode, parent, index);
+            else               model.insertNodeIntoUnfiltered (createdNode, parent, index);
+        }
 
         TreeNode[] createdPath = createdNode.getPath ();
         if (! nameIsGenerated)
@@ -179,8 +189,11 @@ public class AddVariable extends UndoableView implements AddEditable
             createdNode.build ();
             createdNode.findConnections ();
             createdNode.filter ();
-            pet.updateOrder (createdPath);
-            parent.invalidateColumns (model);
+            if (pet != null)
+            {
+                pet.updateOrder (createdPath);
+                parent.invalidateColumns (model);
+            }
 
             if (createdNode.isBinding  ||  wasBinding)
             {
@@ -195,9 +208,12 @@ public class AddVariable extends UndoableView implements AddEditable
             }
             parent.updatePins ();
         }
-        pet.updateVisibility (createdPath, -2, ! multi);
-        if (multi) pet.tree.addSelectionPath (new TreePath (createdPath));
-        pet.animate ();
+        if (pet != null)
+        {
+            pet.updateVisibility (createdPath, -2, ! multi);
+            if (multi) pet.tree.addSelectionPath (new TreePath (createdPath));
+            pet.animate ();
+        }
 
         return createdNode;
     }

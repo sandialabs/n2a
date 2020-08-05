@@ -80,7 +80,7 @@ public class InternalBackend extends Backend
             try {err.set (new PrintStream (new FileOutputStream (jobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
             catch (Exception e) {}
 
-            long elapsedTime = 0;
+            long elapsedTime = System.nanoTime ();
             try
             {
                 Files.createFile (jobDir.resolve ("started"));
@@ -116,6 +116,7 @@ public class InternalBackend extends Backend
             }
             catch (Exception e)
             {
+                elapsedTime = System.nanoTime () - elapsedTime;
                 if (! (e instanceof AbortRun)) e.printStackTrace (err.get ());
 
                 try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), jobDir.resolve ("finished"));}

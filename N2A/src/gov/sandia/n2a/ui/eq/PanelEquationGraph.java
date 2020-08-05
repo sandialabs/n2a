@@ -71,10 +71,12 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
+import gov.sandia.n2a.ui.eq.undo.AddVariable;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
+import gov.sandia.n2a.ui.eq.undo.DeleteVariable;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 @SuppressWarnings("serial")
@@ -2260,31 +2262,93 @@ public class PanelEquationGraph extends JScrollPane
             {
                 String baseName = p.key ();
                 String partName = baseName + index;
-                NodePart np = (NodePart) node.child (baseName);
+                NodePart template = (NodePart) node.child (baseName);
                 MNode data = new MVolatile (null, partName);
-                data.merge (np.source);
-                int x = np.source.getInt ("$metadata", "gui", "bounds", "x");
-                int y = np.source.getInt ("$metadata", "gui", "bounds", "y");
+                data.merge (template.source);
+
+                int x = template.source.getInt ("$metadata", "gui", "bounds", "x");
+                int y = template.source.getInt ("$metadata", "gui", "bounds", "y");
                 data.set (x + 20 * index, "$metadata", "gui", "bounds", "x");
                 data.set (y + 20 * index, "$metadata", "gui", "bounds", "y");
 
+                data.set (index, "autoIndex");
+                data.set (index, "autoCount");  // This will get replaced by better information below, if it is available.
+                MNode pin = template.source.child ("$metadata", "gui", "pin");
+                if (template.connectionBindings == null)
+                {
+                    // Need to update "autoCount" in other copied pins, since they don't have a shared part to reference.
+                    for (int i = 1; i < index; i++)
+                    {
+                        NodePart sibling = (NodePart) node.child (baseName + i);
+                        if (sibling != null) changeOrCreate (um, sibling, "autoCount", String.valueOf (index), false);
+                    }
+                }
+                else
+                {
+                    MNode append = pin.child ("append");
+                    String autoBase = pin.getOrDefault ("0", "append");
+
+                    // Determine bindings
+                    // First unbound endpoint should be IO block.
+                    // First bound endpoint should be the destination part.
+                    String   Aname = null;
+                    String   Bname = null;
+                    NodePart Bpart = null;
+                    for (Entry<String,NodePart> e : template.connectionBindings.entrySet ())
+                    {
+                        NodePart endpoint = e.getValue ();
+                        if (endpoint == null)
+                        {
+                            if (Aname == null) Aname = e.getKey ();
+                        }
+                        else
+                        {
+                            if (Bname == null)
+                            {
+                                Bname = e.getKey ();
+                                Bpart = endpoint;
+                            }
+                        }
+                    }
+
+                    if (Bpart == null)
+                    {
+                        if (append != null) data.set (autoBase, "autoBase");
+                    }
+                    else
+                    {
+                        data.set (":" + Bname + ".autoCount", "autoCount");
+                        if (append != null)
+                        {
+                            data.set (":" + Bname + ".autoBase" + index, "autoBase");
+                            data.set (Aname + ".$n",                     Bname + ".autoN" + index);
+                        }
+
+                        // Set variables in B part
+                        changeOrCreate (um, Bpart, "autoCount", String.valueOf (index), false);
+                        if (append != null)
+                        {
+                            int index1 = index - 1;
+                            if (index > 1) changeOrCreate (um, Bpart, "autoBase" + index, "autoBase" + index1 + "+autoN" + index1, true);
+                            else           changeOrCreate (um, Bpart, "autoBase1", autoBase, true);
+                            String n = Bpart.source.get ("$n");
+                            if (n.isEmpty ()  ||  n.startsWith ("autoBase")) changeOrCreate (um, Bpart, "$n", "autoBase" + index + "+autoN" + index, false);
+                        }
+                    }
+                }
+
                 // Update input bindings
                 //   for connections
-                MNode pin = np.source.child ("$metadata", "gui", "pin");
                 if (pin.get ().equals (pinName))  // must match auto pin name
                 {
                     data.set (pinBaseI, "$metadata", "gui", "pin");
                 }
                 //   for parts that forward inputs
-                MNode in = np.source.child ("$metadata", "gui", "pin", "in");
-                if (in != null)
+                for (MNode b : pin.childOrEmpty ("in"))
                 {
-                    for (MNode b : in)
+                    if (b.get ("bind").isEmpty ()  &&  b.get ("bind", "pin").equals (pinName))  // must bind to IO block and match the auto pin name
                     {
-                        if (b.get ("bind").isEmpty ()  &&  b.get ("bind", "pin").equals (pinName))  // must bind to IO block and match the auto pin name
-                        {
-                            data.set (pinBaseI, "$metadata", "gui", "pin", "in", b.key (), "bind", "pin");
-                        }
+                        data.set (pinBaseI, "$metadata", "gui", "pin", "in", b.key (), "bind", "pin");
                     }
                 }
 
@@ -2306,6 +2370,21 @@ public class PanelEquationGraph extends JScrollPane
             if (data.size () > 0) um.apply (new ChangeAnnotations (node, data));
 
             return pinBaseI;
+        }
+
+        public void changeOrCreate (UndoManager um, NodePart node, String name, String value, boolean createOnly)
+        {
+            NodeBase nb = node.child (name);
+            if (nb == null)
+            {
+                MNode data = new MVolatile (value, name);
+                um.apply (new AddVariable (node, node.getChildCount (), data));
+            }
+            else if (nb instanceof NodeVariable  &&  ! createOnly)
+            {
+                NodeVariable v = (NodeVariable) nb;
+                um.apply (new ChangeVariable (v, name, value));
+            }
         }
 
         /**
@@ -2338,15 +2417,86 @@ public class PanelEquationGraph extends JScrollPane
                 // Delete associated part(s).
                 for (MNode p : parts)
                 {
-                    String partName = p.key () + i;
+                    String partBaseName = p.key ();
+                    String partName = partBaseName + i;
                     NodePart np = (NodePart) node.child (partName);
-                    if (np != null) um.apply (new DeletePart (np, false));
+                    if (np == null) continue;
+
+                    // Clean up connection target
+                    if (np.connectionBindings != null)
+                    {
+                        // Determine "B" side
+                        // It's redundant to look this up for every index to be deleted, however this keeps the code simple.
+                        for (Entry<String,NodePart> e : np.connectionBindings.entrySet ())
+                        {
+                            NodePart Bpart = e.getValue ();
+                            if (Bpart == null) continue;
+
+                            MNode append = node.source.child (partBaseName, "$metadata", "gui", "pin", "append");
+                            if (append != null)
+                            {
+                                NodeBase nb = Bpart.child ("autoBase" + i);
+                                if (nb instanceof NodeVariable) um.apply (new DeleteVariable ((NodeVariable) nb, false));
+                            }
+                            break;
+                        }
+                    }
+
+                    um.apply (new DeletePart (np, false));
                 }
 
                 // Delete pin metadata on node itself.
                 NodeBase nb = AddAnnotation.findExact (metadata, true, "gui", "pin", "in", baseNameI);
                 if (nb != null) um.apply (new DeleteAnnotation ((NodeAnnotation) nb, false));
             }
+            // i is now the index of the highest remaining copy. It could be zero.
+
+            // Update "autoCount" and $n
+            // These is only possible after we know the final number of remaining copies.
+            for (MNode p : parts)
+            {
+                String partBaseName = p.key ();
+                NodePart template = (NodePart) node.child (partBaseName);
+                if (template == null) continue;
+                if (template.connectionBindings == null)
+                {
+                    for (int j = 1; j <= i; j++)
+                    {
+                        String partName = partBaseName + j;
+                        NodePart np = (NodePart) node.child (partName);
+                        if (np != null) changeOrCreate (um, np, "autoCount", String.valueOf (i), false);
+                    }
+                }
+                else
+                {
+                    for (Entry<String,NodePart> e : template.connectionBindings.entrySet ())
+                    {
+                        NodePart Bpart = e.getValue ();
+                        if (Bpart == null) continue;
+
+                        NodeVariable n = (NodeVariable) Bpart.child ("$n");
+                        if (i < 1)  // Since the last instance is going away, "autoCount" is no longer needed.
+                        {
+                            NodeBase nb = Bpart.child ("autoCount");
+                            if (nb instanceof NodeVariable) um.apply (new DeleteVariable ((NodeVariable) nb, false));
+
+                            if (n != null  &&  n.source.get ().startsWith ("autoBase")) um.apply (new DeleteVariable (n, false));
+                        }
+                        else  // "autoCount" is still needed, so update the value
+                        {
+                            changeOrCreate (um, Bpart, "autoCount", String.valueOf (i), false);
+
+                            if (n == null  ||  n.source.get ().startsWith ("autoBase"))
+                            {
+                                changeOrCreate (um, Bpart, "$n", "autoBase" + i + "+autoN" + i, false);
+                            }
+                        }
+
+                        break;
+                    }
+                }
+            }
+
             return true;
         }
 

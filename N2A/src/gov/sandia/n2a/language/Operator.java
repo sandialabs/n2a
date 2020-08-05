@@ -10,6 +10,7 @@ import gov.sandia.n2a.eqset.Equality;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.function.AbsoluteValue;
 import gov.sandia.n2a.language.function.Atan;
+import gov.sandia.n2a.language.function.Columns;
 import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.DrawDisc;
@@ -26,6 +27,7 @@ import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Round;
+import gov.sandia.n2a.language.function.Rows;
 import gov.sandia.n2a.language.function.Signum;
 import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.SquareRoot;
@@ -417,6 +419,7 @@ public class Operator implements Cloneable
         // Functions
         register (AbsoluteValue.factory ());
         register (Atan         .factory ());
+        register (Columns      .factory ());
         register (Cosine       .factory ());
         register (Delay        .factory ());
         register (DrawDisc     .factory ());
@@ -433,6 +436,7 @@ public class Operator implements Cloneable
         register (Norm         .factory ());
         register (ReadMatrix   .factory ());
         register (Round        .factory ());
+        register (Rows         .factory ());
         register (Signum       .factory ());
         register (Sine         .factory ());
         register (SquareRoot   .factory ());

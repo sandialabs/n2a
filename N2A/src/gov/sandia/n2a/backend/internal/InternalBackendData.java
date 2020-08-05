@@ -1352,6 +1352,11 @@ public class InternalBackendData
         {
             return false;
         }
+
+        public String toString ()
+        {
+            return "ResolveContainer";
+        }
     }
 
     public static class ResolvePart implements Instance.Resolver
@@ -1371,6 +1376,11 @@ public class InternalBackendData
         public boolean shouldEnumerate (Instance from)
         {
             return from instanceof Population;
+        }
+
+        public String toString ()
+        {
+            return "ResolvePart " + i;
         }
     }
 
@@ -1447,6 +1457,10 @@ public class InternalBackendData
     public void dumpReferenceSet (String name, TreeSet<VariableReference> set)
     {
         System.out.println ("  " + name);
-        for (VariableReference r : set) System.out.println ("    " + r.variable.nameString () + " in " + r.variable.container.name);
+        for (VariableReference r : set)
+        {
+            System.out.println ("    " + r.variable.nameString () + " in " + r.variable.container.name + " " + r.resolution.size ());
+            //for (Object o : r.resolution) System.out.println ("      " + o);
+        }
     }
 }
