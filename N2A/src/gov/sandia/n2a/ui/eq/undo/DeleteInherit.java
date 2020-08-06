@@ -8,6 +8,8 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
+import javax.swing.undo.UndoableEdit;
+
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeInherit;
 
@@ -16,6 +18,7 @@ public class DeleteInherit extends UndoableView
     protected List<String> path;  // to parent part
     protected boolean      canceled;
     protected String       value;
+    protected boolean      neutralized;
 
     public DeleteInherit (NodeInherit node, boolean canceled)
     {
@@ -35,5 +38,20 @@ public class DeleteInherit extends UndoableView
     {
         super.redo ();
         AddInherit.destroy (path, canceled);
+    }
+
+    public boolean replaceEdit (UndoableEdit edit)
+    {
+        if (edit instanceof AddInherit)
+        {
+            AddInherit ai = (AddInherit) edit;
+            neutralized = path.equals (ai.path);
+        }
+        return neutralized;
+    }
+
+    public boolean anihilate ()
+    {
+        return neutralized;
     }
 }

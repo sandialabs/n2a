@@ -43,7 +43,7 @@ public class AddInherit extends UndoableView
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
-        NodePart grandparent = (NodePart) parent.getParent ();
+        NodePart grandparent = (NodePart) parent.getTrueParent ();
 
         NodeBase node = parent.child ("$inherit");
         TreeNode[] nodePath = node.getPath ();
@@ -67,14 +67,18 @@ public class AddInherit extends UndoableView
             peg.reloadPart ();  // safely disconnects old nodes, even though parent has been rebuilt with new nodes
             parent.filter ();  // Ensure that parts are not visible in parent panel.
         }
-        if (parent.visible ()) model.nodeStructureChanged (parent);
+        model.nodeStructureChanged (parent);  // Presumably, part node is still visible. Is there any harm in doing this if it is not?
 
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath, index);
         pet.animate ();
 
-        peg.reconnect ();
-        peg.repaint ();
+        if (parent != pe.part)
+        {
+            peg.updatePins ();
+            peg.reconnect ();
+            peg.repaint ();
+        }
 
         if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {
@@ -92,7 +96,7 @@ public class AddInherit extends UndoableView
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
-        NodePart grandparent = (NodePart) parent.getParent ();
+        NodePart grandparent = (NodePart) parent.getTrueParent ();
 
         PanelEquations pe = PanelModel.instance.panelEquations;
         PanelEquationTree pet = parent.getTree ();
@@ -117,8 +121,12 @@ public class AddInherit extends UndoableView
         pet.updateVisibility (createdPath);
         pet.animate ();
 
-        peg.reconnect ();
-        peg.repaint ();
+        if (parent != pe.part)
+        {
+            peg.updatePins ();
+            peg.reconnect ();
+            peg.repaint ();
+        }
 
         if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {

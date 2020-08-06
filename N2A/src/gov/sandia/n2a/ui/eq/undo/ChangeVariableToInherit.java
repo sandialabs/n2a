@@ -45,7 +45,7 @@ public class ChangeVariableToInherit extends UndoableView
 
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
-        NodePart grandparent = (NodePart) parent.getParent ();
+        NodePart grandparent = (NodePart) parent.getTrueParent ();
 
         // Update the database
         MPart mparent = parent.source;
@@ -70,15 +70,19 @@ public class ChangeVariableToInherit extends UndoableView
             peg.reloadPart ();
             parent.filter ();
         }
-        if (parent.visible ()) model.nodeStructureChanged (parent);
+        model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child (nameBefore).getPath ();
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
         pet.animate ();
 
-        peg.reconnect ();
-        peg.repaint ();
+        if (parent != pe.part)
+        {
+            peg.updatePins ();
+            peg.reconnect ();
+            peg.repaint ();
+        }
 
         if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {
@@ -92,7 +96,7 @@ public class ChangeVariableToInherit extends UndoableView
 
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
-        NodePart grandparent = (NodePart) parent.getParent ();
+        NodePart grandparent = (NodePart) parent.getTrueParent ();
 
         // Update database
         MPart mparent = parent.source;
@@ -123,8 +127,12 @@ public class ChangeVariableToInherit extends UndoableView
         pet.updateVisibility (nodePath);
         pet.animate ();
 
-        peg.reconnect ();
-        peg.repaint ();
+        if (parent != pe.part)
+        {
+            peg.updatePins ();
+            peg.reconnect ();
+            peg.repaint ();
+        }
 
         if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {

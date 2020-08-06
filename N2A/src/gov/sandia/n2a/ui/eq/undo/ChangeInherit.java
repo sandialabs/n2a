@@ -53,7 +53,7 @@ public class ChangeInherit extends UndoableView
         NodeBase node = NodeBase.locateNode (path);
         if (node == null) throw new CannotRedoException ();
         NodePart parent      = (NodePart) node.getParent ();
-        NodePart grandparent = (NodePart) parent.getParent ();
+        NodePart grandparent = (NodePart) parent.getTrueParent ();
 
         PanelEquations pe = PanelModel.instance.panelEquations;
         PanelEquationTree pet = node.getTree ();
@@ -72,15 +72,19 @@ public class ChangeInherit extends UndoableView
             peg.reloadPart ();
             parent.filter ();  // Ensure that parts are not visible in parent panel.
         }
-        if (parent.visible ()) model.nodeStructureChanged (parent);
+        model.nodeStructureChanged (parent);
 
         TreeNode[] nodePath = parent.child ("$inherit").getPath ();
         pet.updateOrder (nodePath);
         pet.updateVisibility (nodePath);
         pet.animate ();
 
-        peg.reconnect ();
-        peg.repaint ();
+        if (parent != pe.part)
+        {
+            peg.updatePins ();
+            peg.reconnect ();
+            peg.repaint ();
+        }
 
         if (parent.getTrueParent () == null)  // root node, so update categories in search list
         {
