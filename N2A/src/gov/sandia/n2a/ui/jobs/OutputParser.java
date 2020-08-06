@@ -137,7 +137,11 @@ public class OutputParser
                 if (c.header.isEmpty ()) c.header = n.get ();
 
                 String colorName = n.get ("color");
-                if (! colorName.isEmpty ()) c.color = Color.decode (colorName);
+                if (! colorName.isEmpty ())
+                {
+                    try {c.color = Color.decode (colorName);}
+                    catch (NumberFormatException error) {}  // and color remains null
+                }
 
                 String scale = n.get ("scale");
                 if (! scale.isEmpty ())

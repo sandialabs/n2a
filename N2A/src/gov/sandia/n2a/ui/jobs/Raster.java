@@ -8,8 +8,12 @@ package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.geom.Rectangle2D;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
@@ -27,7 +31,9 @@ import org.jfree.data.xy.XYSeriesCollection;
 **/
 public class Raster extends OutputParser
 {
-    public XYSeriesCollection dataset;
+    public XYSeriesCollection dataset     = new XYSeriesCollection ();
+    public List<Color>        colors      = new ArrayList<Color> ();  // correspond 1-to-1 with series added to dataset
+    public double             timeQuantum = 1;  // The closest spacing between two spikes on a single row.
 
     public Raster (Path path)
     {
@@ -37,10 +43,6 @@ public class Raster extends OutputParser
 
     public void createDataset ()
     {
-        dataset = new XYSeriesCollection ();
-        XYSeries series = new XYSeries ("Spikes");
-        dataset.addSeries (series);
-
         // Convert column indices.
         if (raw)
         {
@@ -67,19 +69,38 @@ public class Raster extends OutputParser
         }
 
         // Generate dateset
+        Color red = Color.getHSBColor (0.0f, 1.0f, 0.8f);
         for (Column c : columns)
         {
+            XYSeries series = new XYSeries (c.header);
+            dataset.addSeries (series);
+
+            if (c.color == null) colors.add (red);
+            else                 colors.add (c.color);
+
+            int count = c.values.size ();
             if (timeFound)
             {
-                if (c == time) continue;
-                for (int r = 0; r < c.values.size (); r++)
+                if (c == time)
+                {
+                    double lastTime = c.values.get (0);
+                    for (int r = 1; r < count; r++)
+                    {
+                        double thisTime = c.values.get (r);
+                        double diff = thisTime - lastTime;
+                        timeQuantum = Math.min (timeQuantum, diff);
+                        lastTime = thisTime;
+                    }
+                    continue;
+                }
+                for (int r = 0; r < count; r++)
                 {
                     if (c.values.get (r) != 0) series.add (time.values.get (r + c.startRow).doubleValue (), c.index);
                 }
             }
             else
             {
-                for (int r = 0; r < c.values.size (); r++)
+                for (int r = 0; r < count; r++)
                 {
                     if (c.values.get (r) != 0) series.add (r + c.startRow, c.index);
                 }
@@ -108,27 +129,35 @@ public class Raster extends OutputParser
         plot.setRangePannable  (true);
         NumberAxis rangeAxis = (NumberAxis) plot.getRangeAxis ();
         rangeAxis.setStandardTickUnits (NumberAxis.createIntegerTickUnits ());  // Integer units only
-        plot.setRenderer (new TickRenderer ());
+        TickRenderer renderer = new TickRenderer ();
+        plot.setRenderer (renderer);
+
+        int count = colors.size ();
+        for (int i = 0; i < count; i++) renderer.setSeriesPaint (i, colors.get (i));
 
         return chart;
     }
 
     @SuppressWarnings("serial")
-    public static class TickRenderer extends XYDotRenderer
+    public class TickRenderer extends XYDotRenderer
     {
-        public TickRenderer ()
-        {
-            setDotWidth (1);
-        }
-
         public XYItemRendererState initialise (Graphics2D g2, Rectangle2D dataArea, XYPlot plot, XYDataset dataset, PlotRenderingInfo info)
         {
+            Rectangle clipBounds = g2.getClipBounds ();
+
             double rasterLines = plot.getRangeAxis ().getRange ().getLength ();
-            int    pixels      = g2.getClipBounds ().height;
-            double height = pixels / rasterLines;
+            int    height      = (int) Math.floor (clipBounds.height / rasterLines);
             if      (height > 10) height -= 2;
             else if (height > 2 ) height -= 1;
-            setDotHeight ((int) Math.min (20, Math.max (1, Math.floor (height))));
+            height = Math.min (20, height);
+            height = Math.max (1,  height);
+            setDotHeight ((int) height);
+
+            double timeSteps = plot.getDomainAxis ().getRange ().getLength () / timeQuantum;
+            int    width     = (int) Math.floor (clipBounds.width / timeSteps);
+            width = Math.min (height / 2, width);
+            width = Math.max (1,          width);
+            setDotWidth ((int) width);
 
             return super.initialise (g2, dataArea, plot, dataset, info);
         }
