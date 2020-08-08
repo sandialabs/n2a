@@ -21,6 +21,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.Undoable;
@@ -523,7 +524,8 @@ public class NodeVariable extends NodeContainer
 
         // Handle creation of $inherit node.
         FilteredTreeModel model = (FilteredTreeModel) tree.getModel ();
-        boolean newlyCreated =  getChildCount () == 0  &&  valueBefore.isEmpty ()  &&  source.isFromTopDocument ();  // Only a heuristic. Could also be an existing variable with no equation.
+        boolean canInject    =  getChildCount () == 0  &&  source.isFromTopDocument ();
+        boolean newlyCreated =  canInject  &&  valueBefore.isEmpty ();  // Only a heuristic. Could also be an existing variable with no equation.
         NodeBase parent = (NodeBase) getParent ();
         if (nameAfter.equals ("$inherit"))
         {
@@ -549,9 +551,11 @@ public class NodeVariable extends NodeContainer
         NodeBase nodeAfter = parent.child (nameAfter);
         if (nodeAfter != null)
         {
-            boolean revoked = nodeAfter.source.get ().equals ("$kill");
-            if (   ! (nodeAfter instanceof NodeVariable)
-                || (nodeAfter != this  &&  nodeAfter.source.isFromTopDocument ()  &&  ! newlyCreated  &&  ! revoked))
+            boolean isVariable = nodeAfter instanceof NodeVariable;
+            boolean different  = nodeAfter != this;
+            boolean topdoc     = nodeAfter.source.isFromTopDocument ();
+            boolean revoked    = nodeAfter.source.get ().equals ("$kill");
+            if (! isVariable  ||  (different  &&  topdoc  &&  ! revoked  &&  ! canInject))
             {
                 nameAfter = nameBefore;
                 nodeAfter = this;
@@ -606,11 +610,12 @@ public class NodeVariable extends NodeContainer
                     return;
                 }
             }
-            else
+            else  // Node has been renamed.
             {
-                if (newlyCreated)  // The newly created node has been renamed such that it will inject into/over an existing variable.
+                if (canInject)  // Inject into/over an existing variable.
                 {
-                    // Remove newly-created variable, regardless of what we do to nodeAfter.
+                    // Remove this variable, regardless of what we do to nodeAfter.
+                    um.addEdit (new CompoundEdit ());
                     um.apply (new DeleteVariable (this, canceled));
 
                     // Decide what change (if any) to apply to nodeAfter.
@@ -643,6 +648,8 @@ public class NodeVariable extends NodeContainer
                             }
                         }
                     }
+
+                    um.endCompoundEdit ();
                     return;
                 }
             }
