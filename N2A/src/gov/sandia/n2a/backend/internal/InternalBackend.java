@@ -100,7 +100,7 @@ public class InternalBackend extends Backend
                     job.set (seed, "$metadata", "seed");
                 }
 
-                String e = job.get ("$metadata", "backend", "internal", "event");
+                String e = job.get ("$metadata", "backend", "all", "event");
                 int                      eventMode = Simulator.DURING;
                 if (e.equals ("after"))  eventMode = Simulator.AFTER;
                 if (e.equals ("before")) eventMode = Simulator.BEFORE;

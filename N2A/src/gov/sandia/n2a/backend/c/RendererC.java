@@ -15,6 +15,7 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.function.Columns;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
@@ -27,6 +28,7 @@ import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
+import gov.sandia.n2a.language.function.Rows;
 import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
@@ -106,6 +108,13 @@ public class RendererC extends Renderer
         {
             BuildMatrix b = (BuildMatrix) op;
             result.append (b.name);
+            return true;
+        }
+        if (op instanceof Columns)
+        {
+            Columns c = (Columns) op;
+            c.operands[0].render (this);
+            result.append (".columns ()");
             return true;
         }
         if (op instanceof Constant)
@@ -382,6 +391,13 @@ public class RendererC extends Renderer
             }
             if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
 
+            return true;
+        }
+        if (op instanceof Rows)
+        {
+            Rows r = (Rows) op;
+            r.operands[0].render (this);
+            result.append (".rows ()");
             return true;
         }
         if (op instanceof SquareRoot)

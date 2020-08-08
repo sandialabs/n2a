@@ -143,6 +143,15 @@ public class OutputParser
                     catch (NumberFormatException error) {}  // and color remains null
                 }
 
+                colorName = n.get ("hue");  // Like "color", but expects default values for saturation and brightness.
+                if (! colorName.isEmpty ())
+                {
+                    float hue = 0;
+                    try {hue = Float.valueOf (colorName);}
+                    catch (NumberFormatException error) {}
+                    c.color = Color.getHSBColor (hue, 1.0f, 0.8f);
+                }
+
                 String scale = n.get ("scale");
                 if (! scale.isEmpty ())
                 {

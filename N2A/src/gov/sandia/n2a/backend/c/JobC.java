@@ -116,7 +116,7 @@ public class JobC extends Thread
             if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
 
             eventMode = Simulator.DURING;
-            String e = job.get ("$metadata", "backend", "internal", "event");  // TODO: Need naming convention for parameters shared by more than one backend.
+            String e = job.get ("$metadata", "backend", "all", "event");
             if (e.equals ("after"))  eventMode = Simulator.AFTER;
             if (e.equals ("before")) eventMode = Simulator.BEFORE;
 
@@ -511,6 +511,7 @@ public class JobC extends Thread
 
         result.append ("#include \"" + runtimeDir.resolve ("runtime.h") + "\"\n");
         result.append ("#include \"" + runtimeDir.resolve ("Matrix.tcc") + "\"\n");
+        result.append ("#include \"" + runtimeDir.resolve ("MatrixFixed.tcc") + "\"\n");
         result.append ("\n");
         result.append ("#include <iostream>\n");
         result.append ("#include <vector>\n");
@@ -606,7 +607,7 @@ public class JobC extends Thread
                         int cols = A.columns ();
                         constant.name = "Matrix" + matrixNames.size ();
                         matrixNames.put (constant, constant.name);
-                        result.append ("MatrixFixed<" + T + "," + rows + "," + cols + ">" + constant.name + " = {");
+                        result.append ("MatrixFixed<" + T + "," + rows + "," + cols + "> " + constant.name + " = {");
                         String initializer = "";
                         for (int c = 0; c < cols; c++)
                         {
@@ -3076,6 +3077,7 @@ public class JobC extends Thread
                 result.append ("    }\n");
             }
             result.append ("  }\n");
+            result.append ("  return false;\n");
             result.append ("}\n");
             result.append ("\n");
 
@@ -3104,6 +3106,7 @@ public class JobC extends Thread
                     result.append ("    }\n");
                 }
                 result.append ("  }\n");
+                result.append ("  return -1;\n");
                 result.append ("}\n");
                 result.append ("\n");
             }

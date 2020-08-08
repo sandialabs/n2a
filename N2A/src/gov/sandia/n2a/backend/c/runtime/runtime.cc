@@ -10,10 +10,10 @@ using namespace std;
 
 template class MatrixFixed<n2a_T,3,1>;
 
-template n2a_T          uniform ();
-template n2a_T          uniform (n2a_T sigma);
-template n2a_T          gaussian ();
-template n2a_T          gaussian (n2a_T sigma);
+template n2a_T uniform ();
+template n2a_T uniform (n2a_T sigma);
+template n2a_T gaussian ();
+template n2a_T gaussian (n2a_T sigma);
 
 template MatrixFixed<n2a_T,3,1> grid    (int i, int nx, int ny, int nz);
 template MatrixFixed<n2a_T,3,1> gridRaw (int i, int nx, int ny, int nz);
@@ -50,6 +50,7 @@ holderHelper (vector<Holder *> & holders, const String & fileName, Holder * oldH
 
 template class Simulatable<n2a_T>;
 template class Part<n2a_T>;
+template void removeMonitor (std::vector<Part<n2a_T> *> & partList, Part<n2a_T> * part);
 template class PartTime<n2a_T>;
 template class WrapperBase<n2a_T>;
 template class ConnectIterator<n2a_T>;

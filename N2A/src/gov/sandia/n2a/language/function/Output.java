@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
-import java.awt.Color;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -207,14 +206,6 @@ public class Output extends Function
                             case "ymin":
                                 columnMode.set (val, 0, key);  // All chart-wide parameters go on time column.
                                 break;
-                            case "hue":  // Like "color", but expects default values for saturation and brightness.
-                                float hue = 0;
-                                try {hue = Float.valueOf (val);}
-                                catch (NumberFormatException error) {}
-                                Color color = Color.getHSBColor (hue, 1.0f, 0.8f);
-                                val = "#" + Integer.toHexString (color.getRGB () & 0xFFFFFF);
-                                key = "color";
-                                // and fall through ...
                             default:
                                 columnMode.set (val, index, key);
                         }
