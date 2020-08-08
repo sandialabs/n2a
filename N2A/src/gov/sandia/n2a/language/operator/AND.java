@@ -38,9 +38,9 @@ public class AND extends OperatorBinary implements OperatorLogical
         return 8;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator result = super.simplify (from);
+        Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
         if (operand0.isScalar ())
@@ -49,7 +49,7 @@ public class AND extends OperatorBinary implements OperatorLogical
             result = operand1;
             if (operand0.getDouble () == 0)
             {
-                operand1.releaseDependencies (from);
+                if (! evalOnly) operand1.releaseDependencies (from);
                 result = new Constant (0);
             }
             result.parent = parent;
@@ -61,7 +61,7 @@ public class AND extends OperatorBinary implements OperatorLogical
             result = operand0;
             if (operand1.getDouble () == 0)
             {
-                operand0.releaseDependencies (from);
+                if (! evalOnly) operand0.releaseDependencies (from);
                 result = new Constant (0);
             }
             result.parent = parent;

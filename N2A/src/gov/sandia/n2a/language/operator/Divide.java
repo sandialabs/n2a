@@ -36,15 +36,15 @@ public class Divide extends OperatorBinary
         return 4;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator result = super.simplify (from);
+        Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
         if (operand0.isScalar ()  &&  operand0.getDouble () == 0)
         {
             from.changed = true;
-            operand1.releaseDependencies (from);
+            if (! evalOnly) operand1.releaseDependencies (from);
             operand0.parent = parent;
             return operand0;  // Return the constant 0. No need to make a new object for this.
         }

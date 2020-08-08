@@ -96,6 +96,6 @@ public class Delay extends Function
 
     public String toString ()
     {
-        return "event";
+        return "delay";
     }
 }

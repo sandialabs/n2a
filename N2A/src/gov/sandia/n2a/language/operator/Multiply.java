@@ -37,9 +37,9 @@ public class Multiply extends OperatorBinary
         return 4;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator result = super.simplify (from);
+        Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
         if (operand0.isScalar ())
@@ -54,7 +54,7 @@ public class Multiply extends OperatorBinary
             if (value == 0)
             {
                 from.changed = true;
-                operand1.releaseDependencies (from);
+                if (! evalOnly) operand1.releaseDependencies (from);
                 result = new Constant (0);
                 result.parent = parent;
                 return result;
@@ -72,7 +72,7 @@ public class Multiply extends OperatorBinary
             if (value == 0)
             {
                 from.changed = true;
-                operand0.releaseDependencies (from);
+                if (! evalOnly) operand0.releaseDependencies (from);
                 result = new Constant (0);
                 result.parent = parent;
                 return result;

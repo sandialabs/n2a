@@ -55,9 +55,9 @@ public class OperatorUnary extends Operator implements OperatorArithmetic
         return this;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        operand = operand.simplify (from);
+        operand = operand.simplify (from, evalOnly);
         if (operand instanceof Constant)
         {
             from.changed = true;

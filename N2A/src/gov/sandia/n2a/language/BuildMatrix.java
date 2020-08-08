@@ -132,7 +132,7 @@ public class BuildMatrix extends Operator
         return this;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
         int cols = operands.length;
         if (cols == 0) return this;
@@ -154,7 +154,7 @@ public class BuildMatrix extends Operator
                 }
                 else
                 {
-                    operands[c][r] = operands[c][r].simplify (from);
+                    operands[c][r] = operands[c][r].simplify (from, evalOnly);
                     if (isConstant)  // stop evaluating if we already know we are not constant
                     {
                         if (operands[c][r] instanceof Constant)

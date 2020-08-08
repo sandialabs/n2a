@@ -64,10 +64,10 @@ public class OperatorBinary extends Operator implements OperatorArithmetic
         return this;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        operand0 = operand0.simplify (from);
-        operand1 = operand1.simplify (from);
+        operand0 = operand0.simplify (from, evalOnly);
+        operand1 = operand1.simplify (from, evalOnly);
         if (operand0 instanceof Constant  &&  operand1 instanceof Constant)
         {
             from.changed = true;

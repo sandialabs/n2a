@@ -36,9 +36,9 @@ public class MultiplyElementwise extends OperatorBinary
         return 4;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator result = super.simplify (from);
+        Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
         if (operand0.isScalar ()  &&  operand0.getDouble () == 1)

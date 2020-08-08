@@ -55,7 +55,7 @@ public class AccessVariable extends Operator
         name = node.jjtGetValue ().toString ();
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
         if (reference == null  ||  reference.variable == null) return this;  // unresolved!
         Variable v = reference.variable;
@@ -80,17 +80,18 @@ public class AccessVariable extends Operator
                 p = p.visited;
             }
             v.visited = from;
-            e.expression = e.expression.simplify (v);
+            e.expression = e.expression.simplify (v, evalOnly);
         }
 
         if (e.expression instanceof Constant)
         {
             from.changed = true;
-            releaseDependencies (from);
+            if (! evalOnly) releaseDependencies (from);
             Operator result = e.expression.deepCopy ();
             result.parent = parent;
             return result;
         }
+        if (evalOnly) return this;
         if (e.expression instanceof AccessVariable)  // Our variable is simply an alias for another variable, so grab the other variable instead.
         {
             AccessVariable av = (AccessVariable) e.expression;

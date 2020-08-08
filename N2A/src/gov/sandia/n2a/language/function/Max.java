@@ -36,9 +36,9 @@ public class Max extends Function
         };
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator result = super.simplify (from);
+        Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
         // Check if Max appears as an operand. If so, merge its operands into ours

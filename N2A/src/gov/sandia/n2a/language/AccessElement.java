@@ -36,9 +36,9 @@ public class AccessElement extends Function
         }
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        for (int i = 0; i < operands.length; i++) operands[i] = operands[i].simplify (from);
+        for (int i = 0; i < operands.length; i++) operands[i] = operands[i].simplify (from, evalOnly);
         if (operands.length == 1)
         {
             from.changed = true;
@@ -94,7 +94,7 @@ public class AccessElement extends Function
                         if (element != null  &&  element instanceof Constant)
                         {
                             from.changed = true;
-                            operands[0].releaseDependencies (from);
+                            if (! evalOnly) operands[0].releaseDependencies (from);
                             element.parent = parent;
                             return element;
                         }

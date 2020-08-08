@@ -97,14 +97,14 @@ public class Function extends Operator
         return this;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
         if (canBeConstant ())
         {
             boolean constant = true;
             for (int i = 0; i < operands.length; i++)
             {
-                operands[i] = operands[i].simplify (from);
+                operands[i] = operands[i].simplify (from, evalOnly);
                 if (! (operands[i] instanceof Constant)) constant = false;
             }
             if (constant)
@@ -117,7 +117,7 @@ public class Function extends Operator
         }
         else
         {
-            for (int i = 0; i < operands.length; i++) operands[i] = operands[i].simplify (from);
+            for (int i = 0; i < operands.length; i++) operands[i] = operands[i].simplify (from, evalOnly);
         }
         return this;
     }

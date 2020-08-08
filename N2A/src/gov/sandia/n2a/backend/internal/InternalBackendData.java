@@ -481,8 +481,10 @@ public class InternalBackendData
                                 et.track.reference.variable = et.track;
                             }
 
-                            // Locate any temporaries for evaluation. TODO: for more efficiency, we could have separate lists of temporaries for the condition and delay operands
+                            // Locate any temporaries for evaluation.
                             //   Tie into the dependency graph using a phantom variable (which can go away afterward without damaging the graph).
+                            // TODO: for more efficiency, we could have separate lists of temporaries for the condition and delay operands
+                            // TODO: for more efficiency, cut off search for temporaries along some branch of the tree at the first non-temporary.
                             final Variable phantom = new Variable ("event");
                             phantom.uses = new IdentityHashMap<Variable,Integer> ();
                             for (int i = 0; i < et.event.operands.length; i++) et.event.operands[i].visit (new Visitor ()
@@ -1015,7 +1017,7 @@ public class InternalBackendData
         for (Variable v : localMembers)
         {
             // If a float variable is a reference to another instance, we store a pointer to that instance
-            // in the type array rather than the float array.
+            // in the object array rather than the float array.
             if (v.type instanceof Scalar  &&  v.reference.variable == v)
             {
                 v.readIndex = v.writeIndex = allocateLocalFloat (v.nameString ());
@@ -1323,7 +1325,7 @@ public class InternalBackendData
                 boolean alwaysFires = true;
                 if (e.condition != null)
                 {
-                    Operator test = e.condition.deepCopy ().transform (replace).simplify (v);
+                    Operator test = e.condition.deepCopy ().transform (replace).simplify (v, true);
                     if (test.isScalar ())
                     {
                         couldFire = alwaysFires = test.getDouble () != 0;

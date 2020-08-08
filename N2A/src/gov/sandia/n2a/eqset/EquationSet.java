@@ -1795,10 +1795,10 @@ public class EquationSet implements Comparable<EquationSet>
             }
 
             //     Pass 2 -- Move the variables up to this container.
-            //     Requires changes to external references to the variables of s.
-            //     Requires changes to resolution paths.
+            //     Requires changes in external references to the variables of s.
+            //     Requires changes in resolution paths.
 
-            //     Modify references to variable "from" so they point to variable "to" instead.
+            //     Utility class: Modify references to variable "from" so they point to variable "to" instead.
             //     The expectation is that "from" will be forgotten.
             class Redirector implements Visitor
             {
@@ -1853,7 +1853,7 @@ public class EquationSet implements Comparable<EquationSet>
                     this.from = from;
                     this.to   = to;
 
-                    // Duplicate list, so we can safely modify the original below.
+                    // Copy list of users, so we can safely modify the original below.
                     List<Object> usedBy;
                     if (from.usedBy == null) usedBy = new ArrayList<Object> ();
                     else                     usedBy = new ArrayList<Object> (from.usedBy);
@@ -1861,7 +1861,7 @@ public class EquationSet implements Comparable<EquationSet>
                     // Check variables that "from" uses. Some of these may be external writers to "from", which don't necessarily show up in usedBy.
                     if (from.uses != null)
                     {
-                        List<Variable> uses = new ArrayList<Variable> (from.uses.keySet ());  // duplicate, in case it gets modified
+                        List<Variable> uses = new ArrayList<Variable> (from.uses.keySet ());  // copy, in case it gets modified
                         for (Variable v : uses)
                         {
                             if (v.reference.variable != from) continue;  // Must be one of our external writers.
@@ -1936,6 +1936,7 @@ public class EquationSet implements Comparable<EquationSet>
                 else  // external reference
                 {
                     if (v.name.startsWith ("$up.")) v.name = v.name.substring (4);
+                    else if (v.name.startsWith (name + ".")) v.name = v.name.substring (name.length () + 1);
                     List<Object> r = v.reference.resolution;
                     if (r.get (0) == EquationSet.this)
                     {
@@ -1978,7 +1979,7 @@ public class EquationSet implements Comparable<EquationSet>
             class Resolver implements Visitor
             {
                 EquationSet child;  // The container being eliminated (same as "s" in outer code).
-                EquationSet parent; // Holds "child". Remains after child is eliminated.
+                EquationSet parent; // Holds "child". Remains after child is eliminated. (Same as EquationSet.this in outer code.)
                 Variable    target; // The variable in "child" that should be the destination of the resolution path. If null, don't filter (process every reference).
 
                 public boolean visit (Operator op)
@@ -2631,11 +2632,11 @@ public class EquationSet implements Comparable<EquationSet>
                 if (e.condition != null)
                 {
                     replacePhase.init = 1;
-                    Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (p);
+                    Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (p, true);
                     if (test.isScalar ()  &&  test.getDouble () == 0)  // Does not fire during init phase
                     {
                         replacePhase.init = 0;
-                        test = e.condition.deepCopy ().transform (replacePhase).simplify (p);
+                        test = e.condition.deepCopy ().transform (replacePhase).simplify (p, true);
                         if (test.isScalar ()  &&  test.getDouble () == 0) continue;  // Does not fire during update phase
                     }
                 }
@@ -3775,7 +3776,7 @@ public class EquationSet implements Comparable<EquationSet>
 
                     // init
                     replacePhase.init = 1;
-                    Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (v);
+                    Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (v, true);
                     if (! test.isScalar ()  ||  test.getDouble () != 0)
                     {
                         firesDuringInit++;
@@ -3784,7 +3785,7 @@ public class EquationSet implements Comparable<EquationSet>
 
                     // update
                     replacePhase.init = 0;
-                    test = e.condition.deepCopy ().transform (replacePhase).simplify (v);
+                    test = e.condition.deepCopy ().transform (replacePhase).simplify (v, true);
                     if (! test.isScalar ()  ||  test.getDouble () != 0)
                     {
                         firesDuringUpdate++;
@@ -3866,7 +3867,7 @@ public class EquationSet implements Comparable<EquationSet>
                     }
                     else
                     {
-                        Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (v);
+                        Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (v, true);
                         if (! test.isScalar ()  ||  test.getDouble () != 0)
                         {
                             firesDuringUpdate = true;
@@ -3895,7 +3896,7 @@ public class EquationSet implements Comparable<EquationSet>
                     TreeSet<EquationEntry> nextEquations = new TreeSet<EquationEntry> ();
                     for (EquationEntry e : v.equations)
                     {
-                        e.condition = e.condition.transform (replaceInit).simplify (v);
+                        e.condition = e.condition.transform (replaceInit).simplify (v, false);
                         e.ifString = e.condition.render ();
                         if (e.condition.isScalar ())
                         {
@@ -3969,7 +3970,7 @@ public class EquationSet implements Comparable<EquationSet>
             // Assume a condition always fires, unless we can prove it does not.
             if (e.condition != null)
             {
-                Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (p);
+                Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (p, true);
                 if (test.isScalar ()  &&  test.getDouble () == 0) continue;
             }
             fires.add (e);

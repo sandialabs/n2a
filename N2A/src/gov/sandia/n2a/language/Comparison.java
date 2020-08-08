@@ -13,9 +13,9 @@ import tech.units.indriya.AbstractUnit;
 
 public class Comparison extends OperatorBinary implements OperatorLogical
 {
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator result = super.simplify (from);
+        Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
         // Determine if both operands are exactly the same expression.
@@ -23,7 +23,7 @@ public class Comparison extends OperatorBinary implements OperatorLogical
         if (operand0.render ().equals (operand1.render ()))  // This method is crude, but should be sufficient for simple cases.
         {
             from.changed = true;
-            releaseDependencies (from);
+            if (! evalOnly) releaseDependencies (from);
             operand0 = operand1 = new Constant (new Scalar (0));
             result = new Constant (eval (null));
             result.parent = parent;

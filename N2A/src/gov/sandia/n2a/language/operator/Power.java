@@ -75,9 +75,9 @@ public class Power extends OperatorBinary
         return 1;  // for pow()
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator result = super.simplify (from);
+        Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
         // Cases we cans simplify:

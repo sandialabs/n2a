@@ -38,9 +38,9 @@ public class Subtract extends OperatorBinary
         return 5;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator result = super.simplify (from);
+        Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
         if (operand1.isScalar ()  &&  operand1.getDouble () == 0)
@@ -58,7 +58,7 @@ public class Subtract extends OperatorBinary
                 if (av0.reference.equals (av1.reference))
                 {
                     from.changed = true;
-                    releaseDependencies (from);
+                    if (! evalOnly) releaseDependencies (from);
                     result = new Constant (0);
                     result.parent = parent;
                     return result;

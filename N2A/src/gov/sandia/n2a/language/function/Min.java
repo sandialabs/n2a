@@ -36,9 +36,9 @@ public class Min extends Function
         };
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator result = super.simplify (from);
+        Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
         // Check if Min appears as an operand. If so, merge its operands into ours

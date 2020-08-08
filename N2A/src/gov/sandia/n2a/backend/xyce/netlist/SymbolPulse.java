@@ -89,7 +89,7 @@ public class SymbolPulse extends Symbol
         }
         ReplaceTime replaceTime = new ReplaceTime ();
         o = replacePulse.pulse.operands[0].deepCopy ().transform (replaceTime);
-        delay = o.simplify (eq.variable);
+        delay = o.simplify (eq.variable, true);
 
         // fill in operands that are equivalent
         width  = replacePulse.pulse.operands[1];

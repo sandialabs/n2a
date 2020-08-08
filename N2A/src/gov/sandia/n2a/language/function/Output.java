@@ -360,7 +360,7 @@ public class Output extends Function
         return result;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
         // Even if our variable is about to be replaced by a constant, we want to present its name in the output column.
         if (variableName0 == null  &&  operands.length > 0  &&  operands[0] instanceof AccessVariable)
@@ -372,7 +372,7 @@ public class Output extends Function
             variableName1 = ((AccessVariable) operands[1]).name;
         }
 
-        return super.simplify (from);
+        return super.simplify (from, evalOnly);
     }
 
     // This method should be called by analysis, with v set to the variable that holds this equation.

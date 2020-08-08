@@ -40,9 +40,9 @@ public class Add extends OperatorBinary
         return 5;
     }
 
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator result = super.simplify (from);
+        Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
         if (operand0 instanceof Constant)

@@ -190,10 +190,16 @@ public class Operator implements Cloneable
         Remove operators that have no effect due to specific values of their operands (for example: x*1).
         Replaces constant expressions (including any AccessVariable that points to a Constant) with a single Constant.
         Note: a Transformer could do this work, but a direct implementation is more elegant.
-        @param from The Variable that contains the current expression. Used, in conjunction with Variable.visited, to
-        prevent infinite recursion. It is safe to pass a value of null, since this terminates recursion check.
+        @param from The Variable that contains the current expression. Used in conjunction with Variable.visited to
+        prevent infinite recursion. Used to update dependencies when a RHS reference goes away.
+        @param evalOnly Indicates that caller is only interested in whether the expression tree can be
+        reduced to a constant, rather than in actually transforming the equation set into a simpler form.
+        This is typically done by making a deep copy of the expression and substituting constants for
+        some RHS references. However, a "deep copy" does not actually duplicate the variables themselves,
+        so the dependency structure could be damaged by a call to this function. In that case, set this
+        flag to limit the amount of bookkeeping during simplification.
     **/
-    public Operator simplify (Variable from)
+    public Operator simplify (Variable from, boolean evalOnly)
     {
         return this;
     }

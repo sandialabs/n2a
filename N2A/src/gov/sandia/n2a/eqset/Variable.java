@@ -590,11 +590,11 @@ public class Variable implements Comparable<Variable>, Cloneable
         {
             if (e.expression != null)
             {
-                e.expression = e.expression.simplify (this);
+                e.expression = e.expression.simplify (this, false);
             }
             if (e.condition != null)
             {
-                e.condition = e.condition.simplify (this);
+                e.condition = e.condition.simplify (this, false);
                 e.ifString  = e.condition.render ();
             }
 
