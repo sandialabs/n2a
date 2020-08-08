@@ -16,7 +16,7 @@
 #endif
 
 
-class String    // Note the initial cap. This name will not conflict with std::string.
+class String    // Note the initial capital letter. This name will not conflict with std::string.
 {
 public:
     char * memory;
@@ -357,6 +357,18 @@ public:
             c++;
         }
         return npos;
+    }
+
+    /// Replace all occurrences of a with b.
+    String & replace_all (char a, char b)
+    {
+        char * i = memory;
+        while (i < top)
+        {
+            if (*i == a) *i = b;
+            i++;
+        }
+        return *this;
     }
 
     const char * begin () const

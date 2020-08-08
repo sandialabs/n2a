@@ -134,7 +134,7 @@ public class OutputParser
                 int columnIndex = Integer.valueOf (n.key ());
                 if (columnIndex >= columns.size ()) break;
                 Column c = columns.get (columnIndex);
-                if (c.header.isEmpty ()) c.header = n.get ();
+                c.header = n.getOrDefault (c.header);
 
                 String colorName = n.get ("color");
                 if (! colorName.isEmpty ())

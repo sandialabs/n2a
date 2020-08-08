@@ -899,7 +899,9 @@ OutputHolder<T>::writeTrace ()
             for (; i < count; i++)
             {
                 (*out) << "\t";
-                (*out) << headers[i];
+                String header (headers[i]);  // deep copy
+                header.replace_all (' ', '_');
+                (*out) << header;
             }
             (*out) << std::endl;
         }

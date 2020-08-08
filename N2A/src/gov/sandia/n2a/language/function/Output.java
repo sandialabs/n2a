@@ -173,7 +173,7 @@ public class Output extends Function
             {
                 if (raw)
                 {
-                    int i = Integer.valueOf (column) + 1;  // offset for time in first column
+                    int i = Integer.valueOf (column) + 1;  // 1 is offset for time in first column
                     while (columnValues.size () < i) columnValues.add (Float.NaN);
                     index = i;
                 }
@@ -253,7 +253,7 @@ public class Output extends Function
                     for (; i < count; i++)
                     {
                         out.print ("\t");
-                        out.print (headers[i]);
+                        out.print (headers[i].replaceAll (" ", "_"));
                     }
                     out.println ();
                 }
