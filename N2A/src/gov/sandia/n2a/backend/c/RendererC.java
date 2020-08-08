@@ -230,7 +230,8 @@ public class RendererC extends Renderer
             Operator a = l.operands[0];
             result.append ("log (");
             a.render (this);
-            if (useExponent) result.append (", " + a.exponentNext + ", " + l.exponentNext + ")");
+            if (useExponent) result.append (", " + a.exponentNext + ", " + l.exponentNext);
+            result.append (")");
             return true;
         }
         if (op instanceof Max)
