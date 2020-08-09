@@ -76,6 +76,13 @@ public class JobC extends Thread
     public HashMap<Object,String> outputNames = new HashMap<Object,String> ();
     public HashMap<Object,String> stringNames = new HashMap<Object,String> ();
 
+    // Work around the initialization sequencing problem by delaying the call to holderHelper until main().
+    // To do this, we need to stash variable names. This may seem redundant with the above maps,
+    // but this is a more limited case.
+    public List<ReadMatrix> mainMatrix = new ArrayList<ReadMatrix> ();
+    public List<Input>      mainInput  = new ArrayList<Input> ();
+    public List<Output>     mainOutput = new ArrayList<Output> ();
+
     public JobC (MNode job)
     {
         super ("C Job");
@@ -545,6 +552,8 @@ public class JobC extends Thread
         result.append ("{\n");
         result.append ("  try\n");
         result.append ("  {\n");
+        generateMainInitializers (result);
+        result.append ("\n");
         if (T.equals ("int"))
         {
             Variable dt = model.find (new Variable ("$t", 1));
@@ -556,6 +565,7 @@ public class JobC extends Thread
         result.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
         result.append ("    Wrapper wrapper;\n");
         result.append ("    Simulator<" + T + ">::instance.run (wrapper);\n");
+        result.append ("\n");
         result.append ("    outputClose ();\n");
         result.append ("  }\n");
         result.append ("  catch (const char * message)\n");
@@ -667,9 +677,8 @@ public class JobC extends Thread
                                     {
                                         r.name = "Matrix" + matrixNames.size ();
                                         matrixNames.put (fileName, r.name);
-                                        result.append ("MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (\"" + fileName + "\"");
-                                        if (T.equals ("int")) result.append (", " + r.exponent);
-                                        result.append (");\n");
+                                        mainMatrix.add (r);
+                                        result.append ("MatrixInput<" + T + "> * " + r.name + ";\n");
                                     }
                                 }
                                 else if (f instanceof Input)
@@ -680,9 +689,8 @@ public class JobC extends Thread
                                     {
                                         i.name = "Input" + inputNames.size ();
                                         inputNames.put (fileName, i.name);
-                                        result.append ("InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (\"" + fileName + "\"");
-                                        if (T.equals ("int")) result.append (", " + i.exponent);
-                                        result.append (");\n");
+                                        mainInput.add (i);
+                                        result.append ("InputHolder<" + T + "> * " + i.name + ";\n");
                                     }
                                 }
                                 else if (f instanceof Output)
@@ -693,7 +701,8 @@ public class JobC extends Thread
                                     {
                                         o.name = "Output" + outputNames.size ();
                                         outputNames.put (fileName, o.name);
-                                        result.append ("OutputHolder<" + T + "> * " + o.name + " = outputHelper<" + T + "> (\"" + fileName + "\");\n");
+                                        mainOutput.add (o);
+                                        result.append ("OutputHolder<" + T + "> * " + o.name + ";\n");
                                     }
                                 }
                             }
@@ -742,6 +751,26 @@ public class JobC extends Thread
         {
             checkStatic.global = v.hasAttribute ("global");
             v.visit (checkStatic);
+        }
+    }
+
+    public void generateMainInitializers (StringBuilder result)
+    {
+        for (ReadMatrix r : mainMatrix)
+        {
+            result.append ("    " + r.name + " = matrixHelper<" + T + "> (\"" + r.operands[0].getString () + "\"");
+            if (T.equals ("int")) result.append (", " + r.exponent);
+            result.append (");\n");
+        }
+        for (Input i : mainInput)
+        {
+            result.append ("    " + i.name + " = inputHelper<" + T + "> (\"" + i.operands[0].getString () + "\"");
+            if (T.equals ("int")) result.append (", " + i.exponent);
+            result.append (");\n");
+        }
+        for (Output o : mainOutput)
+        {
+            result.append ("    " + o.name + " = outputHelper<" + T + "> (\"" + o.operands[0].getString () + "\");\n");
         }
     }
 

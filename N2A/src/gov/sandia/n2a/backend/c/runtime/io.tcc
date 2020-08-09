@@ -242,8 +242,6 @@ MatrixInput<T>::getIterator ()
     return new IteratorSkip<T> ((Matrix<T> *) A);
 }
 
-std::vector<Holder *> matrixMap;
-
 #ifdef n2a_FP
 
 inline int
@@ -268,6 +266,8 @@ convert (String input, int exponent)
 }
 
 #endif
+
+std::vector<Holder *> matrixMap;
 
 template<class T>
 MatrixInput<T> *
