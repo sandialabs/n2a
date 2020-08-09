@@ -68,6 +68,9 @@ public class Raster extends OutputParser
             }
         }
 
+        int totalCount = 0;
+        for (Column c : columns) if (! timeFound  ||  c != time) totalCount += c.values.size ();
+
         // Generate dateset
         Color red = Color.getHSBColor (0.0f, 1.0f, 0.8f);
         for (Column c : columns)
@@ -84,11 +87,13 @@ public class Raster extends OutputParser
                 if (c == time)
                 {
                     double lastTime = c.values.get (0);
+                    double minTimeQuantum = (c.values.get (count - 1) - lastTime) / totalCount;
                     for (int r = 1; r < count; r++)
                     {
                         double thisTime = c.values.get (r);
                         double diff = thisTime - lastTime;
-                        timeQuantum = Math.min (timeQuantum, diff);
+                        // If diff is less than minTimeQuantum, it could be due to jittering for "before" or "after" event delivery.
+                        if (diff >= minTimeQuantum) timeQuantum = Math.min (timeQuantum, diff);
                         lastTime = thisTime;
                     }
                     continue;
@@ -153,7 +158,7 @@ public class Raster extends OutputParser
             height = Math.max (1,  height);
             setDotHeight ((int) height);
 
-            double timeSteps = plot.getDomainAxis ().getRange ().getLength () / timeQuantum;
+            double timeSteps = plot.getDomainAxis ().getRange ().getLength () / timeQuantum + 1;
             int    width     = (int) Math.floor (clipBounds.width / timeSteps);
             width = Math.min (height / 2, width);
             width = Math.max (1,          width);
