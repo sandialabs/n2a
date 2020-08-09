@@ -458,7 +458,7 @@ public class InternalBackendData
                                 // then the user has broken the rule that we can't see temporaries in other parts.
                                 if (v.hasAttribute ("temporary")  &&  v.container != s)
                                 {
-                                    Backend.err.get ().println ("WARNING: Cannot be temporary due to event monitor: " + v.container.name + "." + v.nameString () + " from " + s.name);
+                                    Backend.err.get ().println ("WARNING: Cannot be temporary due to event monitor: " + v.fullName () + " from " + s.name);
                                     v.removeAttribute ("temporary");
                                 }
 
@@ -484,10 +484,11 @@ public class InternalBackendData
                             // Locate any temporaries for evaluation.
                             //   Tie into the dependency graph using a phantom variable (which can go away afterward without damaging the graph).
                             // TODO: for more efficiency, we could have separate lists of temporaries for the condition and delay operands
-                            // TODO: for more efficiency, cut off search for temporaries along some branch of the tree at the first non-temporary.
+                            // TODO: for more efficiency, cut off search for temporaries along a given branch of the tree at the first non-temporary.
                             final Variable phantom = new Variable ("event");
                             phantom.uses = new IdentityHashMap<Variable,Integer> ();
-                            for (int i = 0; i < et.event.operands.length; i++) et.event.operands[i].visit (new Visitor ()
+                            phantom.container = s;
+                            et.event.visit (new Visitor ()
                             {
                                 public boolean visit (Operator op)
                                 {
@@ -495,14 +496,14 @@ public class InternalBackendData
                                     {
                                         AccessVariable av = (AccessVariable) op;
                                         Variable v = av.reference.variable;
-                                        if (! phantom.uses.containsKey (v)) phantom.uses.put (v, 1);
+                                        if (v.hasAttribute ("temporary")  &&  ! phantom.uses.containsKey (v)) phantom.uses.put (v, 1);
                                         return false;
                                     }
                                     return true;
                                 }
                             });
                             //   Scan all variables in equation set to see if we need them
-                            for (Variable t : s.variables)
+                            for (Variable t : s.ordered)
                             {
                                 if (t.hasAttribute ("temporary")  &&  phantom.dependsOn (t) != null) et.dependencies.add (t);
                             }

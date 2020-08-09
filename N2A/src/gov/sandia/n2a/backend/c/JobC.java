@@ -3012,7 +3012,7 @@ public class JobC extends Thread
             {
                 result.append ("    case " + et.valueIndex + ":\n");
                 result.append ("    {\n");
-                s.simplify ("$live", et.dependencies);
+                // No useful or safe to simplify et.dependencies before emitting.
                 for (Variable v : et.dependencies)
                 {
                     multiconditional (v, context, "      ");
