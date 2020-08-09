@@ -311,6 +311,9 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
     }
 
+    /**
+        Replicates an individual variable without consideration of its neighbors.
+    **/
     public Variable deepCopy ()
     {
         Variable result = null;

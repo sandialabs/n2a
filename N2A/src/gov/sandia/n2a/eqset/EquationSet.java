@@ -25,6 +25,7 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.UnsupportedFunctionException;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
@@ -90,6 +91,7 @@ public class EquationSet implements Comparable<EquationSet>
     public Object                              backendData;            // holder for extra data associated with each equation set by a given backend
 
     public static final List<String> endpointSpecials = Arrays.asList ("$count", "$k", "$max", "$min", "$project", "$radius");  // $variables that appear after an endpoint identifier
+    public static final List<String> phases           = Arrays.asList ("$connect", "$init", "$live");
 
     /**
         Connection terminology:
@@ -3522,6 +3524,8 @@ public class EquationSet implements Comparable<EquationSet>
         Optimizes a given subset of variables with the assumption that specified phase indicator is true.
         Starts by replacing the variables with deep copies so that any changes do not
         damage the original equation set.
+        @param bless Tag the given temporary variable as having a user, so that it does not get
+        removed during optimization.
     **/
     public void simplify (String phase, List<Variable> list, Variable bless)
     {
@@ -3532,35 +3536,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (i >= 0) list.get (i).addUser (this);
         }
 
-        boolean init        = phase.equals ("$init");
-        boolean splitTarget = ! splitSources.isEmpty ();
-
-        class ReplaceConstants implements Transformer
-        {
-            public Variable self;
-            public List<String> phases = Arrays.asList ("$connect", "$init", "$live");
-            public Operator transform (Operator op)
-            {
-                if (op instanceof AccessVariable)
-                {
-                    AccessVariable av = (AccessVariable) op;
-                    Operator result = null;
-                    if      (phase .equals   (av.name)) result = new Constant (1);
-                    else if (phases.contains (av.name)) result = new Constant (0);
-                    // Self-reference returns 0 at init time, but references to other variables may return nonzero
-                    // if they are initialized before this one. Self might also be initialized by a type split.
-                    // TODO: check if individual variable is target of split, not simply the equation set as a whole.
-                    else if (av.reference.variable == self  &&  init  &&  ! splitTarget) result = new Constant (0);
-                    if (result != null)
-                    {
-                        result.parent = av.parent;
-                        return result;
-                    }
-                }
-                return null;
-            }
-        };
-        ReplaceConstants replace = new ReplaceConstants ();
+        ReplaceConstants replace = new ReplaceConstants (phase);
         for (Variable v : list)
         {
             replace.self = v;
@@ -3582,6 +3558,46 @@ public class EquationSet implements Comparable<EquationSet>
                     changed = true;
                 }
             }
+        }
+    }
+
+    public class ReplaceConstants implements Transformer
+    {
+        public Variable self;
+        public String   phase;
+        public boolean  init;
+        public boolean  splitTarget;
+
+        public ReplaceConstants (String phase)
+        {
+            this.phase  = phase;
+            splitTarget = ! splitSources.isEmpty ();
+            init        = phase.equals ("$init");
+        }
+
+        public Operator transform (Operator op)
+        {
+            if (op instanceof AccessVariable)
+            {
+                AccessVariable av = (AccessVariable) op;
+                Operator result = null;
+                if      (phase .equals   (av.name)) result = new Constant (1);
+                else if (phases.contains (av.name)) result = new Constant (0);
+                // Self-reference returns 0 at init time, but references to other variables may return nonzero
+                // if they are initialized before this one. Self might also be initialized by a type split.
+                // TODO: check if individual variable receives values during a split, rather than assuming they all do.
+                else if (av.reference.variable == self  &&  init  &&  ! splitTarget) result = new Constant (0);
+                if (result != null) result.parent = av.parent;
+                return result;
+            }
+            if (op instanceof Event)  // Events never fire during init or connect phases
+            {
+                if (phase.equals ("$live")) return null;
+                Constant result = new Constant (0);
+                result.parent = op.parent;
+                return result;
+            }
+            return null;
         }
     }
 

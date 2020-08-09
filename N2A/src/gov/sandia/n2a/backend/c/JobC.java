@@ -1042,9 +1042,9 @@ public class JobC extends Thread
         }
         for (EventTarget et : bed.eventTargets)
         {
-            if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
+            if (! et.trackOne  &&  et.edge != EventTarget.NONZERO)
             {
-                result.append ("  " + T + " " + et.track.name + ";\n");
+                result.append ("  " + T + " " + mangle (et.track.name) + ";\n");
             }
             if (et.timeIndex >= 0)
             {
@@ -2137,14 +2137,11 @@ public class JobC extends Thread
             }
             for (EventTarget et : bed.eventTargets)
             {
-                if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
-                {
-                    result.append ("  " + et.track.name + " = 0;\n");
-                }
                 if (et.timeIndex >= 0)
                 {
                     result.append ("  eventTime" + et.timeIndex + " = 10;\n");  // Normal values are modulo 1 second. This initial value guarantees no match.
                 }
+                // Auxiliary variables get initialized as part of the regular list below.
             }
             if (! bed.localFlagType.isEmpty ())
             {
@@ -3012,7 +3009,7 @@ public class JobC extends Thread
             {
                 result.append ("    case " + et.valueIndex + ":\n");
                 result.append ("    {\n");
-                // No useful or safe to simplify et.dependencies before emitting.
+                // Not safe or useful to simplify et.dependencies before emitting.
                 for (Variable v : et.dependencies)
                 {
                     multiconditional (v, context, "      ");
@@ -3021,7 +3018,7 @@ public class JobC extends Thread
                 {
                     result.append ("      " + T + " before = ");
                     if (et.trackOne) result.append (resolve (et.track.reference, context, false));
-                    else             result.append (et.track.name);
+                    else             result.append (mangle (et.track.name));
                     result.append (";\n");
                 }
                 if (et.trackOne)  // This is a single variable, so check its value directly.
@@ -3035,7 +3032,7 @@ public class JobC extends Thread
                     result.append (";\n");
                     if (et.edge != EventTarget.NONZERO)
                     {
-                        result.append ("      " + et.track.name + " = after;\n");
+                        result.append ("      " + mangle (et.track.name) + " = after;\n");
                     }
                 }
                 switch (et.edge)

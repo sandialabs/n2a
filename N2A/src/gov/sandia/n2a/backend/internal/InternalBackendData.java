@@ -10,6 +10,7 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.AccountableConnection;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
+import gov.sandia.n2a.eqset.EquationSet.ReplaceConstants;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
@@ -356,9 +357,14 @@ public class InternalBackendData
             mask <<= 1;
             if (mask > 0x400000) valueIndex = -1;  // Due to limitations of float-int conversion, only 23 bits are available. Allocate another float.
 
-            if (et.track != null  &&  et.track.name.startsWith ("eventAux"))
+            if (! et.trackOne  &&  et.edge != EventTarget.NONZERO)  // We have an auxiliary variable.
             {
                 et.track.readIndex = et.track.writeIndex = allocateLocalFloat (et.track.name);
+                // Preemptively add this, because the main analyze() routine won't see it.
+                // We put the aux in init so that it can pick up the initial value without a call
+                // to EventTarget.test(). Note that dependencies have been set when the aux was
+                // created, so it will execute in the correct order with all the other init variables.
+                localInit.add (et.track);
             }
 
             // Force multiple sources to generate only one event in a given cycle
@@ -474,11 +480,18 @@ public class InternalBackendData
                             }
                             if (! et.trackOne  &&  et.edge != EventTarget.NONZERO)  // Expression, so create auxiliary variable. Aux not needed for NONZERO, because no change detection.
                             {
-                                et.track = new Variable ("eventAux" + targetIndex, 0);
+                                et.track = new Variable ("$eventAux" + targetIndex, 0);
                                 et.track.container = s;
                                 et.track.type = new Scalar (0);
                                 et.track.reference = new VariableReference ();
                                 et.track.reference.variable = et.track;
+
+                                // Make executable so it can be directly evaluated during the init cycle.
+                                et.track.equations = new TreeSet<EquationEntry> ();
+                                EquationEntry ee = new EquationEntry (et.track, "");
+                                et.track.equations.add (ee);
+                                ee.expression = et.event.operands[0].deepCopy ();
+                                ee.expression.addDependencies (et.track);
                             }
 
                             // Locate any temporaries for evaluation.
@@ -840,8 +853,8 @@ public class InternalBackendData
             }
         }
 
-        determineOrderInit (localInit);
-        determineOrderInit (globalInit);
+        determineOrderInit (s, localInit);
+        determineOrderInit (s, globalInit);
 
         singleton = s.isSingleton (true);
         populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
@@ -1260,8 +1273,12 @@ public class InternalBackendData
 
     /**
         Rebuild dependencies based only on equations that can actually fire.
+        Note that the C backend uses EquationSet.simplify() to do the same task.
+        That function relies on Variable.deepCopy(List<Variable>) to duplicate the
+        list and establish an internally-coherent set of dependencies.
+        We don't do that here because we need to keep Java object identity across all lists.
     **/
-    public static void determineOrderInit (List<Variable> list)
+    public static void determineOrderInit (EquationSet s, List<Variable> list)
     {
         for (Variable v : list)
         {
@@ -1269,28 +1286,7 @@ public class InternalBackendData
             v.uses = null;
         }
 
-        class ReplaceConstants implements Transformer
-        {
-            public Variable self;
-            public Operator transform (Operator op)
-            {
-                if (op instanceof AccessVariable)
-                {
-                    AccessVariable av = (AccessVariable) op;
-                    Operator result = null;
-                    if      (av.name.equals ("$init"   ))   result = new Constant (1);
-                    else if (av.name.equals ("$connect"))   result = new Constant (0);
-                    else if (av.reference.variable == self) result = new Constant (0);  // Self-reference is always 0 at init time, but reference to other variables is not, because they may be initialized before this one.
-                    if (result != null)
-                    {
-                        result.parent = av.parent;
-                        return result;
-                    }
-                }
-                return null;
-            }
-        };
-        ReplaceConstants replace = new ReplaceConstants ();
+        ReplaceConstants replace = s.new ReplaceConstants ("$init");
 
         class DependencyTransformer implements Transformer
         {

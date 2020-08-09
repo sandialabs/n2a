@@ -112,6 +112,15 @@ public class BackendDataC
         {
             et.valueIndex = eventIndex;
 
+            if (! et.trackOne  &&  et.edge != EventTarget.NONZERO)  // We have an auxiliary variable.
+            {
+                // Preemptively add this, because the main analyze() routine won't see it.
+                // We put the aux in init so that it can pick up the initial value without a call
+                // to eventTest(). Note that dependencies have been set when the aux was
+                // created, so it will execute in the correct order with all the other init variables.
+                localInit.add (et.track);
+            }
+
             // Force multiple sources to generate only one event in a given cycle
             if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
             {
