@@ -2195,6 +2195,16 @@ public class JobC extends Thread
                 }
             }
 
+            // Initialize static objects
+            for (Variable v : bed.localInit)  // non-optimized list, so hopefully all variables are covered
+            {
+                for (EquationEntry e : v.equations)
+                {
+                    prepareStaticObjects (e.expression, context, "  ");
+                    if (e.condition != null) prepareStaticObjects (e.condition, context, "  ");
+                }
+            }
+
             // Compute variables
             if (bed.localBuffered.contains (bed.dt))
             {
@@ -2212,7 +2222,7 @@ public class JobC extends Thread
             //   as unbuffered and non-accumulating.
             List<Variable> buffered = bed.localBuffered;
             bed.localBuffered = new ArrayList<Variable> ();
-            for (Variable v : bed.localInit)
+            for (Variable v : bed.localInit)  // optimized list: only variables with equations that actually fire during init
             {
                 int assignment = v.assignment;
                 v.assignment = Variable.REPLACE;
@@ -3454,11 +3464,6 @@ public class JobC extends Thread
         // Initialize static objects, and dump dynamic objects needed by conditions
         for (EquationEntry e : v.equations)
         {
-            if (init)
-            {
-                prepareStaticObjects (e.expression, context, pad);
-                if (e.condition != null) prepareStaticObjects (e.condition, context, pad);
-            }
             if (e.condition != null) prepareDynamicObjects (e.condition, context, init, pad);
         }
 
