@@ -116,7 +116,17 @@ public class ChangeAnnotation extends UndoableView
         {
             // If name is unchanged, then node should already exist,
             // and we only need to change the direct value, not the subtree.
-            mparent.set (savedTree.get (), names);
+            String valueBefore = mparent.get (names);
+            String valueAfter  = savedTree.get ();
+            MPart partBefore = (MPart) mparent.child (names);
+            MPart partAfter  = (MPart) mparent.set (valueAfter, names);
+
+            // If there was no change in value, then toggle override state.
+            if (partBefore != null  &&  valueAfter.equals (valueBefore))
+            {
+                if (partAfter.isOverridden ()) partAfter.clearPath ();
+                else                           partAfter.override ();
+            }
         }
         else
         {

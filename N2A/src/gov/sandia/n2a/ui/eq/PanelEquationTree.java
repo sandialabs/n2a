@@ -807,9 +807,9 @@ public class PanelEquationTree extends JScrollPane
                     if (multi) compound.addEdit (d);
                     else       um.apply (d);
                 }
-                else  // Currently off, because it is not explicitly set in this document. Turn it on by overriding in locally. 
+                else  // Currently off, because it is not explicitly set in this document. Turn it on by overriding it locally.
                 {
-                    ChangeAnnotation c = new ChangeAnnotation (watchNode, "watch", "1");
+                    ChangeAnnotation c = new ChangeAnnotation (watchNode, "watch", "");
                     c.selectVariable = selectVariable;
                     if (multi) compound.addEdit (c);
                     else       um.apply (c);
