@@ -1358,20 +1358,43 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void resolveLHS ()
     {
+        LinkedList<UnresolvedVariable> unresolved = new LinkedList<UnresolvedVariable> ();
+        resolveLHS (unresolved);
+        if (unresolved.size () > 0)
+        {
+            int width = 0;
+            for (UnresolvedVariable uv : unresolved) width = Math.max (width, uv.name.length ());
+            PrintStream ps = Backend.err.get ();
+            ps.println ("Unresolved right-hand-side references:");
+            ps.println ("  " + UnresolvedVariable.pad ("(from part)", width) + "\t(reference)");
+            for (UnresolvedVariable uv : unresolved) ps.println ("  " + UnresolvedVariable.pad (uv.name, width) + "\t" + uv.referencedBy);
+            throw new AbortRun ();
+        }
+    }
+
+    public void resolveLHS (LinkedList<UnresolvedVariable> unresolved)
+    {
         for (EquationSet s : parts)
         {
-            s.resolveLHS ();
+            s.resolveLHS (unresolved);
         }
 
         for (Variable v : variables)
         {
-            boolean global = v.hasAttribute ("global");
             Variable query = new Variable (v.name, v.order);
-            if (global) query.addAttribute ("global");  // as a hint
             query.reference = new VariableReference ();
             query.assignment = v.assignment;  // If referent is created in target eqset, then this hints the correct combiner type.
+            boolean global = v.hasAttribute ("global");
+            if (global) query.addAttribute ("global");  // as a hint
+
             EquationSet dest = resolveEquationSet (query, true);
-            if (dest != null) query.reference.variable = dest.find (query);
+            if (dest == null)
+            {
+                unresolved.add (new UnresolvedVariable (prefix (), v.nameString ()));
+                continue;
+            }
+
+            query.reference.variable = dest.find (query);
             v.reference = query.reference;
             Variable target = v.reference.variable;
             if (target != v  &&  target != null)
