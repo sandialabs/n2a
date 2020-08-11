@@ -3681,12 +3681,15 @@ public class EquationSet implements Comparable<EquationSet>
         <ul>
         <li>not "constant"
         <li>not integrated
+        <li>not a reduction -- This is a bit conservative. It might be possible to do a reduction just once if all the sources are initOnly.
+            For example, if the contributors are all children of the target part and their population sizes are constant,
+            then the reduction could be completed during the init cycle of the target part.
         <li>one of:
             <ul>
             <li>no condition is true when $init=0 (that is, during update). Implies that all equations have a non-empty condition.
             <li>all equations and their conditions depend only on "constant" or "initOnly" variables.
             <li>the same equation always fires during both init and update, and it depends only on "constant" or "initOnly" variables.
-            Why only one equation? Multiple equations imply the value could change via conditional selection.
+                Why only one equation? Multiple equations imply the value could change via conditional selection.
             </ul>
         </ul>
         Depends on results of: findConstants(), makeConstantDtInitOnly()
@@ -3765,7 +3768,9 @@ public class EquationSet implements Comparable<EquationSet>
             // Note: some variables get tagged "initOnly" by other means.
             // Note: "externalWrite" implies not "initOnly", even if the external source is initOnly, unless it can be established
             //       that both the external part and this part always go through init at the same time.
-            if (v.hasAny (new String[] {"initOnly", "constant", "dummy", "externalWrite"})) continue;
+            //       Similarly, an external reference needs to fire every cycle to ensure its target accumulates the correct value,
+            //       unless it can be established that the value does not change after the init cycle of the target.
+            if (v.hasAny (new String[] {"initOnly", "constant", "dummy", "externalWrite", "reference"})) continue;
 
             // Count equations
             int firesDuringInit   = 0;
@@ -3810,7 +3815,7 @@ public class EquationSet implements Comparable<EquationSet>
                 }
             }
 
-            int count = v.equations.size ();
+            int count = v.equations.size ();  // Used in the last case below.
             if (firesDuringUpdate == 0)
             {
                 if (firesDuringInit > 0  &&  v.derivative == null)
