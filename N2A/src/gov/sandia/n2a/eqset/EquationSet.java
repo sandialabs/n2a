@@ -1387,8 +1387,8 @@ public class EquationSet implements Comparable<EquationSet>
             boolean global = v.hasAttribute ("global");
             if (global) query.addAttribute ("global");  // as a hint
 
-            EquationSet dest = resolveEquationSet (query, true);
-            if (dest == null)
+            EquationSet dest = resolveEquationSet (query, true);  // Create the variable if needed. Does not create parts, only variables within parts.
+            if (dest == null)  // The target part does not exist.
             {
                 unresolved.add (new UnresolvedVariable (prefix (), v.nameString ()));
                 continue;

@@ -139,6 +139,7 @@ public class ChangeVariable extends UndoableView
                 // Such changes will be saved as an override.
                 MPart doc = pe.root.source;
                 EquationSet compiled = new EquationSet (doc);  // TODO: this is a potentially lengthy operation. For very large models, need to reduce load on EDT. Either maintain incremental compilation, or compile on separate thread.
+                compiled.name = doc.key ();
                 List<String> vkeypath = new ArrayList<String> (path.subList (1, path.size ()));
                 Variable vold;
                 Variable vnew;
@@ -169,6 +170,10 @@ public class ChangeVariable extends UndoableView
                 try
                 {
                     compiled.resolveLHS ();
+                }
+                catch (Exception e) {}
+                try
+                {
                     // This will very likely throw an AbortRun exception to report unresolved variables.
                     // This will do no harm. All we need is that other equations resolve to this variable.
                     compiled.resolveRHS ();
