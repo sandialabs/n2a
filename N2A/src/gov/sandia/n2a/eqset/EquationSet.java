@@ -3562,6 +3562,32 @@ public class EquationSet implements Comparable<EquationSet>
         ReplaceConstants replace = new ReplaceConstants (phase);
         for (Variable v : list)
         {
+            // Check for default equation
+            TreeSet<EquationEntry> nextEquations = new TreeSet<EquationEntry> ();
+            EquationEntry defaultImplicit = null;
+            EquationEntry defaultExplicit = null;
+            for (EquationEntry e : v.equations)
+            {
+                if (e.ifString.isEmpty ()) defaultImplicit = e;
+                else if (e.ifString.equals (phase)) defaultExplicit = e;
+                else nextEquations.add (e);
+            }
+            //   An equation conditioned only on the current phase must be treated as the default.
+            //   It overrules an equation with no condition.
+            if (defaultExplicit != null)
+            {
+                // Convert the explicit default into an implicit default.
+                defaultExplicit.ifString = "";
+                defaultExplicit.condition = null;
+                nextEquations.add (defaultExplicit);
+            }
+            else if (defaultImplicit != null)  // If there was no explicit default, then add back the equation with no condition, if it was present.
+            {
+                nextEquations.add (defaultImplicit);
+            }
+            v.equations = nextEquations;
+
+            // Replace variables known to be constant, particularly the current phase indicator.
             replace.self = v;
             v.transform (replace);
         }
