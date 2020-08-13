@@ -112,6 +112,7 @@ public class PanelEquationTree extends JScrollPane
         tree.setInvokesStopCellEditing (true);  // auto-save current edits, as much as possible
         tree.setDragEnabled (true);
         tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
+        tree.setRequestFocusEnabled (false);  // Don't request focus directly when clicked. Instead, let mouse listener do it.
         ToolTipManager.sharedInstance ().registerComponent (tree);
         tree.setTransferHandler (container.transferHandler);
         tree.setCellRenderer (container.renderer);
@@ -322,8 +323,8 @@ public class PanelEquationTree extends JScrollPane
                 {
                     // Constrain click to be close to node content, but allow some slack.
                     Rectangle r = tree.getPathBounds (path);
-                    r.width += 20;
-                    r.width = Math.max (100, r.width);
+                    r.width += r.x + 100;  // These two lines:
+                    r.x = 0;               //   shift left side over to margin, while shifting right side by 100px to the right
                     if (! r.contains (x, y)) path = null;
                 }
 
@@ -344,7 +345,9 @@ public class PanelEquationTree extends JScrollPane
                 {
                     if (clicks == 1)
                     {
+                        if (path != null) tree.setSelectionPath (path);
                         switchToTree ();
+                        takeFocus ();
                     }
                     else if (clicks == 2)  // Drill down on parts, or edit any other node type.
                     {
