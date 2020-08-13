@@ -591,6 +591,7 @@ public class PanelEquations extends JPanel
         {
             if (contentOnly)
             {
+                saveFocus ();
                 record = null;  // Force rebuild of display
                 load (AppData.models.child (newKey));
             }
@@ -610,6 +611,7 @@ public class PanelEquations extends JPanel
         {
             if (key.equals (oldKey))
             {
+                saveFocus ();
                 record = null;
                 load (oldDoc);
             }
@@ -659,6 +661,18 @@ public class PanelEquations extends JPanel
             focusCache.setObject (result, keyArray);
         }
         return result;
+    }
+
+    public void renameFocus (List<String> oldPath, String newName)
+    {
+        MNode old = focusCache.child (oldPath.toArray ());
+        if (old == null) return;
+        old.parent ().move (old.key (), newName);
+    }
+
+    public void deleteFocus (NodePart p)
+    {
+        focusCache.clear (p.getKeyPath ().toArray ());
     }
 
     public void yieldFocus ()
@@ -751,6 +765,11 @@ public class PanelEquations extends JPanel
         {
             FocusCacheEntry fce = createFocus (part);
             fce.subpart = nextPart.source.key ();
+        }
+        else
+        {
+            FocusCacheEntry fce = createFocus (nextPart);
+            fce.subpart = "";
         }
         loadPart (nextPart);
     }
@@ -2172,10 +2191,10 @@ public class PanelEquations extends JPanel
 
     public static class FocusCacheEntry
     {
-        boolean    titleFocused = true; // state of GraphNode.titleFocused or PanelEquations.titleFocused, whichever was set most recently
-        StoredPath sp;                  // path state of tree, whether as parent or as child
-        Point      position;            // when parent: offset of viewport
-        String     subpart      = "";   // when parent: name of child which has keyboard focus. If empty, then the parent itself has focus.
+        public boolean    titleFocused = true; // state of GraphNode.titleFocused or PanelEquations.titleFocused, whichever was set most recently
+        public StoredPath sp;                  // path state of tree, whether as parent or as child
+        public Point      position;            // when parent: offset of viewport
+        public String     subpart      = "";   // when parent: name of child which has keyboard focus. If empty, then the parent itself has focus.
     }
 
     /**

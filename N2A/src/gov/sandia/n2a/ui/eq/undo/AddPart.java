@@ -296,6 +296,7 @@ public class AddPart extends UndoableView implements AddEditable
         mparent.clear (name);
         if (mparent.child (name) == null)  // Node is fully deleted
         {
+            pe.deleteFocus (createdNode);
             if (model == null) FilteredTreeModel.removeNodeFromParentStatic (createdNode);
             else               model.removeNodeFromParent (createdNode);
             if (graphParent) peg.removePart (createdNode, setSelected  &&  ! multiShared);

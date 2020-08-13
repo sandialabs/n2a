@@ -32,6 +32,7 @@ import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
+import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -223,6 +224,7 @@ public class ChangePart extends UndoableView
         boolean addGraphNode = false;
         if (oldPart == null)  // Only one node will remain when we are done.
         {
+            pe.renameFocus (nodeBefore.getKeyPath (), nameAfter);
             if (nodeAfter == null)  // This is a simple rename, with no restructuring. Keep nodeBefore.
             {
                 nodeAfter = nodeBefore;
@@ -362,6 +364,8 @@ public class ChangePart extends UndoableView
                 {
                     FilteredTreeModel submodel = (FilteredTreeModel) subpet.tree.getModel ();
                     submodel.nodeStructureChanged (nodeAfter);
+                    FocusCacheEntry fce = pe.createFocus (nodeAfter);
+                    if (fce.sp != null) fce.sp.restore (subpet.tree, false);
                     subpet.animate ();
                 }
             }

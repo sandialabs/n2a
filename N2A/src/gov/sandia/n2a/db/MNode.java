@@ -156,6 +156,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         c.clearChild (keys[last]);
     }
 
+    public void clear (Object... keys)
+    {
+        clear (toStrings (keys));
+    }
+
     /**
         @return The number of children we have.
     **/

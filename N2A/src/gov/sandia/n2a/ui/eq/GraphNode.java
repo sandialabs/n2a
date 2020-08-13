@@ -227,12 +227,22 @@ public class GraphNode extends JPanel
         container.setSelected (false);
         if (panelEquationTree == null)
         {
-            container.active = container.panelEquationTree;
-            if (container.panelEquationTree.root != node  &&  ! node.toString ().isEmpty ())  // Only load tree if node is not blank. Usually, a blank node is about to be deleted.
+            PanelEquationTree pet = container.panelEquationTree;
+            container.active = pet;
+            if (pet.root != node  &&  ! node.toString ().isEmpty ())  // Only load tree if node is not blank. Usually, a blank node is about to be deleted.
             {
-                container.panelEquationTree.loadPart (node);
+                // Save current property panel UI state.
+                if (pet.root != null)  // Can it ever be null?
+                {
+                    FocusCacheEntry fce = container.createFocus (pet.root);
+                    if (pet.root.graph != null) fce.titleFocused = pet.root.graph.titleFocused;
+                    fce.sp = pet.saveFocus (fce.sp);
+                }
+
+                // Load new part into property panel.
+                pet.loadPart (node);
                 FocusCacheEntry fce = container.createFocus (node);
-                if (fce.sp != null) fce.sp.restore (container.panelEquationTree.tree, false);
+                if (fce.sp != null) fce.sp.restore (pet.tree, false);
             }
         }
         else
