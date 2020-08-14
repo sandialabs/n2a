@@ -19,4 +19,13 @@ public class NodeCategory extends NodeBase
     {
         return false;
     }
+
+    @Override
+    public String getCategory ()
+    {
+        String result = "";
+        for (String key : getKeyPath ()) result += "/" + key;
+        if (result.isEmpty ()) return result;
+        return result.substring (1);
+    }
 }

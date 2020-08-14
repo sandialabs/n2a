@@ -21,6 +21,7 @@ import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeContainer;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeAnnotation extends UndoableView
@@ -36,6 +37,7 @@ public class ChangeAnnotation extends UndoableView
     protected boolean      multi;          // Add to existing selection rather than blowing it away.
     public    boolean      selectVariable; // Select containing variable rather than specific metadata node. Implies the relevant node is directly under a variable.
     protected boolean      touchesPin;
+    protected boolean      touchesCategory;
 
     public ChangeAnnotation (NodeAnnotation node, String nameAfter, String valueAfter)
     {
@@ -81,6 +83,10 @@ public class ChangeAnnotation extends UndoableView
         }
 
         touchesPin =  path.contains ("pin")  ||  nameBefore.contains ("pin")  ||  nameAfter.contains ("pin");  // Crude heuristic to see if this changes pin metadata.
+
+        NodeBase p = parent;
+        while (! (p instanceof NodePart)) p = (NodeBase) p.getParent ();
+        touchesCategory =  p.getTrueParent () == null  &&  (nameBefore.contains ("category")  ||  nameAfter.contains ("category"));
     }
 
     public void setMulti (boolean value)
@@ -170,7 +176,7 @@ public class ChangeAnnotation extends UndoableView
             pet.animate ();
         }
 
-        AddAnnotation.update (parent, touchesPin);
+        AddAnnotation.update (parent, touchesPin, touchesCategory);
     }
 
     /**

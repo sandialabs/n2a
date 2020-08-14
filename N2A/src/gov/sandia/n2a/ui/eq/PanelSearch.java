@@ -26,6 +26,7 @@ import gov.sandia.n2a.ui.eq.search.NodeModel;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
+import gov.sandia.n2a.ui.eq.undo.ChangeCategory;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 
 import java.awt.Component;
@@ -282,7 +283,50 @@ public class PanelSearch extends JPanel
 
                     if (! schema.type.contains ("Part")) return false;
                     PanelModel pm = PanelModel.instance;
-                    if (xfer.isDrop ()  &&  xferNode != null  &&  xferNode.panel != pm.panelEquations) return false;  // Reject DnD from search or MRU
+                    if (xfer.isDrop ()  &&  xferNode != null  &&  xferNode.panel != pm.panelEquations)
+                    {
+                        if (xferNode.panel != pm.panelSearch) return false;  // Reject DnD from MRU
+                        // This is a drag internal to this search panel, so treat it as a re-categorization.
+
+                        // Determine old category.
+                        if (xferNode.selection == null) return false;
+                        NodeBase oldNode = nodeFor (xferNode.selection);
+                        if (oldNode == null  ||  oldNode.getKeyPath ().size () < xferNode.selection.size ()) return false;
+                        if (! (oldNode instanceof NodeModel)) return false;  // If oldeNode is a category, then the user is trying to move the entire category to a new place. For now, don't support this.
+                        String key = ((NodeModel) oldNode).key;
+                        MNode doc = AppData.models.child (key);
+                        if (! AppData.models.isWriteable (doc)) return false;  // Must be able to change model in order to change category.
+                        String oldCategory = oldNode.getCategory ();
+
+                        // Determine new category.
+                        TreePath path = ((JTree.DropLocation) xfer.getDropLocation ()).getPath ();
+                        if (path == null) return false;
+                        NodeBase newNode = (NodeBase) path.getLastPathComponent ();
+                        String newCategory = newNode.getCategory ();
+                        List<String> newSelection = newNode.getKeyPath ();
+
+                        // Update metadata
+                        if (newCategory.equals (oldCategory)) return true;  // Prevent damage to doc categories if DnD occurs when list is temporarily uncategorized, such as during connection search.
+                        String current = getCategory (key);
+                        List<String> currentList = new ArrayList<String> ();
+                        for (String c : current.split (",")) currentList.add (c.trim ());
+
+                        int index = currentList.indexOf (oldCategory);
+                        if (index >= 0) currentList.set (index, newCategory);
+                        else            currentList.add (newCategory);
+
+                        String next = currentList.get (0);
+                        for (int i = 1; i < currentList.size (); i++) next += "," + currentList.get (i);
+
+                        if (! next.equals (current))
+                        {
+                            if (newNode instanceof NodeModel) newSelection.remove (newSelection.size () - 1);
+                            newSelection.add (oldNode.toString ());
+                            um.apply (new ChangeCategory (doc, next, xferNode.selection, newSelection));
+                        }
+                        return true;
+                    }
+
                     um.addEdit (new CompoundEdit ());
                     for (MNode n : data)  // data can contain several parts
                     {
@@ -322,6 +366,7 @@ public class PanelSearch extends JPanel
                 if (n == null) return null;
                 TransferableNode result = n.createTransferable ();
                 result.panel = PanelSearch.this;
+                result.selection = n.getKeyPath ();
                 result.modifiers = modifiers;
                 modifiers = 0;
                 return result;
@@ -688,6 +733,27 @@ public class PanelSearch extends JPanel
         insertAt = null;
     }
 
+    /**
+        Walks up the inheritance hierarchy (in proper order) until a gui.category tag is found.
+        If none is found, return empty string.
+    **/
+    public String getCategory (String key)
+    {
+        MNode doc = AppData.models.child (key);
+        if (doc == null) return "";
+        String result = doc.get ("$metadata", "gui", "category");
+        if (! result.isEmpty ()) return result;
+
+        // No local definition, so check parents.
+        for (String inherit : doc.get ("$inherit").split (","))
+        {
+            inherit = inherit.trim ().replace ("\"", "");
+            result = getCategory (inherit);
+            if (! result.isEmpty ()) return result;
+        }
+        return "";
+    }
+
     // Retrieve records matching the filter text, and deliver them to the model.
     public class SearchThread extends Thread
     {
@@ -711,7 +777,7 @@ public class PanelSearch extends JPanel
                 String key = i.key ();
                 if (key.toLowerCase ().contains (query))
                 {
-                    for (String category : getCategory (key).split (","))
+                    for (String category : getCategory (key).split (",", -1))
                     {
                         category = category.trim ();
                         NodeModel n = new NodeModel (key);
@@ -778,27 +844,6 @@ public class PanelSearch extends JPanel
                     }
                 }
             });
-        }
-
-        /**
-            Walks up the inheritance hierarchy (in proper order) until a gui.category tag is found.
-            If none is found, return empty string.
-        **/
-        public String getCategory (String key)
-        {
-            MNode doc = AppData.models.child (key);
-            if (doc == null) return "";
-            String result = doc.get ("$metadata", "gui", "category");
-            if (! result.isEmpty ()) return result;
-
-            // No local definition, so check parents.
-            for (String inherit : doc.get ("$inherit").split (","))
-            {
-                inherit = inherit.trim ().replace ("\"", "");
-                result = getCategory (inherit);
-                if (! result.isEmpty ()) return result;
-            }
-            return "";
         }
     }
 

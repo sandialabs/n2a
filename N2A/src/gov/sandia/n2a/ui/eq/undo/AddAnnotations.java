@@ -30,6 +30,7 @@ public class AddAnnotations extends UndoableView implements AddEditable   // The
     protected boolean      multi;
     protected boolean      multiLast;
     protected boolean      touchesPin;
+    protected boolean      touchesCategory;
     protected NodeBase     createdNode;
 
     public AddAnnotations (NodeBase parent, int index, MNode metadata)
@@ -40,7 +41,8 @@ public class AddAnnotations extends UndoableView implements AddEditable   // The
         saved = new MVolatile (null, "$metadata");
         saved.merge (metadata);
 
-        touchesPin = metadata.containsKey ("pin");
+        touchesPin      =  metadata.containsKey ("pin");
+        touchesCategory =  parent.getTrueParent () == null  &&  metadata.containsKey ("category");
     }
 
     public void setMulti (boolean value)
@@ -56,10 +58,10 @@ public class AddAnnotations extends UndoableView implements AddEditable   // The
     public void undo ()
     {
         super.undo ();
-        destroy (path, saved.key (), ! multi  ||  multiLast, touchesPin);
+        destroy (path, saved.key (), ! multi  ||  multiLast, touchesPin, touchesCategory);
     }
 
-    public static void destroy (List<String> path, String blockName, boolean setSelected, boolean touchesPin)
+    public static void destroy (List<String> path, String blockName, boolean setSelected, boolean touchesPin, boolean touchesCategory)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
@@ -85,7 +87,7 @@ public class AddAnnotations extends UndoableView implements AddEditable   // The
         pet.updateVisibility (nodePath, index, setSelected);
         pet.animate ();
 
-        if (blockName.equals ("$metadata")) AddAnnotation.update (parent, touchesPin);
+        if (blockName.equals ("$metadata")) AddAnnotation.update (parent, touchesPin, touchesCategory);
     }
 
     public void redo ()
@@ -98,7 +100,7 @@ public class AddAnnotations extends UndoableView implements AddEditable   // The
                 return new NodeAnnotations (part);
             }
         };
-        createdNode = create (path, index, saved, factory, multi, touchesPin);
+        createdNode = create (path, index, saved, factory, multi, touchesPin, touchesCategory);
     }
 
     public NodeBase getCreatedNode ()
@@ -106,7 +108,7 @@ public class AddAnnotations extends UndoableView implements AddEditable   // The
         return createdNode;
     }
 
-    public static NodeBase create (List<String> path, int index, MNode saved, NodeFactory factory, boolean multi, boolean touchesPin)
+    public static NodeBase create (List<String> path, int index, MNode saved, NodeFactory factory, boolean multi, boolean touchesPin, boolean touchesCategory)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -133,7 +135,7 @@ public class AddAnnotations extends UndoableView implements AddEditable   // The
         if (multi) pet.tree.addSelectionPath (new TreePath (nodePath));
         pet.animate ();
 
-        if (blockName.equals ("$metadata")) AddAnnotation.update (parent, touchesPin);
+        if (blockName.equals ("$metadata")) AddAnnotation.update (parent, touchesPin, touchesCategory);
 
         return node;
     }

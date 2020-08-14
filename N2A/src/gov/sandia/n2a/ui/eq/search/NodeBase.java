@@ -46,6 +46,11 @@ public class NodeBase extends DefaultMutableTreeNode
         return result;
     }
 
+    public String getCategory ()
+    {
+        return "";
+    }
+
     public NodeBase child (String key, boolean selectModel)
     {
         if (children == null) return null;

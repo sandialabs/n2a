@@ -27,6 +27,7 @@ public class TransferableNode implements Transferable, ClipboardOwner
     public String         newPartName; // If set non-null by the receiver (nasty hack), then this transfer resulted in the creation of a new part.
     public Component      panel;       // The panel instance that originated the drag. Used to defend against self-drop.
     public int            modifiers;   // If DnD, then record of modifiers from event that started the drag.
+    public List<String>   selection;   // The selection path in search panel where the drag started. Only non-null if drag is actually from search panel.
 
     /**
         A data flavor that lets PanelSearch extract a TransferableNode instance for the purpose of adding info to it for our local exportDone().

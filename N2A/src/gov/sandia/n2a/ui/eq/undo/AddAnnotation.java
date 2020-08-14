@@ -45,6 +45,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
     protected boolean      multiLast;       // Set selection during delete, but add to selection during create.
     public    boolean      selectVariable;  // Select containing variable rather than specific metadata node. Implies the relevant node is directly under a variable.
     protected boolean      touchesPin;
+    protected boolean      touchesCategory;
 
     /**
         @param parent Direct container of the new node, even if not a $metadata node.
@@ -118,6 +119,10 @@ public class AddAnnotation extends UndoableView implements AddEditable
         }
 
         touchesPin =  path.contains ("pin")  ||  name.contains ("pin")  ||  createSubtree.containsKey ("pin");
+
+        NodeBase p = parent;
+        while (! (p instanceof NodePart)) p = (NodeBase) p.getParent ();
+        touchesCategory =  p.getTrueParent () == null  &&  (name.contains ("category")  ||  createSubtree.containsKey ("category"));
     }
 
     public String uniqueName (MNode mparent, String prefix, boolean allowEmptySuffix)
@@ -144,10 +149,10 @@ public class AddAnnotation extends UndoableView implements AddEditable
     public void undo ()
     {
         super.undo ();
-        destroy (path, false, name, prefix, multi, multiLast, selectVariable, touchesPin);
+        destroy (path, false, name, prefix, multi, multiLast, selectVariable, touchesPin, touchesCategory);
     }
 
-    public static void destroy (List<String> path, boolean canceled, String name, String prefix, boolean multi, boolean multiLast, boolean selectVariable, boolean touchesPin)
+    public static void destroy (List<String> path, boolean canceled, String name, String prefix, boolean multi, boolean multiLast, boolean selectVariable, boolean touchesPin, boolean touchesCategory)
     {
         // Retrieve created node
         NodeContainer parent = (NodeContainer) NodeBase.locateNode (path);
@@ -212,14 +217,14 @@ public class AddAnnotation extends UndoableView implements AddEditable
             pet.animate ();
         }
 
-        update (parent, touchesPin);
+        update (parent, touchesPin, touchesCategory);
     }
 
     /**
         Do related record-keeping.
         This function is shared by all undo classes that modify $metadata.
     **/
-    public static void update (NodeBase parent, boolean touchesPin)
+    public static void update (NodeBase parent, boolean touchesPin, boolean touchesCategory)
     {
         while (parent instanceof NodeAnnotation  ||  parent instanceof NodeAnnotations) parent = (NodeBase) parent.getParent ();
         NodeVariable binding = null;
@@ -269,20 +274,13 @@ public class AddAnnotation extends UndoableView implements AddEditable
         }
 
         // Update categories in search list.
-        if (parent.getTrueParent () == null)  // must be root node
-        {
-            MNode metadata = parent.source.child ("$metadata");
-            if (metadata == null  ||  metadata.containsKey ("category"))  // In the unusual situation that $metadata has just been completely deleted, we guess that it may have contained "category" and update anyway.
-            {
-                PanelModel.instance.panelSearch.search ();
-            }
-        }
+        if (touchesCategory) PanelModel.instance.panelSearch.search ();
     }
 
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, selectVariable, touchesPin);
+        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, selectVariable, touchesPin, touchesCategory);
     }
 
     public NodeBase getCreatedNode ()
@@ -290,7 +288,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
         return createdNode;
     }
 
-    public static NodeBase create (List<String> path, int index, String name, MNode createSubtree, boolean nameIsGenerated, boolean multi, boolean selectVariable, boolean touchesPin)
+    public static NodeBase create (List<String> path, int index, String name, MNode createSubtree, boolean nameIsGenerated, boolean multi, boolean selectVariable, boolean touchesPin, boolean touchesCategory)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null)
@@ -372,7 +370,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
             }
         }
 
-        update (parent, touchesPin);
+        update (parent, touchesPin, touchesCategory);
 
         return createdNode;
     }
@@ -554,6 +552,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
                 prefix          = change.prefixAfter;
                 nameIsGenerated = false;
                 touchesPin      = change.touchesPin;
+                touchesCategory = change.touchesCategory;
                 createSubtree.merge (change.savedTree);  // Generally, there should be nothing in savedTree. Just being thorough.
                 createSubtree.set (change.valueAfter);
                 return true;

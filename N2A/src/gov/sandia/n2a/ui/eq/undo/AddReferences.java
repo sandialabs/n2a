@@ -44,7 +44,7 @@ public class AddReferences extends UndoableView
     public void undo ()
     {
         super.undo ();
-        AddAnnotations.destroy (path, saved.key (), ! multi  ||  multiLast, false);
+        AddAnnotations.destroy (path, saved.key (), ! multi  ||  multiLast, false, false);
     }
 
     public void redo ()
@@ -57,6 +57,6 @@ public class AddReferences extends UndoableView
                 return new NodeReferences (part);
             }
         };
-        AddAnnotations.create (path, index, saved, factory, multi, false);
+        AddAnnotations.create (path, index, saved, factory, multi, false, false);
     }
 }

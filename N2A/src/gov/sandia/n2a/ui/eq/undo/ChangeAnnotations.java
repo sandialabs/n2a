@@ -39,14 +39,16 @@ public class ChangeAnnotations extends UndoableView
     protected boolean      multi;
     public    boolean      multiGraph;    // hint that "multi" applies to graph nodes rather than tree nodes. In this case, don't do anything with focus in tree. Instead, focus should be pulled on to active graph node.
     protected boolean      touchesPin;
+    protected boolean      touchesCategory;
 
     public ChangeAnnotations (NodeBase parent, MNode metadata)
     {
         super (parent);
 
-        path       = parent.getKeyPath ();
-        doAdd      = metadata;
-        touchesPin = metadata.containsKey ("pin");
+        path            = parent.getKeyPath ();
+        doAdd           = metadata;
+        touchesPin      = metadata.containsKey ("pin");
+        touchesCategory = parent.getTrueParent () == null  &&  metadata.containsKey ("category");
 
         MNode currentTree = parent.source.child ("$metadata");
         if (currentTree == null)
@@ -170,7 +172,7 @@ public class ChangeAnnotations extends UndoableView
             if (np.graph != null) np.graph.setSelected (true);
         }
 
-        AddAnnotation.update (parent, touchesPin);
+        AddAnnotation.update (parent, touchesPin, touchesCategory);
     }
 
     public boolean addEdit (UndoableEdit edit)

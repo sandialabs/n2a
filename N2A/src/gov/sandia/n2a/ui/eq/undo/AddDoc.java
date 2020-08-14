@@ -51,16 +51,17 @@ public class AddDoc extends Undoable
             if (n != null)
             {
                 pathAfter = n.getKeyPath ();
-                if (tree.isExpanded (new TreePath (n.getPath ()))) pathAfter.add ("");
-                List<String> path = pathAfter.subList (0, pathAfter.size () - 1);
-
-                String category = "";
-                for (String c : path) category += "/" + c;
-                if (! category.isEmpty ())
+                String category;
+                if (tree.isExpanded (new TreePath (n.getPath ())))
                 {
-                    category = category.substring (1);
-                    saved.set (category, "$metadata", "gui", "category");
+                    pathAfter.add ("");
+                    category = n.getCategory ();
                 }
+                else
+                {
+                    category = ((NodeBase) n.getParent ()).getCategory ();
+                }
+                if (! category.isEmpty ()) saved.set (category, "$metadata", "gui", "category");
             }
         }
 

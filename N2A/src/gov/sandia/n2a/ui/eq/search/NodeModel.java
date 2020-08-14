@@ -75,6 +75,12 @@ public class NodeModel extends NodeBase
         return               EquationTreeCellRenderer.colorInherit;
     }
 
+    @Override
+    public String getCategory ()
+    {
+        return ((NodeBase) parent).getCategory ();
+    }
+
     public NodeModel findModel (String key)
     {
         if (this.key.equals (key)) return this;

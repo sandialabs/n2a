@@ -30,6 +30,7 @@ public class DeleteAnnotation extends UndoableView
     protected boolean      multiLast;
     public    boolean      selectVariable;
     protected boolean      touchesPin;
+    protected boolean      touchesCategory;
 
     public DeleteAnnotation (NodeAnnotation node, boolean canceled)
     {
@@ -63,6 +64,10 @@ public class DeleteAnnotation extends UndoableView
         savedSubtree.merge (node.folded.getSource ());
 
         touchesPin =  path.contains ("pin")  ||  name.contains ("pin")  ||  savedSubtree.containsKey ("pin");
+
+        NodeBase p = container;
+        while (! (p instanceof NodePart)) p = (NodeBase) p.getParent ();
+        touchesCategory =  p.getTrueParent () == null  &&  (name.contains ("category")  ||  savedSubtree.containsKey ("category"));
     }
 
     /**
@@ -95,13 +100,13 @@ public class DeleteAnnotation extends UndoableView
     public void undo ()
     {
         super.undo ();
-        AddAnnotation.create (path, index, name, savedSubtree, false, multi, selectVariable, touchesPin);
+        AddAnnotation.create (path, index, name, savedSubtree, false, multi, selectVariable, touchesPin, touchesCategory);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddAnnotation.destroy (path, canceled, name, prefix, multi, multiLast, selectVariable, touchesPin);
+        AddAnnotation.destroy (path, canceled, name, prefix, multi, multiLast, selectVariable, touchesPin, touchesCategory);
     }
 
     public boolean replaceEdit (UndoableEdit edit)
