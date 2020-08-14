@@ -28,9 +28,11 @@ import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
+import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
+import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
@@ -68,6 +70,7 @@ public class JobC extends Thread
 
     public String T;
     public int    eventMode;
+    public long   seed;
 
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
@@ -121,6 +124,13 @@ public class JobC extends Thread
             digestModel ();
             String duration = model.metadata.get ("duration");
             if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
+
+            seed = -1;
+            if (usesRandom (model))  // only record seed if actually used
+            {
+                seed = job.getOrDefault (System.currentTimeMillis (), "$metadata", "seed");
+                job.set (seed, "$metadata", "seed");
+            }
 
             eventMode = Simulator.DURING;
             String e = job.get ("$metadata", "backend", "all", "event");
@@ -554,6 +564,10 @@ public class JobC extends Thread
         result.append ("  {\n");
         generateMainInitializers (result);
         result.append ("\n");
+        if (seed >= 0)
+        {
+            result.append ("    srand (" + seed + ");\n");
+        }
         if (T.equals ("int"))
         {
             Variable dt = model.find (new Variable ("$t", 1));
@@ -772,6 +786,30 @@ public class JobC extends Thread
         {
             result.append ("    " + o.name + " = outputHelper<" + T + "> (\"" + o.operands[0].getString () + "\");\n");
         }
+    }
+
+    public boolean usesRandom (EquationSet s)
+    {
+        class RandomVisitor implements Visitor
+        {
+            boolean found;
+            public boolean visit (Operator op)
+            {
+                if (op instanceof Uniform  ||  op instanceof Gaussian) found = true;
+                return ! found;
+            }
+        }
+        RandomVisitor visitor = new RandomVisitor ();
+
+        for (Variable v : s.variables)
+        {
+            v.visit (visitor);
+            if (visitor.found) return true;
+        }
+
+        for (EquationSet p : s.parts) if (usesRandom (p)) return true;
+
+        return false;
     }
 
     /**
