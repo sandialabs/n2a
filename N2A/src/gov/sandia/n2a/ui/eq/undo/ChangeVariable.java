@@ -347,7 +347,15 @@ public class ChangeVariable extends UndoableView
         if (touchedBindings)
         {
             parent.updateConnections ();
-            parent.updatePins ();
+
+            // Update edges to pins, if present.
+            if (parent.source.child ("$metadata", "gui", "pin") != null)
+            {
+                parent.updatePins ();
+                pe.panelEquationGraph.updatePins ();
+                pe.panelEquationGraph.reconnect ();
+                pe.panelEquationGraph.repaint ();
+            }
 
             MPart mparent = parent.source;
             if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
