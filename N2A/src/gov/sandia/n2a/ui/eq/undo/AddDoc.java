@@ -113,12 +113,7 @@ public class AddDoc extends Undoable
         AppData.models.clear (name);  // Triggers PanelModel.childDeleted(name), which removes doc from all 3 sub-panels.
 
         PanelModel pm = PanelModel.instance;
-        if (fromSearchPanel)
-        {
-            pm.panelSearch.lastSelection = pathAfter;
-            pm.panelSearch.tree.clearSelection ();
-            pm.panelSearch.takeFocus ();
-        }
+        if (fromSearchPanel) pm.panelSearch.forceSelection (pathAfter);
         // else leave the focus wherever it's at. We shift focus to make user aware of the delete, but this is only meaningful in the search list.
     }
 

@@ -21,6 +21,7 @@ import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.search.NameEditor;
 import gov.sandia.n2a.ui.eq.search.NodeBase;
+import gov.sandia.n2a.ui.eq.search.NodeCategory;
 import gov.sandia.n2a.ui.eq.search.NodeModel;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
@@ -125,6 +126,7 @@ public class PanelSearch extends JPanel
         tree.setInvokesStopCellEditing (true);  // auto-save current edits, as much as possible
         tree.setDragEnabled (true);
         tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
+        tree.setRequestFocusEnabled (false);  // Don't request focus directly when clicked. Instead, let mouse listener do it.
         ToolTipManager.sharedInstance ().registerComponent (tree);
         tree.setCellRenderer (renderer);
         tree.setCellEditor (nameEditor);
@@ -204,9 +206,23 @@ public class PanelSearch extends JPanel
 
         tree.addMouseListener (new MouseAdapter ()
         {
-            public void mouseClicked (MouseEvent e)
+            public void mouseClicked (MouseEvent me)
             {
-                if (e.getClickCount () > 1) selectCurrent ();
+                int clicks = me.getClickCount ();
+                if (clicks == 1)
+                {
+                    TreePath path = tree.getClosestPathForLocation (me.getX (), me.getY ());
+                    if (path != null)
+                    {
+                        lastSelection = ((NodeBase) path.getLastPathComponent ()).getKeyPath ();
+                        tree.setSelectionPath (path);
+                    }
+                    takeFocus ();
+                }
+                else  // all click counts >1
+                {
+                    selectCurrent ();
+                }
             }
         });
 
@@ -495,8 +511,15 @@ public class PanelSearch extends JPanel
         for (String key : path)
         {
             NodeBase c = null;
-            if (key.isEmpty ()) c = n.firstModel ();
-            else                c = n.child (key, key == last);
+            if (key.isEmpty ())
+            {
+                c = n.firstModel ();
+            }
+            else
+            {
+                c = n.child (key, key == last);                            // Give preference to models as leaf node,
+                if (c == null  &&  key == last) c = n.child (key, false);  // but still look for a category if no model exists.
+            }
             if (c == null) break;
             n = c;
         }
@@ -628,19 +651,36 @@ public class PanelSearch extends JPanel
             n = new NodeModel (key);
 
             NodeBase p;
-            int index;
+            int index = -1;
             NodeBase at = nodeFor (insertAt);
             if (at == null) at = root.firstModel ();
             if (at == null)
             {
                 p = root;
-                index = root.getChildCount ();  // past end of list, which will all be categories
             }
             else
             {
-                p = (NodeBase) at.getParent ();
-                index = p.getIndex (at);
+                if (at instanceof NodeCategory)
+                {
+                    if (at.getKeyPath ().size () < insertAt.size ())  // No models in target category (only sub-categories), so add new model at end.
+                    {
+                        p = at;
+                    }
+                    else  // insertAt refers directly to a category, so try to insert a peer.
+                    {
+                        // Should be after the last category under parent category.
+                        p = (NodeBase) at.getParent ();
+                        at = p.firstModel ();
+                        if (at != null) index = p.getIndex (at);
+                    }
+                }
+                else
+                {
+                    p = (NodeBase) at.getParent ();
+                    index = p.getIndex (at);
+                }
             }
+            if (index < 0) index = p.getChildCount ();  // past end of list
 
             model.insertNodeInto (n, p, index);
         }

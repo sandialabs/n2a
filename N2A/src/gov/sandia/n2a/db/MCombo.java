@@ -204,8 +204,8 @@ public class MCombo extends MNode implements MNodeListener
         MNode newChild = newContainer.child (key);
         if (oldChild == newChild) return;  // Change is hidden by higher-precedence dataset.
         children.put (key, newContainer);
-        if (oldChild == null) fireChildAdded (key);
-        fireChildChanged (key, key);
+        if (oldChild == null) fireChildAdded (key);         // This is a completely new child.
+        else                  fireChildChanged (key, key);  // The newly-added child hides the old child, so this appears as a change of content.
     }
 
     public void childDeleted (String key)

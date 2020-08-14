@@ -19,7 +19,7 @@ public class DeleteDoc extends Undoable
 {
     protected MVolatile    saved;
     protected boolean      neutralized;
-    protected List<String> pathAfter;  // key in the search list immediately after the one being deleted, or null if this is the end of the list
+    protected List<String> pathAfter;  // Path to the search list item immediately after the one being deleted. May end with an empty string to indicate no such item exists.
     protected boolean      fromSearchPanel;
     protected boolean      wasShowing;
     protected boolean      wasInMRU;
