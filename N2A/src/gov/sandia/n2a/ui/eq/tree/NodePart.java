@@ -40,6 +40,7 @@ import gov.sandia.n2a.ui.eq.GraphNode;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
+import gov.sandia.n2a.ui.eq.undo.AddInherit;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.AddReference;
 import gov.sandia.n2a.ui.eq.undo.AddVariable;
@@ -832,6 +833,10 @@ public class NodePart extends NodeContainer
         else if (type.equals ("Part"))
         {
             return new AddPart (this, subpartIndex, data, location);
+        }
+        else if (type.equals ("Inherit"))
+        {
+            return new AddInherit (this, data.get ());
         }
         else  // treat all other requests as "Variable"
         {
