@@ -334,10 +334,14 @@ public class ChangeVariable extends UndoableView
 
         for (PanelEquationTree ap : needAnimate) ap.animate ();
 
+        boolean touchesPins =  parent.source.child ("$metadata", "gui", "pin") != null;
         if (nodeAfter.isBinding  ||  wasBinding)
         {
             touchedBindings = true;
-            if (parent.graph != null)
+            // Update edges.
+            // If this part also interacts with pins, then wait to update edges until next code block below.
+            // Otherwise, we might attempt to bind to an IO block that hasn't been created yet.
+            if (parent.graph != null  &&  ! touchesPins)
             {
                 if (nodeAfter.isBinding) parent.graph.updateEdge (nameAfter, parent.connectionBindings.get (nameAfter));
                 else if (wasBinding)     parent.graph.killEdge   (nameAfter);
@@ -349,7 +353,8 @@ public class ChangeVariable extends UndoableView
             parent.updateConnections ();
 
             // Update edges to pins, if present.
-            if (parent.source.child ("$metadata", "gui", "pin") != null)
+            // This rebuilds all edges on canvas, so no need for incremental update above.
+            if (touchesPins)
             {
                 parent.updatePins ();
                 pe.panelEquationGraph.updatePins ();

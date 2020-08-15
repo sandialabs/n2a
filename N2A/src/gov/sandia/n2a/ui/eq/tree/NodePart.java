@@ -678,7 +678,7 @@ public class NodePart extends NodeContainer
                     {
                         side = pinOut;
                     }
-                    else if (n.connectionBindings.values ().contains (null))  // connection with unbound endpoint
+                    else if (n.connectionBindings.containsValue (null))  // connection with unbound endpoint
                     {
                         side = pinIn;
                         pass = pin.child ("pass");

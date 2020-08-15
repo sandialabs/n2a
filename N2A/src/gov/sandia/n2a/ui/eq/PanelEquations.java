@@ -100,6 +100,7 @@ import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.AddEditable;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
@@ -899,9 +900,19 @@ public class PanelEquations extends JPanel
             {
                 if (context.source.child ("$metadata", "gui", "pin") == null)
                 {
+                    if (context.connectionBindings != null  &&  ! context.connectionBindings.containsValue (null))
+                    {
+                        // Need to disconnect one endpoint for connection to expose a pin.
+                        // Pick the first one in alphabetical order. This will probably be "A", which is usually the intent.
+                        String alias = context.connectionBindings.keySet ().iterator ().next ();
+                        NodeVariable variable = (NodeVariable) context.child (alias);
+                        um.addEdit (new CompoundEdit ());
+                        panelEquationGraph.graphPanel.mouseListener.disconnect (um, variable);
+                    }
                     MNode metadata = new MVolatile ();
                     metadata.set ("", "gui", "pin");  // Activate default pin behavior appropriate for the part.
                     um.apply (new ChangeAnnotations (context, metadata));
+                    um.endCompoundEdit ();
                 }
             }
             else
@@ -913,14 +924,9 @@ public class PanelEquations extends JPanel
                 MNode metadata = new MVolatile ();
                 if (pinSide.equals ("in"))
                 {
-                    // Out of sheer laziness, we won't displace a connection-to-pin.
-                    // Everything else is fair game.
-                    if (context.source.child ("$metadata", "gui", "pin", "in", pinKey, "bind", "alias") == null)
-                    {
-                        metadata.set ("",     "gui", "pin", "in", pinKey, "bind");
-                        metadata.set (pinKey, "gui", "pin", "in", pinKey, "bind", "pin");
-                        um.apply (new ChangeAnnotations (context, metadata));
-                    }
+                    metadata.set ("",     "gui", "pin", "in", pinKey, "bind");
+                    metadata.set (pinKey, "gui", "pin", "in", pinKey, "bind", "pin");
+                    um.apply (new ChangeAnnotations (context, metadata));
                 }
                 else  // pinSide is "out"
                 {
