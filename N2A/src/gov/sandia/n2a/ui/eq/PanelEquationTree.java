@@ -314,9 +314,11 @@ public class PanelEquationTree extends JScrollPane
 
             public void mouseClicked (MouseEvent e)
             {
-                int x = e.getX ();
-                int y = e.getY ();
-                int clicks = e.getClickCount ();
+                int     x       = e.getX ();
+                int     y       = e.getY ();
+                int     clicks  = e.getClickCount ();
+                boolean control = e.isControlDown ();
+                boolean shift   = e.isShiftDown ();
 
                 TreePath path = tree.getClosestPathForLocation (x, y);
                 if (path != null)
@@ -328,7 +330,7 @@ public class PanelEquationTree extends JScrollPane
                     if (! r.contains (x, y)) path = null;
                 }
 
-                if (SwingUtilities.isRightMouseButton (e)  ||  e.isControlDown ()  &&  HostSystem.isMac ())
+                if (SwingUtilities.isRightMouseButton (e)  ||  control  &&  HostSystem.isMac ())
                 {
                     if (clicks == 1)  // Show popup menu
                     {
@@ -345,7 +347,7 @@ public class PanelEquationTree extends JScrollPane
                 {
                     if (clicks == 1)
                     {
-                        if (path != null) tree.setSelectionPath (path);
+                        if (path != null  &&  ! control  &&  ! shift) tree.setSelectionPath (path);
                         switchToTree ();
                         takeFocus ();
                     }
