@@ -905,7 +905,7 @@ public class PanelEquationGraph extends JScrollPane
             Vector2 p2 = new Vector2 (p.x, p.y);
             for (GraphEdge e : edges)
             {
-                if (e.tip  != null  &&  e.tip.distance (p2) < GraphEdge.arrowheadLength) return e;
+                if (e.tip != null  &&  e.tip.distance (p2) < GraphEdge.arrowheadLength) return e;
                 // These tests extend the clickable area to include the full width of the pin zone.
                 if (e.pinKeyFrom != null  &&  findTipAtPin (p, e.nodeFrom, e.pinSideFrom, e.pinKeyFrom)) return e;
                 if (e.pinKeyTo   != null  &&  findTipAtPin (p, e.nodeTo,   e.pinSideTo,   e.pinKeyTo  )) return e;
@@ -947,6 +947,15 @@ public class PanelEquationGraph extends JScrollPane
             return false;
         }
 
+        public GraphEdge findTopicAt (Point p)
+        {
+            for (GraphEdge e : edges)
+            {
+                if (! e.topic.isEmpty ()  &&  e.textBox.contains (p)) return e;
+            }
+            return null;
+        }
+
         public GraphNode findNodeAt (Point p, boolean includePins)
         {
             for (Component c : getComponents ())
@@ -986,7 +995,7 @@ public class PanelEquationGraph extends JScrollPane
             for (GraphNode g : nodes)
             {
                 if (g == pinIn  ||  g == pinOut) continue;
-                double d = p.distance (g.getLocation ());
+                double d = p.distance (g.getCenter ());
                 if (d < bestDistance)
                 {
                     result = g;
@@ -1337,6 +1346,24 @@ public class PanelEquationGraph extends JScrollPane
             }
             um.endCompoundEdit ();
         }
+
+        public void applyPinTopicChange (GraphEdge e, String topic)
+        {
+            NodePart part = e.nodeFrom.node;
+            if (topic.equals (part.source.get ("$metadata", "gui", "pin", "topic"))) return;
+            UndoManager um = MainFrame.instance.undoManager;
+            if (topic.isEmpty ())  // reset to default
+            {
+                DeleteAnnotation da = DeleteAnnotation.withName (part, "$metadata", "gui", "pin", "topic");
+                if (da != null) um.apply (da);
+            }
+            else  // change value
+            {
+                MNode metadata = new MVolatile ();
+                metadata.set (topic, "gui", "pin", "topic");
+                um.apply (new ChangeAnnotations (part, metadata));
+            }
+        }
     }
 
     public class GraphLayout implements LayoutManager2
@@ -1504,7 +1531,63 @@ public class PanelEquationGraph extends JScrollPane
         {
             if (SwingUtilities.isLeftMouseButton (me)  &&  me.getClickCount () == 2)
             {
-                container.drillUp ();
+                if (container.locked)
+                {
+                    container.drillUp ();
+                    return;
+                }
+                Point p = me.getPoint ();
+                GraphEdge e = graphPanel.findTopicAt (p);
+                if (e == null)
+                {
+                    container.drillUp ();
+                    return;
+                }
+
+                // Show dialog to get new topic.
+                JTextField editor = new NTextField (e.topic, Math.max (10, e.topic.length ()));
+
+                ActionMap actionMap = editor.getActionMap ();
+                actionMap.put ("Cancel", new AbstractAction ("Cancel")
+                {
+                    public void actionPerformed (ActionEvent ae)
+                    {
+                        graphPanel.remove (editor);
+                        graphPanel.repaint (editor.getBounds ());
+                    }
+                });
+
+                editor.addActionListener (new ActionListener ()
+                {
+                    public void actionPerformed (ActionEvent ae)
+                    {
+                        graphPanel.remove (editor);
+                        graphPanel.repaint (editor.getBounds ());
+                        graphPanel.applyPinTopicChange (e, editor.getText ());
+                    }
+                });
+
+                editor.addFocusListener (new FocusListener ()
+                {
+                    public void focusGained (FocusEvent fe)
+                    {
+                    }
+
+                    public void focusLost (FocusEvent fe)
+                    {
+                        if (editor.getParent () == graphPanel)
+                        {
+                            graphPanel.remove (editor);
+                            graphPanel.repaint (editor.getBounds ());
+                            graphPanel.applyPinTopicChange (e, editor.getText ());
+                        }
+                    }
+                });
+
+                editor.setLocation (e.textBox.getLocation ());
+                graphPanel.add (editor);
+                graphPanel.setComponentZOrder (editor, 0);
+                editor.requestFocusInWindow ();
             }
         }
 

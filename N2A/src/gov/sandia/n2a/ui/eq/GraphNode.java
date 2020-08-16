@@ -372,6 +372,14 @@ public class GraphNode extends JPanel
         return d;
     }
 
+    public Point getCenter ()
+    {
+        Rectangle bounds = getBounds ();
+        bounds.x += bounds.width / 2;
+        bounds.y += bounds.height / 2;
+        return bounds.getLocation ();
+    }
+
     public void nudge (ActionEvent e, int dx, int dy)
     {
         if (container.locked) return;

@@ -39,6 +39,8 @@ public class GraphEdge
     protected String    nameTo;      // Name of external (not in current graph) part that edge goes to. Will only be set if nodeTo is null. If both are null, this is an unconnected edge.
     protected GraphEdge edgeOther;   // For binary connections only, the edge to the other endpoint. Used to coordinate a smooth curve through the connection node.
     protected String    alias;       // Name of endpoint variable in connection part. Empty if this is a pin-to-pin link.
+    protected String    topic;       // If this edge goes from a part to an IO block, then this gives the specific topic on that pin.
+    protected String    text;        // Value to display on "from" side of edge. Includes both alias and pin topic, if any.
     protected String    pinSideTo;   // If attached to a pin, then which side the pin is on ("in" or "out"). null for a regular (non-pin) connection.
     public    String    pinKeyTo;    // If attached to a pin, then the key of the pin. null for regular connection.
     protected String    pinSideFrom; // For pin-to-pin link, this identifies the output pin.
@@ -68,6 +70,7 @@ public class GraphEdge
     {
         this.nodeFrom = nodeFrom;
         this.alias    = alias;
+        topic         = "";
 
         if (partTo == null)
         {
@@ -86,13 +89,14 @@ public class GraphEdge
                 else break;
             }
 
-            // Edge from first unbound endpoint to pin input block.
+            // Determine which IO block this edge goes to.
             String pinName = pin.getOrDefault (nodeFrom.node.source.key ());
             if (alias.equals (first))
             {
                 nodeTo    = nodeFrom.container.panelEquationGraph.graphPanel.pinIn;
                 pinSideTo = "out";
                 pinKeyTo  = pinName;
+                topic     = pin.getOrDefault ("data", "topic");
                 nodeTo.node.pinOut.set ("", pinKeyTo, "bound");
             }
             else if (alias.equals (second)  &&  pin.child ("pass") != null)
@@ -100,6 +104,7 @@ public class GraphEdge
                 nodeTo    = nodeFrom.container.panelEquationGraph.graphPanel.pinOut;
                 pinSideTo = "in";
                 pinKeyTo  = pin.getOrDefault (pinName, "pass");
+                // Don't repeat topic on the output side. It would be unnecessary clutter.
                 nodeTo.node.pinIn.set ("", pinKeyTo, "bound");
             }
             return;
@@ -153,6 +158,7 @@ public class GraphEdge
         this.nodeFrom = nodeFrom;
         this.nodeTo   = nodeTo;
         alias = "";
+        topic = "";
 
         if (nodeTo == null)  // drag edge
         {
@@ -174,6 +180,7 @@ public class GraphEdge
             pinSideTo = "in";
             pinKeyTo  = pinKey;
             // pinSideFrom and pinKeyFrom are null, just like a connector. The distinction is that alias is empty.
+            topic = nodeFrom.node.source.getOrDefault ("data", "$metadata", "gui", "pin", "topic");
 
             nodeTo.node.pinIn.set ("", pinKey, "bound");
         }
@@ -378,7 +385,9 @@ public class GraphEdge
             if (updateOther) edgeOther.updateShape (false);
         }
 
-        double tw = fm.stringWidth (alias);
+        if (topic.isEmpty ()) text = alias;
+        else                  text = alias + "(" + topic + ")";
+        double tw = fm.stringWidth (text);
         double th = fm.getHeight ();
         double nodeAngle = Math.atan ((double) Cbounds.height / Cbounds.width);
 
@@ -631,7 +640,7 @@ public class GraphEdge
         bounds.grow (t, t);
 
         // Name
-        if (! alias.isEmpty ())
+        if (! text.isEmpty ())
         {
             label = new Vector2 (0, 0);
             double absAngle = root.subtract (c).absAngle ();
@@ -679,12 +688,12 @@ public class GraphEdge
             g2.draw (head);
         }
 
-        if (! alias.isEmpty ()  &&  label != null)
+        if (! text.isEmpty ()  &&  label != null)
         {
             g2.setColor (new Color (0xD0FFFFFF, true));
             g2.fill (textBox);
             g2.setColor (Color.black);
-            g2.drawString (alias, (float) label.x, (float) label.y);
+            g2.drawString (text, (float) label.x, (float) label.y);
         }
 
         if (textBoxTo != null)
