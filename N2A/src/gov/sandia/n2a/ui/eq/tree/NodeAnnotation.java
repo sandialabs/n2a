@@ -85,7 +85,7 @@ public class NodeAnnotation extends NodeContainer
         return result;
     }
 
-    public String[] keys ()
+    public List<String> keyList ()
     {
         List<String> result = new ArrayList<String> ();
         MPart p = folded;
@@ -95,6 +95,12 @@ public class NodeAnnotation extends NodeContainer
             p = p.parent ();
             result.add (0, p.key ());  // Since we are working backwards, insert at start of array.
         }
+        return result;
+    }
+    
+    public String[] keyArray ()
+    {
+        List<String> result = keyList ();
         return result.toArray (new String[result.size ()]);
     }
 

@@ -375,25 +375,26 @@ public class AddAnnotation extends UndoableView implements AddEditable
         return createdNode;
     }
 
+    /**
+        Returns the node with the longest path prefix in common with the given path.
+        The target may be folded into a child node, in which case the child node is returned.
+        If the target does not exist, then the result will be a sibling path (one that
+        has the closest common ancestor with the target). If no sibling exists, then it will
+        be the closest direct ancestor.
+        The sibling case is required by the ChangeAnnotations constructor to determine prefix.
+        Most other places it is not an issue because the target node is known to exist.
+    **/
     public static NodeBase findClosest (NodeBase container, String... names)
     {
         return findClosest (container, 0, names);
     }
 
-    /**
-        Returns the node with the longest path prefix in common with the given path.
-        The target may be folded into a child node, in which case the child node is returned.
-        If the target is absent, the result may be a parent or sibling.
-        The sibling case might be considered a problem, except that it may be required by the
-        ChangeAnnotations constructor to determine prefix. Most other places it is not an issue
-        because the target node is known to exist.
-    **/
     public static NodeBase findClosest (NodeBase container, int offset, String... names)
     {
         String name = names[offset];
         NodeBase a = container.child (name);
         if (! (a instanceof NodeAnnotation)) return container;  // Not found. Result is parent of target.
-        String[] keys = ((NodeAnnotation) a).keys ();
+        String[] keys = ((NodeAnnotation) a).keyArray ();
 
         int namesLength = names.length - offset;
         int length = Math.min (namesLength, keys.length);
@@ -405,23 +406,23 @@ public class AddAnnotation extends UndoableView implements AddEditable
         return findClosest (a, offset + keys.length, names);
     }
 
-    public static NodeBase findExact (NodeBase container, boolean allowFolded, String... names)
-    {
-        return findExact (container, allowFolded, 0, names);
-    }
-
     /**
         Returns the NodeAnnotation whose folded field points to the exact node specified by the path.
         Otherwise, returns null. Neither folded children nor parents nor siblings are allowed.
         @param allowFolded Indicates the a node with folded children is OK. Parents are siblings
         are still forbidden.
     **/
+    public static NodeBase findExact (NodeBase container, boolean allowFolded, String... names)
+    {
+        return findExact (container, allowFolded, 0, names);
+    }
+
     public static NodeBase findExact (NodeBase container, boolean allowFolded, int offset, String... names)
     {
         String name = names[offset];
         NodeBase a = container.child (name);
         if (! (a instanceof NodeAnnotation)) return null;  // Not found.
-        String[] keys = ((NodeAnnotation) a).keys ();
+        String[] keys = ((NodeAnnotation) a).keyArray ();
 
         int namesLength = names.length - offset;
         int length = Math.min (namesLength, keys.length);
@@ -471,7 +472,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
             NodeAnnotation na = (NodeAnnotation) parent.child (name);
             if (na == null) break;  // Can't go any deeper.
 
-            String[] keys = na.keys ();
+            String[] keys = na.keyArray ();
             if (keys.length > names.length - offset) break;  // folded in a child, or na is a sibling
             boolean allMatch = true;
             for (int i = 1; i < keys.length; i++)  // First key was already matched by child(String) call above.
@@ -504,26 +505,27 @@ public class AddAnnotation extends UndoableView implements AddEditable
     {
         List<String> result = new ArrayList<String> ();
         Enumeration<TreePath> expandedNodes = tree.getExpandedDescendants (new TreePath (parent.getPath ()));
-        if (expandedNodes != null)
+        if (expandedNodes == null) return result;
+
+        String prefix = "";
+        if (parent instanceof NodeAnnotation) prefix = ((NodeAnnotation) parent).key () + ".";
+        while (expandedNodes.hasMoreElements ())
         {
-            while (expandedNodes.hasMoreElements ())
+            TreePath path = expandedNodes.nextElement ();
+            NodeBase node = (NodeBase) path.getLastPathComponent ();
+            String name = "";
+            while (node != parent)
             {
-                TreePath path = expandedNodes.nextElement ();
-                NodeBase node = (NodeBase) path.getLastPathComponent ();
-                String name = "";
-                while (node != parent)
-                {
-                    String key;
-                    if (node instanceof NodeAnnotation) key = ((NodeAnnotation) node).key ();
-                    else                                key = node.source.key ();
-                    name = key + "." + name;
-                    node = (NodeBase) node.getParent ();
-                }
-                if (! name.isEmpty ())
-                {
-                    name = name.substring (0, name.length () - 1);
-                    result.add (name);
-                }
+                String key;
+                if (node instanceof NodeAnnotation) key = ((NodeAnnotation) node).key ();
+                else                                key = node.source.key ();
+                name = key + "." + name;
+                node = (NodeBase) node.getParent ();
+            }
+            if (! name.isEmpty ())
+            {
+                name = name.substring (0, name.length () - 1);
+                result.add (prefix + name);
             }
         }
         return result;
@@ -531,8 +533,12 @@ public class AddAnnotation extends UndoableView implements AddEditable
 
     public static void restoreExpandedNodes (JTree tree, NodeBase parent, List<String> names)
     {
+        int prefix = 0;
+        if (parent instanceof NodeAnnotation) prefix = ((NodeAnnotation) parent).key ().length () + 1;
         for (String n : names)
         {
+            if (n.length () <= prefix) continue;
+            n = n.substring (prefix);
             NodeBase node = findClosest (parent, n.split ("\\."));
             if (node != parent) tree.expandPath (new TreePath (node.getPath ()));
         }
@@ -544,12 +550,13 @@ public class AddAnnotation extends UndoableView implements AddEditable
         {
             ChangeAnnotation change = (ChangeAnnotation) edit;
             if (change.shouldReplaceEdit (this)) return false;
-            if (path.equals (change.path)  &&  name.equals (change.nameBefore))
+            if (path.equals (change.path)  &&  (change.parentKeys + name).equals (change.nameBefore))
             {
                 change.rebase ();
+                int kill = change.parentKeys.length ();
                 path            = change.path;
-                name            = change.nameAfter;
-                prefix          = change.prefixAfter;
+                name            = change.nameAfter.substring (kill);
+                prefix          = change.prefixAfter.isEmpty () ? "" : change.prefixAfter.substring (kill);
                 nameIsGenerated = false;
                 touchesPin      = change.touchesPin;
                 touchesCategory = change.touchesCategory;

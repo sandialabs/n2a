@@ -26,14 +26,15 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeAnnotation extends UndoableView
 {
-    protected List<String> path;           // to the direct parent of the node that was changed
+    protected List<String> path;           // to the direct parent of the node to be changed
+    protected String       parentKeys;     // Keys relative to DB parent node which are folded into the GUI parent node at the time this transaction is created.
     protected String       nameBefore;
     protected String       nameAfter;
-    protected String       prefixBefore;   // Base of tree which gets removed during rename. Single path element.
-    protected String       prefixAfter;    // Name path of first node that does not already exist at destination. If everything in nameAfter already exists, then this string is empty and tree structure will not be cleared by undo().
+    protected String       prefixBefore;   // DB name path of node which gets removed during rename. Path is relative to closest container that won't change form.
+    protected String       prefixAfter;    // DB name path of first node that does not already exist at destination. If everything in nameAfter already exists, then this string is empty and tree structure will not be cleared by undo().
     protected String       valueBefore;
     protected String       valueAfter;
-    protected MNode        savedTree;      // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
+    protected MNode        savedTree;      // The entire subtree from the top document. If not from top document, then at least a single node for the node itself.
     protected boolean      multi;          // Add to existing selection rather than blowing it away.
     public    boolean      selectVariable; // Select containing variable rather than specific metadata node. Implies the relevant node is directly under a variable.
     protected boolean      touchesPin;
@@ -44,16 +45,26 @@ public class ChangeAnnotation extends UndoableView
         NodeBase parent = (NodeBase) node.getParent ();
         path = parent.getKeyPath ();
 
-        nameBefore  = node.key ();
-        valueBefore = node.folded.get ();
-        this.nameAfter  = nameAfter;
+        // Gather keys relative to DB parent node which are folded into the GUI parent node.
+        // This only happens with NodeAnnotation. Everything else (including NodeAnnotations)
+        // does not do folding.
+        parentKeys = "";
+        if (parent instanceof NodeAnnotation)
+        {
+            List<String> keys = ((NodeAnnotation) parent).keyList ();
+            for (int i = 1; i < keys.size (); i++) parentKeys += keys.get (i) + ".";
+        }
+
+        nameBefore      = parentKeys + node.key ();
+        valueBefore     = node.folded.get ();
+        this.nameAfter  = parentKeys + nameAfter;
         this.valueAfter = valueAfter;
 
         savedTree = new MVolatile ();
         if (node.folded.isFromTopDocument ()) savedTree.merge (node.folded.getSource ());
 
         if (nameBefore.equals (nameAfter)) prefixBefore = "";  // In this case, prefixBefore is ignored.
-        else                               prefixBefore = nameBefore.split ("\\.")[0];
+        else                               prefixBefore = parentKeys + nameBefore.split ("\\.")[0];
 
         prefixAfter = "";
         String[] nameAfters = nameAfter.split ("\\.");
@@ -75,11 +86,11 @@ public class ChangeAnnotation extends UndoableView
         }
         if (i == nameAfters.length)  // The entire destination path already exists.
         {
-            prefixAfter = "";  // Indicate that undo() should not to clear any nodes.
+            prefixAfter = "";  // Indicates that undo() should not clear any nodes.
         }
         else  // Only part of the destination path exists, so note the first path element that does not already exist.
         {
-            prefixAfter = (prefixAfter + "." + nameAfters[i]).substring (1);
+            prefixAfter = parentKeys + (prefixAfter + "." + nameAfters[i]).substring (1);
         }
 
         touchesPin =  path.contains ("pin")  ||  nameBefore.contains ("pin")  ||  nameAfter.contains ("pin");  // Crude heuristic to see if this changes pin metadata.
@@ -114,7 +125,6 @@ public class ChangeAnnotation extends UndoableView
         if (parent == null) throw new CannotRedoException ();
         MPart mparent = parent.source;
         if (parent instanceof NodeVariable) mparent = (MPart) mparent.child ("$metadata");
-        else if (parent instanceof NodeAnnotation) mparent = ((NodeAnnotation) parent).folded;
 
         // Update database
         String[] names = nameAfter.split ("\\.");
@@ -186,8 +196,21 @@ public class ChangeAnnotation extends UndoableView
     **/
     public void rebase ()
     {
-        NodeBase parent    = NodeBase.locateNode (path);
-        NodeBase node      = AddAnnotation.findClosest (parent, nameAfter.split ("\\."));
+        NodeBase parent = NodeBase.locateNode (path);
+
+        // Adjust names for any keys currently folded into parent.
+        String tempNameAfter   = nameAfter;
+        String tempPrefixAfter = prefixAfter;
+        if (parent instanceof NodeAnnotation)
+        {
+            int prefix = 0;
+            List<String> keys = ((NodeAnnotation) parent).keyList ();
+            for (int i = 1; i < keys.size (); i++) i += keys.get (i).length () + 1;
+            tempNameAfter = nameAfter.substring (prefix);
+            if (! prefixAfter.isEmpty ()) tempPrefixAfter = prefixAfter.substring (prefix);
+        }
+
+        NodeBase node      = AddAnnotation.findClosest (parent, tempNameAfter.split ("\\."));
         NodeBase container = (NodeBase) node.getParent ();
         if (   container != parent  &&  container.getChildCount () == 2  // node has exactly one sibling
             && ! prefixAfter.isEmpty ()  // node will be deleted during undo
@@ -197,16 +220,24 @@ public class ChangeAnnotation extends UndoableView
             container = (NodeBase) container.getParent ();
         }
 
+        // Gather keys folded under new parent.
+        parentKeys = "";
+        if (container instanceof NodeAnnotation)
+        {
+            List<String> keys = ((NodeAnnotation) container).keyList ();
+            for (int i = 1; i < keys.size (); i++) parentKeys += keys.get (i) + ".";
+        }
+
         // To rebase to the new container, we must remove all the path elements from the old to the new location.
         List<String> newPath = container.getKeyPath ();
         int killPrefix = 0;
         for (int i = path.size (); i < newPath.size (); i++) killPrefix += newPath.get (i).length () + 1;
-        nameBefore = nameAfter = nameAfter.substring (killPrefix);
+        nameBefore = nameAfter = parentKeys + tempNameAfter.substring (killPrefix);
         path = newPath;
 
         // When names are equal, prefixes are ignored. However, we update prefixAfter
         // so AddAnnotation can abuse this function to merge add followed by change.
-        if (prefixAfter.length () > killPrefix) prefixAfter = prefixAfter.substring (killPrefix);
+        if (tempPrefixAfter.length () > killPrefix) tempPrefixAfter = parentKeys + tempPrefixAfter.substring (killPrefix);
     }
 
     public boolean shouldReplaceEdit (UndoableEdit edit)
@@ -214,7 +245,7 @@ public class ChangeAnnotation extends UndoableView
         if (edit instanceof AddAnnotation)
         {
             AddAnnotation aa = (AddAnnotation) edit;
-            if (aa.nameIsGenerated  &&  path.equals (aa.path)  &&  nameBefore.equals (aa.name))
+            if (aa.nameIsGenerated  &&  path.equals (aa.path)  &&  nameBefore.equals (parentKeys + aa.name))
             {
                 return prefixAfter.isEmpty ();  // Must be pure change, no new db node created.
             }
