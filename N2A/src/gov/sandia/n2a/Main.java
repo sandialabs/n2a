@@ -72,7 +72,7 @@ public class Main
         // Set global application properties.
         AppData.properties.set ("Neurons to Algorithms", "name");
         AppData.properties.set ("N2A",                   "abbreviation");
-        AppData.properties.set ("1.0",                   "version");
+        AppData.properties.set ("1.1",                   "version");
         AppData.checkInitialDB ();
 
         // Load plugins

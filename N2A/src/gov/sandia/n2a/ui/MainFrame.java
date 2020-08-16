@@ -73,7 +73,7 @@ public class MainFrame extends JFrame
         );
 
         MNode winProps = AppData.state.childOrCreate ("WinLayout");
-        int w = winProps.getOrDefault (800, "width");
+        int w = winProps.getOrDefault (900, "width");
         int h = winProps.getOrDefault (600, "height");
         int x = winProps.getOrDefault (-1,  "x");
         int y = winProps.getOrDefault (-1,  "y");
