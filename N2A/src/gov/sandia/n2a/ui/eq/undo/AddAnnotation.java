@@ -68,7 +68,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
         createSubtree = new MVolatile ();
         if (data == null)
         {
-            name = uniqueName (mparent, "a", false);
+            name = uniqueName (mparent, "a", 0, false);
             prefix = name;
             nameIsGenerated = true;
         }
@@ -95,22 +95,22 @@ public class AddAnnotation extends UndoableView implements AddEditable
             }
             else
             {
+                MNode mchild = mparent;
                 for (String n : names)
                 {
                     prefix += "." + n;
-                    mparent = mparent.child (n);
-                    if (mparent == null) break;
+                    mparent = mchild;
+                    mchild = mparent.child (n);
+                    if (mchild == null) break;
                 }
                 prefix = prefix.substring (1);
 
-                // Ensure that last path element is unique
-                if (mparent != null)
+                if (mchild != null)  // The target name already exists, so pick a unique one.
                 {
                     int last = names.length - 1;
-                    names[last] = uniqueName (mparent, names[last], true);
-                    name = "";
-                    for (String n : names) name += "." + n;
-                    name = name.substring (1);
+                    names[last] = uniqueName (mparent, names[last], 2, true);
+                    name = names[0];
+                    for (int i = 1; i <= last; i++) name += "." + names[i];
                     prefix = name;
                 }
             }
@@ -125,15 +125,16 @@ public class AddAnnotation extends UndoableView implements AddEditable
         touchesCategory =  p.getTrueParent () == null  &&  (name.contains ("category")  ||  createSubtree.containsKey ("category"));
     }
 
-    public String uniqueName (MNode mparent, String prefix, boolean allowEmptySuffix)
+    public String uniqueName (MNode mparent, String prefix, int suffix, boolean allowEmptySuffix)
     {
         if (allowEmptySuffix  &&  (mparent == null  ||  mparent.child (prefix) == null)) return prefix;
-        int suffix = 1;
-        if (mparent != null)
+        if (mparent == null) return prefix + suffix;
+        while (true)
         {
-            while (mparent.child (prefix + suffix) != null) suffix++;
+            String result = prefix + suffix;
+            if (mparent.child (result) == null) return result;
+            suffix++;
         }
-        return prefix + suffix;
     }
 
     public void setMulti (boolean value)
@@ -552,16 +553,27 @@ public class AddAnnotation extends UndoableView implements AddEditable
             if (change.shouldReplaceEdit (this)) return false;
             if (path.equals (change.path)  &&  (change.parentKeys + name).equals (change.nameBefore))
             {
+                boolean valueOnly = change.nameAfter.equals (change.nameBefore);
                 change.rebase ();
                 int kill = change.parentKeys.length ();
+
                 path            = change.path;
                 name            = change.nameAfter.substring (kill);
-                prefix          = change.prefixAfter.isEmpty () ? "" : change.prefixAfter.substring (kill);
                 nameIsGenerated = false;
                 touchesPin      = change.touchesPin;
                 touchesCategory = change.touchesCategory;
                 createSubtree.merge (change.savedTree);  // Generally, there should be nothing in savedTree. Just being thorough.
                 createSubtree.set (change.valueAfter);
+                if (change.prefixAfter.isEmpty ())
+                {
+                    if (valueOnly) prefix = name;  // Rejected name change, or user actually entered same name as auto-generated, so we should be prepared to delete new node on undo.
+                    else           prefix = "";
+                }
+                else
+                {
+                    prefix = change.prefixAfter.substring (kill);
+                }
+
                 return true;
             }
         }

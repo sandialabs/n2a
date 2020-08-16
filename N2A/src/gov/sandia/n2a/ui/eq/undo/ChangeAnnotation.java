@@ -247,7 +247,10 @@ public class ChangeAnnotation extends UndoableView
             AddAnnotation aa = (AddAnnotation) edit;
             if (aa.nameIsGenerated  &&  path.equals (aa.path)  &&  nameBefore.equals (parentKeys + aa.name))
             {
-                return prefixAfter.isEmpty ();  // Must be pure change, no new db node created.
+                // Must be pure change, no new db node created.
+                // Name must change, not just value. If name remains the same (rare case), then it is better
+                // for the AddAnnotation to absorb this edit.
+                return prefixAfter.isEmpty ()  &&  ! nameBefore.equals (nameAfter);
             }
         }
         return false;
