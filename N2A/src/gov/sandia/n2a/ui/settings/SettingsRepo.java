@@ -145,6 +145,7 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected GitTableModel  gitModel;
     protected GitTable       gitTable;
     protected JLabel         labelStatus;
+    protected JButton        buttonRefresh;
     protected JButton        buttonPull;
     protected JButton        buttonPush;
     protected JTextField     fieldAuthor;
@@ -461,6 +462,34 @@ public class SettingsRepo extends JScrollPane implements Settings
         });
 
 
+        buttonRefresh = new JButton (ImageUtil.getImage ("refresh.gif"));
+        buttonRefresh.setMargin (new Insets (2, 2, 2, 2));
+        buttonRefresh.setFocusable (false);
+        buttonRefresh.setToolTipText ("Refresh");
+        buttonRefresh.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                // Refresh the list of files for this repo, in case they haven't been
+                // properly synchronized with the editing views. This gives the user
+                // some option to force update other than flipping between repos.
+                gitModel.refreshDiff ();  // Starts a separate thread to scan files.
+
+                // Fetch from remote repository and update displayed tracking info.
+                // This is not the same as a pull. It only gets change sets, without
+                // updating the working directory.
+                Thread thread = new Thread ()
+                {
+                    public void run ()
+                    {
+                        gitModel.refreshTrack (true);
+                    }
+                };
+                thread.setDaemon (true);
+                thread.start ();
+            }
+        });
+
         buttonPull = new JButton (ImageUtil.getImage ("pull.png"));
         buttonPull.setMargin (new Insets (2, 2, 2, 2));
         buttonPull.setFocusable (false);
@@ -591,6 +620,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 Lay.BL ("W", repoPanel),
                 Lay.WL ("L",
                         labelStatus,
+                        buttonRefresh,
                         buttonPull,
                         buttonPush,
                         Box.createHorizontalStrut (15),
@@ -2010,17 +2040,9 @@ public class SettingsRepo extends JScrollPane implements Settings
             fieldMessage.setText (current.message);
             undoAuthor .discardAllEdits ();
             undoMessage.discardAllEdits ();
+            status ("");  // Clear the git status line, since it probably applies to a different repo.
             refreshDiff ();
-            refreshTrackUI ();  // Give immediate feedback ...
-            Thread thread = new Thread ()  // Then do the (possibly) slower work of refreshing track status.
-            {
-                public void run ()
-                {
-                    refreshTrack (true);
-                }
-            };
-            thread.setDaemon (true);
-            thread.start ();
+            refreshTrackUI ();  // Only display current knowledge of tracking status. Does not do fetch.
         }
 
         public synchronized void refreshTable ()
