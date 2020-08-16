@@ -33,6 +33,7 @@ public class ChangeAnnotation extends UndoableView
     protected String       prefixBefore;   // DB name path of node which gets removed during rename. Path is relative to closest container that won't change form.
     protected String       prefixAfter;    // DB name path of first node that does not already exist at destination. If everything in nameAfter already exists, then this string is empty and tree structure will not be cleared by undo().
     protected String       valueBefore;
+    protected String       valueBeforeRebase;  // For use by rebase, in the rare case that there is a non-empty value at the target of a value injection.
     protected String       valueAfter;
     protected MNode        savedTree;      // The entire subtree from the top document. If not from top document, then at least a single node for the node itself.
     protected boolean      multi;          // Add to existing selection rather than blowing it away.
@@ -152,6 +153,7 @@ public class ChangeAnnotation extends UndoableView
                 mparent.clear (prefixes);
             }
             MPart partAfter = (MPart) mparent.childOrCreate (names);
+            if (valueBeforeRebase == null) valueBeforeRebase = partAfter.get ();
             partAfter.merge (savedTree);  // saveTree may have children, or it might be a simple value with no children.
         }
 
@@ -234,6 +236,8 @@ public class ChangeAnnotation extends UndoableView
         for (int i = path.size (); i < newPath.size (); i++) killPrefix += newPath.get (i).length () + 1;
         nameBefore = nameAfter = parentKeys + tempNameAfter.substring (killPrefix);
         path = newPath;
+
+        valueBefore = valueBeforeRebase;  // This is safe to do in all cases. If we are replacing an AddAnnotation, then name was changed, so valueBeforeRebase was set. If we merge into an AddAnnotation, then this will be ignored.
 
         // When names are equal, prefixes are ignored. However, we update prefixAfter
         // so AddAnnotation can abuse this function to merge add followed by change.

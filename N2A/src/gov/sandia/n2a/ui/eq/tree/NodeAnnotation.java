@@ -227,10 +227,10 @@ public class NodeAnnotation extends NodeContainer
                 // then this is merely a rename internal the current node, which is allowed.
                 String[] names = name.split ("\\.");
                 String[] oldNames = oldName.split ("\\.");
-                if (! names[0].equals (oldNames[0]))
+                if (! names[0].equals (oldNames[0]))  // If first name does not match, we need to check more carefully.
                 {
                     // We don't want to overwrite a node that has already been defined in the top document.
-                    // However, if it is part of folded path, we can define a new non-empty value for it.
+                    // However, if it is part of folded path, we can define a new value for it.
                     MPart mparent = source.parent ();
                     MPart partAfter = mparent;
                     for (String n : names)
@@ -238,8 +238,7 @@ public class NodeAnnotation extends NodeContainer
                         partAfter = (MPart) partAfter.child (n);
                         if (partAfter == null) break;
                     }
-                    if (   partAfter != null  &&  partAfter.isFromTopDocument ()
-                        && (source.size () > 0  ||  partAfter.size () != 1  ||  ! partAfter.get ().isEmpty ()))
+                    if (partAfter != null  &&  partAfter.isFromTopDocument ()  &&  source.size () > 0)
                     {
                         name = oldName;
                     }
