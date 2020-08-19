@@ -16,6 +16,7 @@ import gov.sandia.n2a.language.OperatorArithmetic;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.OperatorLogical;
 import gov.sandia.n2a.language.OperatorUnary;
+import gov.sandia.n2a.language.function.Ceil;
 import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
@@ -299,6 +300,38 @@ public class RendererCfp extends RendererC
 
         // Functions
         // These are listed in alphabetical order, with a catch-all at the end.
+        if (op instanceof Ceil)
+        {
+            Ceil f = (Ceil) op;
+            Operator a = f.operands[0];
+            // Ceil always sets operands[0].exponentNext to be same as f.exponentNext, so no shift is necessary.
+            if (f.exponentNext >= Operator.MSB)  // LSB is above decimal, so ceil() operation is impossible.
+            {
+                a.render (this);
+            }
+            else if (f.exponentNext < 0)  // All bits are below decimal
+            {
+                result.append ("0");
+            }
+            else
+            {
+                // Create a mask for bits below the decimal point.
+                // When this mask is added to the number, it will add 1 to the first bit position
+                // above the decimal if any bit is set under the mask. Afterward, used AND to remove
+                // any residual bits below the decimal.
+                // This works for both positive and negative numbers.
+                int zeroes = Operator.MSB - f.exponentNext;
+                int wholeMask = 0xFFFFFFFF << zeroes;
+                int decimalMask = ~wholeMask;
+                boolean needParens = a.precedence () >= new Add ().precedence ();
+                result.append ("(");
+                if (needParens) result.append ("(");
+                a.render (this);
+                if (needParens) result.append (")");
+                result.append (" + " + decimalMask + " & " + wholeMask + ")");
+            }
+            return true;
+        }
         if (op instanceof Cosine)
         {
             Cosine c = (Cosine) op;
@@ -330,14 +363,14 @@ public class RendererCfp extends RendererC
         }
         if (op instanceof Floor)
         {
+            // See Ceil above for similar code.
             Floor f = (Floor) op;
             Operator a = f.operands[0];
-            // Floor always sets operands[0].exponentNext to be same as f.exponentNext, so no shift is necessary.
-            if (f.exponentNext >= Operator.MSB)  // LSB is above decimal, so floor() operation is impossible.
+            if (f.exponentNext >= Operator.MSB)
             {
                 a.render (this);
             }
-            else if (f.exponentNext < 0)  // All bits are below decimal
+            else if (f.exponentNext < 0)
             {
                 result.append ("0");
             }
@@ -345,13 +378,13 @@ public class RendererCfp extends RendererC
             {
                 // Mask off bits below the decimal point. This works for both positive and negative numbers.
                 int zeroes = Operator.MSB - f.exponentNext;
-                int decimalMask = 0xFFFFFFFF << zeroes;
+                int wholeMask = 0xFFFFFFFF << zeroes;
                 boolean needParens = a.precedence () >= new AND ().precedence ();
                 result.append ("(");
                 if (needParens) result.append ("(");
                 a.render (this);
                 if (needParens) result.append (")");
-                result.append (" & " + decimalMask + ")");
+                result.append (" & " + wholeMask + ")");
             }
             return true;
         }
