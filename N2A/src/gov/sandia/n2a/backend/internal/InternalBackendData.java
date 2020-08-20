@@ -31,6 +31,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -1403,7 +1404,13 @@ public class InternalBackendData
                 else  // descend to one of our contained populations
                 {
                     int i = current.parts.indexOf (next);
-                    if (i < 0) throw new EvaluationException ("Could not find resolution target " + next.name + " in " + current.name);
+                    if (i < 0)
+                    {
+                        PrintStream ps = Backend.err.get ();
+                        ps.println ("Could not find resolution target '" + next.name + "' in '" + current.name + "'");
+                        ps.println ("This indicates a bug in the compiler. Please report it to the support email address given on the Settings:About page.");
+                        throw new Backend.AbortRun ();
+                    }
                     newResolution.add (new ResolvePart (i));
                 }
                 current = next;

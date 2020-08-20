@@ -80,6 +80,34 @@ public class VariableReference implements Comparable<VariableReference>
     }
 
     /**
+        Remove loops in the resolution path, where it passes through part A, then through
+        one or more other parts, and comes back to part A again. Loops can be created under
+        normal name resolution, but ideally a resolution path should consist only of unique
+        steps from source to destination. This routine simplifies the path.
+    **/
+    public void removeLoops ()
+    {
+        for (int i = 0; i < resolution.size () - 1; i++)  // Note: this is a case where checking size each time actually matters.
+        {
+            Object A = resolution.get (i);
+            for (int j = i + 1; j < resolution.size ();)
+            {
+                Object B = resolution.get (j);
+                if (B == A)
+                {
+                    int count = j - i;
+                    for (int k = 0; k < count; k++) resolution.remove (i);
+                    j = i + 1;
+                }
+                else
+                {
+                    j++;
+                }
+            }
+        }
+    }
+
+    /**
         Ensure the path does not rely on a connection endpoint as its first step.
         This is needed when a reference within a connection part is executed at
         the global scope, but also uses a connection binding to find the target population.

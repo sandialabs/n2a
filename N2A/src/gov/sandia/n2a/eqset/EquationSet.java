@@ -1396,6 +1396,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             query.reference.variable = dest.find (query);
             v.reference = query.reference;
+            v.reference.removeLoops ();
             Variable target = v.reference.variable;
             if (target != v  &&  target != null)
             {
@@ -1535,9 +1536,11 @@ public class EquationSet implements Comparable<EquationSet>
                             Variable target = query.reference.variable;
                             from.addDependencyOn (target);
                         }
+
+                        av.reference = query.reference;
+                        av.reference.removeLoops ();
+                        av.reference.addDependencies (from);
                     }
-                    av.reference = query.reference;
-                    av.reference.addDependencies (from);
                     return false;
                 }
                 if (op instanceof Split)
