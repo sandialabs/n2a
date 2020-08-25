@@ -446,20 +446,21 @@ template<class T>
 InputHolder<T>::InputHolder (const String & fileName)
 :   Holder (fileName)
 {
-    currentLine   = -1;
-    currentValues = 0;
-    currentCount  = 0;
-    nextLine      = -1;
-    nextValues    = 0;
-    nextCount     = 0;
-    columnCount   = 0;
-    timeColumn    = 0;
-    timeColumnSet = false;
-    time          = false;
+    currentLine      = -1;
+    currentValues    = new T[1];
+    currentValues[0] = (T) 0;
+    currentCount     = 1;
+    nextLine         = -1;
+    nextValues       = 0;
+    nextCount        = 0;
+    columnCount      = 0;
+    timeColumn       = 0;
+    timeColumnSet    = false;
+    time             = false;
 #   ifdef n2a_FP
-    epsilon       = 1;
+    epsilon          = 1;
 #   else
-    epsilon       = (T) 1e-6;
+    epsilon          = (T) 1e-6;
 #   endif
 
     if (fileName.empty ()) in = &std::cin;
