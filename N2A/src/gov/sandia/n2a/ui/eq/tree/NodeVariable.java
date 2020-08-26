@@ -664,8 +664,6 @@ public class NodeVariable extends NodeContainer
     public Undoable makeDelete (boolean canceled)
     {
         if (source.isFromTopDocument ()) return new DeleteVariable (this, canceled);
-        // Possibly kill inherited values ...
-        if (hasEquations ()) return null;  // Only allow direct kill of a variable if it is single-line. Otherwise, must kill individual equations.
         return new ChangeVariable (this, source.key (), "$kill");  // revoke the variable
     }
 }
