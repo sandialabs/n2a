@@ -121,8 +121,11 @@ public class BackendDataC
                 localInit.add (et.track);
             }
 
-            // Force multiple sources to generate only one event in a given cycle
-            if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
+            // Enforce only one event in a given cycle.
+            // See InternalBackendData.analyzeEvents() for more detailed comments.
+            if (   et.edge == EventTarget.NONZERO
+                && (   et.sources.size () > 1
+                    || et.sources.get (0).container == et.container  &&  (et.delay == 0  ||  et.delay == -2)))
             {
                 et.timeIndex = eventIndex;
             }

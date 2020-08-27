@@ -368,8 +368,17 @@ public class InternalBackendData
                 localInit.add (et.track);
             }
 
-            // Force multiple sources to generate only one event in a given cycle
-            if (et.sources.size () > 1  &&  et.edge == EventTarget.NONZERO)
+            // Enforce only one event in a given cycle.
+            // Every other edge type besides NONZERO has built-in latching that prevents duplicate events.
+            // For NONZERO, two different circumstances that can generate duplicate events are:
+            // 1) Having more the one source.
+            // 2) Having zero delay and the event source is self. In this case, the finish() function will
+            //    generate another event each time it is run by the event, producing an infinite loop.
+            // 3) There is an even more pathological version of #2, where a chain of events leads back to
+            //    the same part. Since #2 is already a rare case, we won't worry about trapping this.
+            if (   et.edge == EventTarget.NONZERO
+                && (   et.sources.size () > 1
+                    || et.sources.get (0).container == et.container  &&  (et.delay == 0  ||  et.delay == -2)))
             {
                 et.timeIndex = allocateLocalFloat ("eventTime" + eventIndex);
             }

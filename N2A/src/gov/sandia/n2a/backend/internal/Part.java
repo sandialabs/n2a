@@ -269,6 +269,14 @@ public class Part extends Instance
         }
 
         // Events
+        // Notes on timing: The "delay" parameter in an event() statement is relative to when the condition
+        // is evaluated, which means it is relative to where the monitor resides. This translates into
+        // event source objects, which is what we are about to evaluate below. Thus, delays should be
+        // relative to the current time of this part (the event source).
+        // When this finish() function is called as part of processing an event with special
+        // timing (zero delay or jittered ahead/behind the regular step time), it may generate additional
+        // events, simply as a consequence of running. These secondary events are relative to the time
+        // when they are evaluated, which is generally different than the triggering event.
         for (EventSource es : bed.eventSources)
         {
             @SuppressWarnings("unchecked")

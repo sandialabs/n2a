@@ -2487,7 +2487,7 @@ public class JobC extends Thread
             // Finalize variables
             if (bed.lastT)
             {
-                result.append ("  lastT = Simulator<" + T + ">::instance.currentEvent.t;\n");
+                result.append ("  lastT = Simulator<" + T + ">::instance.currentEvent->t;\n");
             }
             for (Variable v : bed.localBufferedExternal)
             {
@@ -3386,12 +3386,12 @@ public class JobC extends Thread
             if (et.delay < 0)  // timing is no-care
             {
                 result.append (pad + eventSpike + " * spike = new " + eventSpikeLatch + ";\n");
-                result.append (pad + "spike->t = event->t;\n");  // queue immediately after current cycle, so latches get set for next full cycle
+                result.append (pad + "spike->t = Simulator<" + T + ">::instance.currentEvent->t;\n");  // queue immediately after current cycle, so latches get set for next full cycle
             }
             else if (et.delay == 0)  // process as close to current cycle as possible
             {
                 result.append (pad + eventSpike + " * spike = new " + eventSpike + ";\n");  // fully execute the event (not latch it)
-                result.append (pad + "spike->t = event->t;\n");  // queue immediately
+                result.append (pad + "spike->t = Simulator<" + T + ">::instance.currentEvent->t;\n");  // queue immediately
             }
             else
             {
@@ -3408,12 +3408,12 @@ public class JobC extends Thread
             result.append (pad + "if (delay < 0)\n");
             result.append (pad + "{\n");
             result.append (pad + "  " + eventSpike + " * spike = new " + eventSpikeLatch + ";\n");
-            result.append (pad + "  spike->t = event->t;\n");
+            result.append (pad + "  spike->t = Simulator<" + T + ">::instance.currentEvent->t;\n");
             result.append (pad + "}\n");
             result.append (pad + "else if (delay == 0)\n");
             result.append (pad + "{\n");
             result.append (pad + "  " + eventSpike + " * spike = new " + eventSpike + ";\n");
-            result.append (pad + "  spike->t = event->t;\n");
+            result.append (pad + "  spike->t = Simulator<" + T + ">::instance.currentEvent->t;\n");
             result.append (pad + "}\n");
             result.append (pad + "else\n");
             result.append (pad + "{\n");
@@ -3480,7 +3480,7 @@ public class JobC extends Thread
         result.append (pad + "{\n");
         result.append (pad + "  spike = new " + eventSpike + ";\n");
         result.append (pad + "}\n");
-        result.append (pad + "spike->t = event->t + delay;\n");
+        result.append (pad + "spike->t = Simulator<" + T + ">::instance.currentEvent->t + delay;\n");
     }
 
     /**
