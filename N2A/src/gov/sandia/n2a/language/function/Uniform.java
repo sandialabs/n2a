@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -62,7 +62,7 @@ public class Uniform extends Function
     public Type eval (Instance context) throws EvaluationException
     {
         Random random;
-        Simulator simulator = Simulator.getSimulator (context);
+        Simulator simulator = Simulator.instance.get ();
         if (simulator == null) random = new Random ();
         else                   random = simulator.random;
 

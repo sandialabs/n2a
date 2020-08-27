@@ -2542,7 +2542,7 @@ public class ExportJob extends XMLutility
         public Type eval (Instance context)
         {
             Type result = operands[1].eval (context);
-            Simulator simulator = Simulator.getSimulator (context);
+            Simulator simulator = Simulator.instance.get ();
             if (simulator != null) simulation.add (this);
             return result;
         }

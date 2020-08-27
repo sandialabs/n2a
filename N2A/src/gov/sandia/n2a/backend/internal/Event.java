@@ -1,5 +1,5 @@
 /*
-Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,6 +21,12 @@ public class Event implements Comparable<Event>
     {
         if (t > that.t) return 1;
         if (t < that.t) return -1;
-        return 0;
+        // Events have the same timestamp, so sort by event type ...
+        boolean stepA =  this instanceof EventStep;
+        boolean stepB =  that instanceof EventStep;
+        if (stepA  &&  stepB) return 0;  // Both are EventStep, so no-care about order.
+        if (stepA) return - Simulator.instance.get ().sortEvent;
+        if (stepB) return   Simulator.instance.get ().sortEvent;
+        return 0;  // Neither is an EventStep, so no-care about order.
     }
 }

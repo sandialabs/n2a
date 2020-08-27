@@ -215,7 +215,7 @@ public class Input extends Function
 
     public Holder getRow (Instance context, Type op1, boolean time)
     {
-        Simulator simulator = Simulator.getSimulator (context);
+        Simulator simulator = Simulator.instance.get ();
         if (simulator == null) return null;  // If we can't cache a line from the requested stream, then semantics of this function are lost, so give up.
 
         Holder H = null;

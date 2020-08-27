@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -33,6 +33,11 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 **/
 public class Simulator implements Iterable<Part>
 {
+    /**
+        A simulator may have several threads, and each thread will have no more than one simulator.
+    **/
+    public static ThreadLocal<Simulator> instance = new ThreadLocal<Simulator> ();
+
     public Wrapper                     wrapper;  // reference to top-level model, which is also in the simulation queue
     public EventFactory                eventFactory;
     public Queue<Event>                queueEvent    = new PriorityQueue<Event> ();
@@ -48,10 +53,8 @@ public class Simulator implements Iterable<Part>
     public PrintStream        out;
     // Note: System.in will get bound into an Input.Holder if used at all.
 
-    public static int BEFORE = -1;
-    public static int DURING =  0;
-    public static int AFTER  =  1;
-    public int eventMode = DURING;
+    public boolean during    = true; // Indicates that events should set a flag that gets processed during the regular update cycle. If false, then events are processed in their own mini-update.
+    public int     sortEvent = -1;   // -1 means other events sort before EventStep when they have the same timestamp. 1 means they sort after.
 
     public Event currentEvent;
     public boolean stop;  // Flag to terminate event loop as soon as possible
@@ -79,14 +82,14 @@ public class Simulator implements Iterable<Part>
 
     public Simulator (Wrapper wrapper, long seed, Path jobDir, EventFactory factory)
     {
+        instance.set (this);
+        this.wrapper = wrapper;
+
         this.jobDir = jobDir;
         try {out = new PrintStream (jobDir.resolve ("out").toFile (), "UTF-8");}      // put in current working dir, which should be the job directory
         catch (Exception e) {out = System.out;}  // if that fails, just use the default stdout
 
         random = new Random (seed);
-
-        this.wrapper = wrapper;
-        wrapper.simulator = this;
 
         eventFactory = factory;
         EventStep e = eventFactory.create (0.0, 1e-4);
@@ -111,22 +114,6 @@ public class Simulator implements Iterable<Part>
             e.t = e.dt;
             queueEvent.add (e);
         }
-    }
-
-    public static Simulator getSimulator (Instance context)
-    {
-        Simulator simulator = null;
-        if (context instanceof InstanceTemporaries)
-        {
-            simulator = ((InstanceTemporaries) context).simulator;
-        }
-        else
-        {
-            Instance top = context;
-            while (top.container != null) top = top.container;
-            if (top instanceof Wrapper) simulator = ((Wrapper) top).simulator;
-        }
-        return simulator;
     }
 
     public void run ()

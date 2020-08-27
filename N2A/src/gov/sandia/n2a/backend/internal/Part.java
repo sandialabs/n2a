@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -310,10 +310,9 @@ public class Part extends Instance
                         int    step  = (int) Math.round (ratio);
                         if (Math.abs (ratio - step) < 1e-3)
                         {
-                            if (simulator.eventMode == Simulator.DURING) spike = new EventSpikeSingleLatch ();
-                            else                                         spike = new EventSpikeSingle ();
-                            if (simulator.eventMode == Simulator.AFTER) delay = (step + 1e-6) * event.dt;
-                            else                                        delay = (step - 1e-6) * event.dt;
+                            if (simulator.during) spike = new EventSpikeSingleLatch ();
+                            else                  spike = new EventSpikeSingle ();
+                            delay = step * event.dt;
                         }
                         else
                         {
@@ -361,10 +360,9 @@ public class Part extends Instance
                             int    step  = (int) Math.round (ratio);
                             if (Math.abs (ratio - step) < 1e-3)
                             {
-                                if (simulator.eventMode == Simulator.DURING) spike = new EventSpikeSingleLatch ();
-                                else                                         spike = new EventSpikeSingle ();
-                                if (simulator.eventMode == Simulator.AFTER) delay = (step + 1e-6) * event.dt;
-                                else                                        delay = (step - 1e-6) * event.dt;
+                                if (simulator.during) spike = new EventSpikeSingleLatch ();
+                                else                  spike = new EventSpikeSingle ();
+                                delay = step * event.dt;
                             }
                             else
                             {
@@ -396,10 +394,9 @@ public class Part extends Instance
                         int    step  = (int) Math.round (ratio);
                         if (Math.abs (ratio - step) < 1e-3)
                         {
-                            if (simulator.eventMode == Simulator.DURING) spike = new EventSpikeMultiLatch ();
-                            else                                         spike = new EventSpikeMulti ();
-                            if (simulator.eventMode == Simulator.AFTER) delay = (step + 1e-6) * event.dt;
-                            else                                        delay = (step - 1e-6) * event.dt;
+                            if (simulator.during) spike = new EventSpikeMultiLatch ();
+                            else                  spike = new EventSpikeMulti ();
+                            delay = step * event.dt;
                         }
                         else
                         {

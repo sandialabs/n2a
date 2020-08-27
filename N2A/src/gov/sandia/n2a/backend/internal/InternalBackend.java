@@ -100,13 +100,22 @@ public class InternalBackend extends Backend
                     job.set (seed, "$metadata", "seed");
                 }
 
-                String e = job.get ("$metadata", "backend", "all", "event");
-                int                      eventMode = Simulator.DURING;
-                if (e.equals ("after"))  eventMode = Simulator.AFTER;
-                if (e.equals ("before")) eventMode = Simulator.BEFORE;
-
                 simulator = new Simulator (new Wrapper (digestedModel), seed, jobDir);
-                simulator.eventMode = eventMode;
+                String e = job.get ("$metadata", "backend", "all", "event");
+                switch (e)
+                {
+                    case "before":
+                        simulator.during    = false;
+                        simulator.sortEvent = -1;
+                        break;
+                    case "after":
+                        simulator.during    = false;
+                        simulator.sortEvent = 1;
+                    default:  // during
+                        simulator.during    = true;  // Use latch-type spike events.
+                        simulator.sortEvent = -1;  // Spike events come before step events, so that latches can be set before update() is called.
+                }
+
                 elapsedTime = System.nanoTime ();
                 simulator.init ();
                 simulator.run ();  // Does not return until simulation is finished.
@@ -130,6 +139,7 @@ public class InternalBackend extends Backend
                 e.close ();
                 err.remove ();
             }
+            Simulator.instance.remove ();
         }
     }
 

@@ -97,7 +97,7 @@ public class ReadMatrix extends Function
 
     public Matrix open (Instance context)
     {
-        Simulator simulator = Simulator.getSimulator (context);
+        Simulator simulator = Simulator.instance.get ();
         if (simulator == null) return null;  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
         String path = ((Text) operands[0].eval (context)).value;

@@ -76,7 +76,7 @@ public class Delay extends Function
     public Type eval (Instance context)
     {
         Type tempValue = operands[0].eval (context);
-        Simulator simulator = Simulator.getSimulator (context);
+        Simulator simulator = Simulator.instance.get ();
         if (simulator == null) return tempValue;
 
         double value = ((Scalar) tempValue).value;

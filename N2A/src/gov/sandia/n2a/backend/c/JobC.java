@@ -8,7 +8,6 @@ package gov.sandia.n2a.backend.c;
 
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
-import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
@@ -68,9 +67,10 @@ public class JobC extends Thread
     public Path runtimeDir;
     public Path gcc;
 
-    public String T;
-    public int    eventMode;
-    public long   seed;
+    public String  T;
+    public long    seed;
+    public boolean during;
+    public boolean after;
 
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
@@ -132,10 +132,20 @@ public class JobC extends Thread
                 job.set (seed, "$metadata", "seed");
             }
 
-            eventMode = Simulator.DURING;
             String e = job.get ("$metadata", "backend", "all", "event");
-            if (e.equals ("after"))  eventMode = Simulator.AFTER;
-            if (e.equals ("before")) eventMode = Simulator.BEFORE;
+            switch (e)
+            {
+                case "before":
+                    during = false;
+                    after  = false;
+                    break;
+                case "after":
+                    during = false;
+                    after  = true;
+                default:  // during
+                    during = true;
+                    after  = false;
+            }
 
             System.out.println (model.dump (false));
 
@@ -577,6 +587,7 @@ public class JobC extends Thread
         if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
         else                                            integrator = "Euler";
         result.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
+        result.append ("    Simulator<" + T + ">::instance.after = " + after + ";\n");
         result.append ("    Wrapper wrapper;\n");
         result.append ("    Simulator<" + T + ">::instance.run (wrapper);\n");
         result.append ("\n");
@@ -3445,7 +3456,7 @@ public class JobC extends Thread
             result.append (pad + "if (abs (ratio - step) < 1e-3)\n");
         }
         result.append (pad + "{\n");
-        if (eventMode == Simulator.DURING)
+        if (during)
         {
             result.append (pad + "  spike = new " + eventSpikeLatch + ";\n");
         }
@@ -3453,27 +3464,13 @@ public class JobC extends Thread
         {
             result.append (pad + "  spike = new " + eventSpike + ";\n");
         }
-        if (eventMode == Simulator.AFTER)
+        if (T.equals ("int"))
         {
-            if (T.equals ("int"))
-            {
-                result.append (pad + "  delay = quantizedTime + 1;\n");
-            }
-            else
-            {
-                result.append (pad + "  delay = (step + (" + T + ") 1e-6) * event->dt;\n");
-            }
+            result.append (pad + "  delay = quantizedTime;\n");
         }
         else
         {
-            if (T.equals ("int"))
-            {
-                result.append (pad + "  delay = quantizedTime - 1;\n");
-            }
-            else
-            {
-                result.append (pad + "  delay = (step - (" + T + ") 1e-6) * event->dt;\n");
-            }
+            result.append (pad + "  delay = step * event->dt;\n");
         }
         result.append (pad + "}\n");
         result.append (pad + "else\n");

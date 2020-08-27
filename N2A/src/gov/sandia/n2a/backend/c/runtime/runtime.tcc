@@ -1429,6 +1429,13 @@ Event<T>::~Event ()
 {
 }
 
+template<class T>
+bool
+Event<T>::isStep () const
+{
+    return false;
+}
+
 
 // class EventStep -----------------------------------------------------------
 
@@ -1444,6 +1451,13 @@ template<class T>
 EventStep<T>::~EventStep ()
 {
     for (auto it : visitors) delete it;
+}
+
+template<class T>
+bool
+EventStep<T>::isStep () const
+{
+    return true;
 }
 
 template<class T>

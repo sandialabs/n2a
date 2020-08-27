@@ -274,7 +274,7 @@ public class Output extends Function
     public Type eval (Instance context)
     {
         Type result = operands[1].eval (context);
-        Simulator simulator = Simulator.getSimulator (context);
+        Simulator simulator = Simulator.instance.get ();
         if (simulator == null) return result;
 
         String mode = null;

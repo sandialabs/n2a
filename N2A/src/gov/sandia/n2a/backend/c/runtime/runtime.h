@@ -374,6 +374,7 @@ public:
 #   endif
 
     virtual ~Event ();
+    virtual bool isStep () const;  ///< Always returns false, except for instances of EventStep. Used as a poor-man's RTTI in the class More.
 
     virtual void run () = 0;  ///< Does all the work of a simulation cycle. This may be adapted to the specifics of the event type.
     virtual void visit (std::function<void (Visitor<T> * visitor)> f) = 0;  ///< Applies function to each part associated with this event. May visit multiple parts in parallel using separate threads.
@@ -383,9 +384,28 @@ template<class T>
 class More
 {
 public:
+    /**
+        Returns true if a sorts before b. However, priority_queue.top() returns the last
+        element in sort order. Thus we need to sort so earlier times come last.
+        This means that we answer false when a has timestamp strictly before b.
+        Regarding ties (equal timestamps): The contract of priority_queue appears to be that entries
+        will move toward the bottom until the answer switches from true to false.
+        We return true for ties, so they always insert later than existing entries (FIFO).
+        When the tie is between a step event and a spike event, then we generally sort the spike event
+        earlier than the step event. The flag "after" switches this behavior, so spike events
+        sort later than step events.
+    **/
     bool operator() (const Event<T> * a, const Event<T> * b) const
     {
-        return a->t >= b->t;  // If "=" is included in the operator, new entries will get sorted after existing entries at the same point in time.
+        if (a->t > b->t) return true;
+        if (a->t < b->t) return false;
+        // Events have the same timestamp, so sort by event type ...
+        bool stepA = a->isStep ();
+        bool stepB = b->isStep ();
+        if (stepA  &&  stepB) return true;  // Both are step events. New entries will get sorted after existing entries at the same point in time.
+        if (stepA) return ! Simulator<T>::instance.after;
+        if (stepB) return   Simulator<T>::instance.after;
+        return true;  // Both are spike events.
     }
 };
 
@@ -410,6 +430,7 @@ public:
     Integrator<T> *                              integrator;
     bool                                         stop;
     Event<T> *                                   currentEvent;
+    bool                                         after;         ///< When true, and timesteps match, sort spike events after step events. Otherwise sort them before.
 
     static Simulator<T> instance;  ///< Singleton
 
@@ -454,7 +475,7 @@ public:
     Holds parts that are formally queued for simulation.
     Executes on a periodic basis ("step" refers to dt). No other event type can hold parts for the simulator.
     Equivalently, all queued parts must belong to exactly one EventStep.
-    This class may be heavier (more storage, more computation) than other events, as it is expected
+    This class is heavier (more storage, more computation) than other events, as it is expected
     to live for the entire length of the simulation and repeatedly insert itself into the event queue.
 **/
 template<class T>
@@ -466,6 +487,7 @@ public:
 
     EventStep (T t, T dt);
     virtual ~EventStep ();
+    virtual bool isStep () const;
 
     virtual void  run     ();
     virtual void  visit   (std::function<void (Visitor<T> * visitor)> f);
@@ -563,7 +585,7 @@ public:
 // TODO: This implementation using std::map is quite inefficient in both memory and time.
 // If we can assume constant delay and constant dt, then a fixed-size ring buffer would be best.
 // Maybe we can have two implementations: one general and one efficient. The code generator
-// could choose between them base on whether the above conditions are met.
+// could choose between them based on whether the above conditions are met.
 template<class T>
 class DelayBuffer
 {
