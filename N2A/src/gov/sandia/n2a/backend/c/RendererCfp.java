@@ -22,6 +22,7 @@ import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Floor;
 import gov.sandia.n2a.language.function.Gaussian;
+import gov.sandia.n2a.language.function.HyperbolicTangent;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.function.Norm;
@@ -386,6 +387,18 @@ public class RendererCfp extends RendererC
                 if (needParens) result.append (")");
                 result.append (" & " + wholeMask + ")");
             }
+            return true;
+        }
+        if (op instanceof HyperbolicTangent)
+        {
+            HyperbolicTangent ht = (HyperbolicTangent) op;
+            Operator a = ht.operands[0];
+            int shift = ht.exponent - ht.exponentNext;
+            if (shift != 0) result.append ("(");
+            result.append ("tanh (");
+            a.render (this);
+            result.append (", " + a.exponentNext + ")");
+            if (shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
         if (op instanceof Round)

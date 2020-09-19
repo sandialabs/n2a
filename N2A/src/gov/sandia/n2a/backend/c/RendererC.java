@@ -21,6 +21,7 @@ import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Grid;
+import gov.sandia.n2a.language.function.HyperbolicTangent;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.function.Max;
@@ -200,6 +201,15 @@ public class RendererC extends Renderer
                 g.operands[i].render (this);
             }
 
+            result.append (")");
+            return true;
+        }
+        if (op instanceof HyperbolicTangent)
+        {
+            HyperbolicTangent t = (HyperbolicTangent) op;
+            Operator a = t.operands[0];
+            result.append ("tanh (");
+            a.render (this);
             result.append (")");
             return true;
         }

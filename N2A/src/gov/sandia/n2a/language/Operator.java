@@ -21,6 +21,7 @@ import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Floor;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Grid;
+import gov.sandia.n2a.language.function.HyperbolicTangent;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.function.Max;
@@ -424,33 +425,34 @@ public class Operator implements Cloneable
     static
     {
         // Functions
-        register (AbsoluteValue.factory ());
-        register (Atan         .factory ());
-        register (Ceil         .factory ());
-        register (Columns      .factory ());
-        register (Cosine       .factory ());
-        register (Delay        .factory ());
-        register (DrawDisc     .factory ());
-        register (DrawSegment  .factory ());
-        register (Event        .factory ());
-        register (Exp          .factory ());
-        register (Gaussian     .factory ());
-        register (Floor        .factory ());
-        register (Grid         .factory ());
-        register (Input        .factory ());
-        register (Log          .factory ());
-        register (Max          .factory ());
-        register (Min          .factory ());
-        register (Norm         .factory ());
-        register (ReadMatrix   .factory ());
-        register (Round        .factory ());
-        register (Rows         .factory ());
-        register (Signum       .factory ());
-        register (Sine         .factory ());
-        register (SquareRoot   .factory ());
-        register (Tangent      .factory ());
-        register (Output       .factory ());
-        register (Uniform      .factory ());
+        register (AbsoluteValue    .factory ());
+        register (Atan             .factory ());
+        register (Ceil             .factory ());
+        register (Columns          .factory ());
+        register (Cosine           .factory ());
+        register (Delay            .factory ());
+        register (DrawDisc         .factory ());
+        register (DrawSegment      .factory ());
+        register (Event            .factory ());
+        register (Exp              .factory ());
+        register (Gaussian         .factory ());
+        register (Floor            .factory ());
+        register (Grid             .factory ());
+        register (HyperbolicTangent.factory ());
+        register (Input            .factory ());
+        register (Log              .factory ());
+        register (Max              .factory ());
+        register (Min              .factory ());
+        register (Norm             .factory ());
+        register (ReadMatrix       .factory ());
+        register (Round            .factory ());
+        register (Rows             .factory ());
+        register (Signum           .factory ());
+        register (Sine             .factory ());
+        register (SquareRoot       .factory ());
+        register (Tangent          .factory ());
+        register (Output           .factory ());
+        register (Uniform          .factory ());
         operators.put ("pow", Power.factory ());  // hack to map pow() function to ^ operator
 
         // Operators

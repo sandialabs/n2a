@@ -67,7 +67,11 @@ public class Exp extends Function
     public void determineExponentNext (Variable from)
     {
         Operator op = operands[0];
-        op.exponentNext = 7;  // exp(n) rapidly explodes, so no benefit in allowing arbitrary magnitude. Instead, use those bits for precision.
+        // exp(n) rapidly explodes, so no benefit in allowing arbitrary magnitude. Instead, use those bits for precision.
+        // Our goal with fixed-point is to roughly match the performance of single-precision float.
+        // The largest number representable in float is 2^127, so allocating 8 bits above the decimal
+        // should be more than enough.
+        op.exponentNext = 7;
         op.determineExponentNext (from);
     }
 

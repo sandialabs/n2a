@@ -1,12 +1,27 @@
 #include "fixedpoint.h"
 
 
+/**
+    Breaks for shifts less than -2*MSB
+    Could add an extra guard here, or be careful in calling code.
+    Current approach is to minimize cases in favor of compactness and efficiency.
+**/
 inline int
 multiplyRound (int a, int b, int shift)
 {
     int64_t temp = (int64_t) a * b;
-    if (shift < 0) return (temp + (1 << -shift - 1)) >> -shift;
-    if (shift > 0) return  temp                      <<  shift;
+    if (shift < 0) return (temp + ((int64_t) 1 << -shift - 1)) >> -shift;
+    if (shift > 0) return  temp                                <<  shift;
+    return temp;
+}
+
+// See comments on multiplyRound()
+inline int
+multiplyCeil (int a, int b, int shift)
+{
+    int64_t temp = (int64_t) a * b;
+    if (shift < 0) return (temp + ~(0xFFFFFFFFFFFFFFFF << -shift)) >> -shift;   // The constant here is a 64-bit unsigned integer, all 1s.
+    if (shift > 0) return  temp                                    <<  shift;
     return temp;
 }
 
@@ -539,4 +554,59 @@ tan (int a, int exponentA, int exponentResult)
     // However, to save space we simply compute sin()/cos().
     // raw division exponent=0 at bit 0
     return ((int64_t) sin (a, exponentA) << exponentResult) / cos (a, exponentA);  // Don't do any saturation checks. We are not really interested in infinity.
+}
+
+int
+tanh (int a, int exponentA)
+{
+    // result = (exp(2a) - 1) / (exp(2a) + 1)
+    // exponentResult = 0
+
+    // tanh() is symmetric around 0, so only deal with one sign
+    bool negate = a < 0;
+    if (negate) a = -a;
+    if (a == 0) return 0;  // This also traps NAN
+
+    // Determine exponent desired from exp(2a). The result from exp(2a) is never smaller than 1, so exponent>=0
+    // We want enough bits to contain the msb of the output. This is
+    // exponent = log2(exp(2a)) = ln(exp(2a)) / ln(2) = 2a / (log2(2) / log2(e)) = 2a * log2(e)
+    // result of multiply: exponentA + 1 + exponentLOG2E at 2 * MSB --> exponentA + 1 + 0 at 2 * MSB --> exponentA + 1 - MSB at MSB
+    // want: MSB at MSB (for simple integer)
+    // shift: (exponentA + 1 - MSB) - MSB --> exponentA + 1 - 2 * MSB
+    int exponent = 0;
+    if (exponentA >= -1)
+    {
+        exponent = multiplyCeil (a, FP_LOG2E, exponentA + 1 - 2 * FP_MSB);
+        // If exponent gets too large, the result will always be 1 or -1
+        if (exponent > FP_MSB) return negate ? -0x40000000 : 0x40000000;
+    }
+
+    // Find true magnitude of a
+    while ((a & 0x40000000) == 0)
+    {
+        a <<= 1;
+        exponentA--;
+    }
+
+    // Require at least 16 bits for exp() after downshifting.
+    // Otherwise answer is not as accurate as simple linear.
+    if (exponentA < 22 - FP_MSB)  // Includes offset of 6 for the downshift.
+    {
+        // Return linear answer, if possible.
+        if (exponentA < -FP_MSB) return 0;  // Can't return result with correct magnitude, so only option is zero.
+        int result = a >> -exponentA;
+        if (negate) return -result;
+        return result;
+    }
+    // Set correct magnitude for exp().
+    // exp(a) expects exponentA=7, but we want exp(2a), so shift to exponentA=6 and lie about it
+    a >>= 6 - exponentA;
+
+    // call exp() and complete calculation
+    int result = exp (a, exponent);
+    int one = 1 << FP_MSB - exponent;
+    result = ((int64_t) result - one << FP_MSB) / ((int64_t) result + one);
+
+    if (negate) return -result;
+    return result;
 }
