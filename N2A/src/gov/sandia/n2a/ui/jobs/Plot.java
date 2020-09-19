@@ -239,15 +239,17 @@ public class Plot extends OutputParser
         float shift = 0;
         if (dataset1 != null)
         {
-            count *= 3;  // So we use only a third of the color range
-            shift = 1.0f - 1.0f / 6.0f;
+            count *= 2;  // So we use only half of the color range
+            shift = 0.75f + 0.5f / count;
         }
 
         XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
         for (int i = 0; i < dataset0.getSeriesCount (); i++)
         {
             renderer.setSeriesShapesVisible (i, false);
-            renderer.setSeriesPaint (i, Color.getHSBColor ((float) i / count + shift, 1.0f, 0.9f));
+            Color c = Color.getHSBColor ((float) i / count + shift, 1.0f, 0.9f);
+            renderer.setSeriesPaint (i, c);
+            renderer.setLegendTextPaint (i, c);
         }
         plot.setRenderer (renderer);
 
@@ -266,20 +268,22 @@ public class Plot extends OutputParser
             if (range1 > 0) axis1.setAutoRangeMinimumSize (range1 / 2);
             else            axis1.setAutoRangeMinimumSize (1);
             axis1.setTickLabelFont (axis0.getTickLabelFont ());
-            Color color1 = Color.getHSBColor (0.5f, 1.0f, 0.6f);
+            Color color1 = Color.getHSBColor (0.5f, 1.0f, 0.8f);
             axis1.setTickMarkPaint (color1);
             axis1.setTickLabelPaint (color1);
             axis1.setAxisLinePaint (color1);
             plot.setRangeAxis (1, axis1);
 
-            count = dataset1.getSeriesCount () * 3;
-            shift = 1.0f / 3.0f;
+            count = dataset1.getSeriesCount () * 2;
+            shift = 0.25f + 0.5f / count;
 
             renderer = new XYLineAndShapeRenderer();
             for (int i = 0; i < dataset1.getSeriesCount (); i++)
             {
                 renderer.setSeriesShapesVisible (i, false);
-                renderer.setSeriesPaint (i, Color.getHSBColor ((float) i / count + shift, 1.0f, 0.9f));
+                Color c = Color.getHSBColor ((float) i / count + shift, 1.0f, 0.9f);
+                renderer.setSeriesPaint (i, c);
+                renderer.setLegendTextPaint (i, c);
             }
             plot.setRenderer (1, renderer);
             plot.setDatasetRenderingOrder (DatasetRenderingOrder.REVERSE);
