@@ -42,11 +42,13 @@ public class Log extends Function
 
         // let o = power of center of operand
         // let p = power of center of result
-        // p = log2(log(2^o)) = log2(o*log(2)) = log2(o)+log2(log(2)) < log2(o)+1
+        // p = log2(log(2^o)) = log2(o*log(2)) = log2(o)+log2(log(2)) = log2(o) - constant
+        // If o is negative, negate the result with abs(o).
 
         if (op.exponent == UNKNOWN) return;
         int o = op.centerPower ();
-        int p = (int) Math.floor (Math.log (o) / Math.log (2)) + 1;
+        int p = 0;
+        if (o != 0) p = (int) (Math.signum (o) * Math.round (Math.log (Math.abs (o)) / Math.log (2)));
         int centerNew   = MSB / 2;
         int exponentNew = p + MSB - centerNew;
         updateExponent (from, exponentNew, centerNew);

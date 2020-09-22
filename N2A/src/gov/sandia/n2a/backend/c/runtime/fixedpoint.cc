@@ -570,9 +570,9 @@ tanh (int a, int exponentA)
     // Determine exponent desired from exp(2a). The result from exp(2a) is never smaller than 1, so exponent>=0
     // We want enough bits to contain the msb of the output. This is
     // exponent = log2(exp(2a)) = ln(exp(2a)) / ln(2) = 2a / (log2(2) / log2(e)) = 2a * log2(e)
-    // result of multiply: exponentA + 1 + exponentLOG2E at 2 * MSB --> exponentA + 1 + 0 at 2 * MSB --> exponentA + 1 - MSB at MSB
-    // want: MSB at MSB (for simple integer)
-    // shift: (exponentA + 1 - MSB) - MSB --> exponentA + 1 - 2 * MSB
+    // "exponent" should be expressed as a simple integer
+    // raw = exponentA + 1 + exponentLOG2E - MSB = exponentA + 1 - MSB
+    // shift = raw - MSB = exponentA + 1 - 2 * MSB
     int exponent = 0;
     if (exponentA >= -1)
     {

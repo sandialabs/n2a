@@ -72,7 +72,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     public boolean                      changed;    // Indicates that analysis touched one or more equations in a way that merits another pass.
 
     // fixed-point analysis
-    public int                          exponent = Operator.UNKNOWN; // power of most significant bit expected to be stored by this variable. The initial value of MIN_VALUE indicates unknown.
+    public int                          exponent = Operator.UNKNOWN; // power of most significant bit expected to be stored by this variable.
     public int                          center   = Operator.MSB / 2;
     public Operator                     bound;                       // The expression that imposes the largest magnitude on this variable. May be null.
 

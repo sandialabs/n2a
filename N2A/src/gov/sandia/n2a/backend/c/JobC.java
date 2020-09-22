@@ -304,6 +304,7 @@ public class JobC extends Thread
         b.redirectError  (err.toFile ());
         Process p = b.start ();
         p.waitFor ();
+
         if (p.exitValue () != 0)
         {
             PrintStream ps = Backend.err.get ();
@@ -312,6 +313,14 @@ public class JobC extends Thread
             Files.delete (out);
             Files.delete (err);
             throw new Backend.AbortRun ();
+        }
+
+        String errString = HostSystem.streamToString (Files.newInputStream (err));
+        if (! errString.isEmpty ())
+        {
+            PrintStream ps = Backend.err.get ();
+            ps.println ("Compiler says:");
+            ps.println (errString);
         }
         Files.delete (err);
         return out;
@@ -359,13 +368,7 @@ public class JobC extends Thread
         findLiveReferences (model);
         model.determineTypes ();
         model.determineDuration ();
-        if (T.equals ("int"))
-        {
-            double duration = 0;
-            String durationString = model.metadata.get ("duration");
-            if (! durationString.isEmpty ()) duration = Double.valueOf (durationString);
-            model.determineExponents (duration);
-        }
+        if (T.equals ("int")) model.determineExponents ();
         model.findConnectionMatrix ();
         analyzeEvents (model);
         analyze (model);
@@ -543,6 +546,7 @@ public class JobC extends Thread
         result.append ("#include <iostream>\n");
         result.append ("#include <vector>\n");
         result.append ("#include <cmath>\n");
+        result.append ("#include <csignal>\n");
         result.append ("\n");
         result.append ("using namespace std;\n");
         result.append ("using namespace fl;\n");
@@ -567,9 +571,20 @@ public class JobC extends Thread
         result.append ("\n");
         generateDefinitions (context, model);
 
+        // Signal handler
+        result.append ("void signalHandler (int number)\n");
+        result.append ("{\n");
+        result.append ("  cerr << \"Got signal \" << number << endl;\n");
+        result.append ("  if (number == SIGTERM) Simulator<" + T + ">::instance.stop = true;\n");
+        result.append ("  else                   exit (number);\n");
+        result.append ("}\n");
+        result.append ("\n");
+
         // Main
         result.append ("int main (int argc, char * argv[])\n");
         result.append ("{\n");
+        result.append ("  signal (SIGFPE, signalHandler);\n");
+        result.append ("\n");
         result.append ("  try\n");
         result.append ("  {\n");
         generateMainInitializers (result);
@@ -1423,6 +1438,7 @@ public class JobC extends Thread
             result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
         }
         s.simplify ("$init", bed.globalInit);
+        if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.globalInit);
         EquationSet.determineOrderInit (bed.globalInit);
         //   The following code tricks multiconditional() into treating all variables as unbuffered and non-accumulating.
         List<Variable> buffered = bed.globalBuffered;
@@ -1519,6 +1535,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.globalUpdate);
+            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.globalUpdate);
             for (Variable v : bed.globalUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -1647,6 +1664,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.globalDerivativeUpdate);  // This is unlikely to make any difference. Just being thorough before call to multiconditional().
+            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.globalDerivativeUpdate);
             for (Variable v : bed.globalDerivativeUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -2266,6 +2284,7 @@ public class JobC extends Thread
                 result.append ("  lastT = Simulator<" + T + ">::instance.currentEvent->t;\n");
             }
             s.simplify ("$init", bed.localInit);
+            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.localInit);
             EquationSet.determineOrderInit (bed.localInit);
             //   The following code tricks multiconditional() into treating all variables
             //   as unbuffered and non-accumulating.
@@ -2391,6 +2410,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.localUpdate);
+            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.localUpdate);
             for (Variable v : bed.localUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -2597,6 +2617,7 @@ public class JobC extends Thread
                         for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null) list.add (t);
                         list.add (bed.p);
                         s.simplify ("$live", list, bed.p);
+                        if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);
                         for (Variable v : list)
                         {
                             multiconditional (v, context, "  ");
@@ -2665,6 +2686,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.localDerivativeUpdate);
+            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.localDerivativeUpdate);
             for (Variable v : bed.localDerivativeUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -2942,6 +2964,7 @@ public class JobC extends Thread
                         for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  project.dependsOn (t) != null) list.add (t);
                         list.add (project);
                         s.simplify ("$connect", list, project);
+                        if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);
                         for (Variable v : list)
                         {
                             multiconditional (v, context, "      ");
@@ -3049,6 +3072,7 @@ public class JobC extends Thread
                 for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null) list.add (t);
                 list.add (bed.p);
                 s.simplify ("$connect", list, bed.p);
+                if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);
                 for (Variable v : list)
                 {
                     multiconditional (v, context, "  ");
@@ -3076,6 +3100,7 @@ public class JobC extends Thread
                 for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null) list.add (t);
                 list.add (bed.xyz);
                 s.simplify ("$live", list, bed.xyz);  // evaluate in $live phase, because endpoints already exist when connection is evaluated.
+                if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);
                 for (Variable v : list)
                 {
                     multiconditional (v, context, "    ");

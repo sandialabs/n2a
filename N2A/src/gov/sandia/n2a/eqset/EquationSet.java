@@ -470,6 +470,15 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Returns the highest ancestor of this equation set.
+    **/
+    public EquationSet getRoot ()
+    {
+        if (container != null) return container.getRoot ();
+        return this;
+    }
+
+    /**
         Finds the part whose name matches the longest prefix of the given query string, if such a part exists.
         Otherwise, returns null. The matched prefix must be a proper name path, that is, either the full query
         string or else a portion delimited by dot.
@@ -2903,11 +2912,11 @@ public class EquationSet implements Comparable<EquationSet>
         return changed;
     }
 
-    public void determineExponents (double duration)
+    public void determineExponents ()
     {
-        ExponentVisitor ev = new ExponentVisitor (duration);
-        determineExponentsInit (ev);
-        int limit = ev.depth * 2 + 2;  // One cycle for each variable to get initial exponent, and another cycle for each var to influence itself, plus a couple more for good measure. 
+        ExponentContext context = new ExponentContext (this);
+        determineExponentsInit (context);
+        int limit = context.depth * 2 + 2;  // One cycle for each variable to get initial exponent, and another cycle for each var to influence itself, plus a couple more for good measure. 
 
         boolean all = false;
         List<Variable> overflows = new ArrayList<Variable> ();
@@ -2915,8 +2924,8 @@ public class EquationSet implements Comparable<EquationSet>
         {
             System.out.println ("-----------------------------------------------------------------");
             System.out.println ("top of loop " + all + " " + limit);
-            int exponentTime = ev.updateTime ();
-            boolean changed = ev.updateInputs ();
+            int exponentTime = context.updateTime ();
+            boolean changed = context.updateInputs ();
             boolean finalPass = limit-- == 0;
             if (determineExponentsEval (exponentTime, finalPass, overflows)) changed = true;
             if (finalPass  ||  ! changed)
@@ -2943,22 +2952,23 @@ public class EquationSet implements Comparable<EquationSet>
 
         // List results of analysis to error stream
         PrintStream ps = Backend.err.get ();
-        ps.println ("Results of fixed-point analysis (expected median, reported as 10^n):");
+        ps.println ("Results of fixed-point analysis. Column 1 is expected median absolute value as a power of 10. Column 2 is binary power of MSB.");
         dumpMedians (ps);
     }
 
     /**
         Stores lists of objects needed for global agreement on time exponents.
     **/
-    public static class ExponentVisitor
+    public static class ExponentContext
     {
         public int depth;  // Largest number of equations in any equation set. It's unlikely that any dependency cycle will exceed this.
         public int exponentTime;  // of overall simulation
         public List<Variable> dt = new ArrayList<Variable> ();  // All distinct occurrences of $t' in the model (zero or one per equation set)
         public HashMap<Object,ArrayList<Input>> inputs = new HashMap<Object,ArrayList<Input>> ();  // Inputs that have "time" flag must agree on exponentTime.
 
-        public ExponentVisitor (double duration)
+        public ExponentContext (EquationSet root)
         {
+            double duration = root.metadata.getOrDefault (0.0, "duration");
             if (duration == 0) exponentTime = Operator.UNKNOWN;
             else               exponentTime = (int) Math.floor (Math.log (duration) / Math.log (2));
         }
@@ -3017,15 +3027,15 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
-    public void determineExponentsInit (ExponentVisitor ev)
+    public void determineExponentsInit (ExponentContext context)
     {
-        ev.depth = Math.max (ev.depth, variables.size ());
+        context.depth = Math.max (context.depth, variables.size ());
 
         for (Variable v : variables)
         {
             // Collect all $t'
             Variable r = v.reference.variable;
-            if (r.name.equals ("$t")  &&  r.order == 1  &&  ! ev.dt.contains (r)) ev.dt.add (r);
+            if (r.name.equals ("$t")  &&  r.order == 1  &&  ! context.dt.contains (r)) context.dt.add (r);
 
             // Set v as the parent of all its equations
             for (EquationEntry e : v.equations)
@@ -3060,11 +3070,11 @@ public class EquationSet implements Comparable<EquationSet>
                                 // input() statements.
                                 if (key != null)
                                 {
-                                    ArrayList<Input> list = ev.inputs.get (key);
+                                    ArrayList<Input> list = context.inputs.get (key);
                                     if (list == null)
                                     {
                                         list = new ArrayList<Input> ();
-                                        ev.inputs.put (key, list);
+                                        context.inputs.put (key, list);
                                     }
                                     list.add (i);
                                 }
@@ -3075,7 +3085,7 @@ public class EquationSet implements Comparable<EquationSet>
                 }
             });
         }
-        for (EquationSet s : parts) s.determineExponentsInit (ev);
+        for (EquationSet s : parts) s.determineExponentsInit (context);
     }
 
     public boolean determineExponentsEval (int exponentTime, boolean finalPass, List<Variable> overflows)
@@ -3115,6 +3125,39 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Update the newly-created operators in a subset of variables that has been simplified for a specific phase.
+    **/
+    public static void determineExponentsSimplified (List<Variable> list)
+    {
+        // Determine exponentTime.
+        // This value is only used to update $t and $t', and it is available from either $t or $t',
+        // if one of them exists in the list.
+        int exponentTime = Operator.UNKNOWN;
+        for (Variable v : list)
+        {
+            if (v.name.equals ("$t"))
+            {
+                exponentTime = v.exponent;
+                break;
+            }
+        }
+
+        // Update any newly-created operators.
+        for (Variable v : list)
+        {
+            int centerLast   = v.center;
+            int exponentLast = v.exponent;
+            if (v.determineExponent (exponentTime))  // Returns true if variable changed exponent or center.
+            {
+                // Force exponent and center to remain the same.
+                v.center   = centerLast;
+                v.exponent = exponentLast;
+            }
+            v.determineExponentNext ();
+        }
+    }
+
+    /**
         For debugging fixed-point analysis
     **/
     public void dumpExponents ()
@@ -3138,7 +3181,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (! fullName.isEmpty ()) fullName += ".";
             fullName += v.nameString ();
 
-            ps.println ("  " + base10 + "\t" + fullName);
+            ps.println ("  " + base10 + "\t" + v.exponent + "\t" + fullName);
         }
         for (EquationSet s : parts) s.dumpMedians (ps);
     }

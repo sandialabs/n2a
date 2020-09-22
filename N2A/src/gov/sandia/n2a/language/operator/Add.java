@@ -78,7 +78,7 @@ public class Add extends OperatorBinary
             alignExponent (from);
 
             int pow = (operand0.exponent + operand1.exponent) / 2;
-            // Call an odd bit in favor of a naked variable rather than the expression on the other side of the comparison.
+            // Call an odd bit in favor of a naked variable rather than the expression on the other side of the operator.
             if      (operand0 instanceof AccessVariable  &&  Math.abs (pow - operand0.exponent) == 1) pow = operand0.exponent;
             else if (operand1 instanceof AccessVariable  &&  Math.abs (pow - operand1.exponent) == 1) pow = operand1.exponent;
 
