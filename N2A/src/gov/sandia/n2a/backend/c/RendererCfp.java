@@ -102,8 +102,9 @@ public class RendererCfp extends RendererC
         // These are ordered to trap specific cases before more general ones.
         if (op instanceof OperatorLogical)
         {
-            // Don't convert boolean to fixed-point except at the outermost expression. 
-            if (op.parent instanceof OperatorLogical) return super.render (op);
+            // Only convert boolean to a fixed-point value if it is being consumed by a numeric expression or a variable.
+            // Return the boolean itself if being consumed by a condition or by another logical operator.
+            if (op.parent == null  ||  op.parent instanceof OperatorLogical) return super.render (op);
 
             result.append ("(");
             escalate (op);

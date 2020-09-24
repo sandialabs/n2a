@@ -77,7 +77,7 @@ import javax.measure.Unit;
 **/
 public class Operator implements Cloneable
 {
-    public Object  parent; // The AST node that contains this one. If null or Variable, then this is the root node.
+    public Object  parent; // The AST node that contains this one. If null, this is the root node of a condition. If a Variable, then this is the root node of an expression to be assigned.
     public Unit<?> unit;   // Stands in for the physical dimensions associated with the output of this operator.
 
     // Fixed-point

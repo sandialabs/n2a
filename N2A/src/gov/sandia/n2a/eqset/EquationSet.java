@@ -3037,6 +3037,7 @@ public class EquationSet implements Comparable<EquationSet>
             for (EquationEntry e : v.equations)
             {
                 if (e.expression != null) e.expression.parent = v;
+                // e.condition.parent should always be null
             }
 
             // Collect all input() calls which use "time" mode.

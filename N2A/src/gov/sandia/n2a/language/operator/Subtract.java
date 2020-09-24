@@ -100,7 +100,7 @@ public class Subtract extends OperatorBinary
     public void determineExponentNext (Variable from)
     {
         int next = exponent;  // The default
-        if (parent == null  ||  parent instanceof Variable)  // top-level operator, about to assign to a variable
+        if (parent == null  ||  parent instanceof Variable)  // Avoid shifting a variable just before assigning back to itself. Also avoid this in the condition, even though there is no assignment.
         {
             if (   operand0 instanceof AccessVariable  &&  ((AccessVariable) operand0).reference.variable == from
                 || operand1 instanceof AccessVariable  &&  ((AccessVariable) operand1).reference.variable == from)
