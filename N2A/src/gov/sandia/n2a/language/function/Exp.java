@@ -40,28 +40,18 @@ public class Exp extends Function
         Operator op = operands[0];
         op.determineExponent (from);
 
-        // let o = power of op.center
-        // let m = o^2 = magnitude of op.center
-        // let p = power of our center (the effective output of this function)
-        // for op >= 0:
-        //     p = floor (log2 (e^m)) = floor (ln (e^m) / ln (2)) = floor (m / ln (2));
-        // for op < 0:
-        //     User must specify magnitude via fp hint, since we don't try to predict sign.
+        // If op is unsigned, we can solve for center as follows:
+        // o = power of op.center
+        // m = o^2 = magnitude of op.center
+        // p = power of our center (the effective output of this function)
+        //   = floor(log2(exp(m))) = floor(ln(exp(m)) / ln(2)) = floor(m / ln(2));
 
+        // Currently, op is always signed. The best we can do is assume output is centered around 1.
         int centerNew   = MSB / 2;
-        int exponentNew = UNKNOWN;
-        if (op.exponent != UNKNOWN)
-        {
-            int o = op.centerPower ();
-            double m = Math.pow (2, o);
-            exponentNew = (int) Math.floor (m / Math.log (2));  // center power of our output
-        }
+        int exponentNew = 0;
         if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
-        if (exponentNew != UNKNOWN)
-        {
-            exponentNew += MSB - centerNew;
-            updateExponent (from, exponentNew, centerNew);
-        }
+        exponentNew += MSB - centerNew;
+        updateExponent (from, exponentNew, centerNew);
     }
 
     public void determineExponentNext (Variable from)

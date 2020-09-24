@@ -210,6 +210,9 @@ public class Operator implements Cloneable
     {
     }
 
+    /**
+        Impose an output exponent on each operand that is optimal for the calculations of this operator.
+    **/
     public void determineExponentNext (Variable from)
     {
     }

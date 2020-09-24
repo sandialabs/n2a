@@ -21,7 +21,7 @@ import tech.units.indriya.AbstractUnit;
 
 public class Power extends OperatorBinary
 {
-    String hint;
+    public String hint;
 
     public static Factory factory ()
     {

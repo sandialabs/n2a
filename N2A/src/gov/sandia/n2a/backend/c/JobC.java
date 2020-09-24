@@ -163,17 +163,21 @@ public class JobC extends Thread
 
             env.submitJob (job, command);
         }
-        catch (AbortRun a)
-        {
-        }
         catch (Exception e)
         {
-            e.printStackTrace (Backend.err.get ());
+            if (! (e instanceof AbortRun)) e.printStackTrace (Backend.err.get ());
+
+            try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), jobDir.resolve ("finished"));}
+            catch (Exception f) {}
         }
 
         // If an exception occurred, the error file will still be open.
         PrintStream ps = Backend.err.get ();
-        if (ps != System.err) ps.close ();
+        if (ps != System.err)
+        {
+            ps.close ();
+            Backend.err.remove ();
+        }
     }
 
     public void rebuildRuntime () throws Exception

@@ -26,6 +26,7 @@ import gov.sandia.n2a.language.UnsupportedFunctionException;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Event;
+import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
@@ -33,6 +34,7 @@ import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
 import gov.sandia.n2a.language.operator.LT;
+import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
@@ -92,6 +94,8 @@ public class EquationSet implements Comparable<EquationSet>
 
     public static final List<String> endpointSpecials = Arrays.asList ("$count", "$k", "$max", "$min", "$project", "$radius");  // $variables that appear after an endpoint identifier
     public static final List<String> phases           = Arrays.asList ("$connect", "$init", "$live");
+
+    public static final double b2d = Math.log (10) / Math.log (2);  // bits per decimal digit
 
     /**
         Connection terminology:
@@ -2931,15 +2935,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (finalPass  ||  ! changed)
             {
                 PrintStream err = Backend.err.get ();
-                if (overflows.size () > 0)  // Variable.exponent changed during the final cycle.
-                {
-                    err.println ("WARNING: Dubious magnitude. Add hint (median=median_absolute_value).");
-                    for (Variable v : overflows)
-                    {
-                        err.println ("  " + v.container.prefix () + "." + v.nameString ());
-                    }
-                }
-                else if (changed)  // Some equation changed, but it did not produce a change to Variable.exponent.
+                if (changed  &&  overflows.isEmpty ())  // Some equation changed, but it did not produce a change to Variable.exponent.
                 {
                     err.println ("WARNING: Fixed-point analysis did not converge.");
                 }
@@ -2953,7 +2949,7 @@ public class EquationSet implements Comparable<EquationSet>
         // List results of analysis to error stream
         PrintStream ps = Backend.err.get ();
         ps.println ("Results of fixed-point analysis. Column 1 is expected median absolute value as a power of 10. Column 2 is binary power of MSB.");
-        dumpMedians (ps);
+        if (dumpMedians (ps, overflows)) throw new AbortRun ();
     }
 
     /**
@@ -3166,24 +3162,85 @@ public class EquationSet implements Comparable<EquationSet>
         for (EquationSet s : parts) s.dumpExponents ();
     }
 
-    public void dumpMedians (PrintStream ps)
+    /**
+        @return true if we should abort the run. false if it is OK to proceed.
+    **/
+    public boolean dumpMedians (PrintStream ps, List<Variable> overflows)
     {
-        double b2d = Math.log (10) / Math.log (2);  // bits per decimal digit
+        boolean result = false;
+
+        class VisitorExponentSanity implements Visitor
+        {
+            boolean sane = true;
+            boolean warningExp = false;
+            boolean warningPow = false;
+
+            public boolean visit (Operator op)
+            {
+                if (op instanceof AccessVariable) return sane;
+
+                String name = op.toString ();
+                if (op instanceof Function) name += "()";
+                else                        name  = "operator" + name;
+
+                if (op.center < 0  ||  op.center > Operator.MSB)
+                {
+                    sane = false;
+                    String flow = op.center < 0 ? "underflow" : "overflow";
+                    ps.println ("\t\t  ERROR: " + name + " produces " + flow + " (center = " + op.center + ")");
+                }
+                else if (Math.abs (op.exponent) > 128)
+                {
+                    ps.println ("\t\t  WARNING: " + name + " produces large exponent (" + op.exponent + ")");
+                }
+                else if (op instanceof Exp)
+                {
+                    Exp e = (Exp) op;
+                    if (! warningExp  &&  (e.operands.length < 2  ||  ! e.operands[1].getString ().contains ("median")))
+                    {
+                        ps.println ("\t\t  WARNING: exp() is very sensitive. If input values vary far from 0, provide a hint for median output value.");
+                        warningExp = true;
+                    }
+                }
+                else if (op instanceof Power)
+                {
+                    Power p = (Power) op;
+                    if (! warningPow  &&  (p.hint == null  ||  ! p.hint.contains ("median")))
+                    {
+                        if (p.hint == null) ps.println ("\t\t  WARNING: operator^ is very sensitive. For best results, use pow() and provide a hint for median output value.");
+                        else                ps.println ("\t\t  WARNING: pow() is very sensitive. For best results, provide a hint for median output value.");
+                        warningPow = true;
+                    }
+                }
+
+                return sane;
+            }
+        };
+        VisitorExponentSanity visitor = new VisitorExponentSanity ();
+
         for (Variable v : variables)
         {
             if (v.hasAttribute ("dummy")) continue;
+
+            if (v.center < 0  ||  v.center > Operator.MSB) result = true;  // Must abort run, because numbers will almost certainly go out of range.
+            // No need to warn about large v.exponent, because the user will be able to view the list.
 
             // Convert center power to an approximate decimal value.
             int centerPower = v.exponent - Operator.MSB + v.center;
             int base10 = (int) Math.floor (centerPower / b2d);
 
-            String fullName = prefix ();
-            if (! fullName.isEmpty ()) fullName += ".";
-            fullName += v.nameString ();
+            ps.println ("  " + base10 + "\t" + v.exponent + "\t" + v.fullName ());
 
-            ps.println ("  " + base10 + "\t" + v.exponent + "\t" + fullName);
+            if (overflows.contains (v)) ps.println ("\t\t  WARNING: Magnitude did not converge. Add hint (median=median_absolute_value).");
+
+            visitor.sane       = true;
+            visitor.warningExp = false;
+            visitor.warningPow = false;
+            v.visit (visitor);
+            if (! visitor.sane) result = true;
         }
-        for (EquationSet s : parts) s.dumpMedians (ps);
+        for (EquationSet s : parts) if (s.dumpMedians (ps, overflows)) result = true;
+        return result;
     }
 
     /**
@@ -3426,12 +3483,15 @@ public class EquationSet implements Comparable<EquationSet>
             // Check if we have a constant
             if (v.hasAttribute ("constant")) continue;  // If this already has a "constant" tag, it was specially added so presumably correct.
             if (v.hasAttribute ("externalWrite")) continue;  // Regardless of the local math, a variable that gets written is not constant.
+            if (v.derivative != null) continue;  // An integrated variable is presumably not constant, since the derivative is unlikely to be constant zero.
             if (v.equations.size () != 1) continue;
             EquationEntry e = v.equations.first ();
-            if (e.condition != null) continue;
+            if (e.condition != null  &&  ! e.ifString.equals ("$init")) continue;  // Must be unconditional. Notice that a constant equation conditioned on $init is effectively unconditional.
             if (e.expression instanceof Constant)
             {
                 v.addAttribute ("constant");
+                e.condition = null;  // in case it was $init
+                e.ifString  = "";
                 changed = true;
             }
         }

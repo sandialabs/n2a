@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -30,6 +31,16 @@ public class Ceil extends Function
                 return new Ceil ();
             }
         };
+    }
+
+    public void determineExponent (Variable from)
+    {
+        Round.determineExponentStatic (this, from);
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        Round.determineExponentNextStatic (from, operands[0], exponentNext);
     }
 
     public Type eval (Instance context)

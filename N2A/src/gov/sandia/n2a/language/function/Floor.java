@@ -1,11 +1,12 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -30,6 +31,16 @@ public class Floor extends Function
                 return new Floor ();
             }
         };
+    }
+
+    public void determineExponent (Variable from)
+    {
+        Round.determineExponentStatic (this, from);
+    }
+
+    public void determineExponentNext (Variable from)
+    {
+        Round.determineExponentNextStatic (from, operands[0], exponentNext);
     }
 
     public Type eval (Instance context)

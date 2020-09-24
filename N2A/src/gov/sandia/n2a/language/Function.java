@@ -122,6 +122,10 @@ public class Function extends Operator
         return this;
     }
 
+    /**
+        Finds the average exponent and center of our inputs, based on the assumption
+        that our output naturally matches our inputs.
+    **/
     public void determineExponent (Variable from)
     {
         int cent  = 0;
@@ -146,12 +150,17 @@ public class Function extends Operator
         }
     }
 
+    /**
+        Passes our required output exponent on to the inputs, and assumes that
+        that we will naturally output the same exponent as our inputs.
+    **/
     public void determineExponentNext (Variable from)
     {
+        exponent = exponentNext;  // Assumes that we simply output the same exponent as our inputs.
         for (int i = 0; i < operands.length; i++)
         {
             Operator op = operands[i];
-            op.exponentNext = exponentNext;
+            op.exponentNext = exponentNext;  // Passes the required exponent down to operands.
             op.determineExponentNext (from);
         }
     }

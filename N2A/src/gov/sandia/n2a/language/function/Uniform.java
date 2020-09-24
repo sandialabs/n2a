@@ -59,6 +59,11 @@ public class Uniform extends Function
         }
     }
 
+    public void determineExponentNext (Variable from)
+    {
+        if (operands.length > 0) super.determineExponentNext (from);
+    }
+
     public Type eval (Instance context) throws EvaluationException
     {
         Random random;

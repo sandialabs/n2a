@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -34,9 +34,41 @@ public class Round extends Function
         };
     }
 
+    public void determineExponent (Variable from)
+    {
+        determineExponentStatic (this, from);
+    }
+
+    /**
+        Shared by round(), ceil() and floor()
+    **/
+    public static void determineExponentStatic (Function f, Variable from)
+    {
+        Operator op = f.operands[0];
+        op.determineExponent (from);
+        if (op.exponent == UNKNOWN) return;
+
+        int centerPower = Math.max (0, op.centerPower ());  // because we always output an integer
+        int pow  = op.exponent;
+        int cent = MSB - (pow - centerPower);  // We trust that op has its center positioned within the range [0,MSB], so (pow - centerPower) <= MSB.
+        if (pow < 0)
+        {
+            pow = 0;
+            cent = MSB;
+        }
+        f.updateExponent (from, pow, cent);
+    }
+
     public void determineExponentNext (Variable from)
     {
-        Operator op = operands[0];
+        determineExponentNextStatic (from, operands[0], exponentNext);
+    }
+
+    /**
+        Shared by round(), ceil() and floor()
+    **/
+    public static void determineExponentNextStatic (Variable from, Operator op, int exponentNext)
+    {
         if (op.exponent < 0)        op.exponentNext = 0;  // Must have at least one bit above the decimal point in order to round.
         else if (op.exponent < MSB) op.exponentNext = op.exponent;  // Decimal point is visible, so we can process this.
         else                        op.exponentNext = exponentNext; // Otherwise, just pass through.
