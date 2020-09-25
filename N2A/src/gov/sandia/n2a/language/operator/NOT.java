@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.operator;
 
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorLogical;
 import gov.sandia.n2a.language.OperatorUnary;
@@ -43,9 +43,9 @@ public class NOT extends OperatorUnary implements OperatorLogical
         return 3;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        operand.determineExponent (from);
+        operand.determineExponent (context);
         if (operand.exponent == UNKNOWN) return;
         if (operand.getType () instanceof Matrix)  // Matrix inverse
         {
@@ -56,20 +56,20 @@ public class NOT extends OperatorUnary implements OperatorLogical
             int cent = MSB / 2;
             int pow = 0 - operand.centerPower ();  // See Divide class. We're treating this as 1/A, where 1 has center power 0.
             pow += MSB - cent;
-            updateExponent (from, pow, cent);
+            updateExponent (context, pow, cent);
         }
         else  // Logical not
         {
             int centerNew   = MSB / 2;
             int exponentNew = MSB - centerNew;
-            updateExponent (from, exponentNew, centerNew);
+            updateExponent (context, exponentNew, centerNew);
         }
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         operand.exponentNext = operand.exponent;
-        operand.determineExponentNext (from);
+        operand.determineExponentNext ();
     }
 
     public void determineUnit (boolean fatal) throws Exception

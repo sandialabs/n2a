@@ -7,7 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.eqset.Equality;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -35,13 +35,13 @@ public class Atan extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         for (int i = 0; i < operands.length; i++)
         {
-            operands[i].determineExponent (from);
+            operands[i].determineExponent (context);
         }
-        updateExponent (from, 1, MSB - 1);  // in [-pi,pi]
+        updateExponent (context, 1, MSB - 1);  // in [-pi,pi]
     }
 
     public void determineUnit (boolean fatal) throws Exception

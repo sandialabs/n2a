@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.Equality;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import tech.units.indriya.AbstractUnit;
@@ -82,18 +83,18 @@ public class OperatorBinary extends Operator implements OperatorArithmetic
         Adjusts a constant operand so it better aligns with the non-constant operand.
         Directly modifies the fixed-point configuration of the constant.
     **/
-    public void alignExponent (Variable from)
+    public void alignExponent (ExponentContext context)
     {
-        if      (operand0.isScalar ()) ((Constant) operand0).determineExponent (from, operand1.exponent);
-        else if (operand1.isScalar ()) ((Constant) operand1).determineExponent (from, operand0.exponent);
+        if      (operand0.isScalar ()) ((Constant) operand0).determineExponent (context, operand1.exponent);
+        else if (operand1.isScalar ()) ((Constant) operand1).determineExponent (context, operand0.exponent);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         operand0.exponentNext = operand0.exponent;
         operand1.exponentNext = operand1.exponent;
-        operand0.determineExponentNext (from);
-        operand1.determineExponentNext (from);
+        operand0.determineExponentNext ();
+        operand1.determineExponentNext ();
     }
 
     public void dumpExponents (String pad)

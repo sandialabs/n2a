@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -34,17 +34,17 @@ public class Sine extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        operands[0].determineExponent (from);
-        updateExponent (from, 1, MSB - 2);  // Largest absolute value is 1, but we allow one extra bit above the decimal for the convenience of the C implementation.
+        operands[0].determineExponent (context);
+        updateExponent (context, 1, MSB - 2);  // Largest absolute value is 1, but we allow one extra bit above the decimal for the convenience of the C implementation.
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         Operator op = operands[0];
         op.exponentNext = op.exponent;
-        op.determineExponentNext (from);
+        op.determineExponentNext ();
     }
 
     public void determineUnit (boolean fatal) throws Exception

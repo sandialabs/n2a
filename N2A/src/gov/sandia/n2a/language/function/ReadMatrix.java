@@ -8,7 +8,7 @@ package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.backend.internal.Holder;
 import gov.sandia.n2a.backend.internal.Simulator;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -50,7 +50,7 @@ public class ReadMatrix extends Function
         return true;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         String mode = "";
         int lastParm = operands.length - 1;
@@ -58,21 +58,21 @@ public class ReadMatrix extends Function
         boolean RC = mode.contains ("rows")  ||  mode.contains ("columns");
 
         lastParm = Math.min (lastParm, 2);
-        for (int i = 1; i <= lastParm; i++) operands[i].determineExponent (from);
+        for (int i = 1; i <= lastParm; i++) operands[i].determineExponent (context);
 
         if (RC)
         {
-            updateExponent (from, MSB, 0);  // Return an integer
+            updateExponent (context, MSB, 0);  // Return an integer
         }
         else
         {
             int centerNew   = MSB / 2;
             int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
-            updateExponent (from, exponentNew, centerNew);
+            updateExponent (context, exponentNew, centerNew);
         }
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         String mode = "";
         int lastParm = operands.length - 1;
@@ -85,7 +85,7 @@ public class ReadMatrix extends Function
             Operator op = operands[i];
             if (raw) op.exponentNext = MSB;  // We expect an integer.
             else     op.exponentNext = 0;    // We expect a number in [0,1], with some provision for going slightly out of bounds.
-            op.determineExponentNext (from);
+            op.determineExponentNext ();
         }
     }
 

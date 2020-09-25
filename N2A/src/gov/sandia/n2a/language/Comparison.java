@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language;
 
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.type.Scalar;
@@ -33,14 +34,14 @@ public class Comparison extends OperatorBinary implements OperatorLogical
         return this;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        operand0.determineExponent (from);
-        operand1.determineExponent (from);
-        if (operand0.exponent != UNKNOWN  ||  operand1.exponent != UNKNOWN) alignExponent (from);
+        operand0.determineExponent (context);
+        operand1.determineExponent (context);
+        if (operand0.exponent != UNKNOWN  ||  operand1.exponent != UNKNOWN) alignExponent (context);
         int centerNew   = MSB / 2;
         int exponentNew = MSB - centerNew;
-        updateExponent (from, exponentNew, centerNew);
+        updateExponent (context, exponentNew, centerNew);
 
         // Any time a variable is compared to a value, it is a clue about the expected range of the variable.
         // The following two blocks apply this heuristic.
@@ -51,7 +52,7 @@ public class Comparison extends OperatorBinary implements OperatorLogical
             if (! v.hasAttribute ("preexistent")  &&  (v.bound == null  ||  v.bound.centerPower () < operand1.centerPower ()))
             {
                 v.bound = operand1;
-                from.changed = true;  // "from" is not necessarily the variable changing, but this is sufficient to signal that some change happened.
+                context.changed = true;  // Signal that some change happened, though not necessarily to current variable (context.from).
             }
         }
 
@@ -61,12 +62,12 @@ public class Comparison extends OperatorBinary implements OperatorLogical
             if (! v.hasAttribute ("preexistent")  &&  (v.bound == null  ||  v.bound.centerPower () < operand0.centerPower ()))
             {
                 v.bound = operand0;
-                from.changed = true;
+                context.changed = true;
             }
         }
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         int next = (operand0.exponent + operand1.exponent) / 2;
         // Call an odd bit in favor of a naked variable rather than the expression on the other side of the comparison.
@@ -75,8 +76,8 @@ public class Comparison extends OperatorBinary implements OperatorLogical
 
         operand0.exponentNext = next;
         operand1.exponentNext = next;
-        operand0.determineExponentNext (from);
-        operand1.determineExponentNext (from);
+        operand0.determineExponentNext ();
+        operand1.determineExponentNext ();
     }
 
     public void determineUnit (boolean fatal) throws Exception

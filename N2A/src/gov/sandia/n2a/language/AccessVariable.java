@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.parse.SimpleNode;
@@ -110,7 +111,7 @@ public class AccessVariable extends Operator
         return this;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         Variable v = reference.variable;
         // Don't flag a change, because we are merely reflecting the current state of v.

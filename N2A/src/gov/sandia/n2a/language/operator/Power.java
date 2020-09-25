@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
@@ -105,10 +106,10 @@ public class Power extends OperatorBinary
         return this;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        operand0.determineExponent (from);
-        operand1.determineExponent (from);
+        operand0.determineExponent (context);
+        operand1.determineExponent (context);
 
         // This operator is b^a, where b is the base and a is the power.
         // let p = base 2 power of our result
@@ -142,16 +143,16 @@ public class Power extends OperatorBinary
         if (exponentNew != UNKNOWN)
         {
             exponentNew += MSB - centerNew;
-            updateExponent (from, exponentNew, centerNew);
+            updateExponent (context, exponentNew, centerNew);
         }
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         operand0.exponentNext = operand0.exponent;
         operand1.exponentNext = MSB / 2;  // Exponentiation is very sensitive, so no benefit in allowing arbitrary size of input.
-        operand0.determineExponentNext (from);
-        operand1.determineExponentNext (from);
+        operand0.determineExponentNext ();
+        operand1.determineExponentNext ();
     }
 
     public void determineUnit (boolean fatal) throws Exception

@@ -7,7 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.eqset.Equality;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -34,18 +34,18 @@ public class Round extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        determineExponentStatic (this, from);
+        determineExponentStatic (this, context);
     }
 
     /**
         Shared by round(), ceil() and floor()
     **/
-    public static void determineExponentStatic (Function f, Variable from)
+    public static void determineExponentStatic (Function f, ExponentContext context)
     {
         Operator op = f.operands[0];
-        op.determineExponent (from);
+        op.determineExponent (context);
         if (op.exponent == UNKNOWN) return;
 
         int centerPower = Math.max (0, op.centerPower ());  // because we always output an integer
@@ -56,23 +56,23 @@ public class Round extends Function
             pow = 0;
             cent = MSB;
         }
-        f.updateExponent (from, pow, cent);
+        f.updateExponent (context, pow, cent);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
-        determineExponentNextStatic (from, operands[0], exponentNext);
+        determineExponentNextStatic (operands[0], exponentNext);
     }
 
     /**
         Shared by round(), ceil() and floor()
     **/
-    public static void determineExponentNextStatic (Variable from, Operator op, int exponentNext)
+    public static void determineExponentNextStatic (Operator op, int exponentNext)
     {
         if (op.exponent < 0)        op.exponentNext = 0;  // Must have at least one bit above the decimal point in order to round.
         else if (op.exponent < MSB) op.exponentNext = op.exponent;  // Decimal point is visible, so we can process this.
         else                        op.exponentNext = exponentNext; // Otherwise, just pass through.
-        op.determineExponentNext (from);
+        op.determineExponentNext ();
     }
 
     public Type eval (Instance context)

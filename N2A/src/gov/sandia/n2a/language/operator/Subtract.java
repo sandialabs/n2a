@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
@@ -68,14 +69,14 @@ public class Subtract extends OperatorBinary
         return this;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        operand0.determineExponent (from);
-        operand1.determineExponent (from);
+        operand0.determineExponent (context);
+        operand1.determineExponent (context);
 
         if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
         {
-            alignExponent (from);
+            alignExponent (context);
 
             int pow = (operand0.exponent + operand1.exponent) / 2;
             // Call an odd bit in favor of a naked variable rather than the expression on the other side of the operator.
@@ -85,33 +86,33 @@ public class Subtract extends OperatorBinary
             int c0 = operand0.center - (pow - operand0.exponent);
             int c1 = operand1.center - (pow - operand1.exponent);
             int cent = Math.max (c0, c1);
-            updateExponent (from, pow, cent);
+            updateExponent (context, pow, cent);
         }
         else if (operand0.exponent != UNKNOWN)
         {
-            updateExponent (from, operand0.exponent, operand0.center);
+            updateExponent (context, operand0.exponent, operand0.center);
         }
         else if (operand1.exponent != UNKNOWN)
         {
-            updateExponent (from, operand1.exponent, operand1.center);
+            updateExponent (context, operand1.exponent, operand1.center);
         }
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         int next = exponent;  // The default
-        if (parent == null  ||  parent instanceof Variable)  // Avoid shifting a variable just before assigning back to itself. Also avoid this in the condition, even though there is no assignment.
+        if (parent instanceof Variable)  // Avoid shifting a variable just before assigning back to itself. Also avoid this in the condition, even though there is no assignment.
         {
-            if (   operand0 instanceof AccessVariable  &&  ((AccessVariable) operand0).reference.variable == from
-                || operand1 instanceof AccessVariable  &&  ((AccessVariable) operand1).reference.variable == from)
+            if (   operand0 instanceof AccessVariable  &&  ((AccessVariable) operand0).reference.variable == parent
+                || operand1 instanceof AccessVariable  &&  ((AccessVariable) operand1).reference.variable == parent)
             {
-                next = from.exponent;
+                next = ((Variable) parent).exponent;
             }
         }
         operand0.exponentNext = next;
         operand1.exponentNext = next;
-        operand0.determineExponentNext (from);
-        operand1.determineExponentNext (from);
+        operand0.determineExponentNext ();
+        operand1.determineExponentNext ();
     }
 
     public void render (Renderer renderer)

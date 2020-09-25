@@ -7,7 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.eqset.Equality;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -35,10 +35,10 @@ public class Exp extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         Operator op = operands[0];
-        op.determineExponent (from);
+        op.determineExponent (context);
 
         // If op is unsigned, we can solve for center as follows:
         // o = power of op.center
@@ -51,10 +51,10 @@ public class Exp extends Function
         int exponentNew = 0;
         if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
         exponentNew += MSB - centerNew;
-        updateExponent (from, exponentNew, centerNew);
+        updateExponent (context, exponentNew, centerNew);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         Operator op = operands[0];
         // exp(n) rapidly explodes, so no benefit in allowing arbitrary magnitude. Instead, use those bits for precision.
@@ -62,7 +62,7 @@ public class Exp extends Function
         // The largest number representable in float is 2^127, so allocating 8 bits above the decimal
         // should be more than enough.
         op.exponentNext = 7;
-        op.determineExponentNext (from);
+        op.determineExponentNext ();
     }
 
     public void determineUnit (boolean fatal) throws Exception

@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language;
 
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
 
@@ -68,16 +69,16 @@ public class OperatorUnary extends Operator implements OperatorArithmetic
         return this;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        operand.determineExponent (from);
-        updateExponent (from, operand.exponent, operand.center);
+        operand.determineExponent (context);
+        updateExponent (context, operand.exponent, operand.center);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         operand.exponentNext = exponentNext;
-        operand.determineExponentNext (from);
+        operand.determineExponentNext ();
     }
 
     public void dumpExponents (String pad)

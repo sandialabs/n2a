@@ -2922,20 +2922,19 @@ public class EquationSet implements Comparable<EquationSet>
         determineExponentsInit (context);
         int limit = context.depth * 2 + 2;  // One cycle for each variable to get initial exponent, and another cycle for each var to influence itself, plus a couple more for good measure. 
 
-        boolean all = false;
-        List<Variable> overflows = new ArrayList<Variable> ();
         while (true)
         {
             System.out.println ("-----------------------------------------------------------------");
-            System.out.println ("top of loop " + all + " " + limit);
-            int exponentTime = context.updateTime ();
-            boolean changed = context.updateInputs ();
-            boolean finalPass = limit-- == 0;
-            if (determineExponentsEval (exponentTime, finalPass, overflows)) changed = true;
-            if (finalPass  ||  ! changed)
+            System.out.println ("top of loop " + limit);
+            context.changed = false;
+            context.updateTime ();
+            context.updateInputs ();
+            context.finalPass =  limit-- == 0;
+            determineExponentsEval (context);
+            if (context.finalPass  ||  ! context.changed)
             {
                 PrintStream err = Backend.err.get ();
-                if (changed  &&  overflows.isEmpty ())  // Some equation changed, but it did not produce a change to Variable.exponent.
+                if (context.changed  &&  context.overflows.isEmpty ())  // Some equation changed, but it did not produce a change to Variable.exponent.
                 {
                     err.println ("WARNING: Fixed-point analysis did not converge.");
                 }
@@ -2949,7 +2948,7 @@ public class EquationSet implements Comparable<EquationSet>
         // List results of analysis to error stream
         PrintStream ps = Backend.err.get ();
         ps.println ("Results of fixed-point analysis. Column 1 is expected median absolute value as a power of 10. Column 2 is binary power of MSB.");
-        if (dumpMedians (ps, overflows)) throw new AbortRun ();
+        if (dumpMedians (ps, context)) throw new AbortRun ();
     }
 
     /**
@@ -2957,22 +2956,34 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public static class ExponentContext
     {
-        public int depth;  // Largest number of equations in any equation set. It's unlikely that any dependency cycle will exceed this.
-        public int exponentTime;  // of overall simulation
-        public List<Variable> dt = new ArrayList<Variable> ();  // All distinct occurrences of $t' in the model (zero or one per equation set)
-        public HashMap<Object,ArrayList<Input>> inputs = new HashMap<Object,ArrayList<Input>> ();  // Inputs that have "time" flag must agree on exponentTime.
+        public int            depth;         // Largest number of equations in any equation set. It's unlikely that any dependency cycle will exceed this.
+        public int            exponentTime;  // of overall simulation. Computed from available information such as $t' and exponentTimeExplicit.
+        public List<Variable> overflows = new ArrayList<Variable> ();
+        public Variable       from;          // Current variable under evaluation.
+        public boolean        finalPass;
+        public boolean        changed;       // Some operator changed somewhere in the model during the current pass.
+
+        // Info used to determine exponentTime
+        protected boolean                          haveDuration;
+        protected List<Variable>                   dt     = new ArrayList<Variable> ();              // All distinct occurrences of $t' in the model (zero or one per equation set)
+        protected HashMap<Object,ArrayList<Input>> inputs = new HashMap<Object,ArrayList<Input>> (); // Inputs that have "time" flag must agree on exponentTime.
 
         public ExponentContext (EquationSet root)
         {
             double duration = root.metadata.getOrDefault (0.0, "duration");
-            if (duration == 0) exponentTime = Operator.UNKNOWN;
-            else               exponentTime = (int) Math.floor (Math.log (duration) / Math.log (2));
+            haveDuration =  duration != 0;
+            if (haveDuration) exponentTime = (int) Math.floor (Math.log (duration) / Math.log (2));
+            else              exponentTime = Operator.UNKNOWN;
         }
 
-        public int updateTime ()
+        public ExponentContext (int exponentTime)
         {
-            // If duration was specified, simply return it.
-            if (exponentTime != Operator.UNKNOWN) return exponentTime;
+            this.exponentTime = exponentTime;
+        }
+
+        public void updateTime ()
+        {
+            if (haveDuration) return;  // Don't override exponent based on duration. It is the most accurate.
 
             int min = Integer.MAX_VALUE;
             for (Variable v : dt)
@@ -2985,9 +2996,8 @@ public class EquationSet implements Comparable<EquationSet>
                     }
                 }
             }
-            if (min == Integer.MAX_VALUE) return 0;  // If no value of $t' has been set yet, estimate duration as 1s, and $t has exponent=0.
-
-            return min + 20;  // +20 allows one million minimally-sized timesteps, each with 10 bit resolution
+            if (min == Integer.MAX_VALUE) exponentTime = 0;        // If no value of $t' has been set yet, estimate duration as 1s, and $t has exponent=0.
+            else                          exponentTime = min + 20; // +20 allows one million minimally-sized timesteps, each with 10 bit resolution
         }
 
         public boolean updateInputs ()
@@ -3085,34 +3095,26 @@ public class EquationSet implements Comparable<EquationSet>
         for (EquationSet s : parts) s.determineExponentsInit (context);
     }
 
-    public boolean determineExponentsEval (int exponentTime, boolean finalPass, List<Variable> overflows)
+    public void determineExponentsEval (ExponentContext context)
     {
-        boolean changed = false;
         for (int i = ordered.size () - 1; i >= 0; i--)  // Process variables in reverse of dependency order, to maximize propagation of information in each pass.
         {
             Variable v = ordered.get (i);
             int centerLast   = v.center;
             int exponentLast = v.exponent;
-            if (v.determineExponent (exponentTime))
+            v.determineExponent (context);
+            if (v.changed)
             {
-                changed = true;
-                System.out.println ("  " + v.container.prefix () + "." + v.nameString ());
-                if (finalPass)
+                context.changed = true;
+                if (context.finalPass)
                 {
-                    v.center = centerLast;
-                    if (v.exponent != exponentLast)
-                    {
-                        v.exponent = exponentLast;
-                        if (! overflows.contains (v)) overflows.add (v);
-                    }
+                    if (v.exponent != exponentLast  &&  ! context.overflows.contains (v)) context.overflows.add (v);
+                    v.center   = centerLast;
+                    v.exponent = exponentLast;
                 }
             }
         }
-        for (EquationSet s : parts)
-        {
-            if (s.determineExponentsEval (exponentTime, finalPass, overflows)) changed = true;
-        }
-        return changed;
+        for (EquationSet s : parts) s.determineExponentsEval (context);
     }
 
     public void determineExponentNext ()
@@ -3138,15 +3140,16 @@ public class EquationSet implements Comparable<EquationSet>
                 break;
             }
         }
+        ExponentContext context = new ExponentContext (exponentTime);  // Could be UNKNOWN, but if so it won't hurt anything, because it is only needed for $t.
 
         // Update any newly-created operators.
         for (Variable v : list)
         {
             int centerLast   = v.center;
             int exponentLast = v.exponent;
-            if (v.determineExponent (exponentTime))  // Returns true if variable changed exponent or center.
+            v.determineExponent (context);
+            if (v.changed)  // Force exponent and center to remain the same.
             {
-                // Force exponent and center to remain the same.
                 v.center   = centerLast;
                 v.exponent = exponentLast;
             }
@@ -3166,7 +3169,7 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         @return true if we should abort the run. false if it is OK to proceed.
     **/
-    public boolean dumpMedians (PrintStream ps, List<Variable> overflows)
+    public boolean dumpMedians (PrintStream ps, ExponentContext context)
     {
         boolean result = false;
 
@@ -3232,7 +3235,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             ps.println ("  " + base10 + "\t" + v.exponent + "\t" + v.fullName ());
 
-            if (overflows.contains (v)) ps.println ("\t\t  WARNING: Magnitude did not converge. Add hint (median=median_absolute_value).");
+            if (context.overflows.contains (v)) ps.println ("\t\t  WARNING: Magnitude did not converge. Add hint (median=median_absolute_value).");
 
             visitor.sane       = true;
             visitor.warningExp = false;
@@ -3240,7 +3243,7 @@ public class EquationSet implements Comparable<EquationSet>
             v.visit (visitor);
             if (! visitor.sane) result = true;
         }
-        for (EquationSet s : parts) if (s.dumpMedians (ps, overflows)) result = true;
+        for (EquationSet s : parts) if (s.dumpMedians (ps, context)) result = true;
         return result;
     }
 

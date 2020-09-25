@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language;
 
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
@@ -126,7 +127,7 @@ public class Function extends Operator
         Finds the average exponent and center of our inputs, based on the assumption
         that our output naturally matches our inputs.
     **/
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         int cent  = 0;
         int pow   = 0;
@@ -134,7 +135,7 @@ public class Function extends Operator
         for (int i = 0; i < operands.length; i++)
         {
             Operator op = operands[i];
-            op.determineExponent (from);
+            op.determineExponent (context);
             if (op.exponent != UNKNOWN)
             {
                 cent += op.center;
@@ -146,7 +147,7 @@ public class Function extends Operator
         {
             cent /= count;
             pow  /= count;
-            updateExponent (from, pow, cent);
+            updateExponent (context, pow, cent);
         }
     }
 
@@ -154,14 +155,14 @@ public class Function extends Operator
         Passes our required output exponent on to the inputs, and assumes that
         that we will naturally output the same exponent as our inputs.
     **/
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         exponent = exponentNext;  // Assumes that we simply output the same exponent as our inputs.
         for (int i = 0; i < operands.length; i++)
         {
             Operator op = operands[i];
             op.exponentNext = exponentNext;  // Passes the required exponent down to operands.
-            op.determineExponentNext (from);
+            op.determineExponentNext ();
         }
     }
 

@@ -9,7 +9,7 @@ package gov.sandia.n2a.language.function;
 import java.util.Random;
 
 import gov.sandia.n2a.backend.internal.Simulator;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -42,13 +42,13 @@ public class Gaussian extends Function
         return false;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         if (operands.length > 0)
         {
             Operator op = operands[0];
-            op.determineExponent (from);
-            if (op.exponent != UNKNOWN) updateExponent (from, op.exponent, op.center);
+            op.determineExponent (context);
+            if (op.exponent != UNKNOWN) updateExponent (context, op.exponent, op.center);
         }
         else
         {
@@ -57,13 +57,13 @@ public class Gaussian extends Function
             // exceed 6.66 standard deviations when using 32-bit uniform numbers. Thus, 7 std is safe.
             // log2(7)~=2.81, so magnitude of msb is 2
             // Since about 68% of all results are less than 1 sigma, center can point to bit holding 2^-1.
-            updateExponent (from, 2, MSB - 3);
+            updateExponent (context, 2, MSB - 3);
         }
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
-        if (operands.length > 0) super.determineExponentNext (from);
+        if (operands.length > 0) super.determineExponentNext ();
     }
 
     public Type eval (Instance context) throws EvaluationException

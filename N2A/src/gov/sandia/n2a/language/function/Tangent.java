@@ -7,7 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.eqset.Equality;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -35,23 +35,23 @@ public class Tangent extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         Operator op = operands[0];
-        op.determineExponent (from);
+        op.determineExponent (context);
 
         int centerNew   = MSB / 2;
         int exponentNew = 0;
         if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
         exponentNew += MSB - centerNew;
-        updateExponent (from, exponentNew, centerNew);
+        updateExponent (context, exponentNew, centerNew);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         Operator op = operands[0];
         op.exponentNext = op.exponent;
-        op.determineExponentNext (from);
+        op.determineExponentNext ();
     }
 
     public void determineUnit (boolean fatal) throws Exception

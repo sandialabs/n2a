@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language;
 
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.SimpleNode;
@@ -215,7 +216,7 @@ public class BuildMatrix extends Operator
         return this;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         int cent  = 0;
         int pow   = 0;
@@ -224,7 +225,7 @@ public class BuildMatrix extends Operator
         {
             for (Operator e : c)
             {
-                e.determineExponent (from);
+                e.determineExponent (context);
                 if (! (e instanceof Constant)  ||  e.getDouble () != 0)  // avoid counting zeros
                 {
                     cent += e.center;
@@ -243,17 +244,17 @@ public class BuildMatrix extends Operator
             cent = MSB / 2;
             pow  = MSB - cent;
         }
-        updateExponent (from, pow, cent);
+        updateExponent (context, pow, cent);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         for (Operator[] c : operands)
         {
             for (Operator e : c)
             {
                 e.exponentNext = exponentNext;
-                e.determineExponentNext (from);
+                e.determineExponentNext ();
             }
         }
     }

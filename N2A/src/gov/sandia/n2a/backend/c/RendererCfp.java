@@ -348,7 +348,8 @@ public class RendererCfp extends RendererC
         }
         if (op instanceof Event)
         {
-            if (op.parent instanceof OperatorLogical) return super.render (op);
+            // See comment on OperatorLogical above. Since event() returns a boolean, we follow the same behavior here.
+            if (op.parent == null  ||  op.parent instanceof OperatorLogical) return super.render (op);
 
             Event e = (Event) op;
             int exponentRaw = Operator.MSB - e.eventType.valueIndex;

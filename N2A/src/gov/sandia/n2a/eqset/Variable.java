@@ -9,6 +9,7 @@ package gov.sandia.n2a.eqset;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
@@ -813,16 +814,17 @@ public class Variable implements Comparable<Variable>, Cloneable
         return null;
     }
 
-    public boolean determineExponent (int exponentTime)
+    public void determineExponent (ExponentContext context)
     {
+        context.from = this;
+        changed = false;
         int centerNew   = center;
         int exponentNew = exponent;
-        changed = false;
 
         if (name.equals ("$t")  &&  order == 0)
         {
             centerNew   = Operator.MSB - 1;  // Half the time, the msb won't be set. The other half, it will.
-            exponentNew = exponentTime;
+            exponentNew = context.exponentTime;
         }
         else if (name.equals ("$index"))  // The only variable that is stored as a pure integer.
         {
@@ -854,7 +856,7 @@ public class Variable implements Comparable<Variable>, Cloneable
             {
                 if (e.expression != null)
                 {
-                    e.expression.determineExponent (this);
+                    e.expression.determineExponent (context);
                     if (e.expression.exponent != Operator.UNKNOWN)  // Only count equations that have known values of exponent and center.
                     {
                         cent += e.expression.center;
@@ -864,7 +866,7 @@ public class Variable implements Comparable<Variable>, Cloneable
                 }
                 if (e.condition != null)
                 {
-                    e.condition.determineExponent (this);
+                    e.condition.determineExponent (context);
                     // Condition does not directly affect value stored in variable.
                 }
             }
@@ -958,14 +960,14 @@ public class Variable implements Comparable<Variable>, Cloneable
                 }
                 else
                 {
-                    centerNew -= exponentTime - exponentNew;
+                    centerNew -= context.exponentTime - exponentNew;
                     if (centerNew < 0  ||  centerNew > Operator.MSB)
                     {
                         Backend.err.get ().println ("ERROR: not enough fixed-point resolution for given $t'");
                         throw new Backend.AbortRun ();
                     }
                 }
-                exponentNew = exponentTime;
+                exponentNew = context.exponentTime;
             }
         }
 
@@ -974,7 +976,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         if (metadata != null) magnitude = metadata.get ("median");
         if (! magnitude.isEmpty ())
         {
-            if (exponent != Operator.UNKNOWN) return changed;  // Already processed the hint.
+            if (exponent != Operator.UNKNOWN) return;  // Already processed the hint.
             try
             {
                 double value = Operator.parse (magnitude).getDouble ();
@@ -989,7 +991,6 @@ public class Variable implements Comparable<Variable>, Cloneable
         if (exponentNew != exponent  ||  centerNew != center) changed = true;
         exponent = exponentNew;
         center   = centerNew;
-        return changed;
     }
 
     public void determineExponentNext ()
@@ -1007,12 +1008,12 @@ public class Variable implements Comparable<Variable>, Cloneable
             {
                 if (multiplicative) e.expression.exponentNext = e.expression.exponent;
                 else                e.expression.exponentNext = exponentTarget;
-                e.expression.determineExponentNext (this);
+                e.expression.determineExponentNext ();
             }
             if (e.condition != null)
             {
                 e.condition.exponentNext = e.condition.exponent;
-                e.condition.determineExponentNext (this);
+                e.condition.determineExponentNext ();
             }
         }
     }

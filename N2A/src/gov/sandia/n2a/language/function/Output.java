@@ -18,6 +18,7 @@ import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
@@ -72,20 +73,20 @@ public class Output extends Function
     /**
         Depends on determineVariableName() to ensure that file name is in operands[0].
     **/
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         Operator op = operands[1];
-        op.determineExponent (from);
-        if (operands.length > 2) operands[2].determineExponent (from);  // In case column index is computed.
-        updateExponent (from, op.exponent, op.center);
+        op.determineExponent (context);
+        if (operands.length > 2) operands[2].determineExponent (context);  // In case column index is computed.
+        updateExponent (context, op.exponent, op.center);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         // Value
         Operator op = operands[1];
         op.exponentNext = exponentNext;
-        op.determineExponentNext (from);
+        op.determineExponentNext ();
 
         // Column identifier (name or index)
         if (operands.length >= 3)
@@ -99,7 +100,7 @@ public class Output extends Function
             {
                 op.exponentNext = op.exponent;  // name; can be a string or a float
             }
-            op.determineExponentNext (from);
+            op.determineExponentNext ();
         }
     }
 

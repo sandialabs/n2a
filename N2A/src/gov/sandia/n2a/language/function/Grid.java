@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -36,28 +36,28 @@ public class Grid extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         for (int i = 0; i < operands.length; i++)  // This works, even if last operand is a string.
         {
-            operands[i].determineExponent (from);
+            operands[i].determineExponent (context);
         }
 
         boolean raw = false;
         int last = operands.length - 1;
         if (last > 0) raw = operands[last].getString ().contains ("raw");
 
-        if (raw) updateExponent (from, MSB, 0);       // integer
-        else     updateExponent (from, -1,  MSB - 1); // Since output never quite reaches 1, all bits can be fractional.
+        if (raw) updateExponent (context, MSB, 0);       // integer
+        else     updateExponent (context, -1,  MSB - 1); // Since output never quite reaches 1, all bits can be fractional.
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         for (int i = 0; i < operands.length; i++)
         {
             Operator op = operands[i];
             op.exponentNext = MSB;  // grid() requires integers
-            op.determineExponentNext (from);
+            op.determineExponentNext ();
         }
     }
 

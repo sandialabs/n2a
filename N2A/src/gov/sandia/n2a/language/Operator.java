@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.Equality;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.function.AbsoluteValue;
 import gov.sandia.n2a.language.function.Atan;
@@ -206,14 +207,14 @@ public class Operator implements Cloneable
         return this;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
     }
 
     /**
         Impose an output exponent on each operand that is optimal for the calculations of this operator.
     **/
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
     }
 
@@ -229,9 +230,9 @@ public class Operator implements Cloneable
     /**
         Utility routine for determineExponent(Variable).
     **/
-    public void updateExponent (Variable from, int exponentNew, int centerNew)
+    public void updateExponent (ExponentContext context, int exponentNew, int centerNew)
     {
-        if (exponentNew != exponent  ||  centerNew != center) from.changed = true;
+        if (exponentNew != exponent  ||  centerNew != center) context.from.changed = true;
         exponent = exponentNew;
         center   = centerNew;
     }

@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.EquationEntry;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
@@ -105,29 +106,29 @@ public class AccessElement extends Function
         return this;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         Operator v = operands[0];
-        v.determineExponent (from);
-        updateExponent (from, v.exponent, v.center);
+        v.determineExponent (context);
+        updateExponent (context, v.exponent, v.center);
 
         for (int i = 1; i < operands.length; i++)
         {
-            operands[i].determineExponent (from);
+            operands[i].determineExponent (context);
         }
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         Operator v = operands[0];
         v.exponentNext = exponentNext;
-        v.determineExponentNext (from);
+        v.determineExponentNext ();
 
         for (int i = 1; i < operands.length; i++)
         {
             Operator op = operands[i];
             op.exponentNext = MSB;  // forces pure integer
-            op.determineExponentNext (from);
+            op.determineExponentNext ();
         }
     }
 

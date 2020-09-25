@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -33,14 +33,14 @@ public class Floor extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        Round.determineExponentStatic (this, from);
+        Round.determineExponentStatic (this, context);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
-        Round.determineExponentNextStatic (from, operands[0], exponentNext);
+        Round.determineExponentNextStatic (operands[0], exponentNext);
     }
 
     public Type eval (Instance context)

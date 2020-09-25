@@ -18,7 +18,7 @@ import java.nio.file.Path;
 import javax.imageio.ImageIO;
 
 import gov.sandia.n2a.backend.internal.Simulator;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -40,18 +40,18 @@ public class Draw extends Function
         return false;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        updateExponent (from, MSB, 0);
+        updateExponent (context, MSB, 0);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         for (int i = 0; i < operands.length; i++)
         {
             Operator op = operands[i];
             op.exponentNext = op.exponent;
-            op.determineExponentNext (from);
+            op.determineExponentNext ();
         }
     }
 

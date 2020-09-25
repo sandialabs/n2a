@@ -8,7 +8,7 @@ package gov.sandia.n2a.language;
 
 import javax.measure.Unit;
 
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
@@ -67,7 +67,7 @@ public class Constant extends Operator
         This can happen, for example, if a constant is calculated from other values during
         EquationSet.findConstants(). May also need to address this in BuildMatrix.
     **/
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         if (exponent != UNKNOWN) return;  // already done
         if (value instanceof Scalar)
@@ -83,7 +83,7 @@ public class Constant extends Operator
             int e = 0;
             if (v != 0) e = Math.getExponent (v);
             int exponentNew = e + MSB - centerNew;
-            updateExponent (from, exponentNew, centerNew);
+            updateExponent (context, exponentNew, centerNew);
         }
         // Matrix constants are built by BuildMatrix with their exponent and center values set correctly.
         // Text and reference types are simply ignored (and should have exponent=UNKNOWN).
@@ -92,7 +92,7 @@ public class Constant extends Operator
     /**
         Adjusts this constant so it better aligns with another operand.
     **/
-    public void determineExponent (Variable from, int exponentOther)
+    public void determineExponent (ExponentContext context, int exponentOther)
     {
         int shift = exponent - exponentOther;
         if (shift == 0) return;
@@ -113,7 +113,7 @@ public class Constant extends Operator
         }
         int exponentNew = exponent - shift;
         int centerNew   = center   + shift;
-        updateExponent (from, exponentNew, centerNew);
+        updateExponent (context, exponentNew, centerNew);
     }
 
     public int trailingZeros ()

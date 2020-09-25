@@ -9,7 +9,7 @@ package gov.sandia.n2a.language;
 import java.util.ArrayList;
 
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.parse.ASTIdentifier;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
@@ -37,9 +37,9 @@ public class Split extends Operator
         }
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        updateExponent (from, MSB, 0);  // integer
+        updateExponent (context, MSB, 0);  // integer
     }
 
     public void determineUnit (boolean fatal) throws Exception

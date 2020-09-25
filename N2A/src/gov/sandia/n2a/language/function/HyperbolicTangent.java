@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -33,17 +33,17 @@ public class HyperbolicTangent extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        operands[0].determineExponent (from);
-        updateExponent (from, 0, MSB - 1);  // result is always in [-1,1]. TODO: select center more carefully, based on center of operand
+        operands[0].determineExponent (context);
+        updateExponent (context, 0, MSB - 1);  // result is always in [-1,1]. TODO: select center more carefully, based on center of operand
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         Operator op = operands[0];
         op.exponentNext = op.exponent;
-        op.determineExponentNext (from);
+        op.determineExponentNext ();
     }
 
     // Use Function.determineUnit()

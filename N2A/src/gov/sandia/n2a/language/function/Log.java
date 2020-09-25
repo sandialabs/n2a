@@ -7,7 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.eqset.Equality;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -35,10 +35,10 @@ public class Log extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         Operator op = operands[0];
-        op.determineExponent (from);
+        op.determineExponent (context);
 
         // let o = power of center of operand
         // let p = power of center of result
@@ -51,14 +51,14 @@ public class Log extends Function
         if (o != 0) p = (int) (Math.signum (o) * Math.round (Math.log (Math.abs (o)) / Math.log (2)));
         int centerNew   = MSB / 2;
         int exponentNew = p + MSB - centerNew;
-        updateExponent (from, exponentNew, centerNew);
+        updateExponent (context, exponentNew, centerNew);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         Operator op = operands[0];
         op.exponentNext = op.exponent;
-        op.determineExponentNext (from);
+        op.determineExponentNext ();
     }
 
     public void determineUnit (boolean fatal) throws Exception

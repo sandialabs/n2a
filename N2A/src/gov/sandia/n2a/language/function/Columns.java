@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -32,12 +32,12 @@ public class Columns extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        updateExponent (from, MSB, 0);  // small integer
+        updateExponent (context, MSB, 0);  // small integer
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         // No action. The operand is never evaluated.
     }

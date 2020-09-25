@@ -12,7 +12,7 @@ import java.util.TreeMap;
 
 import gov.sandia.n2a.backend.internal.InstanceTemporaries;
 import gov.sandia.n2a.backend.internal.Simulator;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -44,11 +44,38 @@ public class Delay extends Function
         return false;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        Operator op = operands[0];
-        op.determineExponent (from);
-        updateExponent (from, op.exponent, op.center);
+        for (int i = 0; i < operands.length; i++) operands[i].determineExponent (context);
+
+        Operator value = operands[0];  // value to delay
+        updateExponent (context, value.exponent, value.center);
+
+        // Need to record the exponent for time, since we avoid passing context to determineExponentNext().
+        operands[1].exponentNext = context.exponentTime;
+
+        // Assume that defaultValue is representable in the same range as value,
+        // so don't bother incorporating it into the estimate of our output exponent.
+    }
+
+    public void determineExponentNext ()
+    {
+        exponent = exponentNext;  // Assumes that we simply output the same exponent as our inputs.
+
+        Operator value = operands[0];
+        value.exponentNext = exponentNext;  // Passes the required exponent down to operands.
+        value.determineExponentNext ();
+
+        Operator delta = operands[1];
+        // delta.exponentNext already set in determineExponent()
+        delta.determineExponentNext ();
+
+        if (operands.length > 2)
+        {
+            Operator defaultValue = operands[2];
+            defaultValue.exponentNext = exponentNext;
+            defaultValue.determineExponentNext ();
+        }
     }
 
     public void determineUnit (boolean fatal) throws Exception

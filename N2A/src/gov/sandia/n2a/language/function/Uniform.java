@@ -9,7 +9,7 @@ package gov.sandia.n2a.language.function;
 import java.util.Random;
 
 import gov.sandia.n2a.backend.internal.Simulator;
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -42,26 +42,26 @@ public class Uniform extends Function
         return false;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         if (operands.length > 0)
         {
             Operator op = operands[0];
-            op.determineExponent (from);
+            op.determineExponent (context);
             if (op.exponent != UNKNOWN)
             {
-                updateExponent (from, op.exponent, op.center);
+                updateExponent (context, op.exponent, op.center);
             }
         }
         else
         {
-            updateExponent (from, -1, MSB);  // Current implementation never quite reaches 1, only [0,1).
+            updateExponent (context, -1, MSB);  // Current implementation never quite reaches 1, only [0,1).
         }
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
-        if (operands.length > 0) super.determineExponentNext (from);
+        if (operands.length > 0) super.determineExponentNext ();
     }
 
     public Type eval (Instance context) throws EvaluationException

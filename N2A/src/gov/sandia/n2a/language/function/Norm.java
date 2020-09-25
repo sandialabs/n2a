@@ -1,12 +1,12 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
@@ -35,15 +35,15 @@ public class Norm extends Function
         };
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
         Operator op0 = operands[0];  // A
-        op0.determineExponent (from);
+        op0.determineExponent (context);
         Operator op1 = null;  // n
         if (operands.length > 1)
         {
             op1 = operands[1];
-            op1.determineExponent (from);
+            op1.determineExponent (context);
         }
 
         Instance instance = new Instance ()
@@ -83,19 +83,19 @@ public class Norm extends Function
             // It would be nice to have some way to interpolate between the 3 bounding cases.
         }
 
-        updateExponent (from, exponentNew, centerNew);
+        updateExponent (context, exponentNew, centerNew);
     }
 
-    public void determineExponentNext (Variable from)
+    public void determineExponentNext ()
     {
         Operator op0 = operands[0];  // A
         op0.exponentNext = op0.exponent;
-        op0.determineExponentNext (from);
+        op0.determineExponentNext ();
         if (operands.length > 1)
         {
             Operator op1 = operands[1];  // n
             op1.exponentNext = Operator.MSB / 2;
-            op1.determineExponentNext (from);
+            op1.determineExponentNext ();
         }
     }
 

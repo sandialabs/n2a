@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.operator;
 
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
@@ -57,17 +58,17 @@ public class Divide extends OperatorBinary
         return this;
     }
 
-    public void determineExponent (Variable from)
+    public void determineExponent (ExponentContext context)
     {
-        operand0.determineExponent (from);
-        operand1.determineExponent (from);
+        operand0.determineExponent (context);
+        operand1.determineExponent (context);
 
         if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
         {
             int cent = MSB / 2;
             int pow = operand0.centerPower () - operand1.centerPower ();
             pow += MSB - cent;
-            updateExponent (from, pow, cent);
+            updateExponent (context, pow, cent);
         }
         // else don't to propagate a bad guess. Instead, hope that better information arrives in next cycle.
     }
