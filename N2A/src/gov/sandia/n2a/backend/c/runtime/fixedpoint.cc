@@ -25,6 +25,96 @@ multiplyCeil (int a, int b, int shift)
     return temp;
 }
 
+// exponentResult = 1, to accommodate [-pi, pi]
+// exponentY == exponentX, but it doesn't matter what the exponent is; only ratio matters
+int
+atan2 (int y, int x)
+{
+    // Using CORDIC algorithm. See https://www.mathworks.com/help/fixedpoint/ug/calculate-fixed-point-arctangent.html
+
+    // Look-up table for values of atan(2^-i), i=0,1,2,...
+    // Converted to fixed-point with exponent=1 (same as result of this function).
+    // Limited to 12 terms, as a compromise between accuracy and time+space cost.
+    // The Mathworks article discusses these tradeoffs.
+    static const int lut[] = {421657428, 248918914, 131521918, 66762579, 33510843, 16771757, 8387925, 4194218, 2097141, 1048574, 524287, 262143}; //, 131071, 65535, 32767, 16383, 8191, 4095, 2047, 1023, 511, 255, 127, 63, 31, 15, 7, 4, 2, 1};
+    const int count = sizeof (lut) / sizeof (int);  // number of entries in lut
+
+    // Trap corner cases
+    if (x == 0)
+    {
+        if (y == 0) return 0;
+        if (y <  0) return -FP_PI / 2;
+        return              FP_PI / 2;
+    }
+    else if (y == 0)
+    {
+        if (x < 0) return FP_PI;
+        return 0;
+    }
+
+    // Move problem into first quadrant.
+    // While this isn't necessary for CORDIC itself, it ensures that x and y don't overflow due to rotation.
+    int result  = 0;
+    bool negate = false;
+    if (x < 0)
+    {
+        x *= -1;
+        if (y < 0)
+        {
+            y *= -1;
+            result = -FP_PI;
+        }
+        else  // y > 0
+        {
+            result = -FP_PI;
+            negate = true;
+        }
+    }
+    else if (y < 0)  // x > 0
+    {
+        y *= -1;
+        negate = true;
+    }
+
+    if (x >> 4 >= y)  // Use small-angle formula.
+    {
+        result += (int) (((int64_t) y << FP_MSB - 1) / x);
+    }
+    else  // Use CORDIC
+    {
+        if (x + y < 0)  // Detect potential overflow in first iteration.
+        {
+            // To prevent overflow, reduce accuracy a bit (literally).
+            x >>= 1;
+            y >>= 1;
+        }
+        int shiftX = x;
+        int shiftY = y;
+        for (int i = 0; i < count;)
+        {
+            if (y < 0)
+            {
+                x -= shiftY;
+                y += shiftX;
+                result -= lut[i];
+            }
+            else  // y > 0
+            {
+                x += shiftY;
+                y -= shiftX;
+                result += lut[i];
+            }
+            if (y == 0) break;  // This iteration solved the problem exactly, so stop. Rare condition, so might not be worth time+space to test.
+            i++;
+            shiftX = x >> i;
+            shiftY = y >> i;
+        }
+    }
+
+    if (negate) return -result;
+    return result;
+}
+
 int
 cos (int a, int exponentA)
 {

@@ -601,7 +601,7 @@ operator * (const MatrixStrided<T> & A, const MatrixAbstract<T> & B)
         T * columnEnd = c + h;
         while (c < columnEnd)
         {
-            register T element = (T) 0;
+            T element = (T) 0;
             T * i = a;
             T * j = b;
             T * rowEnd = j + ow * bsr;

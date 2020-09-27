@@ -137,11 +137,13 @@ public:
     void trace (T now);               ///< Subroutine for other trace() functions.
     void addMode (const char * mode); ///< Subroutine for other trace() functions.
 #   ifdef n2a_FP
-    void trace (T now, const String & column, T value, int exponent, const char * mode = 0);
-    void trace (T now, T              column, T value, int exponent, const char * mode = 0);
+    void trace (T now, const String & column, T                 value, int exponent, const char * mode = 0);
+    void trace (T now, const String & column, const Matrix<T> & A,     int exponent, const char * mode = 0);
+    void trace (T now, T              column, T                 value, int exponent, const char * mode = 0);
 #   else
-    void trace (T now, const String & column, T value, const char * mode = 0);
-    void trace (T now, T              column, T value, const char * mode = 0);
+    void trace (T now, const String & column, T                 value,               const char * mode = 0);
+    void trace (T now, const String & column, const Matrix<T> & A,                   const char * mode = 0);
+    void trace (T now, T              column, T                 value,               const char * mode = 0);
 #   endif
     void writeTrace ();
     void writeModes ();

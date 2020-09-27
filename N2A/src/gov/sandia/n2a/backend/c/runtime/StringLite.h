@@ -227,6 +227,20 @@ public:
         return result;
     }
 
+    String operator+ (int that) const
+    {
+        char buffer[16];
+        sprintf (buffer, "%i", that);
+        return operator+ (buffer);
+    }
+
+    String operator+ (double that) const
+    {
+        char buffer[32];
+        sprintf (buffer, "%g", that);
+        return operator+ (buffer);
+    }
+
     String & append (const char * that, size_t n)
     {
         size_t length = (top - memory) + n;

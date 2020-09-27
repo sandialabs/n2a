@@ -19,6 +19,7 @@
 
 // Transcendental functions --------------------------------------------------
 
+int atan2    (int y,                        int x);                                                    // returns angle in [-pi,pi], exponentResult=1; exponentA must match exponentB, but it may be arbitrary.
 int cos      (int a,                               int exponentA);
 int exp      (int a,                                                             int exponentResult);  // exponentA=7
 int log      (int a,                               int exponentA,                int exponentResult);

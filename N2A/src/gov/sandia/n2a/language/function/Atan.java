@@ -37,11 +37,38 @@ public class Atan extends Function
 
     public void determineExponent (ExponentContext context)
     {
-        for (int i = 0; i < operands.length; i++)
-        {
-            operands[i].determineExponent (context);
-        }
+        for (int i = 0; i < operands.length; i++) operands[i].determineExponent (context);
         updateExponent (context, 1, MSB - 1);  // in [-pi,pi]
+    }
+
+    public void determineExponentNext ()
+    {
+        Operator y = operands[0];
+        int next;
+        if (operands.length == 1)
+        {
+            if (y.getType () instanceof Matrix)
+            {
+                next = y.exponent;
+            }
+            else
+            {
+                // atan(y) = atan2(y,1), so treat x as 1
+                // If y is so small that all its bits are lost, then angle can be treated as zero.
+                // If y is so large that all the bits of x are lost, then angle can be treated as pi. 
+                next = Math.max (0, y.exponent);
+            }
+        }
+        else
+        {
+            Operator x = operands[1];
+            next = Math.max (x.exponent, y.exponent);
+            x.exponentNext = next;
+            x.determineExponentNext ();
+        }
+        y.exponentNext = next;
+        y.determineExponentNext ();
+
     }
 
     public void determineUnit (boolean fatal) throws Exception
@@ -63,12 +90,13 @@ public class Atan extends Function
             x = ((Matrix) arg).get (0);
             y = ((Matrix) arg).get (1);
         }
-        else if (arg instanceof Scalar)
+        else  // arg must be Scalar; otherwise the casts below will throw an exception.
         {
-            y = ((Scalar) arg                       ).value;
+            y = ((Scalar) arg).value;
+            if (operands.length == 1) return new Scalar (Math.atan (y));
+
             x = ((Scalar) operands[1].eval (context)).value;
         }
-        else throw new EvaluationException ("type mismatch");
 
         return new Scalar (Math.atan2 (y, x));
     }

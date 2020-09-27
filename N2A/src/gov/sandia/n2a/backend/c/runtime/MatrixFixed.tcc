@@ -206,7 +206,7 @@ operator * (const MatrixFixed<T,R,O> & A, const MatrixFixed<T,O,C> & B)
         T * columnEnd = r + R;
         while (r < columnEnd)
         {
-            register T element = (T) 0;
+            T element = (T) 0;
             const T * i = a;
             const T * j = b;
             const T * rowEnd = j + O;

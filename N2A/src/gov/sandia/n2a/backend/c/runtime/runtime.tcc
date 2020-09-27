@@ -63,6 +63,36 @@ gaussian (T sigma)
     return sigma * gaussian<T> ();
 }
 
+template<class T>
+MatrixFixed<T,3,1>
+grid (int i, int nx, int ny, int nz)
+{
+    int sx = ny * nz;  // stride x
+
+    // compute xyz in stride order
+    MatrixFixed<T,3,1> result;
+    result[0] = ((i / sx) + 0.5f) / nx;  // (i / sx) is an integer operation, so remainder is truncated.
+    i %= sx;
+    result[1] = ((i / nz) + 0.5f) / ny;
+    result[2] = ((i % nz) + 0.5f) / nz;
+    return result;
+}
+
+template<class T>
+MatrixFixed<T,3,1>
+gridRaw (int i, int nx, int ny, int nz)
+{
+    int sx = ny * nz;  // stride x
+
+    // compute xyz in stride order
+    MatrixFixed<T,3,1> result;
+    result[0] = i / sx;
+    i %= sx;
+    result[1] = i / nz;
+    result[2] = i % nz;
+    return result;
+}
+
 #ifdef n2a_FP
 
 template<>
@@ -134,6 +164,17 @@ gaussian (int sigma)
     return (int64_t) gaussian<int> () * sigma >> 28;   // ones bit of gaussian draw is at position MSB - 2
 }
 
+template<>
+MatrixFixed<int,3,1>
+grid (int i, int nx, int ny, int nz)
+{
+    MatrixFixed<int,3,1> result = gridRaw<int> (i, nx, ny, nz);
+    result[0] = (((int64_t) result[0] << 1) + 1 << FP_MSB) / nx;  // exponentResult = -1
+    result[1] = (((int64_t) result[1] << 1) + 1 << FP_MSB) / ny;
+    result[2] = (((int64_t) result[2] << 1) + 1 << FP_MSB) / nz;
+    return result;
+}
+
 #endif
 
 namespace n2a
@@ -156,36 +197,6 @@ namespace n2a
     using std::isinf;
 
 #   endif    
-}
-
-template<class T>
-MatrixFixed<T,3,1>
-grid (int i, int nx, int ny, int nz)
-{
-    int sx = ny * nz;  // stride x
-
-    // compute xyz in stride order
-    MatrixFixed<T,3,1> result;
-    result[0] = ((i / sx) + 0.5f) / nx;  // (i / sx) is an integer operation, so remainder is truncated.
-    i %= sx;
-    result[1] = ((i / nz) + 0.5f) / ny;
-    result[2] = ((i % nz) + 0.5f) / nz;
-    return result;
-}
-
-template<class T>
-MatrixFixed<T,3,1>
-gridRaw (int i, int nx, int ny, int nz)
-{
-    int sx = ny * nz;  // stride x
-
-    // compute xyz in stride order
-    MatrixFixed<T,3,1> result;
-    result[0] = i / sx;
-    i %= sx;
-    result[1] = i / nz;
-    result[2] = i % nz;
-    return result;
 }
 
 

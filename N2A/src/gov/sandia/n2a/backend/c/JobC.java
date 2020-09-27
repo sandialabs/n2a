@@ -1230,14 +1230,11 @@ public class JobC extends Thread
         {
             result.append ("  virtual " + T + " getLive ();\n");
         }
-        if (s.connectionBindings == null)
+        if (bed.xyz != null  &&  s.connected)
         {
-            if (bed.xyz != null)
-            {
-                result.append ("  virtual void getXYZ (MatrixFixed<" + T + ",3,1> & xyz);\n");
-            }
+            result.append ("  virtual void getXYZ (MatrixFixed<" + T + ",3,1> & xyz);\n");
         }
-        else
+        if (s.connectionBindings != null)
         {
             if (bed.p != null)
             {

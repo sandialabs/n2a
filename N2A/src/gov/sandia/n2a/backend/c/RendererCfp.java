@@ -16,12 +16,14 @@ import gov.sandia.n2a.language.OperatorArithmetic;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.OperatorLogical;
 import gov.sandia.n2a.language.OperatorUnary;
+import gov.sandia.n2a.language.function.Atan;
 import gov.sandia.n2a.language.function.Ceil;
 import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Floor;
 import gov.sandia.n2a.language.function.Gaussian;
+import gov.sandia.n2a.language.function.Grid;
 import gov.sandia.n2a.language.function.HyperbolicTangent;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Log;
@@ -53,8 +55,10 @@ public class RendererCfp extends RendererC
     protected static HashSet<Class<? extends Operator>> operatorsWithExponent = new HashSet<Class<? extends Operator>> ();
     static
     {
+        operatorsWithExponent.add (Atan      .class);
         operatorsWithExponent.add (Exp       .class);
         operatorsWithExponent.add (Gaussian  .class);
+        operatorsWithExponent.add (Grid      .class);
         operatorsWithExponent.add (Input     .class);
         operatorsWithExponent.add (Log       .class);
         operatorsWithExponent.add (Norm      .class);

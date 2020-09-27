@@ -836,6 +836,64 @@ OutputHolder<T>::trace (T now, const String & column, T value,                  
     }
 }
 
+#ifdef n2a_FP
+
+template<class T>
+void
+OutputHolder<T>::trace (T now, const String & column, const Matrix<T> & A, int exponent, const char * mode)
+{
+    int rows = A.rows ();
+    int cols = A.columns ();
+    if (rows == 1)
+    {
+        for (int c = 0; c < cols; c++) trace (now, column + "(" + c + ")", A(0,c), exponent, mode);
+    }
+    else if (cols == 1)
+    {
+        for (int r = 0; r < rows; r++) trace (now, column + "(" + r + ")", A(r,0), exponent, mode);
+    }
+    else
+    {
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < cols; c++)
+            {
+                trace (now, column + "(" + r + "," + c + ")", A(r,c), exponent, mode);
+            }
+        }
+    }
+}
+
+#else
+
+template<class T>
+void
+OutputHolder<T>::trace (T now, const String & column, const Matrix<T> & A, const char * mode)
+{
+    int rows = A.rows ();
+    int cols = A.columns ();
+    if (rows == 1)
+    {
+        for (int c = 0; c < cols; c++) trace (now, column + "(" + c + ")", A(0,c), mode);
+    }
+    else if (cols == 1)
+    {
+        for (int r = 0; r < rows; r++) trace (now, column + "(" + r + ")", A(r,0), mode);
+    }
+    else
+    {
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < cols; c++)
+            {
+                trace (now, column + "(" + r + "," + c + ")", A(r,c), mode);
+            }
+        }
+    }
+}
+
+#endif
+
 template<class T>
 void
 #ifdef n2a_FP

@@ -15,6 +15,7 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.function.Atan;
 import gov.sandia.n2a.language.function.Columns;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Event;
@@ -64,6 +65,7 @@ public class RendererC extends Renderer
     public boolean render (Operator op)
     {
         // TODO: for "3 letter" functions (sin, cos, pow, etc) on matrices, render as visitor which produces a matrix result
+        // TODO: implement min and max on matrices
 
         if (op instanceof Add)
         {
@@ -102,6 +104,42 @@ public class RendererC extends Renderer
             int shift = av.exponent - av.exponentNext;
             if (useExponent  &&  shift != 0) result.append ("(");
             result.append (job.resolve (av.reference, this, false));
+            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
+            return true;
+        }
+        if (op instanceof Atan)
+        {
+            Atan atan = (Atan) op;
+            int shift = atan.exponent - atan.exponentNext;
+            if (useExponent  &&  shift != 0) result.append ("(");
+            if (atan.operands.length > 1  ||  useExponent) result.append ("atan2 (");
+            else                                           result.append ("atan (");
+
+            Operator y = atan.operands[0];
+            if (y.getType () instanceof Matrix)
+            {
+                y.render (this);
+                result.append ("[1], ");
+                y.render (this);
+                result.append ("[0]");
+            }
+            else
+            {
+                y.render (this);
+                if (atan.operands.length > 1)
+                {
+                    result.append (", ");
+                    atan.operands[1].render (this);  // x
+                }
+                else if (useExponent)
+                {
+                    int shiftX = Operator.MSB - y.exponent;
+                    int x =  shiftX >= 0 ? 0x1 << shiftX : 0;
+                    result.append (", " + x);
+                }
+            }
+
+            result.append (")");
             if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
@@ -188,7 +226,9 @@ public class RendererC extends Renderer
         {
             Grid g = (Grid) op;
             boolean raw = g.operands.length >= 5  &&  g.operands[4].getString ().contains ("raw");
+            int shift = g.exponent - g.exponentNext;
 
+            if (useExponent  &&  shift != 0) result.append ("(");
             result.append ("grid");
             if (raw) result.append ("Raw");
             result.append ("<" + job.T + "> (");
@@ -202,6 +242,7 @@ public class RendererC extends Renderer
             }
 
             result.append (")");
+            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
         if (op instanceof HyperbolicTangent)
