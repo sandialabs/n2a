@@ -42,39 +42,20 @@ public class DrawSegment extends Draw
         if (simulator.currentEvent == null) now = 0;
         else                                now = (float) simulator.currentEvent.t;
 
-        int i = 1;
-        double x;
-        double y;
-        Type t = operands[i++].eval (context);
-        if (t instanceof Matrix)
-        {
-            x = ((Matrix) t).get (0);
-            y = ((Matrix) t).get (1);
-        }
-        else
-        {
-            x = ((Scalar) t).value;
-            y = ((Scalar) operands[i++].eval (context)).value;
-        }
-        double x2;
-        double y2;
-        t = operands[i++].eval (context);
-        if (t instanceof Matrix)
-        {
-            x2 = ((Matrix) t).get (0);
-            y2 = ((Matrix) t).get (1);
-        }
-        else
-        {
-            x2 = ((Scalar) t).value;
-            y2 = ((Scalar) operands[i++].eval (context)).value;
-        }
-        double width;
-        if (operands.length > i) width = ((Scalar) operands[i++].eval (context)).value;
-        else                     width = 0;
-        double color;
-        if (operands.length > i) color = ((Scalar) operands[i  ].eval (context)).value;
-        else                     color = 0xFFFFFF;  // white
+        Matrix p = (Matrix) operands[1].eval (context);
+        double x = p.get (0);
+        double y = p.get (1);
+
+        p = (Matrix) operands[2].eval (context);
+        double x2 = p.get (0);
+        double y2 = p.get (1);
+
+        double width = 0;
+        if (operands.length > 3) width = ((Scalar) operands[3].eval (context)).value;
+
+        double color = 0xFFFFFF;  // white
+        if (operands.length > 4) color = ((Scalar) operands[4].eval (context)).value;
+
         H.drawSegment (now, x, y, x2, y2, width, (int) color);
 
         return new Scalar (0);

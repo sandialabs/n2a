@@ -42,26 +42,16 @@ public class DrawDisc extends Draw
         if (simulator.currentEvent == null) now = 0;
         else                                now = (float) simulator.currentEvent.t;
 
-        int i = 1;
-        double x;
-        double y;
-        Type t = operands[i++].eval (context);
-        if (t instanceof Matrix)
-        {
-            x = ((Matrix) t).get (0);
-            y = ((Matrix) t).get (1);
-        }
-        else
-        {
-            x = ((Scalar) t).value;
-            y = ((Scalar) operands[i++].eval (context)).value;
-        }
-        double radius;
-        if (operands.length > i) radius = ((Scalar) operands[i++].eval (context)).value;
-        else                     radius = 0;
-        double color;
-        if (operands.length > i) color = ((Scalar) operands[i].eval (context)).value;
-        else                     color = 0xFFFFFF;  // white
+        Matrix p = (Matrix) operands[1].eval (context);
+        double x = p.get (0);
+        double y = p.get (1);
+
+        double radius = 0;
+        if (operands.length > 2) radius = ((Scalar) operands[2].eval (context)).value;
+
+        double color = 0xFFFFFF;  // white
+        if (operands.length > 3) color = ((Scalar) operands[3].eval (context)).value;
+
         H.drawDisc (now, x, y, radius, (int) color);
 
         return new Scalar (0);
