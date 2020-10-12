@@ -684,16 +684,18 @@ public class GraphNode extends JPanel
     **/
     public String findPinAt (Point p)
     {
-        FontMetrics fm         = getFontMetrics (getFont ());
-        int         lineHeight = fm.getHeight () + 2 * GraphEdge.padNameTop;
+        // Could calculate lineHeight based on font metrics, but the method here is more efficient
+        // and should be equally correct.
         if (pinInBounds != null  &&  pinInBounds.contains (p))
         {
+            int lineHeight = pinInBounds.height / node.pinIn.size ();
             int y = p.y - pinInBounds.y;
             MNode c = node.pinInOrder.get (y / lineHeight);
             return "in." + c.key ();
         }
         if (pinOutBounds != null  &&  pinOutBounds.contains (p))
         {
+            int lineHeight = pinOutBounds.height / node.pinOut.size ();
             int y = p.y - pinOutBounds.y;
             MNode c = node.pinOutOrder.get (y / lineHeight);
             return "out." + c.key ();

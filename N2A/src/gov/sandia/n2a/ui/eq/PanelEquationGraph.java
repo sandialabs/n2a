@@ -918,6 +918,8 @@ public class PanelEquationGraph extends JScrollPane
         **/
         public boolean findTipAtPin (Point p, GraphNode g, String pinSide, String pinKey)
         {
+            // See GraphNode.findPinAt() for similar code.
+            // The small amount of redundancy here is acceptable, for the sake of efficiency.
             if (pinSide.equals ("in"))
             {
                 if (g.pinInBounds != null  &&  g.pinInBounds.contains (p))
@@ -1078,6 +1080,7 @@ public class PanelEquationGraph extends JScrollPane
                 String pinSide;
                 String pinKey;
                 Point location;
+                // See GraphNode.findPinAt() for similar code. The redundancy here is necessary to get access to lineHeight.
                 if (g == graphPanel.pinIn)
                 {
                     int lineHeight = g.pinOutBounds.height / container.part.pinIn.size ();
@@ -1130,50 +1133,7 @@ public class PanelEquationGraph extends JScrollPane
                     }
                     case "Name":
                     {
-                        // Show dialog to get new name.
-                        JTextField editor = new NTextField (pinKey, Math.max (10, pinKey.length ()));
-
-                        ActionMap actionMap = editor.getActionMap ();
-                        actionMap.put ("Cancel", new AbstractAction ("Cancel")
-                        {
-                            public void actionPerformed (ActionEvent evt)
-                            {
-                                graphPanel.remove (editor);
-                                graphPanel.repaint (editor.getBounds ());
-                            }
-                        });
-
-                        editor.addActionListener (new ActionListener ()
-                        {
-                            public void actionPerformed (ActionEvent e)
-                            {
-                                graphPanel.remove (editor);
-                                graphPanel.repaint (editor.getBounds ());
-                                applyPinNameChange (pinSide, pinKey, editor.getText ());
-                            }
-                        });
-
-                        editor.addFocusListener (new FocusListener ()
-                        {
-                            public void focusGained (FocusEvent e)
-                            {
-                            }
-
-                            public void focusLost (FocusEvent e)
-                            {
-                                if (editor.getParent () == graphPanel)
-                                {
-                                    graphPanel.remove (editor);
-                                    graphPanel.repaint (editor.getBounds ());
-                                    applyPinNameChange (pinSide, pinKey, editor.getText ());
-                                }
-                            }
-                        });
-
-                        editor.setLocation (location);
-                        graphPanel.add (editor);
-                        graphPanel.setComponentZOrder (editor, 0);
-                        editor.requestFocusInWindow ();
+                        showPinNameDialog (pinSide, pinKey, location);
                         break;
                     }
                     case "Delete":
@@ -1250,6 +1210,54 @@ public class PanelEquationGraph extends JScrollPane
                 }
             }
         };
+
+        public void showPinNameDialog (String pinSide, String pinKey, Point location)
+        {
+            // Show dialog to get new name.
+            JTextField editor = new NTextField (pinKey, Math.max (10, pinKey.length ()));
+
+            ActionMap actionMap = editor.getActionMap ();
+            actionMap.put ("Cancel", new AbstractAction ("Cancel")
+            {
+                public void actionPerformed (ActionEvent evt)
+                {
+                    graphPanel.remove (editor);
+                    graphPanel.repaint (editor.getBounds ());
+                }
+            });
+
+            editor.addActionListener (new ActionListener ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    graphPanel.remove (editor);
+                    graphPanel.repaint (editor.getBounds ());
+                    applyPinNameChange (pinSide, pinKey, editor.getText ());
+                }
+            });
+
+            editor.addFocusListener (new FocusListener ()
+            {
+                public void focusGained (FocusEvent e)
+                {
+                }
+
+                public void focusLost (FocusEvent e)
+                {
+                    if (editor.getParent () == graphPanel)
+                    {
+                        graphPanel.remove (editor);
+                        graphPanel.repaint (editor.getBounds ());
+                        applyPinNameChange (pinSide, pinKey, editor.getText ());
+                    }
+                }
+            });
+
+            editor.setLocation (location);
+            graphPanel.add (editor);
+            graphPanel.setComponentZOrder (editor, 0);
+            editor.requestFocusInWindow ();
+        }
 
         public void applyPinNameChange (String pinSide, String pinKey, String newKey)
         {
@@ -1537,6 +1545,40 @@ public class PanelEquationGraph extends JScrollPane
                     return;
                 }
                 Point p = me.getPoint ();
+
+                GraphNode g = graphPanel.findNodeAt (p, true);  // Only a click in the pin zone will return non-null here. If it were in the graph node proper, the click would have been routed there instead.
+                if (g != null  &&  (g == graphPanel.pinIn  ||  g == graphPanel.pinOut))
+                {
+                    Point q = g.getLocation ();
+                    p.x -= q.x;
+                    p.y -= q.y;
+
+                    String pinKey;
+                    String pinSide;
+                    // See listenerPin and GraphNode.findPinAt() for similar code. The redundancy here is necessary to get access to lineHeight.
+                    if (g == graphPanel.pinIn)
+                    {
+                        int lineHeight = g.pinOutBounds.height / container.part.pinIn.size ();
+                        int y = p.y - GraphNode.border.t;
+                        int index = y / lineHeight;
+                        pinKey = container.part.pinInOrder.get (index).key ();
+                        pinSide = "in";
+                        p = new Point (g.pinOutBounds.x + lineHeight / 2, g.pinOutBounds.y + index * lineHeight);
+                    }
+                    else  // g is pinOut
+                    {
+                        int lineHeight = g.pinInBounds.height / container.part.pinOut.size ();
+                        int y = p.y - GraphNode.border.t;
+                        int index = y / lineHeight;
+                        pinKey = container.part.pinOutOrder.get (index).key ();
+                        pinSide = "out";
+                        p = new Point (g.pinInBounds.x, g.pinInBounds.y + index * lineHeight);
+                    }
+
+                    graphPanel.showPinNameDialog (pinSide, pinKey, p);
+                    return;
+                }
+
                 GraphEdge e = graphPanel.findTopicAt (p);
                 if (e == null)
                 {
@@ -1677,6 +1719,8 @@ public class PanelEquationGraph extends JScrollPane
                     else  // In pin zone, and pin is not currently bound to an edge. If it were connected, it would have been caught by findTipAt().
                     {
                         // Determine which pin it is.
+                        // Compare with GraphNode.findPinAt()
+                        // The redundancy here is OK because we need to select special cases. These would not be simplified by using a common routine.
                         if (g.pinInBounds != null  &&  g.pinInBounds.contains (p))
                         {
                             int lineHeight = g.pinInBounds.height / g.node.pinIn.size ();
