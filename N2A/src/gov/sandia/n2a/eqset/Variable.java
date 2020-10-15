@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.AccessVariable;
@@ -199,17 +198,20 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
     }
 
+    /**
+        A quick-and-dirty way to construct a variable with a single expression.
+    **/
     public static Variable from (String equation) throws Exception
     {
         String[] pieces = equation.split ("=", 2);
         String key = pieces[0];
         String value = "";
         if (pieces.length > 1) value = pieces[1];
-        return new Variable (null, new MPersistent (null, key, value));
+        return new Variable (null, new MVolatile (value, key));
     }
 
     /**
-        Convenience class for making queries.
+        Convenience method for making queries.
         A properly-formed variable requires different processing.
     **/
     public static Variable fromLHS (String lhs)

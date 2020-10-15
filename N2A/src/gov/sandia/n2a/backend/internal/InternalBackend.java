@@ -239,8 +239,9 @@ public class InternalBackend extends Backend
         if (e.source.containsKey ("pin"))  // crude heuristic that may save some time for regular (non-dataflow) models
         {
             e.collectPins ();
+            e.fillAutoPins ();
             e.resolvePins ();
-            e.purgeAutoPins ();
+            e.purgePins ();
         }
         e.resolveConnectionBindings ();
         e.addGlobalConstants ();

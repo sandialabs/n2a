@@ -8,7 +8,6 @@ package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
@@ -55,17 +54,17 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableSet;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeSet;
-
 import javax.swing.ImageIcon;
 
 public class EquationSet implements Comparable<EquationSet>
 {
     public String                              name;
-    public MNode                               source;
+    public MNode                               source;                 // Node from collated model that this equation set is based on. Could be null if this eqset is constructed by the middle-end as part of analysis or optimization.
     public EquationSet                         container;
     public NavigableSet<Variable>              variables;
     public List<EquationSet>                   parts;
@@ -406,16 +405,20 @@ public class EquationSet implements Comparable<EquationSet>
     public void override (Variable v)
     {
         variables.remove (v);  // Removes matching value, not exact object identity.
+        v.container = this;
         variables.add (v);
     }
 
-    public void override (String equation) throws Exception
+    /**
+        Add or replace a variable by parsing an equation in string form.
+        Since this function should be under complete program control, it is more convenient to trap
+        any possible exceptions from the Variable class, rather than asking the caller to handle
+        them. This implies that the caller must be careful to never produce malformed equations.
+    **/
+    public void override (String equation)
     {
-        String[] pieces = equation.split ("=", 2);
-        String key = pieces[0];
-        String value = "";
-        if (pieces.length > 1) value = pieces[1];
-        override (new Variable (this, new MPersistent (null, key, value)));
+        try {override (Variable.from (equation));}
+        catch (Exception e) {}
     }
 
     /**
@@ -634,7 +637,7 @@ public class EquationSet implements Comparable<EquationSet>
         we find the LCA of this equation set and the given part. We use the term "cousin" loosely to
         mean any part that is not an ancestor or descendant.
         Notice that this function is more strict than isSingleton(), because we are taking
-        into account not only instances created by the immediate part, but also that created by
+        into account not only instances created by the immediate part, but also those created by
         some subset of its ancestors. Put another way, isSingleton() is roughly equivalent to
         this.isSingletonRelativeTo(this).
     **/
@@ -657,7 +660,7 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Tests if this part is contained in the proposed parent or any of its ancestors.
+        Tests if this part or any of its ancestors is contained in the proposed parent.
         The childOf relationship does not include self. If the proposed parent equals this part,
         then the result is false.
     **/
@@ -673,7 +676,7 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Collects pin exposures and exports into lists for use by resolvePins() and purgeAutoPins().
+        Collects pin exports and exposures into lists for use by fillAutoPins(), resolvePins() and purgePins().
         Compare this code with NodePart.analyzePins()
         Depends on: none -- This function must be the very first thing run after constructing the
         full equation set hierarchy. However, if it is known that no equation set uses pins,
@@ -761,6 +764,179 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        If this part exposes an auto pin, then duplicate the dependent sub-parts for each bound input.
+        Finally, this function recurses into all child parts, whether or not they are the result of duplication.
+        The duplication takes place only at the EquationSet level. The corresponding source field is
+        simply a reference to the original source. This is slightly inconsistent with the contents
+        of the resulting EquationSet objects. For example, the key of the source will not match the name
+        of the EquationSet. If this breaks any middle-end code, then we can create a fake
+        source, or even update the true source. In the last case, it would be necessary for the true
+        source to be volatile, so the database record is not changed.
+        Depends on: collectPins()
+    **/
+    public void fillAutoPins ()
+    {
+        for (MNode autopin : pinIn)
+        {
+            String pinName = autopin.key ();
+            if (! pinName.endsWith ("#")) continue;
+            // Found an auto pin; now process it ...
+
+            int length = pinName.length () - 1;
+            String pinBase = pinName.substring (0, length);
+
+            // Scan for instances
+            // These only exist in the part's original metadata, since they are not backed by actual sub-parts.
+            TreeSet<Integer> instances = new TreeSet<Integer> ();  // automatically sorted, which is useful for iteration below
+            for (MNode pin2 : metadata.childOrEmpty ("gui", "pin", "in"))
+            {
+                String pinBaseI = pin2.key ();
+                if (! pinBaseI.startsWith (pinBase)) continue;
+                String suffix = pinBaseI.substring (length);  // remove prefix
+                // The suffix must be a proper integer.
+                try
+                {
+                    int index = Integer.parseInt (suffix);
+                    if (index > 0) instances.add (index);
+                }
+                catch (NumberFormatException e) {}
+            }
+            int lastIndex = 0;
+            if (! instances.isEmpty ()) lastIndex = instances.last ();
+
+            // Collect destination parts for connections
+            Map<String,EquationSet> Bparts = new HashMap<String,EquationSet> ();
+            for (MNode subscriber : autopin)
+            {
+                String baseName = subscriber.key ();
+                EquationSet template = findPart (baseName);
+                if (template.connectionBindings == null) continue;
+
+                MNode  templatePin = template.metadata.child ("gui", "pin");
+                String Aname       = templatePin.get ("alias");  // assigned by collectPins()
+                // First connection binding that doesn't match "Aname" should be the destination part.
+                // This is a compact form of the same code in resolveConnectionBindings()
+                for (Variable v : template.variables)
+                {
+                    if (v.name.equals (Aname)) continue;
+                    AccessVariable av = template.isConnectionBinding (v);
+                    if (av == null) continue;
+                    ConnectionBinding cb = new ConnectionBinding ();
+                    if (! template.resolveConnectionBinding (av.name, cb)) continue;
+                    if (cb.endpoint == null) continue;
+
+                    Bparts.put (baseName, cb.endpoint);
+                    templatePin.set (v.name, "aliasB");  // for an alias, v.name is sufficient
+                    break;
+                }
+            }
+
+            // Process each instance
+            int previous = 0;  // previous index; zero is never a suffix, so this is sufficient to indicate none (start of list)
+            for (int index : instances)
+            {
+                String pinBaseI = pinBase + index;
+
+                // Duplicate each subscriber
+                for (MNode subscriber : autopin)
+                {
+                    String baseName = subscriber.key ();
+                    EquationSet template = findPart (baseName);
+                    EquationSet duplicate = new EquationSet (this, baseName + index);
+                    parts.add (duplicate);
+                    duplicate.copyPinTemplate (template);
+
+                    duplicate.override ("autoIndex=" + index);
+                    duplicate.override ("autoCount=" + lastIndex);
+                    MNode templatePin = template.metadata.child ("gui", "pin");
+                    if (template.connectionBindings != null)  // connectionBindings got preliminary setting from collectPins()
+                    {
+                        MNode append = templatePin.child ("append");
+                        String autoBase = templatePin.getOrDefault ("0", "append");
+
+                        EquationSet Bpart = Bparts.get (baseName);
+                        if (Bpart == null)
+                        {
+                            // It's possible for the user to set append mode without an actual downstream target.
+                            // In that case, fake the autoBase in the duplicated part itself.
+                            if (append != null) duplicate.override ("autoBase=" + autoBase);
+                        }
+                        else
+                        {
+                            String Aname = templatePin.get ("alias");   // assigned by collectPins()
+                            String Bname = templatePin.get ("aliasB");  // assigned above
+
+                            if (append != null)
+                            {
+                                duplicate.override ("autoBase=:" + Bname + ".autoBase" + index);
+                                duplicate.override ("$all." + Bname + ".autoN" + index + "=" + Aname + ".$n");
+                            }
+
+                            // Set variables in B part
+                            if (append != null)
+                            {
+                                if (previous == 0) Bpart.override ("$all.autoBase" + index + "=" + autoBase);
+                                else               Bpart.override ("$all.autoBase" + index + "=autoBase" + previous + "+autoN" + previous);
+                                previous = index;
+                                if (index == lastIndex)
+                                {
+                                    String n = Bpart.source.get ("$n");
+                                    if (n.isEmpty ()  ||  n.startsWith ("autoBase")) Bpart.override ("$n=autoBase" + index + "+autoN" + index);
+                                }
+                            }
+                        }
+                    }
+
+                    // Update input bindings with actual instance name.
+                    // Notice that pinIn does not need to be updated, because it is only used to get subscribers for the auto-pin template.
+                    //   connections
+                    if (templatePin.get ().equals (pinName))  // must match the auto-pin name
+                    {
+                        duplicate.metadata.set (pinBaseI, "gui", "pin");
+                    }
+                    //   parts that forward inputs
+                    for (MNode b : templatePin.childOrEmpty ("in"))
+                    {
+                        if (b.get ("bind").isEmpty ()  &&  b.get ("bind", "pin").equals (pinName))  // must bind to IO block and match the auto-pin name
+                        {
+                            duplicate.metadata.set (pinBaseI, "gui", "pin", "in", b.key (), "bind", "pin");
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fill auto pins in children.
+        // Note that any children which depend on the auto pin at this current level are also processed,
+        // even though they will eventually be deleted by purgePins(). This ensures they are fully
+        // expanded, so they can be analyzed by other code. This is not useful for running the
+        // model, but is useful for an export routine that understands auto pins.
+        for (EquationSet s : parts) s.fillAutoPins ();
+    }
+
+    /**
+        Recursively copies a part that is acting as an auto-pin template.
+        Assumes that this (target) part has minimal construction, including name and parent part.
+    **/
+    public void copyPinTemplate (EquationSet template)
+    {
+        source = template.source;  // Direct reference, not copy. May need to do something more rigorous, depending on how source is used by middle-end functions.
+        metadata.merge (template.metadata);
+        pinIn = new MVolatile ();
+        pinIn.merge (template.pinIn);
+        pinOut = new MVolatile ();
+        pinOut.merge (template.pinOut);
+        if (template.connectionBindings != null) connectionBindings = new ArrayList<ConnectionBinding> ();  // see collectPins()
+        for (Variable v : template.variables) add (v.deepCopy ());
+        for (EquationSet s : template.parts)
+        {
+            EquationSet s2 = new EquationSet (this, s.name);
+            parts.add (s2);
+            s2.copyPinTemplate (s);
+        }
+    }
+
+    /**
         Converts dangling connections exposed as pins into regular connections with well-defined
         bindings. Folds pass-through connections onto their downstream counterparts.
         The resulting model should be interpretable without reference to metadata or any knowledge
@@ -787,7 +963,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             // Process inner structure of part, regardless of type.
             // If this is a connection, then any internal pin structure should not ascend out of the part.
-            s.resolvePins ();
+            s.resolvePins (unresolved);
 
             // Connections with an unbound alias.
             // For each unbound alias, walk the part hierarchy to find the right target population.
@@ -954,11 +1130,12 @@ public class EquationSet implements Comparable<EquationSet>
         Each structure functions as a template for generating new pins, but itself is never bound.
         Thus it can't function at run time and would otherwise produce compiler errors.
         Also removes pass-through connections, for similar reasons.
-        This could be folded into collectPins(), but it is kept separate to allow partial compilation
+        collectPins() could remove auto pins, but this is kept separate to allow partial compilation
         where the client code wishes to analyze the templates themselves.
-        Depends on results of: collectPins, resolvePins
+        Pass-through pins should not be removed until after resolvePins() has run.
+        Depends on results of: collectPins
     **/
-    public void purgeAutoPins ()
+    public void purgePins ()
     {
         for (MNode pin : pinIn)
         {
@@ -973,7 +1150,7 @@ public class EquationSet implements Comparable<EquationSet>
         for (EquationSet s : tempParts)
         {
             MNode pass = s.metadata.child ("gui", "pin", "pass");
-            if (pass == null) s.purgeAutoPins ();
+            if (pass == null) s.purgePins ();
             else              parts.remove (s);
         }
     }

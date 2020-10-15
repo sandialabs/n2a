@@ -335,8 +335,9 @@ public class JobC extends Thread
         if (model.source.containsKey ("pin"))
         {
             model.collectPins ();
+            model.fillAutoPins ();
             model.resolvePins ();
-            model.purgeAutoPins ();
+            model.purgePins ();
         }
         model.resolveConnectionBindings ();
         model.addGlobalConstants ();
