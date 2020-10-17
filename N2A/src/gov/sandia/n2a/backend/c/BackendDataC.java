@@ -185,18 +185,19 @@ public class BackendDataC
             if (v.hasAny (new String[] {"constant", "accessor"})  &&  ! v.hasAll (new String[] {"constant", "reference"})) continue;
 
             boolean initOnly               = v.hasAttribute ("initOnly");
-            boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
+            boolean emptyCombiner          = v.isEmptyCombiner ();
+            boolean updates                = ! initOnly  &&  v.equations.size () > 0  &&  ! emptyCombiner  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
             boolean temporary              = v.hasAttribute ("temporary");
             boolean unusedTemporary        = temporary  &&  ! v.hasUsers ();
-            boolean updates                = ! initOnly  &&  v.equations.size () > 0  &&  ! v.isEmptyCombiner ()  &&  (v.derivative == null  ||  v.hasAttribute ("updates"));
+            boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
 
             if (v.hasAttribute ("global"))
             {
                 if (updates  &&  ! unusedTemporary) globalUpdate.add (v);
                 if (derivativeOrDependency) globalDerivativeUpdate.add (v);
+                if (! unusedTemporary  &&  ! emptyCombiner) globalInit.add (v);
                 if (! v.hasAttribute ("reference"))
                 {
-                    if (! unusedTemporary) globalInit.add (v);
                     if (! temporary  &&  ! v.hasAttribute ("dummy"))
                     {
                         if (! v.hasAttribute ("preexistent"))
@@ -261,21 +262,13 @@ public class BackendDataC
             {
                 if (updates  &&  ! unusedTemporary) localUpdate.add (v);
                 if (derivativeOrDependency) localDerivativeUpdate.add (v);
-                if (v.hasAttribute ("reference"))  // TODO: references should be included in init cycle. See InternalBackendData for example.
+                if (! unusedTemporary  &&  ! emptyCombiner  &&  v != type) localInit.add (v);
+                if (v.hasAttribute ("reference"))
                 {
                     if (v.reference.variable.container.canDie ()) localReference.add (v.reference);
                 }
                 else
                 {
-                    if (! unusedTemporary)
-                    {
-                        if (v == type)
-                        {
-                            Backend.err.get ().println ("$type must must never be assigned during init, so it needs an appropriate condition.");
-                            throw new Backend.AbortRun ();
-                        }
-                        localInit.add (v);
-                    }
                     if (! temporary  &&  ! v.hasAttribute ("dummy"))
                     {
                         if (! v.hasAttribute ("preexistent"))
@@ -341,6 +334,7 @@ public class BackendDataC
                 else                            localIntegrated.add (v);
             }
         }
+        if (dt != null  &&  dt.hasAttribute ("constant")) localInit.add (dt);
 
         // Purge any lists that consist solely of temporaries, as they accomplish nothing.
         for (List<Variable> list : Arrays.asList (globalUpdate, globalDerivativeUpdate, globalInit, globalIntegrated, localUpdate, localDerivativeUpdate, localInit, localIntegrated))
@@ -432,7 +426,6 @@ public class BackendDataC
         needLocalInit     =    localBufferedExternal.size () > 0
                             || eventTargets.size () > 0
                             || ! localFlagType.isEmpty ()
-                            || localBuffered.contains (dt)
                             || lastT
                             || simplifiedLocalInit.size () > 0
                             || trackN
@@ -450,7 +443,7 @@ public class BackendDataC
             if (hasIntegrated) break;
             hasIntegrated = ((BackendDataC) p.backendData).globalIntegrated.size () > 0;
         }
-        boolean dtCanChange =  dt != null  &&  dt.equations.size () > 0  &&  ! dt.hasAttribute ("initOnly");
+        boolean dtCanChange =  dt != null  &&  ! dt.hasAny ("constant", "initOnly")  &&  (dt.equations.size () > 0  ||  dt.hasAttribute ("externalWrite"));
         // dt could also change if we use a variable-step integrator. There are currently no plans to implement one.
 
         lastT = hasIntegrated  &&  (eventTargets.size () > 0  ||  dtCanChange);

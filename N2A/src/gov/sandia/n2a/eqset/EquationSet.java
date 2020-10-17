@@ -2450,7 +2450,7 @@ public class EquationSet implements Comparable<EquationSet>
         v = new Variable ("$t", 1);  // $t'
         if (add (v))
         {
-            v.unit = UnitValue.seconds;  // seconds per cycle, but cycle is not a unit
+            v.unit = UnitValue.seconds;  // seconds per cycle, except cycle is not a unit
             v.equations = new TreeSet<EquationEntry> ();
         }
 
@@ -2520,7 +2520,9 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Remove any variables (particularly $variables) that are not referenced by some
         equation. These values do not input to any other calculation, and they are not
-        displayed. Therefore they are a waste of time and space.
+        displayed. Therefore they are a waste of time and space. Does not remove
+        $variables with explicit assignments, because these declare something about
+        the behavior of the model even if not directly referenced by other variables.
         Depends on results of:
             resolveLHS(), resolveRHS(), fillIntegratedVariables()
             addSpecials() -- so we can remove any $variables added unnecessarily
@@ -3986,23 +3988,6 @@ public class EquationSet implements Comparable<EquationSet>
             else
             {
                 if (v.order > 0) v.tagDerivativeOrDependency ();
-            }
-        }
-    }
-
-    /**
-        Convert $dt from "constant" to "initOnly" so it will be evaluated during init().
-    **/
-    public void makeConstantDtInitOnly ()
-    {
-        for (EquationSet p : parts) p.makeConstantDtInitOnly ();
-
-        for (Variable v : variables)
-        {
-            if (v.name.equals ("$t")  &&  v.order == 1  &&  v.hasAttribute ("constant"))
-            {
-                v.removeAttribute ("constant");
-                v.addAttribute    ("initOnly");
             }
         }
     }

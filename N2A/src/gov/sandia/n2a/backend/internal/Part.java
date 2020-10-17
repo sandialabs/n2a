@@ -166,6 +166,7 @@ public class Part extends Instance
         if (bed.liveStorage == InternalBackendData.LIVE_STORED) set (bed.live, new Scalar (1));
         if (bed.lastT != null) temp.setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
         if (bed.type != null) temp.setFinal (bed.type, new Scalar (0));
+        if (bed.dt != null  &&  bed.dt.hasAttribute ("constant")) simulator.move (this, ((Scalar) bed.dt.type).value);
 
         // Prepare variables that have a combiner, in case they get written before the first finish().
         // This is done after initialize so that we don't apply our own equations twice (here and in update) before first finish.

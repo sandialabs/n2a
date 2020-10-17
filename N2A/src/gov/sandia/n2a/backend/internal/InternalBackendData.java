@@ -152,6 +152,8 @@ public class InternalBackendData
 
     public Map<EquationSet,Conversion> conversions = new TreeMap<EquationSet,Conversion> ();  // maps from new part type to appropriate conversion record
 
+    public static final List<String> forbiddenLocalInit = Arrays.asList ("$index", "$live", "$type");
+
     public class Conversion
     {
         // These two arrays are filled in parallel, such that index i in one matches i in the other.
@@ -710,7 +712,6 @@ public class InternalBackendData
             countLocalObject += s.connectionBindings.size ();
         }
 
-        List<String> forbiddenLocalInit = Arrays.asList ("$index", "$live", "$type");
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
             String className = "null";

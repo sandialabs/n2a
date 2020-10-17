@@ -268,7 +268,6 @@ public class InternalBackend extends Backend
         e.findTemporary ();
         e.determineOrder ();
         e.findDerivative ();
-        e.makeConstantDtInitOnly ();
         e.findInitOnly ();
         e.purgeInitOnlyTemporary ();
         e.setAttributesLive ();
@@ -280,6 +279,10 @@ public class InternalBackend extends Backend
         prepareToRun (e);
     }
 
+    /**
+        Separate from digestModel() so that other backends can use an alternate/abbreviated compilation
+        process, but still use the Internal backend to run the init cycle.
+    **/
     public static void prepareToRun (EquationSet e)
     {
         createBackendData (e);

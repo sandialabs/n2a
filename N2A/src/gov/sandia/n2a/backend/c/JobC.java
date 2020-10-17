@@ -344,7 +344,7 @@ public class JobC extends Thread
         model.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
         model.addAttribute ("global",      false, true,  "$max", "$min", "$k", "$radius");
         model.addAttribute ("global",      false, false, "$n");
-        model.addAttribute ("preexistent", true,  false, "$index", "$t'", "$t");  // Technically, $index is not pre-existent, but rather always receives special handling which has the same effect.
+        model.addAttribute ("preexistent", true,  false, "$index", "$t'", "$t");  // Technically, $index is not pre-existent, but always receives special handling which has the same effect.
         model.resolveLHS ();
         model.fillIntegratedVariables ();
         model.findIntegrated ();
@@ -365,7 +365,6 @@ public class JobC extends Thread
         model.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances. TODO: make sure this doesn't violate evaluation order rules
         model.determineOrder ();
         model.findDerivative ();
-        model.makeConstantDtInitOnly ();
         model.findInitOnly ();  // propagate initOnly through ASTs
         model.purgeInitOnlyTemporary ();
         model.setAttributesLive ();
@@ -2275,12 +2274,6 @@ public class JobC extends Thread
             }
 
             // Compute variables
-            if (bed.localBuffered.contains (bed.dt))
-            {
-                result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
-                context.hasEvent = true;
-                result.append ("  " + type (bed.dt) + " " + mangle (bed.dt) + ";\n");
-            }
             if (bed.lastT)
             {
                 result.append ("  lastT = Simulator<" + T + ">::instance.currentEvent->t;\n");
@@ -2288,6 +2281,12 @@ public class JobC extends Thread
             s.simplify ("$init", bed.localInit);
             if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.localInit);
             EquationSet.determineOrderInit (bed.localInit);
+            if (bed.localInit.contains (bed.dt))
+            {
+                result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
+                context.hasEvent = true;
+                result.append ("  " + type (bed.dt) + " " + mangle (bed.dt) + ";\n");
+            }
             //   The following code tricks multiconditional() into treating all variables
             //   as unbuffered and non-accumulating.
             List<Variable> buffered = bed.localBuffered;
@@ -2300,7 +2299,7 @@ public class JobC extends Thread
                 v.assignment = assignment;
             }
             bed.localBuffered = buffered;
-            if (bed.localBuffered.contains (bed.dt))
+            if (bed.localInit.contains (bed.dt))
             {
                 result.append ("  if (" + mangle (bed.dt) + " != event->dt) setPeriod (" + mangle (bed.dt) + ");\n");
             }
@@ -2449,11 +2448,7 @@ public class JobC extends Thread
             }
 
             // Preemptively fetch current event
-            boolean needT = bed.eventSources.size () > 0  ||  s.lethalP;
-            for (Variable v : bed.localBufferedExternal)
-            {
-                if (v == bed.dt) needT = true;
-            }
+            boolean needT = bed.eventSources.size () > 0  ||  s.lethalP  ||  bed.localBufferedExternal.contains (bed.dt);
             if (needT)
             {
                 result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
@@ -4069,7 +4064,7 @@ public class JobC extends Thread
             if (context.part.getConnect ()  ||  context.part.getInit ()) return "0";
         }
 
-        if (r.variable.hasAttribute ("constant"))
+        if (r.variable.hasAttribute ("constant")  &&  ! lvalue)  // A constant will always be an rvalue, unless it is being loaded into a local variable (special case for $t').
         {
             EquationEntry e = r.variable.equations.first ();
             StringBuilder temp = context.result;

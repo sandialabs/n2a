@@ -2627,7 +2627,6 @@ public class ExportJob extends XMLutility
                 equations.collectSplits ();
                 equations.determineOrder ();
                 equations.findDerivative ();
-                equations.makeConstantDtInitOnly ();
                 equations.forceTemporaryStorageForSpecials ();
                 equations.determineTypes ();
                 InternalBackend.prepareToRun (equations);
