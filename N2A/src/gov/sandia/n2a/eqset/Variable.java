@@ -1235,6 +1235,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         Record variables or equation sets that depend on this variable.
         Note that addDependencyOn(Variable) handles both sides of the add. You only call this function
         directly to add equation sets.
+        This function guards against duplicates, so it can be called multiple times with the same user.
     **/
     public void addUser (Object user)
     {

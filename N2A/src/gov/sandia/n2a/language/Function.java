@@ -100,25 +100,18 @@ public class Function extends Operator
 
     public Operator simplify (Variable from, boolean evalOnly)
     {
-        if (canBeConstant ())
+        boolean allConstant = true;
+        for (int i = 0; i < operands.length; i++)
         {
-            boolean constant = true;
-            for (int i = 0; i < operands.length; i++)
-            {
-                operands[i] = operands[i].simplify (from, evalOnly);
-                if (! (operands[i] instanceof Constant)) constant = false;
-            }
-            if (constant)
-            {
-                from.changed = true;
-                Operator result = new Constant (eval (null));  // A function should report canBeConstant() true only if null is safe to pass here.
-                result.parent = parent;
-                return result;
-            }
+            operands[i] = operands[i].simplify (from, evalOnly);
+            if (! (operands[i] instanceof Constant)) allConstant = false;
         }
-        else
+        if (allConstant  &&  canBeConstant ())  // This function can be replaced by a constant.
         {
-            for (int i = 0; i < operands.length; i++) operands[i] = operands[i].simplify (from, evalOnly);
+            from.changed = true;
+            Operator result = new Constant (eval (null));  // A function should report canBeConstant() true only if null is safe to pass here.
+            result.parent = parent;
+            return result;
         }
         return this;
     }

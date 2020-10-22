@@ -156,39 +156,37 @@ public class BuildMatrix extends Operator
                 else
                 {
                     operands[c][r] = operands[c][r].simplify (from, evalOnly);
-                    if (isConstant)  // stop evaluating if we already know we are not constant
+                    if (! isConstant) continue;  // stop building A if we already know we are not constant
+                    if (operands[c][r] instanceof Constant)
                     {
-                        if (operands[c][r] instanceof Constant)
+                        Constant op = (Constant) operands[c][r];
+                        Type o = op.value;
+                        if (o instanceof Scalar)
                         {
-                            Constant op = (Constant) operands[c][r];
-                            Type o = op.value;
-                            if (o instanceof Scalar)
-                            {
-                                double v = ((Scalar) o).value;
-                                A.set (r, c, v);
+                            double v = ((Scalar) o).value;
+                            A.set (r, c, v);
 
-                                if (v != 0)
+                            if (v != 0)
+                            {
+                                int tempCent = MSB / 2;
+                                if (op.unitValue != null)
                                 {
-                                    int tempCent = MSB / 2;
-                                    if (op.unitValue != null)
-                                    {
-                                        int bits = (int) Math.ceil (op.unitValue.digits * Math.log (10) / Math.log (2));
-                                        tempCent = Math.max (tempCent, bits - 1);
-                                        tempCent = Math.min (tempCent, MSB);
-                                    }
-                                    cent += tempCent;
-                                    pow  += Math.getExponent (v);
-                                    count++;
+                                    int bits = (int) Math.ceil (op.unitValue.digits * Math.log (10) / Math.log (2));
+                                    tempCent = Math.max (tempCent, bits - 1);
+                                    tempCent = Math.min (tempCent, MSB);
                                 }
+                                cent += tempCent;
+                                pow  += Math.getExponent (v);
+                                count++;
                             }
-                            else if (o instanceof Text  ) A.set (r, c, Double.valueOf (((Text) o).value));
-                            else if (o instanceof Matrix) A.set (r, c, ((Matrix) o).get (0, 0));
-                            else throw new EvaluationException ("Can't construct matrix element from the given type.");
                         }
-                        else
-                        {
-                            isConstant = false;
-                        }
+                        else if (o instanceof Text  ) A.set (r, c, Double.valueOf (((Text) o).value));
+                        else if (o instanceof Matrix) A.set (r, c, ((Matrix) o).get (0, 0));
+                        else throw new EvaluationException ("Can't construct matrix element from the given type.");
+                    }
+                    else
+                    {
+                        isConstant = false;
                     }
                 }
             }

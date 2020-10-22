@@ -440,14 +440,13 @@ template<class T>
 void
 removeMonitor (std::vector<Part<T> *> & partList, Part<T> * part)
 {
-    typename std::vector<Part<T> *>::iterator it;
-    for (it = partList.begin (); it != partList.end (); it++)
+    int last = partList.size () - 1;
+    for (int i = last; i >= 0; i--)
     {
-        if (*it == part)
-        {
-            *it = 0;
-            break;
-        }
+        if (partList[i] != part) continue;
+        if (last > i) partList[i] = partList[last];
+        partList.resize (last);  // removes last entry, shrinking partList by 1
+        break;
     }
 }
 

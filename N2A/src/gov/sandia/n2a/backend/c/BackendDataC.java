@@ -62,6 +62,7 @@ public class BackendDataC
     public Variable xyz;
 
     public boolean lastT;
+    public boolean setDt;
 
     public boolean needGlobalCtor;
     public boolean needGlobalDtor;
@@ -334,7 +335,22 @@ public class BackendDataC
                 else                            localIntegrated.add (v);
             }
         }
-        if (dt != null  &&  dt.hasAttribute ("constant")) localInit.add (dt);
+
+        if (dt != null  &&  dt.hasAttribute ("constant"))
+        {
+            setDt = true;
+            // However, if the nearest container that defines $t' matches our value, then don't set $t'.
+            if (s.container != null)
+            {
+                Variable pdt = s.container.findDt ();
+                if (pdt != null  &&  pdt.hasAttribute ("constant"))
+                {
+                    double  value =  dt.equations.first ().expression.getDouble ();
+                    double pvalue = pdt.equations.first ().expression.getDouble ();
+                    setDt =  value != pvalue;
+                }
+            }
+        }
 
         // Purge any lists that consist solely of temporaries, as they accomplish nothing.
         for (List<Variable> list : Arrays.asList (globalUpdate, globalDerivativeUpdate, globalInit, globalIntegrated, localUpdate, localDerivativeUpdate, localInit, localIntegrated))

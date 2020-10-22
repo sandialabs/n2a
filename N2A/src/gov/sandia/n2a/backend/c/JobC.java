@@ -27,6 +27,7 @@ import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
+import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
@@ -421,6 +422,18 @@ public class JobC extends Thread
                     if (mode.contains ("time")  &&  ! from.hasAttribute ("global")  &&  ! T.equals ("int"))
                     {
                         from.addDependencyOn (dt);
+                    }
+                }
+                if (op instanceof Event)
+                {
+                    Event e = (Event) op;
+                    if (e.operands.length > 1  &&  e.operands[1].getDouble () > 0)  // constant delay > 0
+                    {
+                        // We depend on $t' to know time exponent.
+                        // This is necessary regardless of whether T=="int", because eventGenerate() handles this in a generic way.
+                        EquationSet root = s.getRoot ();
+                        Variable rootDt = root.find (dt);
+                        rootDt.addUser (root);
                     }
                 }
                 return true;
@@ -2303,6 +2316,10 @@ public class JobC extends Thread
             {
                 result.append ("  if (" + mangle (bed.dt) + " != event->dt) setPeriod (" + mangle (bed.dt) + ");\n");
             }
+            else if (bed.setDt)  // implies that bed.dt exists and is constant
+            {
+                result.append ("  setPeriod (" + resolve (bed.dt.reference, context, false) + ");\n");
+            }
 
             // instance counting
             if (bed.n != null  &&  ! bed.singleton) result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".n++;\n");
@@ -2456,7 +2473,6 @@ public class JobC extends Thread
             }
 
             // Events
-            boolean declaredFire = false;
             for (EventSource es : bed.eventSources)
             {
                 EventTarget et = es.target;
@@ -2466,36 +2482,18 @@ public class JobC extends Thread
                 {
                     result.append ("  for (Part * p : " + eventMonitor + ")\n");
                     result.append ("  {\n");
-                    result.append ("    if (! p  ||  ! p->eventTest (" + et.valueIndex + ")) continue;\n");
+                    result.append ("    if (! p->eventTest (" + et.valueIndex + ")) continue;\n");
                     eventGenerate ("    ", et, context, false);
                     result.append ("  }\n");
                 }
                 else  // All monitors share same condition, so only test one.
                 {
-                    if (declaredFire)
-                    {
-                        result.append ("  fire = false;\n");
-                    }
-                    else
-                    {
-                        result.append ("  bool fire = false;\n");
-                        declaredFire = true;
-                    }
-                    result.append ("  for (auto p : " + eventMonitor + ")\n");  // Find first non-null part.
-                    result.append ("  {\n");
-                    result.append ("    if (p)\n");
-                    result.append ("    {\n");
-                    result.append ("      fire = p->eventTest (" + et.valueIndex + ");\n");
-                    result.append ("      break;\n");
-                    result.append ("    }\n");
-                    result.append ("  }\n");
-                    result.append ("  if (fire)\n");
+                    result.append ("  if (! " + eventMonitor + ".empty ()  &&  " + eventMonitor + "[0]->eventTest (" + et.valueIndex + "))\n");
                     result.append ("  {\n");
                     if (es.delayEach)  // Each target instance may require a different delay.
                     {
                         result.append ("    for (auto p : " + eventMonitor + ")\n");
                         result.append ("    {\n");
-                        result.append ("      if (! p) continue;\n");
                         eventGenerate ("      ", et, context, false);
                         result.append ("    }\n");
                     }
@@ -2593,6 +2591,7 @@ public class JobC extends Thread
                     double pvalue = ((Scalar) ((Constant) bed.p.equations.first ().expression).value).value;
                     if (pvalue != 0)
                     {
+                        // If $t' is exactly 1, then pow() is unnecessary here. However, that is a rare situation.
                         result.append ("  if (pow (" + resolve (bed.p.reference, context, false)+ ", " + resolve (bed.dt.reference, context, false));
                         if (context.useExponent)
                         {
@@ -3428,10 +3427,29 @@ public class JobC extends Thread
             }
             else
             {
-                // Is delay an quantum number of $t' steps?
-                result.append (pad + T + " delay = " + context.print (et.delay, context.bed.t.exponent) + ";\n");
-                result.append (pad + eventSpike + " * spike;\n");
-                eventGenerate (pad, et, context, eventSpike, eventSpikeLatch);
+                boolean quantizedConstant = false;  // Indicates the delay is known constant and falls on a regular time-step.
+                Variable dt = context.part.findDt ();
+                if (dt != null  &&  dt.hasAttribute ("constant"))  // constant $t'
+                {
+                    double quantum = ((Scalar) dt.type).value;
+                    double ratio   = et.delay / quantum;
+                    int    step    = (int) Math.round (ratio);
+                    quantizedConstant = Math.abs (ratio - step) < 1e-3;
+                    if (quantizedConstant)
+                    {
+                        double delay = step * quantum;
+                        result.append (pad + eventSpike + " * spike = new " + (during ? eventSpikeLatch : eventSpike) + ";\n");
+                        result.append (pad + "spike->t = Simulator<" + T + ">::instance.currentEvent->t + " + context.print (delay, dt.exponent) + ";\n");
+                    }
+                }
+
+                if (! quantizedConstant)
+                {
+                    int exponent = context.part.getRoot ().find (new Variable ("$t", 1)).exponent;
+                    result.append (pad + T + " delay = " + context.print (et.delay, exponent) + ";\n");
+                    result.append (pad + eventSpike + " * spike;\n");
+                    eventGenerate (pad, et, context, eventSpike, eventSpikeLatch);
+                }
             }
         }
         else  // delay must be evaluated, so emit tests at C level

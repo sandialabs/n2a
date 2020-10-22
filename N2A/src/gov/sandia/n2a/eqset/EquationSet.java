@@ -396,6 +396,23 @@ public class EquationSet implements Comparable<EquationSet>
         return null;
     }
 
+    /**
+        @return The nearest variable $t' in the containment hierarchy that has explicit equations.
+        Could be the $t' on this current equation set. Could be null.
+    **/
+    public Variable findDt ()
+    {
+        Variable query = new Variable ("$t", 1);
+        EquationSet p = this;
+        while (p != null)
+        {
+            Variable dt = p.find (query);
+            if (dt != null  &&  ! dt.equations.isEmpty ()) return dt;
+            p = p.container;
+        }
+        return null;
+    }
+
     public boolean add (Variable v)
     {
         v.container = this;
@@ -1924,7 +1941,7 @@ public class EquationSet implements Comparable<EquationSet>
         with the appropriate operator.
         Depends on results of: resolveLHS(), resolveRHS() -- Object identity of variables should already be established.
         @param backend Prefix for metadata keys specific to the engine selected to execute this model.
-        Where such keys exists, the parts should not be flattened.
+        Where such keys exist, the parts should not be flattened.
     **/
     public void flatten (String backend)
     {
@@ -2416,7 +2433,7 @@ public class EquationSet implements Comparable<EquationSet>
             v.unit = AbstractUnit.ONE;
             v.addAttribute ("constant");  // default. Actual values should be set by setAttributeLive()
             EquationEntry e = new EquationEntry (v, "");
-            e.expression = new Constant (new Scalar (1));
+            e.expression = new Constant (1);
             e.expression.unit = AbstractUnit.ONE;
             v.add (e);
         }
@@ -2486,7 +2503,7 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     v.addAttribute ("constant");
                     EquationEntry e = new EquationEntry (v, "");
-                    e.expression = new Constant (new Scalar (0));
+                    e.expression = new Constant (0);
                     e.expression.unit = AbstractUnit.ONE;
                     v.add (e);
                 }
@@ -2510,7 +2527,7 @@ public class EquationSet implements Comparable<EquationSet>
                 v.unit = AbstractUnit.ONE;
                 v.addAttribute ("constant");  // default. Actual values set by client code.
                 EquationEntry e = new EquationEntry (v, "");
-                e.expression = new Constant (new Scalar (1));
+                e.expression = new Constant (1);
                 e.expression.unit = AbstractUnit.ONE;
                 v.add (e);
             }
@@ -2547,13 +2564,31 @@ public class EquationSet implements Comparable<EquationSet>
             if (v.hasUsers ()  ||  v.hasAttribute ("externalWrite")) continue;
 
             // Even if a $variable has no direct users, we must respect any statements about it.
-            // However, remove $index if it was created constant by addSpecials().
+            // Exceptions:
+            // * $index -- if it was created constant by addSpecials()
+            // * $t' -- if it is constant and matches constant $t' in container. This may have been created by findConstants().
             if (v.equations.size () > 0  &&  v.name.contains ("$")  &&  ! v.name.equals ("$index"))
             {
-                if (v.name.startsWith ("$")) continue;
-                String[] pieces = v.name.split ("\\.");
-                if (pieces.length == 2  &&  endpointSpecials.contains (pieces[1])) continue;
-                // else fall through ...
+                // Check for constant $t'
+                boolean sharedDt = false;
+                if (container != null  &&  v.name.equals ("$t")  &&  v.order == 1  &&  v.hasAttribute ("constant"))
+                {
+                    Variable cdt = container.find (v);
+                    if (cdt != null  &&  cdt.hasAttribute ("constant"))
+                    {
+                        double  value =   v.equations.first ().expression.getDouble ();
+                        double cvalue = cdt.equations.first ().expression.getDouble ();
+                        sharedDt =  value == cvalue;
+                    }
+                }
+
+                if (! sharedDt)  // Check for general case
+                {
+                    if (v.name.startsWith ("$")) continue;
+                    String[] pieces = v.name.split ("\\.");
+                    if (pieces.length == 2  &&  endpointSpecials.contains (pieces[1])) continue;
+                    // else fall through ...
+                }
             }
 
             // Scan AST for any special output functions.
@@ -2639,7 +2674,7 @@ public class EquationSet implements Comparable<EquationSet>
             init.unit = AbstractUnit.ONE;
             init.addAttribute ("constant");  // TODO: should really be "initOnly", since it changes value during (at the end of) the init cycle.
             EquationEntry e = new EquationEntry (init, "");
-            e.expression = new Constant (new Scalar (value));
+            e.expression = new Constant (value);
             e.expression.unit = AbstractUnit.ONE;
             init.add (e);
             add (init);
@@ -2673,7 +2708,7 @@ public class EquationSet implements Comparable<EquationSet>
             connect.unit = AbstractUnit.ONE;
             connect.addAttribute ("constant");
             EquationEntry e = new EquationEntry (connect, "");
-            e.expression = new Constant (new Scalar (value));
+            e.expression = new Constant (value);
             e.expression.unit = AbstractUnit.ONE;
             connect.add (e);
             add (connect);
@@ -3654,11 +3689,6 @@ public class EquationSet implements Comparable<EquationSet>
     protected boolean findConstantsEval ()
     {
         boolean changed = false;
-        for (EquationSet s : parts)
-        {
-            if (s.findConstantsEval ()) changed = true;
-        }
-
         for (Variable v : variables)
         {
             if (v.simplify ()) changed = true;
@@ -3667,16 +3697,41 @@ public class EquationSet implements Comparable<EquationSet>
             if (v.hasAttribute ("constant")) continue;  // If this already has a "constant" tag, it was specially added so presumably correct.
             if (v.hasAttribute ("externalWrite")) continue;  // Regardless of the local math, a variable that gets written is not constant.
             if (v.derivative != null) continue;  // An integrated variable is presumably not constant, since the derivative is unlikely to be constant zero.
-            if (v.equations.size () != 1) continue;
+            if (v.equations.size () != 1)
+            {
+                if (v.equations.isEmpty ()  &&  v.name.equals ("$t")  &&  v.order == 1  &&  container != null)  // special case for $t'
+                {
+                    // Copy constant $t' from container.
+                    Variable parentV = container.find (v);
+                    if (parentV.hasAttribute ("constant"))
+                    {
+                        changed = true;
+                        v.addAttribute ("constant");
+                        EquationEntry e = new EquationEntry (v, "");
+                        v.add (e);
+
+                        EquationEntry parentE = parentV.equations.first ();
+                        e.expression = new Constant (parentE.expression.getDouble ());
+                        e.expression.unit = AbstractUnit.ONE;
+                    }
+                }
+
+                continue;
+            }
             EquationEntry e = v.equations.first ();
             if (e.condition != null  &&  ! e.ifString.equals ("$init")) continue;  // Must be unconditional. Notice that a constant equation conditioned on $init is effectively unconditional.
             if (e.expression instanceof Constant)
             {
+                changed = true;
                 v.addAttribute ("constant");
                 e.condition = null;  // in case it was $init
                 e.ifString  = "";
-                changed = true;
             }
+        }
+
+        for (EquationSet s : parts)
+        {
+            if (s.findConstantsEval ()) changed = true;
         }
         return changed;
     }
@@ -3806,14 +3861,21 @@ public class EquationSet implements Comparable<EquationSet>
         {
             public int compare (Variable a, Variable b)
             {
+                // Break a circular dependency between a regular and a temporary in favor of the temporary.
+                // That is, the temporary should be evaluated first, using zero for the regular variable.
+                if (a.before.contains (b)  &&  b.before.contains (a))  // circular dependency
+                {
+                    if (a.hasAttribute ("temporary")) return -1;
+                    if (b.hasAttribute ("temporary")) return  1;
+                }
+
+                // In general, the variable with the most downstream dependencies should be evaluated first.
                 return b.before.size () - a.before.size ();
             }
         });
         queueDependency.addAll (list);
-        for (Variable v = queueDependency.poll (); v != null; v = queueDependency.poll ())
-        {
-            v.setPriority (1, null);
-        }
+        Variable v;
+        while ((v = queueDependency.poll ()) != null) v.setPriority (1, null);
 
         PriorityQueue<Variable> queuePriority = new PriorityQueue<Variable> (list.size (), new Comparator<Variable> ()
         {
@@ -3824,7 +3886,7 @@ public class EquationSet implements Comparable<EquationSet>
         });
         queuePriority.addAll (list);
         list.clear ();
-        for (Variable v = queuePriority.poll (); v != null; v = queuePriority.poll ()) list.add (v);
+        while ((v = queuePriority.poll ()) != null) list.add (v);
     }
 
     public void simplify (String phase, List<Variable> list)

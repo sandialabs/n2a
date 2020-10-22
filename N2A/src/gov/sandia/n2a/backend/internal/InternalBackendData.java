@@ -98,6 +98,7 @@ public class InternalBackendData
         If we do not store $t, then this member is null.
     **/
     public Variable lastT;
+    public boolean  setDt;  // Indicates we need to explicitly set integration period on this part. This happens when both $t' and container.$t' are constants, but different from each other.
 
     // Event structures
     public List<Integer>     eventLatches    = new ArrayList<Integer> ();  // Indices within Instance.valuesFloat of each latch block. Generally, there will only be one, if any. Used to reset latches during finalize phase.
@@ -861,6 +862,22 @@ public class InternalBackendData
             {
                 if (v.hasAttribute ("global")) globalIntegrated.add (v);
                 else                            localIntegrated.add (v);
+            }
+        }
+
+        if (dt != null  &&  dt.hasAttribute ("constant"))
+        {
+            setDt = true;
+            // However, if the nearest container that defines $t' matches our value, then don't set $t'.
+            if (s.container != null)
+            {
+                Variable pdt = s.container.findDt ();
+                if (pdt != null  &&  pdt.hasAttribute ("constant"))
+                {
+                    double  value =  dt.equations.first ().expression.getDouble ();
+                    double pvalue = pdt.equations.first ().expression.getDouble ();
+                    setDt =  value != pvalue;
+                }
             }
         }
 
