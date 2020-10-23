@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -64,31 +64,43 @@ public class BackendDataC
     public boolean lastT;
     public boolean setDt;
 
+    public boolean needGlobalDerivative;
+    public boolean needGlobalPreserve;
     public boolean needGlobalCtor;
     public boolean needGlobalDtor;
-    public boolean needGlobalPreserve;
+    public boolean needGlobalInit;
+    public boolean needGlobalIntegrate;
+    public boolean needGlobalUpdate;
     public boolean needGlobalFinalize;
     public boolean needGlobalFinalizeN;  // population finalize() should return live status based on $n
+    public boolean needGlobalUpdateDerivative;
+    public boolean needGlobalFinalizeDerivative;
     public boolean needGlobalPath;  // need the path() function, which returns a unique string identifying the current instance
 
+    public boolean needLocalDerivative;
+    public boolean needLocalPreserve;
     public boolean needLocalCtor;
     public boolean needLocalDtor;
     public boolean needLocalDie;
     public boolean needLocalInit;
-    public boolean needLocalPreserve;
+    public boolean needLocalIntegrate;
+    public boolean needLocalUpdate;
     public boolean needLocalFinalize;
+    public boolean needLocalUpdateDerivative;
+    public boolean needLocalFinalizeDerivative;
     public boolean needLocalEventDelay;
     public boolean needLocalPath;
 
     public String pathToContainer;
     public List<String> accountableEndpoints = new ArrayList<String> ();
     public boolean refcount;
-    public boolean trackInstances;
+    public boolean trackInstances;  // keep a list of instances
     public boolean hasProject;
-    public boolean canGrowOrDie; // via $p or $type
-    public boolean canResize;    // via $n
-    public boolean nInitOnly;    // $n is "initOnly"; Can only be true when $n exists.
-    public boolean singleton;    // $n=1
+    public boolean canGrowOrDie;    // via $p or $type
+    public boolean canResize;       // via $n
+    public boolean nInitOnly;       // $n is "initOnly"; Can only be true when $n exists.
+    public boolean singleton;       // $n=1
+    public boolean trackN;          // keep a count of current instances; different than trackInstances
 
     public List<String> globalColumns = new ArrayList<String> ();
     public List<String> localColumns  = new ArrayList<String> ();
@@ -336,6 +348,14 @@ public class BackendDataC
             }
         }
 
+        // Purge any lists that consist solely of temporaries, as they accomplish nothing.
+        for (List<Variable> list : Arrays.asList (globalUpdate, globalDerivativeUpdate, globalInit, globalIntegrated, localUpdate, localDerivativeUpdate, localInit, localIntegrated))
+        {
+            boolean allTemporary = true;
+            for (Variable v : list) if (! v.hasAttribute ("temporary")) allTemporary = false;
+            if (allTemporary) list.clear ();
+        }
+
         if (dt != null  &&  dt.hasAttribute ("constant"))
         {
             setDt = true;
@@ -350,32 +370,6 @@ public class BackendDataC
                     setDt =  value != pvalue;
                 }
             }
-        }
-
-        // Purge any lists that consist solely of temporaries, as they accomplish nothing.
-        for (List<Variable> list : Arrays.asList (globalUpdate, globalDerivativeUpdate, globalInit, globalIntegrated, localUpdate, localDerivativeUpdate, localInit, localIntegrated))
-        {
-            boolean allTemporary = true;
-            for (Variable v : list) if (! v.hasAttribute ("temporary")) allTemporary = false;
-            if (allTemporary) list.clear ();
-        }
-
-        refcount            = s.referenced  &&  s.canDie ();
-        singleton           = s.isSingleton (true);
-        needGlobalPreserve  = globalIntegrated.size () > 0  ||  globalDerivativePreserve.size () > 0  ||  globalBufferedExternalWriteDerivative.size () > 0;
-        needGlobalDtor      = needGlobalPreserve  ||  globalDerivative.size () > 0;
-        needGlobalCtor      = needGlobalDtor  ||  (index != null  ||  n != null)  &&  ! singleton;
-        canResize           = globalMembers.contains (n);  // Works correctly even if n is null.
-        trackInstances      = s.connected  ||  s.needInstanceTracking  ||  canResize;
-        canGrowOrDie        = s.lethalP  ||  s.lethalType  ||  s.canGrow ();
-        needGlobalFinalizeN = s.container == null  &&  (canResize  ||  canGrowOrDie);
-        needGlobalFinalize  = globalBufferedExternal.size () > 0  ||  needGlobalFinalizeN  ||  (canResize  &&  (canGrowOrDie  ||  ! n.hasAttribute ("initOnly")));
-
-        if (! canResize  &&  canGrowOrDie  &&  n != null  &&  n.hasUsers ())
-        {
-            // This is a flaw in the analysis process that needs to be fixed.
-            // See note in InternalBackendData for details.
-            Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
         }
 
         if (s.connectionBindings != null)
@@ -400,6 +394,21 @@ public class BackendDataC
                     break;
                 }
             }
+        }
+
+        refcount       = s.referenced  &&  s.canDie ();
+        singleton      = s.isSingleton (true);
+        canResize      = globalMembers.contains (n);  // Works correctly even if n is null.
+        trackInstances = s.connected  ||  s.needInstanceTracking  ||  canResize;
+        canGrowOrDie   = s.lethalP  ||  s.lethalType  ||  s.canGrow ();
+        trackN         = n != null  &&  ! singleton;
+        boolean Euler  = s.getRoot ().metadata.getOrDefault ("Euler", "backend", "all", "integrator").equals ("Euler");
+
+        if (! canResize  &&  canGrowOrDie  &&  n != null  &&  n.hasUsers ())
+        {
+            // This is a flaw in the analysis process that needs to be fixed.
+            // See note in InternalBackendData for details.
+            Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
         }
 
         int flagCount = eventTargets.size ();
@@ -429,26 +438,61 @@ public class BackendDataC
             throw new Backend.AbortRun ();
         }
 
+        needGlobalDerivative         = ! Euler  &&  globalDerivative.size () > 0;
+        needGlobalIntegrate          = globalIntegrated.size () > 0;
+        needGlobalPreserve           = ! Euler  &&  (needGlobalIntegrate  ||  globalDerivativePreserve.size () > 0  ||  globalBufferedExternalWriteDerivative.size () > 0);
+        needGlobalDtor               = needGlobalPreserve  ||  needGlobalDerivative;
+        needGlobalCtor               = needGlobalDtor  ||  (index != null  ||  n != null)  &&  ! singleton;
+        needGlobalInit               =    globalMembers.size () > 0
+                                       || ! globalFlagType.isEmpty ()
+                                       || globalInit.size () > 0
+                                       || singleton
+                                       || n != null
+                                       || s.connectionBindings != null;
+        needGlobalUpdate             = globalUpdate.size () > 0;
+        needGlobalFinalizeN          = s.container == null  &&  (canResize  ||  canGrowOrDie);
+        needGlobalFinalize           = globalBufferedExternal.size () > 0  ||  needGlobalFinalizeN  ||  (canResize  &&  (canGrowOrDie  ||  ! n.hasAttribute ("initOnly")));
+        needGlobalUpdateDerivative   = ! Euler  &&  globalDerivativeUpdate.size () > 0;
+        needGlobalFinalizeDerivative = ! Euler  &&  globalBufferedExternalDerivative.size () > 0;
+
         // Created simplified localInit to check if init is needed.
         // This is only temporary, because the proper simplification should only be done after I/O operators have names generated.
         List<Variable> simplifiedLocalInit = new ArrayList<Variable> (localInit);
         s.simplify ("$init", simplifiedLocalInit);
 
-        needLocalPreserve = localIntegrated.size () > 0  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0;
-        needLocalDtor     = needLocalPreserve  ||  localDerivative.size () > 0;
-        needLocalCtor     = needLocalDtor  ||  s.accountableConnections != null  ||  refcount  ||  index != null  ||  localMembers.size () > 0;
-        boolean trackN    =  n != null  &&  ! singleton;
-        needLocalDie      = s.canDie ()  &&  (liveFlag >= 0  ||  trackN  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
-        needLocalInit     =    localBufferedExternal.size () > 0
-                            || eventTargets.size () > 0
-                            || ! localFlagType.isEmpty ()
-                            || lastT
-                            || simplifiedLocalInit.size () > 0
-                            || trackN
-                            || accountableEndpoints.size () > 0
-                            || eventTargets.size () > 0
-                            || s.parts.size () > 0;
-        needLocalFinalize = localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();
+        needLocalDerivative         = ! Euler  &&  localDerivative.size () > 0;
+        needLocalIntegrate          = localIntegrated.size () > 0;
+        needLocalPreserve           = ! Euler  &&  (needLocalIntegrate  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0);
+        needLocalDtor               = needLocalPreserve  ||  needLocalDerivative;
+        needLocalCtor               = needLocalDtor  ||  s.accountableConnections != null  ||  refcount  ||  index != null  ||  localMembers.size () > 0  ||  s.parts.size () > 0;
+        needLocalDie                = s.canDie ()  &&  (liveFlag >= 0  ||  trackN  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
+        needLocalInit               =    localBufferedExternal.size () > 0
+                                      || eventTargets.size () > 0
+                                      || ! localFlagType.isEmpty ()
+                                      || lastT
+                                      || simplifiedLocalInit.size () > 0
+                                      || trackN
+                                      || accountableEndpoints.size () > 0
+                                      || eventTargets.size () > 0
+                                      || s.parts.size () > 0;
+        needLocalUpdate             = localUpdate.size () > 0;
+        needLocalFinalize           = localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();
+        needLocalUpdateDerivative   = ! Euler  &&  localDerivativeUpdate.size () > 0;
+        needLocalFinalizeDerivative = ! Euler  &&  localBufferedExternalDerivative.size () > 0;
+
+        // Ensure that functions are emitted to update child populations.
+        for (EquationSet p : s.parts)
+        {
+            BackendDataC pbed = (BackendDataC) p.backendData;
+            if (pbed.needGlobalInit)               needLocalInit               = true;
+            if (pbed.needGlobalIntegrate)          needLocalIntegrate          = true;
+            if (pbed.needGlobalUpdate)             needLocalUpdate             = true;
+            if (pbed.needGlobalFinalize)           needLocalFinalize           = true;
+            if (pbed.needGlobalUpdateDerivative)   needLocalUpdateDerivative   = true;
+            if (pbed.needGlobalFinalizeDerivative) needLocalFinalizeDerivative = true;
+            if (pbed.needGlobalPreserve)           needLocalPreserve           = true;
+            if (pbed.needGlobalDerivative)         needLocalDerivative         = true;
+        }
     }
 
     public void analyzeLastT (EquationSet s)

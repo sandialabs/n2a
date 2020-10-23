@@ -543,9 +543,9 @@ public class JobC extends Thread
 
     public void analyze (EquationSet s)
     {
+        for (EquationSet p : s.parts) analyze (p);
         BackendDataC bed = (BackendDataC) s.backendData;
         bed.analyze (s);
-        for (EquationSet p : s.parts) analyze (p);
         bed.analyzeLastT (s);
     }
 
@@ -615,7 +615,7 @@ public class JobC extends Thread
             Variable dt = model.find (new Variable ("$t", 1));
             result.append ("    Event<int>::exponent = " + dt.exponent + ";\n");
         }
-        String integrator = model.metadata.getOrDefault ("Euler", "c.integrator");
+        String integrator = model.metadata.getOrDefault ("Euler", "backend", "all", "integrator");
         if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
         else                                            integrator = "Euler";
         result.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
@@ -880,7 +880,7 @@ public class JobC extends Thread
         result.append ("public:\n");
 
         // Population buffers
-        if (bed.globalDerivative.size () > 0)
+        if (bed.needGlobalDerivative)
         {
             result.append ("  class Derivative\n");
             result.append ("  {\n");
@@ -938,7 +938,7 @@ public class JobC extends Thread
                 result.append ("  int firstborn;\n");
             }
         }
-        if (bed.globalDerivative.size () > 0)
+        if (bed.needGlobalDerivative)
         {
             result.append ("  Derivative * stackDerivative;\n");
         }
@@ -987,11 +987,11 @@ public class JobC extends Thread
             }
         }
         result.append ("  virtual void init ();\n");
-        if (bed.globalIntegrated.size () > 0)
+        if (bed.needGlobalIntegrate)
         {
             result.append ("  virtual void integrate ();\n");
         }
-        if (bed.globalUpdate.size () > 0)
+        if (bed.needGlobalUpdate)
         {
             result.append ("  virtual void update ();\n");
         }
@@ -1007,11 +1007,11 @@ public class JobC extends Thread
         {
             result.append ("  virtual int getN ();\n");
         }
-        if (bed.globalDerivativeUpdate.size () > 0)
+        if (bed.needGlobalUpdateDerivative)
         {
             result.append ("  virtual void updateDerivative ();\n");
         }
-        if (bed.globalBufferedExternalDerivative.size () > 0)
+        if (bed.needGlobalFinalizeDerivative)
         {
             result.append ("  virtual void finalizeDerivative ();\n");
         }
@@ -1020,7 +1020,7 @@ public class JobC extends Thread
             result.append ("  virtual void snapshot ();\n");
             result.append ("  virtual void restore ();\n");
         }
-        if (bed.globalDerivative.size () > 0)
+        if (bed.needGlobalDerivative)
         {
             result.append ("  virtual void pushDerivative ();\n");
             result.append ("  virtual void multiplyAddToStack (" + T + " scalar);\n");
@@ -1056,7 +1056,7 @@ public class JobC extends Thread
         result.append ("public:\n");
 
         // Unit buffers
-        if (bed.localDerivative.size () > 0)
+        if (bed.needLocalDerivative)
         {
             result.append ("  class Derivative\n");
             result.append ("  {\n");
@@ -1091,7 +1091,7 @@ public class JobC extends Thread
         }
 
         // Unit variables
-        if (bed.localDerivative.size () > 0)
+        if (bed.needLocalDerivative)
         {
             result.append ("  Derivative * stackDerivative;\n");
         }
@@ -1174,7 +1174,7 @@ public class JobC extends Thread
         result.append ("\n");
 
         // Unit functions
-        if (bed.needLocalCtor  ||  s.parts.size () > 0)
+        if (bed.needLocalCtor)
         {
             result.append ("  " + prefix (s) + " ();\n");
         }
@@ -1203,36 +1203,36 @@ public class JobC extends Thread
         {
             result.append ("  virtual bool isFree ();\n");
         }
-        if (bed.needLocalInit  ||  s.parts.size () > 0)
+        if (bed.needLocalInit)
         {
             result.append ("  virtual void init ();\n");
         }
-        if (bed.localIntegrated.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalIntegrate)
         {
             result.append ("  virtual void integrate ();\n");
         }
-        if (bed.localUpdate.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalUpdate)
         {
             result.append ("  virtual void update ();\n");
         }
-        if (bed.needLocalFinalize  ||  s.parts.size () > 0)
+        if (bed.needLocalFinalize)
         {
             result.append ("  virtual bool finalize ();\n");
         }
-        if (bed.localDerivativeUpdate.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalUpdateDerivative)
         {
             result.append ("  virtual void updateDerivative ();\n");
         }
-        if (bed.localBufferedExternalDerivative.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalFinalizeDerivative)
         {
             result.append ("  virtual void finalizeDerivative ();\n");
         }
-        if (bed.needLocalPreserve  ||  s.parts.size () > 0)
+        if (bed.needLocalPreserve)
         {
             result.append ("  virtual void snapshot ();\n");
             result.append ("  virtual void restore ();\n");
         }
-        if (bed.localDerivative.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalDerivative)
         {
             result.append ("  virtual void pushDerivative ();\n");
             result.append ("  virtual void multiplyAddToStack (" + T + " scalar);\n");
@@ -1328,7 +1328,7 @@ public class JobC extends Thread
             result.append ("{\n");
             if (! bed.singleton)
             {
-                if (bed.n != null)
+                if (bed.n != null)  // and not singleton, so trackN is true
                 {
                     result.append ("  n = 0;\n");
                 }
@@ -1341,7 +1341,7 @@ public class JobC extends Thread
                     result.append ("  firstborn = 0;\n");
                 }
             }
-            if (bed.globalDerivative.size () > 0)
+            if (bed.needGlobalDerivative)
             {
                 result.append ("  stackDerivative = 0;\n");
             }
@@ -1358,7 +1358,7 @@ public class JobC extends Thread
         {
             result.append (ns + "~" + prefix (s) + "_Population ()\n");
             result.append ("{\n");
-            if (bed.globalDerivative.size () > 0)
+            if (bed.needGlobalDerivative)
             {
                 result.append ("  while (stackDerivative)\n");
                 result.append ("  {\n");
@@ -1430,68 +1430,71 @@ public class JobC extends Thread
         }
 
         // Population init
-        result.append ("void " + ns + "init ()\n");
-        result.append ("{\n");
-        s.setInit (1);
-        //   Zero out members
-        for (Variable v : bed.globalMembers)
+        if (bed.needGlobalInit)
         {
-            result.append ("  " + zero (mangle (v), v) + ";\n");
-        }
-        for (Variable v : bed.globalBufferedExternal)
-        {
-            result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
-        }
-        if (! bed.globalFlagType.isEmpty ())
-        {
-            result.append ("  flags = 0;\n");
-        }
-        //   Compute variables
-        if (bed.nInitOnly)  // $n is not stored, so we need to declare a local variable to receive its value.
-        {
-            result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
-        }
-        s.simplify ("$init", bed.globalInit);
-        if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.globalInit);
-        EquationSet.determineOrderInit (bed.globalInit);
-        //   The following code tricks multiconditional() into treating all variables as unbuffered and non-accumulating.
-        List<Variable> buffered = bed.globalBuffered;
-        bed.globalBuffered = new ArrayList<Variable> ();
-        for (Variable v : bed.globalInit)
-        {
-            int assignment = v.assignment;
-            v.assignment = Variable.REPLACE;
-            multiconditional (v, context, "  ");
-            v.assignment = assignment;
-        }
-        bed.globalBuffered = buffered;
-        //   create instances
-        if (bed.singleton)
-        {
-            result.append ("  instance.enterSimulation ();\n");
-            result.append ("  container->getEvent ()->enqueue (&instance);\n");
-            result.append ("  instance.init ();\n");
-        }
-        else
-        {
-            if (bed.n != null)
+            result.append ("void " + ns + "init ()\n");
+            result.append ("{\n");
+            s.setInit (1);
+            //   Zero out members
+            for (Variable v : bed.globalMembers)
             {
-                result.append ("  resize (" + resolve (bed.n.reference, context, bed.nInitOnly));
-                if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
-                result.append (");\n");
+                result.append ("  " + zero (mangle (v), v) + ";\n");
             }
+            for (Variable v : bed.globalBufferedExternal)
+            {
+                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
+            }
+            if (! bed.globalFlagType.isEmpty ())
+            {
+                result.append ("  flags = 0;\n");
+            }
+            //   Compute variables
+            if (bed.nInitOnly)  // $n is not stored, so we need to declare a local variable to receive its value.
+            {
+                result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
+            }
+            s.simplify ("$init", bed.globalInit);
+            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.globalInit);
+            EquationSet.determineOrderInit (bed.globalInit);
+            //   The following code tricks multiconditional() into treating all variables as unbuffered and non-accumulating.
+            List<Variable> buffered = bed.globalBuffered;
+            bed.globalBuffered = new ArrayList<Variable> ();
+            for (Variable v : bed.globalInit)
+            {
+                int assignment = v.assignment;
+                v.assignment = Variable.REPLACE;
+                multiconditional (v, context, "  ");
+                v.assignment = assignment;
+            }
+            bed.globalBuffered = buffered;
+            //   create instances
+            if (bed.singleton)
+            {
+                result.append ("  instance.enterSimulation ();\n");
+                result.append ("  container->getEvent ()->enqueue (&instance);\n");
+                result.append ("  instance.init ();\n");
+            }
+            else
+            {
+                if (bed.n != null)  // and not singleton, so trackN is true
+                {
+                    result.append ("  resize (" + resolve (bed.n.reference, context, bed.nInitOnly));
+                    if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
+                    result.append (");\n");
+                }
+            }
+            //   make connections
+            if (s.connectionBindings != null)
+            {
+                result.append ("  Simulator<" + T + ">::instance.connect (this);\n");  // queue to evaluate our connections
+            }
+            s.setInit (0);
+            result.append ("};\n");
+            result.append ("\n");
         }
-        //   make connections
-        if (s.connectionBindings != null)
-        {
-            result.append ("  Simulator<" + T + ">::instance.connect (this);\n");  // queue to evaluate our connections
-        }
-        s.setInit (0);
-        result.append ("};\n");
-        result.append ("\n");
 
         // Population integrate
-        if (bed.globalIntegrated.size () > 0)
+        if (bed.needGlobalIntegrate)
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
@@ -1539,7 +1542,7 @@ public class JobC extends Thread
         }
 
         // Population update
-        if (bed.globalUpdate.size () > 0)
+        if (bed.needGlobalUpdate)
         {
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
@@ -1659,7 +1662,7 @@ public class JobC extends Thread
         }
 
         // Population getN
-        if (bed.n != null  &&  ! bed.singleton)
+        if (bed.trackN)
         {
             result.append ("int " + ns + "getN ()\n");
             result.append ("{\n");
@@ -1669,7 +1672,7 @@ public class JobC extends Thread
         }
 
         // Population updateDerivative
-        if (bed.globalDerivativeUpdate.size () > 0)
+        if (bed.needGlobalUpdateDerivative)
         {
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
@@ -1692,7 +1695,7 @@ public class JobC extends Thread
         }
 
         // Population finalizeDerivative
-        if (bed.globalBufferedExternalDerivative.size () > 0)
+        if (bed.needGlobalFinalizeDerivative)
         {
             result.append ("void " + ns + "finalizeDerivative ()\n");
             result.append ("{\n");
@@ -1747,7 +1750,7 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
-        if (bed.globalDerivative.size () > 0)
+        if (bed.needGlobalDerivative)
         {
             // Population pushDerivative
             result.append ("void " + ns + "pushDerivative ()\n");
@@ -2066,11 +2069,11 @@ public class JobC extends Thread
         String ns = prefix (s) + "::";
 
         // Unit ctor
-        if (bed.needLocalCtor  ||  s.parts.size () > 0)
+        if (bed.needLocalCtor)
         {
             result.append (ns + prefix (s) + " ()\n");
             result.append ("{\n");
-            if (bed.localDerivative.size () > 0)
+            if (bed.needLocalDerivative)
             {
                 result.append ("  stackDerivative = 0;\n");
             }
@@ -2115,7 +2118,7 @@ public class JobC extends Thread
         {
             result.append (ns + "~" + prefix (s) + " ()\n");
             result.append ("{\n");
-            if (bed.localDerivative.size () > 0)
+            if (bed.needLocalDerivative)
             {
                 result.append ("  while (stackDerivative)\n");
                 result.append ("  {\n");
@@ -2235,7 +2238,7 @@ public class JobC extends Thread
         }
 
         // Unit init
-        if (bed.needLocalInit  ||  s.parts.size () > 0)
+        if (bed.needLocalInit)
         {
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
@@ -2322,7 +2325,7 @@ public class JobC extends Thread
             }
 
             // instance counting
-            if (bed.n != null  &&  ! bed.singleton) result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".n++;\n");
+            if (bed.trackN) result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".n++;\n");
 
             for (String alias : bed.accountableEndpoints)
             {
@@ -2346,7 +2349,10 @@ public class JobC extends Thread
                 // If there are parts at all, then orderedParts must be filled in correctly. Otherwise it may be null.
                 for (EquationSet e : s.orderedParts)
                 {
-                    result.append ("  " + mangle (e.name) + ".init ();\n");
+                    if (((BackendDataC) e.backendData).needGlobalInit)
+                    {
+                        result.append ("  " + mangle (e.name) + ".init ();\n");
+                    }
                 }
             }
 
@@ -2357,7 +2363,7 @@ public class JobC extends Thread
         }
 
         // Unit integrate
-        if (bed.localIntegrated.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalIntegrate)
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
@@ -2375,11 +2381,32 @@ public class JobC extends Thread
                 }
                 // Note the resolve() call on the left-hand-side below has lvalue==false.
                 // Integration always takes place in the primary storage of a variable.
-                result.append ("  if (preserve)\n");
-                result.append ("  {\n");
+                String pad = "";
+                if (bed.needLocalPreserve)
+                {
+                    pad = "  ";
+                    result.append ("  if (preserve)\n");
+                    result.append ("  {\n");
+                    for (Variable v : bed.localIntegrated)
+                    {
+                        result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + ");
+                        int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
+                        if (shift != 0  &&  T.equals ("int"))
+                        {
+                            result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (shift) + ");\n");
+                        }
+                        else
+                        {
+                            result.append (                      resolve (v.derivative.reference, context, false) + " * dt;\n");
+                        }
+                    }
+                    result.append ("  }\n");
+                    result.append ("  else\n");
+                    result.append ("  {\n");
+                }
                 for (Variable v : bed.localIntegrated)
                 {
-                    result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + ");
+                    result.append (pad + "  " + resolve (v.reference, context, false) + " += ");
                     int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
                     if (shift != 0  &&  T.equals ("int"))
                     {
@@ -2390,28 +2417,15 @@ public class JobC extends Thread
                         result.append (                      resolve (v.derivative.reference, context, false) + " * dt;\n");
                     }
                 }
-                result.append ("  }\n");
-                result.append ("  else\n");
-                result.append ("  {\n");
-                for (Variable v : bed.localIntegrated)
-                {
-                    result.append ("    " + resolve (v.reference, context, false) + " += ");
-                    int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
-                    if (shift != 0  &&  T.equals ("int"))
-                    {
-                        result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (shift) + ");\n");
-                    }
-                    else
-                    {
-                        result.append (                      resolve (v.derivative.reference, context, false) + " * dt;\n");
-                    }
-                }
-                result.append ("  }\n");
+                if (bed.needLocalPreserve) result.append ("  }\n");
             }
             // contained populations
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".integrate ();\n");
+                if (((BackendDataC) e.backendData).needGlobalIntegrate)
+                {
+                    result.append ("  " + mangle (e.name) + ".integrate ();\n");
+                }
             }
             context.hasEvent = false;
             result.append ("}\n");
@@ -2419,7 +2433,7 @@ public class JobC extends Thread
         }
 
         // Unit update
-        if (bed.localUpdate.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalUpdate)
         {
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
@@ -2440,14 +2454,17 @@ public class JobC extends Thread
             // contained populations
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".update ();\n");
+                if (((BackendDataC) e.backendData).needGlobalUpdate)
+                {
+                    result.append ("  " + mangle (e.name) + ".update ();\n");
+                }
             }
             result.append ("}\n");
             result.append ("\n");
         }
 
         // Unit finalize
-        if (bed.needLocalFinalize  ||  s.parts.size () > 0)
+        if (bed.needLocalFinalize)
         {
             result.append ("bool " + ns + "finalize ()\n");
             result.append ("{\n");
@@ -2455,7 +2472,10 @@ public class JobC extends Thread
             // contained populations
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".finalize ();\n");  // ignore return value
+                if (((BackendDataC) e.backendData).needGlobalFinalize)
+                {
+                    result.append ("  " + mangle (e.name) + ".finalize ();\n");  // ignore return value
+                }
             }
 
             // Early-out if we are already dead
@@ -2673,7 +2693,7 @@ public class JobC extends Thread
         }
 
         // Unit updateDerivative
-        if (bed.localDerivativeUpdate.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalUpdateDerivative)
         {
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
@@ -2694,14 +2714,17 @@ public class JobC extends Thread
             // contained populations
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".updateDerivative ();\n");
+                if (((BackendDataC) e.backendData).needGlobalUpdateDerivative)
+                {
+                    result.append ("  " + mangle (e.name) + ".updateDerivative ();\n");
+                }
             }
             result.append ("}\n");
             result.append ("\n");
         }
 
         // Unit finalizeDerivative
-        if (bed.localBufferedExternalDerivative.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalFinalizeDerivative)
         {
             result.append ("void " + ns + "finalizeDerivative ()\n");
             result.append ("{\n");
@@ -2716,13 +2739,16 @@ public class JobC extends Thread
             // contained populations
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".finalizeDerivative ();\n");
+                if (((BackendDataC) e.backendData).needGlobalFinalizeDerivative)
+                {
+                    result.append ("  " + mangle (e.name) + ".finalizeDerivative ();\n");
+                }
             }
             result.append ("}\n");
             result.append ("\n");
         }
 
-        if (bed.needLocalPreserve  ||  s.parts.size () > 0)
+        if (bed.needLocalPreserve)
         {
             // Unit snapshot
             result.append ("void " + ns + "snapshot ()\n");
@@ -2746,7 +2772,10 @@ public class JobC extends Thread
             }
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".snapshot ();\n");
+                if (((BackendDataC) e.backendData).needGlobalPreserve)
+                {
+                    result.append ("  " + mangle (e.name) + ".snapshot ();\n");
+                }
             }
             result.append ("}\n");
             result.append ("\n");
@@ -2769,13 +2798,16 @@ public class JobC extends Thread
             }
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".restore ();\n");
+                if (((BackendDataC) e.backendData).needGlobalPreserve)
+                {
+                    result.append ("  " + mangle (e.name) + ".restore ();\n");
+                }
             }
             result.append ("}\n");
             result.append ("\n");
         }
 
-        if (bed.localDerivative.size () > 0  ||  s.parts.size () > 0)
+        if (bed.needLocalDerivative)
         {
             // Unit pushDerivative
             result.append ("void " + ns + "pushDerivative ()\n");
@@ -2792,7 +2824,10 @@ public class JobC extends Thread
             }
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".pushDerivative ();\n");
+                if (((BackendDataC) e.backendData).needGlobalDerivative)
+                {
+                    result.append ("  " + mangle (e.name) + ".pushDerivative ();\n");
+                }
             }
             result.append ("}\n");
             result.append ("\n");
@@ -2814,7 +2849,10 @@ public class JobC extends Thread
             }
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".multiplyAddToStack (scalar);\n");
+                if (((BackendDataC) e.backendData).needGlobalDerivative)
+                {
+                    result.append ("  " + mangle (e.name) + ".multiplyAddToStack (scalar);\n");
+                }
             }
             result.append ("}\n");
             result.append ("\n");
@@ -2835,7 +2873,10 @@ public class JobC extends Thread
             }
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".multiply (scalar);\n");
+                if (((BackendDataC) e.backendData).needGlobalDerivative)
+                {
+                    result.append ("  " + mangle (e.name) + ".multiply (scalar);\n");
+                }
             }
             result.append ("}\n");
             result.append ("\n");
@@ -2855,7 +2896,10 @@ public class JobC extends Thread
             }
             for (EquationSet e : s.parts)
             {
-                result.append ("  " + mangle (e.name) + ".addToMembers ();\n");
+                if (((BackendDataC) e.backendData).needGlobalDerivative)
+                {
+                    result.append ("  " + mangle (e.name) + ".addToMembers ();\n");
+                }
             }
             result.append ("}\n");
             result.append ("\n");
