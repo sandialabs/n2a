@@ -986,7 +986,10 @@ public class JobC extends Thread
                 }
             }
         }
-        result.append ("  virtual void init ();\n");
+        if (bed.needGlobalInit)
+        {
+            result.append ("  virtual void init ();\n");
+        }
         if (bed.needGlobalIntegrate)
         {
             result.append ("  virtual void integrate ();\n");
