@@ -34,6 +34,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import tech.units.indriya.AbstractUnit;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -339,17 +340,25 @@ public class Variable implements Comparable<Variable>, Cloneable
     **/
     public static void deepCopy (List<Variable> list)
     {
+        // First step is to clone all the variables.
+        // Clone is a shallow copy (one-level deep), so the resulting variables share exactly
+        // the same members as the original variables.
         try
         {
             for (int i = 0; i < list.size (); i++) list.set (i, (Variable) list.get (i).clone ());
         }
         catch (CloneNotSupportedException e) {}
 
+        // Second step is to drill down and duplicate any members that need more isolation.
+        // We don't duplicate everything, only enough to ensure no damage to the original by
+        // optimization procedures.
         for (Variable v : list)
         {
             TreeSet<EquationEntry> newEquations = new TreeSet<EquationEntry> ();
             for (EquationEntry e : v.equations) newEquations.add (e.deepCopy (v));
             v.equations = newEquations;
+
+            if (v.attributes != null) v.attributes = new HashSet<String> (v.attributes);
 
             v.usedBy = null;
             v.uses = null;
@@ -1490,7 +1499,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     **/
     public void addAttribute (String attribute)
     {
-        if (attributes == null) attributes = new TreeSet<String> ();
+        if (attributes == null) attributes = new HashSet<String> ();
         attributes.add (attribute);
     }
 

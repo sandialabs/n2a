@@ -81,7 +81,7 @@ public class EquationSet implements Comparable<EquationSet>
     public MNode                               metadata;
     public List<Variable>                      ordered;
     public List<ArrayList<EquationSet>>        splits;                 // Enumeration of the $type splits this part can go through
-    public HashSet<EquationSet>                splitSources;           // Equation sets that might create an instance of this equation set via a $type split. Can include ourself.
+    public Set<EquationSet>                    splitSources;           // Equation sets that might create an instance of this equation set via a $type split. Can include ourself.
     public boolean                             lethalN;                // our population could shrink
     public boolean                             lethalP;                // we could have a non-zero probability of dying in some cycle 
     public boolean                             lethalType;             // we can be killed by a part split
@@ -2748,9 +2748,10 @@ public class EquationSet implements Comparable<EquationSet>
         if (splitSources == null) splitSources = new HashSet<EquationSet> ();
         for (Variable v : variables)
         {
-            if (v.reference == null  ||  v.reference.variable == null  ||  ! v.reference.variable.name.equals ("$type")) continue;
+            Variable type = v.reference.variable;  // The actual variable. It is possible for an equation in one part to indicate a type split in another part.
+            if (! type.name.equals ("$type")) continue;
 
-            EquationSet container = v.reference.variable.container;
+            EquationSet container = type.container;
             if (container.splits == null)  // in case we are referencing $type in another equation set that has not yet been processed
             {
                 container.splits = new ArrayList<ArrayList<EquationSet>> ();
@@ -2815,13 +2816,7 @@ public class EquationSet implements Comparable<EquationSet>
     public Set<EquationSet> getConversionTargets ()
     {
         Set<EquationSet> result = new TreeSet<EquationSet> ();
-        for (ArrayList<EquationSet> split : splits)
-        {
-            for (EquationSet s : split)
-            {
-                result.add (s);
-            }
-        }
+        for (ArrayList<EquationSet> split : splits) result.addAll (split);
         return result;
     }
 
@@ -3052,7 +3047,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v.type = new MatrixDense (3, 1);
             }
-            else if (v.name.equals ("$init")  ||  v.name.equals ("$live")  ||  v.name.equals ("$p")  ||  v.name.equals ("$n")  ||  (v.name.equals ("$t")  &&  v.order == 1))
+            else if (v.name.equals ("$connect")  ||  v.name.equals ("$init")  ||  v.name.equals ("$live")  ||  v.name.equals ("$p")  ||  v.name.equals ("$n")  ||  (v.name.equals ("$t")  &&  v.order == 1))
             {
                 v.type = new Scalar (1);
             }
@@ -3895,7 +3890,7 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Optimizes a given subset of variables with the assumption that specified phase indicator is true.
+        Optimizes a given subset of variables with the assumption that the specified phase indicator is true.
         Starts by replacing the variables with deep copies so that any changes do not
         damage the original equation set.
         @param bless Tag the given temporary variable as having a user, so that it does not get
@@ -3908,6 +3903,15 @@ public class EquationSet implements Comparable<EquationSet>
         {
             int i = list.indexOf (bless);
             if (i >= 0) list.get (i).addUser (this);
+        }
+
+        // Assign priority field, so that ReplaceConstants can know when to assume a variable reference is zero.
+        // This optimization is only available during the init phase. In other phases, it is necessary to look up current value.
+        if (phase.equals ("$init"))
+        {
+            determineOrderInit (list);
+            int i = 0;
+            for (Variable v : list) v.priority = i++;
         }
 
         ReplaceConstants replace = new ReplaceConstants (phase);
@@ -3966,13 +3970,11 @@ public class EquationSet implements Comparable<EquationSet>
         public Variable self;
         public String   phase;
         public boolean  init;
-        public boolean  splitTarget;
 
         public ReplaceConstants (String phase)
         {
-            this.phase  = phase;
-            splitTarget = ! splitSources.isEmpty ();
-            init        = phase.equals ("$init");
+            this.phase = phase;
+            init       = phase.equals ("$init");
         }
 
         public Operator transform (Operator op)
@@ -3980,13 +3982,50 @@ public class EquationSet implements Comparable<EquationSet>
             if (op instanceof AccessVariable)
             {
                 AccessVariable av = (AccessVariable) op;
+                Variable v = av.reference.variable;
                 Operator result = null;
                 if      (phase .equals   (av.name)) result = new Constant (1);
                 else if (phases.contains (av.name)) result = new Constant (0);
-                // Self-reference returns 0 at init time, but references to other variables may return nonzero
-                // if they are initialized before this one. Self might also be initialized by a type split.
-                // TODO: check if individual variable receives values during a split, rather than assuming they all do.
-                else if (av.reference.variable == self  &&  init  &&  ! splitTarget) result = new Constant (0);
+                else if (init  &&  v.container == self.container  &&  v.priority >= self.priority)  // Reference to a variable that has not yet been assigned by init.
+                {
+                    // If a variable could be initialied to something besides 0 before init, then we must treat it as unknown.
+                    // * Variables could be assigned by a type split before init runs.
+                    // * $index is 0 if this is a singleton, otherwise unknown
+                    // * $n will return the current size of the population. If it shows up here, it is unknown.
+                    // * $p defaults to 1 until explicitly assigned.
+                    // * $t and $t' will have values from the current event, and thus are unknown.
+                    // * $type may hold a split position, so unknown.
+                    // Other $variables will either be constant and therefore not show up here,
+                    // or they will not yet be assigned. Treat them as ordinary variables with value 0.
+                    if (v.name.equals ("$n")  &&  v.order == 0) return null;
+                    if (v.name.equals ("$t")  &&  v.order <= 1) return null;
+                    if (v.name.equals ("$type")) return null;
+                    if (v.name.equals ("$index"))
+                    {
+                        if (v.container.isSingleton (false)) result = new Constant (0);
+                    }
+                    else
+                    {
+                        // Was it assigned by a type split?
+                        boolean splitTarget = false;
+                        for (EquationSet s : splitSources)
+                        {
+                            if (s.find (v) != null)
+                            {
+                                // This does not filter forbidden attributes.
+                                // The effect is that we treat more variables as having unknown value.
+                                // This is the conservative thing to do.
+                                splitTarget = true;
+                                break;
+                            }
+                        }
+                        if (! splitTarget)
+                        {
+                            if (v.name.equals ("$p")  &&  v.order == 0) result = new Constant (1);
+                            else                                        result = new Constant (0);
+                        }
+                    }
+                }
                 if (result != null) result.parent = av.parent;
                 return result;
             }

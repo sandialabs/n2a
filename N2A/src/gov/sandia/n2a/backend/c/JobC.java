@@ -3405,7 +3405,7 @@ public class JobC extends Thread
             //   $type -- The integer index, in the $type expression, of the current target part. The target part's $type field will be initialized with this number (and zeroed after one cycle).
             result.append ("void " + ns + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, int " + mangle ("$type") + ")\n");
             result.append ("{\n");
-            result.append ("  " + mangle (dest.name) + " * to = " + mangle (dest.name) + ".allocate ();\n");
+            result.append ("  " + mangle (dest.name) + " * to = " + mangle (dest.name) + ".allocate ();\n");  // if this is a recycled part, then clear() is called
             if (connectionDest)
             {
                 // Match connection bindings
@@ -3420,10 +3420,9 @@ public class JobC extends Thread
                     result.append ("  to->" + mangle (c.alias) + " = from->" + mangle (c.alias) + ";\n");
                 }
             }
+            // TODO: Convert contained populations from matching populations in the source part?
             result.append ("  to->enterSimulation ();\n");
             result.append ("  getEvent ()->enqueue (to);\n");
-            result.append ("  to->init ();\n");  // sets all variables, so partially redundant with the following code ...
-            // TODO: Convert contained populations from matching populations in the source part?
 
             // Match variables between the two sets.
             // TODO: a match between variables should be marked as a dependency. This might change some "dummy" variables into stored values.
@@ -3435,16 +3434,14 @@ public class JobC extends Thread
                     result.append ("  to->" + mangle (v) + " = " + mangle ("$type") + ";\n");  // initialize new part with its position in the $type split
                     continue;
                 }
-                if (v.hasAny (forbiddenAttributes))
-                {
-                    continue;
-                }
+                if (v.hasAny (forbiddenAttributes)) continue;
                 Variable v2 = source.find (v);
-                if (v2 != null  &&  v2.equals (v))
+                if (v2 != null)
                 {
                     result.append ("  to->" + mangle (v) + " = " + resolve (v2.reference, context, false, "from->", false) + ";\n");
                 }
             }
+            result.append ("  to->init ();\n");  // Unless the user qualifies code with $type, the values just copied above will simply be overwritten.
 
             result.append ("}\n");
             result.append ("\n");

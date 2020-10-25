@@ -1169,7 +1169,7 @@ public class InternalBackendData
     public void analyzeConversions (EquationSet s)
     {
         // Type conversions
-        List<String> forbiddenVariables = Arrays.asList ("$type", "$live", "$index");  // forbid $index and all phase variables. TODO: create attributes just for this?
+        List<String> forbiddenVariables = Arrays.asList ("$type", "$index", "$live", "$init", "$connect");  // forbid $index and all phase variables. TODO: create attributes just for this?
         for (EquationSet target : s.getConversionTargets ())
         {
             if (s.connectionBindings == null)
@@ -1189,8 +1189,8 @@ public class InternalBackendData
             for (Variable v : targetBed.localMembers)
             {
                 if (forbiddenVariables.contains (v.name)) continue;
-                Variable v2 = s.find (v);
-                if (v2 != null  &&  v2.compareTo (v) == 0)  // compareTo() does not consider container
+                Variable v2 = s.find (v);  // find() does not consider container
+                if (v2 != null)
                 {
                     conversion.to  .add (v);
                     conversion.from.add (v2);
