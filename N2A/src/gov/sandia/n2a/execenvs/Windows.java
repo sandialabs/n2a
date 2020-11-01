@@ -1,11 +1,12 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.execenvs;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
@@ -13,28 +14,52 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Set;
 import java.util.TreeSet;
 
 public class Windows extends LocalHost
 {
     @Override
-    public Set<Long> getActiveProcs () throws Exception
+    public boolean isActive (MNode job) throws Exception
     {
-        Set<Long> result = new TreeSet<Long> ();
-        String[] cmdArray = new String[] {"tasklist", "/v", "/fo", "table"};
-        Process proc = Runtime.getRuntime ().exec (cmdArray);
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        if (pid == 0) return false;
+
+        String jobDir = Paths.get (job.get ()).getParent ().toString ();
+        ProcessBuilder b = new ProcessBuilder ("powershell", "get-process", "-Id", String.valueOf (pid), "|", "format-table", "Path");
+        Process p = b.start ();
+        p.getOutputStream ().close ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (p.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
             {
-                line = line.toLowerCase ();
-                if (line.contains ("n2a_job"))
+                if (line.startsWith (jobDir)) return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public Set<Long> getActiveProcs () throws Exception
+    {
+        Set<Long> result = new TreeSet<Long> ();
+
+        Path   resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
+        String jobsDir     = resourceDir.resolve ("jobs").toString ();
+
+        ProcessBuilder b = new ProcessBuilder ("powershell", "get-process", "|", "format-table", "Id,Path");
+        Process p = b.start ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (p.getInputStream ())))
+        {
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                if (line.contains (jobsDir))
                 {
-                    // If need to use /b for background and don't get title info anymore
-                    String[] parts = line.split ("\\s+");
-                    result.add (new Long (parts[1]));
+                    String[] parts = line.trim ().split (" ", 2);
+                    result.add (new Long (parts[0]));
                 }
             }
         }
@@ -58,8 +83,9 @@ public class Windows extends LocalHost
             + "  echo failure > finished\r\n"
             + ")\r\n"
         );
-        String [] commandParm = new String[] {"cmd", "/c", "start", "/b", script.getAbsolutePath ()};
-        Process p = Runtime.getRuntime ().exec (commandParm);
+
+        ProcessBuilder b = new ProcessBuilder ("cmd", "/c", "start", "/b", script.getAbsolutePath ());
+        Process p = b.start ();
         p.waitFor ();
         if (p.exitValue () != 0)
         {
@@ -68,17 +94,18 @@ public class Windows extends LocalHost
         }
 
         // Get PID of newly-started job
-        Process proc = Runtime.getRuntime ().exec (new String[] {"tasklist", "/v", "/fo", "table"});  // TODO: might be safer to use CSV format instead
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        b = new ProcessBuilder ("powershell", "get-process", "|", "format-table", "Id,Path");
+        p = b.start ();
+        p.getOutputStream ().close ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (p.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
             {
-                line = line.toLowerCase ();
                 if (line.contains (jobDir))
                 {
-                    String[] parts = line.split ("\\s+");
-                    job.set (Long.parseLong (parts[1]), "$metadata", "pid");
+                    line = line.trim ().split (" ", 2)[0];
+                    job.set (Long.parseLong (line), "$metadata", "pid");
                     return;
                 }
             }
@@ -86,9 +113,12 @@ public class Windows extends LocalHost
     }
 
     @Override
-    public void killJob (long pid) throws Exception
+    public void killJob (long pid, boolean force) throws Exception
     {
-        Runtime.getRuntime ().exec (new String [] {"taskkill", "/PID", String.valueOf (pid), "/F"});
+        if (force) new ProcessBuilder ("taskkill", "/PID", String.valueOf (pid), "/F").start ();
+        // Windows does not provide a simple way to signal a non-GUI process.
+        // Instead, the program is responsible to poll for the existence of the "finished" file
+        // on a reasonable interval, say once per second. See Backend.kill()
     }
 
     @Override

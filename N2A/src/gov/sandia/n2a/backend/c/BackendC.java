@@ -1,20 +1,14 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.c;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-
 import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -59,22 +53,6 @@ public class BackendC extends Backend
         Thread t = new JobC (job);
         t.setDaemon (true);
         t.start ();
-    }
-
-    @Override
-    public void kill (MNode job)
-    {
-        long pid = job.getOrDefault (0l, "$metadata", "pid");
-        if (pid != 0)
-        {
-            try
-            {
-                HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host")).killJob (pid);
-                String jobDir = new File (job.get ()).getParent ();
-                Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
-            }
-            catch (Exception e) {}
-        }
     }
 
     @Override

@@ -77,6 +77,10 @@ template<class T, int R, int C> MatrixFixed<T,R,1> gaussian (const MatrixFixed<T
 template<class T> MatrixFixed<T,3,1> grid    (int i, int nx = 1, int ny = 1, int nz = 1);
 template<class T> MatrixFixed<T,3,1> gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);
 
+#ifndef N2A_SPINNAKER
+extern void signalHandler (int number);
+#endif
+
 
 // Simulation classes --------------------------------------------------------
 

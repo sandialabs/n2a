@@ -1,14 +1,19 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.plugins.extpoints;
 
+import java.io.ByteArrayInputStream;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.execenvs.HostSystem;
 import gov.sandia.n2a.parms.ParameterSpecification;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
@@ -122,12 +127,27 @@ public abstract class Backend implements ExtensionPoint
     }
 
     /**
-        Make best-effort attempt to terminate run.
-        For a local machine, this could involve killing the proces.
+        Stop the the run.
+        @param force If false, signal the job to shut down gracefully.
+        If true, terminate the process. For a local machine, this could involve killing the process.
         For a remote machine, this could involve asking the scheduler to kill the job.
     **/
-    public void kill (MNode job)
+    public void kill (MNode job, boolean force)
     {
+        // This default implementation is suitable for most backends, even if the job is running remotely.
+        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        if (pid != 0)
+        {
+            try
+            {
+                HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host")).killJob (pid, force);
+                Path jobDir = Paths.get (job.get ()).getParent ();
+                Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), jobDir.resolve ("finished"));
+                // Note that BackendC on Windows uses the mere existence of the "finished" file as a signal to shut down gracefully.
+                // This is due to the lack of a proper SIGTERM in Windows.
+            }
+            catch (Exception e) {}
+        }
     }
 
     /**

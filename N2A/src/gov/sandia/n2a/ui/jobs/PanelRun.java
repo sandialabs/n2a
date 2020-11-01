@@ -126,7 +126,7 @@ public class PanelRun extends JPanel
                     viewJob ();
                     job = (NodeJob) displayNode;
                 }
-                buttonStop.setEnabled (job.complete < 1);
+                buttonStop.setEnabled (job.complete < 1  ||  job.complete == 3);
             }
         });
 
@@ -196,7 +196,7 @@ public class PanelRun extends JPanel
                             {
                                 NodeJob job = i.next ();
                                 job.monitorProgress (PanelRun.this);
-                                if (job.complete >= 1  ||  job.deleted) i.remove ();
+                                if (job.complete >= 1  &&  job.complete != 3  ||  job.deleted) i.remove ();
                             }
                         }
                         sleep (20000);
@@ -668,7 +668,8 @@ public class PanelRun extends JPanel
         else if (job.complete == 0)                      contents.append (" Started");
         else if (job.complete > 0  &&  job.complete < 1) contents.append (" " + Math.round (job.complete * 100) + "%");
         else if (job.complete == 1)                      contents.append (" Success");
-        else if (job.complete == 3)                      contents.append (" Killed");
+        else if (job.complete == 3)                      contents.append (" Killed (lingering)");
+        else if (job.complete == 4)                      contents.append (" Killed");
         else                                             contents.append (" Failed");  // complete==2, or any value not specified above
         contents.append ("\n");
         if (job.dateStarted  != null) contents.append ("  started:  " + job.dateStarted  + "\n");

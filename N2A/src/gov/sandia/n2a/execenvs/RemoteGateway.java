@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,6 +18,30 @@ import java.util.TreeSet;
 
 public class RemoteGateway extends RemoteHost
 {
+    /**
+        TODO: Test this code. It is unknown what options will actually work with current version of ps on the gateway system.
+    **/
+    @Override
+    public boolean isActive (MNode job) throws Exception
+    {
+        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        if (pid == 0) return false;
+
+        Result r = Connection.exec ("ps -o pid,command " + String.valueOf (pid));
+        if (r.error) return false;
+        BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
+        String line;
+        while ((line = reader.readLine ()) != null)
+        {
+            line = line.trim ();
+            String[] parts = line.split ("\\s+", 2);  // any amount/type of whitespace forms the delimiter
+            long pidListed = Long.parseLong (parts[0]);
+            // TODO: save remote command in job record, then compare it here. PID alone is not enough to be sure job is running.
+            if (pid == pidListed) return true;
+        }
+        return false;
+    }
+
     @Override
     public Set<Long> getActiveProcs () throws Exception
     {
@@ -63,9 +87,9 @@ public class RemoteGateway extends RemoteHost
     }
 
     @Override
-    public void killJob (long pid) throws Exception
+    public void killJob (long pid, boolean force) throws Exception
     {
-        Connection.exec ("kill -9 " + pid);
+        Connection.exec ("kill -" + (force ? 9 : 15) + " " + pid);
     }
 
     public String getNamedValue (String name, String defaultValue)

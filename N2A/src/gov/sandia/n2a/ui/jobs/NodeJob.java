@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -43,10 +42,11 @@ import javax.swing.tree.TreePath;
 @SuppressWarnings("serial")
 public class NodeJob extends NodeBase
 {
-    protected static ImageIcon iconComplete = ImageUtil.getImage ("complete.gif");
-    protected static ImageIcon iconUnknown  = ImageUtil.getImage ("help.gif");
-    protected static ImageIcon iconFailed   = ImageUtil.getImage ("remove.gif");
-    protected static ImageIcon iconStopped  = ImageUtil.getImage ("stop.gif");
+    protected static ImageIcon iconComplete  = ImageUtil.getImage ("complete.gif");
+    protected static ImageIcon iconUnknown   = ImageUtil.getImage ("help.gif");
+    protected static ImageIcon iconFailed    = ImageUtil.getImage ("remove.gif");
+    protected static ImageIcon iconLingering = ImageUtil.getImage ("lingering.png");
+    protected static ImageIcon iconStopped   = ImageUtil.getImage ("stop.gif");
 
     protected static List<String> imageFileSuffixes = Arrays.asList (ImageIO.getReaderFileSuffixes ());  // We don't expect to load image handling plugins after startup, so one-time initialization is fine.
 
@@ -81,21 +81,24 @@ public class NodeJob extends NodeBase
     @Override
     public Icon getIcon (boolean expanded)
     {
-        if (complete == -1) return iconUnknown;
-        if (complete ==  1) return iconComplete;
-        if (complete ==  2) return iconFailed;
-        if (complete ==  3) return iconStopped;
-
-        // Create an icon on the fly which represents percent complete as a pie-chart
-        BufferedImage inProgress = new BufferedImage (16, 16, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = inProgress.createGraphics ();
-        g.setBackground (new Color (0, 0, 0, 1));
-        g.clearRect (0, 0, 16, 16);
-        g.setColor (new Color (0.3f, 0.5f, 1));
-        g.drawOval (0, 0, 14, 14);
-        g.setColor (Color.black);
-        g.fillArc (0, 0, 14, 14, 90, - Math.round (complete * 360));
-        return new ImageIcon (inProgress);
+        if (complete >= 0  &&  complete < 1)
+        {
+            // Create an icon on the fly which represents percent complete as a pie-chart
+            BufferedImage inProgress = new BufferedImage (16, 16, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = inProgress.createGraphics ();
+            g.setBackground (new Color (0, 0, 0, 0));
+            g.clearRect (0, 0, 16, 16);
+            g.setColor (new Color (0.3f, 0.5f, 1));
+            g.drawOval (0, 0, 14, 14);
+            g.setColor (Color.black);
+            g.fillArc (0, 0, 14, 14, 90, - Math.round (complete * 360));
+            return new ImageIcon (inProgress);
+        }
+        if (complete == 1) return iconComplete;
+        if (complete == 2) return iconFailed;
+        if (complete == 3) return iconLingering;
+        if (complete == 4) return iconStopped;
+        return iconUnknown;
     }
 
     public MNode getSource ()
@@ -120,7 +123,7 @@ public class NodeJob extends NodeBase
         {
             inherit = source.getOrDefault (key, "$inherit").split (",", 2)[0].replace ("\"", "");
             setUserObject (inherit);
-            if (complete >= 1)
+            if (complete >= 1  &&  complete != 3)
             {
                 // Since we won't reach the display update below, do a simple one here.
                 EventQueue.invokeLater (new Runnable ()
@@ -134,9 +137,10 @@ public class NodeJob extends NodeBase
             }
         }
 
-        if (complete >= 1) return;
+        if (complete >= 1  &&  complete != 3) return;
 
         float oldComplete = complete;
+        HostSystem env = HostSystem.get (source.get ("$metadata", "host"));
         Path jobDir = Paths.get (source.get ()).getParent ();
         if (complete == -1)
         {
@@ -176,18 +180,12 @@ public class NodeJob extends NodeBase
                 long currentTime = System.currentTimeMillis ();
                 if (currentTime - lastLiveCheck > 1000000)  // about 20 minutes
                 {
-                    HostSystem env = HostSystem.get (source.get ("$metadata", "host"));
-                    long pid = source.getOrDefault (0l, "$metadata", "pid");
                     try
                     {
-                        Set<Long> pids = env.getActiveProcs ();
-                        boolean dead;
-                        if (pid == 0) dead = pids.isEmpty ();
-                        else          dead = ! pids.contains (pid);
-                        if (dead)
+                        if (! env.isActive (source))
                         {
                             Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), finished);
-                            complete = 3;
+                            complete = 4;
                         }
                     }
                     catch (Exception e) {}
@@ -207,6 +205,16 @@ public class NodeJob extends NodeBase
             }
         }
 
+        if (complete == 3)
+        {
+            // Check if process is still lingering
+            try
+            {
+                if (! env.isActive (source)) complete = 4;
+            }
+            catch (Exception e) {}
+        }
+
         if (complete != oldComplete)
         {
             EventQueue.invokeLater (new Runnable ()
@@ -216,14 +224,17 @@ public class NodeJob extends NodeBase
                     panel.model.nodeChanged (NodeJob.this);
                     if (panel.displayNode == NodeJob.this)
                     {
-                        panel.buttonStop.setEnabled (complete < 1);
+                        panel.buttonStop.setEnabled (complete < 1  ||  complete == 3);
                         panel.viewJob ();
                     }
                     else if (panel.displayNode instanceof NodeFile  &&  panel.displayNode.getParent () == NodeJob.this)
                     {
-                        panel.buttonStop.setEnabled (complete < 1);
+                        panel.buttonStop.setEnabled (complete < 1  ||  complete == 3);
+                        // Update the display every 5 seconds during the run.
+                        // Some displays, such as a chart, could take longer than 5s to construct, so don't interrupt those.
+                        // Always update the display when a run finishes.
                         long currentTime = System.currentTimeMillis ();
-                        if (complete >= 1  ||  panel.displayThread == null  &&  currentTime - lastDisplay > 5000)
+                        if (complete >= 1  &&  complete != 3  ||  panel.displayThread == null  &&  currentTime - lastDisplay > 5000)
                         {
                             lastDisplay = currentTime;
                             panel.viewFile (false);
@@ -239,7 +250,8 @@ public class NodeJob extends NodeBase
     public void stop ()
     {
         MNode source = getSource ();
-        Backend.getBackend (source.get ("$metadata", "backend")).kill (source);
+        Backend.getBackend (source.get ("$metadata", "backend")).kill (source, complete >= 3);
+        if (complete < 3) complete = 3;
     }
 
     public void build (JTree tree)

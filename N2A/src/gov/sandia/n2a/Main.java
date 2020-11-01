@@ -31,8 +31,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Set;
-
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 
@@ -183,14 +181,9 @@ public class Main
             long currentTime = System.currentTimeMillis ();
             if (currentTime - lastLiveCheck > 10000)  // about 10 seconds
             {
-                long pid = job.getOrDefault (0l, "$metadata", "pid");
                 try
                 {
-                    Set<Long> pids = env.getActiveProcs ();
-                    boolean dead;
-                    if (pid == 0) dead = pids.isEmpty ();
-                    else          dead = ! pids.contains (pid);
-                    if (dead) break;
+                    if (env.isActive (job)) break;
                 }
                 catch (Exception e) {}
                 lastLiveCheck = currentTime;

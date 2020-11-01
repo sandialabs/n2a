@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,10 +17,32 @@ import java.util.TreeSet;
 
 public class RemoteParallel extends RemoteHost
 {
+    /**
+        TODO: This code needs to be tested.
+    **/
+    @Override
+    public boolean isActive (MNode job) throws Exception
+    {
+        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        if (pid == 0) return false;
+
+        Result r = Connection.exec ("squeue -o \"%i\" -u " + System.getProperty ("user.name"));
+        if (r.error  &&  r.stdErr != null  &&  ! r.stdErr.isEmpty ()) return false;
+
+        BufferedReader reader = new BufferedReader (new StringReader (r.stdOut));
+        String line;
+        while ((line = reader.readLine ()) != null)
+        {
+            long pidListed = Long.parseLong (line);
+            if (pidListed == pid) return true;
+        }
+        return false;
+    }
+
     @Override
     public Set<Long> getActiveProcs() throws Exception
     {
-        Result r = Connection.exec ("squeue -o \"%u %i\" -u " + System.getProperty ("user.name"));
+        Result r = Connection.exec ("squeue -o \"%i\" -u " + System.getProperty ("user.name"));
         if (r.error && r.stdErr != null && !r.stdErr.equals (""))
         {
             Backend.err.get ().println (r.stdErr);
@@ -31,7 +53,7 @@ public class RemoteParallel extends RemoteHost
         String line;
         while((line = reader.readLine ()) != null)
         {
-            result.add (new Long (line.substring (line.indexOf (" ") + 1)));
+            result.add (new Long (line));
         }
         return result;
     }
@@ -85,9 +107,9 @@ public class RemoteParallel extends RemoteHost
     }
 
     @Override
-    public void killJob (long pid) throws Exception
+    public void killJob (long pid, boolean force) throws Exception
     {
-        Connection.exec ("scancel " + pid);
+        Connection.exec ("scancel " + (force ? "" : "-s 15 ") + pid);
     }
 
     public String getNamedValue (String name, String defaultValue)

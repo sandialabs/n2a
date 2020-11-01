@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,6 +13,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -21,6 +22,25 @@ import java.util.TreeSet;
 public class Linux extends LocalHost
 {
     static boolean writeBackgroundScript = true;  // always write the script on first use in a given session
+
+    @Override
+    public boolean isActive (MNode job) throws Exception
+    {
+        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        if (pid == 0) return false;
+
+        String jobDir = Paths.get (job.get ()).getParent ().toString ();
+        Process proc = new ProcessBuilder ("ps", "-o", "command", String.valueOf (pid)).start ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                if (line.startsWith (jobDir)) return true;
+            }
+        }
+        return false;
+    }
 
     @Override
     public Set<Long> getActiveProcs () throws Exception
@@ -141,7 +161,7 @@ public class Linux extends LocalHost
     }
 
     @Override
-    public void killJob (long pid) throws Exception
+    public void killJob (long pid, boolean force) throws Exception
     {
         // Scan for PIDs chained from the given one. We need to kill them all.
         Set<Long> pids = new TreeSet<Long> ();
@@ -149,7 +169,6 @@ public class Linux extends LocalHost
         Process proc = new ProcessBuilder ("ps", "-eo", "pid,ppid").start ();
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
-            System.out.println ("  in try");
             String line;
             while ((line = reader.readLine ()) != null)
             {
@@ -167,7 +186,7 @@ public class Linux extends LocalHost
 
         List<String> command = new ArrayList<String> ();
         command.add ("kill");
-        command.add ("-9");
+        command.add (force ? "-9" : "-15");
         for (long l : pids) command.add (String.valueOf (l));
         new ProcessBuilder (command).start ();
     }

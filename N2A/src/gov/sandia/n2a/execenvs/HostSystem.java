@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -59,11 +59,19 @@ public abstract class HostSystem
         return result;
     }
 
+    /**
+        Determines if this application is running on a Windows system.
+        Not to be confused with the type of system a particular job executes on.
+    **/
     public static boolean isWindows ()
     {
         return System.getProperty ("os.name").toLowerCase ().indexOf ("win") >= 0;
     }
 
+    /**
+        Determines if this application is running on a Mac system.
+        Not to be confused with the type of system a particular job executes on.
+    **/
     public static boolean isMac ()
     {
         return System.getProperty ("os.name").toLowerCase ().indexOf ("mac") >= 0;
@@ -72,19 +80,15 @@ public abstract class HostSystem
     // TODO: This interface should use NIO as much as possible.
     // In particular, remote file access should be encapsulated in a FileSystemProvider.
 
-    public abstract Set<Long>    getActiveProcs    ()                            throws Exception;
-    public abstract long         getProcMem        (long pid)                    throws Exception;
-    /**
-        Starts the simulation on the host system.
-        Sets up piping of the program's stdout and stderr to files "out" and "err" respectively.
-        If a file called "in" exists in the jobDir, then pipes it into the program.
-    **/
-    public abstract void         submitJob         (MNode job, String command)   throws Exception;
-    public abstract void         killJob           (long pid)                    throws Exception;
-    public abstract void         setFileContents   (String path, String content) throws Exception;
-    public abstract String       getFileContents   (String path)                 throws Exception;
-    public abstract void         deleteJob         (String jobName)              throws Exception;
-    public abstract void         downloadFile      (String path, File destPath)  throws Exception;
+    public abstract boolean   isActive        (MNode job)                   throws Exception;  // check if the given job is active
+    public abstract Set<Long> getActiveProcs  ()                            throws Exception;  // enumerate all of our active jobs
+    public abstract long      getProcMem      (long pid)                    throws Exception;  // determine memory usage for the given job
+    public abstract void      submitJob       (MNode job, String command)   throws Exception;
+    public abstract void      killJob         (long pid, boolean force)     throws Exception;
+    public abstract void      setFileContents (String path, String content) throws Exception;
+    public abstract String    getFileContents (String path)                 throws Exception;
+    public abstract void      deleteJob       (String jobName)              throws Exception;
+    public abstract void      downloadFile    (String path, File destPath)  throws Exception;
 
     public static long lastModified (Path path)
     {

@@ -18,6 +18,22 @@ template n2a_T gaussian (n2a_T sigma);
 template MatrixFixed<n2a_T,3,1> grid    (int i, int nx, int ny, int nz);
 template MatrixFixed<n2a_T,3,1> gridRaw (int i, int nx, int ny, int nz);
 
+#ifndef N2A_SPINNAKER
+void signalHandler (int number)
+{
+    cerr << "Got signal " << number << endl;
+    switch (number)
+    {
+        case SIGINT:
+        case SIGTERM:
+            Simulator<n2a_T>::instance.stop = true;
+            break;
+        default:
+            exit (number);
+    }
+}
+#endif
+
 
 // I/O -----------------------------------------------------------------------
 

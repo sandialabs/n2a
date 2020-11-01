@@ -1,12 +1,11 @@
 /*
-Copyright 2018-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.neuroml;
 
-import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -35,22 +34,6 @@ public class BackendNeuroML extends Backend
         Thread simulationThread = new SimulationThread (job);
         simulationThread.setDaemon (true);
         simulationThread.start ();
-    }
-
-    @Override
-    public void kill (MNode job)
-    {
-        long pid = job.getOrDefault (0l, "$metadata", "pid");
-        if (pid != 0)
-        {
-            try
-            {
-                HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host")).killJob (pid);
-                Path jobDir = Paths.get (job.get ()).getParent ();
-                Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), jobDir.resolve ("finished"));
-            }
-            catch (Exception e) {}
-        }
     }
 
     public class SimulationThread extends Thread

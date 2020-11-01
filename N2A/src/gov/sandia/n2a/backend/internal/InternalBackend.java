@@ -45,8 +45,9 @@ public class InternalBackend extends Backend
         simulationThread.start ();
     }
 
+    @SuppressWarnings("deprecation")
     @Override
-    public void kill (MNode job)
+    public void kill (MNode job, boolean force)
     {
         Thread[] threads = new Thread[Thread.activeCount ()];
         int count = Thread.enumerate (threads);
@@ -57,7 +58,8 @@ public class InternalBackend extends Backend
             {
                 SimulationThread s = (SimulationThread) t;
                 if (s.job != job) continue;
-                if (s.simulator != null) s.simulator.stop = true;
+                if (! force  &&  s.simulator != null) s.simulator.stop = true;
+                else                                  s.stop ();
                 return;
             }
         }

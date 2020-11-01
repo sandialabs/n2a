@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -27,8 +27,6 @@ import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.PrintStream;
@@ -201,22 +199,6 @@ class XyceBackend extends Backend
         };
         t.setDaemon (true);
         t.start ();
-    }
-
-    @Override
-    public void kill (MNode job)
-    {
-        long pid = job.getOrDefault (0l, "$metadata", "pid");
-        if (pid != 0)
-        {
-            try
-            {
-                HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host")).killJob (pid);
-                String jobDir = new File (job.get ()).getParent ();
-                Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), Paths.get (jobDir, "finished"));
-            }
-            catch (Exception e) {}
-        }
     }
 
     @Override

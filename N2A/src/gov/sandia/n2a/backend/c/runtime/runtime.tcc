@@ -8,6 +8,11 @@
 #ifdef n2a_FP
 # include "fixedpoint.h"
 #endif
+#ifdef _WIN32
+# define WIN32_LEAN_AND_MEAN
+# include <windows.h>
+# include <time.h>
+#endif
 
 
 // General functions ---------------------------------------------------------
@@ -1183,12 +1188,28 @@ Simulator<T>::run (WrapperBase<T> & wrapper)
     updatePopulations ();
     event->requeue ();  // Only reinserts self if not empty.
 
+#   ifdef _WIN32
+    // Handle graceful shutdown on Windows.
+    int64_t lastCheck = 0;  // Wasting extra bits so we will be ready for the end of Unix time in 2038. By then N2A will have taken over the world, but will Windows still be around?
+#   endif
+
     // Regular simulation
     while (! queueEvent.empty ()  &&  ! stop)
     {
         currentEvent = queueEvent.top ();
         queueEvent.pop ();
         currentEvent->run ();
+
+#       ifdef _WIN32
+        // Since time() is in seconds, simply checking for a difference is sufficient
+        // to throttle our check rate to once per second.
+        int64_t wallTime = (int64_t) time (0);
+        if (wallTime != lastCheck)
+        {
+            if (GetFileAttributes ("finished") != INVALID_FILE_ATTRIBUTES) break;
+            lastCheck = wallTime;
+        }
+#       endif
     }
 }
 

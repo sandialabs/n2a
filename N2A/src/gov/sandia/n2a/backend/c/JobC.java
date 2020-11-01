@@ -200,7 +200,7 @@ public class JobC extends Thread
             needRuntime = false;   // Stop checking files for this session.
         }
 
-        if (changed)
+        if (changed)  // Delete existing object files
         {
             DirectoryStream.Filter<Path> filter = new DirectoryStream.Filter<Path> ()
             {
@@ -213,10 +213,7 @@ public class JobC extends Thread
             {
                 dir.forEach (file ->
                 {
-                    try
-                    {
-                        Files.delete (file);
-                    }
+                    try {Files.delete (file);}
                     catch (IOException e) {}  // Unfortunately, the Consumer interface does not permit exceptions to percolate up.
                 });
             }
@@ -588,19 +585,12 @@ public class JobC extends Thread
         result.append ("\n");
         generateDefinitions (context, model);
 
-        // Signal handler
-        result.append ("void signalHandler (int number)\n");
-        result.append ("{\n");
-        result.append ("  cerr << \"Got signal \" << number << endl;\n");
-        result.append ("  if (number == SIGTERM) Simulator<" + T + ">::instance.stop = true;\n");
-        result.append ("  else                   exit (number);\n");
-        result.append ("}\n");
-        result.append ("\n");
-
         // Main
         result.append ("int main (int argc, char * argv[])\n");
         result.append ("{\n");
-        result.append ("  signal (SIGFPE, signalHandler);\n");
+        result.append ("  signal (SIGFPE,  signalHandler);\n");
+        result.append ("  signal (SIGINT,  signalHandler);\n");
+        result.append ("  signal (SIGTERM, signalHandler);\n");
         result.append ("\n");
         result.append ("  try\n");
         result.append ("  {\n");
