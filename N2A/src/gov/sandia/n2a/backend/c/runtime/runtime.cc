@@ -2,6 +2,8 @@
 #include "MatrixFixed.tcc"
 #include "Matrix.tcc"
 
+#include <csignal>
+
 
 using namespace std;
 

@@ -1,138 +1,170 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.execenvs;
 
+import java.io.BufferedReader;
+import java.io.StringReader;
+import java.net.URI;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.Set;
+import java.util.TreeSet;
+
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Connection.Result;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.StringReader;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
-public abstract class RemoteHost extends HostSystem
+/**
+    Wraps access to any system other than localhost.
+    This default implementation is suitable for a unix-like system that runs jobs on its
+    own processors, as opposed to queuing them on a cluster or specialized hardware.
+**/
+public class RemoteHost extends HostSystem
 {
-    // TODO: package remote file operations into a FileSystemProvider
-    public void createDir (String path) throws Exception
+    FileSystem sshfs;
+
+    @Override
+    public boolean isActive (MNode job) throws Exception
     {
-        Result r = Connection.exec ("mkdir -p '" + path + "'");
-        if (r.error)
+        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        if (pid == 0) return false;
+
+        Result r = Connection.exec ("ps -o pid,command " + String.valueOf (pid));
+        if (r.error) return false;
+        try (BufferedReader reader = new BufferedReader (new StringReader (r.stdOut)))
         {
-            Backend.err.get ().println ("Could not create job directory: " + r.stdErr);
-            throw new Backend.AbortRun ();
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                line = line.trim ();
+                String[] parts = line.split ("\\s+", 2);  // any amount/type of whitespace forms the delimiter
+                long pidListed = Long.parseLong (parts[0]);
+                // TODO: save remote command in job record, then compare it here. PID alone is not enough to be sure job is running.
+                if (pid == pidListed) return true;
+            }
         }
+        return false;
     }
 
     @Override
-    public void setFileContents (String path, String content) throws Exception
+    public Set<Long> getActiveProcs () throws Exception
     {
-        File tempFile = new File ("tempSetFileContents");  // Created in local working directory, which should be set to the job dir.
-        stringToFile (tempFile, content);
-        Result r = Connection.send (tempFile, path);
-        if (r.error)
-        {
-            Backend.err.get ().println ("Could not send file content to remote system: " + r.stdErr);
-            throw new Backend.AbortRun ();
-        }
-    }
+        Set<Long> result = new TreeSet<Long> ();
 
-    @Override
-    public String getFileContents (String path) throws Exception
-    {
-        Result r = Connection.exec ("cat '" + path + "'");
+        Result r = Connection.exec ("ps ux");
         if (r.error)
         {
             Backend.err.get ().println (r.stdErr);
             throw new Backend.AbortRun ();
         }
-        return r.stdOut;
+        try (BufferedReader reader = new BufferedReader (new StringReader (r.stdOut)))
+        {
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                if (line.contains ("ps ux")) continue;
+                if (! line.contains ("model")) continue;
+                line = line.trim ();
+                String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
+                result.add (new Long (parts[1]));  // pid is second column
+            }
+        }
+        return result;
     }
 
     @Override
-    public void deleteJob (String jobName) throws Exception
+    public void submitJob (MNode job, String command) throws Exception
     {
-        String dir = getNamedValue ("directory.jobs");
-        String path = dir + "/" + jobName;
-        String rmCmd = "rm -rf '" + path + "'";
-        Result r = Connection.exec (rmCmd);
-        if (r.error)
+        String prefix = command.substring (0, command.lastIndexOf ("/"));
+        Connection.exec (command + " > '" + prefix + "/out' 2>> '" + prefix + "/err' &", true);
+
+        // Get PID of newly-created job
+        Result r = Connection.exec ("ps -ewwo pid,command");
+        if (r.error) return;
+        try (BufferedReader reader = new BufferedReader (new StringReader (r.stdOut)))
         {
-            Backend.err.get ().println (r.stdErr);
-            throw new Backend.AbortRun ();
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                line = line.trim ();
+                String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
+                job.set (Long.parseLong (parts[0]), "$metadata", "pid");
+                return;
+            }
         }
     }
 
     @Override
-    public void downloadFile (String path, File destPath) throws Exception
+    public void killJob (long pid, boolean force) throws Exception
     {
-        Result r = Connection.receive (path, destPath);
-        if (r.error)
-        {
-            Backend.err.get ().println (r.stdErr);
-            throw new Backend.AbortRun ();
-        }
+        Connection.exec ("kill -" + (force ? 9 : 15) + " " + pid);
     }
 
-    public long lastModified (String path)
+    @SuppressWarnings("unchecked")
+    @Override
+    public Path getResourceDir () throws Exception
     {
-        try
+        // TODO: also check if ssh connection is still live.
+        if (sshfs == null)
         {
-            Result r = Connection.exec ("ls --time-style=full '" + path + "'");
-            if (r.error) return 0;
-            String line = new BufferedReader (new StringReader (r.stdOut)).readLine ();
-            if (line.contains ("No such")) return 0;
-            String[] parts = line.split (" ");
-            line = parts[5] + " " + parts[6];
-            SimpleDateFormat f = new SimpleDateFormat ("yyyy-MM-dd HH:mm:ss.S");
-            Date d = f.parse (line);
-            return d.getTime ();
+            String hostname = metadata.getOrDefault (name, "hostname");
+            String username = metadata.getOrDefault (System.getProperty ("user.name"), "username");
+            sshfs = FileSystems.newFileSystem (new URI ("ssh.unix://" + hostname + "/home/" + username), Collections.EMPTY_MAP);
         }
-        catch (Exception e)
-        {
-            return 0;
-        }
+        return sshfs.getPath ("n2a");
     }
 
-    public String file (String dirName, String fileName) throws Exception
+    @Override
+    public long getProcMem (long pid) throws Exception
     {
-        return dirName + "/" + fileName;
+        Result r = Connection.exec ("ps -q " + String.valueOf (pid) + " -o pid,rss --no-header");
+        if (r.error) return 0;
+        try (BufferedReader reader = new BufferedReader (new StringReader (r.stdOut)))
+        {
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                line = line.trim ();
+                String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
+                long PID = Long.parseLong (parts[0]);
+                long RSS = Long.parseLong (parts[1]);
+                if (PID == pid) return RSS * 1024;
+            }
+        }
+        return 0;
     }
 
-    public String getNamedValue (String name, String defaultValue)
+    @Override
+    public long getMemoryPhysicalTotal ()
     {
-        if (name.equalsIgnoreCase ("name"))           return "RedSky";
-        if (name.equalsIgnoreCase ("xyce.binary"))    return "/ascldap/users/cewarr/srcXyce/Xyce/BUILD/XyceOpenMPI/src/Xyce";
-        if (name.equalsIgnoreCase ("directory.jobs"))
-        {
-            try
-            {
-                Result r = Connection.exec ("cd; pwd");  // return to home directory and print it; probably pwd alone is sufficient
-                String line = new BufferedReader (new StringReader (r.stdOut)).readLine ();
-                return line + "/.n2a";
-            }
-            catch (Exception e)
-            {
-                return defaultValue;
-            }
-        }
-        if (name.equalsIgnoreCase ("c.directory"))
-        {
-            try
-            {
-                Result r = Connection.exec ("cd; pwd");  // return to home directory and print it; probably pwd alone is sufficient
-                String line = new BufferedReader (new StringReader (r.stdOut)).readLine ();
-                return line + "/.n2a_cruntime";
-            }
-            catch (Exception e)
-            {
-                return defaultValue;
-            }
-        }
-        return super.getNamedValue (name, defaultValue);
+        // TODO
+        return 0;
+    }
+
+    @Override
+    public long getMemoryPhysicalFree ()
+    {
+        // TODO
+        return 0;
+    }
+
+    @Override
+    public int getProcessorTotal ()
+    {
+        // TODO
+        return 0;
+    }
+
+    @Override
+    public double getProcessorLoad ()
+    {
+        // TODO
+        return 0;
     }
 }

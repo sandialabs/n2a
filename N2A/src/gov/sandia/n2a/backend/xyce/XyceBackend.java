@@ -161,7 +161,7 @@ class XyceBackend extends Backend
 
                     // set up job info
                     HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
-                    String xyce  = env.getNamedValue ("xyce.binary");
+                    String xyce  = env.metadata.getOrDefault ("Xyce", "xyce", "command");
                     Path cirFile = jobDir.resolve ("model.cir");
                     Path prnFile = jobDir.resolve ("result");  // "prn" doesn't work, at least on windows
 

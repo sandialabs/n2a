@@ -95,7 +95,7 @@ public class CreateRunEnsembleDialog extends EscapeDialog implements HelpCapable
                         "</font>";
                 }
                 String s = "<html>This will create <font color='blue' size='+1'>" + runs + "</font> run" +
-                    StringUtil.s(runs) + " on <font color='blue' size='+1'>" + pnlRun.getEnvironment().toString() +
+                    StringUtil.s(runs) + " on <font color='blue' size='+1'>" + pnlRun.getEnvironment().name +
                     "</font> using <font color='blue' size='+1'>" + pnlRun.getSimulator().getName() +
                     "</font>" + timing + ".<br><br>Do you want to continue?</html>";
                 int answer = JOptionPane.showConfirmDialog(

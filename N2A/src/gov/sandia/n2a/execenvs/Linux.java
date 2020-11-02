@@ -11,15 +11,15 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.InputStreamReader;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class Linux extends LocalHost
+public class Linux extends HostSystem
 {
     static boolean writeBackgroundScript = true;  // always write the script on first use in a given session
 
@@ -30,7 +30,7 @@ public class Linux extends LocalHost
         if (pid == 0) return false;
 
         String jobDir = Paths.get (job.get ()).getParent ().toString ();
-        Process proc = new ProcessBuilder ("ps", "-o", "command", String.valueOf (pid)).start ();
+        Process proc = new ProcessBuilder ("ps", "-q", String.valueOf (pid), "-wwo", "command", "--no-header").start ();
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -46,18 +46,20 @@ public class Linux extends LocalHost
     public Set<Long> getActiveProcs () throws Exception
     {
         Set<Long> result = new TreeSet<Long> ();
-        Process proc = new ProcessBuilder ("ps", "-eo", "pid,command").start ();
+
+        Path   resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
+        String jobsDir     = resourceDir.resolve ("jobs").toString ();
+
+        Process proc = new ProcessBuilder ("ps", "-ewwo", "pid,command", "--no-header").start ();
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
             {
-                line = line.toLowerCase ();
-                if (line.contains ("n2a_job"))
+                if (line.contains (jobsDir))
                 {
-                    line = line.trim ();
-                    String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
-                    result.add (Long.parseLong (parts[0]));
+                    String[] parts = line.trim ().split (" ", 2);
+                    result.add (new Long (parts[0]));
                 }
             }
         }
@@ -65,33 +67,15 @@ public class Linux extends LocalHost
     }
 
     @Override
-    public long getProcMem (long pid) throws Exception
-    {
-        String[] cmdArray = new String[] {"ps", "-p", String.valueOf (pid), "-o", "pid,rss"};
-        Process proc = Runtime.getRuntime ().exec (cmdArray);
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
-        {
-            // first line is headers, second has info we want
-            String line = reader.readLine ();
-            if (line == null) return -1;
-            line = reader.readLine ();
-            if (line == null) return -1;
-
-            line = line.trim ();
-            String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
-            return Long.parseLong(parts[1]) * 1024;
-        }
-    }
-
-    @Override
     public void submitJob (MNode job, String command) throws Exception
     {
-        File binDir     = new File (AppData.properties.get ("resourceDir"), "bin");
-        File background = new File (binDir, "background");
+        Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
+        Path binDir      = resourceDir.resolve ("bin");
+        Path background  = binDir.resolve ("background");
         if (writeBackgroundScript)
         {
             writeBackgroundScript = false;
-            binDir.mkdirs ();
+            binDir.toFile ().mkdirs ();
             stringToFile
             (
                 background,
@@ -99,18 +83,17 @@ public class Linux extends LocalHost
                 + "$1 &\n"
             );
 
-            String [] commandParm = {"chmod", "u+x", background.getAbsolutePath ()};
-            Process p = Runtime.getRuntime ().exec (commandParm);
-            p.waitFor ();
-            if (p.exitValue () != 0)
+            Process proc = new ProcessBuilder ("chmod", "u+x", background.toString ()).start ();
+            proc.waitFor ();
+            if (proc.exitValue () != 0)
             {
-                Backend.err.get ().println ("Failed to change permissions on background script:\n" + streamToString (p.getErrorStream ()));
+                Backend.err.get ().println ("Failed to change permissions on background script:\n" + streamToString (proc.getErrorStream ()));
                 throw new Backend.AbortRun ();
             }
         }
 
-        String jobDir = new File (job.get ()).getParent ();
-        File script = new File (jobDir, "n2a_job");
+        Path jobDir = Paths.get (job.get ()).getParent ();
+        Path script = jobDir.resolve ("n2a_job");
         stringToFile
         (
             script,
@@ -123,38 +106,37 @@ public class Linux extends LocalHost
             + "fi"
         );
 
-        String [] commandParm = {"chmod", "u+x", script.getAbsolutePath ()};
-        Process p = Runtime.getRuntime ().exec (commandParm);
-        p.waitFor ();
-        if (p.exitValue () != 0)
+        Process proc = new ProcessBuilder ("chmod", "u+x", script.toString ()).start ();
+        proc.waitFor ();
+        if (proc.exitValue () != 0)
         {
-            Backend.err.get ().println ("Failed to change permissions on job script:\n" + streamToString (p.getErrorStream ()));
+            Backend.err.get ().println ("Failed to change permissions on job script:\n" + streamToString (proc.getErrorStream ()));
             throw new Backend.AbortRun ();
         }
 
-        commandParm = new String[] {background.getAbsolutePath (), script.getAbsolutePath ()};
-        p = Runtime.getRuntime ().exec (commandParm);
-        p.waitFor ();
-        if (p.exitValue () != 0)
+        proc = new ProcessBuilder (background.toString (), script.toString ()).start ();
+        proc.waitFor ();
+        if (proc.exitValue () != 0)
         {
-            Backend.err.get ().println ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
+            Backend.err.get ().println ("Failed to run job:\n" + streamToString (proc.getErrorStream ()));
             throw new Backend.AbortRun ();
         }
 
         // Get PID of newly created job
-        // A command line containing the path to the job dir should uniquely identify the correct process.
-        Process proc = Runtime.getRuntime ().exec (new String[] {"ps", "-ewwo", "pid,command"});
+        String jobDirString = jobDir.toString ();
+        proc = Runtime.getRuntime ().exec (new String[] {"ps", "-ewwo", "pid,command", "--no-header"});
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
             {
-                if (line.contains (jobDir))
+                if (line.contains (jobDirString))
                 {
                     line = line.trim ();
-                    String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
+                    String[] parts = line.split ("\\s+");
                     job.set (Long.parseLong (parts[0]), "$metadata", "pid");
-                    return;
+                    if (parts[1].equals (command)) return;  // exact match
+                    // otherwise, may be the wrapper script
                 }
             }
         }
@@ -166,14 +148,13 @@ public class Linux extends LocalHost
         // Scan for PIDs chained from the given one. We need to kill them all.
         Set<Long> pids = new TreeSet<Long> ();
         pids.add (pid);
-        Process proc = new ProcessBuilder ("ps", "-eo", "pid,ppid").start ();
+        Process proc = new ProcessBuilder ("ps", "-eo", "pid,ppid", "--no-header").start ();
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
             {
-                line = line.trim ();
-                String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
+                String[] parts = line.trim ().split ("\\s+");
                 try
                 {
                     long PID  = Long.parseLong (parts[0]);
@@ -192,13 +173,21 @@ public class Linux extends LocalHost
     }
 
     @Override
-    public String getNamedValue (String name, String defaultValue)
+    public long getProcMem (long pid) throws Exception
     {
-        if (name.equalsIgnoreCase ("name")) return "Linux";
-        if (name.equalsIgnoreCase ("xyce.binary"))
+        Process proc = new ProcessBuilder ("ps", "-q", String.valueOf (pid), "-o", "pid,rss", "--no-header").start ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
-            return "Xyce";
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                line = line.trim ();
+                String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
+                long PID = Long.parseLong (parts[0]);
+                long RSS = Long.parseLong (parts[1]);
+                if (PID == pid) return RSS * 1024;
+            }
         }
-        return super.getNamedValue (name, defaultValue);
+        return 0;
     }
 }

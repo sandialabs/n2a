@@ -6,19 +6,17 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.execenvs;
 
-import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class Windows extends LocalHost
+public class Windows extends HostSystem
 {
     @Override
     public boolean isActive (MNode job) throws Exception
@@ -27,10 +25,9 @@ public class Windows extends LocalHost
         if (pid == 0) return false;
 
         String jobDir = Paths.get (job.get ()).getParent ().toString ();
-        ProcessBuilder b = new ProcessBuilder ("powershell", "get-process", "-Id", String.valueOf (pid), "|", "format-table", "Path");
-        Process p = b.start ();
-        p.getOutputStream ().close ();
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (p.getInputStream ())))
+        Process proc = new ProcessBuilder ("powershell", "get-process", "-Id", String.valueOf (pid), "|", "format-table", "Path").start ();
+        proc.getOutputStream ().close ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
@@ -46,12 +43,11 @@ public class Windows extends LocalHost
     {
         Set<Long> result = new TreeSet<Long> ();
 
-        Path   resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
+        Path   resourceDir = getResourceDir ();
         String jobsDir     = resourceDir.resolve ("jobs").toString ();
 
-        ProcessBuilder b = new ProcessBuilder ("powershell", "get-process", "|", "format-table", "Id,Path");
-        Process p = b.start ();
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (p.getInputStream ())))
+        Process proc = new ProcessBuilder ("powershell", "get-process", "|", "format-table", "Id,Path").start ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
@@ -69,9 +65,8 @@ public class Windows extends LocalHost
     @Override
     public void submitJob (MNode job, String command) throws Exception
     {
-        String jobDir = new File (job.get ()).getParent ();
-
-        File script = new File (jobDir, "n2a_job.bat");
+        Path jobDir = Paths.get (job.get ()).getParent ();
+        Path script = jobDir.resolve ("n2a_job.bat");
         stringToFile
         (
             script,
@@ -84,25 +79,24 @@ public class Windows extends LocalHost
             + ")\r\n"
         );
 
-        ProcessBuilder b = new ProcessBuilder ("cmd", "/c", "start", "/b", script.getAbsolutePath ());
-        Process p = b.start ();
-        p.waitFor ();
-        if (p.exitValue () != 0)
+        Process proc = new ProcessBuilder ("cmd", "/c", "start", "/b", script.toString ()).start ();
+        proc.waitFor ();
+        if (proc.exitValue () != 0)
         {
-            Backend.err.get ().println ("Failed to run job:\n" + streamToString (p.getErrorStream ()));
+            Backend.err.get ().println ("Failed to run job:\n" + streamToString (proc.getErrorStream ()));
             throw new Backend.AbortRun ();
         }
 
         // Get PID of newly-started job
-        b = new ProcessBuilder ("powershell", "get-process", "|", "format-table", "Id,Path");
-        p = b.start ();
-        p.getOutputStream ().close ();
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (p.getInputStream ())))
+        String jobDirString = jobDir.toString ();
+        proc = new ProcessBuilder ("powershell", "get-process", "|", "format-table", "Id,Path").start ();
+        proc.getOutputStream ().close ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
             {
-                if (line.contains (jobDir))
+                if (line.contains (jobDirString))
                 {
                     line = line.trim ().split (" ", 2)[0];
                     job.set (Long.parseLong (line), "$metadata", "pid");
@@ -125,16 +119,6 @@ public class Windows extends LocalHost
     public String quotePath (Path path)
     {
         return "\"" + path + "\"";
-    }
-
-    @Override
-    public String getNamedValue (String name, String defaultValue)
-    {
-        if (name.equalsIgnoreCase ("name"))
-        {
-            return "Windows";
-        }
-        return super.getNamedValue (name, defaultValue);
     }
 
 	@Override

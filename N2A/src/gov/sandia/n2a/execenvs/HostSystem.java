@@ -6,11 +6,12 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.execenvs;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
+
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -19,10 +20,14 @@ import java.lang.management.OperatingSystemMXBean;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
     Encapsulates access to a computer system, whether it is a workstation, a supercomputer or a "cloud" service.
@@ -35,7 +40,8 @@ import java.util.stream.Collectors;
 **/
 public abstract class HostSystem
 {
-    public String name;  // Simple handle used internally. A nickname in the case of remote systems. Note that IP address or host name is specified separately.
+    public String name;                        // Simple handle used internally. Typically the same as host name. However, IP address or host name is specified separately.
+    public MNode  metadata = new MVolatile (); // Collection of attributes that describe the target, including login information, directory structure and command forms.
 
     protected static Map<String,HostSystem> hosts    = new HashMap<String,HostSystem> ();
     protected static int                    jobCount = 0;
@@ -47,7 +53,7 @@ public abstract class HostSystem
         {
             HostSystem localhost;
             if (isWindows ()) localhost = new Windows ();
-            else              localhost = new Linux ();
+            else              localhost = new Linux ();  // Should be compatible with Mac bash shell.
             localhost.name = "localhost";
             hosts.put (localhost.name, localhost);
 
@@ -77,34 +83,22 @@ public abstract class HostSystem
         return System.getProperty ("os.name").toLowerCase ().indexOf ("mac") >= 0;
     }
 
-    // TODO: This interface should use NIO as much as possible.
-    // In particular, remote file access should be encapsulated in a FileSystemProvider.
+    public abstract boolean   isActive       (MNode job)                 throws Exception;  // check if the given job is active
+    public abstract Set<Long> getActiveProcs ()                          throws Exception;  // enumerate all of our active jobs
+    public abstract void      submitJob      (MNode job, String command) throws Exception;
+    public abstract void      killJob        (long pid, boolean force)   throws Exception;
 
-    public abstract boolean   isActive        (MNode job)                   throws Exception;  // check if the given job is active
-    public abstract Set<Long> getActiveProcs  ()                            throws Exception;  // enumerate all of our active jobs
-    public abstract long      getProcMem      (long pid)                    throws Exception;  // determine memory usage for the given job
-    public abstract void      submitJob       (MNode job, String command)   throws Exception;
-    public abstract void      killJob         (long pid, boolean force)     throws Exception;
-    public abstract void      setFileContents (String path, String content) throws Exception;
-    public abstract String    getFileContents (String path)                 throws Exception;
-    public abstract void      deleteJob       (String jobName)              throws Exception;
-    public abstract void      downloadFile    (String path, File destPath)  throws Exception;
-
-    public static long lastModified (Path path)
+    public void deleteJob (String jobName) throws Exception
     {
-        try
-        {
-            return Files.getLastModifiedTime (path).toMillis ();
-        }
-        catch (IOException e1)
-        {
-            return 0;
-        }
+        Path resourceDir = getResourceDir ();
+        Path jobsDir     = resourceDir.resolve ("jobs");
+        Path jobDir      = jobsDir.resolve (jobName);
+        deleteDirectory (jobDir);
     }
 
-    public String file (String dirName, String fileName) throws Exception
+    public Path getResourceDir () throws Exception
     {
-        return new File (dirName, fileName).getAbsolutePath ();
+        return Paths.get (AppData.properties.get ("resourceDir"));  // Only suitable for localhost. Must override for remote systems.
     }
 
     public String quotePath (Path path)
@@ -112,24 +106,10 @@ public abstract class HostSystem
         return "'" + path + "'";
     }
 
-    public String getNamedValue (String name)
-    {
-        return getNamedValue (name, "");
-    }
-
-    public String getNamedValue (String name, String defaultValue)
-    {
-        if (name.equalsIgnoreCase ("name")) {
-            return "Generic";
-        }
-        return defaultValue;
-    }
-
-    @Override
-    public String toString()
-    {
-        return getNamedValue ("name");
-    }
+    /**
+        Determine memory usage for a given job.
+    **/
+    public abstract long getProcMem (long pid) throws Exception;
 
     public long getMemoryPhysicalTotal ()
     {
@@ -178,6 +158,7 @@ public abstract class HostSystem
         }
     }
 
+
     // Utility functions -----------------------------------------------------
 
     public static Object invoke (Object target, String methodName, Object... args)
@@ -197,11 +178,29 @@ public abstract class HostSystem
         }
     }
 
-    public static void stringToFile (File target, String value) throws IOException
+    public static void downloadFile (Path remotePath, Path localPath) throws Exception
     {
-        try (FileOutputStream fos = new FileOutputStream (target))
+        Files.copy (remotePath, localPath, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    public static void stringToFile (Path path, String value) throws IOException
+    {
+        // Writes string as UTF-8
+        try (BufferedWriter writer = Files.newBufferedWriter (path))
         {
-            fos.write (value.getBytes ("UTF-8"));
+            writer.write (value);
+        }
+    }
+
+    public static String fileToString (Path path)
+    {
+        try (InputStream fis = Files.newInputStream (path))
+        {
+            return streamToString (fis);
+        }
+        catch (IOException e)
+        {
+            return "";
         }
     }
 
@@ -217,15 +216,28 @@ public abstract class HostSystem
         }
     }
 
-    public static String fileToString (File input)
+    public static long lastModified (Path path)
     {
-        try (FileInputStream fis = new FileInputStream (input))
+        try
         {
-            return streamToString (fis);
+            return Files.getLastModifiedTime (path).toMillis ();
         }
-        catch (IOException e)
+        catch (IOException e1)
         {
-            return "";
+            return 0;
         }
+    }
+
+    public static void deleteDirectory (Path path)
+    {
+        try (Stream<Path> walk = Files.walk (path))
+        {
+            walk.sorted (Comparator.reverseOrder ()).forEach (t ->
+            {
+                try {Files.delete (t);}
+                catch (IOException e) {}
+            });
+        }
+        catch (IOException e) {}  // Main cause for this would be if "path" doesn't exist, so we don't care.
     }
 }

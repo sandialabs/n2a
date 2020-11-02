@@ -12,14 +12,15 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedReader;
 import java.io.StringReader;
+import java.nio.file.Path;
 import java.util.Set;
 import java.util.TreeSet;
 
+/**
+    Wraps access to a system that runs jobs via slurm.
+**/
 public class RemoteParallel extends RemoteHost
 {
-    /**
-        TODO: This code needs to be tested.
-    **/
     @Override
     public boolean isActive (MNode job) throws Exception
     {
@@ -61,11 +62,14 @@ public class RemoteParallel extends RemoteHost
     @Override
     public void submitJob (MNode job, String command) throws Exception
     {
-        String jobDir = job.get          (     "$metadata", "remote", "dir");
-        String cores  = job.getOrDefault ("1", "$metadata", "cores");
-        String nodes  = job.getOrDefault ("1", "$metadata", "remote", "nodes");
+        Path resourceDir = getResourceDir ();
+        Path jobsDir     = resourceDir.resolve ("jobs");
+        Path jobDir      = jobsDir.resolve (job.key ());
 
-        setFileContents (jobDir + "/n2a_job",
+        String cores = job.getOrDefault ("1", "$metadata", "cores");
+        String nodes = job.getOrDefault ("1", "$metadata", "remote", "nodes");
+
+        stringToFile (jobDir.resolve ("n2a_job"),
             "#!/bin/bash\n"
             +  "mpiexec --npernode " + cores
             + " numa_wrapper --ppn " + cores
@@ -76,13 +80,13 @@ public class RemoteParallel extends RemoteHost
         Result r = Connection.exec
         (
             "sbatch"
-            + " --nodes="            + nodes
+            + " --nodes="           + nodes
             + " --time=24:00:00"
-            + " --account="          + getNamedValue ("cluster.account", "FY139768")
+            + " --account="         + metadata.get ("cluster", "account")
             + " --job-name=N2A"
-            + " --output='"          + jobDir + "/out'"
-            + " --error='"           + jobDir + "/err'"
-            + " '" + jobDir + "/n2a_job'"
+            + " --output="          + quotePath (jobDir.resolve ("out"))
+            + " --error="           + quotePath (jobDir.resolve ("err"))
+            + " " + quotePath (jobDir.resolve ("n2a_job"))
         );
         if (r.error)
         {
@@ -112,16 +116,37 @@ public class RemoteParallel extends RemoteHost
         Connection.exec ("scancel " + (force ? "" : "-s 15 ") + pid);
     }
 
-    public String getNamedValue (String name, String defaultValue)
+    // Load management is handled by slurm, so the following functions lie about resources
+    // in order to encourage maximal loading. If throttling turns out to be necessary,
+    // these can be modified to produce more useful numbers.
+
+    @Override
+    public long getProcMem (long pid) throws Exception
     {
-        if (name.equalsIgnoreCase ("name")) return "RedSky (Parallel)";
-        return super.getNamedValue (name, defaultValue);
+        return 0;
     }
 
-	@Override
-	public long getProcMem (long pid)
-	{
-		// TODO Get process memory usage
-		return 0;
-	}
+    @Override
+    public long getMemoryPhysicalTotal ()
+    {
+        return Long.MAX_VALUE;
+    }
+
+    @Override
+    public long getMemoryPhysicalFree ()
+    {
+        return Long.MAX_VALUE;
+    }
+
+    @Override
+    public int getProcessorTotal ()
+    {
+        return Integer.MAX_VALUE;
+    }
+
+    @Override
+    public double getProcessorLoad ()
+    {
+        return 0;
+    }
 }

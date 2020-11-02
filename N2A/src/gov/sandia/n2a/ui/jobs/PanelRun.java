@@ -452,9 +452,9 @@ public class PanelRun extends JPanel
                 //   small -- can load entirely into memory
                 //   big   -- too big for memory; must load/display in segments
                 //   huge  -- too big to store on local system, for example a supercomputer job; must be downloaded/displayed in segments
-                // The current code only handles small files. In particular, we don't actually do Step 1, but simply assume data is local.
-                MNode job = ((NodeJob) node.getParent ()).getSource ();
-                HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
+                // The current code only handles small files.
+                //MNode job = ((NodeJob) node.getParent ()).getSource ();
+                //HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
 
                 // Step 2 -- Load data
                 // The exact method depends on node type and the current display mode, selected by pushbuttons and stored in viz
@@ -587,7 +587,7 @@ public class PanelRun extends JPanel
                 }
 
                 // Default is plain text
-                final String contents = env.getFileContents (node.path.toString ());
+                final String contents = HostSystem.fileToString (node.path);
                 if (stop)
                 {
                     signalDone ();
