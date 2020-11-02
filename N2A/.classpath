@@ -14,12 +14,14 @@
 	<classpathentry kind="lib" path="lib/eclipse/org.eclipse.jgit.ui-5.7.0.202003110725-r.jar"/>
 	<classpathentry kind="lib" path="lib/uom/si-quantity-2.0.1.jar"/>
 	<classpathentry kind="lib" path="lib/uom/si-units-2.0.1.jar"/>
-	<classpathentry kind="lib" path="lib/uom/systems-common-2.0.1.jar"/>
-	<classpathentry kind="lib" path="lib/uom/systems-quantity-2.0.1.jar"/>
-	<classpathentry kind="lib" path="lib/uom/systems-ucum-2.0.jar" sourcepath="lib/uom/systems-ucum-2.0-sources.jar"/>
 	<classpathentry kind="lib" path="lib/uom/unit-api-2.0.jar" sourcepath="lib/uom/unit-api-2.0-sources.jar"/>
-	<classpathentry kind="lib" path="lib/uom/uom-lib-common-2.0.jar"/>
-	<classpathentry kind="lib" path="lib/uom/indriya-2.0.1.jar" sourcepath="lib/uom/indriya-2.0.1-sources.jar"/>
 	<classpathentry kind="lib" path="lib/jfreechart/jfreesvg-3.4.jar"/>
+	<classpathentry kind="lib" path="lib/uom/indriya-2.0.4.jar"/>
+	<classpathentry kind="lib" path="lib/uom/systems-common-2.0.2.jar"/>
+	<classpathentry kind="lib" path="lib/uom/systems-quantity-2.0.2.jar"/>
+	<classpathentry kind="lib" path="lib/uom/systems-ucum-2.0.2.jar"/>
+	<classpathentry kind="lib" path="lib/uom/uom-lib-common-2.0.1.jar"/>
+	<classpathentry kind="lib" path="lib/jsch-nio/jsch-extension-0.1.11.jar"/>
+	<classpathentry kind="lib" path="lib/jsch-nio/jsch-nio-1.0.14.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

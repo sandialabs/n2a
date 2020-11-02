@@ -100,6 +100,7 @@ public class SettingsAbout extends JPanel implements Settings
 
         addLicense     (licenses, "JFreeChart",    loadResource ("jfreechart"));
         addLicense     (licenses, "JSch",          loadResource ("jsch"));
+        addLicense     (licenses, "JSch-NIO",      loadResource ("jsch-nio"));
         addLicense     (licenses, "JZlib",         loadResource ("jzlib"));
         addLicense     (licenses, "JGit",          loadResource ("jgit"));
         addLicenseHTML (licenses, "Bouncy Castle", loadResource ("bouncycastle"));
