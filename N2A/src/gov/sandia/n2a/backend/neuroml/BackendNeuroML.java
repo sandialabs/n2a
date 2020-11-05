@@ -17,7 +17,7 @@ import java.util.Map;
 import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.HostSystem;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class BackendNeuroML extends Backend
@@ -112,7 +112,7 @@ public class BackendNeuroML extends Backend
                         {
                             PrintStream os = Backend.err.get ();
                             os.println ("jnml failed:");
-                            os.print (HostSystem.streamToString (Files.newInputStream (err)));
+                            os.print (Host.streamToString (Files.newInputStream (err)));
                         }
                         catch (Exception e) {}
                     }
@@ -153,7 +153,7 @@ public class BackendNeuroML extends Backend
 
         public void submitJob () throws Exception
         {
-            HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
+            Host env = Host.get (job.getOrDefault ("localhost", "$metadata", "host"));
             String command = "JNML_HOME=" + jnmlHome + " " + env.quotePath (jnmlCommand) + " " + env.quotePath (modelPath) + " -nogui";
             env.submitJob (job, command);
         }

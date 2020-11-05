@@ -11,7 +11,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.execenvs.HostSystem;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.MainFrame;
@@ -172,7 +172,7 @@ public class Main
 
         // Wait for completion
         // TODO: This duplicates some functionality in NodeJob.monitorProgress. Should really be part of a job management interface, as it can vary with host-backend combination.
-        HostSystem env = HostSystem.get (job.get ("$metadata", "host"));
+        Host env = Host.get (job.get ("$metadata", "host"));
         Path finished = jobDir.resolve ("finished");
         long lastLiveCheck = System.currentTimeMillis ();
         while (true)

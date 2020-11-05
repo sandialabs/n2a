@@ -10,7 +10,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.HostSystem;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import java.awt.Component;
@@ -587,7 +587,7 @@ public class PanelRun extends JPanel
                 }
 
                 // Default is plain text
-                final String contents = HostSystem.fileToString (node.path);
+                final String contents = Host.fileToString (node.path);
                 if (stop)
                 {
                     signalDone ();
@@ -745,7 +745,7 @@ public class PanelRun extends JPanel
                         synchronized (job) {job.deleted = true;}
 
                         MDoc doc = (MDoc) job.getSource ();
-                        HostSystem env = HostSystem.get (doc.getOrDefault ("localhost", "$metadata", "host"));
+                        Host env = Host.get (doc.getOrDefault ("localhost", "$metadata", "host"));
                         String jobName = doc.key ();
                         try
                         {

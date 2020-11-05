@@ -16,8 +16,24 @@ import java.nio.file.Paths;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class Windows extends HostSystem
+public class Windows extends Host
 {
+    public static Factory factory ()
+    {
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "Windows";
+            }
+
+            public Host createInstance ()
+            {
+                return new Windows ();
+            }
+        };
+    }
+
     @Override
     public boolean isActive (MNode job) throws Exception
     {

@@ -8,7 +8,7 @@ package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.HostSystem;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -172,7 +172,7 @@ public class SettingsAbout extends JPanel implements Settings
     {
         try (InputStream stream = SettingsAbout.class.getResource ("licenses/" + fileName).openStream ())
         {
-            return HostSystem.streamToString (stream);
+            return Host.streamToString (stream);
         }
         catch (IOException e)
         {

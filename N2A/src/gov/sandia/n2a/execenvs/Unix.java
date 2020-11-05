@@ -19,9 +19,25 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class Linux extends HostSystem
+public class Unix extends Host
 {
     static boolean writeBackgroundScript = true;  // always write the script on first use in a given session
+
+    public static Factory factory ()
+    {
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "Unix";
+            }
+
+            public Host createInstance ()
+            {
+                return new Unix ();
+            }
+        };
+    }
 
     @Override
     public boolean isActive (MNode job) throws Exception

@@ -28,7 +28,7 @@ import java.util.stream.Stream;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.HostSystem;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -140,7 +140,7 @@ public class NodeJob extends NodeBase
         if (complete >= 1  &&  complete != 3) return;
 
         float oldComplete = complete;
-        HostSystem env = HostSystem.get (source.get ("$metadata", "host"));
+        Host env = Host.get (source.get ("$metadata", "host"));
         Path jobDir = Paths.get (source.get ()).getParent ();
         if (complete == -1)
         {

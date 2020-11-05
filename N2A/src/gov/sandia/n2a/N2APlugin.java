@@ -6,6 +6,11 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a;
 
+import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.execenvs.RemoteSlurm;
+import gov.sandia.n2a.execenvs.RemoteUnix;
+import gov.sandia.n2a.execenvs.Unix;
+import gov.sandia.n2a.execenvs.Windows;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.plugins.Plugin;
 import gov.sandia.n2a.plugins.ExtensionPoint;
@@ -86,7 +91,11 @@ public class N2APlugin extends Plugin
             new SettingsAbout (),
             new SettingsGeneral (),
             new SettingsLookAndFeel (),
-            new SettingsRepo ()
+            new SettingsRepo (),
+            Unix.factory (),
+            Windows.factory (),
+            RemoteUnix.factory (),
+            RemoteSlurm.factory ()
         };
     }
 
@@ -99,6 +108,7 @@ public class N2APlugin extends Plugin
             Activity.class,
             Backend.class,
             Exporter.class,
+            Host.Factory.class,
             Importer.class,
             Operator.Factory.class,
             Settings.class

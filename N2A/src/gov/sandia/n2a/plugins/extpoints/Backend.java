@@ -13,7 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.HostSystem;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.parms.ParameterSpecification;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
@@ -140,7 +140,7 @@ public abstract class Backend implements ExtensionPoint
         {
             try
             {
-                HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host")).killJob (pid, force);
+                Host.get (job.getOrDefault ("localhost", "$metadata", "host")).killJob (pid, force);
                 Path jobDir = Paths.get (job.get ()).getParent ();
                 Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), jobDir.resolve ("finished"));
                 // Note that BackendC on Windows uses the mere existence of the "finished" file as a signal to shut down gracefully.

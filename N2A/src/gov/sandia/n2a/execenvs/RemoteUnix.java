@@ -7,27 +7,45 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import java.io.BufferedReader;
-import java.io.StringReader;
-import java.net.URI;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
+import java.io.InputStreamReader;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.Connection.Result;
-import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.execenvs.Connection.RemoteProcess;
 
 /**
     Wraps access to any system other than localhost.
     This default implementation is suitable for a unix-like system that runs jobs on its
     own processors, as opposed to queuing them on a cluster or specialized hardware.
 **/
-public class RemoteHost extends HostSystem
+public class RemoteUnix extends Host
 {
-    FileSystem sshfs;
+    //protected Connection connection;
+    public Connection connection;  // public for testing
+
+    public static Factory factory ()
+    {
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "RemoteUnix";
+            }
+
+            public Host createInstance ()
+            {
+                return new RemoteUnix ();
+            }
+        };
+    }
+
+    public void connect () throws Exception
+    {
+        if (connection == null) connection = new Connection (config);
+        connection.connect ();
+    }
 
     @Override
     public boolean isActive (MNode job) throws Exception
@@ -35,9 +53,9 @@ public class RemoteHost extends HostSystem
         long pid = job.getOrDefault (0l, "$metadata", "pid");
         if (pid == 0) return false;
 
-        Result r = Connection.exec ("ps -o pid,command " + String.valueOf (pid));
-        if (r.error) return false;
-        try (BufferedReader reader = new BufferedReader (new StringReader (r.stdOut)))
+        connect ();
+        try (RemoteProcess proc = connection.build ("ps -o pid,command " + String.valueOf (pid)).start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
@@ -57,13 +75,9 @@ public class RemoteHost extends HostSystem
     {
         Set<Long> result = new TreeSet<Long> ();
 
-        Result r = Connection.exec ("ps ux");
-        if (r.error)
-        {
-            Backend.err.get ().println (r.stdErr);
-            throw new Backend.AbortRun ();
-        }
-        try (BufferedReader reader = new BufferedReader (new StringReader (r.stdOut)))
+        connect ();
+        try (RemoteProcess proc = connection.build ("ps ux").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
@@ -82,12 +96,15 @@ public class RemoteHost extends HostSystem
     public void submitJob (MNode job, String command) throws Exception
     {
         String prefix = command.substring (0, command.lastIndexOf ("/"));
-        Connection.exec (command + " > '" + prefix + "/out' 2>> '" + prefix + "/err' &", true);
+        connect ();
+        try (RemoteProcess proc = connection.build (command + " > '" + prefix + "/out' 2>> '" + prefix + "/err' &").start ())
+        {
+            proc.wait ();
+        }
 
         // Get PID of newly-created job
-        Result r = Connection.exec ("ps -ewwo pid,command");
-        if (r.error) return;
-        try (BufferedReader reader = new BufferedReader (new StringReader (r.stdOut)))
+        try (RemoteProcess proc = connection.build ("ps -ewwo pid,command").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
@@ -103,29 +120,26 @@ public class RemoteHost extends HostSystem
     @Override
     public void killJob (long pid, boolean force) throws Exception
     {
-        Connection.exec ("kill -" + (force ? 9 : 15) + " " + pid);
+        connect ();
+        try (RemoteProcess proc = connection.build ("kill -" + (force ? 9 : 15) + " " + pid).start ())
+        {
+            proc.wait ();  // To avoid killing the process by closing the channel.
+        }
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public Path getResourceDir () throws Exception
     {
-        // TODO: also check if ssh connection is still live.
-        if (sshfs == null)
-        {
-            String hostname = metadata.getOrDefault (name, "hostname");
-            String username = metadata.getOrDefault (System.getProperty ("user.name"), "username");
-            sshfs = FileSystems.newFileSystem (new URI ("ssh.unix://" + hostname + "/home/" + username), Collections.EMPTY_MAP);
-        }
-        return sshfs.getPath ("n2a");
+        connect ();
+        return connection.getFileSystem ().getPath ("n2a");  // assumes that filesystem default directory is where n2a dir should reside
     }
 
     @Override
     public long getProcMem (long pid) throws Exception
     {
-        Result r = Connection.exec ("ps -q " + String.valueOf (pid) + " -o pid,rss --no-header");
-        if (r.error) return 0;
-        try (BufferedReader reader = new BufferedReader (new StringReader (r.stdOut)))
+        connect ();
+        try (RemoteProcess proc = connection.build ("ps -q " + String.valueOf (pid) + " -o pid,rss --no-header").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)

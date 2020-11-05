@@ -17,7 +17,7 @@ import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionMatrix;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
-import gov.sandia.n2a.execenvs.HostSystem;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Constant;
@@ -115,7 +115,7 @@ public class JobC extends Thread
                 Backend.err.get ().println ("WARNING: Unsupported numeric type. Defaulting to single-precision float.");
             }
 
-            HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
+            Host env = Host.get (job.getOrDefault ("localhost", "$metadata", "host"));
             Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
             gcc              = Paths.get (AppData.state.getOrDefault ("g++", "BackendC", "gcc"));
             runtimeDir       = resourceDir.resolve ("cruntime");
@@ -252,7 +252,7 @@ public class JobC extends Thread
             URL url = from.getResource ("runtime/" + s);
             long resourceModified = url.openConnection ().getLastModified ();
             Path f = runtimeDir.resolve (s);
-            long fileModified = HostSystem.lastModified (f);
+            long fileModified = Host.lastModified (f);
             if (resourceModified > fileModified)
             {
                 changed = true;
@@ -311,13 +311,13 @@ public class JobC extends Thread
         {
             PrintStream ps = Backend.err.get ();
             ps.println ("Failed to compile:");
-            ps.print (HostSystem.streamToString (Files.newInputStream (err)));
+            ps.print (Host.streamToString (Files.newInputStream (err)));
             Files.delete (out);
             Files.delete (err);
             throw new Backend.AbortRun ();
         }
 
-        String errString = HostSystem.streamToString (Files.newInputStream (err));
+        String errString = Host.streamToString (Files.newInputStream (err));
         if (! errString.isEmpty ())
         {
             PrintStream ps = Backend.err.get ();

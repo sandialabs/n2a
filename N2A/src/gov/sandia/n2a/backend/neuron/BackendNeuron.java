@@ -8,7 +8,7 @@ package gov.sandia.n2a.backend.neuron;
 
 import gov.sandia.n2a.backend.neuroml.BackendNeuroML;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.HostSystem;
+import gov.sandia.n2a.execenvs.Host;
 
 public class BackendNeuron extends BackendNeuroML
 {
@@ -36,7 +36,7 @@ public class BackendNeuron extends BackendNeuroML
 
         public void submitJob () throws Exception
         {
-            HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
+            Host env = Host.get (job.getOrDefault ("localhost", "$metadata", "host"));
             String command = "JNML_HOME=" + jnmlHome + " " + env.quotePath (jnmlCommand) + " " + env.quotePath (modelPath) + " -neuron -run -nogui";
             env.submitJob (job, command);
         }

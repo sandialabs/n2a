@@ -8,8 +8,8 @@ package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MVolatile;
-
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -37,30 +37,62 @@ import java.util.stream.Stream;
     <li>Process management (starting, monitoring, stopping)
     <li>Resource monitoring (memory, disk capacity, processor load)
     </ul>
+
+    Hosts are described using key-value pairs stored in app state. Names of backends are reserved
+    as top-level keys. Under these are specific configurations for the Backend X Host combination,
+    such as the path to the C++ compiler. Additional top-level keys include login information
+    and network address. All these should be documented in the online manual.
 **/
-public abstract class HostSystem
+public abstract class Host
 {
-    public String name;                        // Simple handle used internally. Typically the same as host name. However, IP address or host name is specified separately.
-    public MNode  metadata = new MVolatile (); // Collection of attributes that describe the target, including login information, directory structure and command forms.
+    protected String name;   // Identifies host internally. Also acts as the default value of hostname. This allows the use of a friendly name for display combined with, say, a raw IP for address.
+    public    MNode  config; // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
 
-    protected static Map<String,HostSystem> hosts    = new HashMap<String,HostSystem> ();
-    protected static int                    jobCount = 0;
+    protected static Map<String,Host> hosts    = new HashMap<String,Host> ();
+    protected static int              jobCount = 0;
 
-    public static HostSystem get (String hostname)
+    public interface Factory extends ExtensionPoint
+    {
+        public String name ();           // as it appears in app state
+        public Host   createInstance (); // not yet bound to app state
+    }
+
+    public static Host getHostFromClass (String className)
+    {
+        for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
+        {
+            Factory f = (Factory) ext;
+            if (f.name ().equalsIgnoreCase (className)) return f.createInstance ();
+        }
+        return new RemoteUnix ();  // Note that localhost is always determined by direct probe of our actual OS.
+    }
+
+    public static Host get (String hostname)
     {
         // Lazy initialization of host collection
         if (hosts.isEmpty ())
         {
-            HostSystem localhost;
+            Host localhost;
             if (isWindows ()) localhost = new Windows ();
-            else              localhost = new Linux ();  // Should be compatible with Mac bash shell.
-            localhost.name = "localhost";
+            else              localhost = new Unix ();  // Should be compatible with Mac bash shell.
+            localhost.name   = "localhost";
+            localhost.config = AppData.state.childOrCreate ("Host", "localhost");
             hosts.put (localhost.name, localhost);
 
-            // TODO: load configured remote hosts from app data
+            // Load configured remote hosts from app data
+            for (MNode config : AppData.state.childOrEmpty ("Host"))
+            {
+                String name = config.key ();
+                if (name.equals ("localhost")) continue;
+                String className = config.get ("class");
+                Host hs = getHostFromClass (className);
+                hs.name = name;
+                hs.config = config;
+                hosts.put (name, hs);
+            }
         }
 
-        HostSystem result = hosts.get (hostname);
+        Host result = hosts.get (hostname);
         if (result == null) result = hosts.get ("localhost");
         return result;
     }

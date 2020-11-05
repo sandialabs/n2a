@@ -17,7 +17,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.execenvs.HostSystem;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
@@ -77,7 +77,7 @@ class XyceBackend extends Backend
     @Override
     public boolean canRunNow (MNode job)
     {
-        HostSystem execEnv = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
+        Host execEnv = Host.get (job.getOrDefault ("localhost", "$metadata", "host"));
 
         // TODO - estimate what memory and CPU resources this sim needs
         // getting good estimates could be very difficult...
@@ -160,8 +160,8 @@ class XyceBackend extends Backend
                     if (job.child ("$metadata", "backend", "xyce", "integrator") == null) job.set ("trapezoid",                 "$metadata", "backend", "xyce", "integrator");
 
                     // set up job info
-                    HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
-                    String xyce  = env.metadata.getOrDefault ("Xyce", "xyce", "command");
+                    Host env = Host.get (job.getOrDefault ("localhost", "$metadata", "host"));
+                    String xyce  = env.config.getOrDefault ("Xyce", "xyce", "command");
                     Path cirFile = jobDir.resolve ("model.cir");
                     Path prnFile = jobDir.resolve ("result");  // "prn" doesn't work, at least on windows
 

@@ -10,7 +10,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.execenvs.HostSystem;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
@@ -330,7 +330,7 @@ public class PanelEquationTree extends JScrollPane
                     if (! r.contains (x, y)) path = null;
                 }
 
-                if (SwingUtilities.isRightMouseButton (e)  ||  control  &&  HostSystem.isMac ())
+                if (SwingUtilities.isRightMouseButton (e)  ||  control  &&  Host.isMac ())
                 {
                     if (clicks == 1)  // Show popup menu
                     {
