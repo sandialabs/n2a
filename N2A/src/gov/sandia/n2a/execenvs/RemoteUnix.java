@@ -13,7 +13,6 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.Connection.RemoteProcess;
 
 /**
     Wraps access to any system other than localhost.
@@ -29,7 +28,7 @@ public class RemoteUnix extends Host
     {
         return new Factory ()
         {
-            public String name ()
+            public String className ()
             {
                 return "RemoteUnix";
             }
@@ -53,8 +52,7 @@ public class RemoteUnix extends Host
         long pid = job.getOrDefault (0l, "$metadata", "pid");
         if (pid == 0) return false;
 
-        connect ();
-        try (RemoteProcess proc = connection.build ("ps -o pid,command " + String.valueOf (pid)).start ();
+        try (AnyProcess proc = build ("ps -o pid,command " + String.valueOf (pid)).start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -75,8 +73,7 @@ public class RemoteUnix extends Host
     {
         Set<Long> result = new TreeSet<Long> ();
 
-        connect ();
-        try (RemoteProcess proc = connection.build ("ps ux").start ();
+        try (AnyProcess proc = build ("ps ux").start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -96,14 +93,13 @@ public class RemoteUnix extends Host
     public void submitJob (MNode job, String command) throws Exception
     {
         String prefix = command.substring (0, command.lastIndexOf ("/"));
-        connect ();
-        try (RemoteProcess proc = connection.build (command + " > '" + prefix + "/out' 2>> '" + prefix + "/err' &").start ())
+        try (AnyProcess proc = build (command + " > '" + prefix + "/out' 2>> '" + prefix + "/err' &").start ())
         {
             proc.wait ();
         }
 
         // Get PID of newly-created job
-        try (RemoteProcess proc = connection.build ("ps -ewwo pid,command").start ();
+        try (AnyProcess proc = build ("ps -ewwo pid,command").start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -118,13 +114,22 @@ public class RemoteUnix extends Host
     }
 
     @Override
-    public void killJob (long pid, boolean force) throws Exception
+    public void killJob (MNode job, boolean force) throws Exception
     {
-        connect ();
-        try (RemoteProcess proc = connection.build ("kill -" + (force ? 9 : 15) + " " + pid).start ())
+        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        if (pid == 0) return;
+
+        try (AnyProcess proc = build ("kill -" + (force ? 9 : 15) + " " + pid).start ())
         {
             proc.wait ();  // To avoid killing the process by closing the channel.
         }
+    }
+
+    @Override
+    public AnyProcessBuilder build (String... command) throws Exception
+    {
+        connect ();
+        return connection.build (command);
     }
 
     @Override
@@ -135,10 +140,17 @@ public class RemoteUnix extends Host
     }
 
     @Override
+    public String quotePath (Path path)
+    {
+        String result = path.toString ();
+        if (result.contains (" ")) return "\'" + result + "\'";
+        return result;
+    }
+
+    @Override
     public long getProcMem (long pid) throws Exception
     {
-        connect ();
-        try (RemoteProcess proc = connection.build ("ps -q " + String.valueOf (pid) + " -o pid,rss --no-header").start ();
+        try (AnyProcess proc = build ("ps -q " + String.valueOf (pid) + " -o pid,rss --no-header").start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;

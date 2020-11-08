@@ -27,8 +27,8 @@ import gov.sandia.n2a.parms.Parameter;
 import gov.sandia.n2a.parms.ParameterDomain;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
+import java.io.BufferedWriter;
 import java.io.FileNotFoundException;
-import java.io.FileWriter;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -77,7 +77,7 @@ class XyceBackend extends Backend
     @Override
     public boolean canRunNow (MNode job)
     {
-        Host execEnv = Host.get (job.getOrDefault ("localhost", "$metadata", "host"));
+        Host execEnv = Host.get (job);
 
         // TODO - estimate what memory and CPU resources this sim needs
         // getting good estimates could be very difficult...
@@ -160,10 +160,10 @@ class XyceBackend extends Backend
                     if (job.child ("$metadata", "backend", "xyce", "integrator") == null) job.set ("trapezoid",                 "$metadata", "backend", "xyce", "integrator");
 
                     // set up job info
-                    Host env = Host.get (job.getOrDefault ("localhost", "$metadata", "host"));
+                    Host env = Host.get (job);
                     String xyce  = env.config.getOrDefault ("Xyce", "xyce", "command");
                     Path cirFile = jobDir.resolve ("model.cir");
-                    Path prnFile = jobDir.resolve ("result");  // "prn" doesn't work, at least on windows
+                    Path prnFile = jobDir.resolve ("out");  // "prn" doesn't work, at least on Windows
 
                     EquationSet e = new EquationSet (job);
                     Simulator simulator = InternalBackend.constructStaticNetwork (e);
@@ -173,7 +173,7 @@ class XyceBackend extends Backend
                     String duration = e.metadata.get ("duration");
                     if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
 
-                    FileWriter writer = new FileWriter (cirFile.toFile ());
+                    BufferedWriter writer = Files.newBufferedWriter (cirFile);
                     generateNetlist (job, simulator, writer);
                     writer.close ();
 
@@ -204,10 +204,7 @@ class XyceBackend extends Backend
     @Override
     public double currentSimTime (MNode job)
     {
-        // TODO: Write a pareser than can handle Xyce output.
-        // Need to search for second column.
-        // Does it use spaces or tabs?
-        return 0;
+        return getSimTimeFromOutput (job, "out", 1);
     }
 
     public void analyze (EquationSet s)
@@ -219,7 +216,7 @@ class XyceBackend extends Backend
         bed.analyze (s);
     }
 
-    public void generateNetlist (MNode job, Simulator simulator, FileWriter writer) throws Exception
+    public void generateNetlist (MNode job, Simulator simulator, BufferedWriter writer) throws Exception
     {
         Population toplevel = (Population) simulator.wrapper.valuesObject[0];
         XyceRenderer renderer = new XyceRenderer (simulator);

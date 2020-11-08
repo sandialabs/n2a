@@ -22,7 +22,7 @@ public class Windows extends Host
     {
         return new Factory ()
         {
-            public String name ()
+            public String className ()
             {
                 return "Windows";
             }
@@ -123,8 +123,11 @@ public class Windows extends Host
     }
 
     @Override
-    public void killJob (long pid, boolean force) throws Exception
+    public void killJob (MNode job, boolean force) throws Exception
     {
+        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        if (pid == 0) return;
+
         if (force) new ProcessBuilder ("taskkill", "/PID", String.valueOf (pid), "/F").start ();
         // Windows does not provide a simple way to signal a non-GUI process.
         // Instead, the program is responsible to poll for the existence of the "finished" file

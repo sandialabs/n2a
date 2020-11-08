@@ -27,8 +27,10 @@ import com.pastdev.jsch.DefaultSessionFactory;
 import com.pastdev.jsch.SessionFactory;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.execenvs.Host.AnyProcess;
+import gov.sandia.n2a.execenvs.Host.AnyProcessBuilder;
 
-public class Connection implements Closeable, AutoCloseable
+public class Connection implements Closeable
 {
     protected Session        session;
     protected FileSystem     sshfs;
@@ -81,7 +83,7 @@ public class Connection implements Closeable, AutoCloseable
 
     public Connection (MNode config)
     {
-        hostname = config.getOrDefault (config.key (),                    "hostname");
+        hostname = config.getOrDefault (config.key (),                    "address");
         username = config.getOrDefault (System.getProperty ("user.name"), "username");
         port     = config.getOrDefault (22,                               "port");
         home     = config.getOrDefault ("/home/" + username,              "home");
@@ -125,19 +127,19 @@ public class Connection implements Closeable, AutoCloseable
         return new RemoteProcessBuilder (command);
     }
 
-    public class RemoteProcessBuilder
+    public class RemoteProcessBuilder implements AnyProcessBuilder
     {
-        protected RemoteProcess process;
-        protected Path          fileIn;
-        protected Path          fileOut;
-        protected Path          fileErr;
+        protected String command;
+        protected Path   fileIn;
+        protected Path   fileOut;
+        protected Path   fileErr;
 
         public RemoteProcessBuilder (String... command) throws JSchException
         {
             String combined = "";
             if (command.length > 0) combined = command[0];
             for (int i = 1; i < command.length; i++) combined += " " + command[i];
-            process = new RemoteProcess (combined);
+            this.command = combined;
         }
 
         public RemoteProcessBuilder redirectInput (Path file)
@@ -158,8 +160,10 @@ public class Connection implements Closeable, AutoCloseable
             return this;
         }
 
-        public RemoteProcess start () throws Exception
+        public RemoteProcess start () throws IOException, JSchException
         {
+            RemoteProcess process = new RemoteProcess (command);
+
             // Streams must be configured before connect.
             // A redirected stream is of the opposite type from what we would read directly.
             // IE: stdout (from the perspective of the remote process) must feed into something
@@ -176,12 +180,17 @@ public class Connection implements Closeable, AutoCloseable
             if (fileErr == null) process.stderr = process.channel.getErrStream ();
             else                 process.channel.setErrStream (Files.newOutputStream (fileErr));
 
-            process.channel.connect ();
+            process.channel.connect ();  // This actually starts the remote process.
             return process;
         }
     }
 
-    public class RemoteProcess implements Closeable, AutoCloseable
+    /**
+        Drop-in equivalent to Process that works for a remote process executed via ssh.
+        The one difference is that this should be created within a try-with-resources so that
+        it will be automatically closed and release the ssh channel.
+    **/
+    public class RemoteProcess extends Process implements AnyProcess
     {
         protected ChannelExec channel;
 
@@ -200,7 +209,7 @@ public class Connection implements Closeable, AutoCloseable
 
         public void close ()
         {
-            if (channel != null) channel.disconnect ();  // OK to call disconnect() multiple times
+            channel.disconnect ();  // OK to call disconnect() multiple times
         }
 
         public OutputStream getOutputStream ()
@@ -221,24 +230,34 @@ public class Connection implements Closeable, AutoCloseable
             return stderr;
         }
 
+        public int waitFor () throws InterruptedException
+        {
+            while (! channel.isClosed ()) Thread.sleep (1000);
+            return channel.getExitStatus ();
+        }
+
+        public int exitValue () throws IllegalThreadStateException
+        {
+            if (! channel.isClosed ()) throw new IllegalThreadStateException ();
+            return channel.getExitStatus ();
+        }
+
+        public void destroy ()
+        {
+            try {channel.sendSignal ("TERM");}
+            catch (Exception e) {}
+        }
+
+        public RemoteProcess destroyForcibly ()
+        {
+            try {channel.sendSignal ("KILL");}
+            catch (Exception e) {}
+            return this;
+        }
+
         public boolean isAlive ()
         {
             return ! channel.isClosed ();
-        }
-
-        public int waitFor ()
-        {
-            try
-            {
-                while (! channel.isClosed ()) Thread.sleep (1000);
-            }
-            catch (InterruptedException e) {}
-            return channel.getExitStatus ();
-        }
-
-        public int exitValue ()
-        {
-            return channel.getExitStatus ();
         }
     }
 

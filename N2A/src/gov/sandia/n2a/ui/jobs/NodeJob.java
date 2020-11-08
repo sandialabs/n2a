@@ -13,6 +13,7 @@ import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,12 +21,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.TreeMap;
-import java.util.function.Consumer;
-import java.util.stream.Stream;
-
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Host;
@@ -140,11 +139,29 @@ public class NodeJob extends NodeBase
         if (complete >= 1  &&  complete != 3) return;
 
         float oldComplete = complete;
-        Host env = Host.get (source.get ("$metadata", "host"));
-        Path jobDir = Paths.get (source.get ()).getParent ();
+        Host env = Host.get (source);
+        Path localJobDir = Paths.get (source.get ()).getParent ();
+        // If job is remote, attempt to grab its state files.
+        // TODO: handle remote jobs waiting in queue. Plan is to update "started" file with queue status.
+        Path finished = localJobDir.resolve ("finished");
+        if (env.isRemote ())
+        {
+            try
+            {
+                Path resourceDir  = env.getResourceDir ();
+                Path remoteJobDir = Host.getJobDir (resourceDir, source);
+                Path remoteFinished = remoteJobDir.resolve ("finished");
+                // The following will throw an exception if the local file already exists.
+                // Thus, local finished takes precedence over remoteFinished, which lets
+                // us note that the job has been killed from our side.
+                if (Files.exists (remoteFinished)) Files.copy (remoteFinished, finished);
+            }
+            catch (Exception e) {}
+        }
+
         if (complete == -1)
         {
-            Path started = jobDir.resolve ("started");
+            Path started = localJobDir.resolve ("started");
             if (Files.exists (started))
             {
                 complete = 0;
@@ -153,16 +170,13 @@ public class NodeJob extends NodeBase
         }
         if (complete < 1)
         {
-            Path finished = jobDir.resolve ("finished");
             if (Files.exists (finished))
             {
-                dateFinished = new Date (finished.toFile ().lastModified ());
+                dateFinished = new Date (Host.lastModified (finished));
                 String line = null;
-                try
+                try (BufferedReader reader = Files.newBufferedReader (finished))
                 {
-                    BufferedReader reader = Files.newBufferedReader (finished);
                     line = reader.readLine ();
-                    reader.close ();
                 }
                 catch (IOException e) {}
                 if (line == null) line = "";
@@ -178,7 +192,7 @@ public class NodeJob extends NodeBase
             else
             {
                 long currentTime = System.currentTimeMillis ();
-                if (currentTime - lastLiveCheck > 1000000)  // about 20 minutes
+                if (currentTime - lastLiveCheck > 1000000)  // 1000 seconds, about 20 minutes
                 {
                     try
                     {
@@ -254,109 +268,66 @@ public class NodeJob extends NodeBase
         if (complete < 3) complete = 3;
     }
 
-    public void build (JTree tree)
-    {
-        // Only handle local resources.
-        // If a job runs remotely, then we need to fetch its files to view them, so assume they will be downloaded to local dir when requested.
+    /**
+        Construct the list of resources under this job node.
+        This only called if this job node is actively monitored and open in the tree,
+        or if this job node is about to be opened regardless of monitoring.
 
+        This function may make blocking remote calls, so should not run on the EDT.
+        It queues changes and inserts an EDT event to apply them.
+    **/
+    public synchronized void build (JTree tree)
+    {
         NodeBase selected = null;
         TreePath path = tree.getLeadSelectionPath ();
         if (path != null) selected = (NodeBase) path.getLastPathComponent ();
-        TreeMap<Path,NodeFile> existing = new TreeMap<Path,NodeFile> ();
+        TreeMap<String,NodeFile> existing = new TreeMap<String,NodeFile> ();
         if (children != null)
         {
             for (Object c : children)
             {
                 NodeFile nf = (NodeFile) c;
                 nf.found = false;
-                existing.put (nf.path, nf);
+                existing.put (nf.path.getFileName ().toString (), nf);
             }
         }
 
-        class FileConsumer implements Consumer<Path>
-        {
-            boolean changed;
-            public void accept (Path file)
-            {
-                NodeFile newNode;
-                if (Files.isDirectory (file))
-                {
-                    // Check for image sequence.
-                    // It's an image sequence if a random file from the dir has the right form: an integer with an standard image-file suffix.
-                    try (Stream<Path> dirStream = Files.list (file))
-                    {
-                        Optional<Path> someFile = dirStream.findAny ();
-                        if (! someFile.isPresent ()) return;
-                        Path p = someFile.get ();
-                        String[] pieces = p.getFileName ().toString ().split ("\\.");
-                        if (pieces.length != 2) return;
-                        try {Integer.valueOf (pieces[0]);}
-                        catch (NumberFormatException e) {return;}
-                        String suffix = pieces[1].toLowerCase ();
-                        if (imageFileSuffixes.indexOf (suffix) < 0) return;
-                        newNode = new NodeFile (NodeFile.Type.Video, file);
-                    }
-                    catch (Exception e) {return;}
-                }
-                else
-                {
-                    try {if (Files.size (file) == 0) return;}
-                    catch (IOException e) {return;}
-
-                    String fileName = file.getFileName ().toString ();
-                    if (fileName.startsWith ("n2a_job" )) return;
-                    if (fileName.equals     ("model"   )) return;  // This is the file associated with our own "source"
-                    if (fileName.equals     ("started" )) return;
-                    if (fileName.equals     ("finished")) return;
-                    if (fileName.startsWith ("compile" )) return;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
-                    if (fileName.endsWith   (".bin"    )) return;  // Don't show generated binaries
-                    if (fileName.endsWith   (".aplx"   )) return;
-                    if (fileName.endsWith   (".columns")) return;  // Hint for column names when simulator doesn't output them.
-                    if (fileName.endsWith   (".mod"    )) return;  // NEURON files
-
-                    String suffix = "";
-                    String[] pieces = fileName.split ("\\.");
-                    if (pieces.length > 1) suffix = pieces[pieces.length-1].toLowerCase ();
-
-                    if      (fileName.endsWith ("out"    ))           newNode = new NodeFile (NodeFile.Type.Output,  file);
-                    else if (fileName.endsWith ("err"    ))           newNode = new NodeFile (NodeFile.Type.Error,   file);
-                    else if (fileName.endsWith ("result" ))           newNode = new NodeFile (NodeFile.Type.Result,  file);
-                    else if (fileName.endsWith ("console"))           newNode = new NodeFile (NodeFile.Type.Console, file);
-                    else if (imageFileSuffixes.indexOf (suffix) >= 0) newNode = new NodeFile (NodeFile.Type.Picture, file);
-                    else                                              newNode = new NodeFile (NodeFile.Type.Other,   file);
-                }
-
-                NodeFile oldNode = existing.get (newNode.path);
-                if (oldNode == null)
-                {
-                    add (newNode);
-                    changed = true;
-                }
-                else
-                {
-                    oldNode.found = true;
-                }
-            }
-        };
-        FileConsumer consumer = new FileConsumer ();
+        // Scan local job dir
+        boolean changed = false;
         MNode source = getSource ();
-        Path dir = Paths.get (source.get ()).getParent ();
-        try (Stream<Path> dirStream = Files.list (dir))
+        Path localJobDir = Paths.get (source.get ()).getParent ();
+        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (localJobDir))
         {
-            dirStream.forEach (consumer);
+            for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
         }
         catch (IOException e) {}
+
+        // Scan remote job dir. Because this is done second, it takes lower precedence relative to local files.
+        Host env = Host.get (source);
+        if (env.isRemote ())
+        {
+            try
+            {
+                Path resourceDir  = env.getResourceDir ();
+                Path remoteJobDir = Host.getJobDir (resourceDir, source);
+                try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (remoteJobDir))
+                {
+                    for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
+                }
+            }
+            catch (Exception e) {}
+        }
 
         for (NodeFile nf : existing.values ())
         {
             if (! nf.found)
             {
                 remove (nf);
-                consumer.changed = true;
+                changed = true;
             }
         }
 
-        if (consumer.changed)
+        if (changed)
         {
             if (selected != null)
             {
@@ -371,9 +342,8 @@ public class NodeJob extends NodeBase
                 if (tryToSelectOutput  &&  selected == NodeJob.this  &&  selected == tree.getPathForRow (0).getLastPathComponent ())
                 {
                     NodeFile bestFile = null;
-                    for (Object c : children)
+                    for (NodeFile nf : existing.values ())
                     {
-                        NodeFile nf = (NodeFile) c;
                         if (nf.type.priority == 0) continue;
                         if (bestFile == null  ||  nf.type.priority > bestFile.type.priority)
                         {
@@ -392,8 +362,11 @@ public class NodeJob extends NodeBase
             {
                 public void run ()
                 {
+                    removeAllChildren ();
+                    for (NodeFile nf : existing.values ()) add (nf);
                     DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
                     model.nodeStructureChanged (NodeJob.this);
+
                     if (selectedPath != null)
                     {
                         tree.setSelectionPath (selectedPath);
@@ -401,8 +374,77 @@ public class NodeJob extends NodeBase
                     }
                 }
             };
-            if (EventQueue.isDispatchThread ()) update.run ();
-            else                                EventQueue.invokeLater (update);
+            EventQueue.invokeLater (update);
         }
+    }
+
+    /**
+        Creates a new file node for the given path, but only if it passes a number of filters.
+        It must be different than any file already known to us, and it must be a file we
+        actually want to show to the user.
+    **/
+    public synchronized boolean buildChild (Path file, Map<String,NodeFile> existing)
+    {
+        String fileName = file.getFileName ().toString ();
+        NodeFile oldNode = existing.get (fileName);
+        if (oldNode != null)
+        {
+            oldNode.found = true;
+            return false;
+        }
+
+        NodeFile newNode;
+        if (Files.isDirectory (file))
+        {
+            // Check for image sequence.
+            // It's an image sequence if a random file from the dir has the right form: an integer with an standard image-file suffix.
+            try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (file))
+            {
+                Iterator<Path> it = dirStream.iterator ();
+                if (! it.hasNext ()) return false;
+                Path p = it.next ();
+                String[] pieces = p.getFileName ().toString ().split ("\\.");
+                if (pieces.length != 2) return false;
+                try {Integer.valueOf (pieces[0]);}
+                catch (NumberFormatException e) {return false;}
+                String suffix = pieces[1].toLowerCase ();
+                if (imageFileSuffixes.indexOf (suffix) < 0) return false;
+                newNode = new NodeFile (NodeFile.Type.Video, file);
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            try {if (Files.size (file) == 0) return false;}
+            catch (IOException e) {return false;}
+
+            if (fileName.startsWith ("n2a_job" )) return false;
+            if (fileName.equals     ("model"   )) return false;  // This is the file associated with our own "source"
+            if (fileName.equals     ("started" )) return false;
+            if (fileName.equals     ("finished")) return false;
+            if (fileName.startsWith ("compile" )) return false;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
+            if (fileName.endsWith   (".bin"    )) return false;  // Don't show generated binaries
+            if (fileName.endsWith   (".aplx"   )) return false;
+            if (fileName.endsWith   (".columns")) return false;  // Hint for column names when simulator doesn't output them.
+            if (fileName.endsWith   (".mod"    )) return false;  // NEURON files
+
+            String suffix = "";
+            String[] pieces = fileName.split ("\\.");
+            if (pieces.length > 1) suffix = pieces[pieces.length-1].toLowerCase ();
+
+            if      (fileName.endsWith ("out"    ))           newNode = new NodeFile (NodeFile.Type.Output,  file);
+            else if (fileName.endsWith ("err"    ))           newNode = new NodeFile (NodeFile.Type.Error,   file);
+            else if (fileName.endsWith ("result" ))           newNode = new NodeFile (NodeFile.Type.Result,  file);
+            else if (fileName.endsWith ("console"))           newNode = new NodeFile (NodeFile.Type.Console, file);
+            else if (imageFileSuffixes.indexOf (suffix) >= 0) newNode = new NodeFile (NodeFile.Type.Picture, file);
+            else                                              newNode = new NodeFile (NodeFile.Type.Other,   file);
+        }
+
+        existing.put (fileName, newNode);
+        newNode.found = true;  // So it won't get deleted below.
+        return true;
     }
 }

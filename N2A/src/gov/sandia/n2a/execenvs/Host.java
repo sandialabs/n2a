@@ -12,22 +12,27 @@ import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.reflect.Method;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
-import java.util.Comparator;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import com.jcraft.jsch.JSchException;
 
 /**
     Encapsulates access to a computer system, whether it is a workstation, a supercomputer or a "cloud" service.
@@ -45,15 +50,15 @@ import java.util.stream.Stream;
 **/
 public abstract class Host
 {
-    protected String name;   // Identifies host internally. Also acts as the default value of hostname. This allows the use of a friendly name for display combined with, say, a raw IP for address.
-    public    MNode  config; // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
+    public String name;   // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the hostname key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
+    public MNode  config; // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
 
     protected static Map<String,Host> hosts    = new HashMap<String,Host> ();
     protected static int              jobCount = 0;
 
     public interface Factory extends ExtensionPoint
     {
-        public String name ();           // as it appears in app state
+        public String className ();
         public Host   createInstance (); // not yet bound to app state
     }
 
@@ -62,7 +67,7 @@ public abstract class Host
         for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
         {
             Factory f = (Factory) ext;
-            if (f.name ().equalsIgnoreCase (className)) return f.createInstance ();
+            if (f.className ().equalsIgnoreCase (className)) return f.createInstance ();
         }
         return new RemoteUnix ();  // Note that localhost is always determined by direct probe of our actual OS.
     }
@@ -97,6 +102,11 @@ public abstract class Host
         return result;
     }
 
+    public static Host get (MNode job)
+    {
+        return get (job.getOrDefault ("localhost", "$metadata", "host"));
+    }
+
     /**
         Determines if this application is running on a Windows system.
         Not to be confused with the type of system a particular job executes on.
@@ -115,27 +125,183 @@ public abstract class Host
         return System.getProperty ("os.name").toLowerCase ().indexOf ("mac") >= 0;
     }
 
+    public boolean isRemote ()
+    {
+        return ! name.equals ("localhost");
+    }
+
     public abstract boolean   isActive       (MNode job)                 throws Exception;  // check if the given job is active
     public abstract Set<Long> getActiveProcs ()                          throws Exception;  // enumerate all of our active jobs
     public abstract void      submitJob      (MNode job, String command) throws Exception;
-    public abstract void      killJob        (long pid, boolean force)   throws Exception;
+    public abstract void      killJob        (MNode job, boolean force)  throws Exception;
 
-    public void deleteJob (String jobName) throws Exception
+    /**
+        A general process-building interface that allows the caller to work with
+        both ProcessBuilder and RemoteProcessBuilder.
+    **/
+    public static interface AnyProcessBuilder
     {
-        Path resourceDir = getResourceDir ();
-        Path jobsDir     = resourceDir.resolve ("jobs");
-        Path jobDir      = jobsDir.resolve (jobName);
-        deleteDirectory (jobDir);
+        public AnyProcessBuilder redirectInput  (Path file);
+        public AnyProcessBuilder redirectOutput (Path file);
+        public AnyProcessBuilder redirectError  (Path file);
+        /**
+            Construct and start the process.
+            This is the only function that needs to be inside the try-with-resources.
+        **/
+        public AnyProcess start () throws Exception;
+    }
+
+    /**
+        A general process that presents the Closeable interface.
+        This allows a standard Process to be used in a try-with-resources, just
+        like a RemoteProcess.
+    **/
+    public static interface AnyProcess extends Closeable
+    {
+        public OutputStream getOutputStream ();
+        public InputStream  getInputStream  ();
+        public InputStream  getErrorStream  ();
+        public int          waitFor         ()                            throws InterruptedException;
+        public boolean      waitFor         (long timeout, TimeUnit unit) throws InterruptedException;
+        public int          exitValue       ()                            throws IllegalThreadStateException;
+        public void         destroy         ();
+        public AnyProcess   destroyForcibly ();
+        public boolean      isAlive         ();
+    }
+
+    /**
+        Wrapper for ProcessBuilder.
+    **/
+    public static class LocalProcessBuilder implements AnyProcessBuilder
+    {
+        protected ProcessBuilder builder;
+
+        public LocalProcessBuilder (String... command)
+        {
+            builder = new ProcessBuilder (command);
+        }
+
+        public AnyProcessBuilder redirectInput (Path file)
+        {
+            builder.redirectInput (file.toFile ());
+            return this;
+        }
+
+        public AnyProcessBuilder redirectOutput (Path file)
+        {
+            builder.redirectOutput (file.toFile ());
+            return this;
+        }
+
+        public AnyProcessBuilder redirectError (Path file)
+        {
+            builder.redirectError (file.toFile ());
+            return this;
+        }
+
+        public AnyProcess start () throws IOException, JSchException
+        {
+            return new LocalProcess (builder.start ());
+        }
+    }
+
+    /**
+        Wrapper for Process that allows it to be used in a try-with-resources.
+    **/
+    public static class LocalProcess implements AnyProcess
+    {
+        protected Process process;
+
+        public LocalProcess (Process process)
+        {
+            this.process = process;
+        }
+
+        public void close () throws IOException
+        {
+        }
+
+        public OutputStream getOutputStream ()
+        {
+            return process.getOutputStream ();
+        }
+
+        public InputStream getInputStream ()
+        {
+            return process.getInputStream ();
+        }
+
+        public InputStream getErrorStream ()
+        {
+            return process.getErrorStream ();
+        }
+
+        public int waitFor () throws InterruptedException
+        {
+            return process.waitFor ();
+        }
+
+        public boolean waitFor (long timeout, TimeUnit unit) throws InterruptedException
+        {
+            return process.waitFor (timeout, unit);
+        }
+
+        public int exitValue () throws IllegalThreadStateException
+        {
+            return process.exitValue ();
+        }
+
+        public void destroy ()
+        {
+            process.destroy ();
+        }
+
+        public AnyProcess destroyForcibly ()
+        {
+            process.destroyForcibly ();
+            return this;
+        }
+
+        public boolean isAlive ()
+        {
+            return process.isAlive ();
+        }
+    }
+
+    /**
+        Creates either a local or remote process that executes the given command line.
+        Unless this process is known to be local, it should be wrapped in a try-with-resources
+        so that a RemoteProcess will get properly closed.
+    **/
+    public AnyProcessBuilder build (String... command) throws Exception
+    {
+        // This default implementation is for the local machine.
+        return new LocalProcessBuilder (command);
     }
 
     public Path getResourceDir () throws Exception
     {
-        return Paths.get (AppData.properties.get ("resourceDir"));  // Only suitable for localhost. Must override for remote systems.
+        return getLocalResourceDir ();  // Only suitable for localhost. Must override for remote systems.
     }
 
+    public static Path getLocalResourceDir ()
+    {
+        return Paths.get (AppData.properties.get ("resourceDir"));
+    }
+
+    public static Path getJobDir (Path resourceDir, MNode job)
+    {
+        return resourceDir.resolve ("jobs").resolve (job.key ());
+    }
+
+    /**
+        When needed, wraps the given path in quotes so it won't get misread by the target shell.
+    **/
     public String quotePath (Path path)
     {
-        return "'" + path + "'";
+        // Default for local machine is not to quote, because we use the more advanced ProcessBuilder
+        // class, which allows separate args.
+        return path.toString ();
     }
 
     /**
@@ -260,16 +426,33 @@ public abstract class Host
         }
     }
 
-    public static void deleteDirectory (Path path)
+    public static void deleteTree (Path start, boolean includeStartDir)
     {
-        try (Stream<Path> walk = Files.walk (path))
+        // On Windows, the JVM sometimes holds file locks even after we close the file.
+        // This can keep us from being able to delete directories.
+        // Garbage collection helps reduce this problem, though it does not guarantee success.
+        System.gc ();
+
+        try
         {
-            walk.sorted (Comparator.reverseOrder ()).forEach (t ->
+            Files.walkFileTree (start, new SimpleFileVisitor<Path> ()
             {
-                try {Files.delete (t);}
-                catch (IOException e) {}
+                public FileVisitResult visitFile (final Path file, final BasicFileAttributes attrs) throws IOException
+                {
+                    Files.delete (file);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                public FileVisitResult postVisitDirectory (final Path dir, final IOException e) throws IOException
+                {
+                    if (includeStartDir  ||  ! dir.equals (start)) Files.delete (dir);
+                    return FileVisitResult.CONTINUE;
+                }
             });
         }
-        catch (IOException e) {}  // Main cause for this would be if "path" doesn't exist, so we don't care.
+        catch (IOException e)
+        {
+            e.printStackTrace ();
+        }
     }
 }

@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import java.awt.Component;
 import java.awt.EventQueue;
@@ -27,9 +28,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Iterator;
-import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 
 import javax.swing.Box;
@@ -63,16 +65,16 @@ public class PanelRun extends JPanel
     public JTree            tree;
     public JScrollPane      treePane;
 
-    public JButton           buttonStop;
-    public ButtonGroup       buttons;
-    public JComboBox<String> comboScript;
-    public JTextArea         displayText;
-    public PanelChart        displayChart = new PanelChart ();
-    public JScrollPane       displayPane = new JScrollPane ();
-    public DisplayThread     displayThread = null;
-    public NodeBase          displayNode = null;
-    public MDir              runs;  // Copied from AppData for convenience
-    public List<NodeJob>     running = new LinkedList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
+    public JButton            buttonStop;
+    public ButtonGroup        buttons;
+    public JComboBox<String>  comboScript;
+    public JTextArea          displayText;
+    public PanelChart         displayChart = new PanelChart ();
+    public JScrollPane        displayPane = new JScrollPane ();
+    public DisplayThread      displayThread = null;
+    public NodeBase           displayNode = null;
+    public MDir               runs;  // Copied from AppData for convenience
+    public ArrayList<NodeJob> running = new ArrayList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
 
     public PanelRun ()
     {
@@ -148,7 +150,19 @@ public class PanelRun extends JPanel
             {
                 TreePath path = event.getPath ();
                 Object o = path.getLastPathComponent ();
-                if (o instanceof NodeJob) ((NodeJob) o).build (tree);
+                if (o instanceof NodeJob)
+                {
+                    // Launch a separate (non-EDT) thread to create/update the folder contents.
+                    Thread expandThread = new Thread ("NodeJob Expand")
+                    {
+                        public void run ()
+                        {
+                            ((NodeJob) o).build (tree);
+                        }
+                    };
+                    expandThread.setDaemon (true);
+                    expandThread.start ();
+                }
             }
 
             public void treeWillCollapse (TreeExpansionEvent event) throws ExpandVetoException
@@ -163,43 +177,62 @@ public class PanelRun extends JPanel
                 try
                 {
                     // Initial load
-                    synchronized (running)
-                    {
-                        for (MNode n : AppData.runs) running.add (0, new NodeJob (n, false));  // Insert at front to create reverse time order. This should be efficient on a doubly-linked list.
-                        for (NodeJob job : running) root.add (job);
-                    }
+                    // The Run button on the Models tab starts disabled. We enable it below,
+                    // once all the pre-existing jobs are loaded. This helps ensure consistency
+                    // between the UI and the run data stored on disk.
+                    // This also means that we don't really need to synchronize on
+                    // "running", because no other thread will try to access it until we give
+                    // the go-ahead.
+                    List<NodeJob> reverse = new ArrayList<NodeJob> (AppData.runs.size ());
+                    for (MNode n : AppData.runs) reverse.add (new NodeJob (n, false));
+                    running.ensureCapacity (reverse.size ());
+                    for (int i = reverse.size () - 1; i >= 0; i--) running.add (reverse.get (i));  // Reverse the order, so later dates come first.
+                    for (NodeJob job : running) root.add (job);
                     EventQueue.invokeLater (new Runnable ()
                     {
                         public void run ()
                         {
                             // Update display with newly loaded jobs.
-                            // If a job was added before we finish load, and if the user focused a row under it,
-                            // then we want to retain that selection.
-                            int row = tree.getLeadSelectionRow ();
                             model.nodeStructureChanged (root);
                             if (model.getChildCount (root) > 0)
                             {
-                                row = Math.max (0, row);
-                                tree.setSelectionRow (row);
-                                tree.scrollRowToVisible (row);
+                                tree.setSelectionRow (0);
+                                tree.scrollRowToVisible (0);
                             }
+
+                            PanelModel.instance.panelEquations.enableRuns ();
                         }
                     });
 
                     // Periodic refresh to show status of running jobs
                     while (true)
                     {
-                        synchronized (running)
+                        long startTime = System.currentTimeMillis ();
+                        int i = 0;
+                        while (true)
                         {
-                            Iterator<NodeJob> i = running.iterator ();
-                            while (i.hasNext ())
+                            // This loop is organized to release the lock on "running" once
+                            // per job entry. That minimizes the wait when inserting a new job.
+                            synchronized (running)
                             {
-                                NodeJob job = i.next ();
+                                if (i >= running.size ()) break;
+                                NodeJob job = running.get (i);
                                 job.monitorProgress (PanelRun.this);
-                                if (job.complete >= 1  &&  job.complete != 3  ||  job.deleted) i.remove ();
+                                if (job.complete >= 1  &&  job.complete != 3  ||  job.deleted)
+                                {
+                                    // If necessary, we can use a more efficient method to remove
+                                    // the element (namely, overwrite the ith element with the back element).
+                                    running.remove (i);
+                                }
+                                else
+                                {
+                                    i++;
+                                }
                             }
                         }
-                        sleep (20000);
+                        long duration = System.currentTimeMillis () - startTime;
+                        long wait = 20000 - duration;  // target is 20 seconds between starts
+                        if (wait > 1000) sleep (wait);
                     }
                 }
                 catch (InterruptedException e)
@@ -718,18 +751,44 @@ public class PanelRun extends JPanel
             nextSelectionIsParent = true;
         }
 
+        // Anything being displayed must also be a selected item, so always shut down the display thread.
+        synchronized (displayText)
+        {
+            if (displayThread != null)
+            {
+                displayThread.stop = true;
+                displayThread = null;
+            }
+            displayNode = null;  // All access to this happens on EDT, so safe.
+            displayText.setText ("");
+        }
+        if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
+
+        Set<NodeJob> parents = new HashSet<NodeJob> ();
         for (TreePath path : paths)
         {
             final NodeBase node = (NodeBase) path.getLastPathComponent ();
-            model.removeNodeFromParent (node);
-            if (displayNode == node)
+            if (node instanceof NodeJob)
             {
-                synchronized (displayText)
+                NodeJob job = (NodeJob) node;
+                parents.add (job);
+                synchronized (job)
                 {
-                    displayText.setText ("");
+                    if (job.complete < 1  ||  job.complete == 3)
+                    {
+                        // It's important that the job not have resources locked in the directory when we try to delete it.
+                        // If the job is still running, downgrade the delete request to a kill request.
+                        // The user will have to hit delete again, once the job dies.
+                        job.stop ();
+                        continue;
+                    }
                 }
-                if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
             }
+            else
+            {
+                if (parents.contains ((NodeJob) node.getParent ())) continue;
+            }
+            model.removeNodeFromParent (node);
 
             // It may seem insane to start a separate thread for each path, but it actually makes sense
             // to do all this work in parallel. In particular, if there are remote jobs, there may be
@@ -742,19 +801,39 @@ public class PanelRun extends JPanel
                     if (node instanceof NodeJob)
                     {
                         NodeJob job = (NodeJob) node;
-                        synchronized (job) {job.deleted = true;}
-
-                        MDoc doc = (MDoc) job.getSource ();
-                        Host env = Host.get (doc.getOrDefault ("localhost", "$metadata", "host"));
-                        String jobName = doc.key ();
-                        try
+                        synchronized (job)
                         {
-                            if (job.complete < 1) job.stop ();
-                            env.deleteJob (jobName);
-                        }
-                        catch (Exception e) {}
+                            job.deleted = true;  // Signal the monitor thread to drop this job.
 
-                        doc.delete ();
+                            MDoc doc = (MDoc) job.getSource ();
+                            if (job.complete < 1  ||  job.complete == 3)
+                            {
+                                // It's important that the job not have resources locked in the directory when we try to delete it.
+                                // If the job is still running, downgrade the delete request to a kill request.
+                                // The user will have to hit delete again, once the job dies.
+                                job.stop ();
+                                return;
+                            }
+                            doc.delete ();  // deletes local job directory
+                            Host env = Host.get (doc);
+                            if (env.isRemote ())
+                            {
+                                // We have already "forgotten" the job locally. If the remote files cannot be removed,
+                                // for example because the network is down, we leak disk space on the remote machine.
+                                // This creates a user-interface quandary. The user should be able to fully delete
+                                // local records, for example if the remote host has been permanently retired.
+                                // Yet there should be some way to indicate the unknown state of remote jobs.
+                                // A possible compromise is some utility (perhaps in Settings/Hosts) that lets
+                                // the user scan for zombie jobs and add a placeholder back into the local jobs list.
+                                try
+                                {
+                                    Path resourceDir  = env.getResourceDir ();
+                                    Path remoteJobDir = Host.getJobDir (resourceDir, doc);
+                                    Host.deleteTree (remoteJobDir, true);
+                                }
+                                catch (Exception e) {}
+                            }
+                        }
                     }
                     else if (node instanceof NodeFile)
                     {
@@ -789,23 +868,18 @@ public class PanelRun extends JPanel
         tree.scrollRowToVisible (0);
         tree.requestFocusInWindow ();
 
-        new Thread ("PanelRun Add New Run")
+        new Thread ("Add New Run")
         {
             public void run ()
             {
-                try
-                {
-                    // Wait just a little bit, so backend has a chance to deposit a "started" file in the job directory.
-                    // Backends should do this as early as possible.
-                    // TODO: Add a state to represent ready to run but not yet running. Waiting on queue in a supercomputer would fall in this category.
-                    Thread.sleep (500);
-                }
-                catch (InterruptedException e)
-                {
-                }
+                // Wait just a little bit, so backend has a chance to deposit a "started" file in the job directory.
+                // Backends should do this as early as possible.
+                // TODO: Add a state to represent ready to run but not yet running. Waiting on queue in a supercomputer would fall in this category.
+                try {Thread.sleep (500);}
+                catch (InterruptedException e) {}
 
                 node.monitorProgress (PanelRun.this);
-                if (node.complete < 1) synchronized (running) {running.add (0, node);}  // It could take a very long time for this job to get added, but no longer than one complete update pass over running jobs.
+                if (node.complete < 1) synchronized (running) {running.add (node);}  // It could take a very long time for this job to get added, but no longer than one complete update pass over running jobs.
             };
         }.start ();
     }

@@ -15,7 +15,6 @@ import gov.sandia.n2a.parms.ParameterDomain;
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
-import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -162,61 +161,6 @@ public class InternalBackend extends Backend
             }
         }
         return 0;
-    }
-
-    public static double getSimTimeFromOutput (MNode job)
-    {
-        Path jobDir = Paths.get (job.get ()).getParent ();
-        Path out = jobDir.resolve ("out");
-        return getSimTimeFromOutput (out);
-    }
-
-    /**
-        Assumes that $t is output in first column.
-        Note that this does not hold true for Xyce.
-    **/
-    public static double getSimTimeFromOutput (Path out)
-    {
-        double result = 0;
-        try (RandomAccessFile raf = new RandomAccessFile (out.toFile (), "r"))
-        {
-            long lineLength = 16;  // Initial guess. About long enough to catch two columns. Smaller initial value gives more accurate result, but costs more in terms of repeated scans.
-            while (true)
-            {
-                String column = "";
-                boolean gotNL = false;
-                boolean gotTab = false;
-                long length = raf.length ();
-                if (length < lineLength) break;
-                raf.seek (length - lineLength);
-                for (long i = 0; i < lineLength; i++)
-                {
-                    char c = (char) raf.read ();  // Technically, the file is in UTF-8, but this will only matter in column headings. We are looking for a float string, which will be in all lower ASCII.
-                    if (c == '\n'  ||  c == '\r')
-                    {
-                        gotNL = true;
-                        continue;
-                    }
-                    if (gotNL)
-                    {
-                        if (c == '\t')
-                        {
-                            gotTab = true;
-                            break;
-                        }
-                        column = column + c;
-                    }
-                }
-                if (gotNL  &&  gotTab)
-                {
-                    result = Double.parseDouble (column);
-                    break;
-                }
-                lineLength *= 2;
-            }
-        }
-        catch (Exception e) {}
-        return result;
     }
 
     /**

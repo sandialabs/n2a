@@ -69,19 +69,10 @@ public class OutputParser
                 	columns.add (c);
                 }
 
-                char firstCharacter = parts[0].charAt (0);
-                if (firstCharacter < '0'  ||  firstCharacter > '9')  // column header
+                char fc = parts[0].charAt (0);  // first character
+                if (fc == '-'  ||  fc == '+'  ||  fc == '.'  ||  fc >= '0'  &&  fc <= '9')  // number
                 {
-                    raw = false;
-            		isXycePRN = parts[0].equals ("Index");
-                    for (int p = lastSize; p < parts.length; p++)
-                    {
-                    	columns.get (p).header = parts[p];
-                    }
-                }
-                else
-                {
-                	int p = isXycePRN ? 1 : 0;  // skip parsing Index column, since we don't use it
+                    int p = isXycePRN ? 1 : 0;  // skip parsing Index column, since we don't use it
                     for (; p < parts.length; p++)
                     {
                         Column c = columns.get (p);
@@ -95,6 +86,15 @@ public class OutputParser
                     }
                     for (; p < columns.size (); p++) columns.get (p).values.add (defaultValue);  // Because the structure is not sparse, we must fill out every row.
                     row++;
+                }
+                else  // column header
+                {
+                    raw = false;
+                    isXycePRN = parts[0].equals ("Index");
+                    for (int p = lastSize; p < parts.length; p++)
+                    {
+                        columns.get (p).header = parts[p];
+                    }
                 }
             }
         }

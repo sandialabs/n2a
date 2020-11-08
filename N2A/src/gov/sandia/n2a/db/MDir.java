@@ -8,11 +8,9 @@ package gov.sandia.n2a.db;
 
 import java.io.IOException;
 import java.lang.ref.SoftReference;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.FileVisitResult;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +21,8 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
+
+import gov.sandia.n2a.execenvs.Host;
 
 /**
     A top-level node which maps to a directory on the file system.
@@ -129,32 +129,8 @@ public class MDir extends MNode
     {
         children.clear ();
         writeQueue.clear ();
-        deleteTree (root.toAbsolutePath (), false);
+        Host.deleteTree (root.toAbsolutePath (), false);
         fireChanged ();
-    }
-
-    public static void deleteTree (Path start, boolean includeStartDir)
-    {
-        try
-        {
-            Files.walkFileTree (start, new SimpleFileVisitor<Path> ()
-            {
-                public FileVisitResult visitFile (final Path file, final BasicFileAttributes attrs) throws IOException
-                {
-                    Files.delete (file);
-                    return FileVisitResult.CONTINUE;
-                }
-
-                public FileVisitResult postVisitDirectory (final Path dir, final IOException e) throws IOException
-                {
-                    if (includeStartDir  ||  ! dir.equals (start)) Files.delete (dir);
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        }
-        catch (IOException e)
-        {
-        }
     }
 
     /**
@@ -165,7 +141,7 @@ public class MDir extends MNode
     {
         SoftReference<MDoc> ref = children.remove (key);
         if (ref != null) writeQueue.remove (ref.get ());
-        deleteTree (root.resolve (key).toAbsolutePath (), true);
+        Host.deleteTree (root.resolve (key).toAbsolutePath (), true);
         fireChildDeleted (key);
     }
 
@@ -223,7 +199,7 @@ public class MDir extends MNode
         Path toPath   = root.resolve (toKey  ).toAbsolutePath ();
         try
         {
-            if (Files.exists (toPath)) deleteTree (toPath, true);
+            if (Files.exists (toPath)) Host.deleteTree (toPath, true);
             Files.move (fromPath, toPath, StandardCopyOption.REPLACE_EXISTING);
         }
         catch (IOException e)
@@ -353,12 +329,18 @@ public class MDir extends MNode
 
         NavigableMap<String,SoftReference<MDoc>> newChildren = new TreeMap<String,SoftReference<MDoc>> ();
         // Scan directory.
-        for (String key : root.toFile ().list ())  // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
+        // This may cost a lot of time in some cases. However, N2A should never have more than about 10,000 models in a dir.
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream (root))
         {
-            if (key.startsWith (".")) continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
-            if (suffix != null  &&  ! Files.isDirectory (root.resolve (key))) continue;  // Only permit directories when suffix is defined.
-            newChildren.put (key, children.get (key));  // Some children could get orphaned, if they were deleted from disk by another process. In that case the UI should be rebuilt.
+            for (Path path : stream)
+            {
+                String key = path.getFileName ().toString ();
+                if (key.startsWith (".")) continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
+                if (suffix != null  &&  ! Files.isDirectory (path)) continue;  // Only permit directories when suffix is defined.
+                newChildren.put (key, children.get (key));  // Some children could get orphaned, if they were deleted from disk by another process. In that case the UI should be rebuilt.
+            }
         }
+        catch (IOException e) {}
         // Include newly-created docs that have never been flushed to disk.
         for (MDoc doc : writeQueue)
         {

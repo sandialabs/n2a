@@ -172,7 +172,7 @@ public class Main
 
         // Wait for completion
         // TODO: This duplicates some functionality in NodeJob.monitorProgress. Should really be part of a job management interface, as it can vary with host-backend combination.
-        Host env = Host.get (job.get ("$metadata", "host"));
+        Host env = Host.get (job);
         Path finished = jobDir.resolve ("finished");
         long lastLiveCheck = System.currentTimeMillis ();
         while (true)

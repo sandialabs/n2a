@@ -329,6 +329,7 @@ public class PanelEquations extends JPanel
         buttonRun = new JButton (ImageUtil.getImage ("run.gif"));
         buttonRun.setMargin (new Insets (2, 2, 2, 2));
         buttonRun.setFocusable (false);
+        buttonRun.setEnabled (false);  // Don't let users start a run until the Runs tab loads existing jobs. See PanelRun.ctor
         buttonRun.setToolTipText ("Run");
         buttonRun.addActionListener (listenerRun);
 
@@ -970,6 +971,11 @@ public class PanelEquations extends JPanel
             active.moveSelected (Integer.valueOf (e.getActionCommand ()));
         }
     };
+
+    public void enableRuns ()
+    {
+        buttonRun.setEnabled (true);
+    }
 
     ActionListener listenerRun = new ActionListener ()
     {

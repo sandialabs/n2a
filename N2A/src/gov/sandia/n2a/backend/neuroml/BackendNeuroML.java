@@ -153,7 +153,7 @@ public class BackendNeuroML extends Backend
 
         public void submitJob () throws Exception
         {
-            Host env = Host.get (job.getOrDefault ("localhost", "$metadata", "host"));
+            Host env = Host.get (job);
             String command = "JNML_HOME=" + jnmlHome + " " + env.quotePath (jnmlCommand) + " " + env.quotePath (modelPath) + " -nogui";
             env.submitJob (job, command);
         }
@@ -164,9 +164,6 @@ public class BackendNeuroML extends Backend
     {
         String defaultOutput = job.get ("$metadata", "defaultOutput");
         if (defaultOutput.isEmpty ()) return 0;
-
-        Path jobDir = Paths.get (job.get ()).getParent ();
-        Path out = jobDir.resolve (defaultOutput);
-        return InternalBackend.getSimTimeFromOutput (out);
+        return InternalBackend.getSimTimeFromOutput (job, defaultOutput, 0);
     }
 }

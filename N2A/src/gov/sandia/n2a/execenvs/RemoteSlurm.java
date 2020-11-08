@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.Connection.RemoteProcess;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedReader;
@@ -25,7 +24,7 @@ public class RemoteSlurm extends RemoteUnix
     {
         return new Factory ()
         {
-            public String name ()
+            public String className ()
             {
                 return "RemoteSlurm";
             }
@@ -43,8 +42,7 @@ public class RemoteSlurm extends RemoteUnix
         long pid = job.getOrDefault (0l, "$metadata", "pid");
         if (pid == 0) return false;
 
-        connect ();
-        try (RemoteProcess proc = connection.build ("squeue -o \"%i\" -u " + connection.username).start ();
+        try (AnyProcess proc = build ("squeue -o \"%i\" -u " + connection.username).start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -61,8 +59,7 @@ public class RemoteSlurm extends RemoteUnix
     public Set<Long> getActiveProcs() throws Exception
     {
         Set<Long> result = new TreeSet<Long> ();
-        connect ();
-        try (RemoteProcess proc = connection.build ("squeue -o \"%i\" -u " + connection.username).start ();
+        try (AnyProcess proc = build ("squeue -o \"%i\" -u " + connection.username).start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -92,7 +89,7 @@ public class RemoteSlurm extends RemoteUnix
         );
 
         // Note: There may be other sbatch parameters that are worth controlling here.
-        try (RemoteProcess proc = connection.build
+        try (AnyProcess proc = build
                 (
                     "sbatch"
                     + " --nodes="           + nodes
@@ -127,10 +124,12 @@ public class RemoteSlurm extends RemoteUnix
     }
 
     @Override
-    public void killJob (long pid, boolean force) throws Exception
+    public void killJob (MNode job, boolean force) throws Exception
     {
-        connect ();
-        try (RemoteProcess proc = connection.build ("scancel " + (force ? "" : "-s 15 ") + pid).start ())
+        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        if (pid == 0) return;
+
+        try (AnyProcess proc = build ("scancel " + (force ? "" : "-s 15 ") + pid).start ())
         {
             proc.wait ();  // To avoid killing the process by closing the channel.
         }

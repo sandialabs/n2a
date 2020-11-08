@@ -8,7 +8,6 @@ package gov.sandia.n2a.backend.c;
 
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
-import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
@@ -18,6 +17,8 @@ import gov.sandia.n2a.eqset.EquationSet.ConnectionMatrix;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.execenvs.Host.AnyProcess;
+import gov.sandia.n2a.execenvs.Host.AnyProcessBuilder;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Constant;
@@ -64,9 +65,11 @@ public class JobC extends Thread
     public MNode       job;
     public EquationSet model;
 
-    public Path jobDir;
-    public Path runtimeDir;
-    public Path gcc;
+    public Host env;
+    public Path localJobDir;
+    public Path jobDir;     // local or remote
+    public Path runtimeDir; // local or remote
+    public Path gcc;        // local or remote
 
     public String  T;
     public long    seed;
@@ -95,13 +98,13 @@ public class JobC extends Thread
 
     public void run ()
     {
-        jobDir = Paths.get (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
-        try {Backend.err.set (new PrintStream (new FileOutputStream (jobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
+        localJobDir = Paths.get (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
+        try {Backend.err.set (new PrintStream (new FileOutputStream (localJobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
         catch (Exception e) {}
 
         try
         {
-            Files.createFile (jobDir.resolve ("started"));
+            Files.createFile (localJobDir.resolve ("started"));
 
             T = job.getOrDefault ("float", "$metadata", "backend", "c", "type");
             if (T.startsWith ("int")  &&  T.length () > 3)
@@ -115,9 +118,10 @@ public class JobC extends Thread
                 Backend.err.get ().println ("WARNING: Unsupported numeric type. Defaulting to single-precision float.");
             }
 
-            Host env = Host.get (job.getOrDefault ("localhost", "$metadata", "host"));
-            Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
-            gcc              = Paths.get (AppData.state.getOrDefault ("g++", "BackendC", "gcc"));
+            env              = Host.get (job);
+            Path resourceDir = env.getResourceDir ();
+            jobDir           = Host.getJobDir (resourceDir, job);  // Unlike localJobDir (which is created by MDir), this may not exist until we explicitly create it.
+            gcc              = resourceDir.getFileSystem ().getPath (env.config.getOrDefault ("g++", "c", "gcc"));  // No good way to decide absolute path for the default value. Maybe need to call "which" command for this.
             runtimeDir       = resourceDir.resolve ("cruntime");
             rebuildRuntime ();
 
@@ -150,11 +154,12 @@ public class JobC extends Thread
 
             System.out.println (model.dump (false));
 
+            Files.createDirectories (jobDir);
             Path source = jobDir.resolve ("model.cc");
             generateCode (source);
             String command = env.quotePath (build (source));
 
-            // The C program will append to the same error file, so we need to close the file before submitting.
+            // The C program could append to the same error file, so we need to close the file before submitting.
             PrintStream ps = Backend.err.get ();
             if (ps != System.err)
             {
@@ -168,7 +173,7 @@ public class JobC extends Thread
         {
             if (! (e instanceof AbortRun)) e.printStackTrace (Backend.err.get ());
 
-            try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), jobDir.resolve ("finished"));}
+            try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), localJobDir.resolve ("finished"));}
             catch (Exception f) {}
         }
 
@@ -202,20 +207,12 @@ public class JobC extends Thread
 
         if (changed)  // Delete existing object files
         {
-            DirectoryStream.Filter<Path> filter = new DirectoryStream.Filter<Path> ()
+            try (DirectoryStream<Path> list = Files.newDirectoryStream (runtimeDir))
             {
-                public boolean accept (Path entry) throws IOException
+                for (Path file : list)
                 {
-                    return entry.getFileName ().toString ().endsWith (".o");
+                    if (file.getFileName ().toString ().endsWith (".o")) Files.delete (file);
                 }
-            };
-            try (DirectoryStream<Path> dir = Files.newDirectoryStream (runtimeDir, filter))
-            {
-                dir.forEach (file ->
-                {
-                    try {Files.delete (file);}
-                    catch (IOException e) {}  // Unfortunately, the Consumer interface does not permit exceptions to percolate up.
-                });
             }
             catch (IOException e) {}
         }
@@ -237,7 +234,7 @@ public class JobC extends Thread
                 "-I" + runtimeDir,
                 "-Dn2a_T=" + T,
                 (T.equals ("int") ? "-Dn2a_FP" : ""),
-                "-o", object.toString (), source.toString ()
+                "-o", env.quotePath (object), env.quotePath (source)
             );
             Files.delete (out);
         }
@@ -277,7 +274,7 @@ public class JobC extends Thread
             runtimeDir.resolve ("runtime_" + T + ".o").toString (),
             runtimeDir.resolve ("io_"      + T + ".o").toString (),
             (T.equals ("int") ? runtimeDir.resolve ("fixedpoint_" + T + ".o").toString () : ""),
-            "-o", binary.toString (), source.toString ()
+            "-o", env.quotePath (binary), env.quotePath (source)
         );
         Files.delete (out);
 
@@ -298,33 +295,35 @@ public class JobC extends Thread
         int i = 0;
         for (String s : command) if (! s.isEmpty ()) cleanedCommand[i++] = s;
 
-        Path out = jobDir.resolve ("compile.out");
-        Path err = jobDir.resolve ("compile.err");
+        Path out = localJobDir.resolve ("compile.out");
+        Path err = localJobDir.resolve ("compile.err");
 
-        ProcessBuilder b = new ProcessBuilder (cleanedCommand);
-        b.redirectOutput (out.toFile ());  // Should truncate existing files.
-        b.redirectError  (err.toFile ());
-        Process p = b.start ();
-        p.waitFor ();
-
-        if (p.exitValue () != 0)
+        AnyProcessBuilder b = env.build (cleanedCommand);
+        b.redirectOutput (out);  // Should truncate existing files.
+        b.redirectError  (err);
+        try (AnyProcess p = b.start ())
         {
-            PrintStream ps = Backend.err.get ();
-            ps.println ("Failed to compile:");
-            ps.print (Host.streamToString (Files.newInputStream (err)));
-            Files.delete (out);
+            p.waitFor ();
+
+            if (p.exitValue () != 0)
+            {
+                PrintStream ps = Backend.err.get ();
+                ps.println ("Failed to compile:");
+                ps.print (Host.streamToString (Files.newInputStream (err)));
+                Files.delete (out);
+                Files.delete (err);
+                throw new Backend.AbortRun ();
+            }
+
+            String errString = Host.streamToString (Files.newInputStream (err));
+            if (! errString.isEmpty ())
+            {
+                PrintStream ps = Backend.err.get ();
+                ps.println ("Compiler says:");
+                ps.println (errString);
+            }
             Files.delete (err);
-            throw new Backend.AbortRun ();
         }
-
-        String errString = Host.streamToString (Files.newInputStream (err));
-        if (! errString.isEmpty ())
-        {
-            PrintStream ps = Backend.err.get ();
-            ps.println ("Compiler says:");
-            ps.println (errString);
-        }
-        Files.delete (err);
         return out;
     }
 
