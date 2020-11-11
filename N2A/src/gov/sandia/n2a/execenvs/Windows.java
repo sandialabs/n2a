@@ -135,7 +135,7 @@ public class Windows extends Host
     }
 
     @Override
-    public String quotePath (Path path)
+    public String quote (Path path)
     {
         return "\"" + path + "\"";
     }

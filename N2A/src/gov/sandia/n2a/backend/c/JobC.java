@@ -157,7 +157,7 @@ public class JobC extends Thread
             Files.createDirectories (jobDir);
             Path source = jobDir.resolve ("model.cc");
             generateCode (source);
-            String command = env.quotePath (build (source));
+            String command = env.quote (build (source));
 
             // The C program could append to the same error file, so we need to close the file before submitting.
             PrintStream ps = Backend.err.get ();
@@ -200,7 +200,8 @@ public class JobC extends Thread
                 "KDTree.h", "StringLite.h",
                 "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
                 "nosys.h",
-                "runtime.cc", "runtime.h", "runtime.tcc"
+                "runtime.cc", "runtime.h", "runtime.tcc",
+                "OutputParser.h"  // Not needed by runtime, but provided as a utility for users.
             );
             needRuntime = false;   // Stop checking files for this session.
         }
@@ -234,7 +235,7 @@ public class JobC extends Thread
                 "-I" + runtimeDir,
                 "-Dn2a_T=" + T,
                 (T.equals ("int") ? "-Dn2a_FP" : ""),
-                "-o", env.quotePath (object), env.quotePath (source)
+                "-o", env.quote (object), env.quote (source)
             );
             Files.delete (out);
         }
@@ -268,13 +269,13 @@ public class JobC extends Thread
         (
             gcc.toString (), "-O3", "-std=c++11",
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
-            "-I" + runtimeDir,
+            "-I" + env.quote (runtimeDir),
             "-Dn2a_T=" + T,
             (T.equals ("int") ? "-Dn2a_FP" : ""),
-            runtimeDir.resolve ("runtime_" + T + ".o").toString (),
-            runtimeDir.resolve ("io_"      + T + ".o").toString (),
-            (T.equals ("int") ? runtimeDir.resolve ("fixedpoint_" + T + ".o").toString () : ""),
-            "-o", env.quotePath (binary), env.quotePath (source)
+            env.quote (runtimeDir.resolve ("runtime_" + T + ".o")),
+            env.quote (runtimeDir.resolve ("io_"      + T + ".o")),
+            (T.equals ("int") ? env.quote (runtimeDir.resolve ("fixedpoint_" + T + ".o")) : ""),
+            "-o", env.quote (binary), env.quote (source)
         );
         Files.delete (out);
 
@@ -552,9 +553,9 @@ public class JobC extends Thread
         if (T.equals ("int")) context = new RendererCfp (this, result);
         else                  context = new RendererC   (this, result);
 
-        result.append ("#include \"" + runtimeDir.resolve ("runtime.h") + "\"\n");
-        result.append ("#include \"" + runtimeDir.resolve ("Matrix.tcc") + "\"\n");
-        result.append ("#include \"" + runtimeDir.resolve ("MatrixFixed.tcc") + "\"\n");
+        result.append ("#include \"runtime.h\"\n");
+        result.append ("#include \"Matrix.tcc\"\n");
+        result.append ("#include \"MatrixFixed.tcc\"\n");
         result.append ("\n");
         result.append ("#include <iostream>\n");
         result.append ("#include <vector>\n");

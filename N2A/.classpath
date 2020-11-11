@@ -21,7 +21,5 @@
 	<classpathentry kind="lib" path="lib/uom/systems-quantity-2.0.2.jar"/>
 	<classpathentry kind="lib" path="lib/uom/systems-ucum-2.0.2.jar"/>
 	<classpathentry kind="lib" path="lib/uom/uom-lib-common-2.0.1.jar"/>
-	<classpathentry kind="lib" path="lib/jsch-nio/jsch-nio-1.0.14.jar"/>
-	<classpathentry kind="lib" path="lib/jsch-nio/jsch-extension.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

@@ -31,17 +31,22 @@ import gov.sandia.n2a.ui.MainFrame;
 **/
 public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
 {
-    protected String      password;
-    protected String      passphrase;
+    protected String      password   = "";
+    protected String      passphrase = "";
     protected Set<String> messages = new HashSet<String> ();  // Remember messages, so we only display them once per session.
+    protected boolean     triedPassword;   // The stored password has already been tried, so need to prompt user.
+    protected boolean     triedPassphrase; // ditto for passphrase
+    protected boolean     allowDialogs;    // Initially false. Dialogs must be specifically enabled by the user.
 
     public String getPassword ()
     {
+        triedPassword = true;
         return password;
     }
 
     public String getPassphrase ()
     {
+        triedPassphrase = true;
         return passphrase;
     }
 
@@ -68,6 +73,8 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
 
     public boolean promptPassword (String message)
     {
+        if (! password.isEmpty ()  &&  ! triedPassword) return true;
+        if (! allowDialogs) return false;
         JTextField field = makePasswordField (password);
         Object[] contents = {field};
         int result = JOptionPane.showConfirmDialog (MainFrame.instance, contents, message, JOptionPane.OK_CANCEL_OPTION);
@@ -81,6 +88,8 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
 
     public boolean promptPassphrase (String message)
     {
+        if (! passphrase.isEmpty ()  &&  ! triedPassphrase) return true;
+        if (! allowDialogs) return false;
         JTextField field = makePasswordField (passphrase);
         Object[] contents = {field};
         int result = JOptionPane.showConfirmDialog (MainFrame.instance, contents, message, JOptionPane.OK_CANCEL_OPTION);
@@ -94,6 +103,7 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
 
     public boolean promptYesNo (String message)
     {
+        if (! allowDialogs) return false;
         int result = JOptionPane.showConfirmDialog (MainFrame.instance, message, "Question", JOptionPane.YES_NO_OPTION);
         return result == JOptionPane.OK_OPTION;
     }
@@ -102,11 +112,13 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
     {
         if (messages.contains (message)) return;
         messages.add (message);
-        JOptionPane.showMessageDialog (MainFrame.instance, message);
+        // TODO: let user view saved messages via sessions menu
     }
 
     public String[] promptKeyboardInteractive (String destination, String name, String instruction, String[] prompt, boolean[] echo)
     {
+        if (! allowDialogs) return null;
+
         JPanel panel = new JPanel ();
         panel.setLayout (new GridBagLayout());
 

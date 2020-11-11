@@ -82,24 +82,20 @@ public class RemoteSlurm extends RemoteUnix
         String nodes = job.getOrDefault ("1", "$metadata", "remote", "nodes");
 
         stringToFile (jobDir.resolve ("n2a_job"),
-            "#!/bin/bash\n"
-            +  "mpiexec --npernode " + cores
-            + " numa_wrapper --ppn " + cores
-            + " " + command
+              "#!/bin/bash\n"
+            + "mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + command
         );
 
         // Note: There may be other sbatch parameters that are worth controlling here.
-        try (AnyProcess proc = build
-                (
-                    "sbatch"
-                    + " --nodes="           + nodes
-                    + " --time=24:00:00"
-                    + " --account="         + config.get ("cluster", "account")
-                    + " --job-name=N2A"
-                    + " --output="          + quotePath (jobDir.resolve ("out"))
-                    + " --error="           + quotePath (jobDir.resolve ("err"))
-                    + " " + quotePath (jobDir.resolve ("n2a_job"))
-                ).start ();
+        try (AnyProcess proc = build (
+                "sbatch",
+                "--nodes="   + nodes,
+                "--time=24:00:00",
+                "--account=" + config.get ("cluster", "account"),
+                "--job-name=N2A",  // TODO: use better job name here, one that is unique
+                "--output="  + quote (jobDir.resolve ("out")),
+                "--error="   + quote (jobDir.resolve ("err")),
+                quote (jobDir.resolve ("n2a_job"))).start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             // Example output:
@@ -129,7 +125,7 @@ public class RemoteSlurm extends RemoteUnix
         long pid = job.getOrDefault (0l, "$metadata", "pid");
         if (pid == 0) return;
 
-        try (AnyProcess proc = build ("scancel " + (force ? "" : "-s 15 ") + pid).start ())
+        try (AnyProcess proc = build ("scancel", force ? "" : "-s 15 ", String.valueOf (pid)).start ())
         {
             proc.wait ();  // To avoid killing the process by closing the channel.
         }

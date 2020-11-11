@@ -18,13 +18,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
 import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
-import com.pastdev.jsch.DefaultSessionFactory;
-import com.pastdev.jsch.SessionFactory;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Host.AnyProcess;
@@ -87,9 +87,11 @@ public class Connection implements Closeable
         username = config.getOrDefault (System.getProperty ("user.name"), "username");
         port     = config.getOrDefault (22,                               "port");
         home     = config.getOrDefault ("/home/" + username,              "home");
+
+        passwords.password = config.get ("password");  // may be empty
     }
 
-    public void connect () throws JSchException
+    public synchronized void connect () throws JSchException
     {
         if (session != null  &&  session.isConnected ()) return;
 
@@ -98,10 +100,15 @@ public class Connection implements Closeable
         session.connect (30000);
     }
 
-    public void close ()
+    public synchronized void close ()
     {
         if (session != null  &&  session.isConnected ()) session.disconnect ();
         session = null;
+    }
+
+    public synchronized boolean isConnected ()
+    {
+        return  session != null  &&  session.isConnected ();
     }
 
     /**
@@ -109,22 +116,26 @@ public class Connection implements Closeable
         is the user's home. Absolute paths are with respect to the usual root directory.
         @throws JSchException
     **/
-    public FileSystem getFileSystem () throws Exception
+    public synchronized FileSystem getFileSystem () throws Exception
     {
         connect ();
         if (sshfs == null)
         {
-            SingleSessionFactory factory = new SingleSessionFactory ();
-            Map<String,Object> environment = new HashMap<String,Object> ();
-            environment.put ("defaultSessionFactory", factory);
-            sshfs = FileSystems.newFileSystem (new URI ("ssh.unix://" + hostname + home), environment);
+            Map<String,Object> env = new HashMap<String,Object> ();
+            env.put ("connection", this);
+            sshfs = FileSystems.newFileSystem (new URI ("ssh://" + hostname + home), env);
         }
         return sshfs;
     }
 
-    public RemoteProcessBuilder build (String... command) throws JSchException
+    public RemoteProcessBuilder build (String... command)
     {
         return new RemoteProcessBuilder (command);
+    }
+
+    public RemoteProcessBuilder build (List<String> command)
+    {
+        return new RemoteProcessBuilder (command.toArray (new String[command.size ()]));
     }
 
     public class RemoteProcessBuilder implements AnyProcessBuilder
@@ -134,7 +145,7 @@ public class Connection implements Closeable
         protected Path   fileOut;
         protected Path   fileErr;
 
-        public RemoteProcessBuilder (String... command) throws JSchException
+        public RemoteProcessBuilder (String... command)
         {
             String combined = "";
             if (command.length > 0) combined = command[0];
@@ -203,7 +214,7 @@ public class Connection implements Closeable
         public RemoteProcess (String command) throws JSchException
         {
             connect ();
-            channel = (ChannelExec) session.openChannel ("exec");
+            synchronized (session) {channel = (ChannelExec) session.openChannel ("exec");}
             channel.setCommand (command);
         }
 
@@ -282,32 +293,6 @@ public class Connection implements Closeable
         public void write (int b) throws IOException
         {
             throw new IOException ("Stream closed");
-        }
-    }
-
-    // Override main connection class in jsch-extension to re-use Connection.session.
-    // Most of the work that jsch-extension does is redundant with our Connection class,
-    // including process management. However, jsch-nio provides a complete and usable
-    // implementation of FileSystem, so we live with its awkward dependencies.
-    public class SingleSessionFactory extends DefaultSessionFactory
-    {
-        public Session newSession () throws JSchException
-        {
-            connect ();
-            return session;
-        }
-
-        public SessionFactoryBuilder newSessionFactoryBuilder ()
-        {
-            // The values passed to the constructor here are irrelevant.
-            // The connection will be created outside this machinery.
-            return new SessionFactoryBuilder (jsch, username, hostname, port, getProxy (), null, passwords)
-            {
-                public SessionFactory build ()
-                {
-                    return SingleSessionFactory.this;
-                }
-            };
         }
     }
 }

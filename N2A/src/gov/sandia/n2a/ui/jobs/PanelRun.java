@@ -11,6 +11,7 @@ import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.execenvs.Remote;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -801,38 +802,35 @@ public class PanelRun extends JPanel
                     if (node instanceof NodeJob)
                     {
                         NodeJob job = (NodeJob) node;
-                        synchronized (job)
-                        {
-                            job.deleted = true;  // Signal the monitor thread to drop this job.
+                        synchronized (job) {job.deleted = true;}  // Signal the monitor thread to drop this job.
 
-                            MDoc doc = (MDoc) job.getSource ();
-                            if (job.complete < 1  ||  job.complete == 3)
+                        MDoc doc = (MDoc) job.getSource ();
+                        if (job.complete < 1  ||  job.complete == 3)
+                        {
+                            // It's important that the job not have resources locked in the directory when we try to delete it.
+                            // If the job is still running, downgrade the delete request to a kill request.
+                            // The user will have to hit delete again, once the job dies.
+                            job.stop ();
+                            return;
+                        }
+                        doc.delete ();  // deletes local job directory
+                        Host env = Host.get (doc);
+                        if (env instanceof Remote)
+                        {
+                            // We have already "forgotten" the job locally. If the remote files cannot be removed,
+                            // for example because the network is down, we leak disk space on the remote machine.
+                            // This creates a user-interface quandary. The user should be able to fully delete
+                            // local records, for example if the remote host has been permanently retired.
+                            // Yet there should be some way to indicate the unknown state of remote jobs.
+                            // A possible compromise is some utility (perhaps in Settings/Hosts) that lets
+                            // the user scan for zombie jobs and add a placeholder back into the local jobs list.
+                            try
                             {
-                                // It's important that the job not have resources locked in the directory when we try to delete it.
-                                // If the job is still running, downgrade the delete request to a kill request.
-                                // The user will have to hit delete again, once the job dies.
-                                job.stop ();
-                                return;
+                                Path resourceDir  = env.getResourceDir ();
+                                Path remoteJobDir = Host.getJobDir (resourceDir, doc);
+                                Host.deleteTree (remoteJobDir, true);
                             }
-                            doc.delete ();  // deletes local job directory
-                            Host env = Host.get (doc);
-                            if (env.isRemote ())
-                            {
-                                // We have already "forgotten" the job locally. If the remote files cannot be removed,
-                                // for example because the network is down, we leak disk space on the remote machine.
-                                // This creates a user-interface quandary. The user should be able to fully delete
-                                // local records, for example if the remote host has been permanently retired.
-                                // Yet there should be some way to indicate the unknown state of remote jobs.
-                                // A possible compromise is some utility (perhaps in Settings/Hosts) that lets
-                                // the user scan for zombie jobs and add a placeholder back into the local jobs list.
-                                try
-                                {
-                                    Path resourceDir  = env.getResourceDir ();
-                                    Path remoteJobDir = Host.getJobDir (resourceDir, doc);
-                                    Host.deleteTree (remoteJobDir, true);
-                                }
-                                catch (Exception e) {}
-                            }
+                            catch (Exception e) {}
                         }
                     }
                     else if (node instanceof NodeFile)

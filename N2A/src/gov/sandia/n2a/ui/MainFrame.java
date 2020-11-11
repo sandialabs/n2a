@@ -8,6 +8,7 @@ package gov.sandia.n2a.ui;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -119,6 +120,7 @@ public class MainFrame extends JFrame
             {
                 PanelModel.instance.panelEquations.saveFocus ();  // Hack to ensure that final viewport position gets recorded.
                 AppData.quit ();  // Save all user settings (including those from other parts of the app).
+                Host.quit ();  // Close down any ssh sessions.
             }
         });
 

@@ -28,6 +28,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -62,7 +63,7 @@ public abstract class Host
         public Host   createInstance (); // not yet bound to app state
     }
 
-    public static Host getHostFromClass (String className)
+    public static Host createHostOfClass (String className)
     {
         for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
         {
@@ -72,31 +73,34 @@ public abstract class Host
         return new RemoteUnix ();  // Note that localhost is always determined by direct probe of our actual OS.
     }
 
+    // Lazy initialization of host collection
+    protected static synchronized void init ()
+    {
+        if (! hosts.isEmpty ()) return;
+
+        Host localhost;
+        if (isWindows ()) localhost = new Windows ();
+        else              localhost = new Unix ();  // Should be compatible with Mac bash shell.
+        localhost.name   = "localhost";
+        localhost.config = AppData.state.childOrCreate ("Host", "localhost");
+        hosts.put (localhost.name, localhost);
+
+        // Load configured remote hosts from app data
+        for (MNode config : AppData.state.childOrEmpty ("Host"))
+        {
+            String name = config.key ();
+            if (name.equals ("localhost")) continue;
+            String className = config.get ("class");
+            Host hs = createHostOfClass (className);
+            hs.name = name;
+            hs.config = config;
+            hosts.put (name, hs);
+        }
+    }
+
     public static Host get (String hostname)
     {
-        // Lazy initialization of host collection
-        if (hosts.isEmpty ())
-        {
-            Host localhost;
-            if (isWindows ()) localhost = new Windows ();
-            else              localhost = new Unix ();  // Should be compatible with Mac bash shell.
-            localhost.name   = "localhost";
-            localhost.config = AppData.state.childOrCreate ("Host", "localhost");
-            hosts.put (localhost.name, localhost);
-
-            // Load configured remote hosts from app data
-            for (MNode config : AppData.state.childOrEmpty ("Host"))
-            {
-                String name = config.key ();
-                if (name.equals ("localhost")) continue;
-                String className = config.get ("class");
-                Host hs = getHostFromClass (className);
-                hs.name = name;
-                hs.config = config;
-                hosts.put (name, hs);
-            }
-        }
-
+        init ();
         Host result = hosts.get (hostname);
         if (result == null) result = hosts.get ("localhost");
         return result;
@@ -105,6 +109,45 @@ public abstract class Host
     public static Host get (MNode job)
     {
         return get (job.getOrDefault ("localhost", "$metadata", "host"));
+    }
+
+    public static Host getByAddress (String address)
+    {
+        init ();
+        for (Host h : hosts.values ())
+        {
+            if (h.config.getOrDefault (h.name, "address").equals (address)) return h;
+        }
+        return null;
+    }
+
+    public static void quit ()
+    {
+        Thread shutdownThread = new Thread ("Close Host connections")
+        {
+            public void run ()
+            {
+                for (Host h : hosts.values ())
+                {
+                    if (h instanceof Closeable)
+                    {
+                        try {((Closeable) h).close ();}
+                        catch (IOException e) {}
+                    }
+                }
+            }
+        };
+        shutdownThread.setDaemon (true);
+        shutdownThread.start ();
+
+        // 500ms is a generous amount of time to wait for graceful shutdown of one connection
+        // Limit total to 3s so that closing the program does not take an absurd amount of time.
+        int waitTime = Math.max (3000, 500 * hosts.size ());
+        try
+        {
+            shutdownThread.join (waitTime);
+        }
+        catch (InterruptedException e) {}
     }
 
     /**
@@ -123,11 +166,6 @@ public abstract class Host
     public static boolean isMac ()
     {
         return System.getProperty ("os.name").toLowerCase ().indexOf ("mac") >= 0;
-    }
-
-    public boolean isRemote ()
-    {
-        return ! name.equals ("localhost");
     }
 
     public abstract boolean   isActive       (MNode job)                 throws Exception;  // check if the given job is active
@@ -279,11 +317,25 @@ public abstract class Host
         return new LocalProcessBuilder (command);
     }
 
+    public AnyProcessBuilder build (List<String> command) throws Exception
+    {
+        return build (command.toArray (new String[command.size ()]));
+    }
+
+    /**
+        Determines the application data directory on the system where a job is executed.
+        In the case of a remote host, the Path object will give NIO access to the remote file system.
+        In the case of localhost, this is the same as local resource dir.
+    **/
     public Path getResourceDir () throws Exception
     {
         return getLocalResourceDir ();  // Only suitable for localhost. Must override for remote systems.
     }
 
+    /**
+        Determines the application data directory on the system where a job is managed.
+        This directory can store/provide information about a job even when a remote host is not connected.
+    **/
     public static Path getLocalResourceDir ()
     {
         return Paths.get (AppData.properties.get ("resourceDir"));
@@ -297,7 +349,7 @@ public abstract class Host
     /**
         When needed, wraps the given path in quotes so it won't get misread by the target shell.
     **/
-    public String quotePath (Path path)
+    public String quote (Path path)
     {
         // Default for local machine is not to quote, because we use the more advanced ProcessBuilder
         // class, which allows separate args.
@@ -450,9 +502,6 @@ public abstract class Host
                 }
             });
         }
-        catch (IOException e)
-        {
-            e.printStackTrace ();
-        }
+        catch (IOException e) {}
     }
 }

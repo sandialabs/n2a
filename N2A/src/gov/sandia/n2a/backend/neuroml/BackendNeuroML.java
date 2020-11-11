@@ -154,7 +154,7 @@ public class BackendNeuroML extends Backend
         public void submitJob () throws Exception
         {
             Host env = Host.get (job);
-            String command = "JNML_HOME=" + jnmlHome + " " + env.quotePath (jnmlCommand) + " " + env.quotePath (modelPath) + " -nogui";
+            String command = "JNML_HOME=" + jnmlHome + " " + env.quote (jnmlCommand) + " " + env.quote (modelPath) + " -nogui";
             env.submitJob (job, command);
         }
     }

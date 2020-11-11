@@ -28,6 +28,7 @@ import java.util.TreeMap;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.execenvs.Remote;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
@@ -144,19 +145,21 @@ public class NodeJob extends NodeBase
         // If job is remote, attempt to grab its state files.
         // TODO: handle remote jobs waiting in queue. Plan is to update "started" file with queue status.
         Path finished = localJobDir.resolve ("finished");
-        if (env.isRemote ())
+        if (! Files.exists (finished)  &&  env instanceof Remote)
         {
-            try
+            @SuppressWarnings("resource")
+            Remote remote = (Remote) env;
+            if (remote.isConnected ()  ||  remote.isEnabled ())
             {
-                Path resourceDir  = env.getResourceDir ();
-                Path remoteJobDir = Host.getJobDir (resourceDir, source);
-                Path remoteFinished = remoteJobDir.resolve ("finished");
-                // The following will throw an exception if the local file already exists.
-                // Thus, local finished takes precedence over remoteFinished, which lets
-                // us note that the job has been killed from our side.
-                if (Files.exists (remoteFinished)) Files.copy (remoteFinished, finished);
+                try
+                {
+                    Path resourceDir  = env.getResourceDir ();
+                    Path remoteJobDir = Host.getJobDir (resourceDir, source);
+                    Path remoteFinished = remoteJobDir.resolve ("finished");
+                    Files.copy (remoteFinished, finished);  // throws an exception if the remote file does not exist
+                }
+                catch (Exception e) {}
             }
-            catch (Exception e) {}
         }
 
         if (complete == -1)
@@ -304,18 +307,23 @@ public class NodeJob extends NodeBase
 
         // Scan remote job dir. Because this is done second, it takes lower precedence relative to local files.
         Host env = Host.get (source);
-        if (env.isRemote ())
+        if (env instanceof Remote)
         {
-            try
+            @SuppressWarnings("resource")
+            Remote remote = (Remote) env;
+            if (remote.isConnected ()  ||  remote.isEnabled ())
             {
-                Path resourceDir  = env.getResourceDir ();
-                Path remoteJobDir = Host.getJobDir (resourceDir, source);
-                try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (remoteJobDir))
+                try
                 {
-                    for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
+                    Path resourceDir  = env.getResourceDir ();
+                    Path remoteJobDir = Host.getJobDir (resourceDir, source);
+                    try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (remoteJobDir))
+                    {
+                        for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
+                    }
                 }
+                catch (Exception e) {}
             }
-            catch (Exception e) {}
         }
 
         for (NodeFile nf : existing.values ())
@@ -357,7 +365,8 @@ public class NodeJob extends NodeBase
                     }
                 }
             }
-            final TreePath selectedPath = (selected == null) ? null : new TreePath (selected.getPath ());
+
+            final NodeBase finalSelected = selected;
             Runnable update = new Runnable ()
             {
                 public void run ()
@@ -367,8 +376,9 @@ public class NodeJob extends NodeBase
                     DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
                     model.nodeStructureChanged (NodeJob.this);
 
-                    if (selectedPath != null)
+                    if (finalSelected != null)
                     {
+                        TreePath selectedPath = new TreePath (finalSelected.getPath ());
                         tree.setSelectionPath (selectedPath);
                         tree.scrollPathToVisible (selectedPath);
                     }

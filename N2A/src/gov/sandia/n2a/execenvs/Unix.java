@@ -6,14 +6,14 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.execenvs;
 
-import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -45,9 +45,9 @@ public class Unix extends Host
         long pid = job.getOrDefault (0l, "$metadata", "pid");
         if (pid == 0) return false;
 
-        String jobDir = Paths.get (job.get ()).getParent ().toString ();
-        Process proc = new ProcessBuilder ("ps", "-q", String.valueOf (pid), "-wwo", "command", "--no-header").start ();
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        String jobDir = Host.getJobDir (getResourceDir (), job).toAbsolutePath ().toString ();
+        try (AnyProcess proc = build ("ps", "-q", String.valueOf (pid), "-wwo", "command", "--no-header").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
@@ -63,11 +63,11 @@ public class Unix extends Host
     {
         Set<Long> result = new TreeSet<Long> ();
 
-        Path   resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
-        String jobsDir     = resourceDir.resolve ("jobs").toString ();
+        Path   resourceDir = getResourceDir ();
+        String jobsDir     = resourceDir.resolve ("jobs").toAbsolutePath ().toString ();
 
-        Process proc = new ProcessBuilder ("ps", "-ewwo", "pid,command", "--no-header").start ();
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        try (AnyProcess proc = build ("ps", "-ewwo", "pid,command", "--no-header").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
@@ -85,63 +85,47 @@ public class Unix extends Host
     @Override
     public void submitJob (MNode job, String command) throws Exception
     {
-        Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
+        Path resourceDir = getResourceDir ();
         Path binDir      = resourceDir.resolve ("bin");
         Path background  = binDir.resolve ("background");
         if (writeBackgroundScript)
         {
             writeBackgroundScript = false;
-            binDir.toFile ().mkdirs ();
-            stringToFile
-            (
-                background,
-                "#!/bin/bash\n"
+            Files.createDirectories (binDir);
+            stringToFile (background,
+                  "#!/bin/bash\n"
                 + "$1 &\n"
             );
-
-            Process proc = new ProcessBuilder ("chmod", "u+x", background.toString ()).start ();
-            proc.waitFor ();
-            if (proc.exitValue () != 0)
-            {
-                Backend.err.get ().println ("Failed to change permissions on background script:\n" + streamToString (proc.getErrorStream ()));
-                throw new Backend.AbortRun ();
-            }
+            Files.setPosixFilePermissions (background, PosixFilePermissions.fromString ("rwxr--r--"));
         }
 
-        Path jobDir = Paths.get (job.get ()).getParent ();
+        Path jobDir = Host.getJobDir (resourceDir, job);
         Path script = jobDir.resolve ("n2a_job");
-        stringToFile
-        (
-            script,
-            "#!/bin/bash\n"
-            + "cd " + jobDir + "\n"
+        stringToFile (script,
+              "#!/bin/bash\n"
+            + "cd " + quote (jobDir) + "\n"
             + "if " + command + " > out 2>> err; then\n"   // removed "&" so we wait for process to finish, assuming we can background it directly with sh
             + "  echo success > finished\n"
             + "else\n"
             + "  echo failure > finished\n"
             + "fi"
         );
+        Files.setPosixFilePermissions (script, PosixFilePermissions.fromString ("rwxr--r--"));
 
-        Process proc = new ProcessBuilder ("chmod", "u+x", script.toString ()).start ();
-        proc.waitFor ();
-        if (proc.exitValue () != 0)
+        try (AnyProcess proc = build (quote (background), quote (script)).start ();)
         {
-            Backend.err.get ().println ("Failed to change permissions on job script:\n" + streamToString (proc.getErrorStream ()));
-            throw new Backend.AbortRun ();
-        }
-
-        proc = new ProcessBuilder (background.toString (), script.toString ()).start ();
-        proc.waitFor ();
-        if (proc.exitValue () != 0)
-        {
-            Backend.err.get ().println ("Failed to run job:\n" + streamToString (proc.getErrorStream ()));
-            throw new Backend.AbortRun ();
+            proc.waitFor ();
+            if (proc.exitValue () != 0)
+            {
+                Backend.err.get ().println ("Failed to run job:\n" + streamToString (proc.getErrorStream ()));
+                throw new Backend.AbortRun ();
+            }
         }
 
         // Get PID of newly created job
         String jobDirString = jobDir.toString ();
-        proc = Runtime.getRuntime ().exec (new String[] {"ps", "-ewwo", "pid,command", "--no-header"});
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        try (AnyProcess proc = build ("ps", "-ewwo", "pid,command", "--no-header").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
@@ -152,7 +136,8 @@ public class Unix extends Host
                     String[] parts = line.split ("\\s+");
                     job.set (Long.parseLong (parts[0]), "$metadata", "pid");
                     if (parts[1].equals (command)) return;  // exact match
-                    // otherwise, may be the wrapper script
+                    // Otherwise, may be the wrapper script.
+                    // The wrapper script is better than nothing, but keep scanning.
                 }
             }
         }
@@ -167,8 +152,8 @@ public class Unix extends Host
         // Scan for PIDs chained from the given one. We need to kill them all.
         Set<Long> pids = new TreeSet<Long> ();
         pids.add (pid);
-        Process proc = new ProcessBuilder ("ps", "-eo", "pid,ppid", "--no-header").start ();
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        try (AnyProcess proc = build ("ps", "-eo", "pid,ppid", "--no-header").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
@@ -188,14 +173,14 @@ public class Unix extends Host
         command.add ("kill");
         command.add (force ? "-9" : "-15");
         for (long l : pids) command.add (String.valueOf (l));
-        new ProcessBuilder (command).start ();
+        try (AnyProcess proc = build (command).start ();) {}
     }
 
     @Override
     public long getProcMem (long pid) throws Exception
     {
-        Process proc = new ProcessBuilder ("ps", "-q", String.valueOf (pid), "-o", "pid,rss", "--no-header").start ();
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        try (AnyProcess proc = build ("ps", "-q", String.valueOf (pid), "-o", "pid,rss", "--no-header").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
@@ -207,6 +192,34 @@ public class Unix extends Host
                 if (PID == pid) return RSS * 1024;
             }
         }
+        return 0;
+    }
+
+    @Override
+    public long getMemoryPhysicalTotal ()
+    {
+        // TODO
+        return 0;
+    }
+
+    @Override
+    public long getMemoryPhysicalFree ()
+    {
+        // TODO
+        return 0;
+    }
+
+    @Override
+    public int getProcessorTotal ()
+    {
+        // TODO
+        return 0;
+    }
+
+    @Override
+    public double getProcessorLoad ()
+    {
+        // TODO
         return 0;
     }
 }
