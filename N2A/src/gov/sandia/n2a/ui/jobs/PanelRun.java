@@ -489,9 +489,9 @@ public class PanelRun extends JPanel
                         "W", Lay.FL
                         (
                             "L",
-                            buttonStop,
-                            Box.createHorizontalStrut (15),
                             buttonHost,
+                            Box.createHorizontalStrut (15),
+                            buttonStop,
                             Box.createHorizontalStrut (15),
                             buttonText,
                             buttonTable,

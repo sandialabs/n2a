@@ -1,5 +1,5 @@
 /*
-Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -89,10 +89,10 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
         addMouseMotionListener (mouseListener);
         addMouseWheelListener  (mouseListener);
 
-        JButton buttonProperties = new JButton (ImageUtil.getImage ("properties.gif"));
+        JButton buttonProperties = new JButton (ImageUtil.getImage ("edit.gif"));
         buttonProperties.setMargin (new Insets (2, 2, 2, 2));
         buttonProperties.setFocusable (false);
-        buttonProperties.setToolTipText ("Properties");
+        buttonProperties.setToolTipText ("Edit Properties");
         buttonProperties.addActionListener (actionProperties);
 
         JButton buttonCopy = new JButton (ImageUtil.getImage ("copy.png"));
@@ -113,18 +113,11 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
         buttonPrint.setToolTipText ("Print");
         buttonPrint.addActionListener (actionPrint);
 
-        JButton buttonReset = new JButton (ImageUtil.getImage ("zoom_reset.png"));
-        buttonReset.setMargin (new Insets (2, 2, 2, 2));
-        buttonReset.setFocusable (false);
-        buttonReset.setToolTipText ("Reset Zoom");
-        buttonReset.addActionListener (actionReset);
-
         buttonBar = Lay.FL ("L", "hgap=5,vgap=1",
             buttonProperties,
             buttonCopy,
             buttonSave,
             buttonPrint,
-            buttonReset,
             Box.createHorizontalStrut (15)
         );
     }
@@ -692,14 +685,6 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
                     catch (Exception ex) {}
                     return;
             }
-        }
-    };
-
-    ActionListener actionReset = new ActionListener ()
-    {
-        public void actionPerformed (ActionEvent e)
-        {
-            resetZoom ();
         }
     };
 
