@@ -47,6 +47,15 @@ public class RemoteUnix extends Unix implements Remote
     }
 
     @Override
+    public synchronized void enable ()
+    {
+        if (connection == null) connection = new Connection (config);
+        connection.passwords.allowDialogs = true;
+        try {connection.connect ();}
+        catch (Exception e) {}
+    }
+
+    @Override
     public boolean isEnabled ()
     {
         return  connection != null  &&  connection.passwords.allowDialogs;

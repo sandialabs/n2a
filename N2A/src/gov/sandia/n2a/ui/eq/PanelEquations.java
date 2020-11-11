@@ -163,7 +163,7 @@ public class PanelEquations extends JPanel
     protected JPopupMenu menuPopup;
     protected JPopupMenu menuView;
     protected JPopupMenu menuFilter;
-    protected long       menuCanceledAt = 0;
+    protected long       menuCanceledAt;
 
     protected static ImageIcon iconViewNode   = ImageUtil.getImage ("viewGraph.png");
     protected static ImageIcon iconViewSide   = ImageUtil.getImage ("viewSide.png");

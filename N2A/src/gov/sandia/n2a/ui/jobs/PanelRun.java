@@ -38,15 +38,20 @@ import java.util.regex.Matcher;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
 import javax.swing.Icon;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.UIManager;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
@@ -67,6 +72,8 @@ public class PanelRun extends JPanel
     public JScrollPane      treePane;
 
     public JButton            buttonStop;
+    public JPopupMenu         menuHost;
+    public long               menuCanceledAt;
     public ButtonGroup        buttons;
     public JComboBox<String>  comboScript;
     public JTextArea          displayText;
@@ -76,6 +83,10 @@ public class PanelRun extends JPanel
     public NodeBase           displayNode = null;
     public MDir               runs;  // Copied from AppData for convenience
     public ArrayList<NodeJob> running = new ArrayList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
+
+    public static ImageIcon iconConnect    = ImageUtil.getImage ("connect.gif");
+    //public static ImageIcon iconDisconnect = ImageUtil.getImage ("disconnect.gif");
+    public static ImageIcon iconStop       = ImageUtil.getImage ("stop.gif");
 
     public PanelRun ()
     {
@@ -281,7 +292,7 @@ public class PanelRun extends JPanel
         };
         displayText.setEditable (false);
 
-        buttonStop = new JButton (ImageUtil.getImage ("stop.gif"));
+        buttonStop = new JButton (iconStop);
         buttonStop.setMargin (new Insets (2, 2, 2, 2));
         buttonStop.setFocusable (false);
         buttonStop.setToolTipText ("Kill Job");
@@ -301,6 +312,62 @@ public class PanelRun extends JPanel
                     if (parent instanceof NodeJob) killNode = (NodeJob) parent;
                 }
                 if (killNode != null) killNode.stop ();
+            }
+        });
+
+        // Icon options:
+        // a cloud, similar to the pull or push icons on git tab
+        // "connect.gif" -- connection icon
+        // "disconnect.gif" -- connection with X
+        // "refresh.gif" -- yin-yang-ish arrows
+        // "warn.gif" -- yellow sign with exclamation point
+        JButton buttonHost = new JButton (ImageUtil.getImage ("connect.gif"));
+        buttonHost.setToolTipText ("Remote Hosts");
+        buttonHost.setMargin (new Insets (2, 2, 2, 2));
+        buttonHost.setFocusable (false);
+        buttonHost.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                if (System.currentTimeMillis () - menuCanceledAt > 500)  // A really ugly way to prevent the button from re-showing the menu if it was canceled by clicking the button.
+                {
+                    menuHost.show (buttonHost, 0, buttonHost.getHeight ());
+                }
+            }
+        });
+
+        menuHost = new JPopupMenu ();
+        menuHost.addPopupMenuListener (new PopupMenuListener ()
+        {
+            public void popupMenuWillBecomeVisible (PopupMenuEvent e)
+            {
+                menuHost.removeAll ();
+                for (Host h : Host.hosts.values ())
+                {
+                    if (! (h instanceof Remote)) continue;
+                    @SuppressWarnings("resource")
+                    Remote remote = (Remote) h;
+                    JMenuItem item = new JMenuItem (h.name);
+                    if      (remote.isConnected ()) item.setIcon (iconConnect);
+                    else if (! remote.isEnabled ()) item.setIcon (iconStop);
+                    item.addActionListener (new ActionListener ()
+                    {
+                        public void actionPerformed (ActionEvent e)
+                        {
+                            remote.enable ();
+                        }
+                    });
+                    menuHost.add (item);
+                }
+            }
+
+            public void popupMenuWillBecomeInvisible (PopupMenuEvent e)
+            {
+            }
+
+            public void popupMenuCanceled (PopupMenuEvent e)
+            {
+                menuCanceledAt = System.currentTimeMillis ();
             }
         });
 
@@ -423,6 +490,8 @@ public class PanelRun extends JPanel
                         (
                             "L",
                             buttonStop,
+                            Box.createHorizontalStrut (15),
+                            buttonHost,
                             Box.createHorizontalStrut (15),
                             buttonText,
                             buttonTable,

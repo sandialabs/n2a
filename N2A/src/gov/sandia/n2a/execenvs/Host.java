@@ -54,30 +54,10 @@ public abstract class Host
     public String name;   // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the hostname key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
     public MNode  config; // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
 
-    protected static Map<String,Host> hosts    = new HashMap<String,Host> ();
-    protected static int              jobCount = 0;
-
-    public interface Factory extends ExtensionPoint
+    public static int              jobCount = 0;
+    public static Map<String,Host> hosts    = new HashMap<String,Host> ();
+    static
     {
-        public String className ();
-        public Host   createInstance (); // not yet bound to app state
-    }
-
-    public static Host createHostOfClass (String className)
-    {
-        for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
-        {
-            Factory f = (Factory) ext;
-            if (f.className ().equalsIgnoreCase (className)) return f.createInstance ();
-        }
-        return new RemoteUnix ();  // Note that localhost is always determined by direct probe of our actual OS.
-    }
-
-    // Lazy initialization of host collection
-    protected static synchronized void init ()
-    {
-        if (! hosts.isEmpty ()) return;
-
         Host localhost;
         if (isWindows ()) localhost = new Windows ();
         else              localhost = new Unix ();  // Should be compatible with Mac bash shell.
@@ -98,9 +78,24 @@ public abstract class Host
         }
     }
 
+    public interface Factory extends ExtensionPoint
+    {
+        public String className ();
+        public Host   createInstance (); // not yet bound to app state
+    }
+
+    public static Host createHostOfClass (String className)
+    {
+        for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
+        {
+            Factory f = (Factory) ext;
+            if (f.className ().equalsIgnoreCase (className)) return f.createInstance ();
+        }
+        return new RemoteUnix ();  // Note that localhost is always determined by direct probe of our actual OS.
+    }
+
     public static Host get (String hostname)
     {
-        init ();
         Host result = hosts.get (hostname);
         if (result == null) result = hosts.get ("localhost");
         return result;
@@ -113,7 +108,6 @@ public abstract class Host
 
     public static Host getByAddress (String address)
     {
-        init ();
         for (Host h : hosts.values ())
         {
             if (h.config.getOrDefault (h.name, "address").equals (address)) return h;

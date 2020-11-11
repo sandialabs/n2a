@@ -11,7 +11,8 @@ import java.util.Set;
 
 public interface Remote extends Closeable
 {
-    public boolean     isEnabled ();
-    public boolean     isConnected ();
-    public Set<String> messages ();
+    public void        enable ();      // Allow this host to ask user for login information.
+    public boolean     isEnabled ();   // Indicates that this host is currently able to ask for login, if needed.
+    public boolean     isConnected (); // Indicates that this host has an active ssh (or other protocol) session.
+    public Set<String> messages ();    // Collection of all unique informational messages the remote host has sent us.
 }
