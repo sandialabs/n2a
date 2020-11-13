@@ -30,6 +30,7 @@ import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.settings.SettingsAbout;
 import gov.sandia.n2a.ui.settings.SettingsRepo;
 import gov.sandia.n2a.ui.settings.SettingsGeneral;
+import gov.sandia.n2a.ui.settings.SettingsHost;
 
 import javax.swing.ImageIcon;
 
@@ -90,6 +91,7 @@ public class N2APlugin extends Plugin
             new ActivitySettings (),
             new SettingsAbout (),
             new SettingsGeneral (),
+            new SettingsHost (),
             new SettingsLookAndFeel (),
             new SettingsRepo (),
             Unix.factory (),

@@ -10,14 +10,21 @@ import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+
+import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MPasswordField;
+import gov.sandia.n2a.ui.MTextField;
+
 /**
-    Wraps access to any system other than localhost.
-    This default implementation is suitable for a unix-like system that runs jobs on its
-    own processors, as opposed to queuing them on a cluster or specialized hardware.
+    Suitable for a unix-like system that runs jobs on its own processors,
+    as opposed to queuing them on a cluster or specialized hardware.
 **/
 public class RemoteUnix extends Unix implements Remote
 {
     protected Connection connection;
+    protected JPanel     panel;
 
     public static Factory factory ()
     {
@@ -33,6 +40,20 @@ public class RemoteUnix extends Unix implements Remote
                 return new RemoteUnix ();
             }
         };
+    }
+
+    public JPanel getEditor ()
+    {
+        if (panel != null) return panel;
+        panel = Lay.BL ("N",
+            Lay.BxL ("V",
+                Lay.BL ("W", Lay.FL ("H", new JLabel ("Address"), new MTextField (config, "address", name))),
+                Lay.BL ("W", Lay.FL ("H", new JLabel ("Username"), new MTextField (config, "username", System.getProperty ("user.name")))),
+                Lay.BL ("W", Lay.FL ("H", new JLabel ("Password"), new MPasswordField (config, "password"))),
+                Lay.BL ("W", Lay.FL ("H", new JLabel ("<html>WARNING: Passoword is stored in plain text.<br>If this is a security concern, then you can leave the field blank.<br>You will be prompted for a password once per session.<br>That password will only be held in volatile memory.</html>")))
+            )
+        );
+        return panel;
     }
 
     public synchronized void connect () throws Exception

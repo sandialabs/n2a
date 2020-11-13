@@ -33,6 +33,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import javax.swing.JPanel;
+
 import com.jcraft.jsch.JSchException;
 
 /**
@@ -54,10 +57,29 @@ public abstract class Host
     public String name;   // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the hostname key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
     public MNode  config; // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
 
-    public static int              jobCount = 0;
-    public static Map<String,Host> hosts    = new HashMap<String,Host> ();
-    static
+    public    static int              jobCount = 0;
+    protected static Map<String,Host> hosts    = new HashMap<String,Host> ();
+
+    public interface Factory extends ExtensionPoint
     {
+        public String className ();
+        public Host   createInstance (); // not yet bound to app state
+    }
+
+    public static Host createHostOfClass (String className)
+    {
+        for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
+        {
+            Factory f = (Factory) ext;
+            if (f.className ().equalsIgnoreCase (className)) return f.createInstance ();
+        }
+        return new RemoteUnix ();  // Note that localhost is always determined by direct probe of our actual OS.
+    }
+
+    public static void init ()
+    {
+        if (! hosts.isEmpty ()) return;
+
         Host localhost;
         if (isWindows ()) localhost = new Windows ();
         else              localhost = new Unix ();  // Should be compatible with Mac bash shell.
@@ -78,24 +100,15 @@ public abstract class Host
         }
     }
 
-    public interface Factory extends ExtensionPoint
+    public static Map<String,Host> getHosts ()
     {
-        public String className ();
-        public Host   createInstance (); // not yet bound to app state
-    }
-
-    public static Host createHostOfClass (String className)
-    {
-        for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
-        {
-            Factory f = (Factory) ext;
-            if (f.className ().equalsIgnoreCase (className)) return f.createInstance ();
-        }
-        return new RemoteUnix ();  // Note that localhost is always determined by direct probe of our actual OS.
+        init ();
+        return hosts;
     }
 
     public static Host get (String hostname)
     {
+        init ();
         Host result = hosts.get (hostname);
         if (result == null) result = hosts.get ("localhost");
         return result;
@@ -108,6 +121,7 @@ public abstract class Host
 
     public static Host getByAddress (String address)
     {
+        init ();
         for (Host h : hosts.values ())
         {
             if (h.config.getOrDefault (h.name, "address").equals (address)) return h;
@@ -142,6 +156,28 @@ public abstract class Host
             shutdownThread.join (waitTime);
         }
         catch (InterruptedException e) {}
+    }
+
+    /**
+        Used to show this host in a list for editing.
+    **/
+    public String toString ()
+    {
+        return name;
+    }
+
+    public String getClassName ()
+    {
+        return getClass ().getSimpleName ();
+    }
+
+    /**
+        Construct a panel for editing this class of host.
+        The editor will be bound to the relevant record in application state.
+    **/
+    public JPanel getEditor ()
+    {
+        return new JPanel ();
     }
 
     /**

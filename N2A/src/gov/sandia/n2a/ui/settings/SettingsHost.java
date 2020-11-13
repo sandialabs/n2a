@@ -1,0 +1,234 @@
+/*
+Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
+package gov.sandia.n2a.ui.settings;
+
+import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.execenvs.Remote;
+import gov.sandia.n2a.execenvs.Host.Factory;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
+import gov.sandia.n2a.plugins.extpoints.Settings;
+import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MTextField;
+import gov.sandia.n2a.ui.images.ImageUtil;
+
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.Map;
+
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.Box;
+import javax.swing.DefaultListModel;
+import javax.swing.ImageIcon;
+import javax.swing.InputMap;
+import javax.swing.JComboBox;
+import javax.swing.JList;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.KeyStroke;
+import javax.swing.ListSelectionModel;
+import javax.swing.border.LineBorder;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
+
+@SuppressWarnings("serial")
+public class SettingsHost implements Settings
+{
+    protected JScrollPane            scrollPane;
+    protected DefaultListModel<Host> model        = new DefaultListModel<Host> ();
+    protected JList<Host>            list         = new JList<Host> (model);
+    protected MTextField             fieldName;
+    protected JComboBox<String>      comboClass   = new JComboBox<String> ();
+    protected JPanel                 editorHolder = new JPanel ();  // actually a holder for the real editor panel from Host
+
+    @Override
+    public String getName ()
+    {
+        return "Host";
+    }
+
+    @Override
+    public ImageIcon getIcon ()
+    {
+        return ImageUtil.getImage ("connect.gif");
+    }
+
+    @Override
+    public Component getPanel ()
+    {
+        if (scrollPane != null) return scrollPane;
+
+        JPanel view = new JPanel ();
+        scrollPane = new JScrollPane (view);
+        scrollPane.getVerticalScrollBar ().setUnitIncrement (15);  // About one line of text. Typically, one "click" of the wheel does 3 steps, so about 45px or 3 lines of text.
+
+        for (Host h : Host.getHosts ().values ()) if (h instanceof Remote) model.addElement (h);
+
+        list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
+
+        InputMap inputMap = list.getInputMap ();
+        inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
+        inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
+
+        ActionMap actionMap = list.getActionMap ();
+        actionMap.put ("add", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                // Determine unique host name
+                String hostname = "newhost";
+                int suffix = 2;
+                Map<String,Host> hosts = Host.getHosts ();
+                while (hosts.containsKey (hostname)) hostname = "newhost" + suffix++;
+
+                // Create new record
+                Host h = Host.createHostOfClass ("");  // Get default class. The user can change it later.
+                h.name = hostname;
+                h.config = AppData.state.childOrCreate ("Host", hostname);
+                h.config.set (h.getClassName (), "class");  // Even though class is default, we should be explicit in case default changes.
+                hosts.put (h.name, h);
+
+                // Focus record in UI
+                int index = list.getSelectedIndex ();
+                if (index < 0) index = model.getSize ();
+                model.add (index, h);
+                list.setSelectedIndex (index);  // Assumption: this triggers a selection change event, which will in turn call displayRecord().
+            }
+        });
+        actionMap.put ("delete", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                // Remove current record
+                int index = list.getSelectedIndex ();
+                Host h = list.getSelectedValue ();
+                if (h == null) return;
+                if (h instanceof Closeable)
+                {
+                    try {((Closeable) h).close ();}
+                    catch (IOException error) {}
+                }
+                Host.getHosts ().remove (h.name);
+                AppData.state.clear ("Host", h.name);
+
+                // Focus another record, or clear UI
+                model.remove (index);
+                index = Math.max (index, model.size () - 1);
+                if (index >= 0) list.setSelectedIndex (index);  // triggers selection change event, resulting in call to displayRecord()
+            }
+        });
+
+        list.addListSelectionListener (new ListSelectionListener ()
+        {
+            public void valueChanged (ListSelectionEvent e)
+            {
+                if (e.getValueIsAdjusting ()) return;
+                displayRecord ();
+            }
+        });
+
+        fieldName = new MTextField (null, "", "", 20, true)
+        {
+            public void changed (String before, String after)
+            {
+                Host current = list.getSelectedValue ();
+                current.name = after;
+                list.repaint ();
+            }
+        };
+
+        for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
+        {
+            Factory f = (Factory) ext;
+            comboClass.addItem (f.className ());
+        }
+        comboClass.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                String currentClass = comboClass.getSelectedItem ().toString ();
+
+                // Change the class. This requires destroying the current instance and constructing
+                // a new one that is bound to the same record.
+                int index = list.getSelectedIndex ();
+                Host h = list.getSelectedValue ();
+                if (h == null) return;
+                String originalClass = h.getClassName ();
+                if (currentClass.equals (originalClass)) return;
+
+                if (h instanceof Closeable)
+                {
+                    try {((Closeable) h).close ();}
+                    catch (IOException error) {}
+                }
+                String name = h.name;
+                Host.getHosts ().remove (name);
+
+                h = Host.createHostOfClass (currentClass);
+                h.name = name;
+                h.config = AppData.state.childOrCreate ("Host", name);
+                h.config.set (currentClass, "class");
+                Host.getHosts ().put (name, h);
+
+                model.set (index, h);
+                displayRecord ();
+            }
+        });
+
+        editorHolder.setLayout (new BorderLayout ());
+
+        JPanel panelList = Lay.BL ("C", list, "pref=[100,200]");
+        panelList.setBorder (LineBorder.createBlackLineBorder ());
+        panelList = (JPanel) Lay.eb (Lay.BL ("C", panelList), "5");
+
+        Lay.BLtg (view, "N",
+            Lay.BL ("W",
+                Lay.BxL ("H",
+                    Lay.BL ("N", panelList),
+                    Box.createHorizontalStrut (5),
+                    Lay.BL ("N",
+                        Lay.BxL (
+                            Lay.BL ("W", Lay.FL ("H", Lay.lb ("Name"), fieldName)),
+                            Lay.BL ("W", Lay.FL ("H", Lay.lb ("Class"), comboClass)),
+                            editorHolder
+                        )
+                    )
+                )
+            )
+        );
+
+        if (list.getModel ().getSize () > 0) list.setSelectedIndex (0);
+
+        return scrollPane;
+    }
+
+    @Override
+    public Component getInitialFocus (Component panel)
+    {
+        return list;
+    }
+
+    // Update editor side with currently-selected item in list.
+    public void displayRecord ()
+    {
+        Host h = list.getSelectedValue ();
+        fieldName.bind (h.config.parent (), h.name);
+        comboClass.setSelectedItem (h.getClassName ());
+
+        while (editorHolder.getComponentCount () > 0) editorHolder.remove (editorHolder.getComponent (0));
+        editorHolder.add (h.getEditor (), BorderLayout.CENTER);
+        editorHolder.validate ();
+    }
+}
