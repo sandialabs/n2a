@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.settings;
 
-import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.execenvs.Remote;
 import gov.sandia.n2a.execenvs.Host.Factory;
@@ -21,10 +20,6 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Map;
-
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.Box;
@@ -72,7 +67,7 @@ public class SettingsHost implements Settings
         scrollPane = new JScrollPane (view);
         scrollPane.getVerticalScrollBar ().setUnitIncrement (15);  // About one line of text. Typically, one "click" of the wheel does 3 steps, so about 45px or 3 lines of text.
 
-        for (Host h : Host.getHosts ().values ()) if (h instanceof Remote) model.addElement (h);
+        for (Host h : Host.getHosts ()) if (h instanceof Remote) model.addElement (h);
 
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
 
@@ -87,18 +82,9 @@ public class SettingsHost implements Settings
         {
             public void actionPerformed (ActionEvent e)
             {
-                // Determine unique host name
-                String hostname = "newhost";
-                int suffix = 2;
-                Map<String,Host> hosts = Host.getHosts ();
-                while (hosts.containsKey (hostname)) hostname = "newhost" + suffix++;
-
                 // Create new record
-                Host h = Host.createHostOfClass ("");  // Get default class. The user can change it later.
-                h.name = hostname;
-                h.config = AppData.state.childOrCreate ("Host", hostname);
-                h.config.set (h.getClassName (), "class");  // Even though class is default, we should be explicit in case default changes.
-                hosts.put (h.name, h);
+                String hostname = Host.uniqueName ();
+                Host h = Host.create (hostname, "");  // Get default class. The user can change it later.
 
                 // Focus record in UI
                 int index = list.getSelectedIndex ();
@@ -115,13 +101,7 @@ public class SettingsHost implements Settings
                 int index = list.getSelectedIndex ();
                 Host h = list.getSelectedValue ();
                 if (h == null) return;
-                if (h instanceof Closeable)
-                {
-                    try {((Closeable) h).close ();}
-                    catch (IOException error) {}
-                }
-                Host.getHosts ().remove (h.name);
-                AppData.state.clear ("Host", h.name);
+                Host.remove (h);
 
                 // Focus another record, or clear UI
                 model.remove (index);
@@ -152,7 +132,7 @@ public class SettingsHost implements Settings
         for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
         {
             Factory f = (Factory) ext;
-            comboClass.addItem (f.className ());
+            if (f.isRemote ()) comboClass.addItem (f.className ());
         }
         comboClass.addActionListener (new ActionListener ()
         {
@@ -168,19 +148,9 @@ public class SettingsHost implements Settings
                 String originalClass = h.getClassName ();
                 if (currentClass.equals (originalClass)) return;
 
-                if (h instanceof Closeable)
-                {
-                    try {((Closeable) h).close ();}
-                    catch (IOException error) {}
-                }
                 String name = h.name;
-                Host.getHosts ().remove (name);
-
-                h = Host.createHostOfClass (currentClass);
-                h.name = name;
-                h.config = AppData.state.childOrCreate ("Host", name);
-                h.config.set (currentClass, "class");
-                Host.getHosts ().put (name, h);
+                Host.remove (h);
+                h = Host.create (name, currentClass);
 
                 model.set (index, h);
                 displayRecord ();
@@ -227,8 +197,9 @@ public class SettingsHost implements Settings
         fieldName.bind (h.config.parent (), h.name);
         comboClass.setSelectedItem (h.getClassName ());
 
-        while (editorHolder.getComponentCount () > 0) editorHolder.remove (editorHolder.getComponent (0));
-        editorHolder.add (h.getEditor (), BorderLayout.CENTER);
-        editorHolder.validate ();
+        JPanel editor = h.getEditor ();
+        editorHolder.add (editor, BorderLayout.CENTER);
+        editor.revalidate ();
+        editor.repaint ();
     }
 }

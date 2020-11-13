@@ -35,6 +35,11 @@ public class RemoteUnix extends Unix implements Remote
                 return "RemoteUnix";
             }
 
+            public boolean isRemote ()
+            {
+                return true;
+            }
+
             public Host createInstance ()
             {
                 return new RemoteUnix ();

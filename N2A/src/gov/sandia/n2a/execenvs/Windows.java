@@ -27,6 +27,11 @@ public class Windows extends Host
                 return "Windows";
             }
 
+            public boolean isRemote ()
+            {
+                return false;
+            }
+
             public Host createInstance ()
             {
                 return new Windows ();

@@ -121,7 +121,7 @@ public class JobC extends Thread
             env              = Host.get (job);
             Path resourceDir = env.getResourceDir ();
             jobDir           = Host.getJobDir (resourceDir, job);  // Unlike localJobDir (which is created by MDir), this may not exist until we explicitly create it.
-            gcc              = resourceDir.getFileSystem ().getPath (env.config.getOrDefault ("g++", "c", "gcc"));  // No good way to decide absolute path for the default value. Maybe need to call "which" command for this.
+            gcc              = resourceDir.getFileSystem ().getPath (env.config.getOrDefault ("g++", "c", "cxx"));  // No good way to decide absolute path for the default value. Maybe need to call "which" command for this.
             runtimeDir       = resourceDir.resolve ("cruntime");
             rebuildRuntime ();
 

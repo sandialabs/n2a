@@ -27,6 +27,8 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import javax.swing.JPanel;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 import com.jcraft.jsch.JSchException;
 
@@ -57,13 +61,15 @@ public abstract class Host
     public String name;   // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the hostname key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
     public MNode  config; // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
 
-    public    static int              jobCount = 0;
-    protected static Map<String,Host> hosts    = new HashMap<String,Host> ();
+    public    static int                  jobCount  = 0;
+    protected static Map<String,Host>     hosts     = new HashMap<String,Host> ();
+    protected static List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
 
     public interface Factory extends ExtensionPoint
     {
-        public String className ();
-        public Host   createInstance (); // not yet bound to app state
+        public String  className ();
+        public boolean isRemote ();
+        public Host    createInstance (); // not yet bound to app state
     }
 
     public static Host createHostOfClass (String className)
@@ -100,10 +106,42 @@ public abstract class Host
         }
     }
 
-    public static Map<String,Host> getHosts ()
+    public static Collection<Host> getHosts ()
     {
         init ();
-        return hosts;
+        return hosts.values ();
+    }
+
+    public static String uniqueName ()
+    {
+        init ();
+        String result = "newhost";
+        int suffix = 2;
+        while (hosts.containsKey (result)) result = "newhost" + suffix++;
+        return result;
+    }
+
+    public static Host create (String hostname, String className)
+    {
+        Host h = Host.createHostOfClass (className);
+        h.name = hostname;
+        h.config = AppData.state.childOrCreate ("Host", hostname);  // This will bind to existing data, if there, so not a clean slate.
+        h.config.set (h.getClassName (), "class");  // Even though class is default, we should be explicit in case default changes.
+        hosts.put (h.name, h);
+        notifyChange ();
+        return h;
+    }
+
+    public static void remove (Host h)
+    {
+        if (h instanceof Closeable)
+        {
+            try {((Closeable) h).close ();}
+            catch (IOException error) {}
+        }
+        hosts.remove (h.name);
+        AppData.state.clear ("Host", h.name);
+        notifyChange ();
     }
 
     public static Host get (String hostname)
@@ -127,6 +165,22 @@ public abstract class Host
             if (h.config.getOrDefault (h.name, "address").equals (address)) return h;
         }
         return null;
+    }
+
+    public static void addChangeListener (ChangeListener l)
+    {
+        if (! listeners.contains (l)) listeners.add (l);
+    }
+
+    public static void removeChangeListener (ChangeListener l)
+    {
+        listeners.remove (l);
+    }
+
+    public static void notifyChange ()
+    {
+        ChangeEvent e = new ChangeEvent (hosts);  // The event object should be ignored.
+        for (ChangeListener l : listeners) l.stateChanged (e);
     }
 
     public static void quit ()

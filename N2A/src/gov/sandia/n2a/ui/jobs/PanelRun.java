@@ -342,7 +342,7 @@ public class PanelRun extends JPanel
             public void popupMenuWillBecomeVisible (PopupMenuEvent e)
             {
                 menuHost.removeAll ();
-                for (Host h : Host.getHosts ().values ())
+                for (Host h : Host.getHosts ())
                 {
                     if (! (h instanceof Remote)) continue;
                     @SuppressWarnings("resource")

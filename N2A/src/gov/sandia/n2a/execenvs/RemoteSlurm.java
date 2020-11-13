@@ -29,6 +29,11 @@ public class RemoteSlurm extends RemoteUnix
                 return "RemoteSlurm";
             }
 
+            public boolean isRemote ()
+            {
+                return true;
+            }
+
             public Host createInstance ()
             {
                 return new RemoteSlurm ();

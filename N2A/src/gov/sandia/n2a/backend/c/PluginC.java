@@ -44,6 +44,10 @@ public class PluginC extends Plugin
 	@Override
 	public ExtensionPoint[] getExtensions ()
 	{
-		return new ExtensionPoint[] {new BackendC ()};
+		return new ExtensionPoint[]
+		{
+		    new BackendC (),
+		    new SettingsC ()
+		};
 	}
 }
