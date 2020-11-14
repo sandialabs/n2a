@@ -10,8 +10,10 @@ package gov.sandia.n2a.ui.settings;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Settings;
+import gov.sandia.n2a.ui.Lay;
 
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
@@ -25,6 +27,8 @@ import java.util.TreeMap;
 import java.util.Map.Entry;
 
 import javax.swing.Icon;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
@@ -36,6 +40,7 @@ public class PanelSettings extends JTabbedPane
 {
     protected int                            lastSelectedIndex = 0;
     protected Hashtable<Component,Component> lastFocus         = new Hashtable<Component,Component> ();
+    protected int                            width;
 
     public PanelSettings ()
     {
@@ -48,7 +53,7 @@ public class PanelSettings extends JTabbedPane
         }
 
         Set<String> sorted = new HashSet<String> ();
-        String[] titles = {"About", "General", "Look & Feel", "Repositories"};  // Force the order of these panels.
+        String[] titles = {"About", "General", "Look & Feel", "Repositories", "Host"};  // Force the order of these panels.
         for (String title : titles)
         {
             Settings s = settings.get (title);
@@ -124,8 +129,23 @@ public class PanelSettings extends JTabbedPane
         Icon icon           = s.getIcon ();
         Component component = s.getPanel ();
         lastFocus.put (component, s.getInitialFocus (component));
+        int index = getTabCount ();
         addTab (name, icon, component, null);
-        //setMnemonicAt (getTabCount () - 1, KeyEvent.getExtendedKeyCodeForChar (name.charAt (0)));
+
+        JLabel label = new JLabel (name, icon, LEADING);
+        width = Math.max (width, label.getPreferredSize ().width);
+        JPanel title = new JPanel ()
+        {
+            public Dimension getPreferredSize ()
+            {
+                Dimension result = super.getPreferredSize ();
+                result.width = width;
+                return result;
+            }
+        };
+        title.setOpaque (false);
+        Lay.BLtg (title, "W", label);
+        setTabComponentAt (index, title);
     }
 
     public void resetFocus ()
