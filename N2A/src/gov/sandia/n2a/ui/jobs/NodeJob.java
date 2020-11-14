@@ -52,13 +52,13 @@ public class NodeJob extends NodeBase
 
     protected String  key;
     protected String  inherit         = "";
-    protected float   complete        = -1; // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means terminated.
+    public    float   complete        = -1; // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means terminated.
     protected Date    dateStarted     = null;
     protected Date    dateFinished    = null;
     protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
     protected long    lastLiveCheck   = 0;
     protected long    lastDisplay     = 0;
-    protected boolean deleted;
+    public    boolean deleted;
     protected boolean tryToSelectOutput;
 
     public NodeJob (MNode source, boolean newlyStarted)
@@ -114,34 +114,64 @@ public class NodeJob extends NodeBase
         return Paths.get (getSource ().get ());
     }
 
-    public synchronized void monitorProgress (final PanelRun panel)
+    /**
+        Load job data in and decide which host thread should monitor it.
+    **/
+    public synchronized void distribute ()
+    {
+        MNode source = getSource ();
+        inherit = source.getOrDefault (key, "$inherit").split (",", 2)[0].replace ("\"", "");
+        setUserObject (inherit);
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                PanelRun panel = PanelRun.instance;
+                panel.model.nodeChanged (NodeJob.this);
+                panel.tree.paintImmediately (panel.tree.getPathBounds (new TreePath (NodeJob.this.getPath ())));
+            }
+        });
+
+        // Lightweight evaluation of local "finished" file.
+        // This slows down the initial load, but also makes the user more comfortable by showing status
+        // as soon as possible on the first screenful of the Runs tab.
+        Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
+        Path finished = localJobDir.resolve ("finished");
+        if (Files.exists (finished)) checkFinished (finished);
+
+        Host env = Host.get (source);
+        synchronized (env.running) {env.running.add (this);};
+    }
+
+    public synchronized void checkFinished (Path finished)
+    {
+        dateFinished = new Date (Host.lastModified (finished));
+        String line = null;
+        try (BufferedReader reader = Files.newBufferedReader (finished))
+        {
+            line = reader.readLine ();
+        }
+        catch (IOException e) {}
+        if (line == null) line = "";
+        else              line = line.trim ();  // Windows tacks a space on end of line, due to the way it interprets echo in .bat files. Rather than hack the bat, just defend against it.
+
+        if (line.length () >= 6  ||  Duration.between (dateFinished.toInstant (), Instant.now ()).abs ().getSeconds () > 10)
+        {
+            if      (line.equals ("success")) complete = 1;
+            else if (line.equals ("killed" )) complete = 3;
+            else                              complete = 2;  // includes "failure", "", and any other unknown string
+        }
+    }
+
+    public synchronized void monitorProgress ()
     {
         if (deleted) return;
-
-        MNode source = getSource ();
-        if (inherit.isEmpty ())
-        {
-            inherit = source.getOrDefault (key, "$inherit").split (",", 2)[0].replace ("\"", "");
-            setUserObject (inherit);
-            if (complete >= 1  &&  complete != 3)
-            {
-                // Since we won't reach the display update below, do a simple one here.
-                EventQueue.invokeLater (new Runnable ()
-                {
-                    public void run ()
-                    {
-                        panel.model.nodeChanged (NodeJob.this);
-                        panel.tree.paintImmediately (panel.tree.getPathBounds (new TreePath (NodeJob.this.getPath ())));
-                    }
-                });
-            }
-        }
-
         if (complete >= 1  &&  complete != 3) return;
 
         float oldComplete = complete;
+        MNode source = getSource ();
         Host env = Host.get (source);
-        Path localJobDir = Paths.get (source.get ()).getParent ();
+        Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
         // If job is remote, attempt to grab its state files.
         // TODO: handle remote jobs waiting in queue. Plan is to update "started" file with queue status.
         Path finished = localJobDir.resolve ("finished");
@@ -175,22 +205,7 @@ public class NodeJob extends NodeBase
         {
             if (Files.exists (finished))
             {
-                dateFinished = new Date (Host.lastModified (finished));
-                String line = null;
-                try (BufferedReader reader = Files.newBufferedReader (finished))
-                {
-                    line = reader.readLine ();
-                }
-                catch (IOException e) {}
-                if (line == null) line = "";
-                else              line = line.trim ();  // Windows tacks a space on end of line, due to the way it interprets echo in .bat files. Rather than hack the bat, just defend against it.
-
-                if (line.length () >= 6  ||  Duration.between (dateFinished.toInstant (), Instant.now ()).abs ().getSeconds () > 10)
-                {
-                    if      (line.equals ("success")) complete = 1;
-                    else if (line.equals ("killed" )) complete = 3;
-                    else                              complete = 2;  // includes "failure", "", and any other unknown string
-                }
+                checkFinished (finished);
             }
             else
             {
@@ -232,6 +247,7 @@ public class NodeJob extends NodeBase
             catch (Exception e) {}
         }
 
+        PanelRun panel = PanelRun.instance;
         if (complete != oldComplete)
         {
             EventQueue.invokeLater (new Runnable ()

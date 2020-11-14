@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
+import gov.sandia.n2a.ui.jobs.NodeJob;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.Closeable;
@@ -58,8 +59,10 @@ import com.jcraft.jsch.JSchException;
 **/
 public abstract class Host
 {
-    public String name;   // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the hostname key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
-    public MNode  config; // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
+    public String             name;                                 // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the hostname key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
+    public MNode              config;                               // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
+    public ArrayList<NodeJob> running = new ArrayList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
+    public MonitorThread      monitorThread;
 
     public    static int                  jobCount  = 0;
     protected static Map<String,Host>     hosts     = new HashMap<String,Host> ();
@@ -128,19 +131,21 @@ public abstract class Host
         h.config = AppData.state.childOrCreate ("Host", hostname);  // This will bind to existing data, if there, so not a clean slate.
         h.config.set (h.getClassName (), "class");  // Even though class is default, we should be explicit in case default changes.
         hosts.put (h.name, h);
+        h.restartMonitorThread ();
         notifyChange ();
         return h;
     }
 
-    public static void remove (Host h)
+    public static void remove (Host h, boolean delete)
     {
+        h.stopMonitorThread ();
         if (h instanceof Closeable)
         {
             try {((Closeable) h).close ();}
             catch (IOException error) {}
         }
         hosts.remove (h.name);
-        AppData.state.clear ("Host", h.name);
+        if (delete) AppData.state.clear ("Host", h.name);
         notifyChange ();
     }
 
@@ -213,6 +218,100 @@ public abstract class Host
     }
 
     /**
+        Determines if this application is running on a Windows system.
+        Not to be confused with the type of system a particular job executes on.
+    **/
+    public static boolean isWindows ()
+    {
+        return System.getProperty ("os.name").toLowerCase ().indexOf ("win") >= 0;
+    }
+
+    /**
+        Determines if this application is running on a Mac system.
+        Not to be confused with the type of system a particular job executes on.
+    **/
+    public static boolean isMac ()
+    {
+        return System.getProperty ("os.name").toLowerCase ().indexOf ("mac") >= 0;
+    }
+
+    public void restartMonitorThread ()
+    {
+        if (monitorThread != null) monitorThread.stop = true;
+        monitorThread = new MonitorThread ();
+        monitorThread.setDaemon (true);
+        monitorThread.start ();
+    }
+
+    public void stopMonitorThread ()
+    {
+        if (monitorThread == null) return;
+        monitorThread.stop = true;
+        monitorThread = null;
+    }
+
+    public void transferJobsTo (Host h)
+    {
+        synchronized (running)
+        {
+            synchronized (h.running)
+            {
+                for (NodeJob job : running) h.running.add (job);
+            }
+            running.clear ();
+        }
+    }
+
+    public class MonitorThread extends Thread
+    {
+        public boolean stop;
+
+        public MonitorThread ()
+        {
+            super ("Monitor " + name);
+        }
+
+        public void run ()
+        {
+            try
+            {
+                // Periodic refresh to show status of running jobs
+                while (! stop)
+                {
+                    long startTime = System.currentTimeMillis ();
+                    int i = 0;
+                    while (! stop)
+                    {
+                        NodeJob job;
+                        synchronized (running)
+                        {
+                            if (i >= running.size ()) break;
+                            job = running.get (i);
+                        }
+                        job.monitorProgress ();
+                        if (job.complete >= 1  &&  job.complete != 3  ||  job.deleted)
+                        {
+                            // If necessary, we can use a more efficient method to remove
+                            // the element (namely, overwrite the ith element with the back element).
+                            synchronized (running) {running.remove (i);}
+                        }
+                        else
+                        {
+                            i++;
+                        }
+                    }
+                    long duration = System.currentTimeMillis () - startTime;
+                    long wait = 20000 - duration;  // target is 20 seconds between starts
+                    if (wait > 1000) sleep (wait);
+                }
+            }
+            catch (InterruptedException e)
+            {
+            }
+        }
+    }
+
+    /**
         Used to show this host in a list for editing.
     **/
     public String toString ()
@@ -232,24 +331,6 @@ public abstract class Host
     public JPanel getEditor ()
     {
         return new JPanel ();
-    }
-
-    /**
-        Determines if this application is running on a Windows system.
-        Not to be confused with the type of system a particular job executes on.
-    **/
-    public static boolean isWindows ()
-    {
-        return System.getProperty ("os.name").toLowerCase ().indexOf ("win") >= 0;
-    }
-
-    /**
-        Determines if this application is running on a Mac system.
-        Not to be confused with the type of system a particular job executes on.
-    **/
-    public static boolean isMac ()
-    {
-        return System.getProperty ("os.name").toLowerCase ().indexOf ("mac") >= 0;
     }
 
     public abstract boolean   isActive       (MNode job)                 throws Exception;  // check if the given job is active

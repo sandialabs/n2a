@@ -101,7 +101,7 @@ public class SettingsHost implements Settings
                 int index = list.getSelectedIndex ();
                 Host h = list.getSelectedValue ();
                 if (h == null) return;
-                Host.remove (h);
+                Host.remove (h, true);
 
                 // Focus another record, or clear UI
                 model.remove (index);
@@ -148,9 +148,9 @@ public class SettingsHost implements Settings
                 String originalClass = h.getClassName ();
                 if (currentClass.equals (originalClass)) return;
 
-                String name = h.name;
-                Host.remove (h);
-                h = Host.create (name, currentClass);
+                Host.remove (h, false);
+                Host h2 = Host.create (h.name, currentClass);
+                h.transferJobsTo (h2);
 
                 model.set (index, h);
                 displayRecord ();

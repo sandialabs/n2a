@@ -66,6 +66,8 @@ import javax.swing.tree.TreeSelectionModel;
 @SuppressWarnings("serial")
 public class PanelRun extends JPanel
 {
+    public static PanelRun instance;  ///< Technically, this class is a singleton, because only one would normally be created.
+
     public NodeBase         root;
     public DefaultTreeModel model;
     public JTree            tree;
@@ -82,14 +84,16 @@ public class PanelRun extends JPanel
     public DisplayThread      displayThread = null;
     public NodeBase           displayNode = null;
     public MDir               runs;  // Copied from AppData for convenience
-    public ArrayList<NodeJob> running = new ArrayList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
 
     public static ImageIcon iconConnect    = ImageUtil.getImage ("connect.gif");
+    public static ImageIcon iconPause      = ImageUtil.getImage ("pause.png");
     //public static ImageIcon iconDisconnect = ImageUtil.getImage ("disconnect.gif");
     public static ImageIcon iconStop       = ImageUtil.getImage ("stop.gif");
 
     public PanelRun ()
     {
+        instance = this;
+
         root  = new NodeBase ();
         model = new DefaultTreeModel (root);
         tree  = new JTree (model);
@@ -182,80 +186,46 @@ public class PanelRun extends JPanel
             }
         });
 
-        Thread refreshThreadSlow = new Thread ("Job Refresh Slow")
+        Thread refreshThreadSlow = new Thread ("Start Job Monitors")
         {
             public void run ()
             {
-                try
+                // Initial load
+                // The Run button on the Models tab starts disabled. We enable it below,
+                // once all the pre-existing jobs are loaded. This helps ensure consistency
+                // between the UI and the run data stored on disk.
+                // This also means that we don't really need to synchronize on
+                // "running", because no other thread will try to access it until we give
+                // the go-ahead.
+                List<NodeJob> reverse = new ArrayList<NodeJob> (AppData.runs.size ());
+                for (MNode n : AppData.runs) reverse.add (new NodeJob (n, false));
+                for (int i = reverse.size () - 1; i >= 0; i--) root.add (reverse.get (i));  // Reverse the order, so later dates come first.
+                EventQueue.invokeLater (new Runnable ()
                 {
-                    // Initial load
-                    // The Run button on the Models tab starts disabled. We enable it below,
-                    // once all the pre-existing jobs are loaded. This helps ensure consistency
-                    // between the UI and the run data stored on disk.
-                    // This also means that we don't really need to synchronize on
-                    // "running", because no other thread will try to access it until we give
-                    // the go-ahead.
-                    List<NodeJob> reverse = new ArrayList<NodeJob> (AppData.runs.size ());
-                    for (MNode n : AppData.runs) reverse.add (new NodeJob (n, false));
-                    running.ensureCapacity (reverse.size ());
-                    for (int i = reverse.size () - 1; i >= 0; i--) running.add (reverse.get (i));  // Reverse the order, so later dates come first.
-                    for (NodeJob job : running) root.add (job);
-                    EventQueue.invokeLater (new Runnable ()
+                    public void run ()
                     {
-                        public void run ()
+                        // Update display with newly loaded jobs.
+                        model.nodeStructureChanged (root);
+                        if (model.getChildCount (root) > 0)
                         {
-                            // Update display with newly loaded jobs.
-                            model.nodeStructureChanged (root);
-                            if (model.getChildCount (root) > 0)
-                            {
-                                tree.setSelectionRow (0);
-                                tree.scrollRowToVisible (0);
-                            }
-
-                            PanelModel.instance.panelEquations.enableRuns ();
+                            tree.setSelectionRow (0);
+                            tree.scrollRowToVisible (0);
                         }
-                    });
 
-                    // Periodic refresh to show status of running jobs
-                    while (true)
-                    {
-                        long startTime = System.currentTimeMillis ();
-                        int i = 0;
-                        while (true)
-                        {
-                            // This loop is organized to release the lock on "running" once
-                            // per job entry. That minimizes the wait when inserting a new job.
-                            synchronized (running)
-                            {
-                                if (i >= running.size ()) break;
-                                NodeJob job = running.get (i);
-                                job.monitorProgress (PanelRun.this);
-                                if (job.complete >= 1  &&  job.complete != 3  ||  job.deleted)
-                                {
-                                    // If necessary, we can use a more efficient method to remove
-                                    // the element (namely, overwrite the ith element with the back element).
-                                    running.remove (i);
-                                }
-                                else
-                                {
-                                    i++;
-                                }
-                            }
-                        }
-                        long duration = System.currentTimeMillis () - startTime;
-                        long wait = 20000 - duration;  // target is 20 seconds between starts
-                        if (wait > 1000) sleep (wait);
+                        PanelModel.instance.panelEquations.enableRuns ();
                     }
-                }
-                catch (InterruptedException e)
-                {
-                }
+                });
+
+                // Distribute jobs to host monitor threads.
+                // Here, order doesn't matter so much, but we sill want to examine more recent jobs first.
+                for (int i = reverse.size () - 1; i >= 0; i--) reverse.get (i).distribute ();
+                for (Host h : Host.getHosts ()) h.restartMonitorThread ();
             }
         };
         refreshThreadSlow.setDaemon (true);
         refreshThreadSlow.start ();
 
-        Thread refreshThreadFast = new Thread ("Job Refresh Fast")
+        Thread refreshThreadFast = new Thread ("Monitor Focused Job")
         {
             public void run ()
             {
@@ -267,7 +237,7 @@ public class PanelRun extends JPanel
                         if (d != null)
                         {
                             if (d instanceof NodeFile) d = (NodeBase) d.getParent ();  // parent could be null, if a sub-node was just deleted
-                            if (d != null) ((NodeJob) d).monitorProgress (PanelRun.this);
+                            if (d != null) ((NodeJob) d).monitorProgress ();
                         }
                         sleep (1000);
                     }
@@ -349,7 +319,7 @@ public class PanelRun extends JPanel
                     Remote remote = (Remote) h;
                     JMenuItem item = new JMenuItem (h.name);
                     if      (remote.isConnected ()) item.setIcon (iconConnect);
-                    else if (! remote.isEnabled ()) item.setIcon (iconStop);
+                    else if (! remote.isEnabled ()) item.setIcon (iconPause);
                     item.addActionListener (new ActionListener ()
                     {
                         public void actionPerformed (ActionEvent e)
@@ -925,9 +895,15 @@ public class PanelRun extends JPanel
         tree.repaint (treePane.getViewport ().getViewRect ());
     }
 
+    /**
+        Add a newly-created job to the list, and do all remaining setup to monitor it.
+        This must be called on the EDT.
+    **/
     public void addNewRun (MNode run)
     {
-        final NodeJob node = new NodeJob (run, true);
+        NodeJob node = new NodeJob (run, true);
+        node.setUserObject (run.getOrDefault (node.key, "$inherit").split (",", 2)[0].replace ("\"", ""));
+
         model.insertNodeInto (node, root, 0);  // Since this always executes on event dispatch thread, it will not conflict with other code that accesses model.
         if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, we need to give the JTree a little extra kick to get started.
         tree.expandRow (0);
@@ -935,19 +911,7 @@ public class PanelRun extends JPanel
         tree.scrollRowToVisible (0);
         tree.requestFocusInWindow ();
 
-        new Thread ("Add New Run")
-        {
-            public void run ()
-            {
-                // Wait just a little bit, so backend has a chance to deposit a "started" file in the job directory.
-                // Backends should do this as early as possible.
-                // TODO: Add a state to represent ready to run but not yet running. Waiting on queue in a supercomputer would fall in this category.
-                try {Thread.sleep (500);}
-                catch (InterruptedException e) {}
-
-                node.monitorProgress (PanelRun.this);
-                if (node.complete < 1) synchronized (running) {running.add (node);}  // It could take a very long time for this job to get added, but no longer than one complete update pass over running jobs.
-            };
-        }.start ();
+        Host env = Host.get (run);
+        synchronized (env.running) {env.running.add (node);}
     }
 }
