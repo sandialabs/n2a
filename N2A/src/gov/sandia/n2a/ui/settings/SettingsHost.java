@@ -197,6 +197,7 @@ public class SettingsHost implements Settings
         fieldName.bind (h.config.parent (), h.name);
         comboClass.setSelectedItem (h.getClassName ());
 
+        editorHolder.removeAll ();
         JPanel editor = h.getEditor ();
         editorHolder.add (editor, BorderLayout.CENTER);
         editor.revalidate ();
