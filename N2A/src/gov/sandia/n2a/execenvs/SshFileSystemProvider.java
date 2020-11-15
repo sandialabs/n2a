@@ -755,6 +755,16 @@ public class SshFileSystemProvider extends FileSystemProvider
                 }
             };
         }
+
+        /**
+            Returns the raw number of director entries, without any filtering applied.
+            This is mainly to help measure progress when processing through a directory.
+        **/
+        public int count ()
+        {
+            if (entries.size () <= 2) return entries.size ();
+            return entries.size () - 2;  // subtract 2 for . and ..
+        }
     }
 
     public static class SshPrincipal implements UserPrincipal, GroupPrincipal

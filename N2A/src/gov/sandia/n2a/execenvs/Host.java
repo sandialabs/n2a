@@ -11,6 +11,8 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.ui.jobs.NodeJob;
+
+import java.awt.EventQueue;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.Closeable;
@@ -596,6 +598,70 @@ public abstract class Host
     public static void downloadFile (Path remotePath, Path localPath) throws Exception
     {
         Files.copy (remotePath, localPath, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /**
+        Reads all bytes from the given input stream and writes them to the given output stream.
+        This is the same as Files.copy(InputStream,OutputStream). Unfortunately the JDK
+        developers, in their infinite wisdom, chose to make such a simple and useful function private.
+    **/
+    public static long copy (InputStream in, OutputStream out) throws IOException
+    {
+        long total = 0;
+        byte[] buffer = new byte[8192];  // 8kiB
+        int n;
+        while ((n = in.read (buffer)) > 0)
+        {
+            out.write (buffer, 0, n);
+            total += n;
+        }
+        return total;
+    }
+
+    /**
+        Reads a limited number of bytes from the given input stream and writes them to the given output stream.
+    **/
+    public static long copy (InputStream in, OutputStream out, long maximum, CopyProgress progress) throws IOException
+    {
+        long total = 0;
+        long lastProgress = 0;
+        long remaining = maximum;
+        byte[] buffer = new byte[8192];  // 8kiB
+        int n;
+        while ((n = in.read (buffer, 0, (int) Math.min (buffer.length, remaining))) > 0)
+        {
+            out.write (buffer, 0, n);
+            total += n;
+            remaining -= n;  // Since read length should never exceed remaining, this should never go negative.
+
+            if (progress != null  &&  (double) (total - lastProgress) / maximum > 0.01)
+            {
+                lastProgress = total;
+                double percent = (double) total / maximum;
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        progress.update ((float) percent);
+                    }
+                });
+            }
+        }
+        return total;
+    }
+
+    public static long copy (InputStream in, OutputStream out, long maximum) throws IOException
+    {
+        return copy (in, out, maximum, null);
+    }
+
+    public interface CopyProgress
+    {
+        /**
+            Notify of change in status. This function is always called on the EDT,
+            so the implementer is free to update the gui.
+        **/
+        public void update (float percent);
     }
 
     public static void stringToFile (Path path, String value) throws IOException

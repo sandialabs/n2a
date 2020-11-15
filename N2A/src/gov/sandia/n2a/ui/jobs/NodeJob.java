@@ -325,21 +325,17 @@ public class NodeJob extends NodeBase
         Host env = Host.get (source);
         if (env instanceof Remote)
         {
-            @SuppressWarnings("resource")
-            Remote remote = (Remote) env;
-            if (remote.isConnected ()  ||  remote.isEnabled ())
+            try
             {
-                try
+                ((Remote) env).enable ();  // To get here, the use had to expand the node. This implies permission to prompt for login.
+                Path resourceDir  = env.getResourceDir ();
+                Path remoteJobDir = Host.getJobDir (resourceDir, source);
+                try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (remoteJobDir))
                 {
-                    Path resourceDir  = env.getResourceDir ();
-                    Path remoteJobDir = Host.getJobDir (resourceDir, source);
-                    try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (remoteJobDir))
-                    {
-                        for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
-                    }
+                    for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
                 }
-                catch (Exception e) {}
             }
+            catch (Exception e) {}
         }
 
         for (NodeFile nf : existing.values ())

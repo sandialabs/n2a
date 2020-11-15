@@ -11,7 +11,9 @@ import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.execenvs.Host.CopyProgress;
 import gov.sandia.n2a.execenvs.Remote;
+import gov.sandia.n2a.execenvs.SshFileSystemProvider.SshDirectoryStream;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
@@ -27,14 +29,18 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
-
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
 import javax.swing.Icon;
@@ -524,10 +530,77 @@ public class PanelRun extends JPanel
                 // There are three sizes of data:
                 //   small -- can load entirely into memory
                 //   big   -- too big for memory; must load/display in segments
-                //   huge  -- too big to store on local system, for example a supercomputer job; must be downloaded/displayed in segments
+                //   huge  -- too big to store on local filesystem, for example a supercomputer job; must be downloaded/displayed in segments
                 // The current code only handles small files.
-                //MNode job = ((NodeJob) node.getParent ()).getSource ();
-                //HostSystem env = HostSystem.get (job.getOrDefault ("localhost", "$metadata", "host"));
+                MNode job = ((NodeJob) node.getParent ()).getSource ();
+                Host env = Host.get (job);
+                if (env instanceof Remote)
+                {
+                    ((Remote) env).enable ();  // The user explicitly selected the file, which implies permission to prompt for remote password.
+                    try
+                    {
+                        String fileName = node.path.getFileName ().toString ();
+                        Path localFile  = Host.getJobDir (Host.getLocalResourceDir (), job).resolve (fileName);
+                        Path remoteFile = Host.getJobDir (env.getResourceDir (),       job).resolve (fileName);
+
+                        BasicFileAttributes localAttributes  = null;
+                        BasicFileAttributes remoteAttributes = null;
+                        try {localAttributes  = Files.readAttributes (localFile,  BasicFileAttributes.class);}
+                        catch (Exception e) {}
+                        try {remoteAttributes = Files.readAttributes (remoteFile, BasicFileAttributes.class);}
+                        catch (Exception e) {}
+
+                        if (remoteAttributes != null)
+                        {
+                            if (remoteAttributes.isDirectory ())  // An image sequence stored in a sub-directory.
+                            {
+                                // Copy any remote files that are not present in local directory.
+                                if (localAttributes == null) Files.createDirectories (localFile);
+                                // else local should be a directory. Otherwise, this will fail silently.
+                                try (DirectoryStream<Path> stream = Files.newDirectoryStream (remoteFile))
+                                {
+                                    int total = ((SshDirectoryStream) stream).count ();
+                                    int count = 0;
+                                    for (Path rp : stream)
+                                    {
+                                        Path lp = localFile.resolve (rp.getFileName ().toString ());
+                                        if (! Files.exists (lp))
+                                        {
+                                            try {Files.copy (rp, lp);}
+                                            catch (IOException e) {}
+                                        }
+                                        count++;
+                                        synchronized (displayText) {displayText.setText (String.format ("Downloading %2.0f%%", 100.0 * count / total));}
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                long position = 0;
+                                if (localAttributes == null) Files.createFile (localFile);
+                                else                         position = localAttributes.size ();
+                                long count = remoteAttributes.size () - position;
+                                if (count > 0)
+                                {
+                                    try (InputStream remoteStream = Files.newInputStream (remoteFile);
+                                         OutputStream localStream = Files.newOutputStream (localFile, StandardOpenOption.WRITE, StandardOpenOption.APPEND);)
+                                    {
+                                        remoteStream.skip (position);
+                                        Host.copy (remoteStream, localStream, count, new CopyProgress ()
+                                        {
+                                            public void update (float percent)
+                                            {
+                                                synchronized (displayText) {displayText.setText (String.format ("Downloading %2.0f%%", percent * 100));}
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                            node.path = localFile;  // Force to use local copy, regardless of whether it was local or remote before.
+                        }
+                    }
+                    catch (Exception e) {}
+                }
 
                 // Step 2 -- Load data
                 // The exact method depends on node type and the current display mode, selected by pushbuttons and stored in viz
