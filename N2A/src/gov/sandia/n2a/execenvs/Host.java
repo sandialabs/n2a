@@ -35,7 +35,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -335,10 +334,18 @@ public abstract class Host
         return new JPanel ();
     }
 
-    public abstract boolean   isActive       (MNode job)                 throws Exception;  // check if the given job is active
-    public abstract Set<Long> getActiveProcs ()                          throws Exception;  // enumerate all of our active jobs
-    public abstract void      submitJob      (MNode job, String command) throws Exception;
-    public abstract void      killJob        (MNode job, boolean force)  throws Exception;
+    public abstract boolean           isActive       (MNode job)                 throws Exception;  // check if the given job is active
+    public abstract List<ProcessInfo> getActiveProcs ()                          throws Exception;  // enumerate all of our active jobs
+    public abstract void              submitJob      (MNode job, String command) throws Exception;
+    public abstract void              killJob        (MNode job, boolean force)  throws Exception;
+
+    public class ProcessInfo
+    {
+        public long   pid;
+        public long   memory;     // bytes in use
+        public double cpu = 1;    // number of cores in use
+        public String state = ""; // for HPC jobs
+    }
 
     /**
         A general process-building interface that allows the caller to work with
@@ -523,11 +530,6 @@ public abstract class Host
         return path.toString ();
     }
 
-    /**
-        Determine memory usage for a given job.
-    **/
-    public abstract long getProcMem (long pid) throws Exception;
-
     public long getMemoryPhysicalTotal ()
     {
         OperatingSystemMXBean OS = ManagementFactory.getOperatingSystemMXBean ();
@@ -567,10 +569,12 @@ public abstract class Host
         OperatingSystemMXBean OS = ManagementFactory.getOperatingSystemMXBean ();
         try
         {
-            return (Long) invoke (OS, "getSystemCpuLoad");
+            return (Double) invoke (OS, "getSystemCpuLoad");
         }
         catch (Exception e)
         {
+            // Fallback: use a function from the general interface, rather than hoping for
+            // a com.sun implementation.
             return OS.getSystemLoadAverage ();  // TODO: known to fail on Windows
         }
     }

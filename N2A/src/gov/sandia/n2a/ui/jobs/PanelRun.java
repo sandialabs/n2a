@@ -92,7 +92,7 @@ public class PanelRun extends JPanel
     public MDir               runs;  // Copied from AppData for convenience
 
     public static ImageIcon iconConnect    = ImageUtil.getImage ("connect.gif");
-    public static ImageIcon iconPause      = ImageUtil.getImage ("pause.png");
+    public static ImageIcon iconPause      = ImageUtil.getImage ("pause-16.png");
     //public static ImageIcon iconDisconnect = ImageUtil.getImage ("disconnect.gif");
     public static ImageIcon iconStop       = ImageUtil.getImage ("stop.gif");
 
@@ -457,7 +457,7 @@ public class PanelRun extends JPanel
             this,
             split = Lay.SPL
             (
-                Lay.BL (treePane = Lay.sp (tree)),
+                treePane = Lay.sp (tree),
                 Lay.BL
                 (
                     "N", Lay.BL

@@ -12,8 +12,8 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
     Wraps access to a system that runs jobs via slurm.
@@ -47,7 +47,7 @@ public class RemoteSlurm extends RemoteUnix
         long pid = job.getOrDefault (0l, "$metadata", "pid");
         if (pid == 0) return false;
 
-        try (AnyProcess proc = build ("squeue -o \"%i\" -u " + connection.username).start ();
+        try (AnyProcess proc = build ("squeue -O JobID --noheader -u " + connection.username).start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -61,16 +61,22 @@ public class RemoteSlurm extends RemoteUnix
     }
 
     @Override
-    public Set<Long> getActiveProcs() throws Exception
+    public List<ProcessInfo> getActiveProcs () throws Exception
     {
-        Set<Long> result = new TreeSet<Long> ();
-        try (AnyProcess proc = build ("squeue -o \"%i\" -u " + connection.username).start ();
+        List<ProcessInfo> result = new ArrayList<ProcessInfo> ();
+        try (AnyProcess proc = build ("squeue -O JobID,State --noheader -u " + connection.username).start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
-            while((line = reader.readLine ()) != null)
+            while ((line = reader.readLine ()) != null)
             {
-                result.add (new Long (line));
+                ProcessInfo info = new ProcessInfo ();
+
+                String[] pieces = line.trim ().split (" ", 2);
+                info.pid   = Long.valueOf (pieces[0]);
+                info.state = pieces[1].trim ();
+                
+                result.add (info);
             }
         }
         return result;
@@ -141,12 +147,6 @@ public class RemoteSlurm extends RemoteUnix
     // these can be modified to produce more useful numbers.
 
     @Override
-    public long getProcMem (long pid) throws Exception
-    {
-        return 0;
-    }
-
-    @Override
     public long getMemoryPhysicalTotal ()
     {
         return Long.MAX_VALUE;
@@ -161,12 +161,26 @@ public class RemoteSlurm extends RemoteUnix
     @Override
     public int getProcessorTotal ()
     {
-        return Integer.MAX_VALUE;
+        // Return the maximum number of jobs allowed to wait in queue.
+        // Jobs that are already running won't count against this.
+        return 3;
     }
 
     @Override
     public double getProcessorLoad ()
     {
-        return 0;
+        // Return the number of jobs currently waiting in queue.
+        // For simplicity, count any job owned by the current user.
+        int waiting = 0;
+        try
+        {
+            for (ProcessInfo info : getActiveProcs ())
+            {
+                // TODO: determine what other states to include in "waiting".
+                if (info.state.equals ("PENDING")) waiting++;
+            }
+        }
+        catch (Exception e) {}
+        return waiting;
     }
 }

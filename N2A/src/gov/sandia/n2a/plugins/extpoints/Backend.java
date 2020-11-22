@@ -14,13 +14,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-
+import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Host;
-import gov.sandia.n2a.parms.ParameterSpecification;
+import gov.sandia.n2a.execenvs.Host.ProcessInfo;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
-import gov.sandia.n2a.parms.ParameterDomain;
 
 
 public abstract class Backend implements ExtensionPoint
@@ -81,43 +80,56 @@ public abstract class Backend implements ExtensionPoint
     public abstract String getName ();
 
     /**
-        Give the list of parameters that can be used to configure the
-        simulator during an actual simulation.
-    **/
-    public ParameterDomain getSimulatorParameters ()
-    {
-        return null;
-    }
-
-    /**
-        Enumerate all the variables that could be named in an output expression.
-        Output expressions produce diagnostic information that is dumped during
-        an actual simulation.
-    **/
-    public ParameterDomain getOutputVariables (MNode model)
-    {
-        return null;
-    }
-
-    /**
-        Indicates whether the given parameter can be varied within the simulation.
-        If not, we must launch multiple simulations to vary it.
-        @return true if the parameter can be varied directly within the simulation
-    **/
-    public boolean canHandleRunEnsembleParameter (MNode model, Object key, ParameterSpecification spec)
-    {
-        return false;
-    }
-
-    /**
         Indicates that resources are available to execute the job.
         This requires knowledge of three things:
         * The specifics of the job (how big the model will be).
         * The nature of the specific backend, such as how much resources it needs to handle the given model size.
         * The target machine (available memory, CPUs, etc.) Information needed to determine this should be embedded in the job metadata.
     **/
-    public boolean canRunNow (MNode job)
+    public boolean canRunNow (Host host, MNode model)
     {
+        // Limited resources include:
+        // * Physical processors
+        // * Physical memory
+        // * Disk space
+        // It is difficult to estimate how much of these resources a given job
+        // will consume, so we make a very crude guess.
+        try
+        {
+            double cpuNeeded    = 0;
+            long   memoryNeeded = 0;
+            List<ProcessInfo> procs = host.getActiveProcs ();
+            for (ProcessInfo info : procs)
+            {
+                cpuNeeded    += info.cpu;
+                memoryNeeded += info.memory;
+            }
+
+            int processCount = procs.size ();
+            if (processCount == 0)
+            {
+                cpuNeeded    = 1;                   // Must have at least 1 core available to launch process.
+                memoryNeeded = 1024 * 1024 * 1024;  // Must have at least 1GiB available.
+            }
+            else
+            {
+                // Assume that all processes are running the same model, so average makes sense.
+                // Could also take max.
+                cpuNeeded    /= processCount;
+                memoryNeeded /= processCount;
+            }
+
+            double cpuAvailable = host.getProcessorTotal () - host.getProcessorLoad ();
+            if (cpuAvailable < cpuNeeded) return false;  // Not enough processor capacity for another job.
+
+            long memoryAvailable = host.getMemoryPhysicalFree ();
+            if (memoryAvailable < memoryNeeded) return false;
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+
         return true;
     }
 

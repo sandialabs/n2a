@@ -9,9 +9,6 @@ package gov.sandia.n2a.backend.internal;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import gov.sandia.n2a.parms.Parameter;
-import gov.sandia.n2a.parms.ParameterDomain;
-
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
@@ -25,15 +22,6 @@ public class InternalBackend extends Backend
     public String getName ()
     {
         return "Internal";
-    }
-
-    @Override
-    public ParameterDomain getSimulatorParameters ()
-    {
-        ParameterDomain result = new ParameterDomain ();
-        result.addParameter (new Parameter ("duration",            "1.0"  ));  // default is 1 second
-        result.addParameter (new Parameter ("internal.integrator", "Euler"));  // alt is "RungeKutta"
-        return result;
     }
 
     @Override

@@ -43,6 +43,7 @@ import java.io.PrintStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -110,6 +111,7 @@ import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.UndoableView;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun;
+import gov.sandia.n2a.ui.studies.PanelStudy;
 import sun.swing.SwingUtilities2;
 
 @SuppressWarnings("serial")
@@ -156,6 +158,7 @@ public class PanelEquations extends JPanel
     protected JToggleButton buttonFilterRevoked;
     protected JButton       buttonView;
     protected JButton       buttonRun;
+    protected JButton       buttonStudy;
     protected JButton       buttonExport;
     protected JButton       buttonImport;
 
@@ -326,12 +329,19 @@ public class PanelEquations extends JPanel
             }
         });
 
-        buttonRun = new JButton (ImageUtil.getImage ("run.gif"));
+        buttonRun = new JButton (ImageUtil.getImage ("run-16.png"));
         buttonRun.setMargin (new Insets (2, 2, 2, 2));
         buttonRun.setFocusable (false);
         buttonRun.setEnabled (false);  // Don't let users start a run until the Runs tab loads existing jobs. See PanelRun.ctor
         buttonRun.setToolTipText ("Run");
         buttonRun.addActionListener (listenerRun);
+
+        buttonStudy = new JButton (ImageUtil.getImage ("study-16.png"));
+        buttonStudy.setMargin (new Insets (2, 2, 2, 2));
+        buttonStudy.setFocusable (false);
+        buttonStudy.setEnabled (false);  // Similar restriction as for Run
+        buttonStudy.setToolTipText ("Multi-run Study");
+        buttonStudy.addActionListener (listenerStudy);
 
         buttonExport = new JButton (ImageUtil.getImage ("export.gif"));
         buttonExport.setMargin (new Insets (2, 2, 2, 2));
@@ -365,6 +375,7 @@ public class PanelEquations extends JPanel
                 buttonView,
                 Box.createHorizontalStrut (15),
                 buttonRun,
+                buttonStudy,
                 Box.createHorizontalStrut (15),
                 buttonExport,
                 buttonImport,
@@ -977,6 +988,11 @@ public class PanelEquations extends JPanel
         buttonRun.setEnabled (true);
     }
 
+    public void enableStudies ()
+    {
+        buttonStudy.setEnabled (true);
+    }
+
     ActionListener listenerRun = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
@@ -994,11 +1010,10 @@ public class PanelEquations extends JPanel
 
             String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.
             final Backend simulator = Backend.getBackend (simulatorName);
-            MNode runs = AppData.runs;
-            String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + jobCount++;
-            final MNode job = runs.childOrCreate (jobKey);  // Create the dir and model doc
+            String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
+            final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
             job.merge (root.source);
-            job.set ("\"" + record.key () + "\"", "$inherit");
+            job.set (record.key (), "$inherit");
             ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
 
             new Thread ()
@@ -1014,6 +1029,40 @@ public class PanelEquations extends JPanel
             PanelRun panelRun = (PanelRun) mtp.selectTab ("Runs");
             mtp.setPreferredFocus (panelRun, panelRun.tree);
             panelRun.addNewRun (job);
+        }
+    };
+
+    ActionListener listenerStudy = new ActionListener ()
+    {
+        public void actionPerformed (ActionEvent e)
+        {
+            if (record == null) return;
+            if (! buttonRun.isEnabled ()) return;  // Don't start a new study until we can also start new runs.
+            if (! record.containsKey ("study")) return;  // Only a heuristic. Presence of "study" does not guarantee a study, but absence of the key guarantees not a study.
+
+            MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
+            if (isEditing ())
+            {
+                stopEditing ();
+                GraphNode gn = active.root.graph;
+                if (gn != null  &&  gn.titleFocused) mtp.setPreferredFocus (PanelModel.instance, gn.title);
+                else                                 mtp.setPreferredFocus (PanelModel.instance, active.tree);
+            }
+
+            String key = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
+            MDoc study = (MDoc) AppData.studies.childOrCreate (key);
+            study.set (record.key (), "$inherit");  // So we don't have to open model later for just this info.
+            study.save ();
+
+            Path studyDir = Paths.get (study.get ()).getParent ();
+            MDoc model = new MDoc (studyDir.resolve ("model"));
+            model.merge (root.source);
+            model.set (record.key (), "$inherit");
+            model.save ();
+
+            PanelStudy panelStudy = (PanelStudy) mtp.selectTab ("Studies");
+            mtp.setPreferredFocus (panelStudy, panelStudy.list);
+            panelStudy.addNewStudy (study);
         }
     };
 

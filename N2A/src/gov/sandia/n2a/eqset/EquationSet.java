@@ -40,10 +40,7 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
-import gov.sandia.n2a.ui.images.ImageUtil;
 import tech.units.indriya.AbstractUnit;
-import gov.sandia.n2a.parms.Parameter;
-import gov.sandia.n2a.parms.ParameterDomain;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -59,7 +56,6 @@ import java.util.NavigableSet;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeSet;
-import javax.swing.ImageIcon;
 
 public class EquationSet implements Comparable<EquationSet>
 {
@@ -2358,39 +2354,6 @@ public class EquationSet implements Comparable<EquationSet>
                 }
             }
         }
-    }
-
-    /**
-        Assembles list of all variables that can be used in an output expression.
-        Depends on results of: resolveLHS() (optional, enables us to remove "reference" variables)
-    **/
-    public ParameterDomain getOutputParameters ()
-    {
-        ImageIcon icon;
-        if (connectionBindings == null)
-        {
-            icon = ImageUtil.getImage ("layer.gif");
-        }
-        else
-        {
-            icon = ImageUtil.getImage ("bridge.gif");
-        }
-        ParameterDomain result = new ParameterDomain (name, icon);  // TODO: should we return the empty string, or replace it with something?
-
-        for (Variable v : variables)
-        {
-            if (v.hasAttribute ("reference")) continue;
-
-            String defaultValue = "";
-            if (v.equations.size () > 0) defaultValue = v.equations.first ().expression.render ();
-            result.addParameter (new Parameter (v.nameString (), defaultValue));
-        }
-        for (EquationSet s : parts)
-        {
-            result.addSubdomain (s.getOutputParameters ());
-        }
-
-        return result;
     }
 
     public void addGlobalConstants () throws Exception

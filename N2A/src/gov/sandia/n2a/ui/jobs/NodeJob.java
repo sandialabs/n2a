@@ -6,10 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.jobs;
 
-import java.awt.Color;
 import java.awt.EventQueue;
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -30,6 +27,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.execenvs.Remote;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.imageio.ImageIO;
@@ -81,19 +79,7 @@ public class NodeJob extends NodeBase
     @Override
     public Icon getIcon (boolean expanded)
     {
-        if (complete >= 0  &&  complete < 1)
-        {
-            // Create an icon on the fly which represents percent complete as a pie-chart
-            BufferedImage inProgress = new BufferedImage (16, 16, BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g = inProgress.createGraphics ();
-            g.setBackground (new Color (0, 0, 0, 0));
-            g.clearRect (0, 0, 16, 16);
-            g.setColor (new Color (0.3f, 0.5f, 1));
-            g.drawOval (0, 0, 14, 14);
-            g.setColor (Color.black);
-            g.fillArc (0, 0, 14, 14, 90, - Math.round (complete * 360));
-            return new ImageIcon (inProgress);
-        }
+        if (complete >= 0  &&  complete < 1) return Utility.makeProgressIcon (complete);
         if (complete == 1) return iconComplete;
         if (complete == 2) return iconFailed;
         if (complete == 3) return iconLingering;

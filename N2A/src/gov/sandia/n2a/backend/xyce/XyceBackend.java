@@ -23,8 +23,6 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.parms.Parameter;
-import gov.sandia.n2a.parms.ParameterDomain;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedWriter;
@@ -35,7 +33,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 class XyceBackend extends Backend
 {
@@ -43,99 +40,6 @@ class XyceBackend extends Backend
     public String getName ()
     {
         return "Xyce";
-    }
-
-    @Override
-    public ParameterDomain getSimulatorParameters ()
-    {
-        ParameterDomain inputs = new ParameterDomain ();
-        // TODO:  add real integration options, etc. - also need code to make sure they get in netlist!
-        inputs.addParameter (new Parameter ("duration",        1.0));
-        inputs.addParameter (new Parameter ("seed",            0));
-        inputs.addParameter (new Parameter ("xyce.integrator", "trapezoid"));
-        return inputs;
-    }
-
-    @Override
-    public ParameterDomain getOutputVariables (MNode model)
-    {
-        try
-        {
-            MNode n = (MNode) model;
-            if (n == null) return null;
-            EquationSet s = new EquationSet (n);
-            if (s.name.length () < 1) s.name = "Model";
-            s.resolveLHS ();
-            return s.getOutputParameters ();
-        }
-        catch (Exception error)
-        {
-            return null;
-        }
-    }
-
-    @Override
-    public boolean canRunNow (MNode job)
-    {
-        Host execEnv = Host.get (job);
-
-        // TODO - estimate what memory and CPU resources this sim needs
-        // getting good estimates could be very difficult...
-        // maybe do this during prepare, through ModelInstance 
-        // for now, just hard code
-        // check that the required resources are available
-        // if there are already xyce sims running, use them to estimate needs
-        // if not, assume we have space for one
-        try {
-            Set<Long> procs = execEnv.getActiveProcs();
-            int numRunning = procs.size();
-            if (numRunning == 0) {
-                System.out.println("resourcesAvailable:  numRunning=0");
-                return true;
-            }
-            // check CPU usage
-            // assume n2a processes are responsible for all current load;
-            // evaluate whether there's room for another process of size load/numRunning
-            System.out.println("num procs: " + numRunning);
-            double cpuLoad = execEnv.getProcessorLoad();
-            int cpuTotal = execEnv.getProcessorTotal();
-            double cpuPerProc = cpuLoad/numRunning;
-            boolean cpuAvailable = (cpuTotal-cpuLoad) > cpuPerProc;
-            System.out.println("cpuLoad: " + cpuLoad + 
-                    "; cpuPerProc: " + cpuPerProc +
-                    "; cpuAvailable: " + cpuAvailable
-                    );
-            // Memory estimates using approach above thrown off by N2A using a lot of memory
-            // Instead, ask system for memory usage per proc
-            // TODO - use this approach for CPU usage also?
-            long maxMem = -1;
-            for (Long procNum : procs) {
-                long procMem = execEnv.getProcMem(procNum);
-                if (procMem>maxMem) {
-                    maxMem = procMem;
-                }
-            }
-            long memLoad = execEnv.getMemoryPhysicalTotal() - execEnv.getMemoryPhysicalFree();
-            double memPerProc;
-            if (maxMem>0) {
-                System.out.println("using individual process memory estimate");
-                memPerProc = maxMem;
-            }
-            else {
-                System.out.println("processor memory usage negative; using memLoad/numRunning");
-                memPerProc = memLoad/numRunning;
-            }
-            boolean memAvailable = execEnv.getMemoryPhysicalFree() > memPerProc;
-            System.out.println("memLoad: " + memLoad + 
-                    "; memPerProc: " + memPerProc +
-                    "; memAvailable: " + memAvailable
-                    );
-            return memAvailable && cpuAvailable;
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        return false;
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -29,6 +29,7 @@ import gov.sandia.n2a.ui.settings.ActivitySettings;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.settings.SettingsAbout;
 import gov.sandia.n2a.ui.settings.SettingsRepo;
+import gov.sandia.n2a.ui.studies.ActivityStudy;
 import gov.sandia.n2a.ui.settings.SettingsGeneral;
 import gov.sandia.n2a.ui.settings.SettingsHost;
 
@@ -87,7 +88,7 @@ public class N2APlugin extends Plugin
             new ActivityModel (),
             new ActivityRun (),
             new ActivityReference (),
-            //new RunEnsembleRecordHandler (),
+            new ActivityStudy (),
             new ActivitySettings (),
             new SettingsAbout (),
             new SettingsGeneral (),

@@ -49,7 +49,7 @@ public class SettingsHost implements Settings
     @Override
     public String getName ()
     {
-        return "Host";
+        return "Hosts";
     }
 
     @Override
@@ -178,6 +178,7 @@ public class SettingsHost implements Settings
                 )
             )
         );
+        scrollPane.setFocusCycleRoot (true);
 
         if (list.getModel ().getSize () > 0) list.setSelectedIndex (0);
 

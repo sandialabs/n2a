@@ -31,6 +31,26 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return "";
     }
 
+    public String[] keyPath ()
+    {
+        int index = depth ();
+        String[] result = new String[index + 1];
+        MNode parent = this;
+        while (index >= 0)
+        {
+            result[index--] = parent.key ();
+            parent = parent.parent ();
+        }
+        return result;
+    }
+
+    public int depth ()
+    {
+        MNode parent = parent ();
+        if (parent == null) return 0;
+        return parent.depth () + 1;
+    }
+
     public MNode parent ()
     {
         return null;
@@ -614,15 +634,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return new MNode.IteratorWrapper (new ArrayList<String> ());
     }
 
-    public static class Visitor
+    public interface Visitor
     {
         /**
             @return true to recurse below current node. false if further recursion below this node is not needed.
         **/
-        public boolean visit (MNode node)
-        {
-            return false;  // Since this default implementation doesn't do anything, might as well stop.
-        }
+        public boolean visit (MNode node);
     }
 
     /**

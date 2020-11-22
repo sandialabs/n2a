@@ -1,10 +1,10 @@
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.ui.jobs;
+package gov.sandia.n2a.ui.studies;
 
 import java.awt.Component;
 
@@ -13,29 +13,29 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 
 import javax.swing.ImageIcon;
 
-public class ActivityRun implements Activity
+public class ActivityStudy implements Activity
 {
     @Override
     public ImageIcon getIcon ()
     {
-        return ImageUtil.getImage ("run-16.png");
+        return ImageUtil.getImage ("study-16.png");
     }
 
     @Override
     public String getName ()
     {
-        return "Runs";
+        return "Studies";
     }
 
     @Override
     public Component getPanel ()
     {
-        return new PanelRun ();
+        return new PanelStudy ();
     }
 
     @Override
     public Component getInitialFocus (Component panel)
     {
-        return ((PanelRun) panel).tree;
+        return ((PanelStudy) panel).list;
     }
 }

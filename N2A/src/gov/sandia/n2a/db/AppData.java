@@ -29,6 +29,7 @@ public class AppData
     public static MNode  properties;
     public static MDoc   state;
     public static MDir   runs;
+    public static MDir   studies;
     public static MDir   repos;
     public static MCombo models;
     public static MCombo references;
@@ -44,10 +45,11 @@ public class AppData
         properties = new MVolatile ();
         properties.set (root, "resourceDir");
 
-        state = new MDoc (root.resolve ("state"));
-        runs  = new MDir (root.resolve ("jobs"), "model");  // "model" is our internal housekeeping data, in MNode serialization form. Backend output generally goes into a simulator-specific file.
+        state   = new MDoc (root.resolve ("state"));
+        runs    = new MDir (root.resolve ("jobs"), "model");  // "model" is our internal housekeeping data, in MNode serialization form. Backend output generally goes into a simulator-specific file.
+        studies = new MDir (root.resolve ("studies"), "study");  // "study" contains general metadata. A separate MDoc called "model" holds a snapshot of the model being studied.
         Path reposDir = root.resolve ("repos");
-        repos = new MDir (reposDir, "state");
+        repos   = new MDir (reposDir, "state");
 
         String reposOrderString = state.get ("Repos", "order");
         List<String> reposOrder = new ArrayList<String> ();

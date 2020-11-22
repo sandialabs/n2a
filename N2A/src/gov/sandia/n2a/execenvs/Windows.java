@@ -13,8 +13,10 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class Windows extends Host
 {
@@ -60,14 +62,16 @@ public class Windows extends Host
     }
 
     @Override
-    public Set<Long> getActiveProcs () throws Exception
+    public List<ProcessInfo> getActiveProcs () throws Exception
     {
-        Set<Long> result = new TreeSet<Long> ();
+        List<ProcessInfo> result = new ArrayList<ProcessInfo> ();
+        Map<Long,  ProcessInfo> id2process   = new HashMap<Long,  ProcessInfo> ();
+        Map<String,ProcessInfo> name2process = new HashMap<String,ProcessInfo> ();
 
         Path   resourceDir = getResourceDir ();
         String jobsDir     = resourceDir.resolve ("jobs").toString ();
 
-        Process proc = new ProcessBuilder ("powershell", "get-process", "|", "format-table", "Id,Path").start ();
+        Process proc = new ProcessBuilder ("powershell", "get-process", "|", "format-table", "Id,WorkingSet,Path").start ();
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -75,11 +79,52 @@ public class Windows extends Host
             {
                 if (line.contains (jobsDir))
                 {
+                    ProcessInfo info = new ProcessInfo ();
+
                     String[] parts = line.trim ().split (" ", 2);
-                    result.add (new Long (parts[0]));
+                    info.pid = Long.valueOf (parts[0]);
+
+                    parts = parts[1].trim ().split (" ", 2);
+                    info.memory = Long.valueOf (parts[0]);
+
+                    result.add (info);
+                    id2process.put (info.pid, info);
                 }
             }
         }
+
+        // Extra awkward work to get cpu utilization out of powershell
+        proc = new ProcessBuilder ("powershell", "get-counter", "\"\\process(*)\\id process\",\"\\process(*)\\% processor time\"").start ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                String[] pieces = line.split ("process\\(", 2);
+                if (pieces.length == 1) continue;
+
+                pieces = pieces[1].split ("\\)", 2);
+                String name = pieces[0];
+
+                String line2 = reader.readLine ();
+
+                if (line.contains ("id process"))
+                {
+                    long value = Long.valueOf (line2);
+                    ProcessInfo info = id2process.get (value);
+                    if (info != null)
+                    {
+                        name2process.put (name, info);
+                    }
+                }
+                else if (line.contains ("processor time"))
+                {
+                    ProcessInfo info = name2process.get (name);
+                    if (info != null) info.cpu = Double.valueOf (line2);
+                }
+            }
+        }
+        
         return result;
     }
 
@@ -144,10 +189,4 @@ public class Windows extends Host
     {
         return "\"" + path + "\"";
     }
-
-	@Override
-	public long getProcMem (long pid)
-	{
-		return 0;
-	}
 }

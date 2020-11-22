@@ -64,14 +64,14 @@ public class Unix extends Host
     }
 
     @Override
-    public Set<Long> getActiveProcs () throws Exception
+    public List<ProcessInfo> getActiveProcs () throws Exception
     {
-        Set<Long> result = new TreeSet<Long> ();
+        List<ProcessInfo> result = new ArrayList<ProcessInfo> ();
 
         Path   resourceDir = getResourceDir ();
         String jobsDir     = resourceDir.resolve ("jobs").toAbsolutePath ().toString ();
 
-        try (AnyProcess proc = build ("ps", "-ewwo", "pid,command", "--no-header").start ();
+        try (AnyProcess proc = build ("ps", "-ewwo", "pid,pcpu,rss,command", "--no-header").start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -79,8 +79,18 @@ public class Unix extends Host
             {
                 if (line.contains (jobsDir))
                 {
+                    ProcessInfo info = new ProcessInfo ();
+
                     String[] parts = line.trim ().split (" ", 2);
-                    result.add (new Long (parts[0]));
+                    info.pid = Long.valueOf (parts[0]);
+
+                    parts = parts[1].trim ().split (" ", 2);
+                    info.cpu = Double.valueOf (parts[0]);
+
+                    parts = parts[1].trim ().split (" ", 2);
+                    info.memory = Long.valueOf (parts[0]);
+
+                    result.add (info);
                 }
             }
         }
@@ -179,25 +189,6 @@ public class Unix extends Host
         command.add (force ? "-9" : "-15");
         for (long l : pids) command.add (String.valueOf (l));
         try (AnyProcess proc = build (command).start ();) {}
-    }
-
-    @Override
-    public long getProcMem (long pid) throws Exception
-    {
-        try (AnyProcess proc = build ("ps", "-q", String.valueOf (pid), "-o", "pid,rss", "--no-header").start ();
-             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
-        {
-            String line;
-            while ((line = reader.readLine ()) != null)
-            {
-                line = line.trim ();
-                String[] parts = line.split ("\\s+");  // any amount/type of whitespace forms the delimiter
-                long PID = Long.parseLong (parts[0]);
-                long RSS = Long.parseLong (parts[1]);
-                if (PID == pid) return RSS * 1024;
-            }
-        }
-        return 0;
     }
 
     @Override
