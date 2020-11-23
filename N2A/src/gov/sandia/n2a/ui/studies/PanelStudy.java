@@ -36,6 +36,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
@@ -264,8 +265,9 @@ public class PanelStudy extends JPanel
         protected MNode         source;
         protected StudyThread   thread;
         protected StudyIterator iterator;
-        protected int           count;      // total number of samples that will be generated
-        protected int           index;      // of next sample that should be created
+        protected int           count;                  // total number of samples that will be generated
+        protected int           index;                  // of next sample that should be created
+        protected Random        random = new Random (); // random number generator used by iterator
 
         public Study (MNode source)
         {
@@ -422,14 +424,36 @@ public class PanelStudy extends JPanel
                 // The M order of keys in "jobs" matches their creation order.
                 // By actually executing the iterator again, we ensure that any random
                 // draws repeat exactly the same sequence as before.
+                MNode seed = model.child ("$metadata", "study", "seed");
+                if (seed != null) random.setSeed (seed.getLong ());
+                else              random.setSeed (System.currentTimeMillis ());
                 buildIterator ();
                 iterator.setModel (modelCopy);
                 int lastIndex = source.childOrEmpty ("jobs").size () - 1;
-                if (index <= lastIndex) showStatus (Study.this, "Recapitulating samples");
-                while (! stop  &&  index <= lastIndex)
+                if (index <= lastIndex)
                 {
-                    iterator.next ();
-                    index++;
+                    MNode lastRun = null;
+                    if (seed == null)  // User is not concerned about repeatability, so any state will do.
+                    {
+                        // Retrieve last run.
+                        String lastRunKey = "";
+                        for (MNode r : source.childOrEmpty ("jobs")) lastRunKey = r.key ();
+                        lastRun = AppData.runs.child (lastRunKey);
+                    }
+
+                    if (lastRun != null)
+                    {
+                        iterator.fastForward (lastRun);
+                    }
+                    else  // Either the user cares about repeatable random numbers, or we failed to retrieve the last run.
+                    {
+                        showStatus (Study.this, "Recapitulating samples");
+                        while (! stop  &&  index <= lastIndex)
+                        {
+                            iterator.next ();
+                            index++;
+                        }
+                    }
                 }
 
                 // Get next sample, but don't advance index until it is actually launched.
@@ -489,6 +513,7 @@ public class PanelStudy extends JPanel
                         if (chosenHost != null)
                         {
                             // Launch job and maintain all records
+                            // See PanelEquations.listenerRun for similar code.
                             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + Host.jobCount++;
                             final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
                             job.merge (modelCopy);
@@ -498,8 +523,6 @@ public class PanelStudy extends JPanel
                             {
                                 public void run ()
                                 {
-                                    // Simulator should record all errors/warnings to a file in the job dir.
-                                    // If this thread throws an untrapped exception, then there is something wrong with the implementation.
                                     backend.start (job);
                                 }
                             };
@@ -553,8 +576,9 @@ public class PanelStudy extends JPanel
 
             // Base column width solely on headers, rather than contents.
             // Scanning through all the contents could be very expensive.
-            TableColumnModel cols = getColumnModel ();
             List<String> columns = ((SampleTableModel) getModel ()).variablePaths;
+            if (columns == null) return;
+            TableColumnModel cols = getColumnModel ();
             int digitWidth = fm.charWidth ('0');
             int em         = fm.charWidth ('M');
             int minWidth = 10 * digitWidth;
