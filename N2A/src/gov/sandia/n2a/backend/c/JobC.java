@@ -1481,7 +1481,7 @@ public class JobC extends Thread
                 result.append ("  Simulator<" + T + ">::instance.connect (this);\n");  // queue to evaluate our connections
             }
             s.setInit (0);
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
         }
 
@@ -1529,7 +1529,7 @@ public class JobC extends Thread
             }
             result.append ("  }\n");
             context.hasEvent = false;
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
         }
 
@@ -1554,7 +1554,7 @@ public class JobC extends Thread
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
 
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
         }
 
@@ -1624,7 +1624,7 @@ public class JobC extends Thread
             {
                 result.append ("  return true;\n");
             }
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
         }
 
@@ -1649,7 +1649,7 @@ public class JobC extends Thread
             result.append ("    Part * p = instances[i];\n");
             result.append ("    if (p  &&  p->getLive ()) p->die ();\n");
             result.append ("  }\n");
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
         }
 
@@ -1659,7 +1659,7 @@ public class JobC extends Thread
             result.append ("int " + ns + "getN ()\n");
             result.append ("{\n");
             result.append ("  return n;\n");
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
         }
 
@@ -1682,7 +1682,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
         }
 
@@ -1699,7 +1699,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
         }
 
@@ -1722,7 +1722,7 @@ public class JobC extends Thread
                 result.append ("  preserve->" + mangle ("next_", v) + " = " + mangle ("next_", v) + ";\n");
                 result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
 
             // Population restore
@@ -1738,7 +1738,7 @@ public class JobC extends Thread
             }
             result.append ("  delete preserve;\n");
             result.append ("  preserve = 0;\n");
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
         }
 
@@ -1754,7 +1754,7 @@ public class JobC extends Thread
             {
                 result.append ("  temp->" + mangle (v) + " = " + mangle (v) + ";\n");
             }
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
 
             // Population multiplyAddToStack
@@ -1772,7 +1772,7 @@ public class JobC extends Thread
                     result.append (                      mangle (v) + " * scalar;\n");
                 }
             }
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
 
             // Population multiply
@@ -1789,7 +1789,7 @@ public class JobC extends Thread
                     result.append ("  " + mangle (v) + " *= scalar;\n");
                 }
             }
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
 
             // Population addToMembers
@@ -1802,7 +1802,7 @@ public class JobC extends Thread
             result.append ("  Derivative * temp = stackDerivative;\n");
             result.append ("  stackDerivative = stackDerivative->next;\n");
             result.append ("  delete temp;\n");
-            result.append ("};\n");
+            result.append ("}\n");
             result.append ("\n");
         }
 
