@@ -1558,7 +1558,7 @@ public class JobC extends Thread
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
               
-            push_region(result,ns +"::update()");
+            push_region(result,ns +"update()");
             
             for (Variable v : bed.globalBufferedInternalUpdate)
             {
@@ -2454,7 +2454,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
-            push_region(result,ns +"::update()");
+            push_region(result,ns +"update()");
             for (Variable v : bed.localBufferedInternalUpdate)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
