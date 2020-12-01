@@ -866,7 +866,16 @@ public class JobC extends Thread
         generateDeclarationsLocal (s, result);
         generateDeclarationsGlobal (s, result);
     }
-
+    public void push_region(StringBuilder result, String name) {
+        if(with_profiling) {
+          result.append("push_region(\""+name+"\");\n");
+        }
+    }
+    public void pop_region(StringBuilder result) {
+        if(with_profiling) {
+            result.append("pop_region();\n");
+        }
+    }
     public void generateDeclarationsGlobal (EquationSet s, StringBuilder result)
     {
         BackendDataC bed = (BackendDataC) s.backendData;
@@ -1498,6 +1507,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
+            push_region(result,ns+"integrate()");
             result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
             context.hasEvent = true;
             result.append ("  " + T + " dt = event->dt;\n");
@@ -1537,6 +1547,7 @@ public class JobC extends Thread
             }
             result.append ("  }\n");
             context.hasEvent = false;
+            pop_region(result);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1546,9 +1557,9 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
-            if(with_profiling) {
-              result.append ("push_region(\""+ ns +"::update()"+"\");\n");
-            }
+              
+            push_region(result,ns +"::update()");
+            
             for (Variable v : bed.globalBufferedInternalUpdate)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -1563,9 +1574,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
-            if(with_profiling) {
-                result.append ("pop_region();\n");
-            }
+            pop_region(result);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1680,6 +1689,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
+            push_region(result,ns + "updateDerivative()");
             for (Variable v : bed.globalBufferedInternalDerivative)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -1694,6 +1704,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
+            pop_region(result);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2371,6 +2382,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
+            push_region(result,ns+"integrate()");
             if (bed.localIntegrated.size () > 0)
             {
                 if (bed.lastT)
@@ -2432,6 +2444,7 @@ public class JobC extends Thread
                 }
             }
             context.hasEvent = false;
+            pop_region(result);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2441,9 +2454,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
-            if(with_profiling) {
-                result.append ("push_region(\""+ ns +"::update()"+"\");\n");
-            }
+            push_region(result,ns +"::update()");
             for (Variable v : bed.localBufferedInternalUpdate)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -2466,9 +2477,7 @@ public class JobC extends Thread
                     result.append ("  " + mangle (e.name) + ".update ();\n");
                 }
             }
-            if(with_profiling) {
-                result.append ("pop_region();\n");
-            }
+            pop_region(result);
             
             result.append ("}\n");
             result.append ("\n");
@@ -2708,6 +2717,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
+            push_region(result, ns+"updateDerivative()");
             for (Variable v : bed.localBufferedInternalDerivative)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -2730,6 +2740,7 @@ public class JobC extends Thread
                     result.append ("  " + mangle (e.name) + ".updateDerivative ();\n");
                 }
             }
+            pop_region(result);
             result.append ("}\n");
             result.append ("\n");
         }
