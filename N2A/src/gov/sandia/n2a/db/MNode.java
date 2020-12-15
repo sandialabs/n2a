@@ -31,14 +31,29 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return "";
     }
 
+    /**
+        Returns an array of keys suitable for locating this node relative to its root node.
+        Does not include the key of the root node itself.
+    **/
     public String[] keyPath ()
     {
-        int index = depth ();
-        String[] result = new String[index + 1];
+        return keyPath (null);
+    }
+
+    /**
+        Returns an array of keys suitable for locating this node relative to the given root node.
+        Does not include the key of the root node itself.
+        If the given root node is not on the path to the actual root, then it is ignored and
+        the full path to actual root is returned.
+    **/
+    public String[] keyPath (MNode root)
+    {
+        int index = depth (root);
+        String[] result = new String[index];
         MNode parent = this;
-        while (index >= 0)
+        while (index > 0)
         {
-            result[index--] = parent.key ();
+            result[--index] = parent.key ();
             parent = parent.parent ();
         }
         return result;
@@ -46,9 +61,15 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     public int depth ()
     {
+        return depth (null);
+    }
+
+    public int depth (MNode root)
+    {
+        if (this == root) return 0;
         MNode parent = parent ();
         if (parent == null) return 0;
-        return parent.depth () + 1;
+        return parent.depth (root) + 1;
     }
 
     public MNode parent ()

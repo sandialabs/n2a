@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.execenvs.Host.CopyProgress;
 import gov.sandia.n2a.execenvs.Remote;
@@ -37,6 +38,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -805,27 +807,55 @@ public class PanelRun extends JPanel
             }
         }
 
-        NodeJob job = (NodeJob) displayNode;
-        MNode doc = job.getSource ();
-
         StringBuilder contents = new StringBuilder ();
         contents.append ("Status:");
-        if      (job.complete < 0)                       contents.append (" Waiting");
-        else if (job.complete == 0)                      contents.append (" Started");
-        else if (job.complete > 0  &&  job.complete < 1) contents.append (" " + Math.round (job.complete * 100) + "%");
-        else if (job.complete == 1)                      contents.append (" Success");
-        else if (job.complete == 3)                      contents.append (" Killed (lingering)");
-        else if (job.complete == 4)                      contents.append (" Killed");
+        NodeJob jobNode = (NodeJob) displayNode;
+        if      (jobNode.complete < 0)                       contents.append (" Waiting");
+        else if (jobNode.complete == 0)                      contents.append (" Started");
+        else if (jobNode.complete > 0  &&  jobNode.complete < 1) contents.append (" " + Math.round (jobNode.complete * 100) + "%");
+        else if (jobNode.complete == 1)                      contents.append (" Success");
+        else if (jobNode.complete == 3)                      contents.append (" Killed (lingering)");
+        else if (jobNode.complete == 4)                      contents.append (" Killed");
         else                                             contents.append (" Failed");  // complete==2, or any value not specified above
         contents.append ("\n");
-        if (job.dateStarted  != null) contents.append ("  started:  " + job.dateStarted  + "\n");
-        if (job.dateFinished != null) contents.append ("  finished: " + job.dateFinished + "\n");
+        if (jobNode.dateStarted  != null) contents.append ("  started:  " + jobNode.dateStarted  + "\n");
+        if (jobNode.dateFinished != null) contents.append ("  finished: " + jobNode.dateFinished + "\n");
         contents.append ("\n");
-        appendMetadata (doc, contents, "backend");
-        appendMetadata (doc, contents, "duration");
-        appendMetadata (doc, contents, "host");
-        appendMetadata (doc, contents, "pid");
-        appendMetadata (doc, contents, "seed");
+
+        MNode job = jobNode.getSource ();
+        appendMetadata (job, contents, "backend");
+        appendMetadata (job, contents, "duration");
+        appendMetadata (job, contents, "host");
+        appendMetadata (job, contents, "pid");
+        appendMetadata (job, contents, "seed");
+        contents.append ("\n");
+
+        // Walk the model and display all overridden parameters.
+        // Note that this code depends on the current state of the model in the DB.
+        // What it reports can change as the model changes, and may not capture everything that
+        // was tagged as a parameter at the time the simulation was run. This is a
+        // compromise that allows fast display while being reasonably useful in most cases.
+        MNode doc = AppData.models.child (jobNode.inherit);  // Not collated, so only top-level keys
+        if (doc != null)
+        {
+            doc.visit (new Visitor ()
+            {
+                public boolean visit (MNode node)
+                {
+                    List<String> keyList   = Arrays.asList (node.keyPath (doc));
+                    List<String> paramPath = new ArrayList<String> (keyList);
+                    paramPath.add ("$metadata");
+                    paramPath.add ("param");
+                    if (! job.getFlag (paramPath.toArray ())) return true;  // node is not a parameter
+
+                    String[] keyPath = keyList.toArray (new String[keyList.size ()]);
+                    String key = keyPath[0];
+                    for (int i = 1; i < keyPath.length; i++) key += "." + keyPath[i];
+                    contents.append (key + " = " + job.get (keyPath) + "\n");
+                    return true;
+                }
+            });
+        }
 
         synchronized (displayText)
         {
@@ -975,7 +1005,8 @@ public class PanelRun extends JPanel
     public void addNewRun (MNode run)
     {
         NodeJob node = new NodeJob (run, true);
-        node.setUserObject (run.getOrDefault (node.key, "$inherit").split (",", 2)[0].replace ("\"", ""));
+        node.inherit = run.getOrDefault (node.key, "$inherit").split (",", 2)[0].replace ("\"", "");
+        node.setUserObject (node.inherit);
 
         model.insertNodeInto (node, root, 0);  // Since this always executes on event dispatch thread, it will not conflict with other code that accesses model.
         if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, we need to give the JTree a little extra kick to get started.
