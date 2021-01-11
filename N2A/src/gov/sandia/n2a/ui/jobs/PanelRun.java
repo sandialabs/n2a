@@ -851,7 +851,17 @@ public class PanelRun extends JPanel
                     String[] keyPath = keyList.toArray (new String[keyList.size ()]);
                     String key = keyPath[0];
                     for (int i = 1; i < keyPath.length; i++) key += "." + keyPath[i];
-                    contents.append (key + " = " + job.get (keyPath) + "\n");
+
+                    String value = job.get (keyPath);
+                    contents.append (key + " = " + value + "\n");
+                    if (value.isEmpty ())  // Could be multi-valued
+                    {
+                        for (MNode v : job.childOrEmpty (keyPath))
+                        {
+                            key = v.key ();
+                            if (key.contains ("@")) contents.append ("\t" + v.get () + "\t" + key + "\n");
+                        }
+                    }
                     return true;
                 }
             });
