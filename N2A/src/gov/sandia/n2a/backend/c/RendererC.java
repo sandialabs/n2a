@@ -31,6 +31,7 @@ import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Rows;
+import gov.sandia.n2a.language.function.Sat;
 import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
@@ -458,6 +459,32 @@ public class RendererC extends Renderer
             result.append ("sqrt (");
             a.render (this);
             if (useExponent) result.append (", " + a.exponentNext + ", " + s.exponentNext + ")");
+            return true;
+        }
+        if (op instanceof Sat)
+        {
+            Sat s = (Sat) op;
+            Operator a     = s.operands[0];
+            Operator lower = s.operands[1];
+            Operator upper;
+            if (s.operands.length >= 3) upper = s.operands[2];
+            else                        upper = lower;
+
+            result.append ("max (");
+            if (s.operands.length == 2) result.append ("-1 * (");
+            lower.render (this);
+            appendType (lower);
+            if (s.operands.length == 2) result.append (")");
+
+            result.append (", min (");
+            upper.render (this);
+            appendType (upper);
+
+            result.append (", ");
+            a.render (this);
+            appendType (a);
+
+            result.append ("))");
             return true;
         }
         if (op instanceof Tangent)

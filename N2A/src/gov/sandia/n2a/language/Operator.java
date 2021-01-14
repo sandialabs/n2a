@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -31,6 +31,7 @@ import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Round;
 import gov.sandia.n2a.language.function.Rows;
+import gov.sandia.n2a.language.function.Sat;
 import gov.sandia.n2a.language.function.Signum;
 import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.SquareRoot;
@@ -452,6 +453,7 @@ public class Operator implements Cloneable
         register (Round            .factory ());
         register (Rows             .factory ());
         register (Signum           .factory ());
+        register (Sat              .factory ());
         register (Sine             .factory ());
         register (SquareRoot       .factory ());
         register (Tangent          .factory ());
