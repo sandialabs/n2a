@@ -15,6 +15,7 @@ import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.Utility;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun;
@@ -66,12 +67,12 @@ public class PanelStudy extends JPanel
     public    JList<Study>            list  = new JList<Study> (model);
     protected JScrollPane             listPane;
 
-    protected Study       displayStudy;                // The study currently in focus.
-    protected JTabbedPane displayPane;
-    protected JPanel      panelSamples;
+    protected Study       displayStudy;                  // The study currently in focus.
+    protected JPanel      displayPanel;
     protected JButton     buttonPause;
-    protected JLabel      labelStatus = new JLabel (); // Gives brief summary of remaining work and time.
-    protected JTable      tableSamples;
+    protected JLabel      labelStatus   = new JLabel (); // Gives brief summary of remaining work and time.
+    protected JTabbedPane tabbedResults = new JTabbedPane ();
+    protected SampleTable tableSamples  = new SampleTable ();
 
     protected static ImageIcon iconPause    = ImageUtil.getImage ("pause-16.png");
     protected static ImageIcon iconStop     = ImageUtil.getImage ("stop.gif");
@@ -107,8 +108,7 @@ public class PanelStudy extends JPanel
                 if (study == displayStudy) return;
 
                 displayStudy = study;
-                tableSamples.repaint ();
-                buttonPause.setEnabled (study.complete () < 1);
+                view ();
             }
         });
 
@@ -160,6 +160,7 @@ public class PanelStudy extends JPanel
         buttonPause = new JButton (iconPause);
         buttonPause.setMargin (new Insets (2, 2, 2, 2));
         buttonPause.setFocusable (false);
+        buttonPause.setEnabled (false);  // Until a specific study is selected.
         buttonPause.setToolTipText ("Pause");
         buttonPause.addActionListener (new ActionListener ()
         {
@@ -169,12 +170,12 @@ public class PanelStudy extends JPanel
             }
         });
 
-        tableSamples = new SampleTable ();
+        tabbedResults.addTab ("Samples", Lay.sp (tableSamples));  // No icons for tabs, at least for now.
 
-        panelSamples = Lay.BL
+        displayPanel = Lay.BL
         (
-            "N", Lay.BL ("W", Lay.FL ("H", buttonPause, labelStatus)),
-            "C", Lay.sp (tableSamples)
+            "N", Lay.BL ("W", Lay.FL ("H", buttonPause, labelStatus, "hgap=5,vgap=1")),
+            "C", Lay.sp (tabbedResults)
         );
 
         JSplitPane split;
@@ -184,7 +185,7 @@ public class PanelStudy extends JPanel
             split = Lay.SPL
             (
                 listPane = Lay.sp (list),
-                displayPane
+                displayPanel
             )
         );
         setFocusCycleRoot (true);
@@ -216,6 +217,21 @@ public class PanelStudy extends JPanel
     }
 
     /**
+        Set up displayPanel with tabs appropriate to the newly-selected study.
+    **/
+    public void view ()
+    {
+        // Remove all result tabs, leaving only the main sample tab.
+        int tabCount = tabbedResults.getTabCount ();
+        for (int i = tabCount - 1; i > 0; i--) tabbedResults.remove (i);
+
+        // TODO: Add result tabs appropriate to the type of study.
+
+        tableSamples.repaint ();
+        buttonPause.setEnabled (displayStudy != null  &&  displayStudy.complete () < 1);
+    }
+
+    /**
         Delete studies associated with currently selected items in list.
         Execute on EDT only.
     **/
@@ -235,7 +251,6 @@ public class PanelStudy extends JPanel
             AppData.studies.clear (study.source.key ());
         }
 
-        displayPane.removeAll ();
         int count = model.getSize ();
         if (nextSelection < 0) nextSelection = 0;
         if (nextSelection >= count) nextSelection = count - 1;
@@ -243,7 +258,7 @@ public class PanelStudy extends JPanel
         {
             list.setSelectedIndex (nextSelection);
             displayStudy = list.getSelectedValue ();
-            tableSamples.repaint ();
+            view ();
         }
     }
 
@@ -265,8 +280,8 @@ public class PanelStudy extends JPanel
         protected MNode         source;
         protected StudyThread   thread;
         protected StudyIterator iterator;
-        protected int           count;                  // total number of samples that will be generated
-        protected int           index;                  // of next sample that should be created
+        protected int           count;                  // Total number of samples that will be generated
+        protected int           index;                  // Of next sample that should be created. Always 1 greater than last completed sample. When 0, study is about to start. When equal to count, study has completed.
         protected Random        random = new Random (); // random number generator used by iterator
 
         public Study (MNode source)
@@ -296,17 +311,18 @@ public class PanelStudy extends JPanel
                     int i = keyPath.length - 1;  // Search backwards because "$metadata" is more likely to be immediate parent of "study".
                     for (; i >= 0; i--) if (keyPath[i].equals ("$metadata")) break;
                     if (i < 0) return true;  // move along, nothing to see here
+                    String key = keyPath[0];
                     if (i == keyPath.length - 2)  // immediate parent
                     {
                         if (keyPath.length < 3) return true;  // This is the top-level metadata block, so ignore study. It contains general parameters, rather than tagging a variable.
-                        source.set (n.get (), Arrays.copyOf (keyPath, keyPath.length - 2));
-                        return false;
+                        for (int j = 1; j < keyPath.length - 2; j++) key += "." + keyPath[j];
                     }
                     else  // more distant parent, so a metadata key is the item to be iterated, rather than a variable
                     {
-                        source.set (n.get (), Arrays.copyOf (keyPath, keyPath.length - 1));
-                        return false;
+                        for (int j = 1; j < keyPath.length - 1; j++) key += "." + keyPath[j];
                     }
+                    source.set (n.get (), "variables", key);
+                    return false;
                 }
             });
         }
@@ -330,11 +346,14 @@ public class PanelStudy extends JPanel
                     it = new StudyIteratorList (v.key (), value);
                 }
                 // TODO: how to handle unrecognized study type?
-                it.inner = iterator;
+                if (iterator != null)
+                {
+                    iterator.next ();  // Move to first item in sequence. At least one must exist.
+                    it.inner = iterator;
+                }
                 iterator = it;
             }
-            // TODO: what if no study variables were found?
-            count = iterator.count ();
+            if (iterator != null) count = iterator.count ();
         }
 
         /**
@@ -389,6 +408,7 @@ public class PanelStudy extends JPanel
 
         public float complete ()
         {
+            if (count == 0) return 1;  // Nothing to do, so we are done. This happens when study turns out to be vacuous.
             return (float) index / count;
         }
 
@@ -415,44 +435,79 @@ public class PanelStudy extends JPanel
 
             public void run ()
             {
+                buildIterator ();
+                if (iterator == null)  // Failed to find any study variables.
+                {
+                    // Convert this to a single run.
+                    EventQueue.invokeLater (new Runnable ()
+                    {
+                        public void run ()
+                        {
+                            list.setSelectedValue (Study.this, false); // Make ourself the current selection.
+                            delete ();                                 // Delete current selection.
+
+                            PanelEquations pe = PanelModel.instance.panelEquations;
+                            MNode doc = AppData.models.child (source.get ("$inherit"));
+                            pe.load (doc);  // Usually this record will already be loaded, since the study was launched from there.
+                            pe.launchJob ();
+                        }
+                    });
+
+                    return;
+                }
+
+                int jobCount = source.childOrEmpty ("jobs").size ();
+                if (jobCount >= count) return;  // All samples have completed. TODO: support re-running failed jobs.
+                System.out.println ("jobCount, count = " + jobCount + " " + count);
+
                 Path studyDir = Paths.get (source.get ()).getParent ();
                 MNode model = new MDoc (studyDir.resolve ("model"));
                 MNode modelCopy = new MVolatile ();
-                modelCopy.merge (model);
+                modelCopy.merge (model);  // "model" is never touched. We only use "modelCopy".
 
-                // Initialize iterator and bring up to present.
-                // The M order of keys in "jobs" matches their creation order.
-                // By actually executing the iterator again, we ensure that any random
-                // draws repeat exactly the same sequence as before.
+                // Restart iterator at appropriate place.
                 MNode seed = model.child ("$metadata", "study", "seed");
                 if (seed != null) random.setSeed (seed.getLong ());
                 else              random.setSeed (System.currentTimeMillis ());
-                buildIterator ();
-                iterator.setModel (modelCopy);
-                int lastIndex = source.childOrEmpty ("jobs").size () - 1;
+                int lastIndex = jobCount - 1;
+                System.out.println ("index, lastIndex = " + index + " " + lastIndex);
                 if (index <= lastIndex)
                 {
+                    System.out.println ("move iterator to present");
                     MNode lastRun = null;
                     if (seed == null)  // User is not concerned about repeatability, so any state will do.
                     {
                         // Retrieve last run.
-                        String lastRunKey = "";
-                        for (MNode r : source.childOrEmpty ("jobs")) lastRunKey = r.key ();
+                        String lastRunKey = source.get ("jobs", lastIndex);
                         lastRun = AppData.runs.child (lastRunKey);
                     }
 
-                    if (lastRun != null)
+                    if (lastRun == null)  // Either the user cares about repeatable random numbers, or we failed to retrieve the last run.
                     {
-                        iterator.fastForward (lastRun);
-                    }
-                    else  // Either the user cares about repeatable random numbers, or we failed to retrieve the last run.
-                    {
+                        System.out.println ("need to recapitulate");
+                        // By actually executing the iterator again, we ensure that any random
+                        // draws repeat exactly the same sequence as before.
                         showStatus (Study.this, "Recapitulating samples");
                         while (! stop  &&  index <= lastIndex)
                         {
                             iterator.next ();
                             index++;
                         }
+                    }
+                    else  // Use lastRun to set iterator
+                    {
+                        System.out.println ("have lastRun");
+                        MNode values = new MVolatile ();
+                        for (MNode v : source.childOrEmpty ("variables"))
+                        {
+                            String key = v.key ();  // This is a flattened key.
+                            String[] keyPath = key.split ("\\.");
+                            String value = lastRun.get (keyPath);
+                            values.set (value, key);
+                        }
+                        System.out.println ("values:" + values);
+                        iterator.fastForward (values);
+                        index = lastIndex + 1;
                     }
                 }
 
@@ -461,8 +516,10 @@ public class PanelStudy extends JPanel
                 long startTime = System.currentTimeMillis ();
                 while (! stop  &&  iterator.next ())  // Puts the next sample in modelCopy
                 {
+                    iterator.assign (modelCopy);
+
                     // Show status
-                    // TODO: this should be base on jobs completed rather than merely started.
+                    // TODO: this should be based on jobs completed rather than merely started.
                     String status = "" + index + "/" + count + " samples; ";
                     if (index == 0)
                     {
@@ -472,21 +529,25 @@ public class PanelStudy extends JPanel
                     {
                         long totalTime = source.getLong ("time") + System.currentTimeMillis () - startTime;
                         double averageTime = totalTime / (index + 1);
-                        double ETA = averageTime * (count - index) / 1000;  // ETA is in seconds rather than milliseconds
+                        double ETA = averageTime * (count - index) / 1000;  // ETA is in seconds rather than milliseconds. It is only precise to 1/10th of a second.
                         if      (ETA > 4.3425e17) status += "This will take longer than the age of the universe.";  // 13.77 billion years, give or take a few
                         else if (ETA > 2.3652e14) status += "Deep Thought got done sooner.";                        // 7.5 million years
-                        else if (ETA >  31536000) status += String.format ("%f.1", ETA / 31536000) + " years remaining";
-                        else if (ETA >   2592000) status += String.format ("%f.1", ETA /  2592000) + " months remaining";
-                        else if (ETA >    604800) status += String.format ("%f.1", ETA /   604800) + " weeks remaining";
-                        else if (ETA >     86400) status += String.format ("%f.1", ETA /    86400) + " days remaining";
-                        else if (ETA >      3600) status += String.format ("%f.1", ETA /     3600) + " hours remaining";
-                        else if (ETA >        60) status += String.format ("%f.1", ETA /       60) + " minutes remaining";
-                        else                      status += ETA                                    + " seconds remaining";
+                        else if (ETA >  31536000) status += formatTime (ETA / 31536000) + " years remaining";
+                        else if (ETA >   2592000) status += formatTime (ETA /  2592000) + " months remaining";
+                        else if (ETA >    604800) status += formatTime (ETA /   604800) + " weeks remaining";
+                        else if (ETA >     86400) status += formatTime (ETA /    86400) + " days remaining";
+                        else if (ETA >      3600) status += formatTime (ETA /     3600) + " hours remaining";
+                        else if (ETA >        60) status += formatTime (ETA /       60) + " minutes remaining";
+                        else                      status += formatTime (ETA           ) + " seconds remaining";
                     }
                     showStatus (Study.this, status);
 
                     // Use the model to guide host selection.
                     // This allows host itself to be a study variable.
+                    // Specifically, the user can set up one and only one of these cases:
+                    // 1) $metadata.host specifies one name -- Use only the specified host. Poll until it becomes available.
+                    // 2) $metadata.host specifies several names -- Use first available host, repeatedly polling the list.
+                    // 3) $metadata.host is tagged as a study variable -- Use only the host from the iterator's current position, similar to #1 above.
                     List<Host> hosts = new ArrayList<Host> ();
                     for (String hostname : modelCopy.get ("$metadata", "host").split (","))
                     {
@@ -496,7 +557,7 @@ public class PanelStudy extends JPanel
                     if (hosts.isEmpty ()) hosts.add (Host.get ("localhost"));
 
                     // Likewise for backend
-                    Backend backend = Backend.getBackend (modelCopy.get ("$metada", "backend"));
+                    Backend backend = Backend.getBackend (modelCopy.get ("$metadata", "backend"));
 
                     // Wait until a host becomes available.
                     while (! stop)
@@ -517,6 +578,7 @@ public class PanelStudy extends JPanel
                             String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + Host.jobCount++;
                             final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
                             job.merge (modelCopy);
+                            job.set (chosenHost.name, "$metadata", "host");
                             ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
 
                             Thread thread = new Thread ()
@@ -529,15 +591,13 @@ public class PanelStudy extends JPanel
                             thread.setDaemon (true);
                             thread.start ();
 
-                            PanelRun.instance.addNewRun (job);  // TODO: make sure this doesn't pull focus to Runs tab
-
-                            source.set ("", "jobs", jobKey);
-                            index++;  // If everything is done right, index should equal source "jobs" size - 1.
+                            source.set (jobKey, "jobs", index++);
                             EventQueue.invokeLater (new Runnable ()
                             {
                                 public void run ()
                                 {
                                     tableSamples.repaint ();  // Doesn't matter whether this study is currently showing or not.
+                                    PanelRun.instance.addNewRun (job);  // TODO: make sure this doesn't pull focus to Runs tab
                                 }
                             });
                             break;
@@ -550,8 +610,14 @@ public class PanelStudy extends JPanel
                     catch (InterruptedException e) {}
                 }
 
-                long elapsed = System.currentTimeMillis () - startTime;
-                source.set (source.getLong ("time") + elapsed, "time");
+                long now = System.currentTimeMillis () / 1000;
+                source.set (source.getLong ("time") + now - startTime, "time");
+                if (index >= count - 1) source.set (now, "finished");
+            }
+
+            public String formatTime (double t)
+            {
+                return String.valueOf (Math.round (t * 10) / 10.0);
             }
         }
     }
@@ -597,7 +663,6 @@ public class PanelStudy extends JPanel
         // We cache this work, so it is only updated when displayStudy changes.
         protected Study        currentStudy;
         protected List<String> variablePaths;
-        protected List<String> jobKeys;
 
         public int getRowCount ()
         {
@@ -622,13 +687,12 @@ public class PanelStudy extends JPanel
         public Object getValueAt (int row, int column)
         {
             checkIndices ();
-            if (row < 0  ||  row >= jobKeys.size ()) return "";
             if (column < 0  ||  column >= variablePaths.size ()) return "";
-
-            String[] keyPath = variablePaths.get (column).split ("\\.");
-            String jobKey = jobKeys.get (row);
+            String jobKey = displayStudy.source.get ("jobs", row);
+            if (jobKey.isEmpty ()) return "";
             MNode job = AppData.runs.child (jobKey);
             if (job == null) return "";
+            String[] keyPath = variablePaths.get (column).split ("\\.");
             return job.get (keyPath);
         }
 
@@ -636,45 +700,59 @@ public class PanelStudy extends JPanel
         {
             if (currentStudy == displayStudy) return;
             variablePaths = new ArrayList<String> ();
-            jobKeys       = new ArrayList<String> ();
             if (displayStudy == null) return;
 
             displayStudy.buildVariables ();
             for (MNode v : displayStudy.source.childOrEmpty ("variables")) variablePaths.add (v.key ());
-            for (MNode j : displayStudy.source.childOrEmpty ("jobs")) jobKeys.add (j.key ());
         }
     }
 
+    /**
+        A hierarchical iterator for enumerating combinations of parameters.
+        When chained with other iterators, the outermost iterator varies the fastest.
+        An empty iterator is not allowed. Every iterator must offer a sequence at least 1 item long.
+    **/
     public static abstract class StudyIterator
     {
         protected StudyIterator inner;   // sub-iterator. If null, then this is the last iterator in the chain.
-        protected MNode         model;   // write the variable value directly into this structure
         protected String        key;
         protected String[]      keyPath; // full set of keys that address the location of the variable
         // concrete classes will also include information on the specific values to iterate over
 
+        /**
+            Immediately after construction, this iterator points before the beginning of the sequence.
+            A call to next() must come before a call to assign().
+            When composing with an inner iterator, call restart() or next() on the inner iterator to properly prepare it.
+        **/
         public StudyIterator (String key)
         {
             this.key = key;
             keyPath = key.split ("\\.");
         }
 
-        public void setModel (MNode model)
-        {
-            this.model = model;
-            if (inner != null) inner.setModel (model);
-        }
+        public abstract int     count ();                   // Returns the total number of samples that will be generated by one complete sequence.
+        public abstract void    fastForward (MNode values); // Given a set of flattened key-value pairs, move this and inner iterators to a state where a call to assign() will hand out the given item in the sequence.
+        public abstract void    restart ();                 // Moves this iterator to start of sequence, without regard to inner iterators. An immediate call to assign() will hand out the first item. This is similar to next() but unlike the initial state after construction.
+        public abstract boolean step ();                    // Moves this iterator to next item in sequence, without regard to inner iterator. Returns false if no more items are available.
+        public abstract void    assign (MNode model);       // Applies current value to model, then calls inner.assign()
 
-        public abstract int     count ();  // total number of samples that will be generated by one complete sequence
-        public abstract void    fastForward (MNode value);  // given a set of flattened key-value pairs, set this and each sub-iterator to the state as if it had just handed out this item in the sequence
-        public abstract void    reset ();  // Restart this iterator at the beginning of its sequence. Also resets any sub-iterators.
-        public abstract boolean next ();  // Steps to next value of deepest contained iterator, possibly advancing any iterator up to and including this one. Returns false if no more items are available.
+        public boolean next ()
+        {
+            if (step ()) return true;
+            // Past end of sequence. We can only restart if there is an inner iterator that has another item to offer.
+            if (inner != null  &&  inner.next ())
+            {
+                restart ();
+                return true;
+            }
+            return false;
+        }
     }
 
     public static class StudyIteratorList extends StudyIterator
     {
         protected List<String> items;
-        protected int          index;
+        protected int          index = -1;
 
         public StudyIteratorList (String key, String items)
         {
@@ -692,21 +770,24 @@ public class PanelStudy extends JPanel
         public void fastForward (MNode value)
         {
             String current = value.get (key);
-            index = items.indexOf (current);
-            if (index < 0) index = 0;  // not found, so start at beginning
+            index = items.indexOf (current);  // "current" should always be found in items.
+            if (index < 0) index = 0;         // fallback if improper value was passed
         }
 
-        public void reset ()
+        public void restart ()
         {
             index = 0;
-            if (inner != null) inner.reset ();
         }
 
-        public boolean next ()
+        public boolean step ()
         {
-            if (index >= items.size ()) return false;
-            model.set (items.get (index++), keyPath);
-            return true;
+            index++;
+            return index < items.size ();
+        }
+
+        public void assign (MNode model)
+        {
+            model.set (items.get (index), keyPath);
         }
     }
 
@@ -715,7 +796,7 @@ public class PanelStudy extends JPanel
         protected double lo;
         protected double hi;
         protected double step;
-        protected int index;
+        protected int index = -1;
         protected int count;
 
         public StudyIteratorRange (String key, String range)
@@ -739,30 +820,31 @@ public class PanelStudy extends JPanel
 
         public int count ()
         {
-            int result = count;
-            if (inner != null) result *= inner.count ();
-            return result;
+            if (inner != null) return count * inner.count ();
+            return count;
         }
 
         public void fastForward (MNode value)
         {
             double current = value.getDouble (key);
-            index = (int) Math.floor ((current - lo) / step);
-            if (index < 0) index = 0;
-            if (index >= count) index = count - 1;
+            index = (int) Math.round ((current - lo) / step);
+            if (index < 0  ||  index >= count) index = 0;
         }
 
-        public void reset ()
+        public void restart ()
         {
             index = 0;
-            if (inner != null) inner.reset ();
         }
 
-        public boolean next ()
+        public boolean step ()
         {
-            if (index >= count) return false;
-            model.set (lo + step * index++, keyPath);
-            return true;
+            index++;
+            return index < count;
+        }
+
+        public void assign (MNode model)
+        {
+            model.set (lo + step * index, keyPath);
         }
     }
 }

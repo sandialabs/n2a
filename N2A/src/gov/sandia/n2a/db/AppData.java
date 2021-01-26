@@ -216,11 +216,13 @@ public class AppData
 
     public synchronized static void save ()
     {
-        state.save ();
-        runs.save ();  // The reason to save runs is if we record data in them about process status. If no data is changed, could get rid of this save.
-        repos.save ();
+        // Sorted from most critical to least, in terms of how damaging a loss of information would be.
         models.save ();
         references.save ();
+        studies.save ();
+        runs.save ();
+        repos.save ();
+        state.save ();
     }
 
     public static void quit ()

@@ -997,40 +997,49 @@ public class PanelEquations extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
-            if (record == null) return;
-            MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
-            if (isEditing ())
-            {
-                stopEditing ();
-                // The following is needed because graph node components (title or tree) do not reclaim the focus before it shifts to the run tab.
-                GraphNode gn = active.root.graph;
-                if (gn != null  &&  gn.titleFocused) mtp.setPreferredFocus (PanelModel.instance, gn.title);
-                else                                 mtp.setPreferredFocus (PanelModel.instance, active.tree);
-            }
-
-            String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.
-            final Backend simulator = Backend.getBackend (simulatorName);
-            String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
-            final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
-            job.merge (root.source);
-            job.set (record.key (), "$inherit");
-            ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
-
-            new Thread ()
-            {
-                public void run ()
-                {
-                    // Simulator should record all errors/warnings to a file in the job dir.
-                    // If this thread throws an untrapped exception, then there is something wrong with the implementation.
-                    simulator.start (job);
-                }
-            }.start ();
-
-            PanelRun panelRun = (PanelRun) mtp.selectTab ("Runs");
-            mtp.setPreferredFocus (panelRun, panelRun.tree);
-            panelRun.addNewRun (job);
+            launchJob ();
         }
     };
+
+    public void launchJob ()
+    {
+        if (record == null) return;
+        prepareForTabChange ();
+
+        String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.
+        final Backend simulator = Backend.getBackend (simulatorName);
+        String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
+        final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
+        job.merge (root.source);
+        job.set (record.key (), "$inherit");
+        ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
+
+        new Thread ()
+        {
+            public void run ()
+            {
+                // Simulator should record all errors/warnings to a file in the job dir.
+                // If this thread throws an untrapped exception, then there is something wrong with the implementation.
+                simulator.start (job);
+            }
+        }.start ();
+
+        MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
+        PanelRun panelRun = (PanelRun) mtp.selectTab ("Runs");
+        mtp.setPreferredFocus (panelRun, panelRun.tree);
+        panelRun.addNewRun (job);
+    }
+
+    public void prepareForTabChange ()
+    {
+        if (! isEditing ()) return;
+        stopEditing ();
+        // The following is needed because graph node components (title or tree) do not reclaim the focus before it shifts to the run tab.
+        GraphNode gn = active.root.graph;
+        MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
+        if (gn != null  &&  gn.titleFocused) mtp.setPreferredFocus (PanelModel.instance, gn.title);
+        else                                 mtp.setPreferredFocus (PanelModel.instance, active.tree);
+    }
 
     ActionListener listenerStudy = new ActionListener ()
     {
@@ -1038,16 +1047,12 @@ public class PanelEquations extends JPanel
         {
             if (record == null) return;
             if (! buttonRun.isEnabled ()) return;  // Don't start a new study until we can also start new runs.
-            if (! record.containsKey ("study")) return;  // Only a heuristic. Presence of "study" does not guarantee a study, but absence of the key guarantees not a study.
-
-            MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
-            if (isEditing ())
+            if (! record.containsKey ("study"))  // Only a heuristic. Presence of "study" does not guarantee a study, but absence guarantees not a study.
             {
-                stopEditing ();
-                GraphNode gn = active.root.graph;
-                if (gn != null  &&  gn.titleFocused) mtp.setPreferredFocus (PanelModel.instance, gn.title);
-                else                                 mtp.setPreferredFocus (PanelModel.instance, active.tree);
+                launchJob ();
+                return;
             }
+            prepareForTabChange ();
 
             String key = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
             MDoc study = (MDoc) AppData.studies.childOrCreate (key);
@@ -1060,6 +1065,7 @@ public class PanelEquations extends JPanel
             model.set (record.key (), "$inherit");
             model.save ();
 
+            MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
             PanelStudy panelStudy = (PanelStudy) mtp.selectTab ("Studies");
             mtp.setPreferredFocus (panelStudy, panelStudy.list);
             panelStudy.addNewStudy (study);
