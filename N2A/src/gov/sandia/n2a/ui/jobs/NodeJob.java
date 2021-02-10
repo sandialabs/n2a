@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -29,6 +29,7 @@ import gov.sandia.n2a.execenvs.Remote;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.studies.PanelStudy;
 
 import javax.imageio.ImageIO;
 import javax.swing.Icon;
@@ -40,11 +41,11 @@ import javax.swing.tree.TreePath;
 @SuppressWarnings("serial")
 public class NodeJob extends NodeBase
 {
-    protected static ImageIcon iconComplete  = ImageUtil.getImage ("complete.gif");
-    protected static ImageIcon iconUnknown   = ImageUtil.getImage ("help.gif");
-    protected static ImageIcon iconFailed    = ImageUtil.getImage ("remove.gif");
-    protected static ImageIcon iconLingering = ImageUtil.getImage ("lingering.png");
-    protected static ImageIcon iconStopped   = ImageUtil.getImage ("stop.gif");
+    public static final ImageIcon iconComplete  = ImageUtil.getImage ("complete.gif");
+    public static final ImageIcon iconUnknown   = ImageUtil.getImage ("help.gif");
+    public static final ImageIcon iconFailed    = ImageUtil.getImage ("remove.gif");
+    public static final ImageIcon iconLingering = ImageUtil.getImage ("lingering.png");
+    public static final ImageIcon iconStopped   = ImageUtil.getImage ("stop.gif");
 
     protected static List<String> imageFileSuffixes = Arrays.asList (ImageIO.getReaderFileSuffixes ());  // We don't expect to load image handling plugins after startup, so one-time initialization is fine.
 
@@ -108,15 +109,6 @@ public class NodeJob extends NodeBase
         MNode source = getSource ();
         inherit = source.getOrDefault (key, "$inherit").split (",", 2)[0].replace ("\"", "");
         setUserObject (inherit);
-        EventQueue.invokeLater (new Runnable ()
-        {
-            public void run ()
-            {
-                PanelRun panel = PanelRun.instance;
-                panel.model.nodeChanged (NodeJob.this);
-                panel.tree.paintImmediately (panel.tree.getPathBounds (new TreePath (NodeJob.this.getPath ())));
-            }
-        });
 
         // Lightweight evaluation of local "finished" file.
         // This slows down the initial load, but also makes the user more comfortable by showing status
@@ -124,6 +116,15 @@ public class NodeJob extends NodeBase
         Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
         Path finished = localJobDir.resolve ("finished");
         if (Files.exists (finished)) checkFinished (finished);
+
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                PanelRun panel = PanelRun.instance;
+                panel.model.nodeChanged (NodeJob.this);
+            }
+        });
 
         Host env = Host.get (source);
         synchronized (env.running) {env.running.add (this);};
@@ -233,37 +234,41 @@ public class NodeJob extends NodeBase
             catch (Exception e) {}
         }
 
-        PanelRun panel = PanelRun.instance;
+        PanelRun   panelRun   = PanelRun.instance;
+        PanelStudy panelStudy = PanelStudy.instance;
         if (complete != oldComplete)
         {
             EventQueue.invokeLater (new Runnable ()
             {
                 public void run ()
                 {
-                    panel.model.nodeChanged (NodeJob.this);
-                    if (panel.displayNode == NodeJob.this)
+                    panelRun.model.nodeChanged (NodeJob.this);
+                    if (panelRun.displayNode == NodeJob.this)
                     {
-                        panel.buttonStop.setEnabled (complete < 1  ||  complete == 3);
-                        panel.viewJob ();
+                        panelRun.buttonStop.setEnabled (complete < 1  ||  complete == 3);
+                        panelRun.viewJob ();
                     }
-                    else if (panel.displayNode instanceof NodeFile  &&  panel.displayNode.getParent () == NodeJob.this)
+                    else if (panelRun.displayNode instanceof NodeFile  &&  panelRun.displayNode.getParent () == NodeJob.this)
                     {
-                        panel.buttonStop.setEnabled (complete < 1  ||  complete == 3);
+                        panelRun.buttonStop.setEnabled (complete < 1  ||  complete == 3);
                         // Update the display every 5 seconds during the run.
                         // Some displays, such as a chart, could take longer than 5s to construct, so don't interrupt those.
                         // Always update the display when a run finishes.
                         long currentTime = System.currentTimeMillis ();
-                        if (complete >= 1  &&  complete != 3  ||  panel.displayThread == null  &&  currentTime - lastDisplay > 5000)
+                        if (complete >= 1  &&  complete != 3  ||  panelRun.displayThread == null  &&  currentTime - lastDisplay > 5000)
                         {
                             lastDisplay = currentTime;
-                            panel.viewFile (false);
+                            panelRun.viewFile (false);
                         }
                     }
+
+                    // Also update corresponding entry in Study panel, if visible.
+                    panelStudy.tableSamples.updateJob (key);
                 }
             });
         }
 
-        if (! panel.tree.isCollapsed (new TreePath (getPath ()))) build (panel.tree);
+        if (! panelRun.tree.isCollapsed (new TreePath (getPath ()))) build (panelRun.tree);
     }
 
     public void stop ()

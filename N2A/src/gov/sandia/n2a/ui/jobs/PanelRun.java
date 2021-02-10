@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -39,8 +39,10 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import javax.swing.Box;
@@ -81,17 +83,18 @@ public class PanelRun extends JPanel
     public JTree            tree;
     public JScrollPane      treePane;
 
-    public JButton            buttonStop;
-    public JPopupMenu         menuHost;
-    public long               menuCanceledAt;
-    public ButtonGroup        buttons;
-    public JComboBox<String>  comboScript;
-    public JTextArea          displayText;
-    public PanelChart         displayChart = new PanelChart ();
-    public JScrollPane        displayPane = new JScrollPane ();
-    public DisplayThread      displayThread = null;
-    public NodeBase           displayNode = null;
-    public MDir               runs;  // Copied from AppData for convenience
+    public JButton             buttonStop;
+    public JPopupMenu          menuHost;
+    public long                menuCanceledAt;
+    public ButtonGroup         buttons;
+    public JComboBox<String>   comboScript;
+    public JTextArea           displayText;
+    public PanelChart          displayChart = new PanelChart ();
+    public JScrollPane         displayPane = new JScrollPane ();
+    public DisplayThread       displayThread = null;
+    public NodeBase            displayNode = null;
+    public MDir                runs;  // Copied from AppData for convenience
+    public Map<String,NodeJob> jobNodes = new HashMap<String,NodeJob> ();  // for quick lookup of job node based on job key.
 
     public static ImageIcon iconConnect    = ImageUtil.getImage ("connect.gif");
     public static ImageIcon iconPause      = ImageUtil.getImage ("pause-16.png");
@@ -207,7 +210,12 @@ public class PanelRun extends JPanel
                 // the go-ahead.
                 List<NodeJob> reverse = new ArrayList<NodeJob> (AppData.runs.size ());
                 for (MNode n : AppData.runs) reverse.add (new NodeJob (n, false));
-                for (int i = reverse.size () - 1; i >= 0; i--) root.add (reverse.get (i));  // Reverse the order, so later dates come first.
+                for (int i = reverse.size () - 1; i >= 0; i--)  // Reverse the order, so later dates come first.
+                {
+                    NodeJob n = reverse.get (i);
+                    root.add (n);
+                    jobNodes.put (n.key, n);
+                }
                 EventQueue.invokeLater (new Runnable ()
                 {
                     public void run ()
@@ -810,13 +818,13 @@ public class PanelRun extends JPanel
         StringBuilder contents = new StringBuilder ();
         contents.append ("Status:");
         NodeJob jobNode = (NodeJob) displayNode;
-        if      (jobNode.complete < 0)                       contents.append (" Waiting");
-        else if (jobNode.complete == 0)                      contents.append (" Started");
+        if      (jobNode.complete < 0)                           contents.append (" Waiting");
+        else if (jobNode.complete == 0)                          contents.append (" Started");
         else if (jobNode.complete > 0  &&  jobNode.complete < 1) contents.append (" " + Math.round (jobNode.complete * 100) + "%");
-        else if (jobNode.complete == 1)                      contents.append (" Success");
-        else if (jobNode.complete == 3)                      contents.append (" Killed (lingering)");
-        else if (jobNode.complete == 4)                      contents.append (" Killed");
-        else                                             contents.append (" Failed");  // complete==2, or any value not specified above
+        else if (jobNode.complete == 1)                          contents.append (" Success");
+        else if (jobNode.complete == 3)                          contents.append (" Killed (lingering)");
+        else if (jobNode.complete == 4)                          contents.append (" Killed");
+        else                                                     contents.append (" Failed");  // complete==2, or any value not specified above
         contents.append ("\n");
         if (jobNode.dateStarted  != null) contents.append ("  started:  " + jobNode.dateStarted  + "\n");
         if (jobNode.dateFinished != null) contents.append ("  finished: " + jobNode.dateFinished + "\n");
@@ -955,16 +963,9 @@ public class PanelRun extends JPanel
                     {
                         NodeJob job = (NodeJob) node;
                         synchronized (job) {job.deleted = true;}  // Signal the monitor thread to drop this job.
+                        synchronized (jobNodes) {jobNodes.remove (job.key);}
 
                         MDoc doc = (MDoc) job.getSource ();
-                        if (job.complete < 1  ||  job.complete == 3)
-                        {
-                            // It's important that the job not have resources locked in the directory when we try to delete it.
-                            // If the job is still running, downgrade the delete request to a kill request.
-                            // The user will have to hit delete again, once the job dies.
-                            job.stop ();
-                            return;
-                        }
                         doc.delete ();  // deletes local job directory
                         Host env = Host.get (doc);
                         if (env instanceof Remote)
@@ -1018,6 +1019,7 @@ public class PanelRun extends JPanel
         node.inherit = run.getOrDefault (node.key, "$inherit").split (",", 2)[0].replace ("\"", "");
         node.setUserObject (node.inherit);
 
+        synchronized (jobNodes) {jobNodes.put (node.key, node);}
         model.insertNodeInto (node, root, 0);  // Since this always executes on event dispatch thread, it will not conflict with other code that accesses model.
         if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, we need to give the JTree a little extra kick to get started.
         tree.expandRow (0);

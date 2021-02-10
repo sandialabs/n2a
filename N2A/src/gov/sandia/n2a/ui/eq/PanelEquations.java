@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -43,7 +43,6 @@ import java.io.PrintStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -86,6 +85,7 @@ import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
+import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
@@ -1056,14 +1056,38 @@ public class PanelEquations extends JPanel
 
             String key = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
             MDoc study = (MDoc) AppData.studies.childOrCreate (key);
-            study.set (record.key (), "$inherit");  // So we don't have to open model later for just this info.
-            study.save ();
+            study.set (record.key (), "$inherit");
+            study.set (root.source.childOrEmpty ("$metadata", "study"), "config");  // Copy top-level study tag (general parameters controlling study).
+            // Collect study tags
+            root.source.visit (new Visitor ()
+            {
+                public boolean visit (MNode n)
+                {
+                    if (! n.key ().equals ("study")) return true;
+                    String[] keyPath = n.keyPath ();
+                    int i = keyPath.length - 1;  // Search backwards because "$metadata" is more likely to be immediate parent of "study".
+                    for (; i >= 0; i--) if (keyPath[i].equals ("$metadata")) break;
+                    if (i < 0) return true;  // move along, nothing to see here
 
-            Path studyDir = Paths.get (study.get ()).getParent ();
-            MDoc model = new MDoc (studyDir.resolve ("model"));
-            model.merge (root.source);
-            model.set (record.key (), "$inherit");
-            model.save ();
+                    List<String> keys = new ArrayList<String> (keyPath.length);
+                    keys.add ("variables");
+                    if (i == keyPath.length - 2)  // immediate parent
+                    {
+                        if (keyPath.length < 3) return true;  // This is the top-level metadata block, so ignore study. It contains general parameters, rather than tagging a variable.
+                        for (int j = 0; j < keyPath.length - 2; j++) keys.add (keyPath[j]);  // skip up to the parent of $metadata, which should be a variable
+                    }
+                    else  // more distant parent, so a metadata key is the item to be iterated, rather than a variable
+                    {
+                        for (int j = 0; j < keyPath.length - 1; j++) keys.add (keyPath[j]);
+                    }
+                    keyPath = keys.toArray (new String[keys.size ()]);
+
+                    study.set (n, keyPath);  // Save entire subtree under n, if it exists.
+                    if (! study.data (keyPath)) study.set ("", keyPath);  // ensure node is defined so it can indicate the study variable
+                    return false;  // Don't descend after finding a study tag.
+                }
+            });
+            study.save ();
 
             MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
             PanelStudy panelStudy = (PanelStudy) mtp.selectTab ("Studies");

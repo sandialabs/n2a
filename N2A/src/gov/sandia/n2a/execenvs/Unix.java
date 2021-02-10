@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -192,30 +192,98 @@ public class Unix extends Host
     }
 
     @Override
-    public long getMemoryPhysicalTotal ()
+    public long getMemoryTotal ()
     {
-        // TODO
+        try (AnyProcess proc = build ("cat", "/proc/meminfo").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                if (! line.startsWith ("MemTotal:")) continue;
+                String[] parts = line.trim ().split ("\\s+");
+                return Long.parseLong (parts[1]) * 1024;  // assumes "kB" is unit
+            }
+        }
+        catch (Exception e) {}
         return 0;
     }
 
     @Override
-    public long getMemoryPhysicalFree ()
+    public long getMemoryFree ()
     {
-        // TODO
+        try (AnyProcess proc = build ("cat", "/proc/meminfo").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                if (! line.startsWith ("MemAvailable:")) continue;
+                String[] parts = line.trim ().split ("\\s+");
+                return Long.parseLong (parts[1]) * 1024;
+            }
+        }
+        catch (Exception e) {}
         return 0;
     }
 
     @Override
     public int getProcessorTotal ()
     {
-        // TODO
-        return 0;
+        try (AnyProcess proc = build ("nproc").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            String line = reader.readLine ();
+            return Integer.parseInt (line);
+        }
+        catch (Exception e) {}
+        return 1;
     }
 
     @Override
-    public double getProcessorLoad ()
+    public double getProcessorIdle ()
     {
-        // TODO
-        return 0;
+        // Approach: Read /proc/stat twice and use differences in jiffy count to determine idle time.
+        long deltaTotal = 1;
+        long deltaIdle  = 1;
+        try (AnyProcess proc = build ("head", "-1", "/proc/stat").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            String line = reader.readLine ();
+            String[] pieces = line.split ("\\s+");
+            long user   = Long.parseLong (pieces[1]);
+            long system = Long.parseLong (pieces[3]);
+            long idle   = Long.parseLong (pieces[4]);
+            deltaTotal = -user - system - idle;
+            deltaIdle  = -idle;
+        }
+        catch (Exception e) {}
+
+        // Fetch number of processors, then fill out remaining time to get 1 second delay between readings.
+        long startTime = System.currentTimeMillis ();
+        int nproc = getProcessorTotal ();
+        long duration = System.currentTimeMillis () - startTime;
+        long wait = 1000 - duration;  // target is 1 second
+        if (wait > 0)
+        {
+            try {Thread.sleep (wait);}
+            catch (InterruptedException e) {}
+        }
+
+        try (AnyProcess proc = build ("head", "-1", "/proc/stat").start ();
+             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            String line = reader.readLine ();
+            String[] pieces = line.split ("\\s+");
+            long user   = Long.parseLong (pieces[1]);
+            long system = Long.parseLong (pieces[3]);
+            long idle   = Long.parseLong (pieces[4]);
+            deltaTotal += user + system + idle;
+            deltaIdle  += idle;
+        }
+        catch (Exception e) {}
+
+        double idle = (double) deltaIdle / deltaTotal;
+        return nproc * idle;
     }
 }

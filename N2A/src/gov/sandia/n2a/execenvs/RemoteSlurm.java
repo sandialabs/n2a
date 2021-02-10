@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -147,13 +147,13 @@ public class RemoteSlurm extends RemoteUnix
     // these can be modified to produce more useful numbers.
 
     @Override
-    public long getMemoryPhysicalTotal ()
+    public long getMemoryTotal ()
     {
         return Long.MAX_VALUE;
     }
 
     @Override
-    public long getMemoryPhysicalFree ()
+    public long getMemoryFree ()
     {
         return Long.MAX_VALUE;
     }
@@ -167,7 +167,7 @@ public class RemoteSlurm extends RemoteUnix
     }
 
     @Override
-    public double getProcessorLoad ()
+    public double getProcessorIdle ()
     {
         // Return the number of jobs currently waiting in queue.
         // For simplicity, count any job owned by the current user.
@@ -181,6 +181,6 @@ public class RemoteSlurm extends RemoteUnix
             }
         }
         catch (Exception e) {}
-        return waiting;
+        return getProcessorTotal () - waiting;
     }
 }

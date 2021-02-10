@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -108,8 +108,8 @@ public abstract class Backend implements ExtensionPoint
             int processCount = procs.size ();
             if (processCount == 0)
             {
-                cpuNeeded    = 1;                   // Must have at least 1 core available to launch process.
-                memoryNeeded = 1024 * 1024 * 1024;  // Must have at least 1GiB available.
+                cpuNeeded    = 1;         // Must have at least 1 core available to launch process.
+                memoryNeeded = 0x1 << 30; // Must have at least 1GiB available.
             }
             else
             {
@@ -119,11 +119,8 @@ public abstract class Backend implements ExtensionPoint
                 memoryNeeded /= processCount;
             }
 
-            double cpuAvailable = host.getProcessorTotal () - host.getProcessorLoad ();
-            if (cpuAvailable < cpuNeeded) return false;  // Not enough processor capacity for another job.
-
-            long memoryAvailable = host.getMemoryPhysicalFree ();
-            if (memoryAvailable < memoryNeeded) return false;
+            if (host.getProcessorIdle () < cpuNeeded) return false;
+            if (host.getMemoryFree () < memoryNeeded) return false;
         }
         catch (Exception e)
         {

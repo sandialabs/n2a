@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -530,7 +530,7 @@ public abstract class Host
         return path.toString ();
     }
 
-    public long getMemoryPhysicalTotal ()
+    public long getMemoryTotal ()
     {
         OperatingSystemMXBean OS = ManagementFactory.getOperatingSystemMXBean ();
         try
@@ -544,7 +544,7 @@ public abstract class Host
         }
     }
 
-    public long getMemoryPhysicalFree ()
+    public long getMemoryFree ()
     {
         OperatingSystemMXBean OS = ManagementFactory.getOperatingSystemMXBean ();
         try
@@ -564,18 +564,23 @@ public abstract class Host
         return Runtime.getRuntime ().availableProcessors ();
     }
 
-    public double getProcessorLoad ()
+    /**
+        @return Number of processors available to use. This is directly comparable to the result of getProcessorTotal().
+        If the system has 32 processors and they are all 75% idle, then the return value is 24.0.
+    **/
+    public double getProcessorIdle ()
     {
+        int nproc = getProcessorTotal ();
         OperatingSystemMXBean OS = ManagementFactory.getOperatingSystemMXBean ();
         try
         {
-            return (Double) invoke (OS, "getSystemCpuLoad");
+            return nproc - (Double) invoke (OS, "getSystemCpuLoad");
         }
         catch (Exception e)
         {
             // Fallback: use a function from the general interface, rather than hoping for
             // a com.sun implementation.
-            return OS.getSystemLoadAverage ();  // TODO: known to fail on Windows
+            return nproc - Math.max (0, OS.getSystemLoadAverage ());  // TODO: known to fail on Windows
         }
     }
 
