@@ -1,5 +1,5 @@
 /*
-Copyright 2015-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2015-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -34,7 +34,6 @@ import java.util.Map;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -1416,17 +1415,15 @@ public class InternalBackendData
     **/
     public ArrayList<Object> translateResolution (ArrayList<Object> resolution, EquationSet current)
     {
-        ArrayList<Object> newResolution = new ArrayList<Object> ();
-        Iterator<Object> it = resolution.iterator ();
-        while (it.hasNext ())
+        ArrayList<Object> result = new ArrayList<Object> ();
+        for (Object o : resolution)
         {
-            Object o = it.next ();
             if (o instanceof EquationSet)  // We are following the containment hierarchy.
             {
                 EquationSet next = (EquationSet) o;
                 if (next == current.container)  // ascend to our container
                 {
-                    newResolution.add (new ResolveContainer ());
+                    result.add (new ResolveContainer ());
                 }
                 else  // descend to one of our contained populations
                 {
@@ -1438,7 +1435,7 @@ public class InternalBackendData
                         ps.println ("This indicates a bug in the compiler. Please report it to the support email address given on the Settings:About page.");
                         throw new Backend.AbortRun ();
                     }
-                    newResolution.add (new ResolvePart (i));
+                    result.add (new ResolvePart (i));
                 }
                 current = next;
             }
@@ -1446,11 +1443,11 @@ public class InternalBackendData
             {
                 ConnectionBinding c = (ConnectionBinding) o;
                 InternalBackendData bed = (InternalBackendData) current.backendData;
-                newResolution.add (new ResolvePart (bed.endpoints + c.index));
+                result.add (new ResolvePart (bed.endpoints + c.index));
                 current = c.endpoint;
             }
         }
-        return newResolution;
+        return result;
     }
 
     public void dump ()

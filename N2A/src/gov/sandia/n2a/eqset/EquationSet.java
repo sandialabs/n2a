@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1451,6 +1451,8 @@ public class EquationSet implements Comparable<EquationSet>
                 return container.resolveEquationSet (v, create);
             }
 
+            if (v.name.equals ("$count")) return this;  // "this" is the endpoint that accounts for the number of connections. Presumably, the connection itself was the previous part visited.
+
             // $variables are always treated as local. For example, you would never want to inherit $n from a container!
             if (variables.contains (v)) return this;
             if (! create) return null;
@@ -1473,7 +1475,7 @@ public class EquationSet implements Comparable<EquationSet>
             || v.name.endsWith (".$project")
             || v.name.endsWith (".$radius"))
         {
-            return this;
+            return this;  // "this" is the connection part itself, while the variable is munged to include the alias of the target part
         }
 
         // Check namespace references.
@@ -1690,21 +1692,28 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     AccessVariable av = (AccessVariable) op;
                     Variable query = new Variable (av.getName (), av.getOrder ());
-                    query.reference = new VariableReference ();
-                    EquationSet dest = resolveEquationSet (query, false);
+                    VariableReference r = new VariableReference ();
+                    query.reference = r;
+                    av   .reference = r;
+                    EquationSet dest = resolveEquationSet (query, false);  // modifies "r" with actual resolution path
+                    r.removeLoops ();
+                    r.addDependencies (from);  // dependencies from "from" to each part in the resolution path
+
                     if (dest == null)
                     {
+                        System.out.println ("null dest");
                         unresolved.add (new UnresolvedVariable (av.name, fromName ()));
                     }
                     else
                     {
-                        query.reference.variable = dest.find (query);
-                        if (query.reference.variable == null)
+                        r.variable = dest.find (query);  // "query" contains the modified variable name, needed for lookup within "dest"
+                        if (r.variable == null)
                         {
+                            System.out.println ("null query: " + query.name);
                             if (query.hasAttribute ("instance"))
                             {
                                 // Configure reference to destination container itself.
-                                query.reference.variable = query;  // Recycle the query variable as a pseudo target (one that doesn't actually exist in the container).
+                                r.variable = query;  // Recycle the query variable as a pseudo target (one that doesn't actually exist in the container).
                                 query.container = dest;
                                 query.equations = new TreeSet<EquationEntry> ();
                                 query.type = new Instance ();
@@ -1712,22 +1721,33 @@ public class EquationSet implements Comparable<EquationSet>
                             }
                             else if (query.name.equals ("$count"))  // accountable endpoint
                             {
-                                if (dest.accountableConnections == null) dest.accountableConnections = new TreeSet<AccountableConnection> ();
-                                String alias = av.name.split ("\\.", 2)[0];
-                                AccountableConnection ac = new AccountableConnection (EquationSet.this, alias);
-                                if (! dest.accountableConnections.add (ac)) ac = dest.accountableConnections.floor (ac);
-                                if (ac.count == null)
+                                int last = r.resolution.size () - 1;
+                                Object o = null;
+                                if (last >= 0) o = r.resolution.get (last);
+                                if (! (o instanceof ConnectionBinding))
                                 {
-                                    // Create a fully-functional variable.
-                                    // However, it never gets formally added to dest, because dest should never evaluate it.
-                                    // Rather, it is maintained by the backend's connection system.
-                                    ac.count = new Variable (prefix () + ".$count");
-                                    ac.count.type = new Scalar (0);
-                                    ac.count.container = dest;
-                                    ac.count.equations = new TreeSet<EquationEntry> ();
-                                    ac.count.reference = query.reference;
+                                    unresolved.add (new UnresolvedVariable (av.name, fromName ()));
                                 }
-                                query.reference.variable = ac.count;
+                                else
+                                {
+                                    ConnectionBinding cb = (ConnectionBinding) o;
+                                    if (dest.accountableConnections == null) dest.accountableConnections = new TreeSet<AccountableConnection> ();
+                                    AccountableConnection ac = new AccountableConnection (r.penultimateContainer (EquationSet.this), cb.alias);
+                                    if (! dest.accountableConnections.add (ac)) ac = dest.accountableConnections.floor (ac);
+                                    if (ac.count == null)
+                                    {
+                                        // Create a fully-functional variable.
+                                        // However, it never gets formally added to dest, because dest should never evaluate it.
+                                        // Rather, it is maintained by the backend's connection system.
+                                        ac.count = new Variable (prefix () + ".$count");
+                                        ac.count.type = new Scalar (0);
+                                        ac.count.container = dest;
+                                        ac.count.equations = new TreeSet<EquationEntry> ();
+                                        ac.count.reference = new VariableReference ();
+                                        ac.count.reference.variable = ac.count;
+                                    }
+                                    r.variable = ac.count;
+                                }
                             }
                             else
                             {
@@ -1736,13 +1756,8 @@ public class EquationSet implements Comparable<EquationSet>
                         }
                         else
                         {
-                            Variable target = query.reference.variable;
-                            from.addDependencyOn (target);
+                            from.addDependencyOn (r.variable);
                         }
-
-                        av.reference = query.reference;
-                        av.reference.removeLoops ();
-                        av.reference.addDependencies (from);
                     }
                     return false;
                 }

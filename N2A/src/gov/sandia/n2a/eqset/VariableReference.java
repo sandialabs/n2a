@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -128,6 +128,29 @@ public class VariableReference implements Comparable<VariableReference>
         if (count > 1) mergeResolutionPaths (newResolution, resolution.subList (1, count));
         resolution = newResolution;
         addDependencies (v);
+    }
+
+    /**
+        Walks the resolution path and determines what container we are in just before applying
+        the nth step.
+        @param start Container we are in before first step of resolution.
+        @param n Step at which to stop resolution and return current container.
+    **/
+    public EquationSet containerAt (EquationSet start, int n)
+    {
+        n = Math.min (n, resolution.size ());
+        for (int i = 0; i < n; i++)
+        {
+            Object o = resolution.get (i);
+            if (o instanceof EquationSet) start = (EquationSet) o;
+            else if (o instanceof ConnectionBinding) start = ((ConnectionBinding) o).endpoint;
+        }
+        return start;
+    }
+
+    public EquationSet penultimateContainer (EquationSet start)
+    {
+        return containerAt (start, resolution.size () - 1);
     }
 
     public String dumpResolution ()
