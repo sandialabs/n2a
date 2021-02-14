@@ -806,26 +806,28 @@ public class PanelEquations extends JPanel
         {
             String type = e.getActionCommand ();
             Point location = null;
-            boolean addPeerPart = false;
+            GraphPanel gp = panelEquationGraph.graphPanel;
             if (e.getSource () == itemAddPart)
             {
                 Component invoker = menuPopup.getInvoker ();
-                GraphPanel gp = panelEquationGraph.graphPanel;
                 if (invoker == gp)
                 {
                     location = gp.popupLocation;
                     location.x -= gp.offset.x;
                     location.y -= gp.offset.y;
                 }
-                else if (invoker instanceof GraphNode.TitleRenderer)
-                {
-                    // To be strictly consistent, adding a variable (or other non-part type) on a closed
-                    // node should put it in the parent. However, it seems more likely that the
-                    // user expects it to go into the selected graph node, even if closed. OTOH,
-                    // inserting a part on a closed node should always go to the parent.
-                    addPeerPart =  ! active.root.graph.open  &&  type.equals ("Part");
-                }
             }
+            // To be strictly consistent, adding a variable (or other non-part type) on a closed
+            // node should put it in the parent. However, it seems more likely that the
+            // user expects it to go into the selected graph node, even if closed. OTOH,
+            // inserting a part on a closed node should always go to the parent.
+            if (type.equals ("Part")  &&  location == null  &&  active != null  &&  active.root.graph != null  &&  ! active.root.graph.open)
+            {
+                location = active.root.graph.getLocation ();
+                location.x += 100 - gp.offset.x;
+                location.y += 100 - gp.offset.y;
+            }
+
             if (record == null)
             {
                 AddDoc add = new AddDoc ();
@@ -839,7 +841,7 @@ public class PanelEquations extends JPanel
                 if (locked) return;
             }
 
-            if (active == null  ||  location != null  ||  addPeerPart)
+            if (active == null  ||  location != null)
             {
                 JTree tree = null;
                 if (view == NODE) tree = panelParent.panelEquationTree.tree;
@@ -1025,9 +1027,9 @@ public class PanelEquations extends JPanel
         }.start ();
 
         MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
-        PanelRun panelRun = (PanelRun) mtp.selectTab ("Runs");
-        mtp.setPreferredFocus (panelRun, panelRun.tree);
-        panelRun.addNewRun (job);
+        mtp.setPreferredFocus (PanelRun.instance, PanelRun.instance.tree);
+        mtp.selectTab ("Runs");
+        PanelRun.instance.addNewRun (job);
     }
 
     public void prepareForTabChange ()
@@ -1090,9 +1092,9 @@ public class PanelEquations extends JPanel
             study.save ();
 
             MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
-            PanelStudy panelStudy = (PanelStudy) mtp.selectTab ("Studies");
-            mtp.setPreferredFocus (panelStudy, panelStudy.list);
-            panelStudy.addNewStudy (study);
+            mtp.setPreferredFocus (PanelStudy.instance, PanelStudy.instance.list);
+            mtp.selectTab ("Studies");
+            PanelStudy.instance.addNewStudy (study);
         }
     };
 
