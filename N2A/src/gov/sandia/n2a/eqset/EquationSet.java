@@ -1701,7 +1701,6 @@ public class EquationSet implements Comparable<EquationSet>
 
                     if (dest == null)
                     {
-                        System.out.println ("null dest");
                         unresolved.add (new UnresolvedVariable (av.name, fromName ()));
                     }
                     else
@@ -1709,7 +1708,6 @@ public class EquationSet implements Comparable<EquationSet>
                         r.variable = dest.find (query);  // "query" contains the modified variable name, needed for lookup within "dest"
                         if (r.variable == null)
                         {
-                            System.out.println ("null query: " + query.name);
                             if (query.hasAttribute ("instance"))
                             {
                                 // Configure reference to destination container itself.

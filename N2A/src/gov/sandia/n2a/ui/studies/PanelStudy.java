@@ -236,6 +236,7 @@ public class PanelStudy extends JPanel
 
         tableSamples.changeStudy ();
         buttonPause.setEnabled (displayStudy != null  &&  displayStudy.complete () < 1);
+        if (displayStudy == null) labelStatus.setText ("");
     }
 
     /**
@@ -283,7 +284,6 @@ public class PanelStudy extends JPanel
 
         model.add (0, study);  // Since this always executes on event dispatch thread, it will not conflict with other code that accesses model.
         list.setSelectedValue (study, true);  // Should trigger call of view() via selection listener.
-        //list.requestFocusInWindow ();
     }
 
     public class Study
@@ -393,7 +393,7 @@ public class PanelStudy extends JPanel
 
         public float complete ()
         {
-            if (count == 0) return 1;  // Nothing to do, so we are done. This happens when study turns out to be vacuous.
+            if (count == 0) return 0;
             return (float) index / count;
         }
 
@@ -401,6 +401,7 @@ public class PanelStudy extends JPanel
         {
             if (! source.get ("finished").isEmpty ()) return iconComplete;
             if (source.getFlag ("pause")) return iconPause;
+            if (count == 0) return NodeJob.iconUnknown;
             return Utility.makeProgressIcon (complete ());
         }
 
@@ -411,8 +412,9 @@ public class PanelStudy extends JPanel
 
         public class StudyThread extends Thread
         {
-            public boolean stop;
-            public long    startTime;
+            public boolean        stop;
+            public long           startTime;
+            public Map<Host,Long> hostTime = new HashMap<Host,Long> ();
 
             public StudyThread ()
             {
@@ -533,7 +535,13 @@ public class PanelStudy extends JPanel
                                 break;
                             }
                         }
-                        if (chosenHost != null)
+                        if (chosenHost == null)
+                        {
+                            // Wait 1 second before re-polling host(s).
+                            try {sleep (1000);}
+                            catch (InterruptedException e) {}
+                        }
+                        else
                         {
                             // Launch job and maintain all records
                             // See PanelEquations.listenerRun for similar code.
@@ -543,6 +551,20 @@ public class PanelStudy extends JPanel
                             job.set (inherit,         "$inherit");
                             job.set (chosenHost.name, "$metadata", "host");
                             ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
+                            jobIndex.put (jobKey, index);
+                            source.set (jobKey, "jobs", index++);
+
+                            // Throttle runs on the same host, so each has time to allocate resources
+                            // before the next one starts.
+                            Long previous = hostTime.get (chosenHost);
+                            if (previous != null)
+                            {
+                                long elapsed = System.currentTimeMillis () - previous;
+                                long wait = 1000 - elapsed;
+                                try {if (wait > 0) sleep (wait);}
+                                catch (InterruptedException e) {}
+                            }
+                            hostTime.put (chosenHost, System.currentTimeMillis ());
 
                             Thread thread = new Thread ()
                             {
@@ -554,8 +576,6 @@ public class PanelStudy extends JPanel
                             thread.setDaemon (true);
                             thread.start ();
 
-                            jobIndex.put (jobKey, index);
-                            source.set (jobKey, "jobs", index++);
                             EventQueue.invokeLater (new Runnable ()
                             {
                                 public void run ()
@@ -565,18 +585,9 @@ public class PanelStudy extends JPanel
                                 }
                             });
 
-                            break;  // Skips the next call to sleep().
+                            break;
                         }
-                        // Wait 1 second before re-polling host(s).
-                        try {sleep (1000);}
-                        catch (InterruptedException e) {}
                     }
-
-                    // Wait 1 second between launching jobs. This is mainly to give jobs that
-                    // share the same host some time allocate resources, so that we know they
-                    // are in use when deciding to launch more processes.
-                    try {if (! stop) sleep (1000);}
-                    catch (InterruptedException e) {}
                 }
 
                 long now = System.currentTimeMillis ();
@@ -622,6 +633,7 @@ public class PanelStudy extends JPanel
                     public void run ()
                     {
                         int row = model.indexOf (Study.this);
+                        if (row < 0) return;  // Could be negative if row no longer exists, such as during delete.
                         list.repaint (list.getCellBounds (row, row));
                     }
                 });

@@ -1025,7 +1025,6 @@ public class PanelRun extends JPanel
         tree.expandRow (0);
         tree.setSelectionRow (0);
         tree.scrollRowToVisible (0);
-        tree.requestFocusInWindow ();
 
         Host env = Host.get (run);
         synchronized (env.running) {env.running.add (node);}

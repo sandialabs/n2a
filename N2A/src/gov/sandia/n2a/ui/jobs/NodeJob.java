@@ -27,6 +27,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.execenvs.Remote;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.studies.PanelStudy;
@@ -312,7 +313,7 @@ public class NodeJob extends NodeBase
         }
         catch (IOException e) {}
 
-        // Scan remote job dir. Because this is done second, it takes lower precedence relative to local files.
+        // Scan remote job dir. Because this is done second, remote files take lower precedence than local files.
         Host env = Host.get (source);
         if (env instanceof Remote)
         {
@@ -340,6 +341,13 @@ public class NodeJob extends NodeBase
 
         if (changed)
         {
+            if (MainFrame.instance.tabs.getSelectedComponent () != PanelRun.instance)
+            {
+                tryToSelectOutput = false;
+                selected = null;
+                if (getChildCount () == 0) tree.collapsePath (new TreePath (getPath ()));
+            }
+
             if (selected != null)
             {
                 if (selected instanceof NodeFile)
@@ -349,7 +357,7 @@ public class NodeJob extends NodeBase
                     else if (! ((NodeFile) selected).found) selected = parent;
                 }
 
-                // Try to select an output file when it first appears for the newest job, but only if the job is still selected. 
+                // Try to select an output file when it first appears for the newest job, but only if the job is still selected.
                 if (tryToSelectOutput  &&  selected == NodeJob.this  &&  selected == tree.getPathForRow (0).getLastPathComponent ())
                 {
                     NodeFile bestFile = null;
@@ -457,7 +465,7 @@ public class NodeJob extends NodeBase
         }
 
         existing.put (fileName, newNode);
-        newNode.found = true;  // So it won't get deleted below.
+        newNode.found = true;  // So it won't get deleted in build().
         return true;
     }
 }
