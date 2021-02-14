@@ -723,7 +723,7 @@ public abstract class Host
         // On Windows, the JVM sometimes holds file locks even after we close the file.
         // This can keep us from being able to delete directories.
         // Garbage collection helps reduce this problem, though it does not guarantee success.
-        System.gc ();
+        if (isWindows ()  &&  start.getFileSystem ().provider ().getScheme ().equals ("file")) System.gc ();
 
         try
         {
