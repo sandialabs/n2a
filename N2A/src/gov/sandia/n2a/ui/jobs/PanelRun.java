@@ -898,115 +898,181 @@ public class PanelRun extends JPanel
 
     public void delete ()
     {
+        int[] rows = tree.getSelectionRows ();
+        if (rows.length < 1) return;
         TreePath[] paths = tree.getSelectionPaths ();
-        if (paths.length < 1) return;
 
-        boolean nextSelectionIsParent = false;
-        NodeBase firstSelection = (NodeBase) paths[0             ].getLastPathComponent ();
-        NodeBase lastSelection  = (NodeBase) paths[paths.length-1].getLastPathComponent ();
-        NodeBase                   nextSelection = (NodeBase) lastSelection .getNextSibling ();
-        if (nextSelection == null) nextSelection = (NodeBase) firstSelection.getPreviousSibling ();
-        if (nextSelection == null)
+        // In some cases (such as ctrl-click), the rows may not be in ascending order.
+        int firstRow = rows[0];
+        int lastRow  = rows[rows.length-1];
+        for (int row : rows)
         {
-            nextSelection = (NodeBase) firstSelection.getParent ();  // could be root
-            nextSelectionIsParent = true;
+            firstRow = Math.min (firstRow, row);
+            lastRow  = Math.max (lastRow,  row);
         }
 
-        // Anything being displayed must also be a selected item, so always shut down the display thread.
-        synchronized (displayText)
+        NodeBase firstSelection = (NodeBase) tree.getPathForRow (firstRow).getLastPathComponent ();
+        NodeBase lastSelection  = (NodeBase) tree.getPathForRow (lastRow ).getLastPathComponent ();
+        NodeBase nextSelection = (NodeBase) lastSelection.getNextSibling ();
+        if (nextSelection != null)
         {
-            if (displayThread != null)
+            NodeBase parent = (NodeBase) nextSelection.getParent ();  // Could be root. Root is never selected, so the following test works correctly in that case.
+            if (tree.isPathSelected (new TreePath (parent.getPath ())))  // next sibling will also die, so need next sibling of parent.
             {
-                displayThread.stop = true;
-                displayThread = null;
+                nextSelection = (NodeBase) parent.getNextSibling ();
             }
-            displayNode = null;  // All access to this happens on EDT, so safe.
-            displayText.setText ("");
         }
-        if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
+        if (nextSelection == null) nextSelection = (NodeBase) firstSelection.getPreviousSibling ();  // If this exists, then it is guaranteed to continue to exist after deletion.
+        if (nextSelection == null) nextSelection = (NodeBase) firstSelection.getParent ();  // "firstSelection" could be first file under a job, or first job in tree. In the latter case, the tree will be empty after delete.
 
-        Set<NodeJob> parents = new HashSet<NodeJob> ();
-        for (TreePath path : paths)
+        if (nextSelection == root)  // Tree will be empty after delete.
         {
-            final NodeBase node = (NodeBase) path.getLastPathComponent ();
-            if (node instanceof NodeJob)
+            // Shut down the display thread.
+            synchronized (displayText)
             {
-                NodeJob job = (NodeJob) node;
-                parents.add (job);
-                synchronized (job)
+                if (displayThread != null)
                 {
-                    if (job.complete < 1  ||  job.complete == 3)
-                    {
-                        // It's important that the job not have resources locked in the directory when we try to delete it.
-                        // If the job is still running, downgrade the delete request to a kill request.
-                        // The user will have to hit delete again, once the job dies.
-                        job.stop ();
-                        continue;
-                    }
+                    displayThread.stop = true;
+                    displayThread = null;
                 }
+                displayNode = null;  // All access to this happens on EDT, so safe.
+                displayText.setText ("");
             }
-            else
-            {
-                if (parents.contains ((NodeJob) node.getParent ())) continue;
-            }
-            model.removeNodeFromParent (node);
-
-            // It may seem insane to start a separate thread for each path, but it actually makes sense
-            // to do all this work in parallel. In particular, if there are remote jobs, there may be
-            // some delay in confirming they are stopped. No reason to do that serially.
-            // The downside is that we could end up spawning thousands of threads at the same time.
-            new Thread ("PanelRun Delete")
-            {
-                public void run ()
-                {
-                    if (node instanceof NodeJob)
-                    {
-                        NodeJob job = (NodeJob) node;
-                        synchronized (job) {job.deleted = true;}  // Signal the monitor thread to drop this job.
-                        synchronized (jobNodes) {jobNodes.remove (job.key);}
-
-                        MDoc doc = (MDoc) job.getSource ();
-                        doc.delete ();  // deletes local job directory
-                        Host env = Host.get (doc);
-                        if (env instanceof Remote)
-                        {
-                            // We have already "forgotten" the job locally. If the remote files cannot be removed,
-                            // for example because the network is down, we leak disk space on the remote machine.
-                            // This creates a user-interface quandary. The user should be able to fully delete
-                            // local records, for example if the remote host has been permanently retired.
-                            // Yet there should be some way to indicate the unknown state of remote jobs.
-                            // A possible compromise is some utility (perhaps in Settings/Hosts) that lets
-                            // the user scan for zombie jobs and add a placeholder back into the local jobs list.
-                            try
-                            {
-                                Path resourceDir  = env.getResourceDir ();
-                                Path remoteJobDir = Host.getJobDir (resourceDir, doc);
-                                Host.deleteTree (remoteJobDir, true);
-                            }
-                            catch (Exception e) {}
-                        }
-                    }
-                    else if (node instanceof NodeFile)
-                    {
-                        try {Files.delete (((NodeFile) node).path);}
-                        catch (IOException e) {}
-                    }
-                };
-            }.start ();
+            if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
         }
-
-        if (nextSelectionIsParent  &&  nextSelection.getChildCount () > 0)
-        {
-            nextSelection = (NodeBase) nextSelection.getChildAt (0);
-        }
-        if (nextSelection != root)
+        else  // Set the new selection. This will not be touched by the delete process.
         {
             TreePath path = new TreePath (nextSelection.getPath ());
             tree.setSelectionPath (path);
             tree.scrollPathToVisible (path);
         }
 
-        tree.repaint (treePane.getViewport ().getViewRect ());
+        // Spawn the rest of the delete process off to a separate thread.
+        // The tree will be updated on the EDT as work progresses.
+        Thread deleteThread = new Thread ("Delete Jobs")
+        {
+            public void run ()
+            {
+                Set<NodeJob> parents = new HashSet<NodeJob> ();
+                for (TreePath path : paths)
+                {
+                    final NodeBase node = (NodeBase) path.getLastPathComponent ();
+                    if (node instanceof NodeJob)
+                    {
+                        NodeJob job = (NodeJob) node;
+                        parents.add (job);
+                        synchronized (job)
+                        {
+                            if (job.complete < 1  ||  job.complete == 3)
+                            {
+                                // It's important that the job not have resources locked in the directory when we try to delete it.
+                                // If the job is still running, downgrade the delete request to a kill request.
+                                // The user will have to hit delete again, once the job dies.
+                                job.stop ();
+                                continue;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (parents.contains ((NodeJob) node.getParent ())) continue;
+                    }
+
+                    // Show change to user immediately, so they won't be tempted to issue the delete again.
+                    EventQueue.invokeLater (new Runnable ()
+                    {
+                        public void run ()
+                        {
+                            model.removeNodeFromParent (node);
+                        }
+                    });
+
+                    NodeJob job;
+                    if (node instanceof NodeJob)
+                    {
+                        job = (NodeJob) node;
+                        synchronized (job) {job.deleted = true;}  // Signal the monitor thread to drop this job.
+                        synchronized (jobNodes) {jobNodes.remove (job.key);}
+                    }
+                    else
+                    {
+                        job = (NodeJob) node.getParent ();
+                    }
+                    MDoc doc = (MDoc) job.getSource ();
+                    Host env = Host.get (doc);
+
+                    if (env instanceof Remote)
+                    {
+                        // Use a thread for remote systems, because they may take a long time,
+                        // or even never finish.
+                        Thread remoteDeleteThread = new Thread ("Delete Remote Job")
+                        {
+                            public void run ()
+                            {
+                                try
+                                {
+                                    if (node instanceof NodeJob)
+                                    {
+                                        Path resourceDir  = env.getResourceDir ();
+                                        Path remoteJobDir = Host.getJobDir (resourceDir, doc);
+                                        Host.deleteTree (remoteJobDir, true);
+                                        doc.delete ();  // deletes local job directory
+                                    }
+                                    else if (node instanceof NodeFile)
+                                    {
+                                        NodeFile nf = (NodeFile) node;
+                                        MNode    js = job.getSource ();
+                                        String fileName = nf.path.getFileName ().toString ();
+                                        Path localFile  = Host.getJobDir (Host.getLocalResourceDir (), js).resolve (fileName);
+                                        Path remoteFile = Host.getJobDir (env.getResourceDir (),       js).resolve (fileName);
+
+                                        Host.deleteTree (remoteFile, true);  // In case this is a video directory rather than just a file, use deleteTree().
+                                        Host.deleteTree (localFile, true);
+
+                                        if (fileName.equals ("out"))  // also delete out.columns
+                                        {
+                                            localFile  = Host.getJobDir (Host.getLocalResourceDir (), js).resolve ("out.columns");
+                                            remoteFile = Host.getJobDir (env.getResourceDir (),       js).resolve ("out.columns");
+                                            Host.deleteTree (remoteFile, true);  // Even though this is definitely not a tree, it is still convenient to call deleteTre(), because it absorbs a lot of potential errors.
+                                            Host.deleteTree (localFile,  true);
+                                        }
+                                    }
+                                }
+                                catch (Exception e) {}
+                            };
+                        };
+                        remoteDeleteThread.setDaemon (true);
+                        remoteDeleteThread.start ();
+                    }
+                    else  // local job
+                    {
+                        try
+                        {
+                            if (node instanceof NodeJob)
+                            {
+                                doc.delete ();
+                            }
+                            else if (node instanceof NodeFile)
+                            {
+                                NodeFile nf = (NodeFile) node;
+                                Host.deleteTree (nf.path, true);
+
+                                String fileName = nf.path.getFileName ().toString ();
+                                if (fileName.equals ("out"))  // also delete out.columns
+                                {
+                                    MNode js = job.getSource ();
+                                    Path columns = Host.getJobDir (Host.getLocalResourceDir (), js).resolve ("out.columns");
+                                    Host.deleteTree (columns, true);
+                                }
+                            }
+                        }
+                        catch (Exception e) {}
+                    }
+                }
+            }
+        };
+        deleteThread.setDaemon (true);  // It's OK if this work is interrupted. Any undeleted item will simply show up in the tree on next launch, and the user can try again.
+        deleteThread.start ();
     }
 
     /**
