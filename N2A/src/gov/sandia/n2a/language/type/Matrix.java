@@ -598,6 +598,22 @@ public abstract class Matrix extends Type implements Holder
         return result;
     }
 
+    public double sumSquares ()
+    {
+        int w = columns ();
+        int h = rows ();
+        double result = 0;
+        for (int c = 0; c < w; c++)
+        {
+            for (int r = 0; r < h; r++)
+            {
+                double v = get (r, c);
+                result += v * v;
+            }
+        }
+        return result;
+    }
+
     public boolean betterThan (Type that)
     {
         if (that instanceof Matrix  ) return false;

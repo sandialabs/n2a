@@ -33,6 +33,7 @@ import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Rows;
 import gov.sandia.n2a.language.function.Sat;
 import gov.sandia.n2a.language.function.SquareRoot;
+import gov.sandia.n2a.language.function.SumSquares;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Add;
@@ -452,15 +453,6 @@ public class RendererC extends Renderer
             result.append (".rows ()");
             return true;
         }
-        if (op instanceof SquareRoot)
-        {
-            SquareRoot s = (SquareRoot) op;
-            Operator a = s.operands[0];
-            result.append ("sqrt (");
-            a.render (this);
-            if (useExponent) result.append (", " + a.exponentNext + ", " + s.exponentNext + ")");
-            return true;
-        }
         if (op instanceof Sat)
         {
             Sat s = (Sat) op;
@@ -485,6 +477,26 @@ public class RendererC extends Renderer
             appendType (a);
 
             result.append ("))");
+            return true;
+        }
+        if (op instanceof SquareRoot)
+        {
+            SquareRoot s = (SquareRoot) op;
+            Operator a = s.operands[0];
+            result.append ("sqrt (");
+            a.render (this);
+            if (useExponent) result.append (", " + a.exponentNext + ", " + s.exponentNext);
+            result.append (")");
+            return true;
+        }
+        if (op instanceof SumSquares)
+        {
+            SumSquares ss = (SumSquares) op;
+            Operator A = ss.operands[0];
+            result.append ("sumSquares (");
+            A.render (this);
+            if (useExponent) result.append (", " + A.exponentNext + ", " + ss.exponentNext);
+            result.append (")");
             return true;
         }
         if (op instanceof Tangent)

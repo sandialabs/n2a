@@ -34,6 +34,7 @@ import gov.sandia.n2a.language.function.Round;
 import gov.sandia.n2a.language.function.Signum;
 import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.SquareRoot;
+import gov.sandia.n2a.language.function.SumSquares;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.AND;
@@ -66,6 +67,7 @@ public class RendererCfp extends RendererC
         operatorsWithExponent.add (Power     .class);
         operatorsWithExponent.add (ReadMatrix.class);
         operatorsWithExponent.add (SquareRoot.class);
+        operatorsWithExponent.add (SumSquares.class);
         operatorsWithExponent.add (Tangent   .class);
         operatorsWithExponent.add (Uniform   .class);
     }

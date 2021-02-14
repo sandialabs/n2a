@@ -54,10 +54,11 @@ public:
 
 template<class T> class Matrix;
 
-template<class T> void      clear (      MatrixAbstract<T> & A, const T scalar = (T) 0);    ///< Set all elements to given value.
-template<class T> T         norm  (const MatrixAbstract<T> & A, T n);                       ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
-template<class T> Matrix<T> visit (const MatrixAbstract<T> & A, T (*function) (const T &)); ///< Apply function() to each element, and return the results in a new Matrix of equal size.
-template<class T> Matrix<T> visit (const MatrixAbstract<T> & A, T (*function) (const T));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
+template<class T> void      clear      (      MatrixAbstract<T> & A, const T scalar = (T) 0);    ///< Set all elements to given value.
+template<class T> T         norm       (const MatrixAbstract<T> & A, T n);                       ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
+template<class T> T         sumSquares (const MatrixAbstract<T> & A);                            ///< Equivalent to norm(A,2)^2, but without taking the square root.
+template<class T> Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T &)); ///< Apply function() to each element, and return the results in a new Matrix of equal size.
+template<class T> Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
 
 template<class T> bool operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);  ///< Two matrices are equal if they have the same shape and the same elements.
 template<class T> bool operator != (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)

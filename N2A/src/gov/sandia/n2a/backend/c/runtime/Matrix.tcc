@@ -111,6 +111,24 @@ norm (const MatrixAbstract<T> & A, T n)
 }
 
 template<class T>
+T
+sumSquares (const MatrixAbstract<T> & A)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    T result = (T) 0;
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            T t = A(r,c);
+            result += t * t;
+        }
+    }
+    return result;
+}
+
+template<class T>
 Matrix<T>
 visit (const MatrixAbstract<T> & A, T (*function) (const T &))
 {

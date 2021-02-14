@@ -35,6 +35,7 @@ import gov.sandia.n2a.language.function.Sat;
 import gov.sandia.n2a.language.function.Signum;
 import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.SquareRoot;
+import gov.sandia.n2a.language.function.SumSquares;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Uniform;
@@ -456,6 +457,7 @@ public class Operator implements Cloneable
         register (Sat              .factory ());
         register (Sine             .factory ());
         register (SquareRoot       .factory ());
+        register (SumSquares       .factory ());
         register (Tangent          .factory ());
         register (Output           .factory ());
         register (Uniform          .factory ());

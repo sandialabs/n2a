@@ -63,6 +63,7 @@ public class Norm extends Function
         {
             // For n==1 (sum of elements), which is the most expensive in terms of bits.
             int shift = (int) Math.floor (Math.log (Asize) / Math.log (2));
+            shift = Math.min (op0.center, shift);  // Don't shift center into negative territory.
             centerNew   = op0.center   - shift;
             exponentNew = op0.exponent + shift;
         }
