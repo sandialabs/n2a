@@ -141,10 +141,13 @@ import com.jcraft.jsch.Session;
 @SuppressWarnings("serial")
 public class SettingsRepo extends JScrollPane implements Settings
 {
+    // List of repositories
     protected RepoTable      repoTable;
     protected RepoTableModel repoModel;
-    protected GitTableModel  gitModel;
+
+    // Details about the selected repository
     protected GitTable       gitTable;
+    protected GitTableModel  gitModel;
     protected JLabel         labelStatus;
     protected JButton        buttonRefresh;
     protected JButton        buttonPull;
@@ -457,6 +460,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             public void valueChanged (ListSelectionEvent e)
             {
+                if (e.getValueIsAdjusting ()) return;
                 int row = gitTable.getSelectedRow ();
                 if (row >= 0) panelDiff.load (gitModel.deltas.get (row));
                 else          panelDiff.clear ();
@@ -997,8 +1001,8 @@ public class SettingsRepo extends JScrollPane implements Settings
                     String oldName = key;
                     if (newName.isEmpty ()  ||  newName.equals (oldName)) return;
                     if (AppData.repos.child (newName) != null) return;
-
                     // Now we have a legitimate name change.
+
                     MDir models     = getModels     (oldName);
                     MDir references = getReferences (oldName);
                     existingModels    .remove (oldName);
@@ -1006,12 +1010,14 @@ public class SettingsRepo extends JScrollPane implements Settings
                     existingModels    .put (newName, models);
                     existingReferences.put (newName, references);
 
-                    gitRepos.get (row).close ();
+                    gitRepos.get (row).close ();  // Shut down git under oldName
                     Path repoDir = reposDir.resolve (newName);
                     models    .set (repoDir.resolve ("models"));  // Flushes write queue, so save thread won't interfere with the move.
                     references.set (repoDir.resolve ("references"));
                     AppData.repos.move (oldName, newName);
-                    gitRepos.set (row, new GitWrapper (repoDir.resolve (".git")));
+                    GitWrapper newWrapper = new GitWrapper (repoDir.resolve (".git"));
+                    gitRepos.set (row, newWrapper);
+                    gitModel.current = newWrapper;  // Presumably current == oldWrapper, so we just replace it without checking.
 
                     String primary = AppData.state.get ("Repos", "primary");
                     if (oldName.equals (primary)) AppData.state.set (newName, "Repos", "primary");
@@ -1093,22 +1099,21 @@ public class SettingsRepo extends JScrollPane implements Settings
             existingReferences.remove (name);
             gitRepos          .remove (row);
             repos             .remove (row);
-            needRebuild = true;
             updateOrder ();
 
             gitModel.current = null;  // Keeps us from saving author name to git repo that's about to be deleted.
             fireTableRowsDeleted (row, row);
             if (row >= repos.size ()) row = repos.size () - 1;
             if (row >= 0) repoTable.changeSelection (row, column, false, false);
+            needRebuild = true;
 
-            // Do deletion on a separate thread, because it requires walking a potentially-large tree.
+            // Do deletion on a separate thread, because it requires walking a potentially large tree.
             Thread DeleteRepoThread = new Thread ()
             {
                 public void run ()
                 {
-                    // Order is important. Close the git repo before deleting the directory structure.
-                    wrapper.close ();
-                    AppData.repos.clear (name);
+                    wrapper.close ();            // Close git repo first.
+                    AppData.repos.clear (name);  // Then delete the directory, including .git
                 }
             };
             DeleteRepoThread.setDaemon (true);
