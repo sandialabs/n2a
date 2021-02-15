@@ -23,6 +23,7 @@ import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.reflect.Method;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,11 +31,16 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.DosFileAttributeView;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -68,6 +74,20 @@ public abstract class Host
     public    static int                  jobCount  = 0;
     protected static Map<String,Host>     hosts     = new HashMap<String,Host> ();
     protected static List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
+
+    protected static Set<PosixFilePermission> fullPermissions = new HashSet<PosixFilePermission> ();
+    static
+    {
+        fullPermissions.add (PosixFilePermission.OWNER_READ);
+        fullPermissions.add (PosixFilePermission.OWNER_WRITE);
+        fullPermissions.add (PosixFilePermission.OWNER_EXECUTE);
+        fullPermissions.add (PosixFilePermission.GROUP_READ);
+        fullPermissions.add (PosixFilePermission.GROUP_WRITE);
+        fullPermissions.add (PosixFilePermission.GROUP_EXECUTE);
+        fullPermissions.add (PosixFilePermission.OTHERS_READ);
+        fullPermissions.add (PosixFilePermission.OTHERS_WRITE);
+        fullPermissions.add (PosixFilePermission.OTHERS_EXECUTE);
+    }
 
     public interface Factory extends ExtensionPoint
     {
@@ -720,28 +740,90 @@ public abstract class Host
 
     public static void deleteTree (Path start, boolean includeStartDir)
     {
-        // On Windows, the JVM sometimes holds file locks even after we close the file.
-        // This can keep us from being able to delete directories.
-        // Garbage collection helps reduce this problem, though it does not guarantee success.
-        if (isWindows ()  &&  start.getFileSystem ().provider ().getScheme ().equals ("file")) System.gc ();
+        new DeleteTreeVisitor (start, includeStartDir).walk ();
+    }
 
-        try
+    public static class DeleteTreeVisitor extends SimpleFileVisitor<Path>
+    {
+        public boolean includeStartDir;
+        public Path    start;
+        public boolean setPermissions = false;
+        public boolean evilNIO;
+
+        public DeleteTreeVisitor (Path start, boolean includeStartDir)
         {
-            Files.walkFileTree (start, new SimpleFileVisitor<Path> ()
-            {
-                public FileVisitResult visitFile (final Path file, final BasicFileAttributes attrs) throws IOException
-                {
-                    Files.delete (file);
-                    return FileVisitResult.CONTINUE;
-                }
+            this.start           = start;
+            this.includeStartDir = includeStartDir;
 
-                public FileVisitResult postVisitDirectory (final Path dir, final IOException e) throws IOException
-                {
-                    if (includeStartDir  ||  ! dir.equals (start)) Files.delete (dir);
-                    return FileVisitResult.CONTINUE;
-                }
-            });
+            // On Windows, the JVM sometimes holds file locks even after we close the file.
+            // This can keep us from being able to delete directories.
+            // Garbage collection helps reduce this problem, though it does not guarantee success.
+            evilNIO = isWindows ()  &&  start.getFileSystem ().provider ().getScheme ().equals ("file");
         }
-        catch (IOException e) {}
+
+        public void walk ()
+        {
+            if (evilNIO) System.gc ();
+
+            try {Files.walkFileTree (start, this);}
+            catch (IOException e) {}
+
+            if (evilNIO  &&  setPermissions) System.gc ();  // To get rid of files opened while setting permissions.
+        }
+
+        public FileVisitResult visitFile (final Path file, final BasicFileAttributes attrs) throws IOException
+        {
+            try
+            {
+                Files.delete (file);
+            }
+            catch (AccessDeniedException ade)
+            {
+                if (makeDeletable (file)) Files.delete (file);
+            }
+            return FileVisitResult.CONTINUE;
+        }
+
+        public FileVisitResult postVisitDirectory (final Path dir, final IOException e) throws IOException
+        {
+            if (includeStartDir  ||  ! dir.equals (start))
+            {
+                try
+                {
+                    if (evilNIO  &&  setPermissions)
+                    {
+                        System.gc ();
+                        setPermissions = false;
+                    }
+                    Files.delete (dir);
+                }
+                catch (AccessDeniedException ade)
+                {
+                    if (makeDeletable (dir)) Files.delete (dir);
+                }
+            }
+            return FileVisitResult.CONTINUE;
+        }
+
+        public boolean makeDeletable (Path file) throws IOException
+        {
+            DosFileAttributeView dosView = Files.getFileAttributeView (file, DosFileAttributeView.class);
+            if (dosView != null)
+            {
+                dosView.setReadOnly (false);
+                setPermissions = true;
+                return true;
+            }
+
+            PosixFileAttributeView posixView = Files.getFileAttributeView (file, PosixFileAttributeView.class);
+            if (posixView != null)
+            {
+                posixView.setPermissions (fullPermissions);
+                setPermissions = true;
+                return true;
+            }
+
+            return false;
+        }
     }
 }

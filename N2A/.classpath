@@ -10,8 +10,6 @@
 	<classpathentry kind="lib" path="lib/bouncycastle/bcpg-jdk15on-1.64.jar"/>
 	<classpathentry kind="lib" path="lib/bouncycastle/bcpkix-jdk15on-1.64.jar"/>
 	<classpathentry kind="lib" path="lib/bouncycastle/bcprov-jdk15on-1.64.jar"/>
-	<classpathentry kind="lib" path="lib/eclipse/org.eclipse.jgit-5.7.0.202003110725-r.jar"/>
-	<classpathentry kind="lib" path="lib/eclipse/org.eclipse.jgit.ui-5.7.0.202003110725-r.jar"/>
 	<classpathentry kind="lib" path="lib/uom/si-quantity-2.0.1.jar"/>
 	<classpathentry kind="lib" path="lib/uom/si-units-2.0.1.jar"/>
 	<classpathentry kind="lib" path="lib/uom/unit-api-2.0.jar" sourcepath="lib/uom/unit-api-2.0-sources.jar"/>
@@ -21,5 +19,8 @@
 	<classpathentry kind="lib" path="lib/uom/systems-quantity-2.0.2.jar"/>
 	<classpathentry kind="lib" path="lib/uom/systems-ucum-2.0.2.jar"/>
 	<classpathentry kind="lib" path="lib/uom/uom-lib-common-2.0.1.jar"/>
+	<classpathentry kind="lib" path="lib/eclipse/org.eclipse.jgit-5.10.0.202012080955-r.jar"/>
+	<classpathentry kind="lib" path="lib/eclipse/org.eclipse.jgit.ui-5.10.0.202012080955-r.jar"/>
+	<classpathentry kind="lib" path="lib/eclipse/org.eclipse.jgit.ssh.jsch-5.10.0.202012080955-r.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
+import gov.sandia.n2a.execenvs.Connection;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
@@ -401,6 +402,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             public void valueChanged (ListSelectionEvent e)
             {
+                if (e.getValueIsAdjusting ()) return;
                 int row = repoTable.getSelectedRow ();
                 gitModel.setCurrent (row);
             }
@@ -590,9 +592,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             protected JSch createDefaultJSch (FS fs) throws JSchException
             {
-                JSch result = super.createDefaultJSch (fs);
-                //result.addIdentity ("/path/to/private_key", "passphrase");
-                return result;
+                return Connection.jsch;  // shared with remote execution system
             }
 
             protected void configure (Host h, Session s)
@@ -1086,21 +1086,33 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public void delete (int row, int column)
         {
-            // Order is important. Close the git repo before deleting the directory structure.
-            gitRepos.get (row).close ();
+            GitWrapper wrapper = gitRepos.get (row);
+            String     name    = repos   .get (row).key ();
 
-            String name = repos.get (row).key ();
-            AppData.repos.clear (name);
             existingModels    .remove (name);
             existingReferences.remove (name);
-
+            gitRepos          .remove (row);
+            repos             .remove (row);
             needRebuild = true;
-            gitRepos.remove (row);
-            repos   .remove (row);
             updateOrder ();
+
+            gitModel.current = null;  // Keeps us from saving author name to git repo that's about to be deleted.
             fireTableRowsDeleted (row, row);
             if (row >= repos.size ()) row = repos.size () - 1;
             if (row >= 0) repoTable.changeSelection (row, column, false, false);
+
+            // Do deletion on a separate thread, because it requires walking a potentially-large tree.
+            Thread DeleteRepoThread = new Thread ()
+            {
+                public void run ()
+                {
+                    // Order is important. Close the git repo before deleting the directory structure.
+                    wrapper.close ();
+                    AppData.repos.clear (name);
+                }
+            };
+            DeleteRepoThread.setDaemon (true);
+            DeleteRepoThread.start ();
         }
 
         public void moveSelected (int direction)
@@ -1352,6 +1364,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public void stash ()
         {
+            if (deleted) return;
             MNode doc = getDocument ();
             if (untracked)
             {
@@ -1395,6 +1408,9 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
             else
             {
+                // The doc here breaks the rule of object identity. There may be a completely different
+                // MDoc open on the same file. However, the caller is expected to update those
+                // with contents from disk after we are done.
                 MDoc doc = new MDoc (path);  // If the file already exists, then it will be loaded as needed.
                 if (remove != null) doc.uniqueNodes (remove);
                 if (add    != null) doc.merge       (add);
@@ -1486,6 +1502,14 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
             if (git     != null) git    .close ();
             if (gitRepo != null) gitRepo.close ();
+
+            // Attempt to flush lingering file handles left by NIO on Windows.
+            gitRepo = null;
+            git     = null;
+            config  = null;
+            remote  = null;
+            diff    = null;
+            if (gov.sandia.n2a.execenvs.Host.isWindows ()) System.gc ();
         }
 
         public String getURL ()
@@ -1776,10 +1800,19 @@ public class SettingsRepo extends JScrollPane implements Settings
                 error (e.getMessage ());
                 return;  // It's crucial that the backup fully succeed before we start deleting files.
             }
+
             for (Delta d : stash)
             {
-                try {Files.delete (baseDir.resolve (d.name));}
-                catch (IOException e) {}
+                if (d.deleted) continue;
+                if (d.untracked)
+                {
+                    try {Files.delete (baseDir.resolve (d.name));}
+                    catch (IOException e) {}
+                }
+                else
+                {
+                    d.revert ();
+                }
             }
 
             // User data could be permanently lost if we don't get past this section and restore the internal stash from memory back to disk.

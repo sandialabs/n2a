@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -40,7 +40,7 @@ public class Connection implements Closeable
     protected int            port;
     protected String         home;  // Path of user's home directory on remote system. Includes leading slash.
 
-    protected static JSch jsch = new JSch ();
+    public static JSch jsch = new JSch ();  // shared between remote execution system and git wrapper
     static
     {
         JSch.setConfig ("max_input_buffer_size", "1048576");  // Memory is cheap these days, so set generous buffer size (1MiB).
