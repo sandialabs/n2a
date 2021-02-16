@@ -264,7 +264,7 @@ public class NodeJob extends NodeBase
                     }
 
                     // Also update corresponding entry in Study panel, if visible.
-                    panelStudy.tableSamples.updateJob (key);
+                    if (panelStudy != null) panelStudy.tableSamples.updateJob (key);  // panelStudy could be null for a brief moment during startup
                 }
             });
         }
