@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -300,6 +300,7 @@ public class AddPart extends UndoableView implements AddEditable
             if (model == null) FilteredTreeModel.removeNodeFromParentStatic (createdNode);
             else               model.removeNodeFromParent (createdNode);
             if (graphParent) peg.removePart (createdNode, setSelected  &&  ! multiShared);
+            parent.findConnections ();
             parent.updatePins ();
         }
         else  // Just exposed an overridden node

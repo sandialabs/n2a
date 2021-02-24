@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -122,13 +122,13 @@ public class AddVariable extends UndoableView implements AddEditable
             createdNode.findConnections ();
             createdNode.filter ();
 
-            if (createdNode.isBinding  ||  wasBinding)
+            if (createdNode.isBinding != wasBinding)
             {
-                parent.updateConnections ();
+                parent.updateSubpartConnections ();
                 if (parent.graph != null)
                 {
                     if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
-                    else if (wasBinding)       parent.graph.killEdge   (name);
+                    else                       parent.graph.killEdge   (name);
                 }
                 if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
@@ -187,7 +187,6 @@ public class AddVariable extends UndoableView implements AddEditable
         if (! nameIsGenerated)
         {
             createdNode.build ();
-            createdNode.findConnections ();
             createdNode.filter ();
             if (pet != null)
             {
@@ -195,13 +194,13 @@ public class AddVariable extends UndoableView implements AddEditable
                 parent.invalidateColumns (model);
             }
 
-            if (createdNode.isBinding  ||  wasBinding)
+            if (parent.updateVariableConnections ()) parent.updateSubpartConnections ();
+            if (createdNode.isBinding != wasBinding)
             {
-                parent.updateConnections ();
                 if (parent.graph != null)
                 {
                     if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
-                    else if (wasBinding)       parent.graph.killEdge   (name);
+                    else                       parent.graph.killEdge   (name);
                 }
                 MPart mparent = parent.source;
                 if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);

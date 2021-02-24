@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -508,6 +508,7 @@ public class PanelEquationTree extends JScrollPane
 
         root = part;
         root.pet = this;
+        updateHighlights (root, "");
         model.setRoot (root);  // triggers repaint
     }
 

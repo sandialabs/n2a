@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -303,9 +303,23 @@ public class NodePart extends NodeContainer
         If one of our child variables updates its connection-binding state, then update all child parts as well.
         This locates inner connections that pass through the connection binding.
     **/
-    public void updateConnections ()
+    public void updateSubpartConnections ()
     {
         for (Object o : children) if (o instanceof NodePart) ((NodePart) o).findConnections ();
+    }
+
+    public boolean updateVariableConnections ()
+    {
+        boolean result = false;
+        for (Object o : children)
+        {
+            if (! (o instanceof NodeVariable)) continue;
+            NodeVariable nv = (NodeVariable) o;
+            boolean wasBinding = nv.isBinding;
+            nv.findConnections ();
+            if (nv.isBinding != wasBinding) result = true;
+        }
+        return result;
     }
 
     /**
@@ -331,14 +345,19 @@ public class NodePart extends NodeContainer
             return parent.resolveName (from, this, nextName);
         }
 
+        int nsLength = ns.length ();
         Enumeration<?> i = children ();
         while (i.hasMoreElements ())
         {
             NodeBase n = (NodeBase) i.nextElement ();
-            if (! n.source.key ().equals (ns)) continue;
+            String key = n.source.key ();
+            if (! key.startsWith (ns)) continue;
+            int keyLength = key.length ();
+            if (keyLength != nsLength  &&  key.charAt (nsLength) != '\'') continue;
+
             if (n instanceof NodeVariable)
             {
-                if (((NodeVariable) n).isBinding  &&  connectionBindings != null)
+                if (((NodeVariable) n).isBinding  &&  connectionBindings != null)  // This case can only apply if n is not a derivative (no trailing tick mark).
                 {
                     NodePart p = connectionBindings.get (ns);
                     if (p != null) return p.resolveName (from, null, nextName);  // Tunnel through connection binding.
@@ -346,7 +365,7 @@ public class NodePart extends NodeContainer
                 if (nextName.isEmpty ()) return n;  // fully resolved
                 return null;  // failed to resolve
             }
-            else if (n instanceof NodePart)
+            else if (n instanceof NodePart)  // Part names never contain a tick mark, so no need for extra test to filter it out.
             {
                 // Descend into child part.
                 if (upFrom != null  &&  upFrom != from.getParent ())

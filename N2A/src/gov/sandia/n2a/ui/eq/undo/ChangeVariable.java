@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -33,6 +33,7 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
@@ -273,13 +274,13 @@ public class ChangeVariable extends UndoableView
                 {
                     parent.hide (nodeBefore, model);
                 }
-                if (nodeBefore.isBinding  ||  wasBinding)
+                if (nodeBefore.isBinding != wasBinding)
                 {
                     touchedBindings = true;
                     if (parent.graph != null)
                     {
                         if (nodeBefore.isBinding) parent.graph.updateEdge (nameBefore, parent.connectionBindings.get (nameBefore));
-                        else if (wasBinding)      parent.graph.killEdge   (nameBefore);
+                        else                      parent.graph.killEdge   (nameBefore);
                     }
                 }
             }
@@ -335,7 +336,7 @@ public class ChangeVariable extends UndoableView
         for (PanelEquationTree ap : needAnimate) ap.animate ();
 
         boolean touchesPins =  parent.source.child ("$metadata", "gui", "pin") != null;
-        if (nodeAfter.isBinding  ||  wasBinding)
+        if (nodeAfter.isBinding != wasBinding)
         {
             touchedBindings = true;
             // Update edges.
@@ -344,23 +345,26 @@ public class ChangeVariable extends UndoableView
             if (parent.graph != null  &&  ! touchesPins)
             {
                 if (nodeAfter.isBinding) parent.graph.updateEdge (nameAfter, parent.connectionBindings.get (nameAfter));
-                else if (wasBinding)     parent.graph.killEdge   (nameAfter);
+                else                     parent.graph.killEdge   (nameAfter);
             }
         }
 
+        if (parent.updateVariableConnections ()) touchedBindings = true;
+
         if (touchedBindings)
         {
-            parent.updateConnections ();
+            parent.updateSubpartConnections ();
 
             // Update edges to pins, if present.
             // This rebuilds all edges on canvas, so no need for incremental update above.
+            PanelEquationGraph peg = pe.panelEquationGraph;
             if (touchesPins)
             {
                 parent.updatePins ();
-                pe.panelEquationGraph.updatePins ();
-                pe.panelEquationGraph.reconnect ();
-                pe.panelEquationGraph.repaint ();
+                peg.updatePins ();
             }
+            peg.reconnect ();
+            peg.repaint ();
 
             MPart mparent = parent.source;
             if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);

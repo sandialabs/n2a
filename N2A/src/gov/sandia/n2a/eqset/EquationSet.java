@@ -1172,7 +1172,7 @@ public class EquationSet implements Comparable<EquationSet>
         Find instance variables (that in other languages might be called pointers) and move them
         into the connectionBindings structure.
         Depends on results of
-            resolvePins -- Provides the link path for each dangling connection that is exposed as an input pins.
+            resolvePins -- Provides the link path for each dangling connection that is exposed as an input pin.
             purgeAutoPins -- Removes template structures that can't be resolved.
     **/
     public void resolveConnectionBindings () throws Exception
@@ -1287,7 +1287,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (! (ee.expression instanceof AccessVariable)) return null;
         AccessVariable av = (AccessVariable) ee.expression;
         if (av.getOrder () > 0) return null;
-        if (find (new Variable (av.getName ())) != null) return null;
+        if (find (new Variable (av.getName (), -1)) != null) return null;  // Not a binding if matching variable of any order exists.
         return av;
     }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -193,7 +193,7 @@ public class NodeVariable extends NodeContainer
 
             // Scan for the referent.
             referent = parent.resolveName (this, null, value);
-            if      (referent == null)                 isBinding = ! value.contains (".");  // Ambiguous, so we make an arbitrary call that it is an unresolved variable reference rather than unresolved part reference.
+            if      (referent == null)                 isBinding = ! value.contains (".");  // A name with dot is ambiguous, so we make an arbitrary call that value references a variable rather than a part.
             else if (referent instanceof NodePart)     isBinding = true;
             else if (referent instanceof NodeVariable) isBinding = ((NodeVariable) referent).isBinding;  // probably a sub-reference
         }
