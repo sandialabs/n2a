@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,30 +21,19 @@ import gov.sandia.n2a.db.MVolatile;
 /**
     A simple recursive-descent parser for BibTeX files/strings.
 **/
-public class ParserBibtex
+public class ParserBibtex implements Parser
 {
     public static Set<String> forms = new TreeSet<String> (Arrays.asList ("article", "book", "booklet", "conference", "inbook", "incollection", "inproceedings", "manual", "mastersthesis", "misc", "phdthesis", "proceedings", "techreport", "unpublished"));
     public static Set<String> ignore = new TreeSet<String> (Arrays.asList ("comment", "preamble"));
 
     public Map<String,String> strings = new TreeMap<String,String> ();
 
-    public void parse (Reader input, MNode output)
+    public void parse (BufferedReader input, MNode output) throws IOException
     {
-        BufferedReader reader;
-        if (input instanceof BufferedReader) reader =    (BufferedReader) input;
-        else                                 reader = new BufferedReader (input);
-
-        try
-        {
-            while (parseEntry (reader, output));
-            if (! (input instanceof BufferedReader)) reader.close ();
-        }
-        catch (IOException e)
-        {
-        }
+        while (parseEntry (input, output));
     }
 
-    public boolean parseEntry (BufferedReader reader, MNode output) throws IOException
+    public boolean parseEntry (Reader reader, MNode output) throws IOException
     {
         // find next @ that's not inside a comment
         boolean inComment = false;
@@ -96,7 +85,7 @@ public class ParserBibtex
         return true;  // Whether it's true or not, we will find out in the next parse cycle.
     }
 
-    public void parseString (BufferedReader reader) throws IOException
+    public void parseString (Reader reader) throws IOException
     {
         // find =
         String name = "";
@@ -127,7 +116,7 @@ public class ParserBibtex
         }
     }
 
-    public MNode parseTags (BufferedReader reader) throws IOException
+    public MNode parseTags (Reader reader) throws IOException
     {
         MNode result = new MVolatile ();
 
@@ -150,7 +139,7 @@ public class ParserBibtex
         return result;
     }
 
-    public boolean parseTag (BufferedReader reader, MNode result) throws IOException
+    public boolean parseTag (Reader reader, MNode result) throws IOException
     {
         // read to =
         String name = "";
@@ -166,7 +155,7 @@ public class ParserBibtex
         return true;
     }
 
-    public String parseContent (BufferedReader reader) throws IOException
+    public String parseContent (Reader reader) throws IOException
     {
         String result = "";
         String name = "";
@@ -189,7 +178,7 @@ public class ParserBibtex
         }
     }
 
-    public String parseBracedContent (BufferedReader reader, int endChar) throws IOException
+    public String parseBracedContent (Reader reader, int endChar) throws IOException
     {
         String result = "";
         boolean inEscape = false;

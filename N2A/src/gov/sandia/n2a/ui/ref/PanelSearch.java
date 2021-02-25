@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -31,6 +31,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -139,12 +140,28 @@ public class PanelSearch extends JPanel
             {
                 if (! list.isFocusOwner ()) hideSelection ();
 
-                ParserBibtex parser = new ParserBibtex ();
                 MNode data = new MVolatile ();
-                try
+                try (BufferedReader reader = new BufferedReader (new StringReader ((String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor))))
                 {
-                    StringReader reader = new StringReader ((String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor));
-                    parser.parse (reader, data);
+                    // Scan data to determine type, then parse the specific type.
+                    while (true)
+                    {
+                        // Skip leading white space until first line.
+                        reader.mark (0x1 << 16);  // 64k
+                        String line = reader.readLine ();
+                        if (line == null) break;
+                        line = line.trim ();
+                        if (line.length () == 0) continue;
+
+                        // Determine type from line
+                        Parser parser;
+                        if (line.startsWith ("TY  -")) parser = new ParserRIS ();
+                        else                           parser = new ParserBibtex ();
+
+                        // Parse data
+                        reader.reset ();
+                        parser.parse (reader, data);
+                    }
                 }
                 catch (IOException | UnsupportedFlavorException e)
                 {

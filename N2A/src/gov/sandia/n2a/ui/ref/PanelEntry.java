@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -499,8 +499,8 @@ public class PanelEntry extends JPanel
     {
         String[] formData =
         {
-            "article      =title, author, year,?month,?note,?key,                              volume,?number,?pages,journal",
-            "book         =title, author, year,?month,?note,?key,              ?address,      ?volume,?number,        publisher, editor,?series,?edition",
+            "article      =title, author, year,?month,?note,?key,                              volume,?number,?pages, journal,                           ?doi",
+            "book         =title, author, year,?month,?note,?key,              ?address,      ?volume,?number,        publisher, editor,?series,?edition,?url",
             "booklet      =title,?author,?year,?month,?note,?key,              ?address,                                                                 ?howpublished",
             "inbook       =title, author, year,?month,?note,?key,              ?address,?type,?volume,?number, pages, publisher, editor,?series,?edition,               chapter",
             "incollection =title, author, year,?month,?note,?key,              ?address,?type,?volume,?number,?pages, publisher,?editor,?series,?edition,              ?chapter,booktitle",
@@ -672,7 +672,9 @@ public class PanelEntry extends JPanel
                 if (record.child (newValue) != null) return;  // not allowed, because another tag with that name already exists
                 if (newValue.equals ("id")) return;  // also not allowed; note that "form" and "title" are protected by previous line
 
-                MainFrame.instance.undoManager.apply (new RenameTag (record, keys.indexOf (newValue), tag, newValue));
+                int exposedRow = keys.indexOf (newValue);   // If non-negative, then we are about to overwrite a standard tag that isn't currently defined.
+                if (isStandardTag (tag)) exposedRow = row;  // About to expose a standard tag (which will become undefined).
+                MainFrame.instance.undoManager.apply (new RenameTag (record, exposedRow, tag, newValue));
             }
             else if (column == 1)  // value change
             {
@@ -733,24 +735,20 @@ public class PanelEntry extends JPanel
             int rowBefore = keys.indexOf (before);
             int rowAfter  = keys.indexOf (after);
 
+            keys.set (rowBefore, after);
             record.move (before, after);
+            fireTableRowsUpdated (rowBefore, rowBefore);
             if (rowAfter >= 0)  // This only happens when we're about to overwrite a standard tag that has no assigned value.
             {
                 keys.remove (rowAfter);
                 fireTableRowsDeleted (rowAfter, rowAfter);
             }
-            else  // We might be about to expose a standard tag that was previously overwritten.
+            else if (exposedRow >= 0)  // We're about to expose a standard tag that was previously overwritten.
             {
-                if (form != null  &&  (form.required.contains (before)  ||  form.optional.contains (before)))  // It is a standard tag
-                {
-                    // Assume that exposedRow was saved when the tag was overwritten.
-                    keys.add (exposedRow, before);
-                    fireTableRowsInserted (exposedRow, exposedRow);
-                }
+                keys.add (exposedRow, before);
+                fireTableRowsInserted (exposedRow, exposedRow);
             }
-            keys.set (rowBefore, after);
             updateColumnWidth ();
-            fireTableRowsUpdated (rowBefore, rowBefore);
         }
 
         public void changeValue (String docKey, String name, String value)
@@ -759,7 +757,7 @@ public class PanelEntry extends JPanel
             setRecord (doc);
 
             // Update data
-            if (value.isEmpty ()  &&  form != null  &&  (form.required.contains (name)  ||  form.optional.contains (name)))
+            if (value.isEmpty ()  &&  isStandardTag (name))
             {
                 record.clear (name);
             }
@@ -784,6 +782,11 @@ public class PanelEntry extends JPanel
                     PanelReference.instance.panelSearch.repaint ();
                 }
             }
+        }
+
+        public boolean isStandardTag (String name)
+        {
+            return form != null  &&  (form.required.contains (name)  ||  form.optional.contains (name));
         }
     }
 
