@@ -9,9 +9,16 @@ package gov.sandia.n2a.ui.ref;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
+import gov.sandia.n2a.plugins.extpoints.Export;
+import gov.sandia.n2a.plugins.extpoints.Import;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.ref.ExportBibliography;
+import gov.sandia.n2a.ui.ref.ImportBibliography;
 import gov.sandia.n2a.ui.ref.undo.AddTag;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
 import gov.sandia.n2a.ui.ref.undo.ChangeTag;
@@ -36,8 +43,12 @@ import java.awt.event.FocusListener;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.io.StringReader;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,7 +63,9 @@ import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -64,6 +77,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
+import javax.swing.filechooser.FileFilter;
 import javax.swing.plaf.basic.BasicComboBoxUI;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableCellEditor;
@@ -86,6 +100,8 @@ public class PanelEntry extends JPanel
     protected JButton buttonAddEntry;
     protected JButton buttonAddTag;
     protected JButton buttonDeleteTag;
+    protected JButton buttonExport;
+    protected JButton buttonImport;
 
     public static final DataFlavor tagFlavor = new DataFlavor (TransferableTag.class, null);
 
@@ -240,15 +256,24 @@ public class PanelEntry extends JPanel
             }
         });
 
+        gov.sandia.n2a.ui.UndoManager um = MainFrame.instance.undoManager;
         table.setTransferHandler (new TransferHandler ()
         {
             public boolean canImport (TransferSupport xfer)
             {
-                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+                if (xfer.isDataFlavorSupported (TransferableReference.referenceFlavor)) return false;
+                if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))               return true;
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))         return true;
+                return false;
             }
 
             public boolean importData (TransferSupport xfer)
             {
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))
+                {
+                    return PanelReference.instance.panelSearch.transferHandler.importData (xfer);
+                }
+
                 String data;
                 try
                 {
@@ -262,10 +287,8 @@ public class PanelEntry extends JPanel
                 if (data.isEmpty ()) return false;
                 if (data.contains ("\n")  ||  data.contains ("\r"))
                 {
-                    // Defend against complex formats, such as a full BibTeX entry.
-                    // If it is very likely to be a BibTeX entry, then forward it to the entry list for import.
-                    if (data.startsWith ("@")) return PanelReference.instance.panelSearch.list.getTransferHandler ().importData (xfer);
-                    return false;
+                    // Defend against complex formats, such as copy/paste from a bibliographic entry.
+                    return PanelReference.instance.panelSearch.transferHandler.importData (xfer);
                 }
                 if (model.locked) return false;  // Nothing to import into, and we don't really want to mess with instant entry creation. (If we do, then need compound edit.)
 
@@ -302,7 +325,7 @@ public class PanelEntry extends JPanel
                     }
                     else
                     {
-                        MainFrame.instance.undoManager.apply (new AddTag (model.record, row, key, value));
+                        um.apply (new AddTag (model.record, row, key, value));
                     }
                 }
                 return true;
@@ -334,6 +357,7 @@ public class PanelEntry extends JPanel
 
             protected void exportDone (JComponent source, Transferable data, int action)
             {
+                // Implement a cut operation. Do not support DnD.
                 if (action == MOVE  &&  ! ((TransferableTag) data).drag  &&  ! model.locked)
                 {
                     try
@@ -341,13 +365,14 @@ public class PanelEntry extends JPanel
                         String key = ((String) data.getTransferData (DataFlavor.stringFlavor)).split ("=", 2)[0];
                         if (! key.equals ("id")  &&  ! key.equals ("form")  &&  ! key.equals ("title"))
                         {
-                            MainFrame.instance.undoManager.apply (new DeleteTag (model.record, key));
+                            um.apply (new DeleteTag (model.record, key));
                         }
                     }
                     catch (UnsupportedFlavorException | IOException e)
                     {
                     }
                 }
+                // We never do a compound edit on this panel, so no need to call endEompoundEdit() here.
             }
         });
 
@@ -412,12 +437,27 @@ public class PanelEntry extends JPanel
             }
         });
 
+        buttonExport = new JButton (ImageUtil.getImage ("export.gif"));
+        buttonExport.setMargin (new Insets (2, 2, 2, 2));
+        buttonExport.setFocusable (false);
+        buttonExport.setToolTipText ("Export");
+        buttonExport.addActionListener (listenerExport);
+
+        buttonImport = new JButton (ImageUtil.getImage ("import.gif"));
+        buttonImport.setMargin (new Insets (2, 2, 2, 2));
+        buttonImport.setFocusable (false);
+        buttonImport.setToolTipText ("Import");
+        buttonImport.addActionListener (listenerImport);
+
         Lay.BLtg (this,
             "N", Lay.WL ("L",
                 buttonAddEntry,
                 Box.createHorizontalStrut (15),
                 buttonAddTag,
                 buttonDeleteTag,
+                Box.createHorizontalStrut (15),
+                buttonExport,
+                buttonImport,
                 "hgap=5,vgap=1"
             ),
             "C", scrollPane
@@ -473,6 +513,146 @@ public class PanelEntry extends JPanel
         if (AppData.references.isVisible (model.record)) model.updateLock ();
         else                                             recordDeleted (model.record);
     }
+
+    // See PanelEquations for similar code
+    ActionListener listenerExport = new ActionListener ()
+    {
+        // We create and customize a file chooser on the fly, display it modally, then use its result to initiate export.
+
+        class ExporterFilter extends FileFilter
+        {
+            public ExportBibliography exporter;
+
+            ExporterFilter (ExportBibliography exporter)
+            {
+                this.exporter = exporter;
+            }
+
+            @Override
+            public boolean accept (File f)
+            {
+                return true;
+            }
+
+            @Override
+            public String getDescription ()
+            {
+                return exporter.getName ();
+            }
+        }
+
+        public void actionPerformed (ActionEvent e)
+        {
+            if (model.record == null) return;
+            if (table.isEditing ()) table.getCellEditor ().stopCellEditing ();
+
+            // Construct and customize a file chooser
+            final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
+            fc.setDialogTitle ("Export \"" + model.record.key () + "\"");
+            fc.setSelectedFile (new File (model.record.key ()));
+            ExporterFilter bibtex = null;
+            List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Export.class);
+            for (ExtensionPoint exp : exps)
+            {
+                if (! (exp instanceof ExportBibliography)) continue;
+                ExporterFilter ef = new ExporterFilter ((ExportBibliography) exp);
+                fc.addChoosableFileFilter (ef);
+                if (ef.exporter.getName ().contains ("Bibtex")) bibtex = ef;
+            }
+            fc.setAcceptAllFileFilterUsed (false);
+            if (bibtex != null) fc.setFileFilter (bibtex);
+
+            // Display chooser and collect result
+            int result = fc.showSaveDialog (MainFrame.instance);
+
+            // Do export
+            if (result == JFileChooser.APPROVE_OPTION)
+            {
+                Path path = fc.getSelectedFile ().toPath ();
+                ExporterFilter filter = (ExporterFilter) fc.getFileFilter ();
+                try
+                {
+                    filter.exporter.export (model.record, path);
+                }
+                catch (Exception error)
+                {
+                    File crashdump = new File (AppData.properties.get ("resourceDir"), "crashdump");
+                    try
+                    {
+                        PrintStream err = new PrintStream (crashdump);
+                        error.printStackTrace (err);
+                        err.close ();
+                    }
+                    catch (FileNotFoundException fnfe) {}
+
+                    JOptionPane.showMessageDialog
+                    (
+                        MainFrame.instance,
+                        "<html><body><p style='width:300px'>"
+                        + error.getMessage () + " Exception has been recorded in "
+                        + crashdump.getAbsolutePath ()
+                        + "</p></body></html>",
+                        "Export Failed",
+                        JOptionPane.WARNING_MESSAGE
+                    );
+                }
+            }
+        }
+    };
+
+    // See PanelEquations for similar code
+    ActionListener listenerImport = new ActionListener ()
+    {
+        // We create and customize a file chooser on the fly, display it modally, then use its result to initiate export.
+
+        class ImporterFilter extends FileFilter
+        {
+            public ImportBibliography importer;
+
+            ImporterFilter (ImportBibliography importer)
+            {
+                this.importer = importer;
+            }
+
+            @Override
+            public boolean accept (File f)
+            {
+                return importer.accept (f.toPath ());
+            }
+
+            @Override
+            public String getDescription ()
+            {
+                return importer.getName ();
+            }
+        }
+
+        public void actionPerformed (ActionEvent e)
+        {
+            if (table.isEditing ()) table.getCellEditor ().stopCellEditing ();
+
+            // Construct and customize a file chooser
+            final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
+            fc.setDialogTitle ("Import References");
+            List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Import.class);
+            for (ExtensionPoint exp : exps)
+            {
+                if (! (exp instanceof ImportBibliography)) continue;
+                ImporterFilter f = new ImporterFilter ((ImportBibliography) exp);
+                fc.addChoosableFileFilter (f);
+            }
+
+            // Display chooser and collect result
+            int result = fc.showOpenDialog (MainFrame.instance);
+
+            // Do import
+            if (result == JFileChooser.APPROVE_OPTION)
+            {
+                Path path = fc.getSelectedFile ().toPath ();
+                PanelModel.importFile (path);  // This works for references too.
+            }
+        }
+    };
 
     public static class Form
     {

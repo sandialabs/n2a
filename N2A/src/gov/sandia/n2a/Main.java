@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -80,10 +80,7 @@ public class Main
         pluginClassNames.add ("gov.sandia.n2a.backend.neuroml.PluginNeuroML");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuron.PluginNeuron");
         pluginDirs.add (new File (AppData.properties.get ("resourceDir"), "plugins"));
-        if (! PluginManager.initialize (new N2APlugin (), pluginClassNames, pluginDirs))
-        {
-            System.err.println (PluginManager.getInitializationErrors ());
-        }
+        PluginManager.initialize (new N2APlugin (), pluginClassNames, pluginDirs);
 
         if (headless)
         {

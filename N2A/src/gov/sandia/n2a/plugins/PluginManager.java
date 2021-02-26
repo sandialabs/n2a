@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -107,36 +107,13 @@ import java.util.jar.JarFile;
 
 public class PluginManager
 {
-    // Global / Map(ID -> Object)
-    private static Map<String, Plugin>                          globalPlugins   = new LinkedHashMap<String, Plugin> ();
-    private static Map<String, Class<? extends ExtensionPoint>> globalExtPoints = new LinkedHashMap<String, Class<? extends ExtensionPoint>> ();
-    private static Map<String, ExtensionPoint>                  globalExts      = new LinkedHashMap<String, ExtensionPoint> ();
+    protected static Map<String, Plugin>                          globalPlugins   = new LinkedHashMap<String, Plugin> ();                           // maps plugin name to instance
+    protected static Map<String, Class<? extends ExtensionPoint>> globalExtPoints = new LinkedHashMap<String, Class<? extends ExtensionPoint>> ();  // maps full class name to class
+    protected static Map<String, ExtensionPoint>                  globalExts      = new LinkedHashMap<String, ExtensionPoint> ();                   // maps full class name to instance
 
-    // Ownership / Map(ID -> List<Object>)
-    private static Map<String, List<Class<? extends ExtensionPoint>>> ownedPluginExtPoints = new LinkedHashMap<String, List<Class<? extends ExtensionPoint>>> ();
-    private static Map<String, List<ExtensionPoint>>                  ownedPluginExts      = new LinkedHashMap<String, List<ExtensionPoint>> ();
-    private static Map<String, List<ExtensionPoint>>                  ownedExtPointExts    = new LinkedHashMap<String, List<ExtensionPoint>> ();
-
-    // Initialization Errors
-    private static PluginInitializationErrors initLoadErrors = new PluginInitializationErrors();
-
-
-    // Get all
-
-    public static Map<String, Plugin> getAllPlugins ()
-    {
-        return Collections.unmodifiableMap(globalPlugins);
-    }
-
-    public static Map<String, Class<? extends ExtensionPoint>> getAllExtensionPoints ()
-    {
-        return Collections.unmodifiableMap (globalExtPoints);
-    }
-
-    public static Map<String, ExtensionPoint> getAllExtensions ()
-    {
-        return Collections.unmodifiableMap(globalExts);
-    }
+    protected static Map<String, List<Class<? extends ExtensionPoint>>> ownedPluginExtPoints = new LinkedHashMap<String, List<Class<? extends ExtensionPoint>>> ();
+    protected static Map<String, List<ExtensionPoint>>                  ownedPluginExts      = new LinkedHashMap<String, List<ExtensionPoint>> ();
+    protected static Map<String, List<ExtensionPoint>>                  ownedExtPointExts    = new LinkedHashMap<String, List<ExtensionPoint>> ();
 
 
     // ID -> Obj
@@ -207,7 +184,7 @@ public class PluginManager
         {
             return findOneExtPointClass (ext.getClass (), false);
         }
-        catch (LoadPluginException e)
+        catch (Exception e)
         {
             // Should never happen since validation should happen at plug-in load time.
             throw new RuntimeException ("Invalid extension '" + getExtensionId (ext) + "'.", e);
@@ -217,10 +194,8 @@ public class PluginManager
 
     // Initialization
 
-    public static boolean initialize (Plugin platformPlugin, List<String> loadFromMemByName, List<File> loadFromPluginDirs)
+    public static void initialize (Plugin platformPlugin, List<String> loadFromMemByName, List<File> loadFromPluginDirs)
     {
-        boolean success = true;
-
         // Load an initial platform plug-in if provided.
         if (platformPlugin != null)
         {
@@ -228,10 +203,10 @@ public class PluginManager
             {
                 loadFromMemoryByName (platformPlugin.getClass ().getName ());
             }
-            catch (LoadPluginException e)
+            catch (Exception e)
             {
-                initLoadErrors.setPlatformError (e);
-                success = false;
+                System.err.println ("Error loading platform:");
+                e.printStackTrace (System.err);
             }
         }
 
@@ -245,11 +220,11 @@ public class PluginManager
             {
                 load (p);
             }
-            catch (LoadPluginException e)
+            catch (Exception e)
             {
                 String className = p.getClass ().getName ();
-                initLoadErrors.getMemoryByNameErrors ().put (className, e);
-                success = false;
+                System.err.println ("Error loading SPI-provided plugin: " + className);
+                e.printStackTrace (System.err);
             }
         }
 
@@ -262,26 +237,26 @@ public class PluginManager
                 {
                     loadFromMemoryByName (className);
                 }
-                catch (LoadPluginException e)
+                catch (Exception e)
                 {
-                    initLoadErrors.getMemoryByNameErrors ().put (className, e);
-                    success = false;
+                    System.err.println ("Error loading named plugin: " + className);
+                    e.printStackTrace (System.err);
                 }
             }
         }
 
         if (loadFromPluginDirs != null)
         {
-            for (File jarFile : loadFromPluginDirs)
+            for (File jarDir : loadFromPluginDirs)
             {
                 try
                 {
-                    loadFromJarsInDirectory (jarFile);
+                    loadFromJarsInDirectory (jarDir);
                 }
                 catch (Exception e)
                 {
-                    initLoadErrors.getJarErrors ().put (jarFile, e);
-                    success = false;
+                    System.err.println ("Error loading plugin jars from dir: " + jarDir);
+                    e.printStackTrace (System.err);
                 }
             }
         }
@@ -290,9 +265,10 @@ public class PluginManager
         {
             validateExtPoints ();
         }
-        catch (LoadPluginException e)
+        catch (Exception e)
         {
-            initLoadErrors.setValidateExtPointsError (e);
+            System.err.println ("Error validating extension points:");
+            e.printStackTrace (System.err);
         }
 
         for (String pName : globalPlugins.keySet ())
@@ -304,11 +280,10 @@ public class PluginManager
             }
             catch (Exception e)
             {
-                initLoadErrors.getPluginStartErrors ().put (pName, e);
+                System.err.println ("Error starting plugin: " + pName);
+                e.printStackTrace (System.err);
             }
         }
-
-        return success;
     }
 
 
@@ -316,7 +291,7 @@ public class PluginManager
     // LOADING //
     /////////////
 
-    public static void loadFromMemoryByName (String pluginClassName) throws LoadPluginException
+    public static void loadFromMemoryByName (String pluginClassName) throws Exception
     {
         // Attempt to instantiate the plug-in object from the given fully-qualified class name.
         Plugin plugin;
@@ -328,19 +303,19 @@ public class PluginManager
         }
         catch (ClassNotFoundException e)
         {
-            throw new LoadPluginException("Could not find plug-in class '" + pluginClassName + "'.", e);
+            throw new Exception ("Could not find plug-in class '" + pluginClassName + "'.", e);
         }
         catch (NoSuchMethodException e)
         {
-            throw new LoadPluginException("Plug-in class '" + pluginClassName + "' does not have a default constructor.", e);
+            throw new Exception ("Plug-in class '" + pluginClassName + "' does not have a default constructor.", e);
         }
         catch (InstantiationException e)
         {
-            throw new LoadPluginException("Plug-in class '" + pluginClassName + "' must not be abstract.", e);
+            throw new Exception ("Plug-in class '" + pluginClassName + "' must not be abstract.", e);
         }
         catch (ClassCastException e)
         {
-            throw new LoadPluginException("Plug-in class '" + pluginClassName + "' does not implement '" + Plugin.class.getName() + "'.", e);
+            throw new Exception ("Plug-in class '" + pluginClassName + "' does not implement '" + Plugin.class.getName() + "'.", e);
         }
         catch (Exception e)
         {
@@ -355,23 +330,23 @@ public class PluginManager
         load (plugin);
     }
 
-    public static void load (Plugin plugin) throws LoadPluginException
+    public static void load (Plugin plugin) throws Exception
     {
         // Validate the plug-in object.
         String pluginId = getPluginId(plugin);
         if (getPluginById (pluginId) != null)
         {
-            throw new LoadPluginException ("A plug-in with the ID '" + pluginId + "' has already been loaded.");
+            throw new Exception ("A plug-in with the ID '" + pluginId + "' has already been loaded.");
         }
         if (plugin.getName ().isEmpty ()  ||  plugin.getVersion ().isEmpty ())
         {
             String className = plugin.getClass ().getName ();
-            throw new LoadPluginException ("Plug-in '" + className + "' contains invalid values for name or version.");
+            throw new Exception ("Plug-in '" + className + "' contains invalid values for name or version.");
         }
 
         // Record what extension points are in this plug-in.
-        Class<? extends ExtensionPoint>[] eps = plugin.getExtensionPoints();
-        List<Class<? extends ExtensionPoint>> myExtPoints = new ArrayList<Class<? extends ExtensionPoint>>();
+        Class<? extends ExtensionPoint>[] eps = plugin.getExtensionPoints ();
+        List<Class<? extends ExtensionPoint>> myExtPoints = new ArrayList<Class<? extends ExtensionPoint>> ();
 
         if (eps != null)
         {
@@ -380,14 +355,14 @@ public class PluginManager
                 // Validate the extension point classes provided by the plug-in.
                 // Extension point classes should only inherit from a single
                 // interface that extends ExtensionPoint for clarity's sake.
-                Class<? extends ExtensionPoint> foundExtPoint = findOneExtPointClass(ep, true);
+                Class<? extends ExtensionPoint> foundExtPoint = findOneExtPointClass (ep, true);
 
                 // Make sure this extension point class hasn't already been
                 // loaded by another plug-in.
                 String extPointId = getExtensionPointId (foundExtPoint);
                 if (getExtensionPointById (extPointId) != null)
                 {
-                    throw new LoadPluginException("An extension point with the ID '" + extPointId + "' has already been loaded.");
+                    throw new Exception ("An extension point with the ID '" + extPointId + "' has already been loaded.");
                 }
 
                 // Remember this valid extension point.
@@ -396,72 +371,78 @@ public class PluginManager
         }
 
         // Record what extensions are in this plug-in.
-        ExtensionPoint[] es = plugin.getExtensions();
+        ExtensionPoint[] es = plugin.getExtensions ();
         List<ExtensionPoint> myExts = new ArrayList<ExtensionPoint>();
 
-        if(es != null) {
-            for(ExtensionPoint e : es) {
-
+        if (es != null)
+        {
+            for (ExtensionPoint e : es)
+            {
                 // Validate the extension classes provided by the plug-in.
                 // Extension classes should only implement a single
                 // interface that extends ExtensionPoint for clarity's sake.
-                findOneExtPointClass(e.getClass(), false);
+                findOneExtPointClass (e.getClass (), false);
 
                 // Make sure this extension point class hasn't already been
                 // loaded by another plug-in.
-                String extId = getExtensionId(e);
-                if(getExtensionById(extId) != null) {
-                    throw new LoadPluginException("An extension with the ID '" + extId + "' has already been loaded.");
+                String extId = getExtensionId (e);
+                if (getExtensionById (extId) != null)
+                {
+                    throw new Exception ("An extension with the ID '" + extId + "' has already been loaded.");
                 }
 
                 // Remember this valid extension.
-                myExts.add(e);
+                myExts.add (e);
             }
         }
 
         // Plug-in class and instance are considered good at this point.
 
         // Remember the plug-in (global).
-        globalPlugins.put(pluginId, plugin);
+        globalPlugins.put (pluginId, plugin);
 
         // Remember all the extension points in this plug-in (global).
-        for(Class<? extends ExtensionPoint> extPoint : myExtPoints) {
-            String extPointId = getExtensionPointId(extPoint);
-            globalExtPoints.put(extPointId, extPoint);
-            getOwnedExtPointExts(extPoint);
+        for (Class<? extends ExtensionPoint> extPoint : myExtPoints)
+        {
+            String extPointId = getExtensionPointId (extPoint);
+            globalExtPoints.put (extPointId, extPoint);
+            getOwnedExtPointExts (extPoint);
         }
 
         // Remember all the extensions in this plug-in (global).
-        for(ExtensionPoint ext : myExts) {
-            String extId = getExtensionId(ext);
-            globalExts.put(extId, ext);
+        for (ExtensionPoint ext : myExts)
+        {
+            String extId = getExtensionId (ext);
+            globalExts.put (extId, ext);
 
             // Remember the extensions for the given extension points (ownership).
-            Class<? extends ExtensionPoint> foundExtPoint = findOneExtPointClass(ext.getClass(), false);
-            List<ExtensionPoint> myExtPointExts = getOwnedExtPointExts(foundExtPoint);
-            myExtPointExts.add(ext);
+            Class<? extends ExtensionPoint> foundExtPoint = findOneExtPointClass (ext.getClass (), false);
+            List<ExtensionPoint> myExtPointExts = getOwnedExtPointExts (foundExtPoint);
+            myExtPointExts.add (ext);
         }
 
         // Remember the extension points and extensions for this plug-in (ownership).
-        ownedPluginExtPoints.put(pluginId, myExtPoints);
-        ownedPluginExts.put(pluginId, myExts);
+        ownedPluginExtPoints.put (pluginId, myExtPoints);
+        ownedPluginExts.put (pluginId, myExts);
     }
 
-    private static List<ExtensionPoint> getOwnedExtPointExts(Class<? extends ExtensionPoint> extPoints) {
-        String extPointId = getExtensionPointId(extPoints);
-        List<ExtensionPoint> myExtPointExts = ownedExtPointExts.get(extPointId);
-        if(myExtPointExts == null) {
-            myExtPointExts = new ArrayList<ExtensionPoint>();
-            ownedExtPointExts.put(extPointId, myExtPointExts);
+    protected static List<ExtensionPoint> getOwnedExtPointExts (Class<? extends ExtensionPoint> extPoints)
+    {
+        String extPointId = getExtensionPointId (extPoints);
+        List<ExtensionPoint> myExtPointExts = ownedExtPointExts.get (extPointId);
+        if (myExtPointExts == null)
+        {
+            myExtPointExts = new ArrayList<ExtensionPoint> ();
+            ownedExtPointExts.put (extPointId, myExtPointExts);
         }
         return myExtPointExts;
     }
 
-    public static void validateExtPoints () throws LoadPluginException
+    public static void validateExtPoints () throws Exception
     {
         for (String extPointId : ownedExtPointExts.keySet ())
         {
-            if (!globalExtPoints.keySet ().contains (extPointId))
+            if (! globalExtPoints.keySet ().contains (extPointId))
             {
                 String s = "";
                 for (ExtensionPoint ext : ownedExtPointExts.get (extPointId))
@@ -469,54 +450,68 @@ public class PluginManager
                     s += ", " + ext.getClass ().getName ();
                 }
                 s = s.substring (2);  // to remove the leading ", "
-                throw new LoadPluginException ("The extension point '" + extPointId + "' has not been declared by any plug-in, but it is used by extension classes: " + s);
+                throw new Exception ("The extension point '" + extPointId + "' has not been declared by any plug-in, but it is used by extension classes: " + s);
             }
         }
     }
 
-    public static Map<File, Boolean> loadJarFiles(File directory, int maxRecurseDepth) {
-        Map<File, Boolean> success = new HashMap<File, Boolean>();
-        loadJarFilesInternal(directory, maxRecurseDepth, 0, success);
+    public static Map<File, Boolean> loadJarFiles (File directory, int maxRecurseDepth)
+    {
+        Map<File, Boolean> success = new HashMap<File, Boolean> ();
+        loadJarFilesInternal (directory, maxRecurseDepth, 0, success);
         return success;
     }
 
-    private static void loadJarFilesInternal(File directory, int maxRecurseDepth, int curDepth, Map<File, Boolean> success) {
-        if(directory == null || !directory.exists() || !directory.isDirectory()) {
-            return;
-        }
-        FileFilter jarFilter = new FileFilter() {
-            public boolean accept(File path) {
-                return path.isDirectory() || path.getName().endsWith(".jar");
+    protected static void loadJarFilesInternal (File directory, int maxRecurseDepth, int curDepth, Map<File,Boolean> success)
+    {
+        if (directory == null  ||  ! directory.exists ()  ||  ! directory.isDirectory ()) return;
+        FileFilter jarFilter = new FileFilter ()
+        {
+            public boolean accept (File path)
+            {
+                return path.isDirectory ()  ||  path.getName ().endsWith (".jar");
             }
         };
-        for(File file : directory.listFiles(jarFilter)) {
-            if(file.isDirectory()) {
-                if(maxRecurseDepth > curDepth) {
-                    loadJarFilesInternal(file, maxRecurseDepth, curDepth + 1, success);
+        for (File file : directory.listFiles (jarFilter))
+        {
+            if (file.isDirectory ())
+            {
+                if (maxRecurseDepth > curDepth)
+                {
+                    loadJarFilesInternal (file, maxRecurseDepth, curDepth + 1, success);
                 }
-            } else {
-                try {
-                    addURL(file.toURI().toURL());
-                    success.put(file, true);
-                } catch(Exception e) {
-                    e.printStackTrace();
-                    success.put(file, false);
+            }
+            else
+            {
+                try
+                {
+                    addURL (file.toURI ().toURL ());
+                    success.put (file, true);
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace ();
+                    success.put (file, false);
                 }
             }
         }
     }
 
-    private static void addURL(URL u) throws IOException
+    protected static void addURL (URL u) throws IOException
     {
-        URLClassLoader sysloader = (URLClassLoader) ClassLoader.getSystemClassLoader();
+        // Compare with Host.invoke()
+        URLClassLoader sysloader = (URLClassLoader) ClassLoader.getSystemClassLoader ();
         Class<?> sysclass = URLClassLoader.class;
-        try {
-            Method method = sysclass.getDeclaredMethod("addURL", new Class[] {URL.class});
-            method.setAccessible(true);
-            method.invoke(sysloader, new Object[] {u});
-        } catch (Throwable t) {
-            t.printStackTrace();
-            throw new IOException("Error, could not add URL to system classloader");
+        try
+        {
+            Method method = sysclass.getDeclaredMethod ("addURL", new Class[] {URL.class});
+            method.setAccessible (true);
+            method.invoke (sysloader, new Object[] {u});
+        }
+        catch (Throwable t)
+        {
+            t.printStackTrace ();
+            throw new IOException ("Error, could not add URL to system classloader");
         }
     }
 
@@ -593,12 +588,11 @@ public class PluginManager
         }
     }
 
-
-    //////////
-    // MISC //
-    //////////
-
-    private static Class<? extends ExtensionPoint> findOneExtPointClass (Class<? extends ExtensionPoint> clazz, boolean isExtPoint) throws LoadPluginException
+    /**
+        Determines which extension point the given class belongs to.
+        This is defined as an immediate descendant of ExtensionPoint.
+    **/
+    protected static Class<? extends ExtensionPoint> findOneExtPointClass (Class<? extends ExtensionPoint> clazz, boolean isExtPoint) throws Exception
     {
         String objName = isExtPoint ? "extension point" : "extension";
         String actionName = isExtPoint ? "extend" : "implement";
@@ -606,7 +600,7 @@ public class PluginManager
         List<Class<? extends ExtensionPoint>> foundExtPoints = findExtPoints (clazz);
         if (foundExtPoints.size () == 0)
         {
-            throw new LoadPluginException ("The " + objName + " class '" + clazz.getName () + "' does not " + actionName + " any extension point interface.");
+            throw new Exception ("The " + objName + " class '" + clazz.getName () + "' does not " + actionName + " any extension point interface.");
         }
         else if (foundExtPoints.size () > 1)
         {
@@ -616,32 +610,39 @@ public class PluginManager
                 s += ", " + foundExtPoint.getName ();
             }
             s = s.substring (2);
-            throw new LoadPluginException ("The " + objName + " class '" + clazz.getName () + "' " + actionName + "s more than one extension point interface (" + s + ").");
+            throw new Exception ("The " + objName + " class '" + clazz.getName () + "' " + actionName + "s more than one extension point interface (" + s + ").");
         }
 
         return foundExtPoints.get (0);
     }
 
-    private static List<Class<? extends ExtensionPoint>> findExtPoints(Class<? extends ExtensionPoint> clazz) {
-        List<Class<? extends ExtensionPoint>> extPoints =
-            new ArrayList<Class<? extends ExtensionPoint>>();
-        findExtPoints(clazz, extPoints);
-        return extPoints;
+    /**
+        Walks up the inheritance hierarchy of the given class and collects all ancestors which
+        are direct descendants of ExtensionPoint. Ideally, the return set will have a single item.
+    **/
+    protected static List<Class<? extends ExtensionPoint>> findExtPoints (Class<? extends ExtensionPoint> clazz)
+    {
+        List<Class<? extends ExtensionPoint>> result = new ArrayList<Class<? extends ExtensionPoint>>();
+        findExtPoints (clazz, result);
+        return result;
     }
 
+    /**
+        Subroutine of findExtPoints(class).
+    **/
     @SuppressWarnings("unchecked")
-    private static void findExtPoints (Class<?> clazz, List<Class<? extends ExtensionPoint>> found)
+    protected static void findExtPoints (Class<?> clazz, List<Class<? extends ExtensionPoint>> result)
     {
         Class<?> clazzParent = clazz.getSuperclass ();
         if (clazzParent != null)
         {
             if (clazzParent.equals (ExtensionPoint.class))
             {
-                found.add ((Class<? extends ExtensionPoint>) clazz);
+                result.add ((Class<? extends ExtensionPoint>) clazz);
             }
             else
             {
-                findExtPoints (clazzParent, found);
+                findExtPoints (clazzParent, result);
             }
         }
 
@@ -652,31 +653,31 @@ public class PluginManager
             {
                 if (impl.equals (ExtensionPoint.class))
                 {
-                    found.add ((Class<? extends ExtensionPoint>) clazz);
+                    result.add ((Class<? extends ExtensionPoint>) clazz);
                 }
                 else
                 {
-                    findExtPoints (impl, found);
+                    findExtPoints (impl, result);
                 }
             }
         }
     }
 
-    public static void list() {
-        for(String pluginId : globalPlugins.keySet()) {
-            Plugin plugin = globalPlugins.get(pluginId);
-            System.out.println("Plugin => " + pluginId + " / " + plugin.getName() + " / " + plugin.getVersion());
-            for(Class<? extends ExtensionPoint> extPoint : ownedPluginExtPoints.get(pluginId)) {
-                System.out.println("    ExtPoint => " + getExtensionPointId(extPoint));
+    public static void list ()
+    {
+        for (String pluginId : globalPlugins.keySet ())
+        {
+            Plugin plugin = globalPlugins.get (pluginId);
+            System.out.println ("Plugin => " + pluginId + " / " + plugin.getName () + " / " + plugin.getVersion ());
+            for (Class<? extends ExtensionPoint> extPoint : ownedPluginExtPoints.get (pluginId))
+            {
+                System.out.println ("    ExtPoint => " + getExtensionPointId (extPoint));
             }
-            for(ExtensionPoint ext : ownedPluginExts.get(pluginId)) {
-                System.out.println("    Ext => " + getExtensionId(ext));
-                System.out.println("        Point => " + getExtensionPointId(getPointForExtension(ext)));
+            for (ExtensionPoint ext : ownedPluginExts.get (pluginId))
+            {
+                System.out.println ("    Ext => " + getExtensionId (ext));
+                System.out.println ("        Point => " + getExtensionPointId (getPointForExtension (ext)));
             }
         }
-    }
-
-    public static PluginInitializationErrors getInitializationErrors() {
-        return initLoadErrors;
     }
 }

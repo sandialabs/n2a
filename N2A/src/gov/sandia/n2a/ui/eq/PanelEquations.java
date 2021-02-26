@@ -35,6 +35,7 @@ import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -42,6 +43,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -90,8 +92,10 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import gov.sandia.n2a.plugins.extpoints.Exporter;
-import gov.sandia.n2a.plugins.extpoints.Importer;
+import gov.sandia.n2a.plugins.extpoints.Export;
+import gov.sandia.n2a.plugins.extpoints.ExportModel;
+import gov.sandia.n2a.plugins.extpoints.Import;
+import gov.sandia.n2a.plugins.extpoints.ImportModel;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
@@ -111,6 +115,7 @@ import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.UndoableView;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun;
+import gov.sandia.n2a.ui.ref.ExportBibliography;
 import gov.sandia.n2a.ui.studies.PanelStudy;
 import sun.swing.SwingUtilities2;
 
@@ -1104,9 +1109,9 @@ public class PanelEquations extends JPanel
 
         class ExporterFilter extends FileFilter
         {
-            public Exporter exporter;
+            public Export exporter;
 
-            ExporterFilter (Exporter exporter)
+            ExporterFilter (Export exporter)
             {
                 this.exporter = exporter;
             }
@@ -1134,10 +1139,11 @@ public class PanelEquations extends JPanel
             fc.setDialogTitle ("Export \"" + record.key () + "\"");
             fc.setSelectedFile (new File (record.key ()));
             ExporterFilter n2a = null;
-            List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Exporter.class);
+            List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Export.class);
             for (ExtensionPoint exp : exps)
             {
-                ExporterFilter ef = new ExporterFilter ((Exporter) exp);
+                if (! (exp instanceof ExportModel)  &&  ! (exp instanceof ExportBibliography)) continue;
+                ExporterFilter ef = new ExporterFilter ((Export) exp);
                 fc.addChoosableFileFilter (ef);
                 if (ef.exporter.getName ().contains ("N2A")) n2a = ef;
             }
@@ -1188,9 +1194,9 @@ public class PanelEquations extends JPanel
 
         class ImporterFilter extends FileFilter
         {
-            public Importer importer;
+            public ImportModel importer;
 
-            ImporterFilter (Importer importer)
+            ImporterFilter (ImportModel importer)
             {
                 this.importer = importer;
             }
@@ -1198,7 +1204,7 @@ public class PanelEquations extends JPanel
             @Override
             public boolean accept (File f)
             {
-                return importer.accept (f);
+                return importer.accept (f.toPath ());
             }
 
             @Override
@@ -1214,11 +1220,12 @@ public class PanelEquations extends JPanel
 
             // Construct and customize a file chooser
             final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
-            fc.setDialogTitle ("Import");
-            List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Importer.class);
+            fc.setDialogTitle ("Import Model");
+            List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Import.class);
             for (ExtensionPoint exp : exps)
             {
-                ImporterFilter f = new ImporterFilter ((Importer) exp);
+                if (! (exp instanceof ImportModel)) continue;
+                ImporterFilter f = new ImporterFilter ((ImportModel) exp);
                 fc.addChoosableFileFilter (f);
             }
 
@@ -1326,8 +1333,9 @@ public class PanelEquations extends JPanel
         public boolean canImport (TransferSupport xfer)
         {
             if (locked) return false;
-            if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor)) return true;
-            if (xfer.isDataFlavorSupported (DataFlavor.imageFlavor )) return true;
+            if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))       return true;
+            if (xfer.isDataFlavorSupported (DataFlavor.imageFlavor))        return true;
+            if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor)) return true;
             return false;
         }
 
@@ -1344,19 +1352,40 @@ public class PanelEquations extends JPanel
             try
             {
                 Transferable xferable = xfer.getTransferable ();
-                if (xferable.isDataFlavorSupported (DataFlavor.stringFlavor))
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))
+                {
+                    @SuppressWarnings("unchecked")
+                    List<File> files = (List<File>) xferable.getTransferData (DataFlavor.javaFileListFlavor);
+                    for (File file : files)
+                    {
+                        try (BufferedReader reader = Files.newBufferedReader (file.toPath ()))
+                        {
+                            MNode temp = new MVolatile ();
+                            schema = Schema.readAll (temp, reader);  // Throws an IOException if this is not a proper N2A file.
+                            schema.type = "Part";
+                            data.set (temp, file.getName ());
+                        }
+                        catch (IOException e)
+                        {
+                            // See if it's an image file.
+                            image = ImageIO.read (file);  // returns null if file is not an image
+                        }
+                    }
+                }
+                else if (xferable.isDataFlavorSupported (DataFlavor.imageFlavor))
+                {
+                    image = (BufferedImage) xferable.getTransferData (DataFlavor.imageFlavor);
+                }
+                else if (xferable.isDataFlavorSupported (DataFlavor.stringFlavor))
                 {
                     StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
                     schema = Schema.readAll (data, reader);
-                }
-                if (xferable.isDataFlavorSupported (TransferableNode.nodeFlavor))
-                {
-                    xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
-                    modifiers = xferNode.modifiers;
-                }
-                if (xferable.isDataFlavorSupported (DataFlavor.imageFlavor))
-                {
-                    image = (BufferedImage) xferable.getTransferData (DataFlavor.imageFlavor);
+
+                    if (xferable.isDataFlavorSupported (TransferableNode.nodeFlavor))
+                    {
+                        xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
+                        modifiers = xferNode.modifiers;
+                    }
                 }
             }
             catch (IOException | UnsupportedFlavorException e)
@@ -1522,6 +1551,33 @@ public class PanelEquations extends JPanel
             if (image != null)
             {
                 target = target.containerFor ("image");
+
+                // Limit resolution to 256x256
+                int originalWidth  = image.getWidth ();
+                int originalHeight = image.getHeight ();
+                double w = originalWidth;
+                double h = originalHeight;
+                if (w > 256)
+                {
+                    h *= 256 / w;
+                    w  = 256;
+                }
+                if (h > 256)
+                {
+                    w *= 256 / h;
+                    h  = 256;
+                }
+                int width  = (int) Math.round (w);
+                int height = (int) Math.round (h);
+                if (width != originalWidth  ||  height != originalHeight)
+                {
+                    BufferedImage smaller = new BufferedImage (width, height, image.getType ());
+                    Graphics2D g = smaller.createGraphics ();
+                    g.setRenderingHint (RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);  // Most expensive method, but we're not in that big of a hurry.
+                    g.drawImage (image, 0, 0, width, height, 0, 0, originalWidth, originalHeight, null);
+                    g.dispose ();
+                    image = smaller;
+                }
 
                 // Convert image to base64 coding
                 ByteArrayOutputStream stream = new ByteArrayOutputStream ();
@@ -1710,7 +1766,7 @@ public class PanelEquations extends JPanel
                     i++;
                 }
 
-                if ((modifiers & (InputEvent.CTRL_MASK | InputEvent.SHIFT_MASK)) == 0)  // Could filter on drop action instead. However, this allows us to discriminate any combination of modifiers, not just Swings interpretation of them.
+                if ((modifiers & (InputEvent.CTRL_MASK | InputEvent.SHIFT_MASK)) == 0)  // Could filter on drop action instead. However, this allows us to discriminate any combination of modifiers, not just Swing's interpretation of them.
                 {
                     NodePart.suggestConnections (newParts, oldParts);
                     NodePart.suggestConnections (oldParts, newParts);

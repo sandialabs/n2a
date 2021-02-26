@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -23,7 +23,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNodeListener;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
-import gov.sandia.n2a.plugins.extpoints.Importer;
+import gov.sandia.n2a.plugins.extpoints.Import;
 import gov.sandia.n2a.ui.eq.PanelEquations.BreadcrumbRenderer;
 
 @SuppressWarnings("serial")
@@ -304,15 +304,15 @@ public class PanelModel extends JPanel implements MNodeListener
 
     public static void importFile (Path path)
     {
-        Importer bestImporter = null;
-        float    bestP        = 0;
-        for (ExtensionPoint exp : PluginManager.getExtensionsForPoint (Importer.class))
+        Import bestImporter = null;
+        float  bestP        = 0;
+        for (ExtensionPoint exp : PluginManager.getExtensionsForPoint (Import.class))
         {
-            float P = ((Importer) exp).isIn (path);
+            float P = ((Import) exp).matches (path);
             if (P > bestP)
             {
                 bestP        = P;
-                bestImporter = (Importer) exp;
+                bestImporter = (Import) exp;
             }
         }
         if (bestImporter != null) bestImporter.process (path);

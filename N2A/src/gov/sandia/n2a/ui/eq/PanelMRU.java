@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -69,7 +69,9 @@ public class PanelMRU extends JPanel
         {
             public boolean canImport (TransferSupport xfer)
             {
-                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+                if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))       return true;
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor)) return true;
+                return false;
             }
 
             public boolean importData (TransferSupport xfer)
@@ -77,9 +79,11 @@ public class PanelMRU extends JPanel
                 list.clearSelection ();
 
                 TransferHandler th = PanelModel.instance.panelSearch.transferHandler;
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor)) return th.importData (xfer);
                 if (! xfer.isDrop ()) return th.importData (xfer);
                 Transferable xferable = xfer.getTransferable ();
                 if (! xferable.isDataFlavorSupported (TransferableNode.nodeFlavor)) return th.importData (xfer);
+                // Now we have a DnD within our own app, which means the user is re-ordering entries in the MRU ...
 
                 try
                 {
@@ -101,6 +105,7 @@ public class PanelMRU extends JPanel
                         model.add (newIndex, key);
                         saveMRU ();
                     }
+                    return true;
                 }
                 catch (IOException | UnsupportedFlavorException e) {}
 

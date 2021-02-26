@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -78,20 +78,18 @@ public abstract class Plugin
     }
 
     /**
-     * xxx
-     *
-     * @return
-     */
+        @return A list of interfaces that this module will recognize and make use of.
+    **/
     public Class<? extends ExtensionPoint>[] getExtensionPoints()
     {
         return null;
     }
 
     /**
-     * xxx
-     *
-     * @return
-     */
+        @return A list of instances that implement various extension-point interfaces.
+        Some of these interfaces may be registered by other modules. IE: we are supplying
+        components for use by another module.
+    **/
     public ExtensionPoint[] getExtensions()
     {
         return null;

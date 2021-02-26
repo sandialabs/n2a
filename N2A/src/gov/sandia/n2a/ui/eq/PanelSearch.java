@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -244,7 +244,9 @@ public class PanelSearch extends JPanel
         {
             public boolean canImport (TransferSupport xfer)
             {
-                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor)  ||  xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor);
+                if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))       return true;
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor)) return true;
+                return false;
             }
 
             public boolean importData (TransferSupport xfer)
@@ -252,97 +254,90 @@ public class PanelSearch extends JPanel
                 if (! tree.isFocusOwner ()) yieldFocus ();
 
                 Transferable xferable = xfer.getTransferable ();
-                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))
+                try
                 {
-                    try
+                    if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))
                     {
                         @SuppressWarnings("unchecked")
                         List<File> files = (List<File>) xferable.getTransferData (DataFlavor.javaFileListFlavor);
+                        um.addEdit (new CompoundEdit ());  // in case there is more than one file
                         for (File file : files) PanelModel.importFile (file.toPath ());
+                        um.endCompoundEdit ();
                         return true;
                     }
-                    catch (IOException | UnsupportedFlavorException e)
+                    else if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))
                     {
-                    }
-                }
-                else if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))
-                {
-                    Schema schema;
-                    MNode data = new MVolatile ();
-                    TransferableNode xferNode = null;
-                    try
-                    {
+                        MNode data = new MVolatile ();
                         StringReader reader = new StringReader ((String) xferable.getTransferData (DataFlavor.stringFlavor));
-                        schema = Schema.readAll (data, reader);
+                        Schema schema = Schema.readAll (data, reader);
+
+                        TransferableNode xferNode = null;
                         if (xferable.isDataFlavorSupported (TransferableNode.nodeFlavor)) xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
-                    }
-                    catch (IOException | UnsupportedFlavorException e)
-                    {
-                        return false;
-                    }
-
-                    if (! schema.type.contains ("Part")) return false;
-                    PanelModel pm = PanelModel.instance;
-                    if (xfer.isDrop ()  &&  xferNode != null  &&  xferNode.panel != pm.panelEquations)
-                    {
-                        if (xferNode.panel != pm.panelSearch) return false;  // Reject DnD from MRU
-                        // This is a drag internal to this search panel, so treat it as a re-categorization.
-
-                        // Determine old category.
-                        if (xferNode.selection == null) return false;
-                        NodeBase oldNode = nodeFor (xferNode.selection);
-                        if (oldNode == null  ||  oldNode.getKeyPath ().size () < xferNode.selection.size ()) return false;
-                        if (! (oldNode instanceof NodeModel)) return false;  // If oldeNode is a category, then the user is trying to move the entire category to a new place. For now, don't support this.
-                        String key = ((NodeModel) oldNode).key;
-                        MNode doc = AppData.models.child (key);
-                        if (! AppData.models.isWriteable (doc)) return false;  // Must be able to change model in order to change category.
-                        String oldCategory = oldNode.getCategory ();
-
-                        // Determine new category.
-                        TreePath path = ((JTree.DropLocation) xfer.getDropLocation ()).getPath ();
-                        if (path == null) return false;
-                        NodeBase newNode = (NodeBase) path.getLastPathComponent ();
-                        String newCategory = newNode.getCategory ();
-                        List<String> newSelection = newNode.getKeyPath ();
-
-                        // Update metadata
-                        if (newCategory.equals (oldCategory)) return true;  // Prevent damage to doc categories if DnD occurs when list is temporarily uncategorized, such as during connection search.
-                        String current = getCategory (key);
-                        List<String> currentList = new ArrayList<String> ();
-                        for (String c : current.split (",")) currentList.add (c.trim ());
-
-                        int index = currentList.indexOf (oldCategory);
-                        if (index >= 0) currentList.set (index, newCategory);
-                        else            currentList.add (newCategory);
-
-                        String next = currentList.get (0);
-                        for (int i = 1; i < currentList.size (); i++) next += "," + currentList.get (i);
-
-                        if (! next.equals (current))
+    
+                        if (! schema.type.contains ("Part")) return false;
+                        PanelModel pm = PanelModel.instance;
+                        if (xfer.isDrop ()  &&  xferNode != null  &&  xferNode.panel != pm.panelEquations)
                         {
-                            if (newNode instanceof NodeModel) newSelection.remove (newSelection.size () - 1);
-                            newSelection.add (oldNode.toString ());
-                            um.apply (new ChangeCategory (doc, next, xferNode.selection, newSelection));
+                            if (xferNode.panel != pm.panelSearch) return false;  // Reject DnD from MRU
+                            // This is a drag internal to this search panel, so treat it as a re-categorization.
+    
+                            // Determine old category.
+                            if (xferNode.selection == null) return false;
+                            NodeBase oldNode = nodeFor (xferNode.selection);
+                            if (oldNode == null  ||  oldNode.getKeyPath ().size () < xferNode.selection.size ()) return false;
+                            if (! (oldNode instanceof NodeModel)) return false;  // If oldeNode is a category, then the user is trying to move the entire category to a new place. For now, don't support this.
+                            String key = ((NodeModel) oldNode).key;
+                            MNode doc = AppData.models.child (key);
+                            if (! AppData.models.isWriteable (doc)) return false;  // Must be able to change model in order to change category.
+                            String oldCategory = oldNode.getCategory ();
+    
+                            // Determine new category.
+                            TreePath path = ((JTree.DropLocation) xfer.getDropLocation ()).getPath ();
+                            if (path == null) return false;
+                            NodeBase newNode = (NodeBase) path.getLastPathComponent ();
+                            String newCategory = newNode.getCategory ();
+                            List<String> newSelection = newNode.getKeyPath ();
+    
+                            // Update metadata
+                            if (newCategory.equals (oldCategory)) return true;  // Prevent damage to doc categories if DnD occurs when list is temporarily uncategorized, such as during connection search.
+                            String current = getCategory (key);
+                            List<String> currentList = new ArrayList<String> ();
+                            for (String c : current.split (",")) currentList.add (c.trim ());
+    
+                            int index = currentList.indexOf (oldCategory);
+                            if (index >= 0) currentList.set (index, newCategory);
+                            else            currentList.add (newCategory);
+    
+                            String next = currentList.get (0);
+                            for (int i = 1; i < currentList.size (); i++) next += "," + currentList.get (i);
+    
+                            if (! next.equals (current))
+                            {
+                                if (newNode instanceof NodeModel) newSelection.remove (newSelection.size () - 1);
+                                newSelection.add (oldNode.toString ());
+                                um.apply (new ChangeCategory (doc, next, xferNode.selection, newSelection));
+                            }
+                            return true;
                         }
+    
+                        um.addEdit (new CompoundEdit ());
+                        for (MNode n : data)  // data can contain several parts
+                        {
+                            AddDoc add = new AddDoc (n.key (), n);
+                            if (xferNode != null  &&  xferNode.drag)
+                            {
+                                add.wasShowing = false;  // on the presumption that the sending side will create an Outsource operation, and thus wants to keep the old model in the equation tree
+                                xferNode.newPartName = add.name;
+                            }
+                            um.apply (add);
+                            break;  // For now, we only support transferring a single part. To do more, we need to add collections in TransferableNode for both the node paths and the created part names.
+                        }
+                        if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) um.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
+    
                         return true;
                     }
-
-                    um.addEdit (new CompoundEdit ());
-                    for (MNode n : data)  // data can contain several parts
-                    {
-                        AddDoc add = new AddDoc (n.key (), n);
-                        if (xferNode != null  &&  xferNode.drag)
-                        {
-                            add.wasShowing = false;  // on the presumption that the sending side will create an Outsource operation, and thus wants to keep the old model in the equation tree
-                            xferNode.newPartName = add.name;
-                        }
-                        um.apply (add);
-                        break;  // For now, we only support transferring a single part. To do more, we need to add collections in TransferableNode for both the node paths and the created part names.
-                    }
-                    if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE  ||  xferNode == null) um.endCompoundEdit ();  // By not closing the compound edit on a DnD move, we allow the sending side to include any changes in it when exportDone() is called.
-
-                    return true;
                 }
+                catch (IOException | UnsupportedFlavorException e) {}
 
                 return false;
             }
@@ -429,11 +424,17 @@ public class PanelSearch extends JPanel
 
         textQuery.setTransferHandler (new SafeTextTransferHandler ()
         {
-            public boolean importData (TransferSupport support)
+            public boolean canImport (TransferSupport xfer)
             {
-                boolean result = super.importData (support);
-                if (! result) result = transferHandler.importData (support);
-                return result;
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor)) return true;
+                return super.canImport (xfer);
+            }
+
+            public boolean importData (TransferSupport xfer)
+            {
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor)) return transferHandler.importData (xfer);
+                if (super.importData (xfer)) return true;
+                return transferHandler.importData (xfer);
             }
         });
 

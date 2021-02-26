@@ -11,9 +11,15 @@ import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
+import gov.sandia.n2a.plugins.extpoints.Import;
+import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
+import gov.sandia.n2a.ui.UndoManager;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
 import gov.sandia.n2a.ui.ref.undo.DeleteEntry;
 
@@ -21,7 +27,6 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
@@ -32,6 +37,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -67,6 +73,9 @@ public class PanelSearch extends JPanel
     public int                      lastSelection = -1;
     public int                      insertAt;
     public MNodeRenderer            renderer = new MNodeRenderer ();
+    public TransferHandler          transferHandler;
+
+    public static ExportBibTeX exportBibTeX = new ExportBibTeX ();
 
     public PanelSearch ()
     {
@@ -129,56 +138,77 @@ public class PanelSearch extends JPanel
             }
         });
 
-        list.setTransferHandler (new TransferHandler ()
+        UndoManager um = MainFrame.instance.undoManager;
+        transferHandler = new TransferHandler ()
         {
             public boolean canImport (TransferSupport xfer)
             {
-                return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
+                if (xfer.isDataFlavorSupported (TransferableReference.referenceFlavor)) return false;  // only used to export or to re-order MRU
+                if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))               return true;
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))         return true;
+                return false;
             }
 
             public boolean importData (TransferSupport xfer)
             {
                 if (! list.isFocusOwner ()) hideSelection ();
 
-                MNode data = new MVolatile ();
-                try (BufferedReader reader = new BufferedReader (new StringReader ((String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor))))
+                Transferable xferable = xfer.getTransferable ();
+                try
                 {
-                    // Scan data to determine type, then parse the specific type.
-                    while (true)
+                    if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))
                     {
-                        // Skip leading white space until first line.
-                        reader.mark (0x1 << 16);  // 64k
-                        String line = reader.readLine ();
-                        if (line == null) break;
-                        line = line.trim ();
-                        if (line.length () == 0) continue;
+                        @SuppressWarnings("unchecked")
+                        List<File> files = (List<File>) xferable.getTransferData (DataFlavor.javaFileListFlavor);
+                        um.addEdit (new CompoundEdit ());  // in case there is more than one file
+                        for (File file : files) PanelModel.importFile (file.toPath ());
+                        um.endCompoundEdit ();
+                        return true;
+                    }
+                    else if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))
+                    {
+                        String dataString = (String) xferable.getTransferData (DataFlavor.stringFlavor);
+                        BufferedReader reader = new BufferedReader (new StringReader (dataString));
+                        reader.mark (dataString.length ());
 
-                        // Determine type from line
-                        Parser parser;
-                        if (line.startsWith ("TY  -")) parser = new ParserRIS ();
-                        else                           parser = new ParserBibtex ();
+                        // Scan data to determine type, then parse the specific type.
+                        ImportBibliography bestImporter = null;
+                        float              bestP        = 0;
+                        for (ExtensionPoint exp : PluginManager.getExtensionsForPoint (Import.class))
+                        {
+                            if (! (exp instanceof ImportBibliography)) continue;
+                            ImportBibliography ib = (ImportBibliography) exp;
+
+                            float P = ib.matches (reader);
+                            reader.reset ();
+                            if (P > bestP)
+                            {
+                                bestP        = P;
+                                bestImporter = ib;
+                            }
+                        }
 
                         // Parse data
-                        reader.reset ();
-                        parser.parse (reader, data);
+                        MNode data = new MVolatile ();
+                        if (bestImporter != null) bestImporter.parse (reader, data);
+                        um.addEdit (new CompoundEdit ());  // data can contain several entries
+                        for (MNode n : data)
+                        {
+                            String key = MDir.validFilenameFrom (n.key ());
+                            um.apply (new AddEntry (key, n));
+                        }
+                        um.endCompoundEdit ();
+                        return true;
                     }
                 }
-                catch (IOException | UnsupportedFlavorException e)
-                {
-                    return false;
-                }
+                catch (IOException | UnsupportedFlavorException e) {}
 
-                for (MNode n : data)  // data can contain several entries
-                {
-                    String key = MDir.validFilenameFrom (n.key ());
-                    MainFrame.instance.undoManager.apply (new AddEntry (key, n));
-                }
-                return true;
+                return false;
             }
 
             public int getSourceActions (JComponent comp)
             {
-                return COPY;
+                return COPY;  // In particular, no support for cut.
             }
 
             protected Transferable createTransferable (JComponent comp)
@@ -186,21 +216,17 @@ public class PanelSearch extends JPanel
                 String key = list.getSelectedValue ();
                 if (key == null) return null;
                 MNode ref = AppData.references.child (key);
+                MNode references = new MVolatile ();
+                references.set (ref, ref.key ());
 
                 // Note that the output is a BibTeX entry, not the usual N2A schema.
-                StringWriter writer = new StringWriter ();
-                try
+                try (StringWriter writer = new StringWriter ())
                 {
-                    String nl = String.format ("%n");
-                    writer.write ("@" + ref.get ("form") + "{" + key + "," + nl);
-                    for (MNode c : ref) writer.write ("  " + c.key () + "={" + c.get () + "}," + nl);
-                    writer.write ("}" + nl);
+                    exportBibTeX.export (references, writer);
                     writer.close ();
-                    return new StringSelection (writer.toString ());
+                    return new TransferableReference (writer.toString (), key);
                 }
-                catch (IOException e)
-                {
-                }
+                catch (IOException e) {}
 
                 return null;
             }
@@ -208,8 +234,10 @@ public class PanelSearch extends JPanel
             protected void exportDone (JComponent source, Transferable data, int action)
             {
                 if (! list.isFocusOwner ()) hideSelection ();
+                // No support for cut or DnD move, so no need to call endCompoundEdit() here.
             }
-        });
+        };
+        list.setTransferHandler (transferHandler);
 
 
         textQuery = new JTextField ();
@@ -242,13 +270,22 @@ public class PanelSearch extends JPanel
 
         textQuery.setTransferHandler (new SafeTextTransferHandler ()
         {
-            public boolean importData (TransferSupport support)
+            public boolean canImport (TransferSupport xfer)
             {
+                if (xfer.isDataFlavorSupported (TransferableReference.referenceFlavor)) return false;
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor))         return true;
+                return super.canImport (xfer);
+            }
+
+            public boolean importData (TransferSupport xfer)
+            {
+                if (xfer.isDataFlavorSupported (DataFlavor.javaFileListFlavor)) return transferHandler.importData (xfer);
                 try
                 {
-                    String data = (String) support.getTransferable ().getTransferData (DataFlavor.stringFlavor);
-                    if (data.contains ("@")) return list.getTransferHandler ().importData (support);  // indicates BibTeX format
-                    return super.importData (support);  // Base class will reject serialized N2A objects
+                    String data = (String) xfer.getTransferable ().getTransferData (DataFlavor.stringFlavor);
+                    // Defend against complex formats, such as full bibliographic entry.
+                    if (data.contains ("\n")  ||  data.contains ("\r")) return transferHandler.importData (xfer);
+                    return super.importData (xfer);
                 }
                 catch (IOException | UnsupportedFlavorException e)
                 {

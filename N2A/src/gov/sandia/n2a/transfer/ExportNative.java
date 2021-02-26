@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,14 +8,14 @@ package gov.sandia.n2a.transfer;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.Schema;
-import gov.sandia.n2a.plugins.extpoints.Exporter;
+import gov.sandia.n2a.plugins.extpoints.ExportModel;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class ExportNative implements Exporter
+public class ExportNative implements ExportModel
 {
     @Override
     public String getName ()

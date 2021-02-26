@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,8 +15,8 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.plugins.Plugin;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import gov.sandia.n2a.plugins.extpoints.Exporter;
-import gov.sandia.n2a.plugins.extpoints.Importer;
+import gov.sandia.n2a.plugins.extpoints.Export;
+import gov.sandia.n2a.plugins.extpoints.Import;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.plugins.extpoints.Activity;
 import gov.sandia.n2a.transfer.ExportNative;
@@ -25,6 +25,8 @@ import gov.sandia.n2a.ui.eq.ActivityModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.ActivityRun;
 import gov.sandia.n2a.ui.ref.ActivityReference;
+import gov.sandia.n2a.ui.ref.ImportBibTeX;
+import gov.sandia.n2a.ui.ref.ImportRIS;
 import gov.sandia.n2a.ui.settings.ActivitySettings;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.settings.SettingsAbout;
@@ -84,7 +86,10 @@ public class N2APlugin extends Plugin
         return new ExtensionPoint[]
         {
             new ExportNative (),
+            gov.sandia.n2a.ui.ref.PanelSearch.exportBibTeX,
             new ImportNative (),
+            new ImportBibTeX (),
+            new ImportRIS (),
             new ActivityModel (),
             new ActivityRun (),
             new ActivityReference (),
@@ -110,9 +115,9 @@ public class N2APlugin extends Plugin
         {
             Activity.class,
             Backend.class,
-            Exporter.class,
+            Export.class,
             Host.Factory.class,
-            Importer.class,
+            Import.class,
             Operator.Factory.class,
             Settings.class
         };
