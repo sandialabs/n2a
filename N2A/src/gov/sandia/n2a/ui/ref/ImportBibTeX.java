@@ -26,7 +26,6 @@ import gov.sandia.n2a.db.MVolatile;
 public class ImportBibTeX extends ImportBibliography
 {
     public static Set<String> forms = new TreeSet<String> (Arrays.asList ("article", "book", "booklet", "conference", "inbook", "incollection", "inproceedings", "manual", "mastersthesis", "misc", "phdthesis", "proceedings", "techreport", "unpublished"));
-    public static Set<String> ignore = new TreeSet<String> (Arrays.asList ("comment", "preamble"));
 
     @Override
     public String getName ()
@@ -120,14 +119,13 @@ public class ImportBibTeX extends ImportBibliography
             {
                 parseBracedContent (reader, '}');  // and ignore
             }
-            else
+            else  // entry
             {
                 MNode tags = parseTags (reader);
-                if (! ignore.contains (form))
-                {
-                    tags.set (form, "form");
-                    output.set (tags, tags.get ());
-                }
+                tags.set (form, "form");
+                String key = tags.get ();
+                tags.set (null);
+                output.set (tags, key);
             }
             return true;  // Whether it's true or not, we will find out in the next parse cycle.
         }
@@ -193,7 +191,7 @@ public class ImportBibTeX extends ImportBibliography
             while (true)
             {
                 int c = reader.read ();
-                if (c < 0) return false;
+                if (c < 0  ||  c == '}') return false;
                 if (c == '=') break;
                 name += (char) c;
             }
@@ -208,7 +206,6 @@ public class ImportBibTeX extends ImportBibliography
             String name = "";
             while (true)
             {
-                reader.mark (1);
                 int c = reader.read ();
                 boolean done =  c < 0  ||  c == ','  ||  c == '}'; 
                 if (done  ||  c == '#')
@@ -220,8 +217,9 @@ public class ImportBibTeX extends ImportBibliography
                     name = "";
                     continue;
                 }
-                if (c == '{'  ||  c == '"') name += parseBracedContent (reader, c);
-                else                        name += (char) c;
+                if      (c == '{') name += parseBracedContent (reader, '}');
+                else if (c == '"') name += parseBracedContent (reader, '"');
+                else               name += (char) c;
             }
         }
 
@@ -235,16 +233,20 @@ public class ImportBibTeX extends ImportBibliography
                 if (c < 0) return result;
                 if (inEscape)
                 {
+                    // TODO: read ahead and process LaTeX escapes properly.
                     inEscape = false;
                     result += (char) c;
                     continue;
                 }
-                if (c == endChar  ||  c == '}') break;
-                if (c == '{') result += parseBracedContent (reader, '}');
+                if (c == endChar  ||  c == '}') break;  // If '}' is encountered when we are looking for a different endChar, then there is a problem with the file. This is a defensive check.
+                if (c == '{')
+                {
+                    result += parseBracedContent (reader, '}');
+                }
                 else
                 {
                     result += (char) c;
-                    if (c == '\\') inEscape = true;
+                    if (c == '\\') inEscape = true;  // Yes, we really do copy in that slash in the previous line. For now, we aren't really handling escapes, just copying them verbatim in the import.
                 }
             }
             return result;
