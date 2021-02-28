@@ -26,6 +26,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.ActivityRun;
 import gov.sandia.n2a.ui.ref.ActivityReference;
 import gov.sandia.n2a.ui.ref.ImportBibTeX;
+import gov.sandia.n2a.ui.ref.ImportEndNote;
 import gov.sandia.n2a.ui.ref.ImportRIS;
 import gov.sandia.n2a.ui.settings.ActivitySettings;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
@@ -89,6 +90,7 @@ public class N2APlugin extends Plugin
             gov.sandia.n2a.ui.ref.PanelSearch.exportBibTeX,
             new ImportNative (),
             new ImportBibTeX (),
+            new ImportEndNote (),
             new ImportRIS (),
             new ActivityModel (),
             new ActivityRun (),

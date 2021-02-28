@@ -169,7 +169,7 @@ public class PanelSearch extends JPanel
                     {
                         String dataString = (String) xferable.getTransferData (DataFlavor.stringFlavor);
                         BufferedReader reader = new BufferedReader (new StringReader (dataString));
-                        reader.mark (dataString.length ());
+                        reader.mark (dataString.length () + 1);
 
                         // Scan data to determine type, then parse the specific type.
                         ImportBibliography bestImporter = null;
