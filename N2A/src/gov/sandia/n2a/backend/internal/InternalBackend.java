@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -30,6 +30,23 @@ public class InternalBackend extends Backend
         Thread simulationThread = new SimulationThread (job);
         simulationThread.setDaemon (true);
         simulationThread.start ();
+    }
+
+    @Override
+    public boolean isActive (MNode job)
+    {
+        Thread[] threads = new Thread[Thread.activeCount ()];
+        int count = Thread.enumerate (threads);
+        for (int i = 0; i < count; i++)
+        {
+            Thread t = threads[i];
+            if (t instanceof SimulationThread)
+            {
+                SimulationThread s = (SimulationThread) t;
+                if (s.job == job) return s.isAlive ();
+            }
+        }
+        return false;
     }
 
     @SuppressWarnings("deprecation")

@@ -55,8 +55,8 @@ public class NodeJob extends NodeBase
     public    float   complete        = -1; // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means terminated.
     protected Date    dateStarted     = null;
     protected Date    dateFinished    = null;
-    protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
-    protected long    lastLiveCheck   = 0;
+    protected double  expectedSimTime = -1; // If greater than 0, then we can use this to estimate percent complete.
+    protected long    lastActive      = 0;
     protected long    lastDisplay     = 0;
     public    boolean deleted;
     protected boolean tryToSelectOutput;
@@ -67,7 +67,7 @@ public class NodeJob extends NodeBase
         setUserObject (key);  // This is fast, but the task of loading the $inherit line is slow, so we do it on the first call to monitorProgress().
         if (newlyStarted)
         {
-            lastLiveCheck = System.currentTimeMillis ();  // See below. Gives new jobs about 20 minutes to show some progress. Old jobs have no grace period because their last live check is 0.
+            lastActive = System.currentTimeMillis ();  // See below. Gives new jobs time to appear in process list. Old jobs have no grace period.
             tryToSelectOutput = true;
         }
     }
@@ -191,40 +191,50 @@ public class NodeJob extends NodeBase
         }
         if (complete < 1)
         {
+            Backend simulator = Backend.getBackend (source.get ("$metadata", "backend"));
+
+            float percentDone = 0;
+            if (expectedSimTime < 0) expectedSimTime = source.getOrDefault (0.0, "$metadata", "duration");
+            if (expectedSimTime > 0)
+            {
+                percentDone = (float) (simulator.currentSimTime (source) / expectedSimTime);
+            }
+
             if (Files.exists (finished))
             {
                 checkFinished (finished);
             }
             else
             {
-                long currentTime = System.currentTimeMillis ();
-                if (currentTime - lastLiveCheck > 1000000)  // 1000 seconds, about 20 minutes
+                try
                 {
-                    try
+                    long currentTime = System.currentTimeMillis ();
+                    if (simulator.isActive (source))
                     {
-                        if (! env.isActive (source))
+                        lastActive = currentTime;
+                    }
+                    else if (currentTime - lastActive > 5000)  // 5 seconds grace, to avoid race condition between process construction and this monitor thread
+                    {
+                        if (percentDone < 1)
                         {
+                            // Give it up for dead.
                             Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), finished);
                             complete = 4;
                         }
+                        else  // Job appears to be actually finished, even though "finished" hasn't been written yet.
+                        {
+                            // Fake the "finished" file. This might be overwritten later by the batch process.
+                            // Most likely, it will also report that we succeeded, so presume that things are fine.
+                            Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), finished);
+                            complete = 1;
+                        }
                     }
-                    catch (Exception e) {}
-                    lastLiveCheck = currentTime;
                 }
+                catch (Exception e) {}
             }
-        }
 
-        if (complete >= 0  &&  complete < 1)
-        {
-            if (expectedSimTime == 0) expectedSimTime = source.getOrDefault (0.0, "$metadata", "duration");
-            if (expectedSimTime > 0)
-            {
-                Backend simulator = Backend.getBackend (source.get ("$metadata", "backend"));
-                double t = simulator.currentSimTime (source);
-                if (t != 0) complete = Math.min (0.99999f, (float) (t / expectedSimTime));
-            }
+            if (complete >= 0  &&  complete < 1) complete = Math.min (0.99999f, percentDone);
         }
-
         if (complete == 3)
         {
             // Check if process is still lingering

@@ -138,6 +138,14 @@ public abstract class Backend implements ExtensionPoint
     {
     }
 
+    public boolean isActive (MNode job)
+    {
+        Host env = Host.get (job);
+        try {return env.isActive (job);}
+        catch (Exception e) {}
+        return false;
+    }
+
     /**
         Stop the the run.
         @param force If false, signal the job to shut down gracefully.
