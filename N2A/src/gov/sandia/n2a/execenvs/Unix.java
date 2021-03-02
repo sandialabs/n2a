@@ -109,7 +109,7 @@ public class Unix extends Host
             Files.createDirectories (binDir);
             stringToFile (background,
                   "#!/bin/bash\n"
-                + "$1 &\n"
+                + "$1 > /dev/null 2> /dev/null &\n"  // Redirecting to /dev/null allows ssh exec to return immediately.
             );
             Files.setPosixFilePermissions (background, PosixFilePermissions.fromString ("rwxr--r--"));
         }
@@ -119,7 +119,7 @@ public class Unix extends Host
         stringToFile (script,
               "#!/bin/bash\n"
             + "cd " + quote (jobDir) + "\n"
-            + "if " + command + " > out 2>> err; then\n"   // removed "&" so we wait for process to finish, assuming we can background it directly with sh
+            + "if " + command + " > out 2>> err; then\n"   // Wait for process to finish.
             + "  echo success > finished\n"
             + "else\n"
             + "  echo failure > finished\n"

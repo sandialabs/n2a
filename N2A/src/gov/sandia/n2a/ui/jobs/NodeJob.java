@@ -55,7 +55,7 @@ public class NodeJob extends NodeBase
     public    float   complete        = -1; // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means terminated.
     protected Date    dateStarted     = null;
     protected Date    dateFinished    = null;
-    protected double  expectedSimTime = -1; // If greater than 0, then we can use this to estimate percent complete.
+    protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
     protected long    lastActive      = 0;
     protected long    lastDisplay     = 0;
     public    boolean deleted;
@@ -194,7 +194,7 @@ public class NodeJob extends NodeBase
             Backend simulator = Backend.getBackend (source.get ("$metadata", "backend"));
 
             float percentDone = 0;
-            if (expectedSimTime < 0) expectedSimTime = source.getOrDefault (0.0, "$metadata", "duration");
+            if (expectedSimTime == 0) expectedSimTime = source.getOrDefault (0.0, "$metadata", "duration");
             if (expectedSimTime > 0)
             {
                 percentDone = (float) (simulator.currentSimTime (source) / expectedSimTime);
@@ -213,7 +213,7 @@ public class NodeJob extends NodeBase
                     {
                         lastActive = currentTime;
                     }
-                    else if (currentTime - lastActive > 5000)  // 5 seconds grace, to avoid race condition between process construction and this monitor thread
+                    else if (currentTime - lastActive > 1000000)  // 1000 seconds, or about 20 minutes
                     {
                         if (percentDone < 1)
                         {
