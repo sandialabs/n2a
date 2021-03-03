@@ -923,13 +923,12 @@ public class SettingsRepo extends JScrollPane implements Settings
         public Object getValueAt (int row, int column)
         {
             MNode repo = repos.get (row);
-            String name = repo.key ();
             switch (column)
             {
                 case 0: return row == primaryRow;
                 case 1: return repo.get ("visible").equals ("1");
                 case 2: return getColor (row);
-                case 3: return name;
+                case 3: return repo.key ();
                 case 4: return gitRepos.get (row).getURL ();
             }
             return null;
