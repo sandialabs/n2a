@@ -56,6 +56,7 @@ public class NodeJob extends NodeBase
     protected Date    dateStarted     = null;
     protected Date    dateFinished    = null;
     protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
+    protected long    lastMonitored   = 0;
     protected long    lastActive      = 0;
     protected long    lastDisplay     = 0;
     public    boolean deleted;
@@ -169,6 +170,16 @@ public class NodeJob extends NodeBase
     {
         if (deleted) return;
         if (complete >= 1  &&  complete != 3) return;
+
+        // Limit monitoring to no more than once per second.
+        long elapsed = System.currentTimeMillis () - lastMonitored;
+        long wait = 1000 - elapsed;
+        if (wait > 0)
+        {
+            try {Thread.sleep (wait);}
+            catch (InterruptedException e) {}
+        }
+        lastMonitored = System.currentTimeMillis ();
 
         float oldComplete = complete;
         MNode source = getSource ();

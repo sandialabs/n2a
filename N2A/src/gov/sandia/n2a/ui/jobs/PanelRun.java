@@ -233,10 +233,10 @@ public class PanelRun extends JPanel
                 });
 
                 // Distribute jobs to host monitor threads.
-                // Here, order doesn't matter so much, but we sill want to examine more recent jobs first.
-                for (int i = reverse.size () - 1; i >= 0; i--) reverse.get (i).distribute ();
                 Host.restartAssignmentThread ();
                 for (Host h : Host.getHosts ()) h.restartMonitorThread ();
+                // Here, order doesn't matter so much, but we sill want to examine more recent jobs first.
+                for (int i = reverse.size () - 1; i >= 0; i--) reverse.get (i).distribute ();
             }
         };
         loadHostMonitors.setDaemon (true);
@@ -251,11 +251,8 @@ public class PanelRun extends JPanel
                     while (true)
                     {
                         NodeBase d = displayNode;  // Make local copy (atomic action) to prevent it changing from under us
-                        if (d != null)
-                        {
-                            if (d instanceof NodeFile) d = (NodeBase) d.getParent ();  // parent could be null, if a sub-node was just deleted
-                            if (d != null) ((NodeJob) d).monitorProgress ();
-                        }
+                        if (d instanceof NodeFile) d = (NodeBase) d.getParent ();  // parent could be null, if a sub-node was just deleted
+                        if (d != null) ((NodeJob) d).monitorProgress ();
                         sleep (1000);
                     }
                 }
@@ -899,6 +896,16 @@ public class PanelRun extends JPanel
 
     public void delete ()
     {
+        // Ensure that we don't try to delete something twice.
+        TreePath[] checkPaths = tree.getSelectionPaths ();
+        for (TreePath path : checkPaths)
+        {
+            NodeBase node = (NodeBase) path.getLastPathComponent ();
+            if (node.markDelete) tree.removeSelectionPath (path);
+            else                 node.markDelete = true;
+        }
+
+        // Re-fetch selection
         int[] rows = tree.getSelectionRows ();
         if (rows.length < 1) return;
         TreePath[] paths = tree.getSelectionPaths ();
@@ -948,6 +955,8 @@ public class PanelRun extends JPanel
             tree.scrollPathToVisible (path);
         }
 
+        tree.repaint ();  // Ensure that strikethru marks will be displayed to user.
+
         // Spawn the rest of the delete process off to a separate thread.
         // The tree will be updated on the EDT as work progresses.
         Thread deleteThread = new Thread ("Delete Jobs")
@@ -978,15 +987,6 @@ public class PanelRun extends JPanel
                     {
                         if (parents.contains ((NodeJob) node.getParent ())) continue;
                     }
-
-                    // Show change to user immediately, so they won't be tempted to issue the delete again.
-                    EventQueue.invokeLater (new Runnable ()
-                    {
-                        public void run ()
-                        {
-                            model.removeNodeFromParent (node);
-                        }
-                    });
 
                     NodeJob job;
                     if (node instanceof NodeJob)
@@ -1038,6 +1038,14 @@ public class PanelRun extends JPanel
                                             Host.deleteTree (localFile,  true);
                                         }
                                     }
+
+                                    EventQueue.invokeLater (new Runnable ()
+                                    {
+                                        public void run ()
+                                        {
+                                            model.removeNodeFromParent (node);
+                                        }
+                                    });
                                 }
                                 catch (Exception e) {}
                             };
@@ -1066,6 +1074,14 @@ public class PanelRun extends JPanel
                                     Host.deleteTree (columns, true);
                                 }
                             }
+
+                            EventQueue.invokeLater (new Runnable ()
+                            {
+                                public void run ()
+                                {
+                                    model.removeNodeFromParent (node);
+                                }
+                            });
                         }
                         catch (Exception e) {}
                     }
