@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 
 import java.awt.EventQueue;
@@ -66,14 +67,16 @@ import com.jcraft.jsch.JSchException;
 **/
 public abstract class Host
 {
-    public String             name;                                 // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the hostname key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
-    public MNode              config;                               // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
-    public ArrayList<NodeJob> running = new ArrayList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
-    public MonitorThread      monitorThread;
+    public    String             name;                                 // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the hostname key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
+    public    MNode              config;                               // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
+    protected ArrayList<NodeJob> running = new ArrayList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
+    protected MonitorThread      monitorThread;
 
-    public    static int                  jobCount  = 0;
     protected static Map<String,Host>     hosts     = new HashMap<String,Host> ();
     protected static List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
+
+    protected static ArrayList<NodeJob> waitingForHost = new ArrayList<NodeJob> ();
+    protected static AssignmentThread   assignmentThread;
 
     protected static Set<PosixFilePermission> fullPermissions = new HashSet<PosixFilePermission> ();
     static
@@ -211,6 +214,8 @@ public abstract class Host
 
     public static void quit ()
     {
+        if (assignmentThread != null) assignmentThread.stop = true;
+
         Thread shutdownThread = new Thread ("Close Host connections")
         {
             public void run ()
@@ -236,6 +241,114 @@ public abstract class Host
             shutdownThread.join (waitTime);
         }
         catch (InterruptedException e) {}
+    }
+
+    public static void restartAssignmentThread ()
+    {
+        if (assignmentThread != null) assignmentThread.stop = true;
+        assignmentThread = new AssignmentThread ();
+        assignmentThread.setDaemon (true);
+        assignmentThread.start ();
+    }
+
+    public static void waitForHost (NodeJob job)
+    {
+        synchronized (waitingForHost) {waitingForHost.add (job);}
+    }
+
+    public static class AssignmentThread extends Thread
+    {
+        public boolean        stop;
+        public Map<Host,Long> hostTime = new HashMap<Host,Long> ();
+
+        public AssignmentThread ()
+        {
+            super ("Assign Jobs to Hosts");
+        }
+
+        public void run ()
+        {
+            try
+            {
+                while (! stop)
+                {
+                    int i = 0;
+                    while (! stop)
+                    {
+                        NodeJob job;
+                        synchronized (waitingForHost)
+                        {
+                            if (i >= waitingForHost.size ()) break;
+                            job = waitingForHost.get (i);
+                            if (job.complete == 3  ||  job.deleted)  // The user terminated or deleted job before it got started.
+                            {
+                                job.complete = 4;
+                                waitingForHost.remove (i);  // And don't bother sending to regular monitor.
+                                continue;
+                            }
+                        }
+                        System.out.println ("waiting: " + job.getSource ().key ());
+
+                        // Find available host
+                        MNode source = job.getSource ();
+                        Backend backend = Backend.getBackend (source.get ("$metadata", "backend"));
+
+                        List<Host> hosts = new ArrayList<Host> ();
+                        for (String hostname : source.get ("$metadata", "host").split (","))
+                        {
+                            Host h = Host.get (hostname.trim ());
+                            if (h != null) hosts.add (h);
+                        }
+                        if (hosts.isEmpty ()) hosts.add (Host.get ("localhost"));
+
+                        Host chosenHost = null;
+                        for (Host h : hosts)
+                        {
+                            // Enable host, but only for newly-launched jobs.
+                            // If the job pre-existed the current session of this app,
+                            // then wait for the user to explicitly enable the host.
+                            if (! job.old  &&  h instanceof Remote) ((Remote) h).enable ();
+
+                            // Throttle runs on the same host, so each has time to allocate resources
+                            // before the next one starts.
+                            if (stop) return;
+                            Long previous = hostTime.get (h);
+                            if (previous != null)
+                            {
+                                long elapsed = System.currentTimeMillis () - previous;
+                                long wait = 1000 - elapsed;
+                                try {if (wait > 0) sleep (wait);}
+                                catch (InterruptedException e) {}
+                            }
+
+                            if (stop) return;
+                            if (backend.canRunNow (h, source))
+                            {
+                                chosenHost = h;
+                                break;
+                            }
+                        }
+                        if (chosenHost == null)  // No host ready, so move on to next job.
+                        {
+                            i++;
+                        }
+                        else  // Host is ready, so start job and move to host's monitor list.
+                        {
+                            if (stop) return;
+                            source.set (chosenHost.name, "$metadata", "host");
+                            backend.start (source);
+                            hostTime.put (chosenHost, System.currentTimeMillis ());  // Remember when the most recent job was started on the chosen host.
+                            synchronized (waitingForHost) {waitingForHost.remove (i);}
+                            synchronized (chosenHost.running) {chosenHost.running.add (job);}
+                        }
+                    }
+
+                    // Wait for 1 second before checking the queue again.
+                    sleep (1000);
+                }
+            }
+            catch (InterruptedException e) {}
+        }
     }
 
     /**
@@ -283,6 +396,11 @@ public abstract class Host
         }
     }
 
+    public void monitor (NodeJob job)
+    {
+        synchronized (running) {running.add (job);}
+    }
+
     public class MonitorThread extends Thread
     {
         public boolean stop;
@@ -326,9 +444,7 @@ public abstract class Host
                     if (wait > 1000) sleep (wait);
                 }
             }
-            catch (InterruptedException e)
-            {
-            }
+            catch (InterruptedException e) {}
         }
     }
 

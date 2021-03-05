@@ -104,7 +104,7 @@ public class RemoteUnix extends Unix implements Remote
                                                 ((MDoc) job).save ();
 
                                                 // Add to UI and monitor thread.
-                                                PanelRun.instance.addNewRun (job);
+                                                monitor (PanelRun.instance.addNewRun (job));
                                             }
                                             catch (Exception e) {e.printStackTrace ();}
                                         }

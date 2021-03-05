@@ -89,6 +89,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -114,6 +115,7 @@ import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.UndoableView;
 import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.PanelRun;
 import gov.sandia.n2a.ui.ref.ExportBibliography;
 import gov.sandia.n2a.ui.studies.PanelStudy;
@@ -1013,28 +1015,33 @@ public class PanelEquations extends JPanel
         if (record == null) return;
         prepareForTabChange ();
 
-        String simulatorName = root.source.get ("$metadata", "backend");  // Note that "record" is the raw model, while "root.source" is the collated model.
-        final Backend simulator = Backend.getBackend (simulatorName);
         String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
         final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
         job.merge (root.source);
         job.set (record.key (), "$inherit");
         ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
 
-        new Thread ()
-        {
-            public void run ()
-            {
-                // Simulator should record all errors/warnings to a file in the job dir.
-                // If this thread throws an untrapped exception, then there is something wrong with the implementation.
-                simulator.start (job);
-            }
-        }.start ();
-
         MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
         mtp.setPreferredFocus (PanelRun.instance, PanelRun.instance.tree);
         mtp.selectTab ("Runs");
-        PanelRun.instance.addNewRun (job);
+        NodeJob node = PanelRun.instance.addNewRun (job);
+
+        Backend backend = Backend.getBackend (job.get ("$metadata", "backend"));
+        Host env = Host.get (job);
+        if (backend.getName ().equals ("Internal")  ||  env.name.equals ("localhost"))
+        {
+            // Hack to allow local jobs to bypass the wait-for-host queue.
+            // It would be better for all jobs to check for resources before starting.
+            // However, the time cost for the local check could be as long as the job itself
+            // (for very simple models). There is some expectation that the user knows
+            // the state of their own system when they choose to hit the play button.
+            backend.start (job);
+            env.monitor (node);
+        }
+        else
+        {
+            Host.waitForHost (node);
+        }
     }
 
     public void prepareForTabChange ()

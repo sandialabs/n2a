@@ -59,12 +59,14 @@ public class NodeJob extends NodeBase
     protected long    lastActive      = 0;
     protected long    lastDisplay     = 0;
     public    boolean deleted;
+    public    boolean old;                  // Indicates that the associated job existed before the current invocation of this app started. Used to limit which hosts are automatically enabled.
     protected boolean tryToSelectOutput;
 
     public NodeJob (MNode source, boolean newlyStarted)
     {
         key = source.key ();
         setUserObject (key);  // This is fast, but the task of loading the $inherit line is slow, so we do it on the first call to monitorProgress().
+        old = ! newlyStarted;
         if (newlyStarted)
         {
             lastActive = System.currentTimeMillis ();  // See below. Gives new jobs time to appear in process list. Old jobs have no grace period.
@@ -127,8 +129,20 @@ public class NodeJob extends NodeBase
             }
         });
 
-        Host env = Host.get (source);
-        synchronized (env.running) {env.running.add (this);};
+        Path started = localJobDir.resolve ("started");
+        if (Files.exists (started))
+        {
+            Host env = Host.get (source);
+            env.monitor (this);
+        }
+        else  // Not started yet, so send to wait-for-host queue.
+        {
+            // However, only try to start jobs that still have enough info to actually run.
+            // Sometimes a directory might be lingering from an incomplete delete,
+            // so don't try to start a job in that case.
+            Path model = localJobDir.resolve ("model");
+            if (Files.exists (model)) Host.waitForHost (this);
+        }
     }
 
     public synchronized void checkFinished (Path finished)

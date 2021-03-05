@@ -197,7 +197,7 @@ public class PanelRun extends JPanel
             }
         });
 
-        Thread refreshThreadSlow = new Thread ("Start Job Monitors")
+        Thread loadHostMonitors = new Thread ("Load Host Monitors")
         {
             public void run ()
             {
@@ -235,11 +235,12 @@ public class PanelRun extends JPanel
                 // Distribute jobs to host monitor threads.
                 // Here, order doesn't matter so much, but we sill want to examine more recent jobs first.
                 for (int i = reverse.size () - 1; i >= 0; i--) reverse.get (i).distribute ();
+                Host.restartAssignmentThread ();
                 for (Host h : Host.getHosts ()) h.restartMonitorThread ();
             }
         };
-        refreshThreadSlow.setDaemon (true);
-        refreshThreadSlow.start ();
+        loadHostMonitors.setDaemon (true);
+        loadHostMonitors.start ();
 
         Thread refreshThreadFast = new Thread ("Monitor Focused Job")
         {
@@ -1079,7 +1080,7 @@ public class PanelRun extends JPanel
         Add a newly-created job to the list, and do all remaining setup to monitor it.
         This must be called on the EDT.
     **/
-    public void addNewRun (MNode run)
+    public NodeJob addNewRun (MNode run)
     {
         NodeJob node = new NodeJob (run, true);
         node.inherit = run.getOrDefault (node.key, "$inherit").split (",", 2)[0].replace ("\"", "");
@@ -1092,7 +1093,6 @@ public class PanelRun extends JPanel
         tree.setSelectionRow (0);
         tree.scrollRowToVisible (0);
 
-        Host env = Host.get (run);
-        synchronized (env.running) {env.running.add (node);}
+        return node;
     }
 }

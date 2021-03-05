@@ -2604,7 +2604,7 @@ public class JobC extends Thread
                     if (pvalue != 0)
                     {
                         // If $t' is exactly 1, then pow() is unnecessary here. However, that is a rare situation.
-                        result.append ("  if (pow (" + resolve (bed.p.reference, context, false)+ ", " + resolve (bed.dt.reference, context, false));
+                        result.append ("  if (pow (" + resolve (bed.p.reference, context, false) + ", " + resolve (bed.dt.reference, context, false));
                         if (context.useExponent)
                         {
                             result.append (context.printShift (bed.dt.exponent - 15));  // second operand must have exponent=15

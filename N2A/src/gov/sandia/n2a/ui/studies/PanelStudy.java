@@ -13,8 +13,6 @@ import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.execenvs.Host;
-import gov.sandia.n2a.execenvs.Remote;
-import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.PanelEquations;
@@ -79,6 +77,7 @@ public class PanelStudy extends JPanel
     protected JTabbedPane      tabbedResults = new JTabbedPane ();
     protected SampleTableModel modelSamples  = new SampleTableModel ();
     public    SampleTable      tableSamples  = new SampleTable (modelSamples);
+    protected int              uniqueJobID;
 
     protected static ImageIcon iconPause    = ImageUtil.getImage ("pause-16.png");
     protected static ImageIcon iconStop     = ImageUtil.getImage ("stop.gif");
@@ -412,9 +411,8 @@ public class PanelStudy extends JPanel
 
         public class StudyThread extends Thread
         {
-            public boolean        stop;
-            public long           startTime;
-            public Map<Host,Long> hostTime = new HashMap<Host,Long> ();
+            public boolean stop;
+            public long    startTime;
 
             public StudyThread ()
             {
@@ -503,91 +501,24 @@ public class PanelStudy extends JPanel
                     iterator.assign (modelCopy);
                     MNode collated = new MPart (modelCopy);
 
-                    // Use the model to guide host selection.
-                    // This allows host itself to be a study variable.
-                    // Specifically, the user can set up one and only one of these cases:
-                    // 1) $metadata.host specifies one name -- Use only the specified host. Poll until it becomes available.
-                    // 2) $metadata.host specifies several names -- Use first available host, repeatedly polling the list.
-                    // 3) $metadata.host is tagged as a study variable -- Use only the host from the iterator's current position, similar to #1 above.
-                    List<Host> hosts = new ArrayList<Host> ();
-                    for (String hostname : collated.get ("$metadata", "host").split (","))
+                    // Launch job and maintain all records
+                    // See PanelEquations.listenerRun for similar code.
+                    String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + uniqueJobID++;
+                    final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
+                    job.merge (collated);
+                    job.set (inherit, "$inherit");
+                    ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
+                    jobIndex.put (jobKey, index);
+                    source.set (jobKey, "jobs", index++);
+
+                    EventQueue.invokeLater (new Runnable ()
                     {
-                        Host h = Host.get (hostname.trim ());
-                        if (h != null) hosts.add (h);
-                    }
-                    if (hosts.isEmpty ()) hosts.add (Host.get ("localhost"));
-
-                    // Likewise for backend
-                    Backend backend = Backend.getBackend (collated.get ("$metadata", "backend"));
-
-                    // Wait until a host becomes available.
-                    while (! stop)
-                    {
-                        Host chosenHost = null;
-                        for (Host h : hosts)
+                        public void run ()
                         {
-                            // If a particular host is requested, then the user implicitly gives permission to prompt for password.
-                            if (h instanceof Remote) ((Remote) h).enable ();
-
-                            if (backend.canRunNow (h, collated))
-                            {
-                                chosenHost = h;
-                                break;
-                            }
+                            if (displayStudy == Study.this) tableSamples.addJob ();
+                            Host.waitForHost (PanelRun.instance.addNewRun (job));
                         }
-                        if (chosenHost == null)
-                        {
-                            // Wait 1 second before re-polling host(s).
-                            try {sleep (1000);}
-                            catch (InterruptedException e) {}
-                        }
-                        else
-                        {
-                            // Launch job and maintain all records
-                            // See PanelEquations.listenerRun for similar code.
-                            String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + Host.jobCount++;
-                            final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
-                            job.merge (collated);
-                            job.set (inherit,         "$inherit");
-                            job.set (chosenHost.name, "$metadata", "host");
-                            ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
-                            jobIndex.put (jobKey, index);
-                            source.set (jobKey, "jobs", index++);
-
-                            // Throttle runs on the same host, so each has time to allocate resources
-                            // before the next one starts.
-                            Long previous = hostTime.get (chosenHost);
-                            if (previous != null)
-                            {
-                                long elapsed = System.currentTimeMillis () - previous;
-                                long wait = 1000 - elapsed;
-                                try {if (wait > 0) sleep (wait);}
-                                catch (InterruptedException e) {}
-                            }
-                            hostTime.put (chosenHost, System.currentTimeMillis ());
-
-                            Thread thread = new Thread ()
-                            {
-                                public void run ()
-                                {
-                                    backend.start (job);
-                                }
-                            };
-                            thread.setDaemon (true);
-                            thread.start ();
-
-                            EventQueue.invokeLater (new Runnable ()
-                            {
-                                public void run ()
-                                {
-                                    if (displayStudy == Study.this) tableSamples.addJob ();
-                                    PanelRun.instance.addNewRun (job);
-                                }
-                            });
-
-                            break;
-                        }
-                    }
+                    });
                 }
 
                 long now = System.currentTimeMillis ();
@@ -828,6 +759,12 @@ public class PanelStudy extends JPanel
                 restart ();
                 return true;
             }
+            return false;
+        }
+
+        // Indicates that the caller should wait until all previously-generated jobs finish before calling next again.
+        public boolean barrier ()
+        {
             return false;
         }
     }

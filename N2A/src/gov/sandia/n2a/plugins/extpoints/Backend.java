@@ -131,8 +131,11 @@ public abstract class Backend implements ExtensionPoint
     }
 
     /**
-        For a local machine, start the process that actually computes the job.
-        For a remote system, submit the job to whatever scheduler may exist there.
+        Simulate the model.
+        Implementation is expected to start a new thread and do all work there.
+        Implementation should create the file "started" in the local job directory.
+        All errors and warnings should be recorded in the file "err" in the job directory.
+        Only bugs in the Java implementation itself may throw an error from this function.
     **/
     public void start (MNode job)
     {
