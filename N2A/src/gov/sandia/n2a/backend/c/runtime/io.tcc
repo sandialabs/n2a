@@ -7,6 +7,7 @@
 #include <fstream>
 #include <cmath>
 #include <stdlib.h>
+#include <time.h>
 #ifdef n2a_FP
 #include "runtime.h"   // For Event::exponent
 #include "fixedpoint.h"
@@ -450,13 +451,15 @@ InputHolder<T>::InputHolder (const String & fileName)
     currentValues    = new T[1];
     currentValues[0] = (T) 0;
     currentCount     = 1;
-    nextLine         = -1;
+    nextLine         = (T) NAN;
     nextValues       = 0;
     nextCount        = 0;
     columnCount      = 0;
     timeColumn       = 0;
     timeColumnSet    = false;
     time             = false;
+    csv              = false;
+    csvSet           = false;
 #   ifdef n2a_FP
     epsilon          = 1;
 #   else
@@ -482,14 +485,25 @@ InputHolder<T>::getRow (T row)
     while (true)
     {
         // Read and process next line
-        if (nextLine < 0  &&  in->good ())
+#       ifdef n2a_FP
+        if (nextLine == NAN  &&  in->good ())
+#       else
+        if (std::isnan (nextLine)  &&  in->good ())
+#       endif
         {
             String line;
             getline (*in, line);
             if (! line.empty ())
             {
+                if (! csvSet)
+                {
+                    csv =  line.find_first_of (",") != String::npos;
+                    csvSet = true;
+                }
+
                 int tempCount = 1;
-                for (auto it : line) if (it == ' '  ||  it == '\t') tempCount++;
+                if (csv) for (auto it : line) if (it == ',') tempCount++;
+                else     for (auto it : line) if (it == ' '  ||  it == '\t') tempCount++;
                 columnCount = std::max (columnCount, tempCount);
 
                 // Decide whether this is a header row or a value row
@@ -502,7 +516,9 @@ InputHolder<T>::getRow (T row)
                     int end = line.size ();
                     while (i < end)
                     {
-                        int j = line.find_first_of (" \t", i);
+                        int j;
+                        if (csv) j = line.find_first_of (",",   i);
+                        else     j = line.find_first_of (" \t", i);
                         if (j == String::npos) j = end;
                         if (j > i) columnMap.emplace (line.substr (i, j - i), index);
                         i = j + 1;
@@ -516,9 +532,11 @@ InputHolder<T>::getRow (T row)
                         for (auto it : columnMap)
                         {
                             int potentialMatch = 0;
-                            if      (it.first == "t"   ) potentialMatch = 1;
-                            else if (it.first == "TIME") potentialMatch = 2;
-                            else if (it.first == "$t"  ) potentialMatch = 3;
+                            String header = it.first.tolower ();
+                            if      (header == "t"   ) potentialMatch = 1;
+                            else if (header == "date") potentialMatch = 1;
+                            else if (header == "time") potentialMatch = 2;
+                            else if (header == "$t"  ) potentialMatch = 3;
                             if (potentialMatch > timeMatch)
                             {
                                 timeMatch = potentialMatch;
@@ -541,24 +559,69 @@ InputHolder<T>::getRow (T row)
                 int i = 0;
                 for (; index < tempCount; index++)
                 {
-                    int j = line.find_first_of (" \t", i);
+                    int j;
+                    if (csv) j = line.find_first_of (",",   i);
+                    else     j = line.find_first_of (" \t", i);
                     if (j == String::npos) j = line.size ();
-#                   ifdef n2a_FP
-                    if (j > i)
+                    if (j == i)
                     {
-                        if (time  &&  timeColumnSet  &&  index == timeColumn)
+                        nextValues[index] = 0;
+                    }
+                    else  // j > i
+                    {
+                        String field = line.substr (i, j - i);
+
+                        // Hack to detect a specific date format. Others can be added.
+                        if (index == timeColumn  &&  field.size () == 10  &&  field[4] == '-'  &&  field[7] == '-')
                         {
-                            nextValues[index] = convert (line.substr (i, j - i), Event<T>::exponent);
+                            int day   = atoi (field.substr (8, 2).c_str ());
+                            int month = atoi (field.substr (5, 2).c_str ()) - 1;
+                            int year  = atoi (field.substr (0, 4).c_str ()) - 1900;
+
+                            struct tm date;
+                            date.tm_sec   = 0;
+                            date.tm_min   = 0;
+                            date.tm_hour  = 0;
+                            date.tm_isdst = 0;  // time is strictly UTC, with no DST
+                            // ignoring tm_wday and tm_yday, as mktime() doesn't do anything with them
+
+                            // Hack to adjust for mktime() that can't handle dates before posix epoch (1970/1/1).
+                            // Solution comes from https://bugs.php.net/bug.php?id=17123
+                            // Alternate solution would be to implement a simple mktime() right here.
+                            // Since we don't care about DST or timezones, all it has to do is handle Gregorion leap-years.
+                            time_t offset = 0;
+                            if (year <= 70)  // Yes, that includes 1970 itself.
+                            {
+                                // The referenced post suggested 56 years, which apparently makes week days align correctly.
+                                year += 56;
+                                date.tm_mday = 1;
+                                date.tm_mon  = 0;
+                                date.tm_year = 70 + 56;
+                                offset = mktime (&date);
+                            }
+
+                            date.tm_mday = day;
+                            date.tm_mon  = month;
+                            date.tm_year = year;
+
+                            nextValues[index] = mktime (&date) - offset;
                         }
-                        else
+                        else  // General case.
                         {
-                            nextValues[index] = convert (line.substr (i, j - i), exponent);
+#                           ifdef n2a_FP
+                            if (time  &&  timeColumnSet  &&  index == timeColumn)
+                            {
+                                nextValues[index] = convert (field, Event<T>::exponent);
+                            }
+                            else
+                            {
+                                nextValues[index] = convert (field, exponent);
+                            }
+#                           else
+                            nextValues[index] = (T) atof (field.c_str ());
+#                           endif
                         }
                     }
-#                   else
-                    if (j > i) nextValues[index] = (T) atof (line.substr (i, j - i).c_str ());
-#                   endif
-                    else       nextValues[index] = 0;
                     i = j + 1;
                 }
                 for (; index < columnCount; index++) nextValues[index] = 0;
@@ -570,7 +633,11 @@ InputHolder<T>::getRow (T row)
 
         // Determine if we have the requested data
         if (row <= currentLine) break;
-        if (nextLine < 0) break;  // Return the current line, because another is not (yet) available. In general, we don't stall the simulator to wait for data.
+#       ifdef n2a_FP
+        if (nextLine == NAN) break;  // Return the current line, because another is not (yet) available. In general, we don't stall the simulator to wait for data.
+#       else
+        if (std::isnan (nextLine)) break;
+#       endif
         if (row < nextLine - epsilon) break;
 
         T * tempValues = currentValues;
@@ -578,7 +645,7 @@ InputHolder<T>::getRow (T row)
         currentLine   = nextLine;
         currentValues = nextValues;
         currentCount  = nextCount;
-        nextLine   = -1;
+        nextLine   = (T) NAN;
         nextValues = tempValues;
         nextCount  = tempCount;
     }

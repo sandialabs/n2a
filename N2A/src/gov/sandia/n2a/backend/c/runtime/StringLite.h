@@ -186,9 +186,29 @@ public:
         return compare (that) == 0;
     }
 
+    bool operator!= (const String & that) const
+    {
+        return compare (that) != 0;
+    }
+
     bool operator< (const String & that) const
     {
         return compare (that) < 0;
+    }
+
+    bool operator<= (const String & that) const
+    {
+        return compare (that) <= 0;
+    }
+
+    bool operator> (const String & that) const
+    {
+        return compare (that) > 0;
+    }
+
+    bool operator>= (const String & that) const
+    {
+        return compare (that) >= 0;
     }
 
     const char & operator[] (size_t pos) const
@@ -312,27 +332,6 @@ public:
         return result;
     }
 
-    void trim ()
-    {
-        if (top == memory) return;
-        char * first = memory;
-        while (first < top  &&  (*first == ' '  ||  *first == '\t'  ||  *first == '\r'  ||  *first == '\n')) first++;
-        char * last = top - 1;
-        while (last >= memory  &&  (*last == ' '  ||  *last == '\t'  ||  *last == '\r'  ||  *last == '\n')) last--;
-        if (first > memory)  // Move trimmed sting down to start of memory block ...
-        {
-            char * i = first;
-            char * j = memory;
-            while (i <= last) *j++ = *i++;
-            top = j;  // ... and adjust end marker.
-            *top = 0;
-        }
-        else  // Only adjust end marker.
-        {
-            top = last + 1;
-        }
-    }
-
     size_t find (const char * pattern, size_t pos, size_t n) const
     {
         int available = top - memory;
@@ -373,7 +372,48 @@ public:
         return npos;
     }
 
-    /// Replace all occurrences of a with b.
+    const char * begin () const
+    {
+        return memory;
+    }
+    const char * end () const
+    {
+        return top;
+    }
+
+    // Non-standard functions ------------------------------------------------
+
+    /**
+        Remove leading and trailing white space.
+        Unlike standard member functions, this mutates the object (modification in place).
+        The reason is that in practice that untrimmed string is almost never used afterward.
+    **/
+    String & trim ()
+    {
+        if (top == memory) return *this;
+        char * first = memory;
+        while (first < top  &&  (*first == ' '  ||  *first == '\t'  ||  *first == '\r'  ||  *first == '\n')) first++;
+        char * last = top - 1;
+        while (last >= memory  &&  (*last == ' '  ||  *last == '\t'  ||  *last == '\r'  ||  *last == '\n')) last--;
+        if (first > memory)  // Move trimmed sting down to start of memory block ...
+        {
+            char * i = first;
+            char * j = memory;
+            while (i <= last) *j++ = *i++;
+            top = j;  // ... and adjust end marker.
+            *top = 0;
+        }
+        else  // Only adjust end marker.
+        {
+            top = last + 1;
+        }
+        return *this;
+    }
+
+    /**
+        Replace all occurrences of a with b.
+        Unlike standard member functions, this mutates the object (modification in place).
+    **/
     String & replace_all (char a, char b)
     {
         char * i = memory;
@@ -385,13 +425,31 @@ public:
         return *this;
     }
 
-    const char * begin () const
+    /**
+        Returns a new string where all characters are lower-case versions of the this string.
+        Used for case-insensitive comparison.
+    **/
+    String tolower () const
     {
-        return memory;
-    }
-    const char * end () const
-    {
-        return top;
+        String result;
+        int length = top - memory;
+        if (length <= 0) return result;
+
+        result.capacity = length + 1;
+        result.memory   = (char *) malloc (result.capacity);
+        result.top      = result.memory + length;
+
+        char * from = memory;
+        char * to   = result.memory;
+        while (from < top)
+        {
+            char temp = *from++;
+            if (temp >= 65  &&  temp <= 90) temp |= 0x20;
+            *to++ = temp;
+        }
+        *result.top = 0;
+
+        return result;
     }
 };
 

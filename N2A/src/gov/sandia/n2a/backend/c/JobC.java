@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -3835,7 +3835,11 @@ public class JobC extends Thread
                             if (! context.global  &&  ! T.equals ("int"))  // Note: In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
                             {
                                 // Read $t' as an lvalue, to ensure we get any newly-set frequency.
-                                context.result.append (pad + i.name + "->epsilon = " + resolve (bed.dt.reference, context, true) + " / 1000;\n");
+                                // However, can't do this if $t' is a constant. In that case, no variable exists.
+                                boolean lvalue = ! bed.dt.hasAttribute ("constant");
+                                context.result.append (pad + i.name + "->epsilon = " + resolve (bed.dt.reference, context, lvalue) + " / 1000.0");
+                                if (T.equals ("float")) context.result.append ("f");
+                                context.result.append (";\n");
                             }
                         }
                     }
@@ -3939,7 +3943,10 @@ public class JobC extends Thread
                             context.result.append (pad + i.name + "->time = true;\n");
                             if (! context.global  &&  ! T.equals ("int"))
                             {
-                                context.result.append (pad + i.name + "->epsilon = " + resolve (bed.dt.reference, context, true) + " / 1000;\n");
+                                boolean lvalue = ! bed.dt.hasAttribute ("constant");
+                                context.result.append (pad + i.name + "->epsilon = " + resolve (bed.dt.reference, context, lvalue) + " / 1000.0");
+                                if (T.equals ("float")) context.result.append ("f");
+                                context.result.append (";\n");
                             }
                         }
                     }

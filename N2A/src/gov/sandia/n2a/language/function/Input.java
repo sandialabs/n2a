@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,10 +10,12 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.TimeZone;
 import java.util.TreeMap;
 
 import gov.sandia.n2a.backend.internal.EventStep;
@@ -119,14 +121,16 @@ public class Input extends Function
         public BufferedReader      stream;
         public double              currentLine   = -1;
         public double[]            currentValues = empty;
-        public double              nextLine      = -1;
+        public double              nextLine      = Double.NaN;  // Initial condition is no line available.
         public double[]            nextValues    = empty;
         public Map<String,Integer> columnMap     = new TreeMap<String,Integer> ();
         public List<String>        headers       = new ArrayList<String> ();  // The inverse of columnMap
         public int                 columnCount;
-        public boolean             time;  // mode flag
-        public int                 timeColumn;
-        public boolean             timeColumnSet;
+        public boolean             time;              // mode flag
+        public int                 timeColumn;        // We assume column 0, unless a header overrides this.
+        public boolean             timeColumnSet;     // Indicates that a header appeared in the file, so timeColumn has been evaluated.
+        public String              delimiter = "\\s"; // Regular expression for separator character. Allows switch between comma and space/tab.
+        public boolean             delimiterSet;      // Indicates that check for CSV has been performed. Avoids constant re-checking.
         public double              epsilon;
 
         public void close ()
@@ -140,16 +144,21 @@ public class Input extends Function
             while (true)
             {
                 // Read and process next line
-                if (nextLine < 0  &&  stream.ready ())
+                if (Double.isNaN (nextLine)  &&  stream.ready ())
                 {
                     String line = stream.readLine ();
                     if (line != null  &&  ! line.isEmpty ())
                     {
-                        String[] columns = line.split ("\\s", -1);  // -1 means that trailing tabs/spaces will produce additional columns. We assume that every tab/space is placed intentionally to indicate a column.
+                        if (! delimiterSet  &&  ! line.trim ().isEmpty ())
+                        {
+                            if (line.contains (",")) delimiter = ",";
+                            delimiterSet = true;
+                        }
+                        String[] columns = line.split (delimiter, -1);  // -1 means that trailing tabs/spaces will produce additional columns. We assume that every tab/space is placed intentionally to indicate a column.
                         columnCount = Math.max (columnCount, columns.length);
 
                         // Decide whether this is a header row or a value row
-                        if (! columns[0].isEmpty ())
+                        if (! columns[0].isEmpty ())  // Assumes that columns never contain white-space. This is only a question for CSV.
                         {
                             char firstCharacter = columns[0].charAt (0);
                             if (firstCharacter < '-'  ||  firstCharacter == '/'  ||  firstCharacter > '9')  // not a number, so must be column header
@@ -166,20 +175,26 @@ public class Input extends Function
                                 }
 
                                 // Select time column
+                                // The time column should be specified in the first row of headers, if at all.
                                 if (time  &&  ! timeColumnSet)
                                 {
                                     int timeMatch = 0;
-                                    for (Entry<String,Integer> e : columnMap.entrySet ())
+                                    for (String header : columnMap.keySet ())
                                     {
                                         int potentialMatch = 0;
-                                        String header = e.getKey ();
-                                        if      (header.equals ("t"   )) potentialMatch = 1;
-                                        else if (header.equals ("TIME")) potentialMatch = 2;
-                                        else if (header.equals ("$t"  )) potentialMatch = 3;
+                                        switch (header.toLowerCase ())
+                                        {
+                                            case "t":
+                                            case "date":
+                                                potentialMatch = 1;
+                                                break;
+                                            case "time": potentialMatch = 2; break;
+                                            case "$t":   potentialMatch = 3; break;
+                                        }
                                         if (potentialMatch > timeMatch)
                                         {
                                             timeMatch = potentialMatch;
-                                            timeColumn = e.getValue ();
+                                            timeColumn = columnMap.get (header);
                                         }
                                     }
                                     timeColumnSet = true;
@@ -193,8 +208,26 @@ public class Input extends Function
                         for (int i = 0; i < columns.length; i++)
                         {
                             String c = columns[i];
-                            if (c.isEmpty ()) nextValues[i] = 0;
-                            else              nextValues[i] = Double.parseDouble (c);
+                            if (c.isEmpty ()) continue;  // and use default value of 0 that the array element was initialized with
+
+                            // Special case for formatted date
+                            // There are many possible formats for date. This one is use-case-specific.
+                            // Others can be added as needed.
+                            if (i == timeColumn  &&  c.length () == 10  &&  c.charAt (4) == '-'  &&  c.charAt (7) == '-')
+                            {
+                                try
+                                {
+                                    // Convert date to Unix time. Dates before epoch will be negative.
+                                    SimpleDateFormat format = new SimpleDateFormat ("yyyy-MM-dd");
+                                    format.setTimeZone (TimeZone.getTimeZone ("GMT"));  // When time zone is not explicit in the data, we want to avoid arbitrary local offset.
+                                    nextValues[i] = format.parse (c).toInstant ().toEpochMilli () / 1000.0;
+                                    continue;
+                                }
+                                catch (ParseException e) {}
+                            }
+
+                            // General case
+                            nextValues[i] = Double.parseDouble (c);
                         }
                         if (time) nextLine = nextValues[timeColumn];
                         else      nextLine = currentLine + 1;
@@ -203,11 +236,11 @@ public class Input extends Function
 
                 // Determine if we have the requested data
                 if (requested <= currentLine) break;
-                if (nextLine < 0) break;  // Return the current line, because another is not available. In general, we don't stall the simulator to wait for data.
+                if (Double.isNaN (nextLine)) break;  // Return the current line, because another is not available. In general, we don't stall the simulator to wait for data.
                 if (requested < nextLine - epsilon) break;
                 currentLine   = nextLine;
                 currentValues = nextValues;
-                nextLine   = -1;
+                nextLine   = Double.NaN;
                 nextValues = empty;
             }
         }
