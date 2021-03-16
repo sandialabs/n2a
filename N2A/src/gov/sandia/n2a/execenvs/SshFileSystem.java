@@ -1,5 +1,5 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.execenvs;
 
 import java.io.BufferedReader;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -23,31 +24,36 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Vector;
 import java.util.regex.Pattern;
 
 import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.ChannelSftp.LsEntry;
 import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.SftpATTRS;
+import com.jcraft.jsch.SftpException;
 
 import gov.sandia.n2a.execenvs.Host.AnyProcess;
 
 public class SshFileSystem extends FileSystem
 {
-    protected URI          uri;  // For convenience in answering Path.getURI() call.
+    protected URI          uri;            // For convenience in answering Path.getURI() call.
     protected Connection   connection;
+    protected boolean      ownConnection;  // Indicates that connection belongs directly to this object, rather than a host.
     protected SshPath      rootDir = new SshPath (this);
     protected SshPath      defaultDir;
     protected SshFileStore fileStore;
+    protected WrapperSftp  sftp;
 
     public FileSystemProvider provider ()
     {
         return SshFileSystemProvider.instance;
     }
 
-    public synchronized void close () throws IOException
+    public void close ()
     {
-        // The only real way to close is to shut down connection, but that is used by other tools.
-        // Thus, we never close.
-        throw new UnsupportedOperationException ();
+        if (ownConnection) connection.close ();
+        // Otherwise, don't do anything.
     }
 
     public boolean isOpen ()
@@ -217,6 +223,12 @@ public class SshFileSystem extends FileSystem
         throw new UnsupportedOperationException ();
     }
 
+    public synchronized SshFileStore getFileStore ()
+    {
+        if (fileStore == null) fileStore = new SshFileStore ();
+        return fileStore;
+    }
+
     public class SshFileStore extends FileStore
     {
         public String name ()
@@ -348,25 +360,186 @@ public class SshFileSystem extends FileSystem
         }
     }
 
-    public ChannelSftp getSftp () throws IOException
+    public synchronized WrapperSftp getSftp () throws IOException
     {
-        try
-        {
-            connection.connect ();
-            ChannelSftp result;
-            synchronized (connection.session) {result = (ChannelSftp) connection.session.openChannel ("sftp");}
-            result.connect (20000);
-            return result;
-        }
-        catch (JSchException e)
-        {
-            throw new IOException (e);
-        }
+        if (sftp == null) sftp = new WrapperSftp ();
+        return sftp;
     }
 
-    public synchronized SshFileStore getFileStore ()
+    /**
+        Make sftp safe to use.
+        If any protocol-level error occurs, we need to detect it and make a new sftp connection.
+        ChannelSftp does not appear to be thread-safe, so all methods of this class are synchronized.
+    **/
+    public class WrapperSftp implements Closeable
     {
-        if (fileStore == null) fileStore = new SshFileStore ();
-        return fileStore;
+        public ChannelSftp sftp;
+
+        public synchronized void connect () throws IOException
+        {
+            if (sftp != null  &&  sftp.isConnected ())
+            {
+                if (! sftp.isClosed ()  &&  ! sftp.isEOF ()) return;  // channel is still good
+                close ();
+            }
+
+            try
+            {
+                connection.connect ();
+                sftp = (ChannelSftp) connection.session.openChannel ("sftp");  // Best I can tell, openChannel() is thread-safe.
+                sftp.connect (connection.timeout);
+            }
+            catch (JSchException e)
+            {
+                throw new IOException (e);
+            }
+        }
+
+        public synchronized void close ()
+        {
+            if (sftp != null) sftp.disconnect ();
+            sftp = null;
+        }
+
+        public synchronized SftpATTRS stat (String path) throws IOException, SftpException
+        {
+            try
+            {
+                connect ();
+                return sftp.stat (path);
+            }
+            catch (SftpException e)
+            {
+                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                throw e;
+            }
+        }
+
+        public synchronized SftpATTRS lstat (String path) throws IOException, SftpException
+        {
+            try
+            {
+                connect ();
+                return sftp.lstat (path);
+            }
+            catch (SftpException e)
+            {
+                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                throw e;
+            }
+        }
+
+        @SuppressWarnings("unchecked")  // ChannelSftp.ls() does not specify the exact type of the return vector, but we do.
+        public synchronized Vector<LsEntry> ls (String path) throws IOException, SftpException
+        {
+            try
+            {
+                connect ();
+                return sftp.ls (path);
+            }
+            catch (SftpException e)
+            {
+                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                throw e;
+            }
+        }
+
+        public synchronized void setStat (String path, SftpATTRS attr) throws IOException, SftpException
+        {
+            try
+            {
+                connect ();
+                sftp.setStat (path, attr);
+            }
+            catch (SftpException e)
+            {
+                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                throw e;
+            }
+        }
+
+        public synchronized void chmod (int permissions, String path) throws IOException, SftpException
+        {
+            try
+            {
+                connect ();
+                sftp.chmod (permissions, path);
+            }
+            catch (SftpException e)
+            {
+                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                throw e;
+            }
+        }
+
+        public synchronized void chown (int uid, String path) throws IOException, SftpException
+        {
+            try
+            {
+                connect ();
+                sftp.chown (uid, path);
+            }
+            catch (SftpException e)
+            {
+                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                throw e;
+            }
+        }
+
+        public synchronized void chgrp (int gid, String path) throws IOException, SftpException
+        {
+            try
+            {
+                connect ();
+                sftp.chgrp (gid, path);
+            }
+            catch (SftpException e)
+            {
+                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                throw e;
+            }
+        }
+
+        public synchronized void rm (String path) throws IOException, SftpException
+        {
+            try
+            {
+                connect ();
+                sftp.rm (path);
+            }
+            catch (SftpException e)
+            {
+                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                throw e;
+            }
+        }
+
+        public synchronized void mkdir (String path) throws IOException, SftpException
+        {
+            try
+            {
+                connect ();
+                sftp.mkdir (path);
+            }
+            catch (SftpException e)
+            {
+                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                throw e;
+            }
+        }
+
+        public synchronized void rmdir (String path) throws IOException, SftpException
+        {
+            try
+            {
+                connect ();
+                sftp.rmdir (path);
+            }
+            catch (SftpException e)
+            {
+                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                throw e;
+            }
+        }
     }
 }

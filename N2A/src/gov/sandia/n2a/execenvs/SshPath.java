@@ -1,12 +1,11 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.execenvs;
 
-import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -27,6 +26,8 @@ import java.util.List;
 
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.SftpException;
+
+import gov.sandia.n2a.execenvs.SshFileSystem.WrapperSftp;
 
 public class SshPath implements Path
 {
@@ -320,24 +321,9 @@ public class SshPath implements Path
         return "'" + result + "'";
     }
 
-    public WrapperSFTP getSftp () throws IOException
+    public WrapperSftp getSftp () throws IOException
     {
-        return new WrapperSFTP (fileSystem);
-    }
-
-    public class WrapperSFTP implements Closeable
-    {
-        public ChannelSftp sftp;
-
-        public WrapperSFTP (SshFileSystem fileSystem) throws IOException
-        {
-            sftp = fileSystem.getSftp ();
-        }
-
-        public void close () throws IOException
-        {
-            if (sftp != null) sftp.disconnect ();
-        }
+        return fileSystem.getSftp ();
     }
 
     /**
@@ -347,9 +333,9 @@ public class SshPath implements Path
     public boolean exists () throws IOException
     {
         String name = toAbsolutePath ().toString ();
-        try (WrapperSFTP wrapper = getSftp ())
+        try
         {
-            wrapper.sftp.lstat (name);
+            getSftp ().lstat (name);
             return true;
         }
         catch (SftpException e)

@@ -1,5 +1,5 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -65,7 +65,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.execenvs.Host.AnyProcess;
 import gov.sandia.n2a.execenvs.Host.AnyProcessBuilder;
-import gov.sandia.n2a.execenvs.SshPath.WrapperSFTP;
+import gov.sandia.n2a.execenvs.SshFileSystem.WrapperSftp;
 
 public class SshFileSystemProvider extends FileSystemProvider
 {
@@ -94,9 +94,10 @@ public class SshFileSystemProvider extends FileSystemProvider
         Connection connection = (Connection) o;
 
         SshFileSystem result = new SshFileSystem ();
-        result.uri        = uri;
-        result.connection = connection;
-        result.defaultDir = new SshPath (result, uri.getPath ());
+        result.uri           = uri;
+        result.connection    = connection;
+        result.ownConnection = env.get ("ownConnection") != null;  // We don't check the value, only whether the key exists.
+        result.defaultDir    = new SshPath (result, uri.getPath ());
         fileSystems.put (address, result);
         return result;
     }
@@ -119,15 +120,15 @@ public class SshFileSystemProvider extends FileSystemProvider
         {
             try
             {
-                Connection connection;
+                Map<String,Object> env = new HashMap<String,Object> ();
+
                 String address = uri.getHost ();
                 Host host = Host.getByAddress (address);
                 if (host instanceof RemoteUnix)
                 {
                     @SuppressWarnings("resource")
                     RemoteUnix remote = (RemoteUnix) host;
-                    remote.connect ();
-                    connection = remote.connection;
+                    env.put ("connection", remote.connection);
                 }
                 else
                 {
@@ -135,11 +136,10 @@ public class SshFileSystemProvider extends FileSystemProvider
                     config.set (address,             "address");
                     config.set (uri.getUserInfo (),  "username");
                     config.set (uri.getAuthority (), "password");
-                    connection = new Connection (config);
+                    env.put ("connection", new Connection (config));
+                    env.put ("ownConnection", true);
                 }
 
-                Map<String,Object> env = new HashMap<String,Object> ();
-                env.put ("connection", connection);
                 fileSystem = (SshFileSystem) newFileSystem (uri, env);
             }
             catch (Exception e2)
@@ -292,14 +292,18 @@ public class SshFileSystemProvider extends FileSystemProvider
 
         SshPath A = (SshPath) dir;
         String name = A.toAbsolutePath ().toString ();
-        try (WrapperSFTP wrapper = A.getSftp ())
+        try
         {
-            wrapper.sftp.mkdir (name);
-            if (permissions != null) wrapper.sftp.chmod (sftpPermissions (permissions), name);
+            WrapperSftp sftp = A.getSftp ();
+            sftp.mkdir (name);
+            if (permissions != null) sftp.chmod (sftpPermissions (permissions), name);
         }
         catch (SftpException e)
         {
-            if (A.exists ()) throw new FileAlreadyExistsException (name);
+            // SSH_FX_FAILURE is returned when dir already exists.
+            // Not sure what other conditions it might be returned under,
+            // so the following conclusion might not be accurate ...
+            if (e.id == ChannelSftp.SSH_FX_FAILURE) throw new FileAlreadyExistsException (name);
             throw new IOException (e);
         }
     }
@@ -331,11 +335,12 @@ public class SshFileSystemProvider extends FileSystemProvider
     public void delete (Path path) throws IOException
     {
         String name = path.toAbsolutePath ().toString ();
-        try (WrapperSFTP wrapper = ((SshPath) path).getSftp ())
+        try
         {
-            SftpATTRS attributes = wrapper.sftp.lstat (name);  // doesn't follow links
-            if (attributes.isDir ()) wrapper.sftp.rmdir (name);
-            else                     wrapper.sftp.rm    (name);
+            WrapperSftp sftp = ((SshPath) path).getSftp ();
+            SftpATTRS attributes = sftp.lstat (name);  // doesn't follow links
+            if (attributes.isDir ()) sftp.rmdir (name);
+            else                     sftp.rm    (name);
         }
         catch (SftpException e)
         {
@@ -420,9 +425,9 @@ public class SshFileSystemProvider extends FileSystemProvider
     {
         SshPath A = (SshPath) path;
         String name = A.toAbsolutePath ().toString ();
-        try (WrapperSFTP wrapper = A.getSftp ())
+        try
         {
-            SftpATTRS attributes = wrapper.sftp.stat (name);
+            SftpATTRS attributes = A.getSftp ().stat (name);
             int permissions = attributes.getPermissions ();
             for (AccessMode mode : modes)
             {
@@ -688,16 +693,15 @@ public class SshFileSystemProvider extends FileSystemProvider
         protected Filter<? super Path>        filter;
         protected Vector<ChannelSftp.LsEntry> entries;  // LsEntry also stat information. Sadly, we won't use it here.
 
-        @SuppressWarnings("unchecked")
         public SshDirectoryStream (SshPath parent, Filter<? super Path> filter) throws IOException
         {
             this.parent = parent;
             this.filter = filter;
 
             String name = parent.toAbsolutePath ().toString ();
-            try (WrapperSFTP wrapper = parent.getSftp ())
+            try
             {
-                entries = wrapper.sftp.ls (name);
+                entries = parent.getSftp ().ls (name);
             }
             catch (SftpException e)
             {
@@ -890,11 +894,12 @@ public class SshFileSystemProvider extends FileSystemProvider
         public PosixFileAttributes readAttributes () throws IOException
         {
             String name = path.toAbsolutePath ().toString ();
-            try (WrapperSFTP wrapper = path.getSftp ())
+            try
             {
+                WrapperSftp sftp = path.getSftp ();
                 SshFileAttributes result = new SshFileAttributes ();
-                if (followLinks) result.attributes = wrapper.sftp. stat (name);
-                else             result.attributes = wrapper.sftp.lstat (name);
+                if (followLinks) result.attributes = sftp. stat (name);
+                else             result.attributes = sftp.lstat (name);
                 result.path        = path;
                 result.followLinks = followLinks;
                 return result;
@@ -909,13 +914,14 @@ public class SshFileSystemProvider extends FileSystemProvider
         public void setTimes (FileTime modify, FileTime access, FileTime create) throws IOException
         {
             String name = path.toAbsolutePath ().toString ();
-            try (WrapperSFTP wrapper = path.getSftp ())
+            try
             {
-                SftpATTRS attributes = wrapper.sftp.stat (name);
+                WrapperSftp sftp = path.getSftp ();
+                SftpATTRS attributes = sftp.stat (name);
                 int atime =  access == null ? attributes.getATime () : (int) access.to (TimeUnit.SECONDS);
                 int mtime =  modify == null ? attributes.getMTime () : (int) modify.to (TimeUnit.SECONDS);
                 attributes.setACMODTIME (atime, mtime);
-                wrapper.sftp.setStat (name, attributes);
+                sftp.setStat (name, attributes);
             }
             catch (SftpException e)
             {
@@ -931,9 +937,9 @@ public class SshFileSystemProvider extends FileSystemProvider
         public void setOwner (UserPrincipal owner) throws IOException
         {
             String name = path.toAbsolutePath ().toString ();
-            try (WrapperSFTP wrapper = path.getSftp ())
+            try
             {
-                wrapper.sftp.chown (((SshPrincipal) owner).id, name);
+                path.getSftp ().chown (((SshPrincipal) owner).id, name);
             }
             catch (SftpException e)
             {
@@ -944,9 +950,9 @@ public class SshFileSystemProvider extends FileSystemProvider
         public void setGroup (GroupPrincipal group) throws IOException
         {
             String name = path.toAbsolutePath ().toString ();
-            try (WrapperSFTP wrapper = path.getSftp ())
+            try
             {
-                wrapper.sftp.chgrp (((SshPrincipal) group).id, name);
+                path.getSftp ().chgrp (((SshPrincipal) group).id, name);
             }
             catch (SftpException e)
             {
@@ -957,9 +963,9 @@ public class SshFileSystemProvider extends FileSystemProvider
         public void setPermissions (Set<PosixFilePermission> permissions) throws IOException
         {
             String name = path.toAbsolutePath ().toString ();
-            try (WrapperSFTP wrapper = path.getSftp ())
+            try
             {
-                wrapper.sftp.chmod (sftpPermissions (permissions), name);
+                path.getSftp ().chmod (sftpPermissions (permissions), name);
             }
             catch (SftpException e)
             {

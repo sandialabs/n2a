@@ -38,6 +38,7 @@ public class Connection implements Closeable
     protected String         hostname;
     protected String         username;
     protected int            port;
+    protected int            timeout;
     protected String         home;  // Path of user's home directory on remote system. Includes leading slash.
 
     public static JSch jsch = new JSch ();  // shared between remote execution system and git wrapper
@@ -87,6 +88,7 @@ public class Connection implements Closeable
         username = config.getOrDefault (System.getProperty ("user.name"), "username");
         port     = config.getOrDefault (22,                               "port");
         home     = config.getOrDefault ("/home/" + username,              "home");
+        timeout  = config.getOrDefault (20000,                            "timeout");  // default is 20 seconds
 
         passwords.password = config.get ("password");  // may be empty
     }
@@ -97,7 +99,7 @@ public class Connection implements Closeable
 
         session = jsch.getSession (username, hostname, port);
         session.setUserInfo (passwords);
-        session.setTimeout (20000);  // 20 seconds. Applies to all communication, not just initial connection.
+        session.setTimeout (timeout);  // Applies to all communication, not just initial connection.
         session.connect ();  // Uses timeout set above.
     }
 
@@ -215,7 +217,7 @@ public class Connection implements Closeable
         public RemoteProcess (String command) throws JSchException
         {
             connect ();
-            synchronized (session) {channel = (ChannelExec) session.openChannel ("exec");}
+            channel = (ChannelExec) session.openChannel ("exec");  // Best I can tell, openChannel() is thread-safe.
             channel.setCommand (command);
         }
 
