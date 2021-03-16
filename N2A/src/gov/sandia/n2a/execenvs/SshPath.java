@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.execenvs;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -256,7 +257,7 @@ public class SshPath implements Path
 
     public Path toRealPath (LinkOption... options) throws IOException
     {
-        // TODO Auto-generated method stub
+        // TODO
         return null;
     }
 
@@ -319,9 +320,24 @@ public class SshPath implements Path
         return "'" + result + "'";
     }
 
-    public ChannelSftp getSftp () throws IOException
+    public WrapperSFTP getSftp () throws IOException
     {
-        return fileSystem.getSftp ();
+        return new WrapperSFTP (fileSystem);
+    }
+
+    public class WrapperSFTP implements Closeable
+    {
+        public ChannelSftp sftp;
+
+        public WrapperSFTP (SshFileSystem fileSystem) throws IOException
+        {
+            sftp = fileSystem.getSftp ();
+        }
+
+        public void close () throws IOException
+        {
+            if (sftp != null) sftp.disconnect ();
+        }
     }
 
     /**
@@ -331,10 +347,9 @@ public class SshPath implements Path
     public boolean exists () throws IOException
     {
         String name = toAbsolutePath ().toString ();
-        try
+        try (WrapperSFTP wrapper = getSftp ())
         {
-            ChannelSftp channel = getSftp ();
-            synchronized (channel) {channel.lstat (name);}
+            wrapper.sftp.lstat (name);
             return true;
         }
         catch (SftpException e)

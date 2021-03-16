@@ -6,7 +6,9 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.execenvs;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.nio.file.FileStore;
 import java.nio.file.FileSystem;
@@ -26,11 +28,12 @@ import java.util.regex.Pattern;
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.JSchException;
 
+import gov.sandia.n2a.execenvs.Host.AnyProcess;
+
 public class SshFileSystem extends FileSystem
 {
     protected URI          uri;  // For convenience in answering Path.getURI() call.
     protected Connection   connection;
-    protected ChannelSftp  sftp;
     protected SshPath      rootDir = new SshPath (this);
     protected SshPath      defaultDir;
     protected SshFileStore fileStore;
@@ -42,8 +45,6 @@ public class SshFileSystem extends FileSystem
 
     public synchronized void close () throws IOException
     {
-        if (sftp != null) synchronized (sftp) {sftp.disconnect ();}
-
         // The only real way to close is to shut down connection, but that is used by other tools.
         // Thus, we never close.
         throw new UnsupportedOperationException ();
@@ -51,7 +52,7 @@ public class SshFileSystem extends FileSystem
 
     public boolean isOpen ()
     {
-        return true;
+        return connection.isConnected ();
     }
 
     public boolean isReadOnly ()
@@ -235,21 +236,81 @@ public class SshFileSystem extends FileSystem
 
         public long getTotalSpace () throws IOException
         {
-            // TODO
-            return 0;
+            try
+            {
+                connection.connect ();
+            }
+            catch (JSchException e)
+            {
+                throw new IOException (e);
+            }
+
+            try (AnyProcess proc = connection.build ("df", "-h", defaultDir.toString ()).start ();
+                 BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+            {
+                String line = reader.readLine ();  // Ignore header line.
+                line = reader.readLine ();
+                String[] pieces = line.split ("\\s+");
+                return extractSize (pieces[1]);
+            }
+            catch (Exception e)
+            {
+                throw new IOException (e);
+            }
         }
 
         // Sometimes less than unallocated space, due to such things a the 5% margin on unix file systems
         // which only root can access.
         public long getUsableSpace () throws IOException
         {
-            // TODO
-            return 0;
+            try
+            {
+                connection.connect ();
+            }
+            catch (JSchException e)
+            {
+                throw new IOException (e);
+            }
+
+            try (AnyProcess proc = connection.build ("df", "-h", defaultDir.toString ()).start ();
+                 BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+            {
+                String line = reader.readLine ();  // Ignore header line.
+                line = reader.readLine ();
+                String[] pieces = line.split ("\\s+");
+                return extractSize (pieces[3]);
+            }
+            catch (Exception e)
+            {
+                throw new IOException (e);
+            }
         }
 
         public long getUnallocatedSpace () throws IOException
         {
-            return getUsableSpace ();
+            try
+            {
+                connection.connect ();
+            }
+            catch (JSchException e)
+            {
+                throw new IOException (e);
+            }
+
+            try (AnyProcess proc = connection.build ("df", "-h", defaultDir.toString ()).start ();
+                 BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+            {
+                String line = reader.readLine ();  // Ignore header line.
+                line = reader.readLine ();
+                String[] pieces = line.split ("\\s+");
+                long total = extractSize (pieces[1]);
+                long used  = extractSize (pieces[2]);
+                return total - used;
+            }
+            catch (Exception e)
+            {
+                throw new IOException (e);
+            }
         }
 
         public boolean supportsFileAttributeView (Class<? extends FileAttributeView> type)
@@ -271,17 +332,31 @@ public class SshFileSystem extends FileSystem
         {
             return null;
         }
+
+        public long extractSize (String value)
+        {
+            int last = value.length () - 1;
+            long result = Long.valueOf (value.substring (0, last));
+            switch (value.substring (last).toUpperCase ())
+            {
+                case "T": result *= 0x1l << 40; break;
+                case "G": result *= 0x1l << 30; break;
+                case "M": result *= 0x1l << 20; break;
+                case "K": result *= 0x1l << 10; break;
+            }
+            return result;
+        }
     }
 
-    public synchronized ChannelSftp getSftp () throws IOException
+    public ChannelSftp getSftp () throws IOException
     {
-        if (sftp != null) synchronized (sftp) {if (sftp.isConnected ()) return sftp;}
         try
         {
             connection.connect ();
-            synchronized (connection.session) {sftp = (ChannelSftp) connection.session.openChannel ("sftp");}
-            sftp.connect ();  // No need to synchronize this, because no other thread holds a reference to it yet.
-            return sftp;
+            ChannelSftp result;
+            synchronized (connection.session) {result = (ChannelSftp) connection.session.openChannel ("sftp");}
+            result.connect (20000);
+            return result;
         }
         catch (JSchException e)
         {

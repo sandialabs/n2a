@@ -97,7 +97,8 @@ public class Connection implements Closeable
 
         session = jsch.getSession (username, hostname, port);
         session.setUserInfo (passwords);
-        session.connect (30000);
+        session.setTimeout (20000);  // 20 seconds. Applies to all communication, not just initial connection.
+        session.connect ();  // Uses timeout set above.
     }
 
     public synchronized void close ()

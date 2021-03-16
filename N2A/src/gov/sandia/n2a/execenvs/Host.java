@@ -716,6 +716,18 @@ public abstract class Host
         }
     }
 
+    public long getDiskFree ()
+    {
+        try
+        {
+            return Files.getFileStore (getResourceDir ()).getUsableSpace ();
+        }
+        catch (Exception e)
+        {
+            return 0;
+        }
+    }
+
 
     // Utility functions -----------------------------------------------------
 

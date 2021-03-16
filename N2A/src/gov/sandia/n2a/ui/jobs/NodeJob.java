@@ -52,7 +52,7 @@ public class NodeJob extends NodeBase
 
     protected String  key;
     protected String  inherit         = "";
-    public    float   complete        = -1; // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means terminated.
+    public    float   complete        = -1; // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means killed-lingering. 4 means killed-dead.
     protected Date    dateStarted     = null;
     protected Date    dateFinished    = null;
     protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.

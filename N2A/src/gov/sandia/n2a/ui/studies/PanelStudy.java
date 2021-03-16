@@ -35,6 +35,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -292,6 +294,7 @@ public class PanelStudy extends JPanel
         protected StudyIterator       iterator;
         protected int                 count;                    // Total number of samples that will be generated
         protected int                 index;                    // Of next sample that should be created. Always 1 greater than last completed sample. When 0, study is about to start. When equal to count, study has completed.
+        protected List<String>        incomplete;
         protected Random              random   = new Random (); // random number generator used by iterator
         protected Map<String,Integer> jobIndex = new HashMap<String,Integer> ();
 
@@ -393,7 +396,8 @@ public class PanelStudy extends JPanel
         public float complete ()
         {
             if (count == 0) return 0;
-            return (float) index / count;
+            float complete = index - (incomplete == null ? 0 : incomplete.size ());
+            return complete / count;
         }
 
         public Icon getIcon ()
@@ -489,36 +493,75 @@ public class PanelStudy extends JPanel
                     }
                 }
 
-                // Get next sample, but don't advance index until it is actually launched.
-                // This ensures that we can restart at the right sample if interrupted.
-                startTime = System.currentTimeMillis ();
-                while (! stop  &&  iterator.next ())
+                // Gather list of incomplete jobs, that is, jobs that have not successfully completed for any reason.
+                if (incomplete == null)
                 {
+                    incomplete = new LinkedList<String> ();
+                    for (MNode job : source.childOrEmpty ("jobs"))
+                    {
+                        String jobKey = job.key ();
+                        NodeJob node = PanelRun.instance.jobNodes.get (jobKey);
+                        if (node == null  ||  node.complete != 1) incomplete.add (jobKey);
+                    }
+                }
+
+                startTime = System.currentTimeMillis ();
+                while (! stop)
+                {
+                    // Update list of running jobs.
+                    int notstarted = 0;
+                    Iterator<String> it = incomplete.iterator ();
+                    while (it.hasNext ())
+                    {
+                        String jobKey = it.next ();
+                        NodeJob node = PanelRun.instance.jobNodes.get (jobKey);
+                        if      (node == null  ||  node.complete < 0) notstarted++;
+                        else if (node.complete == 1) it.remove ();
+                    }
+
                     showProgress ();
 
-                    // Expand model
-                    // This allows iteration on model structure itself, for example by changing $inherit.
-                    iterator.assign (modelCopy);
-                    MNode collated = new MPart (modelCopy);
-
-                    // Launch job and maintain all records
-                    // See PanelEquations.listenerRun for similar code.
-                    String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + uniqueJobID++;
-                    final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
-                    job.merge (collated);
-                    job.set (inherit, "$inherit");
-                    ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
-                    jobIndex.put (jobKey, index);
-                    source.set (jobKey, "jobs", index++);
-
-                    EventQueue.invokeLater (new Runnable ()
+                    if (iterator.barrier ()  &&  incomplete.size () > 0  ||  notstarted > 10)
                     {
-                        public void run ()
+                        // Pause the generation of new samples.
+                        try {sleep (1000);}
+                        catch (InterruptedException e) {}
+                    }
+                    else if (iterator.next ())  // Get next sample.
+                    {
+                        // Expand model
+                        // This allows iteration on model structure itself, for example by changing $inherit.
+                        iterator.assign (modelCopy);
+                        MNode collated = new MPart (modelCopy);
+
+                        // Launch job and maintain all records
+                        // See PanelEquations.listenerRun for similar code.
+                        String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + uniqueJobID++;
+                        final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
+                        job.merge (collated);
+                        job.set (inherit, "$inherit");
+                        ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
+                        jobIndex.put (jobKey, index);
+                        source.set (jobKey, "jobs", index++);
+                        incomplete.add (jobKey);
+
+                        EventQueue.invokeLater (new Runnable ()
                         {
-                            if (displayStudy == Study.this) tableSamples.addJob ();
-                            Host.waitForHost (PanelRun.instance.addNewRun (job));
-                        }
-                    });
+                            public void run ()
+                            {
+                                if (displayStudy == Study.this) tableSamples.addJob ();
+                                Host.waitForHost (PanelRun.instance.addNewRun (job));
+                            }
+                        });
+                    }
+                    else  // Done generating samples.
+                    {
+                        if (incomplete.isEmpty ()) break;  // Completely done
+
+                        // Wait for completion.
+                        try {sleep (1000);}
+                        catch (InterruptedException e) {}
+                    }
                 }
 
                 long now = System.currentTimeMillis ();
@@ -537,16 +580,17 @@ public class PanelStudy extends JPanel
             public void showProgress ()
             {
                 // TODO: this should be based on jobs completed rather than merely started.
-                String status = "" + index + "/" + count + " samples; ";
-                if (index == 0)
+                int complete = index - incomplete.size ();
+                String status = "" + complete + "/" + count + " samples; ";
+                if (complete == 0)
                 {
                     status += "Unknonw time remaining";
                 }
                 else
                 {
                     long totalTime = source.getLong ("time") + System.currentTimeMillis () - startTime;
-                    double averageTime = totalTime / (index + 1);
-                    double ETA = averageTime * (count - index) / 1000;  // ETA is in seconds rather than milliseconds. It is only precise to 1/10th of a second.
+                    double averageTime = totalTime / (complete + 1);
+                    double ETA = averageTime * (count - complete) / 1000;  // ETA is in seconds rather than milliseconds. It is only precise to 1/10th of a second.
                     if      (ETA > 4.3425e17) status += "This will take longer than the age of the universe.";  // 13.77 billion years, give or take a few
                     else if (ETA > 2.3652e14) status += "Deep Thought got done sooner.";                        // 7.5 million years
                     else if (ETA >  31536000) status += formatTime (ETA / 31536000) + " years remaining";

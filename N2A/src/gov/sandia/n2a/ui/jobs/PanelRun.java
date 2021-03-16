@@ -896,28 +896,30 @@ public class PanelRun extends JPanel
 
     public void delete ()
     {
-        // Ensure that we don't try to delete something twice.
-        TreePath[] checkPaths = tree.getSelectionPaths ();
-        for (TreePath path : checkPaths)
-        {
-            NodeBase node = (NodeBase) path.getLastPathComponent ();
-            if (node.markDelete) tree.removeSelectionPath (path);
-            else                 node.markDelete = true;
-        }
-
-        // Re-fetch selection
-        int[] rows = tree.getSelectionRows ();
-        if (rows.length < 1) return;
         TreePath[] paths = tree.getSelectionPaths ();
+        if (paths.length == 0) return;
 
-        // In some cases (such as ctrl-click), the rows may not be in ascending order.
-        int firstRow = rows[0];
-        int lastRow  = rows[rows.length-1];
-        for (int row : rows)
+        int firstRow = Integer.MAX_VALUE;
+        int lastRow  = 0;
+        for (int i = 0; i < paths.length; i++)
         {
+            TreePath path = paths[i];
+
+            // Ensure that we don't try to delete something twice.
+            NodeBase node = (NodeBase) path.getLastPathComponent ();
+            if (node.markDelete)
+            {
+                paths[i] = null;
+                continue;
+            }
+            node.markDelete = true;
+
+            // In some cases (such as ctrl-click), the rows may not be in ascending order.
+            int row = tree.getRowForPath (path);
             firstRow = Math.min (firstRow, row);
             lastRow  = Math.max (lastRow,  row);
         }
+        if (firstRow == Integer.MAX_VALUE) return;  // No rows passed the filter above (because they were already selected).
 
         NodeBase firstSelection = (NodeBase) tree.getPathForRow (firstRow).getLastPathComponent ();
         NodeBase lastSelection  = (NodeBase) tree.getPathForRow (lastRow ).getLastPathComponent ();
@@ -963,9 +965,12 @@ public class PanelRun extends JPanel
         {
             public void run ()
             {
+                Map<Host,HostDeleteThread> hostThreads = new HashMap<Host,HostDeleteThread> ();
                 Set<NodeJob> parents = new HashSet<NodeJob> ();
                 for (TreePath path : paths)
                 {
+                    if (path == null) continue;
+
                     final NodeBase node = (NodeBase) path.getLastPathComponent ();
                     if (node instanceof NodeJob)
                     {
@@ -1002,94 +1007,110 @@ public class PanelRun extends JPanel
                     MDoc doc = (MDoc) job.getSource ();
                     Host env = Host.get (doc);
 
-                    if (env instanceof Remote)
+                    HostDeleteThread t = hostThreads.get (env);
+                    if (t == null)
                     {
-                        // Use a thread for remote systems, because they may take a long time,
-                        // or even never finish.
-                        Thread remoteDeleteThread = new Thread ("Delete Remote Job")
-                        {
-                            public void run ()
-                            {
-                                try
-                                {
-                                    if (node instanceof NodeJob)
-                                    {
-                                        Path resourceDir  = env.getResourceDir ();
-                                        Path remoteJobDir = Host.getJobDir (resourceDir, doc);
-                                        Host.deleteTree (remoteJobDir, true);
-                                        doc.delete ();  // deletes local job directory
-                                    }
-                                    else if (node instanceof NodeFile)
-                                    {
-                                        NodeFile nf = (NodeFile) node;
-                                        MNode    js = job.getSource ();
-                                        String fileName = nf.path.getFileName ().toString ();
-                                        Path localFile  = Host.getJobDir (Host.getLocalResourceDir (), js).resolve (fileName);
-                                        Path remoteFile = Host.getJobDir (env.getResourceDir (),       js).resolve (fileName);
-
-                                        Host.deleteTree (remoteFile, true);  // In case this is a video directory rather than just a file, use deleteTree().
-                                        Host.deleteTree (localFile, true);
-
-                                        if (fileName.equals ("out"))  // also delete out.columns
-                                        {
-                                            localFile  = Host.getJobDir (Host.getLocalResourceDir (), js).resolve ("out.columns");
-                                            remoteFile = Host.getJobDir (env.getResourceDir (),       js).resolve ("out.columns");
-                                            Host.deleteTree (remoteFile, true);  // Even though this is definitely not a tree, it is still convenient to call deleteTre(), because it absorbs a lot of potential errors.
-                                            Host.deleteTree (localFile,  true);
-                                        }
-                                    }
-
-                                    EventQueue.invokeLater (new Runnable ()
-                                    {
-                                        public void run ()
-                                        {
-                                            model.removeNodeFromParent (node);
-                                        }
-                                    });
-                                }
-                                catch (Exception e) {}
-                            };
-                        };
-                        remoteDeleteThread.setDaemon (true);
-                        remoteDeleteThread.start ();
+                        t = new HostDeleteThread (env);
+                        t.setDaemon (true);
+                        t.start ();
+                        hostThreads.put (env, t);
                     }
-                    else  // local job
-                    {
-                        try
-                        {
-                            if (node instanceof NodeJob)
-                            {
-                                doc.delete ();
-                            }
-                            else if (node instanceof NodeFile)
-                            {
-                                NodeFile nf = (NodeFile) node;
-                                Host.deleteTree (nf.path, true);
-
-                                String fileName = nf.path.getFileName ().toString ();
-                                if (fileName.equals ("out"))  // also delete out.columns
-                                {
-                                    MNode js = job.getSource ();
-                                    Path columns = Host.getJobDir (Host.getLocalResourceDir (), js).resolve ("out.columns");
-                                    Host.deleteTree (columns, true);
-                                }
-                            }
-
-                            EventQueue.invokeLater (new Runnable ()
-                            {
-                                public void run ()
-                                {
-                                    model.removeNodeFromParent (node);
-                                }
-                            });
-                        }
-                        catch (Exception e) {}
-                    }
+                    synchronized (t.nodes) {t.nodes.add (node);}
                 }
+
+                for (HostDeleteThread t : hostThreads.values ()) t.allQueued = true;
             }
         };
         deleteThread.setDaemon (true);  // It's OK if this work is interrupted. Any undeleted item will simply show up in the tree on next launch, and the user can try again.
         deleteThread.start ();
+    }
+
+    public class HostDeleteThread extends Thread
+    {
+        public Host           env;
+        public List<NodeBase> nodes = new ArrayList<NodeBase> ();
+        public boolean        allQueued;
+
+        public HostDeleteThread (Host env)
+        {
+            super ("Delete Jobs (" + env.name + ")");
+            this.env = env;
+        }
+
+        public void run ()
+        {
+            while (true)
+            {
+                NodeBase node = null;
+                synchronized (nodes)
+                {
+                    if (! nodes.isEmpty ()) node = nodes.remove (nodes.size () - 1);
+                }
+                if (node == null)
+                {
+                    if (allQueued) break;  // done
+                    try {sleep (1000);}
+                    catch (InterruptedException e) {}
+                    continue;
+                }
+
+                NodeJob job;
+                if (node instanceof NodeJob) job = (NodeJob) node;
+                else                         job = (NodeJob) node.getParent ();
+                MDoc doc = (MDoc) job.getSource ();
+                Host env = Host.get (doc);
+               
+                try
+                {
+                    if (node instanceof NodeJob)
+                    {
+                        if (env instanceof Remote)
+                        {
+                            Path remoteJobDir = Host.getJobDir (env.getResourceDir (), doc);
+                            Host.deleteTree (remoteJobDir, true);
+                        }
+                        doc.delete ();  // deletes local job directory
+                    }
+                    else if (node instanceof NodeFile)
+                    {
+                        NodeFile nf = (NodeFile) node;
+                        MNode    js = job.getSource ();
+                        String fileName = nf.path.getFileName ().toString ();
+
+                        if (env instanceof Remote)
+                        {
+                            Path remoteJobDir = Host.getJobDir (env.getResourceDir (), js);
+                            Path remoteFile = remoteJobDir.resolve (fileName);
+                            Host.deleteTree (remoteFile, true);  // In case this is a video directory rather than just a file, use deleteTree().
+                            if (fileName.equals ("out"))  // also delete out.columns
+                            {
+                                remoteFile = remoteJobDir.resolve ("out.columns");
+                                Host.deleteTree (remoteFile, true);  // Even though this is definitely not a tree, it is still convenient to call deleteTre(), because it absorbs a lot of potential errors.
+                            }
+                        }
+
+                        Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), js);
+                        Path localFile = localJobDir.resolve (fileName);
+                        Host.deleteTree (localFile, true);
+                        if (fileName.equals ("out"))
+                        {
+                            localFile = localJobDir.resolve ("out.columns");
+                            Host.deleteTree (localFile,  true);
+                        }
+                    }
+
+                    final NodeBase deleteNode = node;
+                    EventQueue.invokeLater (new Runnable ()
+                    {
+                        public void run ()
+                        {
+                            model.removeNodeFromParent (deleteNode);
+                        }
+                    });
+                }
+                catch (Exception e) {e.printStackTrace ();}
+            }
+        }
     }
 
     /**

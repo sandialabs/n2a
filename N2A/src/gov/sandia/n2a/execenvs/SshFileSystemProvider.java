@@ -65,6 +65,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.execenvs.Host.AnyProcess;
 import gov.sandia.n2a.execenvs.Host.AnyProcessBuilder;
+import gov.sandia.n2a.execenvs.SshPath.WrapperSFTP;
 
 public class SshFileSystemProvider extends FileSystemProvider
 {
@@ -290,15 +291,11 @@ public class SshFileSystemProvider extends FileSystemProvider
         }
 
         SshPath A = (SshPath) dir;
-        ChannelSftp channel = A.getSftp ();
         String name = A.toAbsolutePath ().toString ();
-        try
+        try (WrapperSFTP wrapper = A.getSftp ())
         {
-            synchronized (channel)
-            {
-                channel.mkdir (name);
-                if (permissions != null) channel.chmod (sftpPermissions (permissions), name);
-            }
+            wrapper.sftp.mkdir (name);
+            if (permissions != null) wrapper.sftp.chmod (sftpPermissions (permissions), name);
         }
         catch (SftpException e)
         {
@@ -334,15 +331,11 @@ public class SshFileSystemProvider extends FileSystemProvider
     public void delete (Path path) throws IOException
     {
         String name = path.toAbsolutePath ().toString ();
-        try
+        try (WrapperSFTP wrapper = ((SshPath) path).getSftp ())
         {
-            ChannelSftp channel = ((SshPath) path).getSftp ();
-            synchronized (channel)
-            {
-                SftpATTRS attributes = channel.lstat (name);  // doesn't follow links
-                if (attributes.isDir ()) channel.rmdir (name);
-                else                     channel.rm    (name);
-            }
+            SftpATTRS attributes = wrapper.sftp.lstat (name);  // doesn't follow links
+            if (attributes.isDir ()) wrapper.sftp.rmdir (name);
+            else                     wrapper.sftp.rm    (name);
         }
         catch (SftpException e)
         {
@@ -427,11 +420,9 @@ public class SshFileSystemProvider extends FileSystemProvider
     {
         SshPath A = (SshPath) path;
         String name = A.toAbsolutePath ().toString ();
-        try
+        try (WrapperSFTP wrapper = A.getSftp ())
         {
-            ChannelSftp channel = A.getSftp ();
-            SftpATTRS attributes;
-            synchronized (channel) {attributes = channel.stat (name);}
+            SftpATTRS attributes = wrapper.sftp.stat (name);
             int permissions = attributes.getPermissions ();
             for (AccessMode mode : modes)
             {
@@ -704,10 +695,9 @@ public class SshFileSystemProvider extends FileSystemProvider
             this.filter = filter;
 
             String name = parent.toAbsolutePath ().toString ();
-            try
+            try (WrapperSFTP wrapper = parent.getSftp ())
             {
-                ChannelSftp channel = parent.getSftp ();
-                synchronized (channel) {entries = channel.ls (name);}
+                entries = wrapper.sftp.ls (name);
             }
             catch (SftpException e)
             {
@@ -900,15 +890,11 @@ public class SshFileSystemProvider extends FileSystemProvider
         public PosixFileAttributes readAttributes () throws IOException
         {
             String name = path.toAbsolutePath ().toString ();
-            try
+            try (WrapperSFTP wrapper = path.getSftp ())
             {
                 SshFileAttributes result = new SshFileAttributes ();
-                ChannelSftp channel = path.getSftp ();
-                synchronized (channel)
-                {
-                    if (followLinks) result.attributes = channel. stat (name);
-                    else             result.attributes = channel.lstat (name);
-                }
+                if (followLinks) result.attributes = wrapper.sftp. stat (name);
+                else             result.attributes = wrapper.sftp.lstat (name);
                 result.path        = path;
                 result.followLinks = followLinks;
                 return result;
@@ -923,15 +909,13 @@ public class SshFileSystemProvider extends FileSystemProvider
         public void setTimes (FileTime modify, FileTime access, FileTime create) throws IOException
         {
             String name = path.toAbsolutePath ().toString ();
-            try
+            try (WrapperSFTP wrapper = path.getSftp ())
             {
-                ChannelSftp channel = path.getSftp ();
-                SftpATTRS attributes;
-                synchronized (channel) {attributes = channel.stat (name);}
+                SftpATTRS attributes = wrapper.sftp.stat (name);
                 int atime =  access == null ? attributes.getATime () : (int) access.to (TimeUnit.SECONDS);
                 int mtime =  modify == null ? attributes.getMTime () : (int) modify.to (TimeUnit.SECONDS);
                 attributes.setACMODTIME (atime, mtime);
-                synchronized (channel) {channel.setStat (name, attributes);}
+                wrapper.sftp.setStat (name, attributes);
             }
             catch (SftpException e)
             {
@@ -947,10 +931,9 @@ public class SshFileSystemProvider extends FileSystemProvider
         public void setOwner (UserPrincipal owner) throws IOException
         {
             String name = path.toAbsolutePath ().toString ();
-            try
+            try (WrapperSFTP wrapper = path.getSftp ())
             {
-                ChannelSftp channel = path.getSftp ();
-                synchronized (channel) {channel.chown (((SshPrincipal) owner).id, name);}
+                wrapper.sftp.chown (((SshPrincipal) owner).id, name);
             }
             catch (SftpException e)
             {
@@ -961,10 +944,9 @@ public class SshFileSystemProvider extends FileSystemProvider
         public void setGroup (GroupPrincipal group) throws IOException
         {
             String name = path.toAbsolutePath ().toString ();
-            try
+            try (WrapperSFTP wrapper = path.getSftp ())
             {
-                ChannelSftp channel = path.getSftp ();
-                synchronized (channel) {channel.chgrp (((SshPrincipal) group).id, name);}
+                wrapper.sftp.chgrp (((SshPrincipal) group).id, name);
             }
             catch (SftpException e)
             {
@@ -975,10 +957,9 @@ public class SshFileSystemProvider extends FileSystemProvider
         public void setPermissions (Set<PosixFilePermission> permissions) throws IOException
         {
             String name = path.toAbsolutePath ().toString ();
-            try
+            try (WrapperSFTP wrapper = path.getSftp ())
             {
-                ChannelSftp channel = path.getSftp ();
-                synchronized (channel) {channel.chmod (sftpPermissions (permissions), name);}
+                wrapper.sftp.chmod (sftpPermissions (permissions), name);
             }
             catch (SftpException e)
             {
