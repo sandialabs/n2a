@@ -1024,7 +1024,7 @@ public class PanelEquations extends JPanel
         MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
         mtp.setPreferredFocus (PanelRun.instance, PanelRun.instance.tree);
         mtp.selectTab ("Runs");
-        NodeJob node = PanelRun.instance.addNewRun (job);
+        NodeJob node = PanelRun.instance.addNewRun (job, true);
 
         Backend backend = Backend.getBackend (job.get ("$metadata", "backend"));
         Host env = Host.get (job);

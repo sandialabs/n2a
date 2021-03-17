@@ -1117,7 +1117,7 @@ public class PanelRun extends JPanel
         Add a newly-created job to the list, and do all remaining setup to monitor it.
         This must be called on the EDT.
     **/
-    public NodeJob addNewRun (MNode run)
+    public NodeJob addNewRun (MNode run, boolean takeFocus)
     {
         NodeJob node = new NodeJob (run, true);
         node.inherit = run.getOrDefault (node.key, "$inherit").split (",", 2)[0].replace ("\"", "");
@@ -1126,9 +1126,12 @@ public class PanelRun extends JPanel
         synchronized (jobNodes) {jobNodes.put (node.key, node);}
         model.insertNodeInto (node, root, 0);  // Since this always executes on event dispatch thread, it will not conflict with other code that accesses model.
         if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, we need to give the JTree a little extra kick to get started.
-        tree.expandRow (0);
-        tree.setSelectionRow (0);
-        tree.scrollRowToVisible (0);
+        if (takeFocus)
+        {
+            tree.expandRow (0);
+            tree.setSelectionRow (0);
+            tree.scrollRowToVisible (0);
+        }
 
         return node;
     }

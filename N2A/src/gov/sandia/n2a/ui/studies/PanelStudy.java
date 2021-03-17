@@ -550,7 +550,7 @@ public class PanelStudy extends JPanel
                             public void run ()
                             {
                                 if (displayStudy == Study.this) tableSamples.addJob ();
-                                Host.waitForHost (PanelRun.instance.addNewRun (job));
+                                Host.waitForHost (PanelRun.instance.addNewRun (job, false));
                             }
                         });
                     }
