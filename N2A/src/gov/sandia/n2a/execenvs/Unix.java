@@ -286,4 +286,24 @@ public class Unix extends Host
         double idle = (double) deltaIdle / deltaTotal;
         return nproc * idle;
     }
+
+    public void deleteTree (Path start, boolean includeStart)
+    {
+        // Going through NIO is incredibly inefficient, particularly for remote filesystems.
+        // Why do that, when we have a simple shell command that does it all (nearly) instantly?
+
+        List<String> command = new ArrayList<String> ();
+        command.add ("rm");
+        command.add ("-rf");
+        String path = quote (start);
+        if (! includeStart)
+        {
+            if (path.endsWith ("'")) path  = path.substring (0, path.length () - 1) + "/*'";
+            else                     path += "/*";
+        }
+        command.add (path);
+
+        try (AnyProcess proc = build (command).start ()) {}
+        catch (Exception e) {}
+    }
 }

@@ -173,6 +173,12 @@ public abstract class Host
         notifyChange ();
     }
 
+    public static Host get ()
+    {
+        init ();
+        return hosts.get ("localhost");
+    }
+
     public static Host get (String hostname)
     {
         init ();
@@ -184,6 +190,15 @@ public abstract class Host
     public static Host get (MNode job)
     {
         return get (job.getOrDefault ("localhost", "$metadata", "host"));
+    }
+
+    public static Host get (Path path)
+    {
+        if (path instanceof SshPath)
+        {
+            return get (((SshFileSystem) path.getFileSystem ()).connection.hostname);
+        }
+        return get ("localhost");
     }
 
     public static Host getByAddress (String address)
@@ -862,27 +877,29 @@ public abstract class Host
         }
     }
 
-    public static void deleteTree (Path start, boolean includeStartDir)
+    public void deleteTree (Path start, boolean includeStart)
     {
-        new DeleteTreeVisitor (start, includeStartDir).walk ();
+        // This is mainly for Windows, but works as a general-purpose delete-tree,
+        // even for remote filesystems.
+        new DeleteTreeVisitor (start, includeStart).walk ();
     }
 
     public static class DeleteTreeVisitor extends SimpleFileVisitor<Path>
     {
-        public boolean includeStartDir;
+        public boolean includeStart;
         public Path    start;
         public boolean setPermissions = false;
         public boolean evilNIO;
 
-        public DeleteTreeVisitor (Path start, boolean includeStartDir)
+        public DeleteTreeVisitor (Path start, boolean includeStart)
         {
-            this.start           = start;
-            this.includeStartDir = includeStartDir;
+            this.start        = start;
+            this.includeStart = includeStart;
 
             // On Windows, the JVM sometimes holds file locks even after we close the file.
             // This can keep us from being able to delete directories.
             // Garbage collection helps reduce this problem, though it does not guarantee success.
-            evilNIO = isWindows ()  &&  start.getFileSystem ().provider ().getScheme ().equals ("file");
+            evilNIO = isWindows ();
         }
 
         public void walk ()
@@ -910,7 +927,7 @@ public abstract class Host
 
         public FileVisitResult postVisitDirectory (final Path dir, final IOException e) throws IOException
         {
-            if (includeStartDir  ||  ! dir.equals (start))
+            if (includeStart  ||  ! dir.equals (start))
             {
                 try
                 {
