@@ -1062,7 +1062,7 @@ public class PanelRun extends JPanel
                         if (env instanceof Remote)
                         {
                             Path remoteJobDir = Host.getJobDir (env.getResourceDir (), job);
-                            env.deleteTree (remoteJobDir, true);
+                            env.deleteTree (remoteJobDir);
                         }
                         job.delete ();  // deletes local job directory
                     }
@@ -1075,21 +1075,21 @@ public class PanelRun extends JPanel
                         {
                             Path remoteJobDir = Host.getJobDir (env.getResourceDir (), job);
                             Path remoteFile = remoteJobDir.resolve (fileName);
-                            env.deleteTree (remoteFile, true);  // In case this is a video directory rather than just a file, use deleteTree().
+                            env.deleteTree (remoteFile);  // In case this is a video directory rather than just a file, use deleteTree().
                             if (fileName.equals ("out"))  // also delete out.columns
                             {
                                 remoteFile = remoteJobDir.resolve ("out.columns");
-                                env.deleteTree (remoteFile, true);  // Even though this is definitely not a tree, it is still convenient to call deleteTre(), because it absorbs a lot of potential errors.
+                                env.deleteTree (remoteFile);  // Even though this is definitely not a tree, it is still convenient to call deleteTre(), because it absorbs a lot of potential errors.
                             }
                         }
 
                         Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
                         Path localFile = localJobDir.resolve (fileName);
-                        Host.get ().deleteTree (localFile, true);
+                        Host.get ().deleteTree (localFile);
                         if (fileName.equals ("out"))
                         {
                             localFile = localJobDir.resolve ("out.columns");
-                            Host.get ().deleteTree (localFile,  true);
+                            Host.get ().deleteTree (localFile);
                         }
                     }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,6 +11,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -182,6 +183,24 @@ public class Windows extends Host
         // Windows does not provide a simple way to signal a non-GUI process.
         // Instead, the program is responsible to poll for the existence of the "finished" file
         // on a reasonable interval, say once per second. See Backend.kill()
+    }
+
+    public void deleteTree (Path start)
+    {
+        // Hack to deal with file locks held by NIO.
+        // See notes on Host.DeleteTreeVisitor ctor.
+        System.gc ();
+
+        if (Files.isDirectory (start))
+        {
+            try (AnyProcess proc = build ("cmd", "/c", "rd", "/q", "/s", quote (start)).start ()) {}
+            catch (Exception e) {}
+        }
+        else  // single file
+        {
+            try (AnyProcess proc = build ("cmd", "/c", "del", "/q", "/f", quote (start)).start ()) {}
+            catch (Exception e) {}
+        }
     }
 
     @Override

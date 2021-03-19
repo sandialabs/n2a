@@ -883,24 +883,26 @@ public abstract class Host
         }
     }
 
-    public void deleteTree (Path start, boolean includeStart)
+    /**
+        Deletes the file or directory and all of its descendants.
+        Any exceptions are silently ignored.
+    **/
+    public void deleteTree (Path start)
     {
         // This is mainly for Windows, but works as a general-purpose delete-tree,
         // even for remote filesystems.
-        new DeleteTreeVisitor (start, includeStart).walk ();
+        new DeleteTreeVisitor (start).walk ();
     }
 
     public static class DeleteTreeVisitor extends SimpleFileVisitor<Path>
     {
-        public boolean includeStart;
         public Path    start;
         public boolean setPermissions = false;
         public boolean evilNIO;
 
-        public DeleteTreeVisitor (Path start, boolean includeStart)
+        public DeleteTreeVisitor (Path start)
         {
-            this.start        = start;
-            this.includeStart = includeStart;
+            this.start = start;
 
             // On Windows, the JVM sometimes holds file locks even after we close the file.
             // This can keep us from being able to delete directories.
@@ -933,21 +935,18 @@ public abstract class Host
 
         public FileVisitResult postVisitDirectory (final Path dir, final IOException e) throws IOException
         {
-            if (includeStart  ||  ! dir.equals (start))
+            try
             {
-                try
+                if (evilNIO  &&  setPermissions)
                 {
-                    if (evilNIO  &&  setPermissions)
-                    {
-                        System.gc ();
-                        setPermissions = false;
-                    }
-                    Files.delete (dir);
+                    System.gc ();
+                    setPermissions = false;
                 }
-                catch (AccessDeniedException ade)
-                {
-                    if (makeDeletable (dir)) Files.delete (dir);
-                }
+                Files.delete (dir);
+            }
+            catch (AccessDeniedException ade)
+            {
+                if (makeDeletable (dir)) Files.delete (dir);
             }
             return FileVisitResult.CONTINUE;
         }

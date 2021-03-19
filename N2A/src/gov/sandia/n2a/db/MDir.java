@@ -130,7 +130,7 @@ public class MDir extends MNode
         children.clear ();
         writeQueue.clear ();
         Path path = root.toAbsolutePath ();
-        Host.get (path).deleteTree (path, false);
+        Host.get (path).deleteTree (path);  // It's OK to delete this directory, since it will be re-created by the next MDoc that gets saved.
         fireChanged ();
     }
 
@@ -143,7 +143,7 @@ public class MDir extends MNode
         SoftReference<MDoc> ref = children.remove (key);
         if (ref != null) writeQueue.remove (ref.get ());
         Path path = root.resolve (key).toAbsolutePath ();
-        Host.get (path).deleteTree (path, true);
+        Host.get (path).deleteTree (path);
         fireChildDeleted (key);
     }
 
@@ -201,7 +201,7 @@ public class MDir extends MNode
         Path toPath   = root.resolve (toKey  ).toAbsolutePath ();
         try
         {
-            if (Files.exists (toPath)) Host.get (toPath).deleteTree (toPath, true);
+            if (Files.exists (toPath)) Host.get (toPath).deleteTree (toPath);
             Files.move (fromPath, toPath, StandardCopyOption.REPLACE_EXISTING);
         }
         catch (IOException e)
