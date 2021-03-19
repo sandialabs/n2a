@@ -133,8 +133,17 @@ class XyceBackend extends Backend
         writer.append ("\n");
         writer.append ("* seed: " + job.get ("seed") + "\n");
         writer.append (".tran 0 " + job.get ("duration") + "\n");
-        // TODO: add integrator options to netlist.
-        // There are a vast number of options that apply under various circumstances.
+
+        MNode integrator = job.child ("integrator");
+        if (integrator != null)
+        {
+            String method = integrator.get ();
+            if (! method.isEmpty ())
+            {
+                writer.append (".options timeint method=" + method + "\n");
+            }
+            // TODO: add other integrator options
+        }
 
         // Equations
         for (Instance i : simulator)
