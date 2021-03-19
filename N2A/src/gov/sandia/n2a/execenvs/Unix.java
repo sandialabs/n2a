@@ -47,7 +47,7 @@ public class Unix extends Host
     @Override
     public boolean isActive (MNode job) throws Exception
     {
-        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        long pid = job.getOrDefault (0l, "pid");
         if (pid == 0) return false;
 
         String jobDir = Host.getJobDir (getResourceDir (), job).toAbsolutePath ().toString ();
@@ -149,7 +149,7 @@ public class Unix extends Host
                 {
                     line = line.trim ();
                     String[] parts = line.split ("\\s+");
-                    job.set (Long.parseLong (parts[0]), "$metadata", "pid");
+                    job.set (Long.parseLong (parts[0]), "pid");
                     if (parts[1].equals (command)) return;  // exact match
                     // Otherwise, may be the wrapper script.
                     // The wrapper script is better than nothing, but keep scanning.
@@ -161,7 +161,7 @@ public class Unix extends Host
     @Override
     public void killJob (MNode job, boolean force) throws Exception
     {
-        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        long pid = job.getOrDefault (0l, "pid");
         if (pid == 0) return;
 
         // Scan for PIDs chained from the given one. We need to kill them all.

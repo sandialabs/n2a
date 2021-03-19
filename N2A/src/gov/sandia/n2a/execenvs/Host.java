@@ -189,7 +189,7 @@ public abstract class Host
 
     public static Host get (MNode job)
     {
-        return get (job.getOrDefault ("localhost", "$metadata", "host"));
+        return get (job.getOrDefault ("localhost", "host"));
     }
 
     public static Host get (Path path)
@@ -309,10 +309,10 @@ public abstract class Host
 
                     // Find available host
                     MNode source = job.getSource ();
-                    Backend backend = Backend.getBackend (source.get ("$metadata", "backend"));
+                    Backend backend = Backend.getBackend (source.get ("backend"));
 
                     List<Host> hosts = new ArrayList<Host> ();
-                    for (String hostname : source.get ("$metadata", "host").split (","))
+                    for (String hostname : source.get ("host").split (","))
                     {
                         Host h = Host.get (hostname.trim ());
                         if (h != null) hosts.add (h);
@@ -353,7 +353,7 @@ public abstract class Host
                     else  // Host is ready, so start job and move to host's monitor list.
                     {
                         if (stop) return;
-                        source.set (chosenHost.name, "$metadata", "host");
+                        source.set (chosenHost.name, "host");
                         backend.start (source);
                         hostTime.put (chosenHost, System.currentTimeMillis ());  // Remember when the most recent job was started on the chosen host.
                         synchronized (waitingForHost) {waitingForHost.remove (i);}
@@ -500,9 +500,10 @@ public abstract class Host
     **/
     public static interface AnyProcessBuilder
     {
-        public AnyProcessBuilder redirectInput  (Path file);
-        public AnyProcessBuilder redirectOutput (Path file);
-        public AnyProcessBuilder redirectError  (Path file);
+        public AnyProcessBuilder  redirectInput  (Path file);
+        public AnyProcessBuilder  redirectOutput (Path file);
+        public AnyProcessBuilder  redirectError  (Path file);
+        public Map<String,String> environment ();
         /**
             Construct and start the process.
             This is the only function that needs to be inside the try-with-resources.
@@ -556,6 +557,11 @@ public abstract class Host
         {
             builder.redirectError (file.toFile ());
             return this;
+        }
+
+        public Map<String,String> environment ()
+        {
+            return builder.environment ();
         }
 
         public AnyProcess start () throws IOException, JSchException

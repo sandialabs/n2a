@@ -12,7 +12,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import gov.sandia.n2a.db.MNode;
@@ -161,7 +160,7 @@ public abstract class Backend implements ExtensionPoint
         try
         {
             Host.get (job).killJob (job, force);
-            Path localJobDir = Paths.get (job.get ()).getParent ();
+            Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
             Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), localJobDir.resolve ("finished"));
             // Note that BackendC on Windows uses the mere existence of the "finished" file as a signal to shut down gracefully.
             // This is due to the lack of a proper SIGTERM in Windows.
@@ -193,7 +192,7 @@ public abstract class Backend implements ExtensionPoint
         }
 
         // The divide by 2 at the end of the following line allows us to adapt down as well as up.
-        int lineLength = job.getOrDefault (32, "$metadata", "backend", "all", "lineLength") / 2;
+        int lineLength = job.getOrDefault (32, "lineLength") / 2;
 
         try (SeekableByteChannel channel = Files.newByteChannel (out, StandardOpenOption.READ))
         {
@@ -243,7 +242,7 @@ public abstract class Backend implements ExtensionPoint
                             {
                                 try
                                 {
-                                    job.set (lineLength, "$metadata", "backend", "all", "lineLength");  // Remember most recent value, to more quickly track situation in the output stream.
+                                    job.set (lineLength, "lineLength");  // Remember most recent value, to more quickly track situation in the output stream.
                                     return Double.parseDouble (column);
                                 }
                                 catch (NumberFormatException e)

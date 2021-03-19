@@ -44,7 +44,7 @@ public class Windows extends Host
     @Override
     public boolean isActive (MNode job) throws Exception
     {
-        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        long pid = job.getOrDefault (0l, "pid");
         if (pid == 0) return false;
 
         String jobDir = Paths.get (job.get ()).getParent ().toString ();
@@ -165,7 +165,7 @@ public class Windows extends Host
                 if (line.contains (jobDirString))
                 {
                     line = line.trim ().split (" ", 2)[0];
-                    job.set (Long.parseLong (line), "$metadata", "pid");
+                    job.set (Long.parseLong (line), "pid");
                     return;
                 }
             }
@@ -175,7 +175,7 @@ public class Windows extends Host
     @Override
     public void killJob (MNode job, boolean force) throws Exception
     {
-        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        long pid = job.getOrDefault (0l, "pid");
         if (pid == 0) return;
 
         if (force) new ProcessBuilder ("taskkill", "/PID", String.valueOf (pid), "/F").start ();

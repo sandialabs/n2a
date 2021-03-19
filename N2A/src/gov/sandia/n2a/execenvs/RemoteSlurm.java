@@ -44,7 +44,7 @@ public class RemoteSlurm extends RemoteUnix
     @Override
     public boolean isActive (MNode job) throws Exception
     {
-        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        long pid = job.getOrDefault (0l, "pid");
         if (pid == 0) return false;
 
         try (AnyProcess proc = build ("squeue -O JobID --noheader -u " + connection.username).start ();
@@ -89,8 +89,8 @@ public class RemoteSlurm extends RemoteUnix
         Path jobsDir     = resourceDir.resolve ("jobs");
         Path jobDir      = jobsDir.resolve (job.key ());
 
-        String cores = job.getOrDefault ("1", "$metadata", "cores");
-        String nodes = job.getOrDefault ("1", "$metadata", "remote", "nodes");
+        String cores = job.getOrDefault ("1", "host", "cores");
+        String nodes = job.getOrDefault ("1", "host", "nodes");
 
         stringToFile (jobDir.resolve ("n2a_job"),
               "#!/bin/bash\n"
@@ -118,7 +118,7 @@ public class RemoteSlurm extends RemoteUnix
                 String[] parts = line.split ("job", 2);
                 if (parts.length == 2)
                 {
-                    job.set (Long.parseLong (parts[1].trim ()), "$metadata", "pid");
+                    job.set (Long.parseLong (parts[1].trim ()), "pid");
                     return;
                 }
             }
@@ -133,7 +133,7 @@ public class RemoteSlurm extends RemoteUnix
     @Override
     public void killJob (MNode job, boolean force) throws Exception
     {
-        long pid = job.getOrDefault (0l, "$metadata", "pid");
+        long pid = job.getOrDefault (0l, "pid");
         if (pid == 0) return;
 
         try (AnyProcess proc = build ("scancel", force ? "" : "-s 15 ", String.valueOf (pid)).start ())

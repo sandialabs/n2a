@@ -8,13 +8,15 @@ package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationSet;
+import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.ui.jobs.NodeJob;
+
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 public class InternalBackend extends Backend
 {
@@ -82,32 +84,29 @@ public class InternalBackend extends Backend
 
         public void run ()
         {
-            Path jobDir = Paths.get (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
-            try {err.set (new PrintStream (new FileOutputStream (jobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
+            Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
+            try {err.set (new PrintStream (new FileOutputStream (localJobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
             catch (Exception e) {}
 
             long elapsedTime = System.nanoTime ();
             try
             {
-                Files.createFile (jobDir.resolve ("started"));
-                EquationSet digestedModel = new EquationSet (job);
+                Files.createFile (localJobDir.resolve ("started"));
+                MNode model = NodeJob.getModel (job);
+                EquationSet digestedModel = new EquationSet (model);
                 digestModel (digestedModel);
-                Files.copy (new ByteArrayInputStream (digestedModel.dump (false).getBytes ("UTF-8")), jobDir.resolve ("model.flat"));
+                Files.copy (new ByteArrayInputStream (digestedModel.dump (false).getBytes ("UTF-8")), localJobDir.resolve ("model.flat"));
                 //dumpBackendData (digestedModel);
 
                 // Any new metadata generated after MPart is collated must be injected back into job
                 String duration = digestedModel.metadata.get ("duration");
-                if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
+                if (! duration.isEmpty ()) job.set (duration, "duration");
 
-                long seed = job.getOrDefault (-1l, "$metadata", "seed");
-                if (seed < 0)
-                {
-                    seed = System.currentTimeMillis ();
-                    job.set (seed, "$metadata", "seed");
-                }
+                long seed = model.getOrDefault (System.currentTimeMillis (), "$metadata", "seed");
+                job.set (seed, "seed");
 
-                simulator = new Simulator (new Wrapper (digestedModel), seed, jobDir);
-                String e = job.get ("$metadata", "backend", "all", "event");
+                simulator = new Simulator (new Wrapper (digestedModel), seed, localJobDir);
+                String e = model.get ("$metadata", "backend", "all", "event");
                 switch (e)
                 {
                     case "before":
@@ -126,15 +125,15 @@ public class InternalBackend extends Backend
                 simulator.init ();
                 simulator.run ();  // Does not return until simulation is finished.
                 elapsedTime = System.nanoTime () - elapsedTime;
-                if (simulator.stop) Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), jobDir.resolve ("finished"));
-                else                Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), jobDir.resolve ("finished"));
+                if (simulator.stop) Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), localJobDir.resolve ("finished"));
+                else                Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), localJobDir.resolve ("finished"));
             }
             catch (Exception e)
             {
                 elapsedTime = System.nanoTime () - elapsedTime;
                 if (! (e instanceof AbortRun)) e.printStackTrace (err.get ());
 
-                try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), jobDir.resolve ("finished"));}
+                try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), localJobDir.resolve ("finished"));}
                 catch (Exception f) {}
             }
 
@@ -175,7 +174,7 @@ public class InternalBackend extends Backend
     public static Simulator constructStaticNetwork (EquationSet e) throws Exception
     {
         digestModel (e);
-        long seed = e.metadata.getOrDefault (0l, "seed");
+        long seed = e.metadata.getOrDefault (System.currentTimeMillis (), "seed");
         Simulator result = new Simulator (new Wrapper (e), seed);
         result.init ();
         return result;

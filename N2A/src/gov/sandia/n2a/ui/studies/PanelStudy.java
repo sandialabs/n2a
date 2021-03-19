@@ -464,7 +464,6 @@ public class PanelStudy extends JPanel
                 if (seed != null) random.setSeed (seed.getLong ());
                 else              random.setSeed (System.currentTimeMillis ());
                 int lastIndex = jobCount - 1;
-                System.out.println ("index, lastIndex = " + index + " " + lastIndex);
                 if (index <= lastIndex)
                 {
                     MNode lastRun = null;
@@ -472,7 +471,7 @@ public class PanelStudy extends JPanel
                     {
                         // Retrieve last run.
                         String lastRunKey = source.get ("jobs", lastIndex);
-                        lastRun = AppData.runs.child (lastRunKey);
+                        lastRun = NodeJob.getModel (lastRunKey);
                     }
 
                     if (lastRun == null)  // Either the user cares about repeatable random numbers, or we failed to retrieve the last run.
@@ -537,10 +536,11 @@ public class PanelStudy extends JPanel
                         // Launch job and maintain all records
                         // See PanelEquations.listenerRun for similar code.
                         String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + uniqueJobID++;
-                        final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
-                        job.merge (collated);
-                        job.set (inherit, "$inherit");
-                        ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
+                        final MDoc job = (MDoc) AppData.runs.childOrCreate (jobKey);
+                        NodeJob.collectJobParameters (collated, inherit, job);
+                        job.save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
+                        NodeJob.saveCollatedModel (collated, job);
+
                         jobIndex.put (jobKey, index);
                         source.set (jobKey, "jobs", index++);
                         incomplete.add (jobKey);
@@ -550,7 +550,8 @@ public class PanelStudy extends JPanel
                             public void run ()
                             {
                                 if (displayStudy == Study.this) tableSamples.addJob ();
-                                Host.waitForHost (PanelRun.instance.addNewRun (job, false));
+                                NodeJob node = PanelRun.instance.addNewRun (job, false);
+                                Host.waitForHost (node);
                             }
                         });
                     }
@@ -685,8 +686,9 @@ public class PanelStudy extends JPanel
 
     public class SampleTableModel extends AbstractTableModel
     {
-        protected Study          currentStudy;
-        protected List<String[]> variablePaths = new ArrayList<String[]> ();
+        protected Study                currentStudy;
+        protected List<String[]>       variablePaths = new ArrayList<String[]> ();
+        protected Map<String,String[]> rowValues     = new HashMap<String,String[]> ();
 
         public int getRowCount ()
         {
@@ -713,17 +715,26 @@ public class PanelStudy extends JPanel
         public Object getValueAt (int row, int column)
         {
             checkIndices ();
-            int columnCount = variablePaths.size () + 1;
-            int rowCount = displayStudy.source.childOrEmpty ("jobs").size ();
+            int count       = variablePaths.size ();
+            int columnCount = count + 1;
+            int rowCount    = displayStudy.source.childOrEmpty ("jobs").size ();
 
             if (column < 0  ||  column >= columnCount) return null;
             if (row < 0  ||  row >= rowCount) return null;
 
             String jobKey = displayStudy.source.get ("jobs", rowCount - row - 1);  // Reverse row order, so most-recently created jobs show at top.
             if (jobKey.isEmpty ()) return null;
-            MNode job = AppData.runs.child (jobKey);
-            if (job == null) return null;
-            if (column > 0) return job.get (variablePaths.get (column - 1));
+            String[] values = rowValues.get (jobKey);
+            if (values == null)  // Load model and extract relevant values
+            {
+                // A more memory-efficient approach would be to scan the model file for keys without fully loading it.
+                MNode model = NodeJob.getModel (jobKey);
+                if (model == null) return null;
+                values = new String[count];
+                for (int i = 0; i < count; i++) values[i] = model.get (variablePaths.get (i));
+                rowValues.put (jobKey, values);
+            }
+            if (column > 0) return values[column-1];
 
             // Determine status icon (column 0)
             NodeJob node = PanelRun.instance.jobNodes.get (jobKey);
@@ -736,7 +747,8 @@ public class PanelStudy extends JPanel
             if (currentStudy == displayStudy) return;
             currentStudy = displayStudy;
 
-            variablePaths = new ArrayList<String[]> ();
+            variablePaths.clear ();
+            rowValues.clear ();
             if (displayStudy == null) return;
 
             MNode variables = displayStudy.source.childOrEmpty ("variables");

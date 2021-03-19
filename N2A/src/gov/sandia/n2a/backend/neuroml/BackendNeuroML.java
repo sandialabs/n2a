@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,7 +10,6 @@ import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +17,8 @@ import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.execenvs.Host.AnyProcess;
+import gov.sandia.n2a.execenvs.Host.AnyProcessBuilder;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class BackendNeuroML extends Backend
@@ -39,11 +40,7 @@ public class BackendNeuroML extends Backend
     public class SimulationThread extends Thread
     {
         public MNode  job;
-        public Path   jobDir;
-        public Path   modelPath;
-        public String jnmlHome;
-        public Path   jnmlCommand;
-        public String simulator = "";
+        public String simulator;
 
         public SimulationThread (MNode job)
         {
@@ -53,21 +50,25 @@ public class BackendNeuroML extends Backend
 
         public void run ()
         {
-            jobDir = Paths.get (job.get ()).getParent ();  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
-            try {err.set (new PrintStream (new FileOutputStream (jobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
+            Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
+            try {err.set (new PrintStream (new FileOutputStream (localJobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
             catch (Exception e) {}
 
             try
             {
+                Files.createFile (localJobDir.resolve ("started"));
+
                 // Export the model to NeuroML
-                Files.createFile (jobDir.resolve ("started"));
                 String inherit = job.get ("$inherit").replace ("\"", "");
-                MNode doc = AppData.models.child (inherit);
-                modelPath = jobDir.resolve ("model.nml");
+                MNode doc = AppData.models.child (inherit);  // doc is the NON-collated model. We ignore the collated model stored in the job dir, because ExportJob will do its own collation.
+
+                Host env = Host.get (job);
+                Path jobDir = Host.getJobDir (env.getResourceDir (), job);
+                Path modelPath = jobDir.resolve ("model.nml");
                 ExportJob exportJob = PluginNeuroML.exporter.export (doc, modelPath, true);
 
                 // Record metadata
-                if (! exportJob.duration.isEmpty ()) job.set (exportJob.duration, "$metadata", "duration");
+                if (! exportJob.duration.isEmpty ()) job.set (exportJob.duration, "duration");
                 if (exportJob.simulation != null)
                 {
                     List<String> outputFiles = exportJob.simulation.dumpColumns (jobDir);
@@ -76,31 +77,32 @@ public class BackendNeuroML extends Backend
                     {
                         if (defaultOutput.isEmpty ()  ||  f.startsWith ("defaultOutput")) defaultOutput = f;
                     }
-                    if (! defaultOutput.isEmpty ()) job.set (defaultOutput, "$metadata", "defaultOutput");
+                    if (! defaultOutput.isEmpty ()) job.set (defaultOutput, "defaultOutput");
                 }
 
                 // Convert the model to target format using jnml
 
-                jnmlHome = AppData.state.get ("BackendNeuroML", "JNML_HOME");
+                String jnmlHome = AppData.state.get ("BackendNeuroML", "JNML_HOME");
                 if (jnmlHome.isEmpty ()) jnmlHome = System.getenv ("JNML_HOME");  // This is unlikely to be set, but respect if it is.
-                if (jnmlHome == null) jnmlHome = "/usr/local/jNeuroML";  // just a guess
-                jnmlCommand = Paths.get (jnmlHome, "jnml");
+                if (jnmlHome == null)    jnmlHome = "/usr/local/jNeuroML";        // just a guess
+                Path jnmlHomeDir = env.getResourceDir ().getRoot ().resolve (jnmlHome);
+                Path jnmlCommand = jnmlHomeDir.resolve ("jnml");
 
+                if (simulator == null) simulator = doc.get ("$metadata", "backend", "lems", "simulator");
                 if (! simulator.isEmpty ()  &&  ! simulator.equals ("neuron"))  // NUERON gets special treatment because jnml will run it for us.
                 {
-                    ProcessBuilder b = new ProcessBuilder (jnmlCommand.toString (), modelPath.toString (), "-" + simulator);
-                    Map<String,String> env = b.environment ();
-                    env.put ("JNML_HOME", jnmlHome);
+                    AnyProcessBuilder b = env.build (jnmlCommand.toString (), modelPath.toString (), "-" + simulator);
+                    Map<String,String> environment = b.environment ();
+                    environment.put ("JNML_HOME", jnmlHome);
 
-                    Path out = jobDir.resolve ("jnml.out");
-                    Path err = jobDir.resolve ("jnml.err");
-                    b.redirectOutput (out.toFile ());  // Should truncate existing files.
-                    b.redirectError  (err.toFile ());
+                    Path out = localJobDir.resolve ("jnml.out");
+                    Path err = localJobDir.resolve ("jnml.err");
+                    b.redirectOutput (out);  // Should truncate existing files.
+                    b.redirectError  (err);
 
                     int result = 1;
-                    try
+                    try (AnyProcess p = b.start ())
                     {
-                        Process p = b.start ();
                         p.waitFor ();
                         result = p.exitValue ();
                     }
@@ -136,7 +138,10 @@ public class BackendNeuroML extends Backend
                 }
 
                 // Run the model on the target simulator
-                submitJob ();
+                String parameters = "-nogui";
+                if (simulator.equals ("neuron")) parameters = "-neuron -run " + parameters;
+                String command = "JNML_HOME=" + env.quote (jnmlHomeDir) + " " + env.quote (jnmlCommand) + " " + env.quote (modelPath) + " " + parameters;
+                env.submitJob (job, command);
             }
             catch (AbortRun a)
             {
@@ -150,19 +155,12 @@ public class BackendNeuroML extends Backend
             PrintStream ps = Backend.err.get ();
             if (ps != System.err) ps.close ();
         }
-
-        public void submitJob () throws Exception
-        {
-            Host env = Host.get (job);
-            String command = "JNML_HOME=" + jnmlHome + " " + env.quote (jnmlCommand) + " " + env.quote (modelPath) + " -nogui";
-            env.submitJob (job, command);
-        }
     }
 
     @Override
     public double currentSimTime (MNode job)
     {
-        String defaultOutput = job.get ("$metadata", "defaultOutput");
+        String defaultOutput = job.get ("defaultOutput");
         if (defaultOutput.isEmpty ()) return 0;
         return InternalBackend.getSimTimeFromOutput (job, defaultOutput, 0);
     }

@@ -8,6 +8,7 @@ package gov.sandia.n2a.ui.jobs;
 
 import java.awt.EventQueue;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
@@ -23,7 +24,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.execenvs.Remote;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -97,6 +100,46 @@ public class NodeJob extends NodeBase
         return AppData.runs.child (key);
     }
 
+    // The following static functions are utilities for working with the snapshot model
+    // in the job dir. They are not directly to NodeJob, but this is as good a place
+    // as any to collect these routines.
+
+    public static MDoc getModel (String jobKey)
+    {
+        return getModel (AppData.runs.child (jobKey));
+    }
+
+    public static MDoc getModel (MNode job)
+    {
+        if (job == null) return null;
+        Path modelPath = Host.getJobDir (Host.getLocalResourceDir (), job).resolve ("model");
+        return new MDoc (modelPath);
+    }
+
+    /**
+        Writes the collated model to the local job directory.
+        @param collated The fully-expanded model.
+        @param job The job record, used only to determine name of job directory.
+    **/
+    public static void saveCollatedModel (MNode collated, MNode job)
+    {
+        Path jobDir    = Host.getJobDir (Host.getLocalResourceDir (), job);  // The path is also contained in the job MDoc node.
+        Path modelPath = jobDir.resolve ("model");
+        // See MDoc.save () for similar code.
+        // We avoid using MDoc because it would require duplicating the collated model in memory,
+        // and the model could be very large.
+        try (BufferedWriter writer = Files.newBufferedWriter (modelPath))
+        {
+            Schema.latest ().writeAll (collated, writer);
+            // File should be closed when writer is closed. It will be re-opened by backend.
+        }
+        catch (IOException e)
+        {
+            System.err.println ("Failed to write model file.");
+            e.printStackTrace ();
+        }
+    }
+
     /**
         @return Path to the source file (not the containing directory).
     **/
@@ -111,12 +154,22 @@ public class NodeJob extends NodeBase
     public synchronized void distribute ()
     {
         MNode source = getSource ();
+        if (source.size () == 0)  // TODO: remove this conversion on 3/17/2022 (one-year sunset date)
+        {
+            // Convert old-format job directories to new format, which has separate "job" and "model" files.
+            System.err.println ("converting to new job format: " + source.key ());
+            Path jobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
+            MDoc model = new MDoc (jobDir.resolve ("model"));
+            collectJobParameters (model, model.get ("$inherit"), source);
+            String temp = model.get ("$metadata", "pid");
+            if (! temp.isEmpty ()) source.set (temp, "pid");
+        }
         inherit = source.getOrDefault (key, "$inherit").split (",", 2)[0].replace ("\"", "");
         setUserObject (inherit);
 
         // Lightweight evaluation of local "finished" file.
-        // This slows down the initial load, but also makes the user more comfortable by showing status
-        // as soon as possible on the first screenful of the Runs tab.
+        // This slows down the initial load, but also makes the user more comfortable by showing
+        // status as soon as possible on the first screenful of the Runs tab.
         Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
         Path finished = localJobDir.resolve ("finished");
         if (Files.exists (finished)) checkFinished (finished);
@@ -144,6 +197,43 @@ public class NodeJob extends NodeBase
             Path model = localJobDir.resolve ("model");
             if (Files.exists (model)) Host.waitForHost (this);
         }
+    }
+
+    /**
+        Examines a model submitted for simulation and extracts key metadata needed
+        for the job record. The caller is responsible for assigning $inherit,
+        because this is usually already lost from "model" by the time this function
+        is called.
+        @param model The input model. Should be already collated, and so generally
+        is not the original source model from the DB.
+        @param inherit Key of the source model in the DB. 
+        @param job The job record to be filled in.
+    **/
+    public static void collectJobParameters (MNode model, String inherit, MNode job)
+    {
+        if (! inherit.isEmpty ()) job.set (inherit, "$inherit");
+
+        // Take the entire host subtree, in case there are host-specific configurations as subkeys.
+        // For example: "nodes" and "cores" for HPC systems.
+        MNode host = model.child ("$metadata", "host");
+        if (host != null)
+        {
+            job.set (host, "host");
+            job.clear ("host", "study");  // While we can't negate every unimportant thing, this is definitely one of them.
+        }
+
+        // Only need the main backend key, since the backend will always open the model, and thus can access detailed keys directly.
+        String temp = model.get ("$metadata", "backend");
+        if (! temp.isEmpty ()) job.set (temp, "backend");
+
+        temp = model.get ("$metadata", "duration");
+        if (! temp.isEmpty ()) job.set (temp, "duration");
+
+        // Unlike everything above, "seed" is merely trivia.
+        // However, it is useful for reproducing a run, so is frequently displayed to user.
+        // To avoid constantly opening the model, we copy it over to the job record.
+        temp = model.get ("$metadata", "seed");
+        if (! temp.isEmpty ()) job.set (temp, "seed");
     }
 
     public synchronized void checkFinished (Path finished)
@@ -196,8 +286,7 @@ public class NodeJob extends NodeBase
             {
                 try
                 {
-                    Path resourceDir  = env.getResourceDir ();
-                    Path remoteJobDir = Host.getJobDir (resourceDir, source);
+                    Path remoteJobDir = Host.getJobDir (env.getResourceDir (), source);
                     Path remoteFinished = remoteJobDir.resolve ("finished");
                     Files.copy (remoteFinished, finished);  // throws an exception if the remote file does not exist
                 }
@@ -214,12 +303,11 @@ public class NodeJob extends NodeBase
                 dateStarted = new Date (started.toFile ().lastModified ());
             }
         }
+        Backend simulator = Backend.getBackend (source.get ("backend"));
         if (complete < 1)
         {
-            Backend simulator = Backend.getBackend (source.get ("$metadata", "backend"));
-
             float percentDone = 0;
-            if (expectedSimTime == 0) expectedSimTime = source.getOrDefault (0.0, "$metadata", "duration");
+            if (expectedSimTime == 0) expectedSimTime = source.getOrDefault (0.0, "duration");
             if (expectedSimTime > 0)
             {
                 percentDone = (float) (simulator.currentSimTime (source) / expectedSimTime);
@@ -263,15 +351,12 @@ public class NodeJob extends NodeBase
         if (complete == 3)
         {
             // Check if process is still lingering
-            try
-            {
-                if (! env.isActive (source)) complete = 4;
-            }
-            catch (Exception e) {}
+            if (! simulator.isActive (source)) complete = 4;
         }
 
         PanelRun   panelRun   = PanelRun.instance;
         PanelStudy panelStudy = PanelStudy.instance;
+        if (panelRun == null) return;  // Probably running headless, so skip all UI updates.
         if (complete != oldComplete)
         {
             EventQueue.invokeLater (new Runnable ()
@@ -310,7 +395,7 @@ public class NodeJob extends NodeBase
     public void stop ()
     {
         MNode source = getSource ();
-        Backend.getBackend (source.get ("$metadata", "backend")).kill (source, complete >= 3);
+        Backend.getBackend (source.get ("backend")).kill (source, complete >= 3);
         if (complete < 3) complete = 3;
     }
 
@@ -341,7 +426,7 @@ public class NodeJob extends NodeBase
         // Scan local job dir
         boolean changed = false;
         MNode source = getSource ();
-        Path localJobDir = Paths.get (source.get ()).getParent ();
+        Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
         try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (localJobDir))
         {
             for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
@@ -355,8 +440,7 @@ public class NodeJob extends NodeBase
             try
             {
                 ((Remote) env).enable ();  // To get here, the use had to expand the node. This implies permission to prompt for login.
-                Path resourceDir  = env.getResourceDir ();
-                Path remoteJobDir = Host.getJobDir (resourceDir, source);
+                Path remoteJobDir = Host.getJobDir (env.getResourceDir (), source);
                 try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (remoteJobDir))
                 {
                     for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
@@ -478,6 +562,7 @@ public class NodeJob extends NodeBase
             catch (IOException e) {return false;}
 
             if (fileName.startsWith ("n2a_job" )) return false;
+            if (fileName.equals     ("job"     )) return false;  // The primary record for the jobs repo.
             if (fileName.equals     ("model"   )) return false;  // This is the file associated with our own "source"
             if (fileName.equals     ("started" )) return false;
             if (fileName.equals     ("finished")) return false;

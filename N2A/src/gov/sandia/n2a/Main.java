@@ -11,10 +11,10 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
 import gov.sandia.n2a.ui.jobs.OutputParser.Column;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
@@ -158,33 +158,47 @@ public class Main
 
     public static void runHeadless (MNode runModel)
     {
-        MPart collated = new MPart (runModel);
+        Path jobDir = Paths.get (System.getProperty ("user.dir")).toAbsolutePath ();  // Use current working directory, on assumption that's what the caller wants.
         MNode job = new MVolatile ();
-        job.merge (collated);  // Avoid passing an actual MPart on to backend
-        Path jobDir = Paths.get (System.getProperty ("user.dir")).toAbsolutePath ();
-        job.set (jobDir.resolve ("model").toString ());  // Make job look like an MDoc, so backend can fetch working directory.
-        String simulatorName = job.get ("$metadata", "backend");
+        job.set (jobDir.resolve ("job").toString ());  // Make job look like an MDoc, so backend can fetch working directory.
+
+        MPart collated = new MPart (runModel);
+        NodeJob.collectJobParameters (collated, collated.get ("$inherit"), job);
+
+        // Save collated model.
+        // Compare with PanelEquations.saveCollatedModel() and MDoc.save().
+        // We do extra work here to avoid using MDoc, which would require duplicating the collated model in memory.
+        Path modelPath = jobDir.resolve ("model");
+        try (BufferedWriter writer = Files.newBufferedWriter (modelPath))
+        {
+            Schema.latest ().writeAll (collated, writer);
+            // File should be closed when writer is closed. It will be re-opened by backend.
+        }
+        catch (IOException e)
+        {
+            System.err.println ("Failed to write model file.");
+            e.printStackTrace ();
+            System.exit (1);
+        }
+
+        String simulatorName = job.get ("backend");
         Backend backend = Backend.getBackend (simulatorName);
         backend.start (job);
 
         // Wait for completion
-        // TODO: This duplicates some functionality in NodeJob.monitorProgress. Should really be part of a job management interface, as it can vary with host-backend combination.
-        Host env = Host.get (job);
-        Path finished = jobDir.resolve ("finished");
-        long lastLiveCheck = System.currentTimeMillis ();
-        while (true)
+        NodeJob node = new NodeJob (job, true);
+        long lastCheck = 0;
+        while (node.complete < 1)
         {
-            if (Files.exists (finished)) break;
-            long currentTime = System.currentTimeMillis ();
-            if (currentTime - lastLiveCheck > 10000)  // about 10 seconds
+            if (lastCheck > 0)
             {
-                try
-                {
-                    if (env.isActive (job)) break;
-                }
-                catch (Exception e) {}
-                lastLiveCheck = currentTime;
+                long elapsed = System.currentTimeMillis () - lastCheck;
+                long wait = 1000 - elapsed;
+                try {if (wait > 0) Thread.sleep (wait);}
+                catch (InterruptedException e) {}
             }
+            lastCheck = System.currentTimeMillis ();
+            node.monitorProgress ();
         }
 
         // Extract results requested in ASV

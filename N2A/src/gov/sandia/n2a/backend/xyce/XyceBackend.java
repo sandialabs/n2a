@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -24,13 +24,13 @@ import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.ui.jobs.NodeJob;
 
 import java.io.BufferedWriter;
 import java.io.FileNotFoundException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,36 +50,39 @@ class XyceBackend extends Backend
             @Override
             public void run ()
             {
-                Path jobDir = Paths.get (job.get ()).getParent ();
-                try {Backend.err.set (new PrintStream (jobDir.resolve ("err").toFile ()));}
+                Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
+                try {Backend.err.set (new PrintStream (localJobDir.resolve ("err").toFile ()));}
                 catch (FileNotFoundException e) {}
 
                 try
                 {
-                    Files.createFile (jobDir.resolve ("started"));
-
-                    // Ensure essential metadata is set
-                    if (job.child ("$metadata", "duration"                     ) == null) job.set ("1.0",                       "$metadata", "duration");
-                    if (job.child ("$metadata", "seed"                         ) == null) job.set (System.currentTimeMillis (), "$metadata", "seed");
-                    if (job.child ("$metadata", "backend", "xyce", "integrator") == null) job.set ("trapezoid",                 "$metadata", "backend", "xyce", "integrator");
+                    Files.createFile (localJobDir.resolve ("started"));
+                    MNode model = NodeJob.getModel (job);
 
                     // set up job info
                     Host env = Host.get (job);
                     String xyce  = env.config.getOrDefault ("Xyce", "xyce", "command");
+                    Path jobDir  = Host.getJobDir (env.getResourceDir (), job);  // local or remote
                     Path cirFile = jobDir.resolve ("model.cir");
                     Path prnFile = jobDir.resolve ("out");  // "prn" doesn't work, at least on Windows
 
-                    EquationSet e = new EquationSet (job);
-                    Simulator simulator = InternalBackend.constructStaticNetwork (e);
-                    analyze (e);
+                    EquationSet digestedModel = new EquationSet (model);
+                    Simulator simulator = InternalBackend.constructStaticNetwork (digestedModel);
+                    analyze (digestedModel);
 
-                    // Just in case a $p expression says something different than $metadata.duration
-                    String duration = e.metadata.get ("duration");
-                    if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
+                    String duration = digestedModel.metadata.getOrDefault ("1.0", "duration");
+                    job.set (duration, "duration");
 
-                    BufferedWriter writer = Files.newBufferedWriter (cirFile);
-                    generateNetlist (job, simulator, writer);
-                    writer.close ();
+                    long seed = digestedModel.metadata.getOrDefault (System.currentTimeMillis (), "seed");
+                    job.set (seed, "seed");
+
+                    MNode integrator = digestedModel.metadata.child ("backend", "xyce", "integrator");
+                    job.set (integrator, "integrator");
+
+                    try (BufferedWriter writer = Files.newBufferedWriter (cirFile))
+                    {
+                        generateNetlist (job, simulator, writer);
+                    }
 
                     PrintStream ps = Backend.err.get ();
                     if (ps != System.err)
@@ -128,9 +131,10 @@ class XyceBackend extends Backend
         // Header
         writer.append (toplevel.equations.name + "\n");
         writer.append ("\n");
-        writer.append ("* seed: " + job.get ("$metadata", "seed") + "\n");
-        writer.append (".tran 0 " + job.get ("$metadata", "duration") + "\n");
-        //job.get ("$metadata", "xyce", "integrator")  // TODO: add this to netlist
+        writer.append ("* seed: " + job.get ("seed") + "\n");
+        writer.append (".tran 0 " + job.get ("duration") + "\n");
+        // TODO: add integrator options to netlist.
+        // There are a vast number of options that apply under various circumstances.
 
         // Equations
         for (Instance i : simulator)

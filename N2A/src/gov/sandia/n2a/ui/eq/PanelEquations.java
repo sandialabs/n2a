@@ -1016,17 +1016,17 @@ public class PanelEquations extends JPanel
         prepareForTabChange ();
 
         String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
-        final MNode job = AppData.runs.childOrCreate (jobKey);  // Create the dir and model doc
-        job.merge (root.source);
-        job.set (record.key (), "$inherit");
-        ((MDoc) job).save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
+        MDoc job = (MDoc) AppData.runs.childOrCreate (jobKey);
+        NodeJob.collectJobParameters (root.source, record.key (), job);
+        job.save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
+        NodeJob.saveCollatedModel (root.source, job);
 
         MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
         mtp.setPreferredFocus (PanelRun.instance, PanelRun.instance.tree);
         mtp.selectTab ("Runs");
         NodeJob node = PanelRun.instance.addNewRun (job, true);
 
-        Backend backend = Backend.getBackend (job.get ("$metadata", "backend"));
+        Backend backend = Backend.getBackend (job.get ("backend"));
         Host env = Host.get (job);
         if (backend.getName ().equals ("Internal")  ||  env.name.equals ("localhost"))
         {

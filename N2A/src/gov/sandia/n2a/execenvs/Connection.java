@@ -20,6 +20,7 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.JSch;
@@ -143,10 +144,11 @@ public class Connection implements Closeable
 
     public class RemoteProcessBuilder implements AnyProcessBuilder
     {
-        protected String command;
-        protected Path   fileIn;
-        protected Path   fileOut;
-        protected Path   fileErr;
+        protected String             command;
+        protected Path               fileIn;
+        protected Path               fileOut;
+        protected Path               fileErr;
+        protected Map<String,String> environment;
 
         public RemoteProcessBuilder (String... command)
         {
@@ -174,6 +176,12 @@ public class Connection implements Closeable
             return this;
         }
 
+        public Map<String,String> environment ()
+        {
+            if (environment == null) environment = new HashMap<String,String> ();
+            return environment;
+        }
+
         public RemoteProcess start () throws IOException, JSchException
         {
             RemoteProcess process = new RemoteProcess (command);
@@ -193,6 +201,14 @@ public class Connection implements Closeable
             else                 process.channel.setOutputStream (Files.newOutputStream (fileOut));
             if (fileErr == null) process.stderr = process.channel.getErrStream ();
             else                 process.channel.setErrStream (Files.newOutputStream (fileErr));
+
+            if (environment != null)
+            {
+                for (Entry<String,String> e : environment.entrySet ())
+                {
+                    process.channel.setEnv (e.getKey (), e.getValue ());
+                }
+            }
 
             process.channel.connect ();  // This actually starts the remote process.
             return process;

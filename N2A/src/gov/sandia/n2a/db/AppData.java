@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -46,7 +46,7 @@ public class AppData
         properties.set (root, "resourceDir");
 
         state   = new MDoc (root.resolve ("state"));
-        runs    = new MDir (root.resolve ("jobs"), "model");  // "model" is our internal housekeeping data, in MNode serialization form. Backend output generally goes into a simulator-specific file.
+        runs    = new MDir (root.resolve ("jobs"), "job");  // "job" is our internal housekeeping data, in MNode serialization form. "model" is a fully-collated archival copy of the model being simulated. Backend output generally goes into files named "model" with specific suffixes.
         studies = new MDir (root.resolve ("studies"), "study");  // "study" contains general metadata. A separate MDoc called "model" holds a snapshot of the model being studied.
         Path reposDir = root.resolve ("repos");
         repos   = new MDir (reposDir, "state");

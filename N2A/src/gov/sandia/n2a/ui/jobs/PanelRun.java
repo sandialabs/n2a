@@ -844,6 +844,8 @@ public class PanelRun extends JPanel
         MNode doc = AppData.models.child (jobNode.inherit);  // Not collated, so only top-level keys
         if (doc != null)
         {
+            Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
+            MDoc model = new MDoc (localJobDir.resolve ("model"));  // Collated and frozen at time job was created.
             doc.visit (new Visitor ()
             {
                 public boolean visit (MNode node)
@@ -852,17 +854,17 @@ public class PanelRun extends JPanel
                     List<String> paramPath = new ArrayList<String> (keyList);
                     paramPath.add ("$metadata");
                     paramPath.add ("param");
-                    if (! job.getFlag (paramPath.toArray ())) return true;  // node is not a parameter
+                    if (! model.getFlag (paramPath.toArray ())) return true;  // node is not a parameter
 
                     String[] keyPath = keyList.toArray (new String[keyList.size ()]);
                     String key = keyPath[0];
                     for (int i = 1; i < keyPath.length; i++) key += "." + keyPath[i];
 
-                    String value = job.get (keyPath);
+                    String value = model.get (keyPath);
                     contents.append (key + " = " + value + "\n");
                     if (value.isEmpty ())  // Could be multi-valued
                     {
-                        for (MNode v : job.childOrEmpty (keyPath))
+                        for (MNode v : model.childOrEmpty (keyPath))
                         {
                             key = v.key ();
                             if (key.contains ("@")) contents.append ("\t" + v.get () + "\t" + key + "\n");
@@ -882,16 +884,10 @@ public class PanelRun extends JPanel
         displayPane.repaint (displayPane.getBounds ());
     }
 
-    public void appendMetadata (MNode doc, StringBuilder result, String... indices)
+    public void appendMetadata (MNode doc, StringBuilder result, String name)
     {
-        MNode child = doc.child ("$metadata");
-        if (child == null) return;
-        child = child.child (indices);
-        if (child == null) return;
-        String name = "";
-        for (String i : indices) name += "." + i;
-        name = name.substring (1);
-        result.append (name + "=" + child.get () + "\n");
+        MNode child = doc.child (name);
+        if (child != null) result.append (name + "=" + child.get () + "\n");
     }
 
     public void delete ()
@@ -1004,8 +1000,7 @@ public class PanelRun extends JPanel
                     {
                         job = (NodeJob) node.getParent ();
                     }
-                    MDoc doc = (MDoc) job.getSource ();
-                    Host env = Host.get (doc);
+                    Host env = Host.get (job.getSource ());
 
                     HostDeleteThread t = hostThreads.get (env);
                     if (t == null)
@@ -1041,12 +1036,12 @@ public class PanelRun extends JPanel
         {
             while (true)
             {
-                NodeBase node = null;
+                NodeBase nodeBase = null;
                 synchronized (nodes)
                 {
-                    if (! nodes.isEmpty ()) node = nodes.remove (nodes.size () - 1);
+                    if (! nodes.isEmpty ()) nodeBase = nodes.remove (nodes.size () - 1);
                 }
-                if (node == null)
+                if (nodeBase == null)
                 {
                     if (allQueued) break;  // done
                     try {sleep (1000);}
@@ -1054,32 +1049,31 @@ public class PanelRun extends JPanel
                     continue;
                 }
 
-                NodeJob job;
-                if (node instanceof NodeJob) job = (NodeJob) node;
-                else                         job = (NodeJob) node.getParent ();
-                MDoc doc = (MDoc) job.getSource ();
-                Host env = Host.get (doc);
+                NodeJob nodeJob;
+                if (nodeBase instanceof NodeJob) nodeJob = (NodeJob) nodeBase;
+                else                             nodeJob = (NodeJob) nodeBase.getParent ();
+                MDoc job = (MDoc) nodeJob.getSource ();
+                Host env = Host.get (job);
                
                 try
                 {
-                    if (node instanceof NodeJob)
+                    if (nodeBase instanceof NodeJob)
                     {
                         if (env instanceof Remote)
                         {
-                            Path remoteJobDir = Host.getJobDir (env.getResourceDir (), doc);
+                            Path remoteJobDir = Host.getJobDir (env.getResourceDir (), job);
                             env.deleteTree (remoteJobDir, true);
                         }
-                        doc.delete ();  // deletes local job directory
+                        job.delete ();  // deletes local job directory
                     }
-                    else if (node instanceof NodeFile)
+                    else if (nodeBase instanceof NodeFile)
                     {
-                        NodeFile nf = (NodeFile) node;
-                        MNode    js = job.getSource ();
+                        NodeFile nf = (NodeFile) nodeBase;
                         String fileName = nf.path.getFileName ().toString ();
 
                         if (env instanceof Remote)
                         {
-                            Path remoteJobDir = Host.getJobDir (env.getResourceDir (), js);
+                            Path remoteJobDir = Host.getJobDir (env.getResourceDir (), job);
                             Path remoteFile = remoteJobDir.resolve (fileName);
                             env.deleteTree (remoteFile, true);  // In case this is a video directory rather than just a file, use deleteTree().
                             if (fileName.equals ("out"))  // also delete out.columns
@@ -1089,7 +1083,7 @@ public class PanelRun extends JPanel
                             }
                         }
 
-                        Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), js);
+                        Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
                         Path localFile = localJobDir.resolve (fileName);
                         Host.get ().deleteTree (localFile, true);
                         if (fileName.equals ("out"))
@@ -1099,7 +1093,7 @@ public class PanelRun extends JPanel
                         }
                     }
 
-                    final NodeBase deleteNode = node;
+                    final NodeBase deleteNode = nodeBase;
                     EventQueue.invokeLater (new Runnable ()
                     {
                         public void run ()

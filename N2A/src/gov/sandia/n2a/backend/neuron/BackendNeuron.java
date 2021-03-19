@@ -8,7 +8,6 @@ package gov.sandia.n2a.backend.neuron;
 
 import gov.sandia.n2a.backend.neuroml.BackendNeuroML;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.Host;
 
 public class BackendNeuron extends BackendNeuroML
 {
@@ -31,14 +30,7 @@ public class BackendNeuron extends BackendNeuroML
         public SimulationThread (MNode job)
         {
             super (job);
-            simulator = "neuron";
-        }
-
-        public void submitJob () throws Exception
-        {
-            Host env = Host.get (job);
-            String command = "JNML_HOME=" + jnmlHome + " " + env.quote (jnmlCommand) + " " + env.quote (modelPath) + " -neuron -run -nogui";
-            env.submitJob (job, command);
+            simulator = "neuron";  // Override the simulator string from backend. This is all it takes to switch to NEURON.
         }
     }
 }

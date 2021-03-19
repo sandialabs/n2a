@@ -29,17 +29,16 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Event;
-import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
-import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
+import gov.sandia.n2a.ui.jobs.NodeJob;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
@@ -62,7 +61,7 @@ public class JobC extends Thread
     protected static boolean needRuntime = true;  // always rebuild runtime once per session
 
     public MNode       job;
-    public EquationSet model;
+    public EquationSet digestedModel;
 
     public Host env;
     public Path localJobDir;
@@ -97,15 +96,16 @@ public class JobC extends Thread
 
     public void run ()
     {
-        localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);  // assumes the MNode "job" is really an MDoc. In any case, the value of the node should point to a file on disk where it is stored in a directory just for it.
+        localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
         try {Backend.err.set (new PrintStream (new FileOutputStream (localJobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
         catch (Exception e) {}
 
         try
         {
             Files.createFile (localJobDir.resolve ("started"));
+            MNode model = NodeJob.getModel (job);
 
-            T = job.getOrDefault ("float", "$metadata", "backend", "c", "type");
+            T = model.getOrDefault ("float", "$metadata", "backend", "c", "type");
             if (T.startsWith ("int")  &&  T.length () > 3)
             {
                 T = "int";
@@ -124,19 +124,19 @@ public class JobC extends Thread
             runtimeDir       = resourceDir.resolve ("cruntime");
             rebuildRuntime ();
 
-            model = new EquationSet (job);
+            digestedModel = new EquationSet (model);
             digestModel ();
-            String duration = model.metadata.get ("duration");
-            if (! duration.isEmpty ()) job.set (duration, "$metadata", "duration");
+            String duration = digestedModel.metadata.get ("duration");
+            if (! duration.isEmpty ()) job.set (duration, "duration");
 
             seed = -1;
-            if (usesRandom (model))  // only record seed if actually used
+            if (digestedModel.usesRandom ())  // only record seed if actually used
             {
-                seed = job.getOrDefault (System.currentTimeMillis (), "$metadata", "seed");
-                job.set (seed, "$metadata", "seed");
+                seed = model.getOrDefault (System.currentTimeMillis (), "$metadata", "seed");
+                job.set (seed, "seed");
             }
 
-            String e = job.get ("$metadata", "backend", "all", "event");
+            String e = model.get ("$metadata", "backend", "all", "event");
             switch (e)
             {
                 case "before":
@@ -151,7 +151,7 @@ public class JobC extends Thread
                     after  = false;
             }
 
-            System.out.println (model.dump (false));
+            System.out.println (digestedModel.dump (false));
 
             Files.createDirectories (jobDir);
             Path source = jobDir.resolve ("model.cc");
@@ -329,50 +329,50 @@ public class JobC extends Thread
 
     public void digestModel () throws Exception
     {
-        if (model.source.containsKey ("pin"))
+        if (digestedModel.source.containsKey ("pin"))
         {
-            model.collectPins ();
-            model.fillAutoPins ();
-            model.resolvePins ();
-            model.purgePins ();
+            digestedModel.collectPins ();
+            digestedModel.fillAutoPins ();
+            digestedModel.resolvePins ();
+            digestedModel.purgePins ();
         }
-        model.resolveConnectionBindings ();
-        model.addGlobalConstants ();
-        model.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
-        model.addAttribute ("global",      false, true,  "$max", "$min", "$k", "$radius");
-        model.addAttribute ("global",      false, false, "$n");
-        model.addAttribute ("preexistent", true,  false, "$index", "$t'", "$t");  // Technically, $index is not pre-existent, but always receives special handling which has the same effect.
-        model.resolveLHS ();
-        model.fillIntegratedVariables ();
-        model.findIntegrated ();
-        model.resolveRHS ();
-        model.flatten ("c");
-        model.findExternal ();
-        model.sortParts ();
-        model.checkUnits ();
-        model.findConstants ();
-        model.determineTraceVariableName ();
-        model.collectSplits ();
-        model.findDeath ();
-        addImplicitDependencies (model);
-        model.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
-        createBackendData (model);
-        findPathToContainer (model);
-        model.findAccountableConnections ();
-        model.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances. TODO: make sure this doesn't violate evaluation order rules
-        model.determineOrder ();
-        model.findDerivative ();
-        model.findInitOnly ();  // propagate initOnly through ASTs
-        model.purgeInitOnlyTemporary ();
-        model.setAttributesLive ();
-        model.forceTemporaryStorageForSpecials ();
-        findLiveReferences (model);
-        model.determineTypes ();
-        model.determineDuration ();
-        if (T.equals ("int")) model.determineExponents ();
-        model.findConnectionMatrix ();
-        analyzeEvents (model);
-        analyze (model);
+        digestedModel.resolveConnectionBindings ();
+        digestedModel.addGlobalConstants ();
+        digestedModel.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
+        digestedModel.addAttribute ("global",      false, true,  "$max", "$min", "$k", "$radius");
+        digestedModel.addAttribute ("global",      false, false, "$n");
+        digestedModel.addAttribute ("preexistent", true,  false, "$index", "$t'", "$t");  // Technically, $index is not pre-existent, but always receives special handling which has the same effect.
+        digestedModel.resolveLHS ();
+        digestedModel.fillIntegratedVariables ();
+        digestedModel.findIntegrated ();
+        digestedModel.resolveRHS ();
+        digestedModel.flatten ("c");
+        digestedModel.findExternal ();
+        digestedModel.sortParts ();
+        digestedModel.checkUnits ();
+        digestedModel.findConstants ();
+        digestedModel.determineTraceVariableName ();
+        digestedModel.collectSplits ();
+        digestedModel.findDeath ();
+        addImplicitDependencies (digestedModel);
+        digestedModel.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
+        createBackendData (digestedModel);
+        findPathToContainer (digestedModel);
+        digestedModel.findAccountableConnections ();
+        digestedModel.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances. TODO: make sure this doesn't violate evaluation order rules
+        digestedModel.determineOrder ();
+        digestedModel.findDerivative ();
+        digestedModel.findInitOnly ();  // propagate initOnly through ASTs
+        digestedModel.purgeInitOnlyTemporary ();
+        digestedModel.setAttributesLive ();
+        digestedModel.forceTemporaryStorageForSpecials ();
+        findLiveReferences (digestedModel);
+        digestedModel.determineTypes ();
+        digestedModel.determineDuration ();
+        if (T.equals ("int")) digestedModel.determineExponents ();
+        digestedModel.findConnectionMatrix ();
+        analyzeEvents (digestedModel);
+        analyze (digestedModel);
     }
 
     /**
@@ -564,25 +564,25 @@ public class JobC extends Thread
         result.append ("using namespace std;\n");
         result.append ("using namespace fl;\n");
         result.append ("\n");
-        generateStatic (context, model);
+        generateStatic (context, digestedModel);
         result.append ("\n");
-        generateClassList (model, result);
+        generateClassList (digestedModel, result);
         result.append ("class Wrapper;\n");
         result.append ("\n");
-        generateDeclarations (model, result);
+        generateDeclarations (digestedModel, result);
         result.append ("class Wrapper : public WrapperBase<" + T + ">\n");
         result.append ("{\n");
         result.append ("public:\n");
-        result.append ("  " + prefix (model) + "_Population " + mangle (model.name) + ";\n");
+        result.append ("  " + prefix (digestedModel) + "_Population " + mangle (digestedModel.name) + ";\n");
         result.append ("\n");
         result.append ("  Wrapper ()\n");
         result.append ("  {\n");
-        result.append ("    population = &" + mangle (model.name) + ";\n");
-        result.append ("    " + mangle (model.name) + ".container = this;\n");
+        result.append ("    population = &" + mangle (digestedModel.name) + ";\n");
+        result.append ("    " + mangle (digestedModel.name) + ".container = this;\n");
         result.append ("  }\n");
         result.append ("};\n");
         result.append ("\n");
-        generateDefinitions (context, model);
+        generateDefinitions (context, digestedModel);
 
         // Main
         result.append ("int main (int argc, char * argv[])\n");
@@ -601,10 +601,10 @@ public class JobC extends Thread
         }
         if (T.equals ("int"))
         {
-            Variable dt = model.find (new Variable ("$t", 1));
+            Variable dt = digestedModel.find (new Variable ("$t", 1));
             result.append ("    Event<int>::exponent = " + dt.exponent + ";\n");
         }
-        String integrator = model.metadata.getOrDefault ("Euler", "backend", "all", "integrator");
+        String integrator = digestedModel.metadata.getOrDefault ("Euler", "backend", "all", "integrator");
         if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
         else                                            integrator = "Euler";
         result.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
@@ -818,30 +818,6 @@ public class JobC extends Thread
         {
             result.append ("    " + o.name + " = outputHelper<" + T + "> (\"" + o.operands[0].getString () + "\");\n");
         }
-    }
-
-    public boolean usesRandom (EquationSet s)
-    {
-        class RandomVisitor implements Visitor
-        {
-            boolean found;
-            public boolean visit (Operator op)
-            {
-                if (op instanceof Uniform  ||  op instanceof Gaussian) found = true;
-                return ! found;
-            }
-        }
-        RandomVisitor visitor = new RandomVisitor ();
-
-        for (Variable v : s.variables)
-        {
-            v.visit (visitor);
-            if (visitor.found) return true;
-        }
-
-        for (EquationSet p : s.parts) if (usesRandom (p)) return true;
-
-        return false;
     }
 
     /**

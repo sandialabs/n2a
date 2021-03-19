@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,7 +21,6 @@ import javax.swing.JPanel;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
-import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MPasswordField;
 import gov.sandia.n2a.ui.MTextField;
@@ -99,9 +98,9 @@ public class RemoteUnix extends Unix implements Remote
                                             try
                                             {
                                                 // Re-create the local placeholder
-                                                MNode job = AppData.runs.childOrCreate (key);
-                                                job.set (name, "$metadata", "host");
-                                                ((MDoc) job).save ();
+                                                MDoc job = (MDoc) AppData.runs.childOrCreate (key);
+                                                job.set (name, "host");
+                                                job.save ();
 
                                                 // Add to UI and monitor thread.
                                                 monitor (PanelRun.instance.addNewRun (job, false));
