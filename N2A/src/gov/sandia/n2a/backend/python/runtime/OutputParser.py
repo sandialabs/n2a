@@ -3,6 +3,9 @@ import re
 import sys
 
 class Column:
+    """ Utility class used by OutputParser. Keeps track of header and all rows
+        held by one column. This is the kind of object returned by OutputParser.getColumn().
+    """
 
     def __init__(self, header):
         self.header    = header
@@ -37,6 +40,16 @@ class Column:
         return self.values[row]
 
 class OutputParser:
+    """ Primary class for reading and accessing data in an N2A-augmented output file.
+        There are two main ways to use this class. One is to read the entire file into
+        memory. The other is to read through the file row-by-row, without remembering
+        anything but the current row. The second method is designed specifically for
+        output files which exceed your system's memory capacity.
+        The all-at-once interface uses the parse() function.
+        The row-by-row interface uses the open() and nextRow() functions.
+        It's a good idea not to mix these usages. Note that the parse() function is
+        actually built on top of the row-by-row functions.
+    """
 
     def __init__(self):
         self.columns      = []
@@ -116,7 +129,7 @@ class OutputParser:
         return 0
 
     def parse(self, fileName, defaultValue = 0.0):
-        """ Use this function to read the entire file into memory.
+        """ Use this function to read the file into memory all at once.
         """
         self.defaultValue = defaultValue
         self.open(fileName)
@@ -178,10 +191,25 @@ class OutputParser:
             if column.header == columnName: return column
         return None
 
+    def getRow(self, row = -1):
+        result = []
+        for column in self.columns:
+            result.append(column.get(row, self.defaultValue))
+        return result
+
     def get(self, columnName, row = -1):
         column = self.getColumn(columnName)
         if column is None: return defaultValue
         return column.get(row)
+
+    def getNumpyArray(self):
+        columnCount = len(self.columns)
+        result = numpy.full((self.rows, columnCount), self.defaultValue)
+        for c in range(0,columnCount):
+            column = self.columns[c]
+            for r in range(column.startRow,self.rows):
+                result[r,c] = column.values[r-column.startRow]
+        return result
 
     def hasData(self):
         for column in self.columns:
@@ -200,16 +228,16 @@ class OutputParser:
         last = self.columns[-1]
 
         if self.hasHeaders():
+            e = "\t"
             for column in self.columns:
                 if column is last: e = "\n"
-                else:              e = "\t"
                 print(column.header, end=e, file=out)
 
         if self.hasData():
             for r in range(self.rows):
+                e = "\t"
                 for column in self.columns:
                     if column is last: e = "\n"
-                    else:              e = "\t"
                     print(column.get(r), end=e, file=out)
 
     def dumpMode(self, out=sys.stdout):
@@ -222,7 +250,8 @@ class OutputParser:
                 print("scale=" + column.scale, file=out)
 
 if __name__ == "__main__":
+    # Example of the all-at-once interface.
     o = OutputParser()
     o.parse("C:/Users/frothga/n2a/jobs/2020-05-27-205826-0/out")
     o.dump()
-    print ('done')
+    print('done')
