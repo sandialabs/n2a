@@ -9,7 +9,7 @@ class Column:
 
     def __init__(self, header):
         self.header    = header
-        self.index     = 0
+        self.index     = 0    # Utility field with arbitrary semantics. See OutputParser.assignSpikeIndex() for one possible use.
         self.values    = []
         self.value     = 0.0  # For most recent row
         self.startRow  = 0
@@ -22,10 +22,10 @@ class Column:
 
     def computeStats(self):
         for f in self.values:
-            if isinf(f) or isnan(f): continue
+            if numpy.isinf(f) or numpy.isnan(f): continue
             self.minimum = min(self.minimum, f)
             self.maximum = max(self.maximum, f)
-        if isinf(maximum):  # There was no good data. If max is infinite, then so is min.
+        if numpy.isinf(self.maximum):  # There was no good data. If max is infinite, then so is min.
             # Set defensive values.
             self.range   = 0.0
             self.minimum = 0.0
@@ -40,13 +40,14 @@ class Column:
         return self.values[row]
 
 class OutputParser:
-    """ Primary class for reading and accessing data in an N2A-augmented output file.
+    """ Primary class for reading and accessing data in an augmented output file.
         There are two main ways to use this class. One is to read the entire file into
         memory. The other is to read through the file row-by-row, without remembering
         anything but the current row. The second method is designed specifically for
         output files which exceed your system's memory capacity.
+        Both interfaces use the get() functions to retrieve buffered values.
         The all-at-once interface uses the parse() function.
-        The row-by-row interface uses the open() and nextRow() functions.
+        The row-by-row interface uses the open(), nextRow() functions.
         It's a good idea not to mix these usages. Note that the parse() function is
         actually built on top of the row-by-row functions.
     """
@@ -79,7 +80,9 @@ class OutputParser:
         self.columns = []
 
     def nextRow(self):
-        """ Returns number of columns found in current row. If zero, then end-of-file
+        """ Reads in the next row of data values. Also processes header rows, but continues
+            reading until a data row comes in.
+            Returns number of columns found in current row. If zero, then end-of-file
             has been reached or there is an error.
         """
         if self.inFile is None: return 0
@@ -186,9 +189,30 @@ class OutputParser:
         # Get rid of Xyce "Index" column, as it is redundant with row number.
         if self.isXycePRN: self.columns = self.columns[1:]
 
-    def getColumn(self, columnName):
+    def assignSpikeIndex(self):
+        """ Optional post-processing step to give columns their position in a spike raster.
+        """
+        if self.raw:
+            i = 0
+            for c in self.columns:
+                if  not self.timeFound  or  not c is self.time:
+                    c.index = i
+                    i += 1
+        else:
+            nextColumn = -1
+            for c in self.columns:
+                try:
+                    c.index = int(c.header)
+                except ValueError:
+                    c.index = nextColumn
+                    nextColumn = nextColumn - 1   # Yes, that's actually subtraction. Mis-named or unnamed columns get negative indices, reserving the positive indices for explicit and proper names.
+
+    def getColumn(self, columnNameOrNumber):
+        if type(columnNameOrNumber) is int:
+            if columnNameOrNumber >= len(self.columns): return None
+            return self.columns[columnNameOrNumber]
         for column in self.columns:
-            if column.header == columnName: return column
+            if column.header == columnNameOrNumber: return column
         return None
 
     def getRow(self, row = -1):
@@ -197,9 +221,9 @@ class OutputParser:
             result.append(column.get(row, self.defaultValue))
         return result
 
-    def get(self, columnName, row = -1):
-        column = self.getColumn(columnName)
-        if column is None: return defaultValue
+    def get(self, columnNameOrNumber, row = -1):
+        column = self.getColumn(columnNameOrNumber)
+        if column is None: return self.defaultValue
         return column.get(row)
 
     def getNumpyArray(self):

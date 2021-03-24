@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -171,6 +171,36 @@ public class OutputParser
         }
     }
 
+    /**
+        Optional post-processing step to give columns their position in a spike raster.
+    **/
+    public void assignSpikeIndices ()
+    {
+        if (raw)
+        {
+            int i = 0;
+            for (Column c : columns)
+            {
+                if (! timeFound  ||  c != time) c.index = i++;
+            }
+        }
+        else
+        {
+            int nextColumn = -1;
+            for (Column c : columns)
+            {
+                try
+                {
+                    c.index = Integer.parseInt (c.header);
+                }
+                catch (NumberFormatException e)
+                {
+                    c.index = nextColumn--;
+                }
+            }
+        }
+    }
+
     public Column getColumn (String columnName)
     {
         for (Column c : columns) if (c.header.equals (columnName)) return c;
@@ -182,11 +212,22 @@ public class OutputParser
         return get (columnName, -1);
     }
 
+    public float get (int columnNumber)
+    {
+        return get (columnNumber, -1);
+    }
+
     public float get (String columnName, int row)
     {
         Column c = getColumn (columnName);
         if (c == null) return defaultValue;
         return c.get (row, defaultValue);
+    }
+
+    public float get (int columnNumber, int row)
+    {
+        if (columnNumber >= columns.size ()) return defaultValue;
+        return columns.get (columnNumber).get (row, defaultValue);
     }
 
     public boolean hasData ()

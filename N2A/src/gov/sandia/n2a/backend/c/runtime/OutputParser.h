@@ -3,7 +3,7 @@ A utility class for reading simulation output files.
 Primarily for those who wish to write C++ code to analyze these data.
 This is a pure header implementation. No need to build/link extra libraries.
 
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,11 +21,15 @@ the U.S. Government retains certain rights in this software.
 
 namespace n2a
 {
+    /**
+        Utility class used by OutputParser. Keeps track of header and all rows
+        held by one column. This is the kind of object returned by OutputParser.getColumn().
+    **/
     class Column
     {
     public:
         std::string        header;
-        int                index;  // If this is a spike raster, then header should convert to an integer.
+        int                index;  // Utility field with arbitrary semantics. See OutputParser.assignSpikeIndices() for one possible use.
         std::vector<float> values;
         float              value;  // For most recent row
         int                startRow;
@@ -77,6 +81,18 @@ namespace n2a
         }
     };
 
+    /**
+        Primary class for reading and accessing data in an augmented output file.
+        There are two main ways to use this class. One is to read the entire file into
+        memory. The other is to read through the file row-by-row, without remembering
+        anything but the current row. The second method is designed specifically for
+        output files which exceed your system's memory capacity.
+        Both interfaces use the get() functions to retrieve buffered values.
+        The all-at-once interface uses the parse() function.
+        The row-by-row interface uses the open(), nextRow() functions.
+        It's a good idea not to mix these usages. Note that the parse() function is
+        actually built on top of the row-by-row functions.
+    **/
     class OutputParser
     {
     public:
@@ -124,6 +140,8 @@ namespace n2a
         }
 
         /**
+            Reads in the next row of data values. Also processes header rows, but continues
+            reading until a data row comes in.
             @return Number of columns found in current row. If zero, then end-of-file
             has been reached or there is an error.
         **/
@@ -278,6 +296,36 @@ namespace n2a
             if (isXycePRN) columns.erase (columns.begin ());
         }
 
+        /**
+            Optional post-processing step to give columns their position in a spike raster.
+        **/
+        void assignSpikeIndices ()
+        {
+            if (raw)
+            {
+                int i = 0;
+                for (Column * c : columns)
+                {
+                    if (! timeFound  ||  c != time) c->index = i++;
+                }
+            }
+            else
+            {
+                int nextColumn = -1;
+                for (Column * c : columns)
+                {
+                    try
+                    {
+                        c->index = std::stoi (c->header);
+                    }
+                    catch (std::exception & error)
+                    {
+                        c->index = nextColumn--;  // Yes, that's actually subtraction. Mis-named or unnamed columns get negative indices, reserving the positive indices for explicit and proper names.
+                    }
+                }
+            }
+        }
+
         Column * getColumn (const std::string & columnName)
         {
             for (Column * c : columns) if (c->header == columnName) return c;
@@ -289,6 +337,12 @@ namespace n2a
             Column * c = getColumn (columnName);
             if (c == 0) return defaultValue;
             return c->get (row);
+        }
+
+        float get (int columnNumber, int row = -1)
+        {
+            if (columnNumber >= columns.size ()) return defaultValue;
+            return columns[columnNumber]->get (row);
         }
 
         bool hasData ()

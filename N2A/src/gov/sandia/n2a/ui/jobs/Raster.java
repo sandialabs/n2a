@@ -43,30 +43,7 @@ public class Raster extends OutputParser
 
     public void createDataset ()
     {
-        // Convert column indices.
-        if (raw)
-        {
-            int i = 0;
-            for (Column c : columns)
-            {
-                if (! timeFound  ||  c != time) c.index = i++;
-            }
-        }
-        else
-        {
-            int nextColumn = -1;
-            for (Column c : columns)
-            {
-                try
-                {
-                    c.index = Integer.parseInt (c.header);
-                }
-                catch (NumberFormatException e)
-                {
-                    c.index = nextColumn--;
-                }
-            }
-        }
+        assignSpikeIndices ();
 
         int totalCount = 0;
         for (Column c : columns) if (! timeFound  ||  c != time) totalCount += c.values.size ();
