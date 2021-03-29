@@ -29,6 +29,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.execenvs.Host;
 import gov.sandia.n2a.execenvs.Remote;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.Utility;
@@ -113,7 +114,12 @@ public class NodeJob extends NodeBase
     {
         if (job == null) return null;
         Path modelPath = Host.getJobDir (Host.getLocalResourceDir (), job).resolve ("model");
-        return new MDoc (modelPath);
+        MDoc result = new MDoc (modelPath);
+        // The model key does contain the original model name.
+        // EquationSet will replace the name of the top-level model with the value from $inherit.
+        // We do not modify $inherit in saveCollatedModel(), so we need to do that now.
+        result.set (job.get ("$inherit"), "$inherit");  // This change is never saved.
+        return result;
     }
 
     /**
@@ -307,7 +313,7 @@ public class NodeJob extends NodeBase
         if (complete < 1)
         {
             float percentDone = 0;
-            if (expectedSimTime == 0) expectedSimTime = source.getOrDefault (0.0, "duration");
+            if (expectedSimTime == 0) expectedSimTime = new UnitValue (source.get ("duration")).get ();
             if (expectedSimTime > 0)
             {
                 percentDone = (float) (simulator.currentSimTime (source) / expectedSimTime);
