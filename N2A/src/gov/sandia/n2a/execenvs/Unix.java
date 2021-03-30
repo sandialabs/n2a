@@ -98,7 +98,7 @@ public class Unix extends Host
     }
 
     @Override
-    public void submitJob (MNode job, String command) throws Exception
+    public void submitJob (MNode job, String... command) throws Exception
     {
         Path resourceDir = getResourceDir ();
         Path binDir      = resourceDir.resolve ("bin");
@@ -116,10 +116,11 @@ public class Unix extends Host
 
         Path jobDir = Host.getJobDir (resourceDir, job);
         Path script = jobDir.resolve ("n2a_job");
+        String combined = combine (command);
         stringToFile (script,
               "#!/bin/bash\n"
             + "cd " + quote (jobDir) + "\n"
-            + "if " + command + " > out 2>> err; then\n"   // Wait for process to finish.
+            + "if " + combined + " > out 2>> err; then\n"   // Wait for process to finish.
             + "  echo success > finished\n"
             + "else\n"
             + "  echo failure > finished\n"
@@ -150,7 +151,7 @@ public class Unix extends Host
                     line = line.trim ();
                     String[] parts = line.split ("\\s+");
                     job.set (Long.parseLong (parts[0]), "pid");
-                    if (parts[1].equals (command)) return;  // exact match
+                    if (parts[1].equals (combined)) return;  // exact match
                     // Otherwise, may be the wrapper script.
                     // The wrapper script is better than nothing, but keep scanning.
                 }

@@ -178,11 +178,7 @@ public class JobC extends Thread
 
         // If an exception occurred, the error file will still be open.
         PrintStream ps = Backend.err.get ();
-        if (ps != System.err)
-        {
-            ps.close ();
-            Backend.err.remove ();
-        }
+        if (ps != System.err) ps.close ();
     }
 
     public void rebuildRuntime () throws Exception

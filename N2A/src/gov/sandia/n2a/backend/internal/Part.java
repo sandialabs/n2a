@@ -491,7 +491,8 @@ public class Part extends Instance
                 for (Variable v : bed.Pdependencies)
                 {
                     Type result = v.eval (temp);
-                    if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
+                    if (result == null) temp.set (v, v.type);
+                    else                temp.set (v, result);
                 }
                 Type result = bed.p.eval (temp);
                 if (result == null) p = 1;
@@ -576,7 +577,8 @@ public class Part extends Instance
         for (Variable v : temp.bed.Pdependencies)
         {
             Type result = v.eval (temp);
-            if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
+            if (result == null) temp.set (v, v.type);
+            else                temp.set (v, result);
         }
         Type result = temp.bed.p.eval (temp);
         if (result == null) return 1;
@@ -596,7 +598,8 @@ public class Part extends Instance
         for (Variable v : bed.XYZdependencies)
         {
             Type result = v.eval (temp);
-            if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
+            if (result == null) temp.set (v, v.type);
+            else                temp.set (v, result);
         }
         Type result = bed.xyz.eval (temp);
         if (result == null) return new double[3];

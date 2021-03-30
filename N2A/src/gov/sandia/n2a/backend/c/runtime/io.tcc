@@ -976,9 +976,16 @@ OutputHolder<T>::trace (T now, T column, T value,                  const char * 
 #   endif
 
     char buffer[32];
-    int index = (int) round (column);  // "raw" is the most likely case, so preemptively convert to int
-    if (raw) sprintf (buffer, "%i", index);
-    else     sprintf (buffer, "%g", column);
+    int index;  // Only used for "raw" mode.
+    if (raw)
+    {
+        index = (int) round (column);
+        sprintf (buffer, "%i", index);
+    }
+    else
+    {
+        sprintf (buffer, "%g", column);
+    }
     String columnName = buffer;
 
     std::unordered_map<String, int>::iterator result = columnMap.find (columnName);

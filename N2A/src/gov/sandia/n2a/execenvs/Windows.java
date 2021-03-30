@@ -130,15 +130,16 @@ public class Windows extends Host
     }
 
     @Override
-    public void submitJob (MNode job, String command) throws Exception
+    public void submitJob (MNode job, String... command) throws Exception
     {
         Path jobDir = Paths.get (job.get ()).getParent ();
         Path script = jobDir.resolve ("n2a_job.bat");
+        String combined = combine (command);
         stringToFile
         (
             script,
             "cd " + jobDir + "\r\n"
-            + command + " > out 2>> err\r\n"
+            + combined + " > out 2>> err\r\n"
             + "if errorlevel 0 (\r\n"
             + "  echo success > finished\r\n"
             + ") else (\r\n"

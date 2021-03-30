@@ -430,10 +430,18 @@ public class EquationSet implements Comparable<EquationSet>
         any possible exceptions from the Variable class, rather than asking the caller to handle
         them. This implies that the caller must be careful to never produce malformed equations.
     **/
-    public void override (String equation)
+    public Variable override (String equation)
     {
-        try {override (Variable.from (equation));}
-        catch (Exception e) {}
+        try
+        {
+            Variable v = Variable.from (equation);
+            override (v);
+            return v;
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
     }
 
     /**
@@ -1596,7 +1604,7 @@ public class EquationSet implements Comparable<EquationSet>
             int width = 0;
             for (UnresolvedVariable uv : unresolved) width = Math.max (width, uv.name.length ());
             PrintStream ps = Backend.err.get ();
-            ps.println ("Unresolved right-hand-side references:");
+            ps.println ("Unresolved left-hand-side references:");
             ps.println ("  " + UnresolvedVariable.pad ("(from part)", width) + "\t(reference)");
             for (UnresolvedVariable uv : unresolved) ps.println ("  " + UnresolvedVariable.pad (uv.name, width) + "\t" + uv.referencedBy);
             throw new AbortRun ();

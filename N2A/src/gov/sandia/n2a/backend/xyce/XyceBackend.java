@@ -90,7 +90,8 @@ class XyceBackend extends Backend
                         ps.close ();
                         Backend.err.remove ();
                     }
-                    env.submitJob (job, xyce + " " + env.quote (cirFile) + " -o " + env.quote (prnFile));
+
+                    env.submitJob (job, xyce, env.quote (cirFile), "-o",  env.quote (prnFile));
                 }
                 catch (AbortRun a)
                 {

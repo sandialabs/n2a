@@ -34,8 +34,7 @@ public class InternalBackend extends Backend
         simulationThread.start ();
     }
 
-    @Override
-    public boolean isActive (MNode job)
+    public SimulationThread getThread (MNode job)
     {
         Thread[] threads = new Thread[Thread.activeCount ()];
         int count = Thread.enumerate (threads);
@@ -45,30 +44,27 @@ public class InternalBackend extends Backend
             if (t instanceof SimulationThread)
             {
                 SimulationThread s = (SimulationThread) t;
-                if (s.job == job) return s.isAlive ();
+                if (s.job == job) return s;
             }
         }
-        return false;
+        return null;
+    }
+
+    @Override
+    public boolean isActive (MNode job)
+    {
+        SimulationThread s = getThread (job);
+        return  s != null  &&  s.isAlive ();
     }
 
     @SuppressWarnings("deprecation")
     @Override
     public void kill (MNode job, boolean force)
     {
-        Thread[] threads = new Thread[Thread.activeCount ()];
-        int count = Thread.enumerate (threads);
-        for (int i = 0; i < count; i++)
-        {
-            Thread t = threads[i];
-            if (t instanceof SimulationThread)
-            {
-                SimulationThread s = (SimulationThread) t;
-                if (s.job != job) continue;
-                if (! force  &&  s.simulator != null) s.simulator.stop = true;
-                else                                  s.stop ();
-                return;
-            }
-        }
+        SimulationThread s = getThread (job);
+        if (s == null) return;
+        if (! force  &&  s.simulator != null) s.simulator.stop = true;
+        else                                  s.stop ();
     }
 
     public class SimulationThread extends Thread
@@ -139,31 +135,17 @@ public class InternalBackend extends Backend
 
             PrintStream e = err.get ();
             e.println ("Execution time: " + elapsedTime / 1e9 + " seconds");
-            if (e != System.err)
-            {
-                e.close ();
-                err.remove ();
-            }
-            Simulator.instance.remove ();
+            if (e != System.err) e.close ();
+            // Both the err stream and the simulator object are held in thread-local storage.
+            // This thread is now ending, so it should become eligible for garbage collection.
         }
     }
 
     @Override
     public double currentSimTime (MNode job)
     {
-        Thread[] threads = new Thread[Thread.activeCount ()];
-        int count = Thread.enumerate (threads);
-        for (int i = 0; i < count; i++)
-        {
-            Thread t = threads[i];
-            if (t instanceof SimulationThread)
-            {
-                SimulationThread s = (SimulationThread) t;
-                if (s.job != job) continue;
-                if (s.simulator != null  &&  s.simulator.currentEvent != null) return s.simulator.currentEvent.t;
-                return 0;
-            }
-        }
+        SimulationThread s = getThread (job);
+        if (s != null  &&  s.simulator != null  &&  s.simulator.currentEvent != null) return s.simulator.currentEvent.t;
         return 0;
     }
 
@@ -183,8 +165,6 @@ public class InternalBackend extends Backend
     public static void digestModel (EquationSet e) throws Exception
     {
         String backend = e.metadata.getOrDefault ("internal", "backend");
-        if (backend.isEmpty ()) backend = "none";  // Should not match any backend metadata entries, since they are all supposed to start with "backend".
-        else                    backend = "backend." + backend;
 
         if (e.source.containsKey ("pin"))  // crude heuristic that may save some time for regular (non-dataflow) models
         {

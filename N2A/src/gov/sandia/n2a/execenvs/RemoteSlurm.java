@@ -83,7 +83,7 @@ public class RemoteSlurm extends RemoteUnix
     }
 
     @Override
-    public void submitJob (MNode job, String command) throws Exception
+    public void submitJob (MNode job, String... command) throws Exception
     {
         Path resourceDir = getResourceDir ();  // implies connect()
         Path jobsDir     = resourceDir.resolve ("jobs");
@@ -94,7 +94,7 @@ public class RemoteSlurm extends RemoteUnix
 
         stringToFile (jobDir.resolve ("n2a_job"),
               "#!/bin/bash\n"
-            + "mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + command
+            + "mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + combine (command)
         );
 
         // Note: There may be other sbatch parameters that are worth controlling here.

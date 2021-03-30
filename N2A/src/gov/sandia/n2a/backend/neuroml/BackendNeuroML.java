@@ -10,6 +10,7 @@ import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +41,7 @@ public class BackendNeuroML extends Backend
     public class SimulationThread extends Thread
     {
         public MNode  job;
-        public String simulator;
+        public String target;
 
         public SimulationThread (MNode job)
         {
@@ -88,10 +89,10 @@ public class BackendNeuroML extends Backend
                 Path jnmlHomeDir = env.getResourceDir ().getRoot ().resolve (jnmlHome);
                 Path jnmlCommand = jnmlHomeDir.resolve ("jnml");
 
-                if (simulator == null) simulator = doc.get ("$metadata", "backend", "lems", "simulator");
-                if (! simulator.isEmpty ()  &&  ! simulator.equals ("neuron"))  // NUERON gets special treatment because jnml will run it for us.
+                if (target == null) target = doc.get ("$metadata", "backend", "lems", "target");
+                if (! target.isEmpty ()  &&  ! target.equals ("neuron"))  // NUERON gets special treatment because jnml will run it for us.
                 {
-                    AnyProcessBuilder b = env.build (jnmlCommand.toString (), modelPath.toString (), "-" + simulator);
+                    AnyProcessBuilder b = env.build (jnmlCommand.toString (), modelPath.toString (), "-" + target);
                     Map<String,String> environment = b.environment ();
                     environment.put ("JNML_HOME", jnmlHome);
 
@@ -138,10 +139,17 @@ public class BackendNeuroML extends Backend
                 }
 
                 // Run the model on the target simulator
-                String parameters = "-nogui";
-                if (simulator.equals ("neuron")) parameters = "-neuron -run " + parameters;
-                String command = "JNML_HOME=" + env.quote (jnmlHomeDir) + " " + env.quote (jnmlCommand) + " " + env.quote (modelPath) + " " + parameters;
-                env.submitJob (job, command);
+                List<String> command = new ArrayList<String> ();
+                command.add ("JNML_HOME=" + env.quote (jnmlHomeDir));
+                command.add (env.quote (jnmlCommand));
+                command.add (env.quote (modelPath));
+                command.add ("-nogui");
+                if (target.equals ("neuron"))
+                {
+                    command.add ("-neuron");
+                    command.add ("-run");
+                }
+                env.submitJob (job, command.toArray (new String[command.size ()]));
             }
             catch (AbortRun a)
             {

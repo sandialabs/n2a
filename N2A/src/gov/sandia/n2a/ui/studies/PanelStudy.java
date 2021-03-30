@@ -580,7 +580,6 @@ public class PanelStudy extends JPanel
 
             public void showProgress ()
             {
-                // TODO: this should be based on jobs completed rather than merely started.
                 int complete = index - incomplete.size ();
                 String status = "" + complete + "/" + count + " samples; ";
                 if (complete == 0)

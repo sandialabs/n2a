@@ -481,10 +481,10 @@ public abstract class Host
         return new JPanel ();
     }
 
-    public abstract boolean           isActive       (MNode job)                 throws Exception;  // check if the given job is active
-    public abstract List<ProcessInfo> getActiveProcs ()                          throws Exception;  // enumerate all of our active jobs
-    public abstract void              submitJob      (MNode job, String command) throws Exception;
-    public abstract void              killJob        (MNode job, boolean force)  throws Exception;
+    public abstract boolean           isActive       (MNode job)                    throws Exception;  // check if the given job is active
+    public abstract List<ProcessInfo> getActiveProcs ()                             throws Exception;  // enumerate all of our active jobs
+    public abstract void              submitJob      (MNode job, String... command) throws Exception;
+    public abstract void              killJob        (MNode job, boolean force)     throws Exception;
 
     public class ProcessInfo
     {
@@ -681,6 +681,17 @@ public abstract class Host
         // Default for local machine is not to quote, because we use the more advanced ProcessBuilder
         // class, which allows separate args.
         return path.toString ();
+    }
+
+    /**
+        Concatenates command into a single string suitable for use in shell scripts on this host.
+    **/
+    public String combine (String... command)
+    {
+        String result = "";
+        if (command.length > 0) result = command[0];
+        for (int i = 1; i < command.length; i++) result += " " + command[i];
+        return result;
     }
 
     public long getMemoryTotal ()

@@ -34,6 +34,7 @@ import java.util.Map;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -1307,10 +1308,15 @@ public class InternalBackendData
     **/
     public static void determineOrderInit (EquationSet s, List<Variable> list)
     {
+        int count = list.size ();
+        Map<Variable,List<Object>>          backupUsedBy = new HashMap<Variable,List<Object>> (count);
+        Map<Variable,Map<Variable,Integer>> backupUses   = new HashMap<Variable,Map<Variable,Integer>> (count);
         for (Variable v : list)
         {
+            backupUsedBy.put (v, v.usedBy);
+            backupUses  .put (v, v.uses);
             v.usedBy = null;
-            v.uses = null;
+            v.uses   = null;
         }
 
         ReplaceConstants replace = s.new ReplaceConstants ("$init");
@@ -1365,6 +1371,14 @@ public class InternalBackendData
         }
 
         EquationSet.determineOrderInit (list);
+
+        // Restore backup of dependency structure.
+        // This is mainly to support further analysis by backends that use InternalBackend.constructStaticNetwork()
+        for (Variable v : list)
+        {
+            v.usedBy = backupUsedBy.get (v);
+            v.uses   = backupUses  .get (v);
+        }
     }
 
     public static class ResolveContainer implements Instance.Resolver
