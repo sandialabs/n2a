@@ -6,11 +6,11 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a;
 
-import gov.sandia.n2a.execenvs.Host;
-import gov.sandia.n2a.execenvs.RemoteSlurm;
-import gov.sandia.n2a.execenvs.RemoteUnix;
-import gov.sandia.n2a.execenvs.Unix;
-import gov.sandia.n2a.execenvs.Windows;
+import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.RemoteSlurm;
+import gov.sandia.n2a.host.RemoteUnix;
+import gov.sandia.n2a.host.Unix;
+import gov.sandia.n2a.host.Windows;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.plugins.Plugin;
 import gov.sandia.n2a.plugins.ExtensionPoint;

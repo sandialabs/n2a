@@ -17,7 +17,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Visitor;

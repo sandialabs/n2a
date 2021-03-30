@@ -12,7 +12,7 @@ import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
-import gov.sandia.n2a.execenvs.Connection;
+import gov.sandia.n2a.host.Connection;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
@@ -1513,7 +1513,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             config  = null;
             remote  = null;
             diff    = null;
-            if (gov.sandia.n2a.execenvs.Host.isWindows ()) System.gc ();
+            if (gov.sandia.n2a.host.Host.isWindows ()) System.gc ();
         }
 
         public String getURL ()

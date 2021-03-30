@@ -18,11 +18,12 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+
+import gov.sandia.n2a.host.Host;
+
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
-
-import gov.sandia.n2a.execenvs.Host;
 
 /**
     A top-level node which maps to a directory on the file system.

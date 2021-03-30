@@ -6,9 +6,9 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.settings;
 
-import gov.sandia.n2a.execenvs.Host;
-import gov.sandia.n2a.execenvs.Remote;
-import gov.sandia.n2a.execenvs.Host.Factory;
+import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.Remote;
+import gov.sandia.n2a.host.Host.Factory;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Settings;

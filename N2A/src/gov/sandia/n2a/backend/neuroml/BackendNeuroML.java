@@ -17,9 +17,9 @@ import java.util.Map;
 import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.Host;
-import gov.sandia.n2a.execenvs.Host.AnyProcess;
-import gov.sandia.n2a.execenvs.Host.AnyProcessBuilder;
+import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.Host.AnyProcess;
+import gov.sandia.n2a.host.Host.AnyProcessBuilder;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class BackendNeuroML extends Backend

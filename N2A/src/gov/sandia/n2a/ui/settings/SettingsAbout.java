@@ -8,7 +8,7 @@ package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.images.ImageUtil;

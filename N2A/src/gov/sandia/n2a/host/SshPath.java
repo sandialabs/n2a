@@ -4,7 +4,7 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.execenvs;
+package gov.sandia.n2a.host;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,7 +27,7 @@ import java.util.List;
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.SftpException;
 
-import gov.sandia.n2a.execenvs.SshFileSystem.WrapperSftp;
+import gov.sandia.n2a.host.SshFileSystem.WrapperSftp;
 
 public class SshPath implements Path
 {

@@ -4,7 +4,7 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.execenvs;
+package gov.sandia.n2a.host;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -63,9 +63,9 @@ import com.jcraft.jsch.SftpATTRS;
 import com.jcraft.jsch.SftpException;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.execenvs.Host.AnyProcess;
-import gov.sandia.n2a.execenvs.Host.AnyProcessBuilder;
-import gov.sandia.n2a.execenvs.SshFileSystem.WrapperSftp;
+import gov.sandia.n2a.host.Host.AnyProcess;
+import gov.sandia.n2a.host.Host.AnyProcessBuilder;
+import gov.sandia.n2a.host.SshFileSystem.WrapperSftp;
 
 public class SshFileSystemProvider extends FileSystemProvider
 {

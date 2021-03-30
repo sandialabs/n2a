@@ -12,7 +12,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.PanelEquations;

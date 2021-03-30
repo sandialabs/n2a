@@ -4,7 +4,7 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.execenvs;
+package gov.sandia.n2a.host;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;

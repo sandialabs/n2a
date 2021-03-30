@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.c;
 
-import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MTextField;

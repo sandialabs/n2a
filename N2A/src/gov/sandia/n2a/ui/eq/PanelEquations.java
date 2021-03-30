@@ -89,7 +89,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;

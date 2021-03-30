@@ -52,7 +52,7 @@ import javax.swing.tree.TreePath;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;

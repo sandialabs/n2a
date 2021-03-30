@@ -8,7 +8,7 @@ package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationSet;
-import gov.sandia.n2a.execenvs.Host;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 

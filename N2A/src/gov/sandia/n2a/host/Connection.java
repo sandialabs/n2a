@@ -4,7 +4,7 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.execenvs;
+package gov.sandia.n2a.host;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -28,8 +28,8 @@ import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
 
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.Host.AnyProcess;
-import gov.sandia.n2a.execenvs.Host.AnyProcessBuilder;
+import gov.sandia.n2a.host.Host.AnyProcess;
+import gov.sandia.n2a.host.Host.AnyProcessBuilder;
 
 public class Connection implements Closeable
 {

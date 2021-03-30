@@ -15,8 +15,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.execenvs.Host;
-import gov.sandia.n2a.execenvs.Host.ProcessInfo;
+import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.Host.ProcessInfo;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 
