@@ -132,8 +132,6 @@ public class SettingsHost implements Settings
         {
             public void stateChanged (ChangeEvent e)
             {
-                // TODO: make sure the name does not overwrite an existing entry
-                // If it does, pick and alternate name before proceeding with change. Also rebind fieldName.
                 Host current = list.getSelectedValue ();
                 current.name = fieldName.getText ();
                 list.repaint ();

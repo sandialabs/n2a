@@ -33,6 +33,7 @@ public class MTextField extends NTextField
     protected String               key;
     protected String               original = "";
     protected boolean              editKey;  // False to edit contents of node[key]. True to edit key itself.
+    protected boolean              overwrite;  // If editKey is true and this field is true, then a name change can overwrite and existing key. The default (false) is to modify the key to avoid collision.
     protected String               defaultValue;
     protected List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
 
@@ -98,6 +99,14 @@ public class MTextField extends NTextField
         {
             if (editKey)
             {
+                if (! overwrite)  // check for collision
+                {
+                    current = current.trim ();
+                    String prefix = current;
+                    int suffix = 2;
+                    while (parent.child (current) != null) current = prefix + suffix++;
+                    if (! current.equals (prefix)) setText (current);
+                }
                 parent.move (original, current);
             }
             else
@@ -172,6 +181,11 @@ public class MTextField extends NTextField
     public String getOriginal ()
     {
         return original;
+    }
+
+    public void setOverwrite (boolean value)
+    {
+        overwrite = value;
     }
 
     public void addChangeListener (ChangeListener l)
