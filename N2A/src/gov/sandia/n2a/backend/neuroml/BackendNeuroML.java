@@ -52,7 +52,8 @@ public class BackendNeuroML extends Backend
         public void run ()
         {
             Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
-            try {err.set (new PrintStream (new FileOutputStream (localJobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
+            Path errPath = localJobDir.resolve ("err");
+            try {err.set (new PrintStream (new FileOutputStream (errPath.toFile (), true), false, "UTF-8"));}
             catch (Exception e) {}
 
             try
@@ -136,6 +137,7 @@ public class BackendNeuroML extends Backend
                 {
                     ps.close ();
                     err.remove ();
+                    job.set (Host.size (errPath), "errSize");
                 }
 
                 // Run the model on the target simulator
@@ -149,7 +151,7 @@ public class BackendNeuroML extends Backend
                     command.add ("-neuron");
                     command.add ("-run");
                 }
-                env.submitJob (job, command.toArray (new String[command.size ()]));
+                env.submitJob (job, false, command.toArray (new String[command.size ()]));
             }
             catch (AbortRun a)
             {

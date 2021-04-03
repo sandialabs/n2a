@@ -33,6 +33,8 @@ import javax.swing.JScrollPane;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.border.LineBorder;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
@@ -44,7 +46,13 @@ public class SettingsHost implements Settings
     protected JList<Host>            list         = new JList<Host> (model);
     protected MTextField             fieldName;
     protected JComboBox<String>      comboClass   = new JComboBox<String> ();
-    protected JPanel                 editorHolder = new JPanel ();  // actually a holder for the real editor panel from Host
+    protected JPanel                 editor;  // The panel returned by Host for editing itself.
+    protected JPanel                 editorHolder = new JPanel ();
+
+    public interface NameChangeListener
+    {
+        public void nameChanged (String newName);
+    }
 
     @Override
     public String getName ()
@@ -105,7 +113,7 @@ public class SettingsHost implements Settings
 
                 // Focus another record, or clear UI
                 model.remove (index);
-                index = Math.max (index, model.size () - 1);
+                index = Math.min (index, model.size () - 1);
                 if (index >= 0) list.setSelectedIndex (index);  // triggers selection change event, resulting in call to displayRecord()
             }
         });
@@ -119,15 +127,19 @@ public class SettingsHost implements Settings
             }
         });
 
-        fieldName = new MTextField (null, "", "", 20, true)
+        fieldName = new MTextField (null, "", "", 20, true);
+        fieldName.addChangeListener (new ChangeListener ()
         {
-            public void changed (String before, String after)
+            public void stateChanged (ChangeEvent e)
             {
+                // TODO: make sure the name does not overwrite an existing entry
+                // If it does, pick and alternate name before proceeding with change. Also rebind fieldName.
                 Host current = list.getSelectedValue ();
-                current.name = after;
+                current.name = fieldName.getText ();
                 list.repaint ();
+                if (editor instanceof NameChangeListener) ((NameChangeListener) editor).nameChanged (current.name);
             }
-        };
+        });
 
         for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
         {
@@ -138,7 +150,7 @@ public class SettingsHost implements Settings
         {
             public void actionPerformed (ActionEvent e)
             {
-                String currentClass = comboClass.getSelectedItem ().toString ();
+                String newClass = comboClass.getSelectedItem ().toString ();
 
                 // Change the class. This requires destroying the current instance and constructing
                 // a new one that is bound to the same record.
@@ -146,13 +158,13 @@ public class SettingsHost implements Settings
                 Host h = list.getSelectedValue ();
                 if (h == null) return;
                 String originalClass = h.getClassName ();
-                if (currentClass.equals (originalClass)) return;
+                if (newClass.equals (originalClass)) return;
 
                 Host.remove (h, false);
-                Host h2 = Host.create (h.name, currentClass);
+                Host h2 = Host.create (h.name, newClass);
                 h.transferJobsTo (h2);
 
-                model.set (index, h);
+                model.set (index, h2);
                 displayRecord ();
             }
         });
@@ -195,11 +207,16 @@ public class SettingsHost implements Settings
     public void displayRecord ()
     {
         Host h = list.getSelectedValue ();
+        editorHolder.removeAll ();
+        if (h == null)  // This can happen during delete.
+        {
+            fieldName.bind (null, null);
+            return;
+        }
         fieldName.bind (h.config.parent (), h.name);
         comboClass.setSelectedItem (h.getClassName ());
 
-        editorHolder.removeAll ();
-        JPanel editor = h.getEditor ();
+        editor = h.getEditor ();
         editorHolder.add (editor, BorderLayout.CENTER);
         editor.revalidate ();
         editor.repaint ();

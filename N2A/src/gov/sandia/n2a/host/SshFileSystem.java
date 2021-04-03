@@ -53,8 +53,9 @@ public class SshFileSystem extends FileSystem
 
     public void close ()
     {
+        SshFileSystemProvider.instance.fileSystems.remove (uri.getHost ());
+        if (connection.sshfs == this) connection.sshfs = null;
         if (ownConnection) connection.close ();
-        // Otherwise, don't do anything.
     }
 
     public boolean isOpen ()

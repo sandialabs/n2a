@@ -27,7 +27,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 
 import java.io.BufferedWriter;
-import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,8 +51,9 @@ class XyceBackend extends Backend
             public void run ()
             {
                 Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
-                try {Backend.err.set (new PrintStream (localJobDir.resolve ("err").toFile ()));}
-                catch (FileNotFoundException e) {}
+                Path errPath = localJobDir.resolve ("err");
+                try {err.set (new PrintStream (new FileOutputStream (errPath.toFile (), true), false, "UTF-8"));}
+                catch (Exception e) {}
 
                 try
                 {
@@ -89,9 +90,10 @@ class XyceBackend extends Backend
                     {
                         ps.close ();
                         Backend.err.remove ();
+                        job.set (Host.size (errPath), "errSize");
                     }
 
-                    env.submitJob (job, xyce, env.quote (cirFile), "-o",  env.quote (prnFile));
+                    env.submitJob (job, false, xyce, env.quote (cirFile), "-o",  env.quote (prnFile));
                 }
                 catch (AbortRun a)
                 {

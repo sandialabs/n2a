@@ -18,13 +18,17 @@ import java.util.Set;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MPasswordField;
 import gov.sandia.n2a.ui.MTextField;
+import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.PanelRun;
+import gov.sandia.n2a.ui.settings.SettingsHost.NameChangeListener;
 
 /**
     Suitable for a unix-like system that runs jobs on its own processors,
@@ -56,79 +60,113 @@ public class RemoteUnix extends Unix implements Remote
         };
     }
 
+    @Override
     public JPanel getEditor ()
     {
-        if (panel != null) return panel;
+        if (panel == null) panel = new EditorPanel ();
+        return panel;
+    }
 
-        JButton buttonRestart = new JButton ("Restart Monitor Thread");
-        buttonRestart.addActionListener (new ActionListener ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                restartMonitorThread ();
-            }
-        });
+    @SuppressWarnings("serial")
+    public class EditorPanel extends JPanel implements NameChangeListener
+    {
+        public MTextField     fieldAddress  = new MTextField (config, "address", name);
+        public MTextField     fieldUsername = new MTextField (config, "username", System.getProperty ("user.name"));
+        public MPasswordField fieldPassword = new MPasswordField (config, "password");
+        public JLabel         labelWarning  = new JLabel ("<html>WARNING: Passoword is stored in plain text.<br>If this is a security concern, then you can leave the field blank.<br>You will be prompted for a password once per session.<br>That password will only be held in volatile memory.</html>");
+        public MTextField     fieldHome     = new MTextField (config, "home", "/home/" + config.getOrDefault (System.getProperty ("user.name"), "username"));
+        public JButton        buttonRestart = new JButton ("Restart Monitor Thread");
+        public JButton        buttonZombie  = new JButton ("Scan for Leaked Job Resources");
 
-        JButton buttonZombie = new JButton ("Scan for Leaked Job Resources");
-        buttonZombie.addActionListener (new ActionListener ()
+        public EditorPanel ()
         {
-            public void actionPerformed (ActionEvent e)
+            prepare ();
+            Lay.BLtg (this, "N",
+                Lay.BxL ("V",
+                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Address"), fieldAddress)),
+                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Username"), fieldUsername)),
+                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Password"), fieldPassword)),
+                    Lay.BL ("W", Lay.FL ("H", labelWarning)),
+                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Home Directory"), fieldHome)),
+                    Lay.BL ("W", Lay.FL ("H", buttonRestart, buttonZombie))
+                )
+            );
+        }
+
+        public void prepare ()
+        {
+            fieldUsername.addChangeListener (new ChangeListener ()
             {
-                Thread thread = new Thread ("Scan " + name)
+                public void stateChanged (ChangeEvent e)
                 {
-                    public void run ()
+                    fieldHome.setDefault ("/home/" + fieldUsername.getText ());
+                }
+            });
+
+            buttonRestart.addActionListener (new ActionListener ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    restartMonitorThread ();
+                }
+            });
+
+            buttonZombie.addActionListener (new ActionListener ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    Thread thread = new Thread ("Scan " + name)
                     {
-                        try
+                        public void run ()
                         {
-                            Path localJobsDir = getLocalResourceDir ().resolve ("jobs");
-                            Path remoteJobsDir = getResourceDir ().resolve ("jobs");
-                            try (DirectoryStream<Path> stream = Files.newDirectoryStream (remoteJobsDir))
+                            try
                             {
-                                for (Path remoteDir : stream)
+                                Path localJobsDir = getLocalResourceDir ().resolve ("jobs");
+                                Path remoteJobsDir = getResourceDir ().resolve ("jobs");
+                                try (DirectoryStream<Path> stream = Files.newDirectoryStream (remoteJobsDir))
                                 {
-                                    if (! Files.isDirectory (remoteDir)) continue;
-                                    String key = remoteDir.getFileName ().toString ();
-                                    Path localDir = localJobsDir.resolve (key);
-                                    if (Files.exists (localDir)) continue;
-
-                                    EventQueue.invokeLater (new Runnable ()
+                                    for (Path remoteDir : stream)
                                     {
-                                        public void run ()
-                                        {
-                                            try
-                                            {
-                                                // Re-create the local placeholder
-                                                MDoc job = (MDoc) AppData.runs.childOrCreate (key);
-                                                job.set (name, "host");
-                                                job.save ();
+                                        if (! Files.isDirectory (remoteDir)) continue;
+                                        String key = remoteDir.getFileName ().toString ();
+                                        Path localDir = localJobsDir.resolve (key);
+                                        if (Files.exists (localDir)) continue;
 
-                                                // Add to UI and monitor thread.
-                                                monitor (PanelRun.instance.addNewRun (job, false));
+                                        EventQueue.invokeLater (new Runnable ()
+                                        {
+                                            public void run ()
+                                            {
+                                                try
+                                                {
+                                                    // Re-create the local placeholder
+                                                    MDoc job = (MDoc) AppData.runs.childOrCreate (key);
+                                                    job.set (name, "host");
+                                                    job.save ();
+
+                                                    // Add to UI and monitor thread.
+                                                    NodeJob node = PanelRun.instance.addNewRun (job, false);
+                                                    monitor (node);
+                                                }
+                                                catch (Exception e) {e.printStackTrace ();}
                                             }
-                                            catch (Exception e) {e.printStackTrace ();}
-                                        }
-                                    });
+                                        });
+                                    }
                                 }
                             }
+                            catch (Exception e) {e.printStackTrace ();}
                         }
-                        catch (Exception e) {e.printStackTrace ();}
-                    }
-                };
-                thread.setDaemon (true);
-                thread.start ();
-            }
-        });
+                    };
+                    thread.setDaemon (true);
+                    thread.start ();
+                }
+            });
+        }
 
-        panel = Lay.BL ("N",
-            Lay.BxL ("V",
-                Lay.BL ("W", Lay.FL ("H", new JLabel ("Address"), new MTextField (config, "address", name))),
-                Lay.BL ("W", Lay.FL ("H", new JLabel ("Username"), new MTextField (config, "username", System.getProperty ("user.name")))),
-                Lay.BL ("W", Lay.FL ("H", new JLabel ("Password"), new MPasswordField (config, "password"))),
-                Lay.BL ("W", Lay.FL ("H", new JLabel ("<html>WARNING: Passoword is stored in plain text.<br>If this is a security concern, then you can leave the field blank.<br>You will be prompted for a password once per session.<br>That password will only be held in volatile memory.</html>"))),
-                Lay.BL ("W", Lay.FL ("H", buttonRestart, buttonZombie))
-            )
-        );
-        return panel;
+        @Override
+        public void nameChanged (String newName)
+        {
+            fieldAddress.setDefault (name);
+        }
     }
 
     public synchronized void connect () throws Exception
@@ -192,7 +230,7 @@ public class RemoteUnix extends Unix implements Remote
     public Path getResourceDir () throws Exception
     {
         connect ();
-        return connection.getFileSystem ().getPath ("n2a");  // assumes that filesystem default directory is where n2a dir should reside
+        return connection.getFileSystem ().getPath ("/").getRoot ().resolve (connection.home).resolve ("n2a");
     }
 
     @Override

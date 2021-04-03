@@ -24,6 +24,7 @@ import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.reflect.Method;
+import java.nio.channels.FileChannel;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -67,7 +68,7 @@ import com.jcraft.jsch.JSchException;
 **/
 public abstract class Host
 {
-    public    String             name;                                 // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the hostname key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
+    public    String             name;                                 // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the address key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
     public    MNode              config;                               // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
     protected ArrayList<NodeJob> running = new ArrayList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
     protected MonitorThread      monitorThread;
@@ -481,10 +482,10 @@ public abstract class Host
         return new JPanel ();
     }
 
-    public abstract boolean           isActive       (MNode job)                    throws Exception;  // check if the given job is active
-    public abstract List<ProcessInfo> getActiveProcs ()                             throws Exception;  // enumerate all of our active jobs
-    public abstract void              submitJob      (MNode job, String... command) throws Exception;
-    public abstract void              killJob        (MNode job, boolean force)     throws Exception;
+    public abstract boolean           isActive       (MNode job)                                     throws Exception;  // check if the given job is active
+    public abstract List<ProcessInfo> getActiveProcs ()                                              throws Exception;  // enumerate all of our active jobs
+    public abstract void              submitJob      (MNode job, boolean out2err, String... command) throws Exception;  // out2err indicates that stdout should be directed to same file as stderr, rather than "out"
+    public abstract void              killJob        (MNode job, boolean force)                      throws Exception;
 
     public class ProcessInfo
     {
@@ -887,6 +888,18 @@ public abstract class Host
         try
         {
             return Files.getLastModifiedTime (path).toMillis ();
+        }
+        catch (IOException e1)
+        {
+            return 0;
+        }
+    }
+
+    public static long size (Path path)
+    {
+        try
+        {
+            return FileChannel.open (path).size ();
         }
         catch (IOException e1)
         {

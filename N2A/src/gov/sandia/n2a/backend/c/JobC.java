@@ -97,7 +97,8 @@ public class JobC extends Thread
     public void run ()
     {
         localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
-        try {Backend.err.set (new PrintStream (new FileOutputStream (localJobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
+        Path errPath = localJobDir.resolve ("err");
+        try {Backend.err.set (new PrintStream (new FileOutputStream (errPath.toFile (), true), false, "UTF-8"));}
         catch (Exception e) {}
 
         try
@@ -164,9 +165,10 @@ public class JobC extends Thread
             {
                 ps.close ();
                 Backend.err.remove ();
+                job.set (Host.size (errPath), "errSize");
             }
 
-            env.submitJob (job, command);
+            env.submitJob (job, false, command);
         }
         catch (Exception e)
         {

@@ -529,9 +529,9 @@ public class NodeJob extends NodeBase
         It must be different than any file already known to us, and it must be a file we
         actually want to show to the user.
     **/
-    public synchronized boolean buildChild (Path file, Map<String,NodeFile> existing)
+    public synchronized boolean buildChild (Path path, Map<String,NodeFile> existing)
     {
-        String fileName = file.getFileName ().toString ();
+        String fileName = path.getFileName ().toString ();
         NodeFile oldNode = existing.get (fileName);
         if (oldNode != null)
         {
@@ -540,11 +540,11 @@ public class NodeJob extends NodeBase
         }
 
         NodeFile newNode;
-        if (Files.isDirectory (file))
+        if (Files.isDirectory (path))
         {
             // Check for image sequence.
             // It's an image sequence if a random file from the dir has the right form: an integer with an standard image-file suffix.
-            try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (file))
+            try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (path))
             {
                 Iterator<Path> it = dirStream.iterator ();
                 if (! it.hasNext ()) return false;
@@ -555,7 +555,7 @@ public class NodeJob extends NodeBase
                 catch (NumberFormatException e) {return false;}
                 String suffix = pieces[1].toLowerCase ();
                 if (imageFileSuffixes.indexOf (suffix) < 0) return false;
-                newNode = new NodeFile (NodeFile.Type.Video, file);
+                newNode = new NodeFile (NodeFile.Type.Video, path);
             }
             catch (Exception e)
             {
@@ -564,7 +564,7 @@ public class NodeJob extends NodeBase
         }
         else
         {
-            try {if (Files.size (file) == 0) return false;}
+            try {if (Files.size (path) == 0) return false;}
             catch (IOException e) {return false;}
 
             if (fileName.startsWith ("n2a_job" )) return false;
@@ -582,12 +582,10 @@ public class NodeJob extends NodeBase
             String[] pieces = fileName.split ("\\.");
             if (pieces.length > 1) suffix = pieces[pieces.length-1].toLowerCase ();
 
-            if      (fileName.endsWith ("out"    ))           newNode = new NodeFile (NodeFile.Type.Output,  file);
-            else if (fileName.endsWith ("err"    ))           newNode = new NodeFile (NodeFile.Type.Error,   file);
-            else if (fileName.endsWith ("result" ))           newNode = new NodeFile (NodeFile.Type.Result,  file);
-            else if (fileName.endsWith ("console"))           newNode = new NodeFile (NodeFile.Type.Console, file);
-            else if (imageFileSuffixes.indexOf (suffix) >= 0) newNode = new NodeFile (NodeFile.Type.Picture, file);
-            else                                              newNode = new NodeFile (NodeFile.Type.Other,   file);
+            if      (fileName.endsWith ("out"))               newNode = new NodeFile (NodeFile.Type.Output,  path);
+            else if (fileName.endsWith ("err"))               newNode = new NodeFile (NodeFile.Type.Error,   path);
+            else if (imageFileSuffixes.indexOf (suffix) >= 0) newNode = new NodeFile (NodeFile.Type.Picture, path);
+            else                                              newNode = new NodeFile (NodeFile.Type.Other,   path);
         }
 
         existing.put (fileName, newNode);

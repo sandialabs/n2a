@@ -13,6 +13,7 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystem;
+import java.nio.file.FileSystemAlreadyExistsException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -127,7 +128,17 @@ public class Connection implements Closeable
         {
             Map<String,Object> env = new HashMap<String,Object> ();
             env.put ("connection", this);
-            sshfs = FileSystems.newFileSystem (new URI ("ssh://" + hostname + home), env);
+            URI uri = new URI ("ssh://" + hostname + home);
+            try
+            {
+                sshfs = FileSystems.newFileSystem (uri, env);
+            }
+            catch (FileSystemAlreadyExistsException e)
+            {
+                // It is possible for two host to share the exact same filesystem.
+                // The host could be an alias with an alternate configuration.
+                sshfs = FileSystems.getFileSystem (uri);
+            }
         }
         return sshfs;
     }

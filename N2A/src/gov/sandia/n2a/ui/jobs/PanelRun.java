@@ -547,31 +547,35 @@ public class PanelRun extends JPanel
                     ((Remote) env).enable ();  // The user explicitly selected the file, which implies permission to prompt for remote password.
                     try
                     {
+                        Path localJobDir  = Host.getJobDir (Host.getLocalResourceDir (), job);
+                        Path remoteJobDir = Host.getJobDir (env.getResourceDir (),       job);
                         String fileName = node.path.getFileName ().toString ();
-                        Path localFile  = Host.getJobDir (Host.getLocalResourceDir (), job).resolve (fileName);
-                        Path remoteFile = Host.getJobDir (env.getResourceDir (),       job).resolve (fileName);
+                        Path localPath  = localJobDir .resolve (fileName);
+                        Path remotePath = remoteJobDir.resolve (fileName);
 
                         BasicFileAttributes localAttributes  = null;
                         BasicFileAttributes remoteAttributes = null;
-                        try {localAttributes  = Files.readAttributes (localFile,  BasicFileAttributes.class);}
+                        try {localAttributes  = Files.readAttributes (localPath,  BasicFileAttributes.class);}
                         catch (Exception e) {}
-                        try {remoteAttributes = Files.readAttributes (remoteFile, BasicFileAttributes.class);}
+                        try {remoteAttributes = Files.readAttributes (remotePath, BasicFileAttributes.class);}
                         catch (Exception e) {}
 
                         if (remoteAttributes != null)
                         {
+                            node.path = localPath;  // Force to use local copy, regardless of whether it was local or remote before.
+
                             if (remoteAttributes.isDirectory ())  // An image sequence stored in a sub-directory.
                             {
                                 // Copy any remote files that are not present in local directory.
-                                if (localAttributes == null) Files.createDirectories (localFile);
+                                if (localAttributes == null) Files.createDirectories (localPath);
                                 // else local should be a directory. Otherwise, this will fail silently.
-                                try (DirectoryStream<Path> stream = Files.newDirectoryStream (remoteFile))
+                                try (DirectoryStream<Path> stream = Files.newDirectoryStream (remotePath))
                                 {
                                     int total = ((SshDirectoryStream) stream).count ();
                                     int count = 0;
                                     for (Path rp : stream)
                                     {
-                                        Path lp = localFile.resolve (rp.getFileName ().toString ());
+                                        Path lp = localPath.resolve (rp.getFileName ().toString ());
                                         if (! Files.exists (lp))
                                         {
                                             try {Files.copy (rp, lp);}
@@ -582,16 +586,23 @@ public class PanelRun extends JPanel
                                     }
                                 }
                             }
-                            else
+                            else  // remote is simple file
                             {
                                 long position = 0;
-                                if (localAttributes == null) Files.createFile (localFile);
-                                else                         position = localAttributes.size ();
+                                if (localAttributes == null)
+                                {
+                                    Files.createFile (localPath);
+                                }
+                                else
+                                {
+                                    position = localAttributes.size ();
+                                    if (localPath.endsWith ("err")) position -= job.getLong ("errSize");  // Append to, rather than replace, any locally-generated error text.
+                                }
                                 long count = remoteAttributes.size () - position;
                                 if (count > 0)
                                 {
-                                    try (InputStream remoteStream = Files.newInputStream (remoteFile);
-                                         OutputStream localStream = Files.newOutputStream (localFile, StandardOpenOption.WRITE, StandardOpenOption.APPEND);)
+                                    try (InputStream remoteStream = Files.newInputStream (remotePath);
+                                         OutputStream localStream = Files.newOutputStream (localPath, StandardOpenOption.WRITE, StandardOpenOption.APPEND);)
                                     {
                                         remoteStream.skip (position);
                                         Host.copy (remoteStream, localStream, count, new CopyProgress ()
@@ -603,8 +614,37 @@ public class PanelRun extends JPanel
                                         });
                                     }
                                 }
+
+                                // Also download columns file, if it exists.
+                                if (node.type == NodeFile.Type.Output  ||  node.type == NodeFile.Type.Other)
+                                {
+                                    localPath  = localJobDir .resolve (fileName + ".columns");
+                                    remotePath = remoteJobDir.resolve (fileName + ".columns");
+                                    localAttributes  = null;
+                                    remoteAttributes = null;
+                                    try {localAttributes  = Files.readAttributes (localPath,  BasicFileAttributes.class);}
+                                    catch (Exception e) {}
+                                    try {remoteAttributes = Files.readAttributes (remotePath, BasicFileAttributes.class);}
+                                    catch (Exception e) {}
+
+                                    if (remoteAttributes != null  &&  (localAttributes == null  ||  localAttributes.size () < remoteAttributes.size ()))
+                                    {
+                                        // Always overwrite column file completely, because it can change structure over
+                                        // time in a way that is not amenable to incremental download.
+                                        try (InputStream remoteStream = Files.newInputStream (remotePath);
+                                             OutputStream localStream = Files.newOutputStream (localPath);)
+                                        {
+                                            Host.copy (remoteStream, localStream, remoteAttributes.size (), new CopyProgress ()
+                                            {
+                                                public void update (float percent)
+                                                {
+                                                    synchronized (displayText) {displayText.setText (String.format ("Downloading %2.0f%%", percent * 100));}
+                                                }
+                                            });
+                                        }
+                                    }
+                                }
                             }
-                            node.path = localFile;  // Force to use local copy, regardless of whether it was local or remote before.
                         }
                     }
                     catch (Exception e) {}
@@ -741,27 +781,50 @@ public class PanelRun extends JPanel
                 }
 
                 // Default is plain text
-                final String contents = Host.fileToString (node.path);
-                if (stop)
+                String contents = Host.fileToString (node.path);
+                if (node.type == NodeFile.Type.Error)  // Special case for "err": show ANSI colors
                 {
-                    signalDone ();
-                    return;
-                }
-
-                EventQueue.invokeLater (new Runnable ()
-                {
-                    public void run ()
+                    TextPaneANSI displayANSI = new TextPaneANSI ()
                     {
-                        synchronized (displayText)
+                        public void updateUI ()
+                        {
+                            super.updateUI ();
+                            Font f = UIManager.getFont ("TextPane.font");
+                            if (f == null) return;
+                            setFont (new Font (Font.MONOSPACED, Font.PLAIN, f.getSize ()));
+                        }
+                    };
+                    displayANSI.setEditable (false);
+                    displayANSI.setText (contents);
+
+                    EventQueue.invokeLater (new Runnable ()
+                    {
+                        public void run ()
                         {
                             if (stop) return;
-                            displayText.setText (contents);
-                            displayText.setCaretPosition (0);
                             displayChart.buttonBar.setVisible (false);
-                            displayPane.setViewportView (displayText);
+                            displayPane.setViewportView (displayANSI);
                         }
-                    }
-                });
+                    });
+                }
+                else  // Otherwise, show plain text
+                {
+                    final String finalContents = stripANSI (contents);
+                    EventQueue.invokeLater (new Runnable ()
+                    {
+                        public void run ()
+                        {
+                            synchronized (displayText)
+                            {
+                                if (stop) return;
+                                displayText.setText (finalContents);
+                                displayText.setCaretPosition (0);
+                                displayChart.buttonBar.setVisible (false);
+                                displayPane.setViewportView (displayText);
+                            }
+                        }
+                    });
+                }
             }
             catch (Exception e)
             {
@@ -777,6 +840,39 @@ public class PanelRun extends JPanel
                 if (displayThread == this) displayThread = null;
             }
         }
+    }
+
+    /**
+        Remove ANSI color sequences from string.
+        May be able to remove some other sequences as well, but has not been written
+        to be fully general yet.
+    **/
+    public static String stripANSI (String contents)
+    {
+        int e = contents.indexOf (27);
+        if (e < 0) return contents;  // Early out if no escape sequences.
+
+        StringBuilder result = new StringBuilder ();
+        int b = 0;
+        while (true)
+        {
+            result.append (contents.substring (b, e));  // b could be same as e, in which case no text is added
+            if (e >= contents.length ()) break;  // no more text left
+
+            // Find end of escape sequence.
+            e++;
+            b = contents.indexOf ('m', e);
+            if (b < 0) break;  // escape sequence cut off by end of string
+            b++;
+            if (b >= contents.length ()) break;
+            e = contents.indexOf (27, b);
+            if (e < 0)
+            {
+                result.append (contents.substring (b));
+                break;
+            }
+        }
+        return result.toString ();
     }
 
     public void viewFile (boolean showLoading)
@@ -1076,9 +1172,11 @@ public class PanelRun extends JPanel
                             Path remoteJobDir = Host.getJobDir (env.getResourceDir (), job);
                             Path remoteFile = remoteJobDir.resolve (fileName);
                             env.deleteTree (remoteFile);  // In case this is a video directory rather than just a file, use deleteTree().
-                            if (fileName.equals ("out"))  // also delete out.columns
+
+                            // Also delete auxiliary columns file.
+                            if (nf.type == NodeFile.Type.Output  ||  nf.type == NodeFile.Type.Other)
                             {
-                                remoteFile = remoteJobDir.resolve ("out.columns");
+                                remoteFile = remoteJobDir.resolve (fileName + ".columns");
                                 env.deleteTree (remoteFile);  // Even though this is definitely not a tree, it is still convenient to call deleteTre(), because it absorbs a lot of potential errors.
                             }
                         }
@@ -1086,9 +1184,9 @@ public class PanelRun extends JPanel
                         Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
                         Path localFile = localJobDir.resolve (fileName);
                         Host.get ().deleteTree (localFile);
-                        if (fileName.equals ("out"))
+                        if (nf.type == NodeFile.Type.Output  ||  nf.type == NodeFile.Type.Other)
                         {
-                            localFile = localJobDir.resolve ("out.columns");
+                            localFile = localJobDir.resolve (fileName + ".columns");
                             Host.get ().deleteTree (localFile);
                         }
                     }

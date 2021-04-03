@@ -8,12 +8,17 @@ package gov.sandia.n2a.host;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MTextField;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 
 /**
     Wraps access to a system that runs jobs via slurm.
@@ -39,6 +44,35 @@ public class RemoteSlurm extends RemoteUnix
                 return new RemoteSlurm ();
             }
         };
+    }
+
+    @Override
+    public JPanel getEditor ()
+    {
+        if (panel == null) panel = new EditorPanel2 ();
+        return panel;
+    }
+
+    @SuppressWarnings("serial")
+    public class EditorPanel2 extends EditorPanel
+    {
+        public MTextField fieldAccount = new MTextField (config, "account");
+
+        public EditorPanel2 ()
+        {
+            prepare ();
+            Lay.BLtg (this, "N",
+                Lay.BxL ("V",
+                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Address"), fieldAddress)),
+                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Username"), fieldUsername)),
+                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Password"), fieldPassword)),
+                    Lay.BL ("W", Lay.FL ("H", labelWarning)),
+                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Home Directory"), fieldHome)),
+                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Slurm Account"), fieldAccount)),
+                    Lay.BL ("W", Lay.FL ("H", buttonRestart, buttonZombie))
+                )
+            );
+        }
     }
 
     @Override
@@ -83,7 +117,7 @@ public class RemoteSlurm extends RemoteUnix
     }
 
     @Override
-    public void submitJob (MNode job, String... command) throws Exception
+    public void submitJob (MNode job, boolean out2err, String... command) throws Exception
     {
         Path resourceDir = getResourceDir ();  // implies connect()
         Path jobsDir     = resourceDir.resolve ("jobs");
@@ -102,9 +136,9 @@ public class RemoteSlurm extends RemoteUnix
                 "sbatch",
                 "--nodes="   + nodes,
                 "--time=24:00:00",
-                "--account=" + config.get ("cluster", "account"),
+                "--account=" + config.get ("account"),  // TODO: add "account" to panel in getEditor().
                 "--job-name=N2A",  // TODO: use better job name here, one that is unique
-                "--output="  + quote (jobDir.resolve ("out")),
+                "--output="  + quote (jobDir.resolve (out2err ? "err" : "out")),
                 "--error="   + quote (jobDir.resolve ("err")),
                 quote (jobDir.resolve ("n2a_job"))).start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))

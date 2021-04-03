@@ -53,7 +53,7 @@ public class PanelSettings extends JTabbedPane
         }
 
         Set<String> sorted = new HashSet<String> ();
-        String[] titles = {"About", "General", "Look & Feel", "Repositories", "Host"};  // Force the order of these panels.
+        String[] titles = {"About", "General", "Look & Feel", "Repositories", "Hosts"};  // Force the order of these panels.
         for (String title : titles)
         {
             Settings s = settings.get (title);

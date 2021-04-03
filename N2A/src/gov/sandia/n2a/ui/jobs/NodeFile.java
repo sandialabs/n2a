@@ -22,11 +22,9 @@ public class NodeFile extends NodeBase
         Model   (0, "Model",       "file_in.gif"),
         Output  (1, "Output",      "file_out.gif"),
         Error   (0, "Diagnostics", "file_err.gif"),
-        Result  (2, "Result",      "file_prn.gif"),
-        Console (0, "Console",     "file_cout.gif"),
         Other   (0, "Other",       "file_obj.gif"),
-        Video   (2, "Other",       "file_obj.gif"),
-        Picture (2, "Other",       "file_obj.gif");
+        Video   (2, "Other",       "fileVideo.png"),
+        Picture (2, "Other",       "fileImage-16.png");
 
         public int       priority;  // For choosing primary output file. 0 means don't ever select as output.
         public String    label;
