@@ -62,7 +62,7 @@ class XyceBackend extends Backend
 
                     // set up job info
                     Host env = Host.get (job);
-                    String xyce  = env.config.getOrDefault ("Xyce", "xyce", "command");
+                    String xyce  = env.config.getOrDefault ("Xyce", "backend", "xyce", "command");
                     Path jobDir  = Host.getJobDir (env.getResourceDir (), job);  // local or remote
                     Path cirFile = jobDir.resolve ("model.cir");
                     Path prnFile = jobDir.resolve ("out");  // "prn" doesn't work, at least on Windows

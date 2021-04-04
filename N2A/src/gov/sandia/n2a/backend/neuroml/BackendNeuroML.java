@@ -84,7 +84,7 @@ public class BackendNeuroML extends Backend
 
                 // Convert the model to target format using jnml
 
-                String jnmlHome = AppData.state.get ("BackendNeuroML", "JNML_HOME");
+                String jnmlHome = env.config.get ("backend", "neuroml", "JNML_HOME");
                 if (jnmlHome.isEmpty ()) jnmlHome = System.getenv ("JNML_HOME");  // This is unlikely to be set, but respect if it is.
                 if (jnmlHome == null)    jnmlHome = "/usr/local/jNeuroML";        // just a guess
                 Path jnmlHomeDir = env.getResourceDir ().getRoot ().resolve (jnmlHome);

@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.host;
 
+import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.ExtensionPoint;
@@ -16,11 +17,14 @@ import gov.sandia.n2a.ui.jobs.NodeJob;
 import java.awt.EventQueue;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.Closeable;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.reflect.Method;
@@ -284,6 +288,8 @@ public abstract class Host
 
         public void run ()
         {
+            init ();
+
             while (! stop)
             {
                 if (waitingForHost.isEmpty ())
@@ -311,17 +317,65 @@ public abstract class Host
                     // Find available host
                     MNode source = job.getSource ();
                     Backend backend = Backend.getBackend (source.get ("backend"));
+                    String backendName = backend.getName ().toLowerCase ();
 
-                    List<Host> hosts = new ArrayList<Host> ();
-                    for (String hostname : source.get ("host").split (","))
+                    List<Host> candidates = new ArrayList<Host> ();
+                    String hostNames = source.get ("host");
+                    if (hostNames.isEmpty ())  // No host specified, so find suitable default.
                     {
-                        Host h = Host.get (hostname.trim ());
-                        if (h != null) hosts.add (h);
+                        // Prefer localhost, if backend is permitted.
+                        Host    localhost = Host.get ("localhost");
+                        boolean forbidden = localhost.config.get ("backend", backendName).equals ("0");
+                        boolean internal  = backend instanceof InternalBackend;
+                        if (internal  ||  ! forbidden)  // use of Internal overrides host selection
+                        {
+                            candidates.add (localhost);
+                        }
+                        else  // Find suitable remote host.
+                        {
+                            for (Host h : hosts.values ())
+                            {
+                                if (! (h instanceof Remote)) continue;  // localhost not permitted
+                                if (h.config.get ("backend", backendName).equals ("0")) continue;  // forbidden
+                                candidates.add (h);
+                            }
+                        }
                     }
-                    if (hosts.isEmpty ()) hosts.add (Host.get ("localhost"));
+                    else  // Only consider hosts specified by user.
+                    {
+                        for (String hostname : hostNames.split (","))
+                        {
+                            Host h = hosts.get (hostname.trim ());
+                            if (h == null) continue;
+                            if (h instanceof Remote  &&  backend instanceof InternalBackend) continue;  // Internal can only run on localhost.
+                            if (h.config.get ("backend", backendName).equals ("0")) continue;  // marked as forbidden
+                            candidates.add (h);
+                        }
+                    }
+                    if (candidates.isEmpty ())  // No suitable hosts found.
+                    {
+                        // Report error
+                        if (stop) return;  // Don't wait on locks if we are shutting down.
+                        synchronized (waitingForHost) {waitingForHost.remove (i);}
+                        Path localJobDir = getJobDir (getLocalResourceDir (), source);
+                        try
+                        {
+                            synchronized (job)
+                            {
+                                job.complete = 2;
+                                Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), localJobDir.resolve ("finished"));
+                            }
+                            // Reopen the err stream and append an explanation.
+                            try (PrintStream err = new PrintStream (new FileOutputStream (localJobDir.resolve ("err").toFile (), true), false, "UTF-8"))
+                            {
+                                err.println ("ERROR: Backend can't run on given host, and no suitable alternative was found.");
+                            }
+                        }
+                        catch (Exception e) {}
+                    }
 
                     Host chosenHost = null;
-                    for (Host h : hosts)
+                    for (Host h : candidates)
                     {
                         // Enable host, but only for newly-launched jobs.
                         // If the job pre-existed the current session of this app,

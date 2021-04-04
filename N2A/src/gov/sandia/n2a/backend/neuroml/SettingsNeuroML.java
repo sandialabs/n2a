@@ -1,93 +1,46 @@
 /*
-Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.neuroml;
 
-import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.plugins.extpoints.Settings;
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.Lay;
-import gov.sandia.n2a.ui.SafeTextTransferHandler;
-import java.awt.Component;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.FocusAdapter;
-import java.awt.event.FocusEvent;
-import java.net.URL;
+import gov.sandia.n2a.ui.MTextField;
+import gov.sandia.n2a.ui.settings.SettingsBackend;
 
-import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JTextField;
 
-@SuppressWarnings("serial")
-public class SettingsNeuroML extends JPanel implements Settings
+public class SettingsNeuroML extends SettingsBackend
 {
-    ImageIcon icon;
-
-    public static class Item extends JPanel
-    {
-        JLabel     label;
-        JTextField field;
-
-        public Item (String text, String key, String defaultValue, int length)
-        {
-            label = new JLabel (text);
-            field = new JTextField (AppData.state.getOrDefault (defaultValue, "BackendNeuroML", key), length);
-            field.addActionListener (new ActionListener ()
-            {
-                public void actionPerformed (ActionEvent arg0)
-                {
-                    AppData.state.set (field.getText (), "BackendNeuroML", key);
-                }
-            });
-            field.addFocusListener (new FocusAdapter ()
-            {
-                public void focusLost (FocusEvent e)
-                {
-                    AppData.state.set (field.getText (), "BackendNeuroML", key);
-                }
-            });
-            field.setTransferHandler (new SafeTextTransferHandler ());
-
-            Lay.FLtg (this, "L", label, field);
-        }
-    }
+    protected MTextField fieldHome = new MTextField (40);
 
     public SettingsNeuroML ()
     {
-        setName ("Backend NeuroML");  // Use JPanel to fulfill Settings.getName()
+        key          = "neuroml";
+        iconFileName = "NeuroML.png";
+    }
 
-        JPanel box = Lay.BxL ("V",
-            new Item ("JNML_HOME", "JNML_HOME", "/usr/local/jNeuroML", 40)
+    @Override
+    public String getName ()
+    {
+        return "Backend NeuroML";
+    }
+
+    @Override
+    public void bind (MNode parent)
+    {
+        fieldHome.bind (parent, "JNML_HOME", "/usr/local/jNeuroML");
+    }
+
+    @Override
+    public JPanel getEditor ()
+    {
+        return Lay.BxL (
+            Lay.BL ("W", Lay.FL ("H", new JLabel ("JNML_HOME"), fieldHome))
         );
-        Lay.BLtg (this,
-            "N", box
-        );
-    }
-
-    @Override
-    public ImageIcon getIcon ()
-    {
-        if (icon == null)
-        {
-            URL imageURL = getClass ().getResource ("NeuroML.png");
-            if (imageURL != null) icon = new ImageIcon (imageURL);
-        }
-        return icon;  // Can be null, if we fail to load the image.
-    }
-
-    @Override
-    public Component getPanel ()
-    {
-        return this;
-    }
-
-    @Override
-    public Component getInitialFocus (Component panel)
-    {
-        return panel;
     }
 }
