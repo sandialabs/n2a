@@ -192,6 +192,7 @@ public class NodeJob extends NodeBase
         Path started = localJobDir.resolve ("started");
         if (Files.exists (started))
         {
+            dateStarted = new Date (Host.lastModified (started));
             Host env = Host.get (source);
             env.monitor (this);
         }
@@ -306,7 +307,7 @@ public class NodeJob extends NodeBase
             if (Files.exists (started))
             {
                 complete = 0;
-                dateStarted = new Date (started.toFile ().lastModified ());
+                dateStarted = new Date (Host.lastModified (started));
             }
         }
         Backend simulator = Backend.getBackend (source.get ("backend"));
