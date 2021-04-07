@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.internal;
 
 import gov.sandia.n2a.language.type.Instance;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -86,7 +87,7 @@ public class Simulator implements Iterable<Part>
         this.wrapper = wrapper;
 
         this.jobDir = jobDir;
-        try {out = new PrintStream (jobDir.resolve ("out").toFile (), "UTF-8");}      // put in current working dir, which should be the job directory
+        try {out = new PrintStream (new FileOutputStream (jobDir.resolve ("out").toFile (), true), false, "UTF-8");}
         catch (Exception e) {out = System.out;}  // if that fails, just use the default stdout
 
         random = new Random (seed);
