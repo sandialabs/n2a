@@ -133,6 +133,32 @@ public class Input extends Function
         public boolean             delimiterSet;      // Indicates that check for CSV has been performed. Avoids constant re-checking.
         public double              epsilon;
 
+        public static Holder get (Simulator simulator, String path, boolean time) throws IOException
+        {
+            Holder result;
+            Object o = simulator.holders.get (path);
+            if (o == null)
+            {
+                result = new Holder ();
+
+                if (path.isEmpty ()) result.stream = new BufferedReader (new InputStreamReader (System.in));  // not ideal; reading stdin should be reserved for headless operation
+                else                 result.stream = Files.newBufferedReader (simulator.jobDir.resolve (path));
+
+                result.time = time;
+                result.epsilon = Math.sqrt (Math.ulp (1.0));  // sqrt (epsilon for time representation (currently double)), about 1e-8
+                if (time  &&  simulator.currentEvent instanceof EventStep) result.epsilon = Math.min (result.epsilon, ((EventStep) simulator.currentEvent).dt / 1000);
+
+                simulator.holders.put (path, result);
+            }
+            else if (! (o instanceof Holder))
+            {
+                Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
+                throw new Backend.AbortRun ();
+            }
+            else result = (Holder) o;
+            return result;
+        }
+
         public void close ()
         {
             try {stream.close ();}
@@ -256,26 +282,7 @@ public class Input extends Function
         {
             // get an input holder
             String path = ((Text) operands[0].eval (context)).value;
-            Object o = simulator.holders.get (path);
-            if (o == null)
-            {
-                H = new Holder ();
-
-                if (path.isEmpty ()) H.stream = new BufferedReader (new InputStreamReader (System.in));  // not ideal; reading stdin should be reserved for headless operation
-                else                 H.stream = Files.newBufferedReader (simulator.jobDir.resolve (path));
-
-                H.time = time;
-                H.epsilon = Math.sqrt (Math.ulp (1.0));  // sqrt (epsilon for time representation (currently double)), about 1e-8
-                if (time  &&  simulator.currentEvent instanceof EventStep) H.epsilon = Math.min (H.epsilon, ((EventStep) simulator.currentEvent).dt / 1000);
-
-                simulator.holders.put (path, H);
-            }
-            else if (! (o instanceof Holder))
-            {
-                Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
-                throw new Backend.AbortRun ();
-            }
-            else H = (Holder) o;
+            H = Holder.get (simulator, path, time);
 
             if (H.time != time  &&  ! timeWarning)
             {

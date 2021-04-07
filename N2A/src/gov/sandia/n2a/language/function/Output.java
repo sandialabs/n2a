@@ -137,11 +137,35 @@ public class Output extends Function
             }
         }
 
+        public static Holder get (Simulator simulator, String path, boolean raw)
+        {
+            Holder result;
+            Object o = simulator.holders.get (path);
+            if (o == null)
+            {
+                result = new Holder (simulator, path);
+                result.raw = raw;
+                simulator.holders.put (path, result);
+            }
+            else if (! (o instanceof Holder))
+            {
+                Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
+                throw new Backend.AbortRun ();
+            }
+            else result = (Holder) o;
+            return result;
+        }
+
         public void close ()
         {
             writeTrace ();
             out.close ();
             columnMode.save ();
+        }
+
+        public void trace (double now, String column, float value)
+        {
+            trace (now, column, value, null);
         }
 
         public void trace (double now, String column, float value, String mode)
@@ -282,20 +306,8 @@ public class Output extends Function
         if (operands.length > 3) mode = operands[3].eval (context).toString ();
 
         String path = ((Text) operands[0].eval (context)).value;
-        Holder H;
-        Object o = simulator.holders.get (path);
-        if (o == null)
-        {
-            H = new Holder (simulator, path);
-            if (mode != null) H.raw = mode.contains ("raw");
-            simulator.holders.put (path, H);
-        }
-        else if (! (o instanceof Holder))
-        {
-            Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
-            throw new Backend.AbortRun ();
-        }
-        else H = (Holder) o;
+        boolean raw =  mode != null  &&  mode.contains ("raw");
+        Holder H = Holder.get (simulator, path, raw);
 
         // Determine column name
         String column;
