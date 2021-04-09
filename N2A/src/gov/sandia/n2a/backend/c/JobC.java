@@ -398,7 +398,7 @@ public class JobC extends Thread
 
         if (s.lethalP)
         {
-            Variable p = s.find (new Variable ("$p", 0));  // Which should for sure exist, since lethalP implies it.
+            Variable p = s.find (new Variable ("$p"));  // Which should for sure exist, since lethalP implies it.
             p.addDependencyOn (dt);
         }
 
@@ -3000,7 +3000,7 @@ public class JobC extends Thread
             result.append ("int " + ns + "mapIndex (int i, int rc)\n");
             result.append ("{\n");
 
-            Variable rc = new Variable ("rc", 0);
+            Variable rc = new Variable ("rc");
             rc.reference = new VariableReference ();
             rc.reference.variable = rc;
             rc.container = s;

@@ -316,7 +316,7 @@ public class EquationSet implements Comparable<EquationSet>
                             // Determine dummy variable name
                             String dummy = "x0";
                             int suffix = 1;
-                            while (find (new Variable (dummy)) != null  ||  source.child (dummy) != null) dummy = "x" + suffix++;
+                            while (find (new Variable (dummy, -1)) != null  ||  source.child (dummy) != null) dummy = "x" + suffix++;
 
                             // Check for timeScale
                             EquationSet root = this;
@@ -631,9 +631,9 @@ public class EquationSet implements Comparable<EquationSet>
         // These tests are good heuristics, but they're actually too strict. Some relaxations would be:
         // * If $p is constant 1, then part won't die. (But then, why write that?)
         // * If $type always has exactly one instance of original part, then part remains a singleton. (Again, why write that?)
-        if (find (new Variable ("$p")) != null  &&  (strict  ||  container != null)) return false;
+        if (find (new Variable ("$p", -1)) != null  &&  (strict  ||  container != null)) return false;
         if (find (new Variable ("$type")) != null) return false;
-        Variable n = new Variable ("$n", 0);
+        Variable n = new Variable ("$n");
         Variable nn = variables.higher (n);
         if (nn != null  &&  nn.name.equals ("$n")) return false;  // higher orders means $n is dynamic
 
@@ -1383,7 +1383,7 @@ public class EquationSet implements Comparable<EquationSet>
             return true;
         }
 
-        Variable v = find (new Variable (ns));
+        Variable v = find (new Variable (ns, -1));
         if (v != null) return true;  // The match was found, but it turns out to be a variable, not an equation set. result.endpoint should still be null.
         // Treat undefined $variables as local. This will never include $up, because that case is eliminated above.
         if (ns.startsWith ("$")) return true;  // Assert it is a variable, regardless. There is no legal way for this to be a part name, even if it contains a dot.
@@ -1583,7 +1583,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     public VariableReference resolveReference (String variableName)
     {
-        Variable query = new Variable (variableName);
+        Variable query = new Variable (variableName, -1);
         query.reference = new VariableReference ();
         EquationSet dest = resolveEquationSet (query, false);
         if (dest != null) query.reference.variable = dest.find (query);
@@ -1808,7 +1808,7 @@ public class EquationSet implements Comparable<EquationSet>
                         {
                             split.parts.add (part);
 
-                            Variable query = new Variable ("$type", 0);
+                            Variable query = new Variable ("$type");
                             Variable type = part.find (query);
                             if (type == null)
                             {
@@ -2002,7 +2002,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             // Check if $n==1
             if (! s.isSingleton (true)) continue;
-            s.variables.remove (new Variable ("$n", 0));  // We don't want to overwrite our own $n, so remove it from the sub-part. This won't change its singleton status.
+            s.variables.remove (new Variable ("$n"));  // We don't want to overwrite our own $n, so remove it from the sub-part. This won't change its singleton status.
 
             // Don't merge if there are any conflicting $variables.
             // Regular variables never conflict, because they get a unique prefix when flattened.
@@ -2412,7 +2412,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             String value = c.get ();
             if (value.isEmpty ()) continue;
-            Variable v = new Variable (c.key (), 0);
+            Variable v = new Variable (c.key ());
             if (add (v))
             {
                 v.addAttribute ("constant");
@@ -2437,7 +2437,7 @@ public class EquationSet implements Comparable<EquationSet>
         // Force phase indicators to exist.
         setConnect (0);
         setInit    (0);
-        Variable v = new Variable ("$live", 0);  // $live does not require a set method, so create it directly
+        Variable v = new Variable ("$live");  // $live does not require a set method, so create it directly
         if (add (v))
         {
             v.unit = AbstractUnit.ONE;
@@ -2458,7 +2458,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
 
-        v = new Variable ("$t", 0);
+        v = new Variable ("$t");
         if (add (v))
         {
             v.unit = UnitValue.seconds;
@@ -2481,10 +2481,10 @@ public class EquationSet implements Comparable<EquationSet>
             v.equations = new TreeSet<EquationEntry> ();
         }
 
-        if (container == null)           // top-level model
+        if (container == null)        // top-level model
         {
-            v = new Variable ("$p", 0);  // must have a termination condition
-            if (add (v))                 // but it doesn't
+            v = new Variable ("$p");  // must have a termination condition
+            if (add (v))              // but it doesn't
             {
                 v.unit = AbstractUnit.ONE;
                 try
@@ -2504,7 +2504,7 @@ public class EquationSet implements Comparable<EquationSet>
         {
             boolean singleton = isSingleton (true);
 
-            v = new Variable ("$index", 0);
+            v = new Variable ("$index");
             if (add (v))
             {
                 v.unit = AbstractUnit.ONE;
@@ -2531,7 +2531,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         if (connectionBindings == null)
         {
-            v = new Variable ("$n", 0);
+            v = new Variable ("$n");
             if (add (v))
             {
                 v.unit = AbstractUnit.ONE;
@@ -2663,6 +2663,7 @@ public class EquationSet implements Comparable<EquationSet>
                     vo.equations = new TreeSet<EquationEntry> ();
                     vo.reference = new VariableReference ();
                     vo.reference.variable = vo;
+                    if (last.hasAttribute ("global")) vo.addAttribute ("global");
                     found = vo;
                 }
                 found.addDependencyOn (last);
@@ -2677,10 +2678,11 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void setInit (float value)
     {
-        Variable init = find (new Variable ("$init"));
+        Variable query = new Variable ("$init");
+        Variable init  = find (query);
         if (init == null)
         {
-            init = new Variable ("$init", 0);
+            init = query;
             init.unit = AbstractUnit.ONE;
             init.addAttribute ("constant");  // TODO: should really be "initOnly", since it changes value during (at the end of) the init cycle.
             EquationEntry e = new EquationEntry (init, "");
@@ -2711,10 +2713,11 @@ public class EquationSet implements Comparable<EquationSet>
 
     public void setConnect (float value)
     {
-        Variable connect = find (new Variable ("$connect"));
+        Variable query   = new Variable ("$connect");
+        Variable connect = find (query);
         if (connect == null)
         {
-            connect = new Variable ("$connect", 0);
+            connect = query;
             connect.unit = AbstractUnit.ONE;
             connect.addAttribute ("constant");
             EquationEntry e = new EquationEntry (connect, "");
@@ -2842,7 +2845,7 @@ public class EquationSet implements Comparable<EquationSet>
         </ul>
         Each of these may call for different processing in the simulator, so various
         flags are set to indicate the causes.
-        Depends on results of: addSpecials(), findConstants(), collectSplits()
+        Depends on results of: addSpecials(), fillIntegratedVariables(), findConstants(), collectSplits()
     **/
     public void findDeath ()
     {
@@ -2876,6 +2879,7 @@ public class EquationSet implements Comparable<EquationSet>
                 }
             }
         }
+        if (find (new Variable ("$n", 1)) != null) lethalN = true;  // Conservatively, assume any order of derivative could decrease $n.
 
         // Determine if $p has an assignment less than 1
         Variable p = find (new Variable ("$p"));
@@ -2904,6 +2908,7 @@ public class EquationSet implements Comparable<EquationSet>
                 break;
             }
         }
+        if (find (new Variable ("$p", 1)) != null) lethalP = true;
 
         // Determine if any splits kill this part
         for (ArrayList<EquationSet> split : splits)  // my splits are the parts I can split into
@@ -3575,7 +3580,7 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public void determineDuration ()
     {
-        Variable p = find (new Variable ("$p", 0));
+        Variable p = find (new Variable ("$p"));
         if (p != null  &&  p.equations.size () == 1)
         {
             Operator expression = p.equations.first ().expression;
@@ -4412,7 +4417,7 @@ public class EquationSet implements Comparable<EquationSet>
     public double determinePoll ()
     {
         if (connectionBindings == null) return -1;
-        Variable p = find (new Variable ("$p", 0));
+        Variable p = find (new Variable ("$p"));
         if (p == null) return -1;
 
         List<EquationEntry> fires = new ArrayList<EquationEntry> ();
@@ -4485,8 +4490,8 @@ public class EquationSet implements Comparable<EquationSet>
         if (connectionBindings == null) return;
         for (ConnectionBinding c : connectionBindings)
         {
-            Variable max = find (new Variable (c.alias + ".$max"));
-            Variable min = find (new Variable (c.alias + ".$min"));
+            Variable max = find (new Variable (c.alias + ".$max", -1));
+            Variable min = find (new Variable (c.alias + ".$min", -1));
             if (max == null  &&  min == null) continue;
             if (c.endpoint.accountableConnections == null) c.endpoint.accountableConnections = new TreeSet<AccountableConnection> ();
             c.endpoint.accountableConnections.add (new AccountableConnection (this, c.alias));  // Only adds if it is not already there.
@@ -4506,7 +4511,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         if (connectionBindings == null) return;  // Only do this on connections
         if (connectionBindings.size () != 2) return;  // Only check binary connections
-        Variable p = find (new Variable ("$p", 0));
+        Variable p = find (new Variable ("$p"));
         if (p == null) return;
 
         // Determine which equation fires during connect phase

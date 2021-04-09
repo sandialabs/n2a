@@ -100,7 +100,7 @@ public class XyceBackendData
         ContainsOperator containsSinewave = new ContainsOperator ();
         containsSinewave.targetClass = Sinewave.class;
 
-        ContainsVariable containsT = new ContainsVariable (new Variable ("$t", 0));
+        ContainsVariable containsT = new ContainsVariable (new Variable ("$t"));
 
         for (Variable v : s.variables)
         {

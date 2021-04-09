@@ -97,11 +97,18 @@ public class Variable implements Comparable<Variable>, Cloneable
     // DIVIDE is redundant with MULTIPLY, but may make some expressions easier to write.
     // Since they are compatible, no error will be flagged if they are used together.
 
+    /**
+        Create variable with given name and default order 0.
+    **/
     public Variable (String name)
     {
-        this (name, -1);
+        this (name, 0);
     }
 
+    /**
+        Create variable with given name and order (level of derivative).
+        When this variable is used as a query object, an order of -1 means match any order. 
+    **/
     public Variable (String name, int order)
     {
         this.name  = name;

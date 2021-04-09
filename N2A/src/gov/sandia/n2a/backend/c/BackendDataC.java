@@ -376,8 +376,8 @@ public class BackendDataC
         {
             for (ConnectionBinding c : s.connectionBindings)
             {
-                Variable       v = s.find (new Variable (c.alias + ".$max"));
-                if (v == null) v = s.find (new Variable (c.alias + ".$min"));
+                Variable       v = s.find (new Variable (c.alias + ".$max", -1));
+                if (v == null) v = s.find (new Variable (c.alias + ".$min", -1));
                 if (v != null) accountableEndpoints.add (c.alias);
 
                 if (s.find (new Variable (c.alias + ".$project")) != null) hasProject = true;

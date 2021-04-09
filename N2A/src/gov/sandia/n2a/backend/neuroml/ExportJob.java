@@ -519,7 +519,7 @@ public class ExportJob extends XMLutility
 
                 EquationSet part = getEquations (source);
                 part.metadata.set ("1", "backend", "lems", "enumerate");  // This part requires XPath subscript.
-                Variable n = part.find (new Variable ("$n", 0));
+                Variable n = part.find (new Variable ("$n"));
                 int size = 1;
                 if (n != null) size = (int) Math.floor (((Scalar) n.eval (context)).value);
 
@@ -548,8 +548,8 @@ public class ExportJob extends XMLutility
                 // Output 3D structure
                 if (list)
                 {
-                    Variable xyz = part.find (new Variable ("$xyz", 0));
-                    Variable ijk = part.find (new Variable ("ijk",  0));
+                    Variable xyz = part.find (new Variable ("$xyz"));
+                    Variable ijk = part.find (new Variable ("ijk"));
                     for (int index = 0; index < size; index++)
                     {
                         context.index = index;
@@ -1050,7 +1050,7 @@ public class ExportJob extends XMLutility
             if (source.get ("$inherit").contains ("Coupling"))
             {
                 EquationSet part = getEquations (source);
-                Variable G = part.find (new Variable ("G", 0));
+                Variable G = part.find (new Variable ("G"));
                 double conductance = ((Scalar) G.eval (context)).value;
 
                 Element synapse = addElement ("gapJunction", elements);
@@ -1142,8 +1142,8 @@ public class ExportJob extends XMLutility
         {
             NameMap nameMap = partMap.importMap ("rampGenerator");
             EquationSet sourceEquations = getEquations (source);
-            Variable high1 = sourceEquations.find (new Variable (nameMap.importName ("startAmplitude"), 0));
-            Variable high2 = sourceEquations.find (new Variable (nameMap.importName ("finishAmplitude"), 0));
+            Variable high1 = sourceEquations.find (new Variable (nameMap.importName ("startAmplitude")));
+            Variable high2 = sourceEquations.find (new Variable (nameMap.importName ("finishAmplitude")));
             try
             {
                 double value1 = ((Scalar) high1.eval (context)).value;
@@ -1258,7 +1258,7 @@ public class ExportJob extends XMLutility
 
             EquationSet part = getEquations (source);
             populationSize = 1;
-            Variable n = part.find (new Variable ("$n", 0));
+            Variable n = part.find (new Variable ("$n"));
             if (n != null) populationSize = (int) Math.floor (((Scalar) n.eval (context)).value);
         }
 
@@ -1465,7 +1465,7 @@ public class ExportJob extends XMLutility
             SegmentBlock B = blockNames.get (c.source.get ("B"));  // child
             if (A == null  ||  B == null) return;  // This should never happen for imported models, but user-made models could be ill-formed.
 
-            Variable p = c.find (new Variable ("$p", 0));
+            Variable p = c.find (new Variable ("$p"));
             if (p == null)
             {
                 // Absent $p indicates all-to-all, which NeuroML can only represent if A is a singleton
@@ -1607,11 +1607,11 @@ public class ExportJob extends XMLutility
                 }
 
                 // Analyze
-                Variable n         = part.find (new Variable ("$n", 0));
-                Variable xyz0      = part.find (new Variable ("xyz0"));
-                Variable xyz       = part.find (new Variable ("$xyz"));
+                Variable n         = part.find (new Variable ("$n"       ));
+                Variable xyz0      = part.find (new Variable ("xyz0"     ));
+                Variable xyz       = part.find (new Variable ("$xyz"     ));
                 Variable diameter0 = part.find (new Variable ("diameter0"));
-                Variable diameter  = part.find (new Variable ("diameter"));
+                Variable diameter  = part.find (new Variable ("diameter" ));
 
                 // Extract segments
                 int count = 1;
