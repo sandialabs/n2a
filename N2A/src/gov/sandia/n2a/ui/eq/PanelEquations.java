@@ -290,6 +290,7 @@ public class PanelEquations extends JPanel
         buttonFilterInherited.setFocusable (false);
         buttonFilterInherited.setSelected (FilteredTreeModel.showInherited);
         buttonFilterInherited.setToolTipText ("Show Inherited Equations");
+        buttonFilterInherited.setActionCommand ("Inherited");
         buttonFilterInherited.addActionListener (listenerFilter);
 
         buttonFilterLocal = new JToggleButton (iconFilter);  // black
@@ -298,6 +299,7 @@ public class PanelEquations extends JPanel
         buttonFilterLocal.setFocusable (false);
         buttonFilterLocal.setSelected (FilteredTreeModel.showLocal);
         buttonFilterLocal.setToolTipText ("Show Local Equations");
+        buttonFilterLocal.setActionCommand ("Local");
         buttonFilterLocal.addActionListener (listenerFilter);
 
         Color darkGreen = new Color (0, 128, 0);
@@ -307,6 +309,7 @@ public class PanelEquations extends JPanel
         buttonFilterParam.setFocusable (false);
         buttonFilterParam.setSelected (FilteredTreeModel.showParam);
         buttonFilterParam.setToolTipText ("Show Parameters");
+        buttonFilterParam.setActionCommand ("Param");
         buttonFilterParam.addActionListener (listenerFilter);
 
         Color darkRed = new Color (192, 0, 0);
@@ -316,6 +319,7 @@ public class PanelEquations extends JPanel
         buttonFilterRevoked.setFocusable (false);
         buttonFilterRevoked.setSelected (FilteredTreeModel.showRevoked);
         buttonFilterRevoked.setToolTipText ("Show Revoked Equations");
+        buttonFilterRevoked.setActionCommand ("Revoked");
         buttonFilterRevoked.addActionListener (listenerFilter);
 
         buttonView = new JButton ();
@@ -1322,6 +1326,17 @@ public class PanelEquations extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             panelEquationTree.tree.stopEditing ();
+
+            // Regular click clears everything but current button.
+            // Shift-click produces a kind of extended selection, where buttons can be combined.
+            if ((e.getModifiers () & ActionEvent.SHIFT_MASK) == 0)
+            {
+                String a = e.getActionCommand ();
+                buttonFilterInherited.setSelected (a.equals ("Inherited"));
+                buttonFilterLocal    .setSelected (a.equals ("Local"));
+                buttonFilterParam    .setSelected (a.equals ("Param"));
+                buttonFilterRevoked  .setSelected (a.equals ("Revoked"));
+            }
 
             FilteredTreeModel.showInherited = buttonFilterInherited.isSelected ();
             FilteredTreeModel.showLocal     = buttonFilterLocal    .isSelected ();
