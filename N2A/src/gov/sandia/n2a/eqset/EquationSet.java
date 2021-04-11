@@ -2708,7 +2708,7 @@ public class EquationSet implements Comparable<EquationSet>
         Variable init = find (new Variable ("$init"));
         if (init == null) return false;
         EquationEntry e = init.equations.first ();
-        return ((Scalar) ((Constant) e.expression).value).value != 0;
+        return e.expression.getDouble () != 0;
     }
 
     public void setConnect (float value)
@@ -2743,7 +2743,7 @@ public class EquationSet implements Comparable<EquationSet>
         Variable connect = find (new Variable ("$connect"));
         if (connect == null) return false;
         EquationEntry e = connect.equations.first ();
-        return ((Scalar) ((Constant) e.expression).value).value != 0;
+        return e.expression.getDouble () != 0;
     }
 
     /**

@@ -187,7 +187,9 @@ public class Instance extends Type
     }
 
     /**
-        Sets any values touched by a zero-delay event as if they were set by the most recent sim cycle.
+        Sets any values touched by a zero-delay event as if they were set by finish()
+        during the most recent sim cycle. This assumes nothing else has touched the buffered
+        value other than event handler.
         @param v Implicitly, this is an "externalWrite" variable.
     **/
     public void finishEvent (Variable v)
@@ -254,6 +256,39 @@ public class Instance extends Type
         }
     }
 
+    /**
+        Prepare variables that require external buffering, but prepare their current value
+        rather than future value, so that the init process can correctly set direct values.
+    **/
+    public void clearExternalWriteInit (List<Variable> list)
+    {
+        for (Variable v : list)
+        {
+            switch (v.assignment)
+            {
+                case Variable.ADD:
+                    setFinal (v, v.type);
+                    break;
+                case Variable.MULTIPLY:
+                case Variable.DIVIDE:
+                    if (v.type instanceof Matrix) setFinal (v, ((Matrix) v.type).identity ());
+                    else                          setFinal (v, new Scalar (1));
+                    break;
+                case Variable.MIN:
+                    if (v.type instanceof Matrix) setFinal (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
+                    else                          setFinal (v, new Scalar (Double.POSITIVE_INFINITY));
+                    break;
+                case Variable.MAX:
+                    if (v.type instanceof Matrix) setFinal (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
+                    else                          setFinal (v, new Scalar (Double.NEGATIVE_INFINITY));
+                    break;
+            }
+        }
+    }
+
+    /**
+        Apply value during update cycle, using appropriate combiner.
+    **/
     public void applyResult (Variable v, Type result)
     {
         if (v.assignment == Variable.REPLACE)
@@ -271,6 +306,29 @@ public class Instance extends Type
                 case Variable.DIVIDE:   set (v, current.divide   (result)); break;
                 case Variable.MIN:      set (v, current.min      (result)); break;
                 case Variable.MAX:      set (v, current.max      (result)); break;
+            }
+        }
+    }
+
+    /**
+        Apply value during init cycle, using appropriate combiner.
+    **/
+    public void applyResultInit (Variable v, Type result)
+    {
+        if (v.assignment == Variable.REPLACE)
+        {
+            setFinal (v, result);
+        }
+        else
+        {
+            Type current = get (v.reference);
+            switch (v.assignment)
+            {
+                case Variable.ADD:      setFinal (v, current.add      (result)); break;
+                case Variable.MULTIPLY: setFinal (v, current.multiply (result)); break;
+                case Variable.DIVIDE:   setFinal (v, current.divide   (result)); break;
+                case Variable.MIN:      setFinal (v, current.min      (result)); break;
+                case Variable.MAX:      setFinal (v, current.max      (result)); break;
             }
         }
     }

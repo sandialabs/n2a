@@ -1409,6 +1409,7 @@ public class JobC extends Thread
             for (Variable v : bed.globalBufferedExternal)
             {
                 result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
+                result.append ("  " + clearAccumulator (mangle (         v), v, context) + ";\n");
             }
             if (! bed.globalFlagType.isEmpty ())
             {
@@ -1422,17 +1423,10 @@ public class JobC extends Thread
             s.simplify ("$init", bed.globalInit);
             if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.globalInit);
             EquationSet.determineOrderInit (bed.globalInit);
-            //   The following code tricks multiconditional() into treating all variables as unbuffered and non-accumulating.
-            List<Variable> buffered = bed.globalBuffered;
-            bed.globalBuffered = new ArrayList<Variable> ();
             for (Variable v : bed.globalInit)
             {
-                int assignment = v.assignment;
-                v.assignment = Variable.REPLACE;
                 multiconditional (v, context, "  ");
-                v.assignment = assignment;
             }
-            bed.globalBuffered = buffered;
             //   create instances
             if (bed.singleton)
             {
@@ -2212,7 +2206,9 @@ public class JobC extends Thread
 
             for (Variable v : bed.localBufferedExternal)
             {
+                // Clear both buffered and regular values, so we can use a proper combiner during init.
                 result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
+                result.append ("  " + clearAccumulator (mangle (         v), v, context) + ";\n");
             }
             for (EventTarget et : bed.eventTargets)
             {
@@ -2269,18 +2265,11 @@ public class JobC extends Thread
                 context.hasEvent = true;
                 result.append ("  " + type (bed.dt) + " " + mangle (bed.dt) + ";\n");
             }
-            //   The following code tricks multiconditional() into treating all variables
-            //   as unbuffered and non-accumulating.
-            List<Variable> buffered = bed.localBuffered;
-            bed.localBuffered = new ArrayList<Variable> ();
             for (Variable v : bed.localInit)  // optimized list: only variables with equations that actually fire during init
             {
-                int assignment = v.assignment;
-                v.assignment = Variable.REPLACE;
                 multiconditional (v, context, "  ");
-                v.assignment = assignment;
             }
-            bed.localBuffered = buffered;
+            // TODO: may need to deal with REPLACE for buffered variables. See internal.Part
             if (bed.localInit.contains (bed.dt))
             {
                 result.append ("  if (" + mangle (bed.dt) + " != event->dt) setPeriod (" + mangle (bed.dt) + ");\n");
@@ -4174,7 +4163,8 @@ public class JobC extends Thread
         }
         if (name.length () == 0)
         {
-            if (lvalue  &&  (bed.globalBuffered.contains (r.variable)  ||  bed.localBuffered.contains (r.variable)))
+            // Write to buffered value, except during init phase.
+            if (lvalue  &&  ! context.part.getInit ()  &&  (bed.globalBuffered.contains (r.variable)  ||  bed.localBuffered.contains (r.variable)))
             {
                 name = mangle ("next_", r.variable);
             }

@@ -149,19 +149,23 @@ public class Part extends Instance
         // Initialize variables
         // Note that some valuesObject entries could be left null. This is OK, because Instance.get() will return
         // a zero-equivalent value if it finds null.
+        clearExternalWriteInit (bed.localBufferedExternalWrite);  // So our intial values can be applied correctly.
         for (Variable v : bed.localInit)
         {
             Type result = v.eval (temp);
             if (result == null  ||  v.reference.variable.writeIndex < 0) continue;
-            if (v.reference.variable == v) temp.setFinal (v, result);
-            // else this is an external reference, so need to do a proper combining operation in the target part. The options are:
-            // 1) combine with buffered value
-            // 2) combine with final value
-            // 3) do nothing
-            // Option 1 is definitely wrong, because it can cause a value to be added twice (here and in update) before the next call to finish.
-            // Option 2 is dubious, because it could cause changes to a value in the middle of a cycle.
-            // That leaves option 3, which is what we take here. This means that a combiner generally has no effect during the init cycle,
-            // and must wait until the first full cycle to deliver its result.
+
+            // For local fields that have external writers, the value set here will not be included
+            // in the reduction for the next cycle, as if this value was finalized in the previous cycle.
+            // This prevents double counting.
+            // Likewise, if we write to another part, it will be treated as if it were combined
+            // in the previous cycle, again preventing double counting in the other part.
+            // This is analogous to zero-delay event processing.
+            // What could go wrong? If parts are updating asynchronously, this will cause a
+            // sudden jump in the working value of the other part which is not properly associated
+            // with its finish() step. It would be as if the part had an extra cycle inserted.
+            if (v.reference.variable == v)               temp.applyResultInit (v, result);
+            else ((Instance) valuesObject[v.reference.index]).applyResultInit (v.reference.variable, result);
         }
         if (bed.liveStorage == InternalBackendData.LIVE_STORED) set (bed.live, new Scalar (1));
         if (bed.lastT != null) temp.setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
@@ -169,9 +173,8 @@ public class Part extends Instance
         if (bed.setDt) simulator.move (this, ((Scalar) bed.dt.type).value);
 
         // Prepare variables that have a combiner, in case they get written before the first finish().
-        // This is done after initialize so that we don't apply our own equations twice (here and in update) before first finish.
-        clearExternalWriteBuffers (bed.localBufferedExternalWrite);  // See comment on this function. We still need to handle REPLACE ...
-        for (Variable v : bed.localBufferedExternalWrite) if (v.assignment == Variable.REPLACE) temp.set (v, temp.get (v));
+        clearExternalWriteBuffers (bed.localBufferedExternalWrite);  // skips REPLACE it because it is unnecessary when called from update(). Handle REPLACE separately ...
+        for (Variable v : bed.localBufferedExternalWrite) if (v.assignment == Variable.REPLACE) temp.set (v, temp.get (v));  // This must come after the variables are initialized. Otherwise, there is no point.
 
         // Request event monitors
         for (EventTarget et : bed.eventTargets)
