@@ -1076,6 +1076,14 @@ public class PanelRun extends JPanel
                                 // If the job is still running, downgrade the delete request to a kill request.
                                 // The user will have to hit delete again, once the job dies.
                                 job.stop ();
+                                job.markDelete = false;
+                                EventQueue.invokeLater (new Runnable ()
+                                {
+                                    public void run ()
+                                    {
+                                        tree.repaint (tree.getPathBounds (new TreePath (job.getPath ())));
+                                    }
+                                });
                                 continue;
                             }
                         }
