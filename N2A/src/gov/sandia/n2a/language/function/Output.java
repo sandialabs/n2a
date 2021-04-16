@@ -309,24 +309,7 @@ public class Output extends Function
         boolean raw =  mode != null  &&  mode.contains ("raw");
         Holder H = Holder.get (simulator, path, raw);
 
-        // Determine column name
-        String column;
-        if (hasColumnName)  // column name is specified
-        {
-            column = operands[2].eval (context).toString ();
-        }
-        else  // auto-generate column name
-        {
-            if (context instanceof InstanceTemporaries) context = ((InstanceTemporaries) context).wrapped;
-            column = (String) context.valuesObject[index];
-            if (column == null)
-            {
-                String prefix = context.path ();
-                if (prefix.isEmpty ()) column =                variableName;
-                else                   column = prefix + "." + variableName;
-                context.valuesObject[index] = column;
-            }
-        }
+        String column = getColumnName (context);
 
         double now;
         if (simulator.currentEvent == null) now = 0;
@@ -361,6 +344,24 @@ public class Output extends Function
             H.trace (now, column, (float) ((Scalar) result).value, mode);
         }
 
+        return result;
+    }
+
+    public String getColumnName (Instance context)
+    {
+        // Explicit column name
+        if (hasColumnName) return operands[2].eval (context).toString ();
+
+        // Auto-generate column name
+        if (context instanceof InstanceTemporaries) context = ((InstanceTemporaries) context).wrapped;
+        String result = (String) context.valuesObject[index];
+        if (result == null)
+        {
+            String prefix = context.path ();
+            if (prefix.isEmpty ()) result =                variableName;
+            else                   result = prefix + "." + variableName;
+            context.valuesObject[index] = result;
+        }
         return result;
     }
 

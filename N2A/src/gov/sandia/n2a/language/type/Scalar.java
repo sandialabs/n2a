@@ -19,6 +19,8 @@ public class Scalar extends Type
 {
     public double value;
 
+    public static final double epsilon = Math.ulp (1);  // Even though this is stored as double, it is really a single-precision epsilon
+
     public Scalar ()
     {
     }
@@ -442,8 +444,6 @@ public class Scalar extends Type
 
     public static String print (double d)
     {
-        double epsilon = Math.ulp (1);  // Even though this is stored as double, it is really a single-precision epsilon
-
         // Round to integer?
         long l = Math.round (d);
         if (l != 0  &&  Math.abs (d - l) < epsilon) return String.valueOf (l);
