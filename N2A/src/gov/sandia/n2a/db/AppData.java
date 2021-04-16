@@ -83,7 +83,7 @@ public class AppData
         for (String repoName : reposOrder)
         {
             MNode repo = repos.child (repoName);
-            if (repo == null  ||  repo.getInt ("visible") == 0  &&  ! repoName.equals (primary)) continue;
+            if (repo == null  ||  ! repo.getBoolean ("visible")  &&  ! repo.getBoolean ("editable")  &&  ! repoName.equals (primary)) continue;
             Path repoDir = reposDir.resolve (repoName);
             modelContainers    .add (new MDir (repoName, repoDir.resolve ("models")));
             referenceContainers.add (new MDir (repoName, repoDir.resolve ("references")));
@@ -121,6 +121,7 @@ public class AppData
         if (repos.size () > 0) return;
 
         repos.set (1, "local", "visible");
+        repos.set (1, "local", "editable");
         repos.set (1, "base",  "visible");
         state.set ("local,base", "Repos", "order");
         state.set ("local",      "Repos", "primary");

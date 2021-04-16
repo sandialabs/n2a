@@ -732,7 +732,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             String repoName = repo.key ();
             boolean isPrimary = repoName.equals (primary);
-            if (! repo.getBoolean ("visible")  &&  ! isPrimary) continue;
+            if (! repo.getBoolean ("visible")  &&  ! repo.getBoolean ("editable")  &&  ! isPrimary) continue;
 
             MNode models     = getModels     (repoName);
             MNode references = getReferences (repoName);
@@ -799,15 +799,15 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             TableColumnModel cols = getColumnModel ();
 
-            TableColumn col = cols.getColumn (2);
+            TableColumn col = cols.getColumn (3);
             col.setCellRenderer (new ColorRenderer ());
 
-            col = cols.getColumn (3);
+            col = cols.getColumn (4);
             col.setCellRenderer (new ColorTextRenderer ());
             TextCellEditor cellEditor = new TextCellEditor ();
             col.setCellEditor (cellEditor);
 
-            col = cols.getColumn (4);
+            col = cols.getColumn (5);
             col.setCellEditor (cellEditor);
 
             ((DefaultTableCellRenderer) getTableHeader ().getDefaultRenderer ()).setHorizontalAlignment (JLabel.LEFT);
@@ -823,31 +823,26 @@ public class SettingsRepo extends JScrollPane implements Settings
             setRowHeight (fm.getHeight () + getRowMargin ());
 
             TableColumnModel cols = getColumnModel ();
-            TableColumn col = cols.getColumn (0);
-            int width = fm.stringWidth (getColumnName (0)) + em;
-            col.setMaxWidth (width);
-            col.setPreferredWidth (width);
+            TableColumn col;
+            int width;
+            for (int c = 0; c < 4; c++)
+            {
+                col = cols.getColumn (c);
+                width = fm.stringWidth (getColumnName (c)) + em;
+                col.setMaxWidth (width);
+                col.setPreferredWidth (width);
+            }
 
-            col = cols.getColumn (1);
-            width = fm.stringWidth (getColumnName (1)) + em;
-            col.setMaxWidth (width);
-            col.setPreferredWidth (width);
-
-            col = cols.getColumn (2);
-            width = fm.stringWidth (getColumnName (2)) + em;
-            col.setMaxWidth (width);
-            col.setPreferredWidth (width);
-
-            col = cols.getColumn (3);
-            width = fm.stringWidth (getColumnName (3));
+            col = cols.getColumn (4);
+            width = fm.stringWidth (getColumnName (4));
             for (MNode r : AppData.repos) width = Math.max (width, fm.stringWidth (r.key ()));
             width = Math.max (width, 15 * em);
             width += em;
             col.setMinWidth (width);
             col.setPreferredWidth (width);
 
-            col = cols.getColumn (4);
-            width = fm.stringWidth (getColumnName (4));
+            col = cols.getColumn (5);
+            width = fm.stringWidth (getColumnName (5));
             for (GitWrapper w : repoModel.gitRepos)
             {
                 String url = w.getURL ();
@@ -892,31 +887,32 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         public int getColumnCount ()
         {
-            return 5;
+            return 6;
         }
 
         public String getColumnName (int column)
         {
             switch (column)
             {
-                case 0: return "Editable";
-                case 1: return "Visible";
-                case 2: return "Color";
-                case 3: return "Name";
-                case 4: return "Git Remote";
+                case 0: return "Add";
+                case 1: return "Edit";
+                case 2: return "View";
+                case 3: return "Color";
+                case 4: return "Name";
+                case 5: return "Git Remote";
             }
             return "";
         }
 
         public Class<?> getColumnClass (int column)
         {
-            if (column <= 1) return Boolean.class;  // Coerce table into using default Boolean renderer, which looks reasonably good.
+            if (column < 3) return Boolean.class;  // Coerce table into using default Boolean renderer, which looks reasonably good.
             return super.getColumnClass (column);
         }
 
         public boolean isCellEditable (int row, int column)
         {
-            if (column <= 1) return false;
+            if (column < 3) return false;
             return true;
         }
 
@@ -926,10 +922,11 @@ public class SettingsRepo extends JScrollPane implements Settings
             switch (column)
             {
                 case 0: return row == primaryRow;
-                case 1: return repo.get ("visible").equals ("1");
-                case 2: return getColor (row);
-                case 3: return repo.key ();
-                case 4: return gitRepos.get (row).getURL ();
+                case 1: return repo.get ("editable").equals ("1");
+                case 2: return repo.get ("visible") .equals ("1");
+                case 3: return getColor (row);
+                case 4: return repo.key ();
+                case 5: return gitRepos.get (row).getURL ();
             }
             return null;
         }
@@ -962,20 +959,31 @@ public class SettingsRepo extends JScrollPane implements Settings
                         MainFrame.instance.undoManager.discardAllEdits ();
                         needRebuild = true;
                         fireTableCellUpdated (oldRow, 0);  // Primary
-                        fireTableCellUpdated (oldRow, 3);  // Name, which may be rendered in a new color
+                        fireTableCellUpdated (oldRow, 4);  // Name, which may be rendered in a new color
                         fireTableCellUpdated (row,    0);
-                        fireTableCellUpdated (row,    3);
+                        fireTableCellUpdated (row,    4);
                     }
                     return true;
                 case 1:
+                    int editable = repo.getInt ("editable");
+                    if (editable == 0) editable = 1;
+                    else               editable = 0;
+                    repo.set (editable, "editable");
+                    MainFrame.instance.undoManager.discardAllEdits ();  // TODO: It would be better to only purge edits related to the specific repo.
+                    needRebuild = true;
+                    fireTableCellUpdated (row, 1);
+                    fireTableCellUpdated (row, 4);
+                    return true;
+                case 2:
                     int visible = repo.getInt ("visible");
                     if (visible == 0) visible = 1;
                     else              visible = 0;
                     repo.set (visible, "visible");
+                    MainFrame.instance.undoManager.discardAllEdits ();
                     needRebuild = true;
-                    fireTableCellUpdated (row, 1);
+                    fireTableCellUpdated (row, 2);
                     return true;
-                case 2:
+                case 3:
                     // Show a modal color chooser
                     Color initialColor = getColor (row);
                     Color chosenColor = JColorChooser.showDialog (MainFrame.instance, "", initialColor);
@@ -995,7 +1003,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             String key = repo.key ();
             switch (column)
             {
-                case 3:
+                case 4:
                     String newName = MDir.validFilenameFrom (value.toString ());
                     String oldName = key;
                     if (newName.isEmpty ()  ||  newName.equals (oldName)) return;
@@ -1024,7 +1032,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
                     // No need to rebuild, because all object identities are maintained.
                     return;
-                case 4:
+                case 5:
                     GitWrapper gitRepo = gitRepos.get (row);
                     String url = value.toString ();
                     gitRepo.setURL (url);
@@ -1083,9 +1091,9 @@ public class SettingsRepo extends JScrollPane implements Settings
             repoModel.gitRepos.add (row, gitRepo);
             repoModel.updateOrder ();
             repoModel.fireTableRowsInserted (row, row);
-            repoTable.changeSelection (row, 3, false, false);
+            repoTable.changeSelection (row, 4, false, false);
 
-            if (URL.isEmpty ()) repoTable.editCellAt (row, 3, null);
+            if (URL.isEmpty ()) repoTable.editCellAt (row, 4, null);
             else                pull (gitRepo, name);
         }
 
@@ -1201,7 +1209,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             else            setBackground (table.getBackground ());
 
             String primary = AppData.state.get ("Repos", "primary");
-            if (text.equals (primary))
+            if (text.equals (primary)  ||  AppData.repos.getBoolean (text, "editable"))
             {
                 setForeground (Color.black);
             }

@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,10 +21,10 @@ public class MCombo extends MNode implements MNodeListener
 {
     protected String  name;
 	protected boolean loaded;
-	protected MNode   primary;  // The one source we are allowed to modify. Always set to first object in sources.
+	protected MNode   primary;  // The one container that allows creation of new parts. This is a shortcut to the first object in containers.
 
     protected List<MNode>                containers = new ArrayList<MNode> ();
-	protected NavigableMap<String,MNode> children   = new TreeMap<String,MNode> ();  // from key to source; requires second lookup to retrieve actual child
+	protected NavigableMap<String,MNode> children   = new TreeMap<String,MNode> ();  // from key to container; requires second lookup to retrieve actual child
     protected List<MNodeListener>        listeners  = new ArrayList<MNodeListener> ();
 
     public MCombo (String name, List<MNode> containers)
@@ -59,17 +59,22 @@ public class MCombo extends MNode implements MNodeListener
         return result;
     }
 
+    public boolean containerIsWriteable (MNode container)
+    {
+        if (container == primary) return true;
+        if (container == null  ||  ! containers.contains (container)) return false;
+        return AppData.repos.getBoolean (container.key (), "editable");  // Each container is an MDir whose name has been set to the repo name.
+    }
+
     public boolean isWriteable (MNode doc)
     {
-        return doc.parent () == primary;
+        return containerIsWriteable (doc.parent ());
     }
 
     public synchronized boolean isWriteable (String key)
     {
         load ();
-        MNode container = children.get (key);
-        if (container == null) return false;
-        return container == primary;
+        return containerIsWriteable (children.get (key));
     }
 
     public synchronized boolean isVisible (MNode doc)
@@ -121,7 +126,7 @@ public class MCombo extends MNode implements MNodeListener
         // This actually removes the original object.
         load ();
         MNode container = children.get (key);
-        if (container == primary) container.clear (key);  // Triggers childDeleted() call from MDir, which updates our children collection.
+        if (containerIsWriteable (container)) container.clear (key);  // Triggers childDeleted() call from MDir, which updates our children collection.
     }
 
     public synchronized int size ()
@@ -133,6 +138,8 @@ public class MCombo extends MNode implements MNodeListener
     public synchronized MNode set (String value, String key)
     {
         load ();
+        MNode container = children.get (key);
+        if (containerIsWriteable (container)) return container.set (value, key);
         return primary.set (value, key);  // Triggers childAdded() call from MDir, which updates our children collection.
     }
 
@@ -145,8 +152,8 @@ public class MCombo extends MNode implements MNodeListener
     {
         load ();
         MNode container = children.get (fromKey);
-        if (container != primary) return;
-        primary.move (fromKey, toKey);  // Triggers childChanged() call from MDir, which updates our children collection.
+        if (! containerIsWriteable (container)) return;
+        container.move (fromKey, toKey);  // Triggers childChanged() call from MDir, which updates our children collection.
     }
 
     public synchronized void addListener (MNodeListener listener)
