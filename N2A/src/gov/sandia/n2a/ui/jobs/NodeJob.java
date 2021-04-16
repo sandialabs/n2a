@@ -115,7 +115,6 @@ public class NodeJob extends NodeBase
         if (job == null) return null;
         Path modelPath = Host.getJobDir (Host.getLocalResourceDir (), job).resolve ("model");
         MDoc result = new MDoc (modelPath);
-        // The model key does contain the original model name.
         // EquationSet will replace the name of the top-level model with the value from $inherit.
         // We do not modify $inherit in saveCollatedModel(), so we need to do that now.
         result.set (job.get ("$inherit"), "$inherit");  // This change is never saved.

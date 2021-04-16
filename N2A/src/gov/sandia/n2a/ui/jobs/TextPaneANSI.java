@@ -34,6 +34,7 @@ public class TextPaneANSI extends JTextPane
     public static final Color cyan50     = Color.getHSBColor (3f / 6, 1, 0.5f);
     public static final Color blue50     = Color.getHSBColor (4f / 6, 1, 0.5f);
     public static final Color magenta50  = Color.getHSBColor (5f / 6, 1, 0.5f);
+    public static final Color yellow80   = Color.getHSBColor (1f / 6, 1, 0.8f);
     public static final Color red100     = Color.getHSBColor (0,      1, 1);
     public static final Color yellow100  = Color.getHSBColor (1f / 6, 1, 1);
     public static final Color green100   = Color.getHSBColor (2f / 6, 1, 1);
@@ -112,7 +113,7 @@ public class TextPaneANSI extends JTextPane
                             attributes.addAttribute (StyleConstants.Foreground, Color.green);
                             break;
                         case "33":
-                            attributes.addAttribute (StyleConstants.Foreground, Color.yellow);
+                            attributes.addAttribute (StyleConstants.Foreground, yellow80);
                             break;
                         case "34":
                             attributes.addAttribute (StyleConstants.Foreground, Color.blue);
