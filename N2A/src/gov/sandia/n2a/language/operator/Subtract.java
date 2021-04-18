@@ -44,7 +44,15 @@ public class Subtract extends OperatorBinary
         Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
-        if (operand1.isScalar ()  &&  operand1.getDouble () == 0)
+        if (operand0.isScalar ()  &&  operand0.getDouble () == 0)
+        {
+            from.changed = true;
+            Negate n = new Negate ();
+            n.operand = operand1;
+            n.parent = parent;
+            return n;
+        }
+        else if (operand1.isScalar ()  &&  operand1.getDouble () == 0)
         {
             from.changed = true;
             operand0.parent = parent;

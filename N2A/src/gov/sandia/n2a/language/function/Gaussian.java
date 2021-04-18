@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,6 +9,7 @@ package gov.sandia.n2a.language.function;
 import java.util.Random;
 
 import gov.sandia.n2a.backend.internal.Simulator;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
@@ -40,6 +41,22 @@ public class Gaussian extends Function
     public boolean canBeConstant ()
     {
         return false;
+    }
+
+    public Operator simplify (Variable from, boolean evalOnly)
+    {
+        if (operands.length > 0)
+        {
+            operands[0] = operands[0].simplify (from, evalOnly);
+            Operator sigma = operands[0];
+            if (sigma.isScalar ()  &&  sigma.getDouble () == 0)
+            {
+                from.changed = true;
+                sigma.parent = parent;
+                return sigma;
+            }
+        }
+        return this;
     }
 
     public void determineExponent (ExponentContext context)
