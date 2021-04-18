@@ -68,7 +68,7 @@ class XyceBackend extends Backend
                     Path prnFile = jobDir.resolve ("out");  // "prn" doesn't work, at least on Windows
 
                     EquationSet digestedModel = new EquationSet (model);
-                    Simulator simulator = InternalBackend.constructStaticNetwork (digestedModel);
+                    Simulator simulator = InternalBackend.constructStaticNetwork (digestedModel, null);
                     analyze (digestedModel);
 
                     String duration = digestedModel.metadata.getOrDefault ("1.0", "duration");

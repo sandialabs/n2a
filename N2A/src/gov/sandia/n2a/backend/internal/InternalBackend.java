@@ -91,6 +91,7 @@ public class InternalBackend extends Backend
                 MNode model = NodeJob.getModel (job);
                 EquationSet digestedModel = new EquationSet (model);
                 digestModel (digestedModel);
+                prepareToRun (digestedModel);
                 Files.copy (new ByteArrayInputStream (digestedModel.dump (false).getBytes ("UTF-8")), localJobDir.resolve ("model.flat"));
                 //dumpBackendData (digestedModel);
 
@@ -149,13 +150,20 @@ public class InternalBackend extends Backend
         return 0;
     }
 
+    public interface Analyzer
+    {
+        public void analyzeMiddle (EquationSet e);
+    }
+
     /**
         Utility function to enable other backends to use Internal to prepare static network structures.
         @return A Simulator object which contains the constructed network.
     **/
-    public static Simulator constructStaticNetwork (EquationSet e) throws Exception
+    public static Simulator constructStaticNetwork (EquationSet e, Analyzer a) throws Exception
     {
         digestModel (e);
+        if (a != null) a.analyzeMiddle (e);
+        prepareToRun (e);
         long seed = e.metadata.getOrDefault (System.currentTimeMillis (), "seed");
         Simulator result = new Simulator (new Wrapper (e), seed);
         result.init ();
@@ -205,8 +213,6 @@ public class InternalBackend extends Backend
         e.determineTypes ();
         e.findConnectionMatrix ();
         e.determineDuration ();
-
-        prepareToRun (e);
     }
 
     /**
