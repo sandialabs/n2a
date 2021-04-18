@@ -1,10 +1,12 @@
 /*
-Copyright 2013 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.internal;
+
+import java.util.List;
 
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
@@ -42,6 +44,17 @@ public class InstanceTemporaries extends Instance
         this.bed       = bed;
         if (wrapped instanceof Population) allocate (bed.countGlobalTempFloat, bed.countGlobalTempObject);
         else                               allocate (bed.countLocalTempFloat,  bed.countLocalTempObject);
+    }
+
+    public void eval (List<Variable> dependencies)
+    {
+        if (dependencies == null) return;
+        for (Variable v : dependencies)
+        {
+            Type result = v.eval (this);
+            if (result == null) set (v, v.type);
+            else                set (v, result);
+        }
     }
 
     public Type get (VariableReference r)

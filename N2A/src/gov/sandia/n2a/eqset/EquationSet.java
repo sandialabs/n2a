@@ -394,6 +394,19 @@ public class EquationSet implements Comparable<EquationSet>
         return null;
     }
 
+    public List<Variable> collectTemporaries (Variable v)
+    {
+        List<Variable> result = new ArrayList<Variable> ();
+        for (Variable t : ordered)
+        {
+            if (t.hasAttribute ("temporary")  &&  v.dependsOn (t) != null)
+            {
+                result.add (t);
+            }
+        }
+        return result;
+    }
+
     /**
         @return The nearest variable $t' in the containment hierarchy that has explicit equations.
         Could be the $t' on this current equation set. Could be null.
