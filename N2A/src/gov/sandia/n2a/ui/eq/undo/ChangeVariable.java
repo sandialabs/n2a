@@ -233,11 +233,7 @@ public class ChangeVariable extends UndoableView
             {
                 if (nodeBefore.isBinding)
                 {
-                    if (parent.graph != null)
-                    {
-                        parent.connectionBindings.remove (nameBefore);
-                        parent.graph.killEdge (nameBefore);  // remove old connection edge
-                    }
+                    if (parent.graph != null) parent.connectionBindings.remove (nameBefore);
                     touchedBindings = true;
                 }
 
@@ -262,9 +258,7 @@ public class ChangeVariable extends UndoableView
                     else               model.insertNodeIntoUnfiltered (nodeAfter, parent, index);
                 }
 
-                boolean wasBinding = nodeBefore.isBinding;
                 nodeBefore.build ();
-                nodeBefore.findConnections ();
                 nodeBefore.filter ();
                 if (nodeBefore.visible ())
                 {
@@ -274,21 +268,10 @@ public class ChangeVariable extends UndoableView
                 {
                     parent.hide (nodeBefore, model);
                 }
-                if (nodeBefore.isBinding != wasBinding)
-                {
-                    touchedBindings = true;
-                    if (parent.graph != null)
-                    {
-                        if (nodeBefore.isBinding) parent.graph.updateEdge (nameBefore, parent.connectionBindings.get (nameBefore));
-                        else                      parent.graph.killEdge   (nameBefore);
-                    }
-                }
             }
         }
 
-        boolean wasBinding = nodeAfter.isBinding;
         nodeAfter.build ();
-        nodeAfter.findConnections ();
         nodeAfter.filter ();
         Set<PanelEquationTree> needAnimate = new HashSet<PanelEquationTree> ();
         if (pet != null)
@@ -335,34 +318,19 @@ public class ChangeVariable extends UndoableView
 
         for (PanelEquationTree ap : needAnimate) ap.animate ();
 
-        boolean touchesPins =  parent.source.child ("$metadata", "gui", "pin") != null;
-        if (nodeAfter.isBinding != wasBinding)
-        {
-            touchedBindings = true;
-            // Update edges.
-            // If this part also interacts with pins, then wait to update edges until next code block below.
-            // Otherwise, we might attempt to bind to an IO block that hasn't been created yet.
-            if (parent.graph != null  &&  ! touchesPins)
-            {
-                if (nodeAfter.isBinding) parent.graph.updateEdge (nameAfter, parent.connectionBindings.get (nameAfter));
-                else                     parent.graph.killEdge   (nameAfter);
-            }
-        }
-
         if (parent.updateVariableConnections ()) touchedBindings = true;
-
         if (touchedBindings)
         {
             parent.updateSubpartConnections ();
 
             // Update edges to pins, if present.
-            // This rebuilds all edges on canvas, so no need for incremental update above.
             PanelEquationGraph peg = pe.panelEquationGraph;
-            if (touchesPins)
+            if (parent.source.child ("$metadata", "gui", "pin") != null)
             {
                 parent.updatePins ();
                 peg.updatePins ();
             }
+            // Rebuild all edges on canvas, whether regular connection or pin.
             peg.reconnect ();
             peg.repaint ();
 

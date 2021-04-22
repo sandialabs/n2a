@@ -308,6 +308,11 @@ public class NodePart extends NodeContainer
         for (Object o : children) if (o instanceof NodePart) ((NodePart) o).findConnections ();
     }
 
+    /**
+        Rechecks the connection-binding state for each variable in the part.
+        Binding state includes whether or not the variable is a binding and which target it binds to.
+        @return true if any variable changed binding state.
+    **/
     public boolean updateVariableConnections ()
     {
         boolean result = false;
@@ -315,9 +320,16 @@ public class NodePart extends NodeContainer
         {
             if (! (o instanceof NodeVariable)) continue;
             NodeVariable nv = (NodeVariable) o;
+            String name = nv.source.key ().trim ();
             boolean wasBinding = nv.isBinding;
+            NodePart oldTarget = null;  // Somewhat independent from isBinding. For example, an unbound endpoint would still have isBinding true.
+            if (connectionBindings != null) oldTarget = connectionBindings.get (name);
+
             nv.findConnections ();
-            if (nv.isBinding != wasBinding) result = true;
+
+            NodePart newTarget = null;
+            if (connectionBindings != null) newTarget = connectionBindings.get (name);
+            if (nv.isBinding != wasBinding  ||  oldTarget != newTarget) result = true;
         }
         return result;
     }
