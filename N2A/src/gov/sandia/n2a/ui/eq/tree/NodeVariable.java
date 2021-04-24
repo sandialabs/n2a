@@ -291,6 +291,12 @@ public class NodeVariable extends NodeContainer
         Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
         result.add ("=" + pieces.combiner);
 
+        if (FilteredTreeModel.showParam  &&  source.get ("$metadata", "param").equals ("watch"))
+        {
+            result.add ("(watchable)");
+            return result;
+        }
+
         boolean hasEquations = false;
         if (! expanded  &&  children != null)
         {
@@ -475,6 +481,13 @@ public class NodeVariable extends NodeContainer
             for (Object o : children) if (o instanceof NodeEquation) return true;
         }
         return false;
+    }
+
+    @Override
+    public boolean allowEdit ()
+    {
+        if (FilteredTreeModel.showParam) return ! source.get ("$metadata", "param").equals ("watch");
+        return true;
     }
 
     /**

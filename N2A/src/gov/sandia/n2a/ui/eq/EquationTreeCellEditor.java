@@ -522,7 +522,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         }
         if (labels.get (0).isVisible ())  // parameter mode, so add back name and assignment character
         {
-            value = labels.get (0).getText ().trim () + "=" + value;
+            // Column 1 (assignment operator) should exist if column 0 exists.
+            value = labels.get (0).getText ().trim () + labels.get (1).getText ().trim () + value;
         }
         return value;
     }
@@ -552,8 +553,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             Object o = lastPath.getLastPathComponent ();
             if (! (o instanceof NodeBase)) return false;
             NodeBase node = (NodeBase) o;
-            if (! node.allowEdit ()) return false;
-            return true;
+            return node.allowEdit ();
         }
         else if (event instanceof MouseEvent)
         {
@@ -578,7 +578,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 });
             }
         }
-        // Always return false from this method. Instead, initiate editing indirectly.
+        // We only get here during a mouse event.
+        // In that case, always return false, because we initiate editing indirectly.
         return false;
     }
 

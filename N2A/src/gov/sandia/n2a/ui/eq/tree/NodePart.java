@@ -250,8 +250,8 @@ public class NodePart extends NodeContainer
         // Under "parent" graph node, don't display child parts, as these will have separate graph nodes.
         if (hide  ||  parent == null) return false;
 
+        if (FilteredTreeModel.showParam) return ! isRevoked ();  // Even if we don't contain parameters.
         if (isRevoked ()) return FilteredTreeModel.showRevoked;  // TODO: implement a way to revoke parts
-        if (FilteredTreeModel.showParam) return true;  // Even if we don't contain parameters.
         if (isLocal ())   return FilteredTreeModel.showLocal;
         else              return FilteredTreeModel.showInherited;
     }
