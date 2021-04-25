@@ -367,7 +367,11 @@ public class JobC extends Thread
         findLiveReferences (digestedModel);
         digestedModel.determineTypes ();
         digestedModel.determineDuration ();
-        if (T.equals ("int")) digestedModel.determineExponents ();
+        if (T.equals ("int"))
+        {
+            digestedModel.assignParents ();
+            digestedModel.determineExponents ();
+        }
         digestedModel.findConnectionMatrix ();
         analyzeEvents (digestedModel);
         analyze (digestedModel);
@@ -1430,6 +1434,10 @@ public class JobC extends Thread
             //   create instances
             if (bed.singleton)
             {
+                if (bed.newborn >= 0)
+                {
+                    result.append ("  instance.flags = (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
+                }
                 result.append ("  instance.enterSimulation ();\n");
                 result.append ("  container->getEvent ()->enqueue (&instance);\n");
                 result.append ("  instance.init ();\n");
@@ -4326,7 +4334,7 @@ public class JobC extends Thread
             result.append (prefix + "bool newborn = " + pointer + "instance.flags & (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
             if (depth == 0)
             {
-                result.append (prefix + "result->instances = new vector<Part<" + T + "> *> (1);\n");
+                result.append (prefix + "result->instances = new vector<Part<" + T + "> *>;\n");
                 result.append (prefix + "result->deleteInstances = true;\n");
             }
             result.append (prefix + "if (result->firstborn == INT_MAX  &&  newborn) result->firstborn = result->instances->size ();\n");

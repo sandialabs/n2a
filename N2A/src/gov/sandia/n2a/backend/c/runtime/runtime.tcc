@@ -1023,7 +1023,7 @@ ConnectIterator<T> *
 Population<T>::getIteratorsSimple ()
 {
     std::vector<ConnectPopulation<T> *> iterators;
-    iterators.reserve (3);  // This is the largest number of endpoints we will usually have in practice.
+    iterators.reserve (2);  // By far the most common case.
     bool nothingNew = true;
     int i = 0;
     while (true)
