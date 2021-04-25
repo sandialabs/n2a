@@ -11,6 +11,7 @@ import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
+import gov.sandia.n2a.eqset.Variable.ParsedValue;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.host.Host.CopyProgress;
@@ -956,9 +957,9 @@ public class PanelRun extends JPanel
                     String key = keyPath[0];
                     for (int i = 1; i < keyPath.length; i++) key += "." + keyPath[i];
 
-                    String value = model.get (keyPath);
-                    contents.append (key + " = " + value + "\n");
-                    if (value.isEmpty ())  // Could be multi-valued
+                    ParsedValue pv = new ParsedValue (model.get (keyPath));
+                    contents.append (key + " =" + pv.combiner + " " + pv.expression + "\n");
+                    if (pv.expression.isEmpty ())  // Could be multi-valued
                     {
                         for (MNode v : model.childOrEmpty (keyPath))
                         {
