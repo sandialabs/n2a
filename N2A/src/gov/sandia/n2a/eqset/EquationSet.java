@@ -3153,6 +3153,26 @@ public class EquationSet implements Comparable<EquationSet>
         return changed;
     }
 
+    /**
+        Assigns each variable as the parent of its equations.
+        This is used by determineExponents() and by the Internal simulator.
+        The assignment is only valid as long as no more optimization is done.
+        Thus, it should be the last step before running one of those processes.
+    **/
+    public void assignParents ()
+    {
+        for (Variable v : variables)
+        {
+            // Set v as the parent of all its equations
+            for (EquationEntry e : v.equations)
+            {
+                if (e.expression != null) e.expression.parent = v;
+                // e.condition.parent should always be null, because it is not actually assigned to the variable.
+            }
+        }
+        for (EquationSet s : parts) s.assignParents ();
+    }
+
     public void determineExponents ()
     {
         ExponentContext context = new ExponentContext (this);
@@ -3279,13 +3299,6 @@ public class EquationSet implements Comparable<EquationSet>
             // Collect all $t'
             Variable r = v.reference.variable;
             if (r.name.equals ("$t")  &&  r.order == 1  &&  ! context.dt.contains (r)) context.dt.add (r);
-
-            // Set v as the parent of all its equations
-            for (EquationEntry e : v.equations)
-            {
-                if (e.expression != null) e.expression.parent = v;
-                // e.condition.parent should always be null
-            }
 
             // Collect all input() calls which use "time" mode.
             v.visit (new Visitor ()

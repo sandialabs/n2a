@@ -182,6 +182,13 @@ public class RendererC extends Renderer
         if (op instanceof Delay)
         {
             Delay d = (Delay) op;
+            if (d.operands.length == 1)
+            {
+                result.append ("(");
+                d.operands[0].render (this);
+                result.append (")");
+                return true;
+            }
             result.append ("delay" + d.index + ".step (Simulator<" + job.T + ">::instance.currentEvent->t, ");
             d.operands[1].render (this);
             result.append (", ");

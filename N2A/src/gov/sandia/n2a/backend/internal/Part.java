@@ -60,6 +60,11 @@ public class Part extends Instance
         }
     }
 
+    public double getDt ()
+    {
+        return event.dt;
+    }
+
     public Type get (Variable v)
     {
         if (v.global)  // forward global variables to our population object

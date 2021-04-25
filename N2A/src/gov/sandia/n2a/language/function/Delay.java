@@ -52,7 +52,7 @@ public class Delay extends Function
         updateExponent (context, value.exponent, value.center);
 
         // Need to record the exponent for time, since we avoid passing context to determineExponentNext().
-        operands[1].exponentNext = context.exponentTime;
+        if (operands.length > 1) operands[1].exponentNext = context.exponentTime;
 
         // Assume that defaultValue is representable in the same range as value,
         // so don't bother incorporating it into the estimate of our output exponent.
@@ -66,9 +66,12 @@ public class Delay extends Function
         value.exponentNext = exponentNext;  // Passes the required exponent down to operands.
         value.determineExponentNext ();
 
-        Operator delta = operands[1];
-        // delta.exponentNext already set in determineExponent()
-        delta.determineExponentNext ();
+        if (operands.length > 1)
+        {
+            Operator delta = operands[1];
+            // delta.exponentNext already set in determineExponent()
+            delta.determineExponentNext ();
+        }
 
         if (operands.length > 2)
         {
@@ -86,7 +89,7 @@ public class Delay extends Function
 
     public static class DelayBuffer
     {
-        double value;  // Although not strictly immutable, but generally treated that way, so we will use this repeatedly for return value.
+        double value;  // Return value is not strictly immutable, but generally treated that way, so we will use this repeatedly.
         NavigableMap<Double,Double> buffer = new TreeMap<Double,Double> ();
 
         public void step (double now, double delay, double value)
@@ -105,6 +108,7 @@ public class Delay extends Function
         Type tempValue = operands[0].eval (context);
         Simulator simulator = Simulator.instance.get ();
         if (simulator == null) return tempValue;
+        if (operands.length < 2) return tempValue;  // Zero delay, which generally introduces one cycle of delay in an expression like: A = delay(B)
 
         double value = ((Scalar) tempValue).value;
         double delay = ((Scalar) operands[1].eval (context)).value;

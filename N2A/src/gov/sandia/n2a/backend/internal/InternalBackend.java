@@ -227,6 +227,7 @@ public class InternalBackend extends Backend
         analyzeConversions (e);
         analyzeLastT (e);
         e.clearVariables ();
+        e.assignParents ();
     }
 
     public static void createBackendData (EquationSet s)

@@ -52,6 +52,11 @@ public class Population extends Instance
         if (bed.poll >= 0) valuesObject[bed.pollSorted] = new HashSet<Part> ();
     }
 
+    public double getDt ()
+    {
+        return ((Part) container).event.dt;
+    }
+
     public void init (Simulator simulator)
     {
         InstanceTemporaries temp = new InstanceInit (this, simulator);

@@ -90,6 +90,15 @@ public class Instance extends Type
     }
 
     /**
+        Retrieves dt of the event we are attached to.
+        Only works for Internal simulator objects like Part and Population.
+    **/
+    public double getDt ()
+    {
+        throw new EvaluationException ("Can't retrieve $t' for non-simulation object.");
+    }
+
+    /**
         Fetches a value from a referenced instance.
     **/
     public Type get (VariableReference r)

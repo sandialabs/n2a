@@ -57,6 +57,11 @@ public class InstanceTemporaries extends Instance
         }
     }
 
+    public double getDt ()
+    {
+        return wrapped.getDt ();
+    }
+
     public Type get (VariableReference r)
     {
         if (r.index >= 0) return ((Instance) wrapped.valuesObject[r.index]).get (r.variable);
@@ -67,11 +72,7 @@ public class InstanceTemporaries extends Instance
     {
         if (v == bed.init  ||  v == bed.connect) return new Scalar (0);
         if (v == bed.t) return new Scalar (simulator.currentEvent.t);
-        if (v == bed.dt)
-        {
-            if      (wrapped instanceof Part      ) return new Scalar (((Part) wrapped          ).event.dt);
-            else if (wrapped instanceof Population) return new Scalar (((Part) wrapped.container).event.dt);
-        }
+        if (v == bed.dt) return new Scalar (wrapped.getDt ());
 
         if (v.readTemp) return super.get (v);
         return               wrapped.get (v);
