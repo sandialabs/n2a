@@ -502,8 +502,14 @@ InputHolder<T>::getRow (T row)
                 }
 
                 int tempCount = 1;
-                if (csv) for (auto it : line) if (it == ',') tempCount++;
-                else     for (auto it : line) if (it == ' '  ||  it == '\t') tempCount++;
+                if (csv)
+                {
+                    for (auto it : line) if (it == ',') tempCount++;
+                }
+                else
+                {
+                    for (auto it : line) if (it == ' '  ||  it == '\t') tempCount++;
+                }
                 columnCount = std::max (columnCount, tempCount);
 
                 // Decide whether this is a header row or a value row
