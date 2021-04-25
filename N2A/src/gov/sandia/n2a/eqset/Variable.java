@@ -620,7 +620,18 @@ public class Variable implements Comparable<Variable>, Cloneable
                 e.ifString  = e.condition.render ();
             }
 
-            if (e.condition instanceof Constant)
+            if (e.expression instanceof AccessVariable)
+            {
+                if (((AccessVariable) e.expression).reference.variable == this)
+                {
+                    // Vacuous assignment.
+                    // Simulator always copies value to next cycle when no equation fires,
+                    // so there is never need for an explicit equation to do this.
+                    changed = true;
+                    continue;
+                }
+            }
+            else if (e.condition instanceof Constant)
             {
                 if (e.condition.getDouble () == 0)  // Will never fire
                 {
@@ -633,19 +644,14 @@ public class Variable implements Comparable<Variable>, Cloneable
                     alwaysTrue.add (e);
                 }
             }
-            else if (e.ifString.isEmpty ()  &&  e.expression instanceof AccessVariable  &&  ((AccessVariable) e.expression).reference.variable == this)
-            {
-                // Drop this default equation because it is redundant. Simulator always copies value to next cycle when no equation fires.
-                changed = true;
-                continue;
-            }
 
             nextEquations.add (e);
         }
-        if (alwaysTrue.size () == 1)  // Default equation will never be included in alwaysTrue.
+        if (alwaysTrue.size () == 1  ||  alwaysTrue.equals (equations)  &&  ! alwaysTrue.isEmpty ())  // Default equation will never be included in alwaysTrue.
         {
             changed = true;
-            equations = alwaysTrue;
+            equations.clear ();
+            equations.add (alwaysTrue.first ());
 
             // Make the equation unconditional, since it always fires anyway.
             EquationEntry e = equations.first ();
@@ -655,6 +661,15 @@ public class Variable implements Comparable<Variable>, Cloneable
         else
         {
             equations = nextEquations;
+
+            if (equations.isEmpty ()  &&  hasAttribute ("temporary"))
+            {
+                changed = true;
+                addAttribute ("constant");
+                EquationEntry e = new EquationEntry (this, "");
+                equations.add (e);
+                e.expression = new Constant (0);  // This is the default value for a temporary when no equation fires.
+            }
         }
 
         // Check if we have become eligible to execute in the global context.
