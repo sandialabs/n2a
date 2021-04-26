@@ -18,7 +18,6 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Split;
-import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
@@ -1300,14 +1299,16 @@ public class InternalBackendData
     }
 
     /**
-        Rebuild dependencies based only on equations that can actually fire.
-        Note that the C backend uses EquationSet.simplify() to do the same task.
+        Sequence variables for maximum information spread during init cycle.
+        Builds dependencies based only on equations that can actually fire.
+        Note that the C backend uses EquationSet.simplify() to do a similar task.
         That function relies on Variable.deepCopy(List<Variable>) to duplicate the
         list and establish an internally-coherent set of dependencies.
         We don't do that here because we need to keep Java object identity across all lists.
     **/
     public static void determineOrderInit (EquationSet s, List<Variable> list)
     {
+        // Back up dependency info.
         int count = list.size ();
         Map<Variable,List<Object>>          backupUsedBy = new HashMap<Variable,List<Object>> (count);
         Map<Variable,Map<Variable,Integer>> backupUses   = new HashMap<Variable,Map<Variable,Integer>> (count);
@@ -1320,28 +1321,24 @@ public class InternalBackendData
         }
 
         ReplaceConstants replace = s.new ReplaceConstants ("$init");
+        replace.priorityKnown = false;
 
-        class DependencyTransformer implements Transformer
+        class DependencyVisitor implements Visitor
         {
             public Variable v;
-            public Operator transform (Operator op)
+            public boolean visit (Operator op)
             {
                 if (op instanceof AccessVariable)
                 {
                     AccessVariable av = (AccessVariable) op;
                     Variable listVariable = EquationSet.find (av.reference.variable, list);
-                    if (listVariable != null)
-                    {
-                        av.reference = new VariableReference ();
-                        av.reference.variable = listVariable;
-                        v.addDependencyOn (listVariable);
-                        return av;
-                    }
+                    if (listVariable != null) v.addDependencyOn (listVariable);
+                    return false;
                 }
-                return null;
+                return true;
             }
         }
-        DependencyTransformer depend = new DependencyTransformer ();
+        DependencyVisitor depend = new DependencyVisitor ();
 
         for (Variable v : list)
         {
@@ -1355,6 +1352,7 @@ public class InternalBackendData
                 boolean alwaysFires = true;
                 if (e.condition != null)
                 {
+                    e.condition.visit (depend);  // We will at least have to evaluate the condition, so add its dependencies.
                     Operator test = e.condition.deepCopy ().transform (replace).simplify (v, true);
                     if (test.isScalar ())
                     {
@@ -1365,7 +1363,7 @@ public class InternalBackendData
                         alwaysFires = false;
                     }
                 }
-                if (couldFire) v.transform (depend);
+                if (couldFire  &&  e.expression != null) e.expression.visit (depend);
                 if (alwaysFires) break;  // Don't check any more equations, because Internal will stop here.
             }
         }

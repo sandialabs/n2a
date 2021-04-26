@@ -3905,7 +3905,7 @@ public class EquationSet implements Comparable<EquationSet>
                     if (b.hasAttribute ("temporary")) return  1;
                 }
 
-                // In general, the variable with the most downstream dependencies should be evaluated first.
+                // As a heuristic, the variable with the most downstream dependencies should be evaluated first.
                 return b.before.size () - a.before.size ();
             }
         });
@@ -4011,6 +4011,7 @@ public class EquationSet implements Comparable<EquationSet>
         public Variable self;
         public String   phase;
         public boolean  init;
+        public boolean  priorityKnown = true;
 
         public ReplaceConstants (String phase)
         {
@@ -4027,11 +4028,15 @@ public class EquationSet implements Comparable<EquationSet>
                 Operator result = null;
                 if      (phase .equals   (av.name)) result = new Constant (1);
                 else if (phases.contains (av.name)) result = new Constant (0);
-                else if (init  &&  v.container == self.container  &&  v.priority >= self.priority)  // Reference to a variable that has not yet been assigned by init.
+                else if (v.name.equals ("$index"))
                 {
+                    if (v.container.isSingleton (false)) result = new Constant (0);
+                }
+                else if (init  &&  v.container == self.container  &&  priorityKnown  &&  v.priority >= self.priority)  // Reference to a variable that has not yet been assigned by init.
+                {
+                    // Ordinary variables have default value 0 until they are assigned by init.
                     // If a variable could be initialied to something besides 0 before init, then we must treat it as unknown.
                     // * Variables could be assigned by a type split before init runs.
-                    // * $index is 0 if this is a singleton, otherwise unknown
                     // * $n will return the current size of the population. If it shows up here, it is unknown.
                     // * $p defaults to 1 until explicitly assigned.
                     // * $t and $t' will have values from the current event, and thus are unknown.
@@ -4041,30 +4046,24 @@ public class EquationSet implements Comparable<EquationSet>
                     if (v.name.equals ("$n")  &&  v.order == 0) return null;
                     if (v.name.equals ("$t")  &&  v.order <= 1) return null;
                     if (v.name.equals ("$type")) return null;
-                    if (v.name.equals ("$index"))
+
+                    // Was it assigned by a type split?
+                    boolean splitTarget = false;
+                    for (EquationSet s : splitSources)
                     {
-                        if (v.container.isSingleton (false)) result = new Constant (0);
+                        if (s.find (v) != null)
+                        {
+                            // This does not filter forbidden attributes.
+                            // The effect is that we treat more variables as having unknown value.
+                            // This is the conservative thing to do.
+                            splitTarget = true;
+                            break;
+                        }
                     }
-                    else
+                    if (! splitTarget)
                     {
-                        // Was it assigned by a type split?
-                        boolean splitTarget = false;
-                        for (EquationSet s : splitSources)
-                        {
-                            if (s.find (v) != null)
-                            {
-                                // This does not filter forbidden attributes.
-                                // The effect is that we treat more variables as having unknown value.
-                                // This is the conservative thing to do.
-                                splitTarget = true;
-                                break;
-                            }
-                        }
-                        if (! splitTarget)
-                        {
-                            if (v.name.equals ("$p")  &&  v.order == 0) result = new Constant (1);
-                            else                                        result = new Constant (0);
-                        }
+                        if (v.name.equals ("$p")  &&  v.order == 0) result = new Constant (1);
+                        else                                        result = new Constant (0);
                     }
                 }
                 if (result != null) result.parent = av.parent;
