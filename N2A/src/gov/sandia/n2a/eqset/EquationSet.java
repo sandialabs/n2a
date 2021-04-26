@@ -4032,6 +4032,15 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     if (v.container.isSingleton (false)) result = new Constant (0);
                 }
+                else if (v.name.equals ("$type"))
+                {
+                    // $type is usually 0, except when a part is being constructed in response
+                    // to a type split. Even an external reference to $type is unknown during
+                    // init, because we may be referring to a parent parent that just split
+                    // and then triggered our own construction.
+                    if (init) return null;
+                    else result = new Constant (0);
+                }
                 else if (init  &&  v.container == self.container  &&  priorityKnown  &&  v.priority >= self.priority)  // Reference to a variable that has not yet been assigned by init.
                 {
                     // Ordinary variables have default value 0 until they are assigned by init.
@@ -4040,12 +4049,10 @@ public class EquationSet implements Comparable<EquationSet>
                     // * $n will return the current size of the population. If it shows up here, it is unknown.
                     // * $p defaults to 1 until explicitly assigned.
                     // * $t and $t' will have values from the current event, and thus are unknown.
-                    // * $type may hold a split position, so unknown.
                     // Other $variables will either be constant and therefore not show up here,
                     // or they will not yet be assigned. Treat them as ordinary variables with value 0.
                     if (v.name.equals ("$n")  &&  v.order == 0) return null;
                     if (v.name.equals ("$t")  &&  v.order <= 1) return null;
-                    if (v.name.equals ("$type")) return null;
 
                     // Was it assigned by a type split?
                     boolean splitTarget = false;

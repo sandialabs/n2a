@@ -606,7 +606,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     {
         changed = false;
         TreeSet<EquationEntry> nextEquations = new TreeSet<EquationEntry> ();
-        TreeSet<EquationEntry> alwaysTrue    = new TreeSet<EquationEntry> ();
+        EquationEntry alwaysTrue = null;
         visited = null;
         for (EquationEntry e : equations)
         {
@@ -641,17 +641,17 @@ public class Variable implements Comparable<Variable>, Cloneable
                 }
                 else  // Will always fire
                 {
-                    alwaysTrue.add (e);
+                    if (alwaysTrue == null) alwaysTrue = e;
                 }
             }
 
             nextEquations.add (e);
         }
-        if (alwaysTrue.size () == 1  ||  alwaysTrue.equals (equations)  &&  ! alwaysTrue.isEmpty ())  // Default equation will never be included in alwaysTrue.
+        if (! nextEquations.isEmpty ()  &&  nextEquations.first () == alwaysTrue)  // alwaysTrue is never the default equation.
         {
             changed = true;
             equations.clear ();
-            equations.add (alwaysTrue.first ());
+            equations.add (alwaysTrue);
 
             // Make the equation unconditional, since it always fires anyway.
             EquationEntry e = equations.first ();
