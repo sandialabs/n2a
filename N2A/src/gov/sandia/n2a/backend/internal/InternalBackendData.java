@@ -107,6 +107,7 @@ public class InternalBackendData
     public List<Delay>       delays          = new ArrayList<Delay> ();     // Not related to events, but processed in a similar manner.
 
     public boolean singleton;               // $n=1 always; No structural dynamics.
+    public boolean singleConnection;        // Indicates that this is a connection and that all endpoints are singletons and immediate peers. Used for nicer path generation.
     public boolean populationCanGrowOrDie;  // by structural dynamics other than $n
     public boolean populationCanResize;     // by manipulating $n
     public int     populationIndex;         // in container.populations
@@ -923,6 +924,22 @@ public class InternalBackendData
                     firstborn = allocateGlobalFloat ("firstborn");
                 }
                 newborn = allocateLocalFloat ("newborn");
+            }
+        }
+
+        // Special case for generating name paths: if all endpoints of a connection are
+        // immediate peers and singletons, then no need to include their names.
+        // Just give name of connection part itself.
+        if (s.connectionBindings != null)
+        {
+            singleConnection = true;
+            for (ConnectionBinding cb : s.connectionBindings)
+            {
+                if (cb.endpoint.container != s.container  ||  ! cb.endpoint.isSingleton (true))
+                {
+                    singleConnection = false;
+                    break;
+                }
             }
         }
 

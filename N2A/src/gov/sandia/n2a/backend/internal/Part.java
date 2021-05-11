@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -618,12 +618,13 @@ public class Part extends Instance
     {
         String result = super.path ();
         if (equations.connectionBindings == null) return result;
-
-        // For connections, it is more understandable to show our endpoints rather than our own name.
         InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.singleConnection) return result;
+
+        // Connection doesn't have an index. Only way to get a unique name is to use its endpoints.
         result += "(" + ((Part) valuesObject[bed.endpoints]).path ();  // first endpoint
         int count = equations.connectionBindings.size ();
-        for (int i = 1; i < count; i++) result += "-" + ((Part) valuesObject[bed.endpoints+i]).path ();  // other endpoints
+        for (int i = 1; i < count; i++) result += "-" + ((Part) valuesObject[bed.endpoints+i]).path ();  // subsequent endpoints
         return result + ")";
     }
 
