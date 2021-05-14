@@ -2183,6 +2183,7 @@ public class PanelEquations extends JPanel
 
         public String getToolTipText ()
         {
+            if (part == null) return null;
             FontMetrics fm = getFontMetrics (getFont ());
             return part.getToolTipText (fm);
         }
