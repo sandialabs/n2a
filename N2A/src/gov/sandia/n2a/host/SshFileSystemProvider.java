@@ -242,7 +242,9 @@ public class SshFileSystemProvider extends FileSystemProvider
             {
                 public void close () throws IOException
                 {
-                    stream.flush ();
+                    stream.close ();  // Causes cat command to exit.
+                    try {proc.waitFor (1, TimeUnit.SECONDS);}
+                    catch (InterruptedException e) {}
                     proc.close ();
                 }
 
@@ -407,7 +409,7 @@ public class SshFileSystemProvider extends FileSystemProvider
         }
         catch (NoSuchFileException e)
         {
-            return false;  // They can't be the same of either of them does not exist.
+            return false;  // They can't be the same if either of them does not exist.
         }
     }
 
@@ -671,6 +673,8 @@ public class SshFileSystemProvider extends FileSystemProvider
                  WritableByteChannel channel = Channels.newChannel (out);)
             {
                 result = channel.write (buffer);
+                channel.close ();  // Closes "out", which causes dd command to exit.
+                proc.waitFor (1, TimeUnit.SECONDS);  // Ensure that all bytes are written before this thread moves on.
             }
             catch (IOException e)
             {
@@ -765,6 +769,11 @@ public class SshFileSystemProvider extends FileSystemProvider
     {
         int id;
 
+        public SshPrincipal (int id)
+        {
+            this.id = id;
+        }
+
         public boolean equals (Object o)
         {
             if (! (o instanceof SshPrincipal)) return false;
@@ -853,15 +862,13 @@ public class SshFileSystemProvider extends FileSystemProvider
 
         public UserPrincipal owner ()
         {
-            SshPrincipal result = new SshPrincipal ();
-            result.id = attributes.getUId ();
+            SshPrincipal result = new SshPrincipal (attributes.getUId ());
             return result;
         }
 
         public GroupPrincipal group ()
         {
-            SshPrincipal result = new SshPrincipal ();
-            result.id = attributes.getGId ();
+            SshPrincipal result = new SshPrincipal (attributes.getGId ());
             return result;
         }
 
