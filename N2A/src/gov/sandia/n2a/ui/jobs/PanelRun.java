@@ -951,7 +951,9 @@ public class PanelRun extends JPanel
                     List<String> paramPath = new ArrayList<String> (keyList);
                     paramPath.add ("$metadata");
                     paramPath.add ("param");
-                    if (! model.getFlag (paramPath.toArray ())) return true;  // node is not a parameter
+                    Object[] paramArray = paramPath.toArray ();
+                    if (! model.getFlag (paramArray)) return true;  // node is not a parameter
+                    if (model.get (paramArray).equals ("watch")) return true;  // watchable items aren't of interest for this summary
 
                     String[] keyPath = keyList.toArray (new String[keyList.size ()]);
                     String key = keyPath[0];
