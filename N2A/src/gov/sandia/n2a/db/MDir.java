@@ -103,6 +103,7 @@ public class MDir extends MNode
     protected synchronized MNode getChild (String key)
     {
         if (key.isEmpty ()) return null;  // The file-existence code below can be fooled by an empty string, so explicitly guard against it.
+        if (! children.containsKey (key)) return null;
         MDoc result = null;
         SoftReference<MDoc> reference = children.get (key);
         if (reference != null) result = reference.get ();
@@ -197,7 +198,7 @@ public class MDir extends MNode
         if (toKey.equals (fromKey)) return;
         save ();  // If this turns out to be too much work, then scan the write queue for fromKey and save it directly.
 
-        // This operation is independent of bookkeeping in children
+        // This operation is independent of bookkeeping in "children" collection.
         Path fromPath = root.resolve (fromKey).toAbsolutePath ();
         Path toPath   = root.resolve (toKey  ).toAbsolutePath ();
         try
@@ -211,19 +212,20 @@ public class MDir extends MNode
         }
 
         SoftReference<MDoc> fromReference = children.get (fromKey);
-        SoftReference<MDoc> toReference   = children.get (toKey);
+        boolean fromExists = children.containsKey (fromKey);
+        boolean toExists   = children.containsKey (toKey);
         children.remove (fromKey);
         children.remove (toKey);
-        if (fromReference == null)
-        {
-            if (toReference != null) fireChildDeleted (toKey);  // Because we overwrote an existing node with a non-existing node, causing the destination to cease to exist.
-        }
-        else
+        if (fromExists)
         {
             MDoc from = fromReference.get ();
             if (from != null) from.name = toKey;
             children.put (toKey, fromReference);
             fireChildChanged (fromKey, toKey);
+        }
+        else  // from does not exist
+        {
+            if (toExists) fireChildDeleted (toKey);  // Because we overwrote an existing node with a non-existing node, causing the destination to cease to exist.
         }
     }
 
@@ -274,7 +276,7 @@ public class MDir extends MNode
 
         // Synchronize with updated/restored doc on disk.
         SoftReference<MDoc> reference = children.get (key);
-        if (reference == null)  // added back into db
+        if (reference == null)  // added back into db, or not currently loaded
         {
             MDoc child = new MDoc (this, key);
             reference = new SoftReference<MDoc> (child);
