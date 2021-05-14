@@ -272,13 +272,13 @@ public class NodeVariable extends NodeContainer
         {
             int in  = inout.get (i);
             int out = inout.get (i+1);
-            result.append (escapeHTML (value.substring (next, in)));
+            result.append (escapeHTML (value.substring (next, in), true));
             result.append ("<span bgcolor=\"" + EquationTreeCellRenderer.colorHighlight + "\">");
-            result.append (escapeHTML (value.substring (in, out)));
+            result.append (escapeHTML (value.substring (in, out), true));
             result.append ("</span>");
             next = out;
         }
-        result.append (escapeHTML (value.substring (next)));
+        result.append (escapeHTML (value.substring (next), true));
         result.append ("</html>");
         return result.toString ();
     }

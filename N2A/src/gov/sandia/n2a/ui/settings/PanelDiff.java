@@ -368,8 +368,8 @@ public class PanelDiff extends JTree
                         else  // different
                         {
                             result  = "<html>";
-                            result += "<s>" + NodeBase.escapeHTML (key) + " = " + NodeBase.escapeHTML (A.get ()) + "</s><br/>";
-                            result +=         NodeBase.escapeHTML (key) + " = " + NodeBase.escapeHTML (B.get ());
+                            result += "<s>" + NodeBase.escapeHTML (key, true) + " = " + NodeBase.escapeHTML (A.get (), true) + "</s><br/>";
+                            result +=         NodeBase.escapeHTML (key, true) + " = " + NodeBase.escapeHTML (B.get (), true);
                             result += "</html>";
                         }
                     }

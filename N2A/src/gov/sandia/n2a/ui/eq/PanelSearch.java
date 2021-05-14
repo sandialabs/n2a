@@ -111,12 +111,9 @@ public class PanelSearch extends JPanel
                 MNode doc = AppData.models.child (node.key);
                 if (doc == null) return null;
                 MPart source = new MPart (doc);
-                String notes = source.get ("$metadata", "notes");
-                if (notes.isEmpty ()) notes = source.get ("$metadata", "note");
-                if (notes.isEmpty ()) return null;
 
                 FontMetrics fm = getFontMetrics (getFont ());
-                return gov.sandia.n2a.ui.eq.tree.NodeBase.formatToolTipText (notes, fm);
+                return gov.sandia.n2a.ui.eq.tree.NodeBase.getToolTipText (source, fm);
             }
         };
         tree.setRootVisible (false);

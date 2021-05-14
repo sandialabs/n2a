@@ -205,8 +205,14 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public String getToolTipText (FontMetrics fm)
     {
-        String notes = source.get ("$metadata", "notes");
-        if (notes.isEmpty ()) notes = source.get ("$metadata", "note");
+        return getToolTipText (source, fm);
+    }
+
+    public static String getToolTipText (MNode node, FontMetrics fm)
+    {
+        String                notes = node.get ("$metadata", "notes");
+        if (notes.isEmpty ()) notes = node.get ("$metadata", "note");
+        if (notes.isEmpty ()) notes = node.get ("$metadata", "description");  // for NeuroML parts
         if (notes.isEmpty ()) return null;
         return formatToolTipText (notes, fm);
     }
@@ -218,8 +224,8 @@ public class NodeBase extends DefaultMutableTreeNode
         int notesWidth = fm.stringWidth (text);
         if (notesWidth < frameWidth) return text;
 
-        text = text.replace ("\n", "<br>");
-        return "<html><p  width=\"" + frameWidth + "\">" + text + "</p></html>";
+        text = escapeHTML (text, false);
+        return "<html><p width=" + frameWidth + ">" + text + "</p></html>";
     }
 
     public Icon getIcon (boolean expanded)
@@ -272,12 +278,13 @@ public class NodeBase extends DefaultMutableTreeNode
         return false;
     }
 
-    public static String escapeHTML (String value)
+    public static String escapeHTML (String value, boolean singleLine)
     {
         value = value.replace ("&",  "&amp;");
         value = value.replace ("<",  "&lt;");
         value = value.replace (">",  "&gt;");
         value = value.replace ("\"", "&quot;");
+        if (! singleLine) value = value.replace ("\n", "<br>");
         return value;
     }
 
