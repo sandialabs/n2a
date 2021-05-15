@@ -456,6 +456,7 @@ public class PanelSearch extends JPanel
         // Don't wait for thread to stop.
 
         String query = textQuery.getText ();
+        if (query.startsWith ("(")) return;
         threadSearch = new SearchThread (query.trim ());
         threadSearch.start ();
     }
@@ -752,6 +753,38 @@ public class PanelSearch extends JPanel
         return "";
     }
 
+    public void saveExpandedNodes ()
+    {
+        expandedNodes = new ArrayList<String[]> ();
+        Enumeration<TreePath> expandedPaths = tree.getExpandedDescendants (new TreePath (root.getPath ()));
+        if (expandedPaths != null)
+        {
+            while (expandedPaths.hasMoreElements ())
+            {
+                TreePath path = expandedPaths.nextElement ();
+                Object[] objectPath = path.getPath ();
+                if (objectPath.length == 1) continue;  // Don't store root node.
+                String[] stringPath = new String[objectPath.length - 1];
+                for (int i = 1; i < objectPath.length; i++) stringPath[i-1] = ((NodeBase) objectPath[i]).toString ();
+                expandedNodes.add (stringPath);
+            }
+        }
+    }
+
+    public void restoreExpandedNodes ()
+    {
+        for (String[] stringPath : expandedNodes)
+        {
+            NodeBase c = root;
+            for (String key : stringPath)
+            {
+                c = c.child (key, false);
+                if (c == null) break;
+            }
+            if (c != null) tree.expandPath (new TreePath (c.getPath ()));
+        }
+    }
+
     // Retrieve records matching the filter text, and deliver them to the model.
     public class SearchThread extends Thread
     {
@@ -794,41 +827,12 @@ public class PanelSearch extends JPanel
                     {
                         if (stop) return;
 
-                        // Save list of open nodes
-                        if (lastQuery.isEmpty ())
-                        {
-                            expandedNodes = new ArrayList<String[]> ();
-                            Enumeration<TreePath> expandedPaths = tree.getExpandedDescendants (new TreePath (root.getPath ()));
-                            if (expandedPaths != null)
-                            {
-                                while (expandedPaths.hasMoreElements ())
-                                {
-                                    TreePath path = expandedPaths.nextElement ();
-                                    Object[] objectPath = path.getPath ();
-                                    if (objectPath.length == 1) continue;  // Don't store root node.
-                                    String[] stringPath = new String[objectPath.length - 1];
-                                    for (int i = 1; i < objectPath.length; i++) stringPath[i-1] = ((NodeBase) objectPath[i]).toString ();
-                                    expandedNodes.add (stringPath);
-                                }
-                            }
-                        }
-                        lastQuery = query;
-
                         // Switch to new tree
+                        if (lastQuery.isEmpty ()) saveExpandedNodes ();
+                        lastQuery = query;
                         root = newRoot;
                         model.setRoot (newRoot);  // triggers repaint
-
-                        // Restore open nodes
-                        for (String[] stringPath : expandedNodes)
-                        {
-                            NodeBase c = root;
-                            for (String key : stringPath)
-                            {
-                                c = c.child (key, false);
-                                if (c == null) break;
-                            }
-                            if (c != null) tree.expandPath (new TreePath (c.getPath ()));
-                        }
+                        restoreExpandedNodes ();
 
                         // Scroll to most recent selection.
                         NodeBase n = nodeFor (lastSelection);
@@ -1258,9 +1262,10 @@ public class PanelSearch extends JPanel
 
                     if (newRoot.getChildCount () > 1)
                     {
-                        // Clear query text. It is unrelated to the search for a connection.
-                        textQuery.setText ("");
-                        lastQuery = "connection";  // TODO: arrange to remember tree state across selection modes, so we can return to regular tree view without losing our original place.
+                        // Update query field
+                        if (lastQuery.isEmpty ()) saveExpandedNodes ();
+                        lastQuery = "(connection; ESC to clear)";
+                        textQuery.setText (lastQuery);
 
                         // Switch to new tree
                         root = newRoot;
