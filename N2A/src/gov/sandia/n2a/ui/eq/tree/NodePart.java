@@ -436,8 +436,8 @@ public class NodePart extends NodeContainer
     public static void suggestConnections (List<NodePart> fromParts, List<NodePart> toParts)
     {
         // Set connectionTarget flags
-        for (NodePart fromPart : toParts  ) fromPart.connectionTarget = false;
-        for (NodePart toPart   : fromParts) toPart  .connectionTarget = false;
+        for (NodePart fromPart : fromParts) fromPart.connectionTarget = false;
+        for (NodePart toPart   : toParts  ) toPart  .connectionTarget = false;
         for (NodePart toPart : toParts)
         {
             if (toPart.connectionBindings == null) continue;
@@ -484,11 +484,12 @@ public class NodePart extends NodeContainer
                 }
             }
 
-            // If distance is known, sort candidates in descending order.
-            // That way, more distant candidates will be eliminated first.
+            // If distance is known, sort candidates in ascending order.
+            // That way, more distant candidates will be eliminated first,
+            // since in later code we iterate backward through the list of candidates.
             if (fromPart.graph != null)
             {
-                Point fromPoint = fromPart.graph.getLocation ();
+                Point fromCenter = fromPart.graph.getCenter ();
                 Map<Double,NodePart> sorted = new TreeMap<Double,NodePart> ();
                 for (UnsatisfiedConnection u : unsatisfied)
                 {
@@ -497,9 +498,9 @@ public class NodePart extends NodeContainer
                         double distance = Double.MAX_VALUE;
                         if (toPart.graph != null)
                         {
-                            Point toPoint = toPart.graph.getLocation ();
-                            int dx = fromPoint.x - toPoint.x;
-                            int dy = fromPoint.y - toPoint.y;
+                            Point toCenter = toPart.graph.getCenter ();
+                            int dx = fromCenter.x - toCenter.x;
+                            int dy = fromCenter.y - toCenter.y;
                             distance = Math.sqrt (dx * dx + dy * dy);
                         }
                         sorted.put (distance, toPart);
@@ -509,7 +510,7 @@ public class NodePart extends NodeContainer
                     {
                         double distance = e.getKey ();
                         if (distance < Double.MAX_VALUE  &&  distance > limit) continue;
-                        u.candidates.add (0, e.getValue ());
+                        u.candidates.add (e.getValue ());
                     }
                 }
             }
@@ -517,55 +518,49 @@ public class NodePart extends NodeContainer
             // Narrow down lists of candidates to one best choice for each endpoint.
             // The complicated tests below are merely heuristics for better connection choices,
             // not absolute rules.
-            for (UnsatisfiedConnection u : unsatisfied)
+            int count = unsatisfied.size ();
+            for (int i = 0; i < count; i++)
             {
-                // Minimize connections to the same target.
-                while (u.candidates.size () > 1)
-                {
-                    NodePart duplicate = null;
-                    for (NodePart c : u.candidates)
-                    {
-                        // Check candidates for peer endpoints.
-                        for (UnsatisfiedConnection v : unsatisfied)
-                        {
-                            if (v == u) continue;  // Don't check ourselves.
-                            if (v.candidates.contains (c))
-                            {
-                                duplicate = c;
-                                break;
-                            }
-                        }
-                        if (duplicate != null) break;
+                UnsatisfiedConnection u = unsatisfied.get (i);
 
-                        // Also scan satisfied endpoints, if any.
-                        for (Entry<String,NodePart> e : fromPart.connectionBindings.entrySet ())
-                        {
-                            if (e.getValue () == c)
-                            {
-                                duplicate = c;
-                                break;
-                            }
-                        }
-                        if (duplicate != null) break;
+                // Minimize connections to the same target.
+                for (int k = u.candidates.size () - 1; k >= 0; k--)
+                {
+                    NodePart c = u.candidates.get (k);
+
+                    // Check candidates for peer endpoints.
+                    boolean duplicate = false;
+                    for (int j = i + 1; j < count  &&  ! duplicate; j++)
+                    {
+                        UnsatisfiedConnection v = unsatisfied.get (j);
+                        duplicate = v.candidates.contains (c);
                     }
-                    if (duplicate == null) break;
-                    u.candidates.remove (duplicate);
+                    if (duplicate)
+                    {
+                        if (u.candidates.size () > 1) u.candidates.remove (k);
+                        continue;
+                    }
+
+                    // Also scan satisfied endpoints, if any.
+                    if (fromPart.connectionBindings.values ().contains (c)  &&  u.candidates.size () > 1) u.candidates.remove (k);
                 }
 
                 // Minimize connections to a target that already receives connections.
-                while (u.candidates.size () > 1)
+                for (int k = u.candidates.size () - 1; k >= 0; k--)
                 {
-                    NodePart taken = null;
-                    for (NodePart c : u.candidates)
+                    NodePart c = u.candidates.get (k);
+                    if (c.connectionTarget  &&  u.candidates.size () > 1) u.candidates.remove (k);
+                }
+
+                // Reserve the endpoint.
+                if (u.candidates.size () == 1)  // If more than one candidate still exists, then implicitly they are all unique to this binding.
+                {
+                    NodePart c = u.candidates.get (0);
+                    for (int j = i + 1; j < count; j++)
                     {
-                        if (c.connectionTarget)
-                        {
-                            taken = c;
-                            break;
-                        }
+                        UnsatisfiedConnection v = unsatisfied.get (j);
+                        if (v.candidates.size () > 1) v.candidates.remove (c);
                     }
-                    if (taken == null) break;
-                    u.candidates.remove (taken);
                 }
             }
 
@@ -582,11 +577,11 @@ public class NodePart extends NodeContainer
             }
             if (targetsFull) continue;
 
-            // Assign the last candidate, as it should be sorted closest to fromNode.
+            // Assign the first candidate, as it should be sorted closest to fromPart.
             for (UnsatisfiedConnection u : unsatisfied)
             {
                 if (u.candidates.size () == 0) continue;
-                NodePart toPart = u.candidates.get (u.candidates.size () - 1);
+                NodePart toPart = u.candidates.get (0);
                 NodeVariable v = (NodeVariable) fromPart.child (u.alias);  // This must exist.
                 MainFrame.instance.undoManager.apply (new ChangeVariable (v, u.alias, toPart.source.key ()));
                 toPart.connectionTarget = true;

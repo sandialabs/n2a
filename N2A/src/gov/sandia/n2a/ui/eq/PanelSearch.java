@@ -1091,7 +1091,6 @@ public class PanelSearch extends JPanel
             For any given query, the original order is the first thing tested.
             This means that the user-specified direction of the connection will take
             precedence over any other, provided they have the same score.
-            This only really matters for binary connections.
         **/
         public void generate (int k, int[] indices, WorkingState state)
         {

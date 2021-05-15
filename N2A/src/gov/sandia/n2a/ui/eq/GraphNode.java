@@ -916,7 +916,17 @@ public class GraphNode extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    if (open)
+                    List<GraphNode> selection = container.panelEquationGraph.getSelection ();
+                    selection.remove (GraphNode.this);  // Ensure we are at the end of the list ...
+                    selection.add (GraphNode.this);
+
+                    if (selection.size () > 1)  // Create a new connection part.
+                    {
+                        List<NodePart> query = new ArrayList<NodePart> ();
+                        for (GraphNode g : selection) query.add (g.node);
+                        PanelModel.instance.panelSearch.search (query);
+                    }
+                    else if (open)
                     {
                         panelEquationTree.addAtSelected ("");  // No selection should be active, so this should default to root (same as our "node").
                     }
