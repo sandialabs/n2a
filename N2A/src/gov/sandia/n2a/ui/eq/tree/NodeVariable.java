@@ -18,6 +18,7 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
@@ -411,8 +412,13 @@ public class NodeVariable extends NodeContainer
                 if (existingEquation != null)
                 {
                     key = key.substring (1);  // remove the @, since ChangeEquation expects strings from ParsedValue
-                    String combiner = new Variable.ParsedValue (source.get ()).combiner;
-                    return new ChangeEquation (this, key, combiner, existingEquation.source.get (), key, combiner, data.get ());
+                    String combiner = existing.combiner;
+                    String newValue = data.get ();
+                    String existingValue = existingEquation.source.get ();
+                    if (! newValue.equals (existingValue)) return new ChangeEquation (this, key, combiner, existingValue, key, combiner, newValue);
+                    // else the user intent is to duplicate the equation for convenience before editing it.
+                    // In this case, we need to create a new equation with alternate key.
+                    data = new MVolatile (existingValue, "@" + key + "&&");
                 }
             }
 
