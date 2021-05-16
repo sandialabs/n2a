@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.settings;
 
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Settings;
@@ -34,7 +35,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-// TODO: force tabs to render left-aligned, as described in this post: http://stackoverflow.com/questions/26308859/jtabbedpane-tab-placement-set-to-left-but-icons-are-not-aligned
 @SuppressWarnings("serial")
 public class PanelSettings extends JTabbedPane
 {
@@ -129,8 +129,11 @@ public class PanelSettings extends JTabbedPane
         Icon icon           = s.getIcon ();
         Component component = s.getPanel ();
         lastFocus.put (component, s.getInitialFocus (component));
-        int index = getTabCount ();
         addTab (name, icon, component, null);
+
+        // Hack to avoid messing with vertical labels on Mac platform.
+        // Other L&Fs might also have vertical labels, so this is an inadequate test, but it is not obvious how to check.
+        if (Host.isMac ()  &&  SettingsLookAndFeel.instance.currentLaf.instance.isNativeLookAndFeel ()) return;
 
         JLabel label = new JLabel (name, icon, LEADING);
         width = Math.max (width, label.getPreferredSize ().width);
@@ -145,7 +148,7 @@ public class PanelSettings extends JTabbedPane
         };
         title.setOpaque (false);
         Lay.BLtg (title, "W", label);
-        setTabComponentAt (index, title);
+        setTabComponentAt (getTabCount () - 1, title);
     }
 
     public void resetFocus ()

@@ -60,10 +60,6 @@ public class SettingsLookAndFeel extends JPanel implements Settings
         protected MetalTheme   theme;
         protected JRadioButton item;
 
-        public void getFonts ()
-        {
-        }
-
         public void apply ()
         {
             try
@@ -155,18 +151,15 @@ public class SettingsLookAndFeel extends JPanel implements Settings
                 Laf lafTheme = new Laf ();
                 lafTheme.instance = laf.instance;
                 lafTheme.theme = new OceanTheme ();
-                lafTheme.getFonts ();
                 catalog.put (lafTheme.toString (), lafTheme);
 
                 lafTheme = new Laf ();
                 lafTheme.instance = laf.instance;
                 lafTheme.theme = new DefaultMetalTheme ();
-                lafTheme.getFonts ();
                 catalog.put (lafTheme.toString (), lafTheme);
             }
             else
             {
-                laf.getFonts ();
                 catalog.put (laf.toString (), laf);
             }
         }
