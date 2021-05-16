@@ -66,7 +66,6 @@ import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
-import sun.swing.SwingUtilities2;
 
 @SuppressWarnings("serial")
 public class GraphNode extends JPanel
@@ -1224,7 +1223,7 @@ public class GraphNode extends JPanel
             GraphNode.this.validate ();
             parent.scrollRectToVisible (GraphNode.this.getBounds ());
             GraphNode.this.repaint ();
-            SwingUtilities2.compositeRequestFocus (editingComponent);  // editingComponent is really a container, so we shift focus to the first focusable child of editingComponent
+            container.editor.editingComponent.requestFocusInWindow ();  // The "editingComponent" returned above is actually just the container for the real editing component.
         }
 
         public void completeEditing (boolean canceled)

@@ -122,7 +122,6 @@ import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.PanelRun;
 import gov.sandia.n2a.ui.ref.ExportBibliography;
 import gov.sandia.n2a.ui.studies.PanelStudy;
-import sun.swing.SwingUtilities2;
 
 @SuppressWarnings("serial")
 public class PanelEquations extends JPanel
@@ -2271,7 +2270,7 @@ public class PanelEquations extends JPanel
 
             panelBreadcrumb.validate ();
             panelBreadcrumb.repaint ();
-            SwingUtilities2.compositeRequestFocus (editingComponent);  // editingComponent is really a container, so we shift focus to the first focusable child of editingComponent
+            editor.editingComponent.requestFocusInWindow ();  // The "editingComponent" returned above is just a container for the true editing component.
         }
 
         public void completeEditing (boolean canceled)
