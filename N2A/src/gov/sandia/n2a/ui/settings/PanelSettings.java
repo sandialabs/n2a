@@ -126,8 +126,8 @@ public class PanelSettings extends JTabbedPane
 
     public void addSettings (Settings s)
     {
-        String name         = s.getName ();
-        Icon icon           = s.getIcon ();
+        String    name      = s.getName ();
+        Icon      icon      = s.getIcon ();
         Component component = s.getPanel ();
         lastFocus.put (component, s.getInitialFocus (component));
         addTab (name, icon, component, null);
@@ -136,6 +136,11 @@ public class PanelSettings extends JTabbedPane
         // Other L&Fs might also have vertical labels, so this is an inadequate test, but it is not obvious how to check.
         if (Host.isMac ()  &&  UIManager.getLookAndFeel ().isNativeLookAndFeel ()) return;
 
+        setTabLabel (getTabCount () - 1, name, icon);
+    }
+
+    public void setTabLabel (int index, String name, Icon icon)
+    {
         JLabel label = new JLabel (name, icon, LEADING);
         width = Math.max (width, label.getPreferredSize ().width);
         JPanel title = new JPanel ()
@@ -149,7 +154,26 @@ public class PanelSettings extends JTabbedPane
         };
         title.setOpaque (false);
         Lay.BLtg (title, "W", label);
-        setTabComponentAt (getTabCount () - 1, title);
+        setTabComponentAt (index, title);
+    }
+
+    public void updateUI ()
+    {
+        super.updateUI ();
+
+        int count = getTabCount ();
+        if (Host.isMac ()  &&  UIManager.getLookAndFeel ().isNativeLookAndFeel ())
+        {
+            for (int i = 0; i < count; i++) setTabComponentAt (i, null);
+            return;
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            String name  = getTitleAt (i);
+            Icon   icon  = getIconAt (i);
+            setTabLabel (i, name, icon);
+        }
     }
 
     public void resetFocus ()
