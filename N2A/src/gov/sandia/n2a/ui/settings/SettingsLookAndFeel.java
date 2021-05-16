@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -29,11 +29,9 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JTextField;
-import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIDefaults;
 import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.UIManager.LookAndFeelInfo;
 import javax.swing.plaf.FontUIResource;
 import javax.swing.plaf.metal.DefaultMetalTheme;
@@ -56,9 +54,9 @@ public class SettingsLookAndFeel extends JPanel implements Settings
 
     public class Laf
     {
-        protected LookAndFeel  instance;
-        protected MetalTheme   theme;
-        protected JRadioButton item;
+        protected LookAndFeelInfo info;
+        protected MetalTheme      theme;
+        protected JRadioButton    item;
 
         public void apply ()
         {
@@ -75,7 +73,7 @@ public class SettingsLookAndFeel extends JPanel implements Settings
                 }
 
                 if (theme != null) MetalLookAndFeel.setCurrentTheme (theme);
-                UIManager.setLookAndFeel (instance);
+                UIManager.setLookAndFeel (info.getClassName ());
                 currentLaf = this;
                 AppData.state.set (this,      "LookAndFeel");
                 AppData.state.set (fontScale, "FontScale");
@@ -98,15 +96,16 @@ public class SettingsLookAndFeel extends JPanel implements Settings
                     }
                 }
             }
-            catch (UnsupportedLookAndFeelException e)
+            catch (Exception e)
             {
+                e.printStackTrace ();
             }
             for (Window w : Window.getWindows ()) SwingUtilities.updateComponentTreeUI (w);  // TODO: add pack() here?
         }
 
         public String toString ()
         {
-            String result = instance.getName ();
+            String result = info.getName ();
             if (theme != null) result += " / " + theme.getName ();
             return result;
         }
@@ -116,50 +115,24 @@ public class SettingsLookAndFeel extends JPanel implements Settings
     {
         instance = this;
 
-        Set<String> potential = new TreeSet<String> ();
-        potential.add ("javax.swing.plaf.metal.MetalLookAndFeel");
-        potential.add ("com.sun.java.swing.plaf.nimbus.NimbusLookAndFeel");
-        potential.add ("com.sun.java.swing.plaf.windows.WindowsLookAndFeel");
-        potential.add ("com.sun.java.swing.plaf.motif.MotifLookAndFeel");
-        potential.add ("com.sun.java.swing.plaf.mac.MacLookAndFeel");
-        potential.add ("com.apple.laf.AquaLookAndFeel");
-
-        // Add any other LAF's that might be installed on the host, but not present in the above list.
         for (LookAndFeelInfo lafi : UIManager.getInstalledLookAndFeels ())
         {
-            potential.add (lafi.getClassName ());
-        }
-
-        for (String className : potential)
-        {
-            // Instantiate the object associated with the class.
-            Laf laf = new Laf ();
-            try
-            {
-                ClassLoader loader = Thread.currentThread ().getContextClassLoader ();
-                Class<?> lafClass = Class.forName (className, true, loader);
-                laf.instance = (LookAndFeel) lafClass.newInstance ();
-            }
-            catch (Exception e)
-            {
-                continue;  // Skip if cannot instantiate.
-            }
-            if (! laf.instance.isSupportedLookAndFeel ()) continue;  // Skip if not supported on this platform.
-
-            if (laf.instance instanceof MetalLookAndFeel)
+            if (lafi.getName ().equals ("Metal"))
             {
                 Laf lafTheme = new Laf ();
-                lafTheme.instance = laf.instance;
+                lafTheme.info = lafi;
                 lafTheme.theme = new OceanTheme ();
                 catalog.put (lafTheme.toString (), lafTheme);
 
                 lafTheme = new Laf ();
-                lafTheme.instance = laf.instance;
+                lafTheme.info = lafi;
                 lafTheme.theme = new DefaultMetalTheme ();
                 catalog.put (lafTheme.toString (), lafTheme);
             }
             else
             {
+                Laf laf = new Laf ();
+                laf.info = lafi;
                 catalog.put (laf.toString (), laf);
             }
         }
@@ -205,7 +178,7 @@ public class SettingsLookAndFeel extends JPanel implements Settings
         String currentClass = UIManager.getLookAndFeel ().getClass ().getName ();
         for (Laf laf : catalog.values ())
         {
-            boolean selected = currentClass.equals (laf.instance.getClass ().getName ());
+            boolean selected = currentClass.equals (laf.info.getClassName ());
             if (selected) currentLaf = laf;
             laf.item = new JRadioButton (laf.toString (), selected);
             laf.item.addActionListener (menuListener);

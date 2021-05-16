@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -32,6 +32,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
@@ -133,7 +134,7 @@ public class PanelSettings extends JTabbedPane
 
         // Hack to avoid messing with vertical labels on Mac platform.
         // Other L&Fs might also have vertical labels, so this is an inadequate test, but it is not obvious how to check.
-        if (Host.isMac ()  &&  SettingsLookAndFeel.instance.currentLaf.instance.isNativeLookAndFeel ()) return;
+        if (Host.isMac ()  &&  UIManager.getLookAndFeel ().isNativeLookAndFeel ()) return;
 
         JLabel label = new JLabel (name, icon, LEADING);
         width = Math.max (width, label.getPreferredSize ().width);
