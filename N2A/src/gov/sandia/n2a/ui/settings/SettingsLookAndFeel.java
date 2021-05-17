@@ -100,7 +100,7 @@ public class SettingsLookAndFeel extends JPanel implements Settings
             {
                 e.printStackTrace ();
             }
-            for (Window w : Window.getWindows ()) SwingUtilities.updateComponentTreeUI (w);  // TODO: add pack() here?
+            for (Window w : Window.getWindows ()) SwingUtilities.updateComponentTreeUI (w);  // Don't call w.pack(). It creates a mess, such as oversizing the main window.
         }
 
         public String toString ()
