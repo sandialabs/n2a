@@ -457,7 +457,7 @@ public class Population extends Instance
             {
                 if (newOnly) count = size - firstborn;
                 else         count = size;
-                if (count > 1) i = (int) Math.round (Math.random () * (count - 1));
+                if (count > 1) i = (int) Math.round (simulator.random.nextDouble () * (count - 1));
                 else           i = 0;
             }
             stop = i + count;
