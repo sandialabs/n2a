@@ -1180,10 +1180,17 @@ public class Variable implements Comparable<Variable>, Cloneable
         return changed;
     }
 
+    public void addDependencyOn (Variable whatWeNeed)
+    {
+        addDependencyOn (whatWeNeed, true);
+    }
+
     /**
         Record other variables that this variable depends on.
+        @param incrementCount Indicates that we should do reference counting for this
+        dependency. If false, the dependency will be recorded only once.
     **/
-    public void addDependencyOn (Variable whatWeNeed)
+    public void addDependencyOn (Variable whatWeNeed, boolean incrementCount)
     {
         if (uses == null)
         {
@@ -1191,7 +1198,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
         else if (uses.containsKey (whatWeNeed))
         {
-            uses.put (whatWeNeed, uses.get (whatWeNeed) + 1);
+            if (incrementCount) uses.put (whatWeNeed, uses.get (whatWeNeed) + 1);
             return;
         }
         uses.put (whatWeNeed, 1);
@@ -1219,7 +1226,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     /**
         Assuming none of our equations currently have their dependencies set, add dependencies on
         our direct references or the connection bindings they pass through. Used when rewriting
-        equations in a way that to complex to conveniently track as incremental changes.
+        equations in a way that is too complex to conveniently track as incremental changes.
         1) removeDepenciesFromReferences() to clear dependencies
         2) Do complex changes to equation structure (such as merging another variable) without
            updating dependencies.

@@ -20,6 +20,11 @@ public abstract class Type implements Comparable<Type>
         throw new EvaluationException ("Operation not supported on this type.");
     }
 
+    public boolean isZero () throws EvaluationException
+    {
+        throw new EvaluationException ("Operation not supported on this type.");
+    }
+
     public Type add (Type that) throws EvaluationException
     {
         throw new EvaluationException ("Operation not supported on this type.");

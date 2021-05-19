@@ -36,6 +36,11 @@ public class Text extends Type
         return new Text ();
     }
 
+    public boolean isZero ()
+    {
+        return value.isEmpty ();
+    }
+
     public void addEscapes ()
     {
         StringBuffer result = new StringBuffer ();

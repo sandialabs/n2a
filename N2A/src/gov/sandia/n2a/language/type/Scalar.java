@@ -67,6 +67,11 @@ public class Scalar extends Type
         return new Scalar (0);
     }
 
+    public boolean isZero ()
+    {
+        return value == 0;
+    }
+
     public Type add (Type that) throws EvaluationException
     {
         if (that instanceof Scalar) return new Scalar (value + ((Scalar) that).value);

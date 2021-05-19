@@ -2679,7 +2679,7 @@ public class EquationSet implements Comparable<EquationSet>
                     if (last.hasAttribute ("global")) vo.addAttribute ("global");
                     found = vo;
                 }
-                found.addDependencyOn (last);
+                found.addDependencyOn (last, false);
                 last = found;
             }
         }
@@ -3732,30 +3732,69 @@ public class EquationSet implements Comparable<EquationSet>
             // Check if we have a constant
             if (v.hasAttribute ("constant")) continue;  // If this already has a "constant" tag, it was specially added so presumably correct.
             if (v.hasAttribute ("externalWrite")) continue;  // Regardless of the local math, a variable that gets written is not constant.
-            if (v.derivative != null) continue;  // An integrated variable is presumably not constant, since the derivative is unlikely to be constant zero.
+            if (v.derivative != null)  // A variable with a derivative is usually not constant. However, there are two ways in which it could be constant ...
+            {
+                // 1) The variable is assigned an unconditional constant. This overrides the derivative in every cycle.
+                if (v.equations.size () == 1)
+                {
+                    EquationEntry e = v.equations.first ();
+                    if (e.expression instanceof Constant  &&  e.condition == null)  // Must be unconditional. No exception for $init. (Non-integrated variables do get an exception for $init; see below.)
+                    {
+                        changed = true;
+                        v.addAttribute ("constant");
+                        v.removeDependencyOn (v.derivative);
+                        v.derivative = null;
+                        continue;
+                    }
+                }
+
+                // 2) The derivative is constant zero. In that case, the derivative has no effect.
+                if (! v.derivative.hasAttribute ("constant")) continue;
+                EquationEntry e = v.derivative.equations.first ();
+                if (! ((Constant) e.expression).value.isZero ()) continue;
+                changed = true;
+                v.removeDependencyOn (v.derivative);
+                v.derivative = null;
+                if (v.equations.isEmpty ())
+                {
+                    // An empty equation list indicates the variable was added as an integrated value.
+                    // Since the derivative went away, the variable will now be constant zero.
+                    // $t, $t', $index an $type are also added without equations.
+                    if (v.name.equals ("$t")  &&  v.order < 2) continue;
+                    v.addAttribute ("constant");
+                    e = new EquationEntry (v, "");
+                    e.expression = new Constant (0);
+                    v.add (e);
+                    continue;  // Already determined that v is constant, so done with it.
+                }
+                // v is now effectively an ordinary variable (no derivative) with equation(s), so fall through ...
+            }
             if (v.equations.size () != 1)
             {
                 if (v.equations.isEmpty ()  &&  v.name.equals ("$t")  &&  v.order == 1  &&  container != null)  // special case for $t'
                 {
                     // Copy constant $t' from container.
-                    Variable parentV = container.find (v);
-                    if (parentV.hasAttribute ("constant"))
+                    Variable parentDt = container.find (v);
+                    if (parentDt.hasAttribute ("constant"))
                     {
                         changed = true;
                         v.addAttribute ("constant");
                         EquationEntry e = new EquationEntry (v, "");
                         v.add (e);
 
-                        EquationEntry parentE = parentV.equations.first ();
+                        EquationEntry parentE = parentDt.equations.first ();
                         e.expression = new Constant (parentE.expression.getDouble ());
                         e.expression.unit = AbstractUnit.ONE;
                     }
                 }
-
                 continue;
             }
+
+            // At this point, the variable satisfies most of the requirements to be constant.
+            // It has no external writers or derivatives, so only equations can change it.
+            // There is exactly one equation. The remaining question is whether the equation is an unconditional constant.
             EquationEntry e = v.equations.first ();
-            if (e.condition != null  &&  ! e.ifString.equals ("$init")) continue;  // Must be unconditional. Notice that a constant equation conditioned on $init is effectively unconditional.
+            if (e.condition != null  &&  ! e.ifString.equals ("$init")) continue;  // Notice that a constant equation conditioned on $init is effectively unconditional.
             if (e.expression instanceof Constant)
             {
                 changed = true;

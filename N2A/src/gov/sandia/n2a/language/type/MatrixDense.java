@@ -260,6 +260,21 @@ public class MatrixDense extends Matrix
         return result;
     }
 
+    public boolean isZero ()
+    {
+        int w = value.length;
+        if (w < 1) return true;
+        int h = value[0].length;
+        for (int c = 0; c < w; c++)
+        {
+            for (int r = 0; r < h; r++)
+            {
+                if (value[c][r] != 0) return false;
+            }
+        }
+        return true;
+    }
+
     public Type add (Type that) throws EvaluationException
     {
         if (that instanceof MatrixDense)

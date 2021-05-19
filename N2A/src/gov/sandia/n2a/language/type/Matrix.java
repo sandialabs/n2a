@@ -139,6 +139,11 @@ public abstract class Matrix extends Type implements Holder
     **/
     public abstract Matrix identity ();
 
+    public boolean isZero ()
+    {
+        return new MatrixDense (this).isZero ();
+    }
+
     public Type add (Type that) throws EvaluationException
     {
         return new MatrixDense (this).add (that);

@@ -132,6 +132,18 @@ public class MatrixSparse extends Matrix
         return result;
     }
 
+    public boolean isZero ()
+    {
+        for (HashMap<Integer,Double> c : data)
+        {
+            for (Double d : c.values ())
+            {
+                if (d != 0) return false;
+            }
+        }
+        return true;
+    }
+
     public Type add (Type that) throws EvaluationException
     {
         if (that instanceof MatrixSparse)
