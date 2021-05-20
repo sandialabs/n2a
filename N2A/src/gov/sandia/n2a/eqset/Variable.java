@@ -647,7 +647,7 @@ public class Variable implements Comparable<Variable>, Cloneable
 
             nextEquations.add (e);
         }
-        if (! nextEquations.isEmpty ()  &&  nextEquations.first () == alwaysTrue)  // alwaysTrue is never the default equation.
+        if (! nextEquations.isEmpty ()  &&  nextEquations.first () == alwaysTrue)  // alwaysTrue requires a non-null condition, so it is never the default equation.
         {
             changed = true;
             equations.clear ();
@@ -1180,17 +1180,12 @@ public class Variable implements Comparable<Variable>, Cloneable
         return changed;
     }
 
-    public void addDependencyOn (Variable whatWeNeed)
-    {
-        addDependencyOn (whatWeNeed, true);
-    }
-
     /**
         Record other variables that this variable depends on.
         @param incrementCount Indicates that we should do reference counting for this
         dependency. If false, the dependency will be recorded only once.
     **/
-    public void addDependencyOn (Variable whatWeNeed, boolean incrementCount)
+    public void addDependencyOn (Variable whatWeNeed)
     {
         if (uses == null)
         {
@@ -1198,7 +1193,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
         else if (uses.containsKey (whatWeNeed))
         {
-            if (incrementCount) uses.put (whatWeNeed, uses.get (whatWeNeed) + 1);
+            uses.put (whatWeNeed, uses.get (whatWeNeed) + 1);
             return;
         }
         uses.put (whatWeNeed, 1);

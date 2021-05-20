@@ -1695,8 +1695,9 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Attach the appropriate Variable to each AccessVariable operator.
         Depends on results of:
-            resolveConnectionBindings -- to follow connection references
+            resolveConnectionBindings() -- to follow connection references
             resolveLHS() -- to create indirect variables and thus avoid unnecessary failure of resolution
+            findIntegrated() -- to create implicit integrands
     **/
     public void resolveRHS () throws Exception
     {
@@ -2662,7 +2663,8 @@ public class EquationSet implements Comparable<EquationSet>
                 if (ns.length > 1  &&  findConnection (ns[0]) != null) continue;
             }
 
-            // This may seem inefficient, but in general there will only be one order to process.
+            // This is inefficient because it iterates over all lower orders for each order found,
+            // roughly O(n^2). However, there will rarely be more than one order to process.
             int lowestOrder = 0;
             if (v.name.equals ("$t")) lowestOrder = 1;  // don't let $t depend on $t', as this is handled entirely within the simulator
             Variable last = v;
@@ -2679,7 +2681,6 @@ public class EquationSet implements Comparable<EquationSet>
                     if (last.hasAttribute ("global")) vo.addAttribute ("global");
                     found = vo;
                 }
-                found.addDependencyOn (last, false);
                 last = found;
             }
         }
@@ -4146,6 +4147,7 @@ public class EquationSet implements Comparable<EquationSet>
             // Check if there is another equation that is exactly one order higher than us.
             // If so, then we must be integrated from it.
             v.derivative = find (new Variable (v.name, v.order + 1));  // returns null if the derivative does not exist
+            if (v.derivative != null) v.addDependencyOn (v.derivative);
         }
     }
 
