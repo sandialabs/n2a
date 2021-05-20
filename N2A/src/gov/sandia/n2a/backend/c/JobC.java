@@ -52,6 +52,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
@@ -70,11 +71,10 @@ public class JobC extends Thread
     public Path gcc;        // local or remote
 
     public String  T;
-    public String  ProfilingString;
     public long    seed;
     public boolean during;
     public boolean after;
-    public boolean with_profiling;
+    public boolean profile;
     
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
@@ -120,8 +120,6 @@ public class JobC extends Thread
                 Backend.err.get ().println ("WARNING: Unsupported numeric type. Defaulting to single-precision float.");
             }
 
-            ProfilingString = job.getOrDefault ("false","$metadata","profile");
-            with_profiling = ProfilingString.startsWith ("true");
             env              = Host.get (job);
             Path resourceDir = env.getResourceDir ();
             jobDir           = Host.getJobDir (resourceDir, job);  // Unlike localJobDir (which is created by MDir), this may not exist until we explicitly create it.
@@ -155,6 +153,8 @@ public class JobC extends Thread
                     during = true;
                     after  = false;
             }
+
+            profile = model.getFlag ("$metadata", "backend", "c", "profile");
 
             System.out.println (digestedModel.dump (false));
 
@@ -201,11 +201,13 @@ public class JobC extends Thread
                 "KDTree.h", "StringLite.h",
                 "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
                 "nosys.h",
-                "runtime.cc", "runtime.h", "runtime.tcc", "profiling.cc",
+                "runtime.cc", "runtime.h", "runtime.tcc",
+                "profiling.h", "profiling.cc",
                 "OutputParser.h"  // Not needed by runtime, but provided as a utility for users.
             );
             needRuntime = false;   // Stop checking files for this session.
         }
+
         if (changed)  // Delete existing object files
         {
             try (DirectoryStream<Path> list = Files.newDirectoryStream (runtimeDir))
@@ -219,14 +221,18 @@ public class JobC extends Thread
         }
 
         // Compile runtime
-        ArrayList<String> sources = new ArrayList<String> ();
-        sources.add ("runtime");
-        sources.add ("io");
-        sources.add ("profiling");
-        if (T.equals ("int")) sources.add ("fixedpoint");
-        for (String stem : sources)
+        Map<String,Boolean> sources = new HashMap<String,Boolean> ();  // List of source names, associated with flag indicating that a type-specific object should be built.
+        sources.put ("runtime",   true);
+        sources.put ("io",        true);
+        sources.put ("profiling", false);
+        if (T.equals ("int")) sources.put ("fixedpoint", true);
+        for (String stem : sources.keySet ())
         {
-            Path object = runtimeDir.resolve (stem + "_" + T + ".o");
+            String objectName = stem;
+            if (sources.get (stem)) objectName += "_" + T;
+            objectName += ".o";
+
+            Path object = runtimeDir.resolve (objectName);
             if (Files.exists (object)) continue;
             Path source = runtimeDir.resolve (stem + ".cc");
             Path out = runCommand
@@ -269,14 +275,14 @@ public class JobC extends Thread
         Path out = runCommand
         (
             gcc.toString (), "-O3", "-std=c++11",
-            "-ffunction-sections", "-fdata-sections",
+            "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
             "-I" + env.quote (runtimeDir),
             "-Dn2a_T=" + T,
             (T.equals ("int") ? "-Dn2a_FP" : ""),
             env.quote (runtimeDir.resolve ("runtime_" + T + ".o")),
             env.quote (runtimeDir.resolve ("io_"      + T + ".o")),
-            env.quote (runtimeDir.resolve ("profiling_"      + T + ".o")),
             (T.equals ("int") ? env.quote (runtimeDir.resolve ("fixedpoint_" + T + ".o")) : ""),
+            (profile ? env.quote (runtimeDir.resolve ("profiling.o")) : ""), (profile ? "-ldl" : ""),
             "-o", env.quote (binary), env.quote (source)
         );
         Files.delete (out);
@@ -560,9 +566,12 @@ public class JobC extends Thread
         else                  context = new RendererC   (this, result);
 
         result.append ("#include \"runtime.h\"\n");
+        if (profile)
+        {
+            result.append ("#include \"profiling.h\"\n");
+        }
         result.append ("#include \"Matrix.tcc\"\n");
         result.append ("#include \"MatrixFixed.tcc\"\n");
-        
         result.append ("\n");
         result.append ("#include <iostream>\n");
         result.append ("#include <vector>\n");
@@ -595,13 +604,16 @@ public class JobC extends Thread
         // Main
         result.append ("int main (int argc, char * argv[])\n");
         result.append ("{\n");
-        result.append ("get_callbacks();\n");
         result.append ("  signal (SIGFPE,  signalHandler);\n");
         result.append ("  signal (SIGINT,  signalHandler);\n");
         result.append ("  signal (SIGTERM, signalHandler);\n");
         result.append ("\n");
         result.append ("  try\n");
         result.append ("  {\n");
+        if (profile)
+        {
+            result.append ("    get_callbacks ();\n");
+        }
         generateMainInitializers (result);
         result.append ("\n");
         if (seed >= 0)
@@ -622,7 +634,10 @@ public class JobC extends Thread
         result.append ("    Simulator<" + T + ">::instance.run (wrapper);\n");
         result.append ("\n");
         result.append ("    outputClose ();\n");
-        result.append ("finalize_profiling();\n");
+        if (profile)
+        {
+            result.append ("    finalize_profiling ();\n");
+        }
         result.append ("  }\n");
         result.append ("  catch (const char * message)\n");
         result.append ("  {\n");
@@ -844,16 +859,7 @@ public class JobC extends Thread
         generateDeclarationsLocal (s, result);
         generateDeclarationsGlobal (s, result);
     }
-    public void push_region(StringBuilder result, String name) {
-        if(with_profiling) {
-          result.append("push_region(\""+name+"\");\n");
-        }
-    }
-    public void pop_region(StringBuilder result) {
-        if(with_profiling) {
-            result.append("pop_region();\n");
-        }
-    }
+
     public void generateDeclarationsGlobal (EquationSet s, StringBuilder result)
     {
         BackendDataC bed = (BackendDataC) s.backendData;
@@ -1483,7 +1489,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
-            push_region(result,ns+"integrate()");
+            push_region (result, ns + "integrate()");
             result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
             context.hasEvent = true;
             result.append ("  " + T + " dt = event->dt;\n");
@@ -1523,7 +1529,7 @@ public class JobC extends Thread
             }
             result.append ("  }\n");
             context.hasEvent = false;
-            pop_region(result);
+            pop_region (result);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1533,9 +1539,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
-              
-            push_region(result,ns +"update()");
-            
+            push_region (result, ns + "update()");
             for (Variable v : bed.globalBufferedInternalUpdate)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -1550,7 +1554,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
-            pop_region(result);
+            pop_region (result);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -1665,7 +1669,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
-            push_region(result,ns + "updateDerivative()");
+            push_region (result, ns + "updateDerivative()");
             for (Variable v : bed.globalBufferedInternalDerivative)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -1680,7 +1684,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
-            pop_region(result);
+            pop_region (result);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2353,7 +2357,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
-            push_region(result,ns+"integrate()");
+            push_region (result, ns + "integrate()");
             if (bed.localIntegrated.size () > 0)
             {
                 if (bed.lastT)
@@ -2415,7 +2419,7 @@ public class JobC extends Thread
                 }
             }
             context.hasEvent = false;
-            pop_region(result);
+            pop_region (result);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2425,7 +2429,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
-            push_region(result,ns +"update()");
+            push_region (result, ns + "update()");
             for (Variable v : bed.localBufferedInternalUpdate)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -2448,8 +2452,7 @@ public class JobC extends Thread
                     result.append ("  " + mangle (e.name) + ".update ();\n");
                 }
             }
-            pop_region(result);
-            
+            pop_region (result);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2688,7 +2691,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
-            push_region(result, ns+"updateDerivative()");
+            push_region (result, ns + "updateDerivative()");
             for (Variable v : bed.localBufferedInternalDerivative)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -2711,7 +2714,7 @@ public class JobC extends Thread
                     result.append ("  " + mangle (e.name) + ".updateDerivative ();\n");
                 }
             }
-            pop_region(result);
+            pop_region (result);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -3436,6 +3439,16 @@ public class JobC extends Thread
             result.append ("}\n");
             result.append ("\n");
         }
+    }
+
+    public void push_region (StringBuilder result, String name)
+    {
+        if (profile) result.append ("push_region (\"" + name +"\");\n");
+    }
+
+    public void pop_region (StringBuilder result)
+    {
+        if (profile) result.append ("pop_region ();\n");
     }
 
     public void eventGenerate (String pad, EventTarget et, RendererC context, boolean multi)
