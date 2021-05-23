@@ -606,6 +606,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     {
         changed = false;
         TreeSet<EquationEntry> nextEquations = new TreeSet<EquationEntry> ();
+        EquationEntry defaultEquation = null;
         EquationEntry alwaysTrue = null;
         visited = null;
         for (EquationEntry e : equations)
@@ -614,7 +615,11 @@ public class Variable implements Comparable<Variable>, Cloneable
             {
                 e.expression = e.expression.simplify (this, false);
             }
-            if (e.condition != null)
+            if (e.condition == null)
+            {
+                defaultEquation = e;
+            }
+            else
             {
                 e.condition = e.condition.simplify (this, false);
                 e.ifString  = e.condition.render ();
@@ -622,12 +627,14 @@ public class Variable implements Comparable<Variable>, Cloneable
 
             if (e.expression instanceof AccessVariable)
             {
-                if (((AccessVariable) e.expression).reference.variable == this)
+                if (((AccessVariable) e.expression).reference.variable == this)  // Vacuous assignment
                 {
-                    // Vacuous assignment.
                     // Simulator always copies value to next cycle when no equation fires,
                     // so there is never need for an explicit equation to do this.
                     changed = true;
+                    e.expression.releaseDependencies (this);
+                    if (e.condition == null) defaultEquation = null;
+                    else                     e.condition.releaseDependencies (this);
                     continue;
                 }
             }
@@ -637,6 +644,7 @@ public class Variable implements Comparable<Variable>, Cloneable
                 {
                     // Drop equation
                     changed = true;
+                    if (e.expression != null) e.expression.releaseDependencies (this);
                     continue;
                 }
                 else  // Will always fire
@@ -647,11 +655,18 @@ public class Variable implements Comparable<Variable>, Cloneable
 
             nextEquations.add (e);
         }
-        if (! nextEquations.isEmpty ()  &&  nextEquations.first () == alwaysTrue)  // alwaysTrue requires a non-null condition, so it is never the default equation.
+        if (! nextEquations.isEmpty ()  &&  nextEquations.first () == alwaysTrue)  // alwaysTrue requires an explicit (non-null) condition. The default equation is never selected.
         {
             changed = true;
             equations.clear ();
             equations.add (alwaysTrue);
+
+            for (EquationEntry e : nextEquations)
+            {
+                if (e == alwaysTrue) continue;
+                if (e.expression != null) e.expression.releaseDependencies (this);
+                if (e.condition  != null) e.condition .releaseDependencies (this);
+            }
 
             // Make the equation unconditional, since it always fires anyway.
             EquationEntry e = equations.first ();
@@ -662,13 +677,38 @@ public class Variable implements Comparable<Variable>, Cloneable
         {
             equations = nextEquations;
 
-            if (equations.isEmpty ()  &&  hasAttribute ("temporary"))
+            if (equations.isEmpty ())
             {
-                changed = true;
-                addAttribute ("constant");
-                EquationEntry e = new EquationEntry (this, "");
-                equations.add (e);
-                e.expression = new Constant (0);  // This is the default value for a temporary when no equation fires.
+                if (hasAttribute ("temporary"))
+                {
+                    changed = true;
+                    addAttribute ("constant");
+                    EquationEntry e = new EquationEntry (this, "");
+                    equations.add (e);
+                    e.expression = new Constant (0);  // This is the default value for a temporary when no equation fires.
+                }
+            }
+            else if (equations.size () > 1)
+            {
+                // Eliminate equations if they output the same constant value as the default.
+                // Basically, if all the conditions are mutually exclusive, then default will take
+                // the place of the removed equation. If they are not mutually exclusive, then the
+                // contract with the user allows us to choose another equation instead.
+                if (defaultEquation != null  &&  defaultEquation.expression instanceof Constant)
+                {
+                    nextEquations = new TreeSet<EquationEntry> ();
+                    nextEquations.add (defaultEquation);
+                    // Add any equations that don't match the default equation.
+                    for (EquationEntry e : equations)
+                    {
+                        if (   ! (e.expression instanceof Constant)
+                            || ! ((Constant) defaultEquation.expression).value.equals (((Constant) e.expression).value))
+                        {
+                            nextEquations.add (e);
+                        }
+                    }
+                    equations = nextEquations;
+                }
             }
         }
 
@@ -1296,10 +1336,15 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
     }
 
+    /**
+        Indicates that other objects (mainly variables) depend on this one.
+        A dependency from this variable on itself does not count as a user.
+    **/
     public boolean hasUsers ()
     {
-        if (usedBy == null) return false;
-        return ! usedBy.isEmpty ();
+        if (usedBy == null  ||  usedBy.isEmpty ()) return false;
+        if (usedBy.size () == 1  &&  usedBy.contains (this)) return false;
+        return true;
     }
 
     public boolean neededBySpecial ()
