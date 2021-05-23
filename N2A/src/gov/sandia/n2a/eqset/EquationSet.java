@@ -3733,9 +3733,15 @@ public class EquationSet implements Comparable<EquationSet>
             // Check if we have a constant
             if (v.hasAttribute ("constant")) continue;  // If this already has a "constant" tag, it was specially added so presumably correct.
             if (v.hasAttribute ("externalWrite")) continue;  // Regardless of the local math, a variable that gets written is not constant.
-            if (v.derivative != null)  // A variable with a derivative is usually not constant. However, there are two ways in which it could be constant ...
+
+            if (v.derivative != null)  // A variable with a derivative is usually not constant, with the following exceptions ...
             {
                 // 1) The variable is assigned an unconditional constant. This overrides the derivative in every cycle.
+                // 2) The derivative is constant zero. In that case, the derivative has no effect.
+                //    a) Pure circular dependency with an implicit integrand, and derivative evaluates to zero given initial value (zero) of integrand.
+                //       In this case, the integrand will never change, so the derivative will continue to evaluate to zero.
+
+                // 1) Check for unconditional constant.
                 if (v.equations.size () == 1)
                 {
                     EquationEntry e = v.equations.first ();
@@ -3749,7 +3755,48 @@ public class EquationSet implements Comparable<EquationSet>
                     }
                 }
 
-                // 2) The derivative is constant zero. In that case, the derivative has no effect.
+                // 2a) Check for pure circular dependency.
+                Variable top = v;
+                while (top.uses.size () == 1)  // This single dependency must be the derivative.
+                {
+                    if (top.derivative != null)
+                    {
+                        top = top.derivative;
+                        continue;
+                    }
+
+                    // "top" is now the highest derivative.
+                    // Its single dependency is not a derivative, but could be anything else.
+                    if (top.uses.containsKey (v))  // This is a pure circular dependency.
+                    {
+                        // Evaluate top. Initial value of v must be zero, because otherwise it would depend on other variables or be trapped above as an unconditional constant.
+                        // We can only make this assumption here.
+                        Instance instance = new Instance ()
+                        {
+                            public Scalar zero = new Scalar (0);
+
+                            // all AccessVariable objects will reach here first.
+                            public Type get (VariableReference r) throws EvaluationException
+                            {
+                                return zero;
+                            }
+                        };
+                        Type result = top.eval (instance);
+                        if (result instanceof Scalar  &&  ((Scalar) result).value == 0)
+                        {
+                            changed = true;
+                            top.addAttribute ("constant");
+                            top.removeDependencies ();  // Should just be v, but there may be multiple references.
+                            top.equations.clear ();
+                            EquationEntry e = new EquationEntry (top, "");
+                            e.expression = new Constant (0);
+                            top.add (e);
+                        }
+                    }
+                    break;  // And fall through to case 2. If top is immediately v.derivative, then it will be detached in this iteration.
+                }
+
+                // 2) Check if derivative is constant zero.
                 if (! v.derivative.hasAttribute ("constant")) continue;
                 EquationEntry e = v.derivative.equations.first ();
                 if (! ((Constant) e.expression).value.isZero ()) continue;
@@ -3770,6 +3817,7 @@ public class EquationSet implements Comparable<EquationSet>
                 }
                 // v is now effectively an ordinary variable (no derivative) with equation(s), so fall through ...
             }
+
             if (v.equations.size () != 1)
             {
                 if (v.equations.isEmpty ()  &&  v.name.equals ("$t")  &&  v.order == 1  &&  container != null)  // special case for $t'
@@ -3792,8 +3840,8 @@ public class EquationSet implements Comparable<EquationSet>
             }
 
             // At this point, the variable satisfies most of the requirements to be constant.
-            // It has no external writers or derivatives, so only equations can change it.
-            // There is exactly one equation. The remaining question is whether the equation is an unconditional constant.
+            // It has no external writers or derivatives, so only its single equation can change it.
+            // The remaining question is whether the equation is an unconditional constant.
             EquationEntry e = v.equations.first ();
             if (e.condition != null  &&  ! e.ifString.equals ("$init")) continue;  // Notice that a constant equation conditioned on $init is effectively unconditional.
             if (e.expression instanceof Constant)
