@@ -215,6 +215,12 @@ public class MCombo extends MNode implements MNodeListener
         else                  fireChildChanged (key, key);  // The newly-added child hides the old child, so this appears as a change of content.
     }
 
+    /**
+        Fulfills MNodeListener interface.
+        Also called by SettingsRepo to notify us when a document has been moved between repos.
+        In that case the child isn't strictly deleted, but this method still does the right thing
+        by updating our children map and sending a change notification to listeners.
+    **/
     public void childDeleted (String key)
     {
         MNode newContainer = rescanContainer (key);

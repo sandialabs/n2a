@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
@@ -68,9 +69,12 @@ import javax.swing.JButton;
 import javax.swing.JColorChooser;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JPopupMenu;
+import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
@@ -141,6 +145,8 @@ import com.jcraft.jsch.Session;
 @SuppressWarnings("serial")
 public class SettingsRepo extends JScrollPane implements Settings
 {
+    public static SettingsRepo instance;  // singleton
+
     // List of repositories
     protected RepoTable      repoTable;
     protected RepoTableModel repoModel;
@@ -176,6 +182,8 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public SettingsRepo ()
     {
+        instance = this;
+
         setName ("Repositories");  // Necessary to fulfill Settings interface.
         JPanel panel = new JPanel ();
         setViewportView (panel);
@@ -667,6 +675,53 @@ public class SettingsRepo extends JScrollPane implements Settings
     public Component getInitialFocus (Component panel)
     {
         return panel;
+    }
+
+    public JPopupMenu createTransferMenu (String path)
+    {
+        // Determine which repo holds key
+        String pieces[] = path.split ("/");
+        MDir source;
+        if (pieces[0].equals ("models")) source = (MDir) AppData.models    .containerFor (pieces[1]);
+        else                             source = (MDir) AppData.references.containerFor (pieces[1]);
+        String repoName = source.key ();
+        String primary = AppData.state.get ("Repos", "primary");
+        boolean sourceEditable =  AppData.repos.getBoolean (repoName, "editable")  ||  repoName.equals (primary);
+
+        JPopupMenu result = new JPopupMenu ();
+        for (MNode repo : repoModel.repos)
+        {
+            String key = repo.key ();
+            boolean editable =  sourceEditable  &&  (repo.getBoolean ("editable")  ||  key.equals (primary));
+            boolean selected = key.equals (repoName);
+
+            JMenuItem item = new JRadioButtonMenuItem (key);
+            item.setSelected (selected);
+            item.setEnabled (editable);
+            result.add (item);
+
+            if (editable  &&  ! selected) item.addActionListener (new ActionListener ()
+            {
+                public void actionPerformed (ActionEvent event)
+                {
+                    MDir destination;
+                    MCombo combo;
+                    if (pieces[0].equals ("models"))
+                    {
+                        destination = (MDir) existingModels.get (key);
+                        combo = AppData.models;
+                    }
+                    else
+                    {
+                        destination = (MDir) existingReferences.get (key);
+                        combo = AppData.references;
+                    }
+                    destination.take (source, pieces[1]);
+                    combo.childDeleted (pieces[1]);  // Not actually deleted. This just forces an update of the children map.
+                }
+            });
+        }
+        return result;
     }
 
     public void status (String message)

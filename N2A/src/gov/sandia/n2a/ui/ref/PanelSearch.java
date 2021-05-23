@@ -22,6 +22,7 @@ import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
 import gov.sandia.n2a.ui.ref.undo.DeleteEntry;
+import gov.sandia.n2a.ui.settings.SettingsRepo;
 
 import java.awt.Color;
 import java.awt.Component;
@@ -51,6 +52,7 @@ import javax.swing.InputMap;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
@@ -82,6 +84,7 @@ public class PanelSearch extends JPanel
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setDragEnabled (true);
         list.setCellRenderer (renderer);
+        list.setRequestFocusEnabled (false);  // Let the mouse listener handle focus on click.
 
         InputMap inputMap = list.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
@@ -119,9 +122,33 @@ public class PanelSearch extends JPanel
 
         list.addMouseListener (new MouseAdapter ()
         {
-            public void mouseClicked (MouseEvent e)
+            public void mouseClicked (MouseEvent me)
             {
-                if (e.getClickCount () > 1) selectCurrent ();
+                int clicks = me.getClickCount ();
+                if (clicks == 1)
+                {
+                    int index = list.locationToIndex (me.getPoint ());
+                    if (index >= 0)
+                    {
+                        lastSelection = index;
+                        list.setSelectedIndex (index);
+                    }
+                    list.requestFocusInWindow ();
+
+                    if (me.isControlDown ())  // Bring up context menu for moving between repos.
+                    {
+                        String key = list.getSelectedValue ();
+                        if (key != null)
+                        {
+                            JPopupMenu menuRepo = SettingsRepo.instance.createTransferMenu ("references/" + key);
+                            menuRepo.show (list, me.getX (), me.getY ());
+                        }
+                    }
+                }
+                else
+                {
+                    selectCurrent ();
+                }
             }
         });
 
@@ -134,7 +161,7 @@ public class PanelSearch extends JPanel
 
             public void focusLost (FocusEvent e)
             {
-                hideSelection ();
+                if (! e.isTemporary ()) hideSelection ();
             }
         });
 

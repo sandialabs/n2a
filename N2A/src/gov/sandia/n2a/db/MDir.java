@@ -229,6 +229,42 @@ public class MDir extends MNode
         }
     }
 
+    /**
+        Transfer document from another MDir.
+        The document is completely removed from the source.
+        This function is used only by the repo transfer menu, so it does not do rigorous notification to listeners.
+        Instead, we rely on the caller to update MCombo children map.
+        This is more efficient than a set of strictly-correct notifications.
+    **/
+    public synchronized void take (MDir source, String key)
+    {
+        if (       child (key) != null) return;  // Don't overwrite an existing model.
+        if (source.child (key) == null) return;  // Nothing to move
+ 
+        synchronized (source)  // Both source and destination must be locked for this. Could produce a deadlock if take() is not called carefully.
+        {
+            // Move on disk
+            source.save ();  // Flush write queue, so we can safely move file.
+            Path fromPath = source.pathForChild (key);
+            Path toPath   =        pathForChild (key);
+            try
+            {
+                Files.move (fromPath, toPath);
+            }
+            catch (IOException e)
+            {
+                return;  // No damage has been done yet (hopefully).
+            }
+
+            // Reassign in memory
+            SoftReference<MDoc> ref = source.children.remove (key);  // May be null
+            children.put (key, ref);
+            MDoc doc = null;
+            if (ref != null) doc = ref.get ();
+            if (doc != null) doc.parent = this;
+        }
+    }
+
     public synchronized void addListener (MNodeListener listener)
     {
         listeners.add (listener);

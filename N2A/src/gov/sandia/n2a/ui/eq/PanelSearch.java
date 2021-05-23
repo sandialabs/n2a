@@ -28,6 +28,7 @@ import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.ChangeCategory;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
+import gov.sandia.n2a.ui.settings.SettingsRepo;
 
 import java.awt.Component;
 import java.awt.EventQueue;
@@ -63,6 +64,7 @@ import javax.swing.Icon;
 import javax.swing.InputMap;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
@@ -209,13 +211,25 @@ public class PanelSearch extends JPanel
                 int clicks = me.getClickCount ();
                 if (clicks == 1)
                 {
-                    TreePath path = tree.getClosestPathForLocation (me.getX (), me.getY ());
+                    int x = me.getX ();
+                    int y = me.getY ();
+                    TreePath path = tree.getClosestPathForLocation (x, y);
                     if (path != null)
                     {
                         lastSelection = ((NodeBase) path.getLastPathComponent ()).getKeyPath ();
                         tree.setSelectionPath (path);
                     }
                     takeFocus ();
+
+                    if (path != null  &&  me.isControlDown ())  // Bring up context menu for moving between repos.
+                    {
+                        Object o = path.getLastPathComponent ();
+                        if (o instanceof NodeModel)
+                        {
+                            JPopupMenu menuRepo = SettingsRepo.instance.createTransferMenu ("models/" + ((NodeModel) o).key);
+                            menuRepo.show (tree, x, y);
+                        }
+                    }
                 }
                 else  // all click counts >1
                 {
