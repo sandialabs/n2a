@@ -642,6 +642,8 @@ public class NodeJob extends NodeBase
                     String key = n.key ();
                     if (inMetadata)
                     {
+                        if (key.equals ("seed")) return n;
+                        if (key.equals ("duration")) return n;
                         if (key.equals ("param")  &&  n.getFlag ()  &&  ! n.get ().equals ("watch")) return n;
                         if (! key.equals ("backend")) continue;
                         if (n.child ("all") != null) return n;
@@ -657,6 +659,8 @@ public class NodeJob extends NodeBase
                     else if (key.equals ("$metadata"))
                     {
                         // Don't even process $metadata unless it contains useful backend info.
+                        if (n.child ("seed") != null) return n;
+                        if (n.child ("duration") != null) return n;
                         if (n.getFlag ("param")  &&  ! n.get ("param").equals ("watch")) return n;
                         MNode b = n.child ("backend");
                         if (b == null) continue;
