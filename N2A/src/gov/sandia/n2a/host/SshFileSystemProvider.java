@@ -53,6 +53,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.Vector;
 import java.util.concurrent.TimeUnit;
@@ -747,6 +748,7 @@ public class SshFileSystemProvider extends FileSystemProvider
 
                 public Path next ()
                 {
+                    if (next == null) throw new NoSuchElementException ();
                     Path result = next;
                     next = findNext ();
                     return result;
