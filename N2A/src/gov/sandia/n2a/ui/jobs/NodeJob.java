@@ -101,50 +101,6 @@ public class NodeJob extends NodeBase
         return AppData.runs.child (key);
     }
 
-    // The following static functions are utilities for working with the snapshot model
-    // in the job dir. They are not directly to NodeJob, but this is as good a place
-    // as any to collect these routines.
-
-    public static MDoc getModel (String jobKey)
-    {
-        return getModel (AppData.runs.child (jobKey));
-    }
-
-    public static MDoc getModel (MNode job)
-    {
-        if (job == null) return null;
-        Path modelPath = Host.getJobDir (Host.getLocalResourceDir (), job).resolve ("model");
-        MDoc result = new MDoc (modelPath);
-        // EquationSet will replace the name of the top-level model with the value from $inherit.
-        // We do not modify $inherit in saveCollatedModel(), so we need to do that now.
-        result.set (job.get ("$inherit"), "$inherit");  // This change is never saved.
-        return result;
-    }
-
-    /**
-        Writes the collated model to the local job directory.
-        @param collated The fully-expanded model.
-        @param job The job record, used only to determine name of job directory.
-    **/
-    public static void saveCollatedModel (MNode collated, MNode job)
-    {
-        Path jobDir    = Host.getJobDir (Host.getLocalResourceDir (), job);  // The path is also contained in the job MDoc node.
-        Path modelPath = jobDir.resolve ("model");
-        // See MDoc.save () for similar code.
-        // We avoid using MDoc because it would require duplicating the collated model in memory,
-        // and the model could be very large.
-        try (BufferedWriter writer = Files.newBufferedWriter (modelPath))
-        {
-            Schema.latest ().writeAll (collated, writer);
-            // File should be closed when writer is closed. It will be re-opened by backend.
-        }
-        catch (IOException e)
-        {
-            System.err.println ("Failed to write model file.");
-            e.printStackTrace ();
-        }
-    }
-
     /**
         @return Path to the source file (not the containing directory).
     **/
@@ -159,7 +115,7 @@ public class NodeJob extends NodeBase
     public synchronized void distribute ()
     {
         MNode source = getSource ();
-        if (source.size () == 0)  // TODO: remove this conversion on 3/17/2022 (one-year sunset date)
+        if (source.size () == 0)  // TODO: remove this conversion by 3/17/2022 (one-year sunset date)
         {
             // Convert old-format job directories to new format, which has separate "job" and "model" files.
             System.err.println ("converting to new job format: " + source.key ());
@@ -591,5 +547,150 @@ public class NodeJob extends NodeBase
         existing.put (fileName, newNode);
         newNode.found = true;  // So it won't get deleted in build().
         return true;
+    }
+
+    // The following static functions are utilities for working with the snapshot model
+    // in the job dir. They are not directly related to NodeJob, but this is as good a place
+    // as any to collect these routines.
+
+    public static MDoc getModel (String jobKey)
+    {
+        return getModel (AppData.runs.child (jobKey));
+    }
+
+    public static MDoc getModel (MNode job)
+    {
+        if (job == null) return null;
+        Path modelPath = Host.getJobDir (Host.getLocalResourceDir (), job).resolve ("model");
+        MDoc result = new MDoc (modelPath);
+        // EquationSet will replace the name of the top-level model with the value from $inherit.
+        // We do not modify $inherit in saveCollatedModel(), so we need to do that now.
+        result.set (job.get ("$inherit"), "$inherit");  // This change is never saved.
+        return result;
+    }
+
+    /**
+        Writes the collated model to the local job directory.
+        @param collated The fully-expanded model.
+        @param job The job record, used only to determine name of job directory.
+    **/
+    public static void saveCollatedModel (MNode collated, MNode job)
+    {
+        Path jobDir    = Host.getJobDir (Host.getLocalResourceDir (), job);  // The path is also contained in the job MDoc node.
+        Path modelPath = jobDir.resolve ("model");
+        MFilter filtered = new MFilter (collated, job.get ("backend"));
+        // See MDoc.save () for similar code.
+        // We don't create an MDoc here because it would require duplicating the collated model in memory,
+        // and the model could be very large.
+        try (BufferedWriter writer = Files.newBufferedWriter (modelPath))
+        {
+            Schema.latest ().writeAll (filtered, writer);
+            // File should be closed when writer is closed. It may be re-opened by backend.
+        }
+        catch (IOException e)
+        {
+            System.err.println ("Failed to write model file.");
+            e.printStackTrace ();
+        }
+    }
+
+    /**
+        Wrapper which removes nodes not needed in the snapshot model stored to disk.
+        This is a minimal implementation, just enough to support serialization by the Schema class.
+    **/
+    public static class MFilter extends MNode
+    {
+        protected MNode  node;    // what we are wrapping
+        protected String backend; // name of target backend
+
+        public MFilter (MNode node, String backend)
+        {
+            this.node    = node;
+            this.backend = backend;
+        }
+
+        public String key ()
+        {
+            return node.key ();
+        }
+
+        public boolean data ()
+        {
+            return node.data ();
+        }
+
+        public String getOrDefault (String defaultValue)
+        {
+            return node.getOrDefault (defaultValue);
+        }
+
+        public class IteratorFilter implements Iterator<MNode>
+        {
+            protected MNode           next;
+            protected Iterator<MNode> iterator;
+            protected boolean         inMetadata;
+            protected boolean         inBackend;
+
+            public MNode findNext ()
+            {
+                while (iterator.hasNext ())
+                {
+                    MNode n = iterator.next ();
+
+                    // We must look ahead to decide whether to descend into a node.
+                    // Unfortunately, this creates a lot of redundant checks.
+                    String key = n.key ();
+                    if (inMetadata)
+                    {
+                        if (key.equals ("param")  &&  n.getFlag ()  &&  ! n.get ().equals ("watch")) return n;
+                        if (! key.equals ("backend")) continue;
+                        if (n.child ("all") != null) return n;
+                        if (n.child (backend) != null) return n;
+                        continue;
+                    }
+                    else if (inBackend)
+                    {
+                        if (key.equals ("all")) return n;
+                        if (key.equals (backend)) return n;
+                        continue;
+                    }
+                    else if (key.equals ("$metadata"))
+                    {
+                        // Don't even process $metadata unless it contains useful backend info.
+                        if (n.getFlag ("param")  &&  ! n.get ("param").equals ("watch")) return n;
+                        MNode b = n.child ("backend");
+                        if (b == null) continue;
+                        if (b.child ("all") != null) return n;
+                        if (b.child (backend) != null) return n;
+                        continue;
+                    }
+                    return n;
+                }
+                return null;
+            }
+
+            public boolean hasNext ()
+            {
+                return next != null;
+            }
+
+            public MNode next ()
+            {
+                MNode result = new MFilter (next, backend);
+                next = findNext ();
+                return result;
+            }
+        }
+
+        public Iterator<MNode> iterator ()
+        {
+            IteratorFilter result = new IteratorFilter ();
+            result.iterator = node.iterator ();
+            String key = node.key ();
+            result.inMetadata = key.equals ("$metadata");
+            result.inBackend  = key.equals ("backend");  // Should also check that parent is "$metadata", but this is good enough a heuristic.
+            result.next = result.findNext ();
+            return result;
+        }
     }
 }

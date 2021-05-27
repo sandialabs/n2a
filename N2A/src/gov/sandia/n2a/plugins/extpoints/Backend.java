@@ -84,6 +84,9 @@ public abstract class Backend implements ExtensionPoint
         * The specifics of the job (how big the model will be).
         * The nature of the specific backend, such as how much resources it needs to handle the given model size.
         * The target machine (available memory, CPUs, etc.) Information needed to determine this should be embedded in the job metadata.
+
+        @param model The fully-collated model to be executed. Used as a hint to estimate run-time resources.
+        If null, then a standard amount of resources will be reserved (1 processor, 1GiB RAM, no disk space). 
     **/
     public boolean canRunNow (Host host, MNode model)
     {

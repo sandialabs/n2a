@@ -538,7 +538,7 @@ public class PanelStudy extends JPanel
                         String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ()) + "-" + uniqueJobID++;
                         final MDoc job = (MDoc) AppData.runs.childOrCreate (jobKey);
                         NodeJob.collectJobParameters (collated, inherit, job);
-                        job.save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
+                        job.save ();
                         NodeJob.saveCollatedModel (collated, job);
 
                         jobIndex.put (jobKey, index);
