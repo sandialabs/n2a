@@ -979,6 +979,7 @@ public class PanelRun extends JPanel
             displayText.setText (contents.toString ());
             displayText.setCaretPosition (0);
         }
+        displayChart.buttonBar.setVisible (false);
         if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
         displayPane.repaint (displayPane.getBounds ());
     }
