@@ -71,6 +71,17 @@ public class Simulator implements Iterable<Part>
         }
     }
 
+    /**
+        Special constructor for use only by the Study mechanism.
+        This creates unusable object which references the given RNG.
+        This allows us to use expression evaluation to generate random values for the study.
+    **/
+    public Simulator (Random random)
+    {
+        instance.set (this);
+        this.random = random;
+    }
+
     public Simulator (Wrapper wrapper, long seed) throws IOException
     {
         this (wrapper, seed, Files.createTempDirectory ("n2a"));

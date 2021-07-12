@@ -27,6 +27,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.Schema;
+import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.language.UnitValue;
@@ -99,6 +100,11 @@ public class NodeJob extends NodeBase
     public MNode getSource ()
     {
         return AppData.runs.child (key);
+    }
+
+    public MNode getModel ()
+    {
+        return getModel (getSource ());
     }
 
     /**
@@ -644,7 +650,12 @@ public class NodeJob extends NodeBase
                     {
                         if (key.equals ("seed")) return n;
                         if (key.equals ("duration")) return n;
-                        if (key.equals ("param")  &&  n.getFlag ()  &&  ! n.get ().equals ("watch")) return n;
+                        if (key.equals ("param")  &&  n.getFlag ()  &&  ! n.get ().equals ("watch"))
+                        {
+                            // Only mark overrides with "param".
+                            if (node instanceof MPart  &&  ! ((MPart) node.parent ()).isFromTopDocument ()) continue;
+                            return n;
+                        }
                         if (! key.equals ("backend")) continue;
                         if (n.child ("all") != null) return n;
                         if (n.child (backend) != null) return n;
@@ -661,7 +672,11 @@ public class NodeJob extends NodeBase
                         // Don't even process $metadata unless it contains useful backend info.
                         if (n.child ("seed") != null) return n;
                         if (n.child ("duration") != null) return n;
-                        if (n.getFlag ("param")  &&  ! n.get ("param").equals ("watch")) return n;
+                        if (n.getFlag ("param")  &&  ! n.get ("param").equals ("watch"))
+                        {
+                            if (node instanceof MPart  &&  ! ((MPart) node).isFromTopDocument ()) continue;
+                            return n;
+                        }
                         MNode b = n.child ("backend");
                         if (b == null) continue;
                         if (b.child ("all") != null) return n;

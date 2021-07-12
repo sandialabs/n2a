@@ -1083,9 +1083,10 @@ public class PanelEquations extends JPanel
             {
                 public boolean visit (MNode n)
                 {
-                    if (! n.key ().equals ("study")) return true;
+                    // Find "study" somewhere under "$metadata".
+                    if (! n.key ().equals ("study")) return true;  // Filter on "study" first.
                     String[] keyPath = n.keyPath ();
-                    int i = keyPath.length - 1;  // Search backwards because "$metadata" is more likely to be immediate parent of "study".
+                    int i = keyPath.length - 1;  // Search backwards for "$metadata", because it is most likely to be immediate parent of "study".
                     for (; i >= 0; i--) if (keyPath[i].equals ("$metadata")) break;
                     if (i < 0) return true;  // move along, nothing to see here
 

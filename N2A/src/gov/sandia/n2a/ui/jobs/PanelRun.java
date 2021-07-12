@@ -941,8 +941,7 @@ public class PanelRun extends JPanel
         MNode doc = AppData.models.child (jobNode.inherit);  // Not collated, so only top-level keys
         if (doc != null)
         {
-            Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
-            MDoc model = new MDoc (localJobDir.resolve ("model"));  // Collated and frozen at time job was created.
+            MNode model = jobNode.getModel ();  // Collated and frozen at time job was created.
             doc.visit (new Visitor ()
             {
                 public boolean visit (MNode node)
@@ -992,8 +991,16 @@ public class PanelRun extends JPanel
 
     public void delete ()
     {
-        TreePath[] paths = tree.getSelectionPaths ();
+        delete (tree.getSelectionPaths ());
+    }
+
+    public void delete (TreePath[] paths)
+    {
         if (paths.length == 0) return;
+
+        NodeBase nextSelection = null;  // The node that will be focused after all the deletes are done.
+        TreePath leadSelection = tree.getLeadSelectionPath ();
+        if (leadSelection != null) nextSelection = (NodeBase) leadSelection.getLastPathComponent ();
 
         int firstRow = Integer.MAX_VALUE;
         int lastRow  = 0;
@@ -1009,6 +1016,7 @@ public class PanelRun extends JPanel
                 continue;
             }
             node.markDelete = true;
+            if (nextSelection == node) nextSelection = null;  // Current focus is a node that will be deleted. This is almost always the case, except when jobs are deleted by the Studies panel.
 
             // In some cases (such as ctrl-click), the rows may not be in ascending order.
             int row = tree.getRowForPath (path);
@@ -1019,7 +1027,7 @@ public class PanelRun extends JPanel
 
         NodeBase firstSelection = (NodeBase) tree.getPathForRow (firstRow).getLastPathComponent ();
         NodeBase lastSelection  = (NodeBase) tree.getPathForRow (lastRow ).getLastPathComponent ();
-        NodeBase nextSelection = (NodeBase) lastSelection.getNextSibling ();
+        if (nextSelection == null) nextSelection = (NodeBase) lastSelection.getNextSibling ();
         if (nextSelection != null)
         {
             NodeBase parent = (NodeBase) nextSelection.getParent ();  // Could be root. Root is never selected, so the following test works correctly in that case.
@@ -1044,6 +1052,7 @@ public class PanelRun extends JPanel
                 displayNode = null;  // All access to this happens on EDT, so safe.
                 displayText.setText ("");
             }
+            displayChart.buttonBar.setVisible (false);
             if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
         }
         else  // Set the new selection. This will not be touched by the delete process.

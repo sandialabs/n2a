@@ -11,6 +11,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.studies.PanelStudy;
 
 import java.awt.Image;
 import java.awt.Toolkit;
@@ -119,6 +120,7 @@ public class MainFrame extends JFrame
             public void windowClosing (WindowEvent arg0)
             {
                 PanelModel.instance.panelEquations.saveFocus ();  // Hack to ensure that final viewport position gets recorded.
+                PanelStudy.instance.quit ();  // Give any active study threads a chance to shut down gracefully.
                 AppData.quit ();  // Save all user settings (including those from other parts of the app).
                 Host.quit ();  // Close down any ssh sessions.
             }
