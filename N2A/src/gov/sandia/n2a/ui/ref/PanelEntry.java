@@ -17,8 +17,6 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
-import gov.sandia.n2a.ui.ref.ExportBibliography;
-import gov.sandia.n2a.ui.ref.ImportBibliography;
 import gov.sandia.n2a.ui.ref.undo.AddTag;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
 import gov.sandia.n2a.ui.ref.undo.ChangeTag;

@@ -8,7 +8,6 @@ package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.type.Scalar;
 import tech.units.indriya.AbstractUnit;
 
