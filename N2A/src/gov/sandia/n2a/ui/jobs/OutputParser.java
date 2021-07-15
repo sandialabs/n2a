@@ -13,7 +13,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
@@ -32,6 +34,28 @@ public class OutputParser
     public double       xmax;  // Note that "x" is always time.
     public double       ymin;
     public double       ymax;
+
+    public static Map<String,Color> HTMLcolors = new HashMap<String,Color> ();
+    static
+    {
+        // Ideally, this map would contain all 140 standard HTML colors.
+        // Use pre-fab colors where possible, but always match the defined values in the standard.
+        // This means some constants in awt.Color can't be used.
+        HTMLcolors.put ("black",   Color.black);
+        HTMLcolors.put ("blue",    Color.blue);
+        HTMLcolors.put ("cyan",    Color.cyan);
+        HTMLcolors.put ("gray",    Color.gray);
+        HTMLcolors.put ("lime",    Color.green);
+        HTMLcolors.put ("green",   new Color (0x008000));
+        HTMLcolors.put ("silver",  Color.lightGray);
+        HTMLcolors.put ("magenta", Color.magenta);
+        HTMLcolors.put ("orange",  new Color (0xFFA500));
+        HTMLcolors.put ("pink",    new Color (0xFFC0CB));
+        HTMLcolors.put ("red",     Color.red);
+        HTMLcolors.put ("white",   Color.white);
+        HTMLcolors.put ("yellow",  Color.yellow);
+        HTMLcolors.put ("purple",  new Color (0x800080));
+    }
 
     public void parse (Path f)
     {
@@ -139,8 +163,16 @@ public class OutputParser
                 String colorName = n.get ("color");
                 if (! colorName.isEmpty ())
                 {
-                    try {c.color = Color.decode (colorName);}
-                    catch (NumberFormatException error) {}  // and color remains null
+                    try
+                    {
+                        c.color = Color.decode (colorName);
+                    }
+                    catch (NumberFormatException error)
+                    {
+                        // Attempt to interpret as a standard HTML color name.
+                        // If no match is found, color remains null.
+                        c.color = HTMLcolors.get (colorName.toLowerCase ());
+                    }
                 }
 
                 colorName = n.get ("hue");  // Like "color", but expects default values for saturation and brightness.
@@ -158,6 +190,20 @@ public class OutputParser
                     c.scale = new UnitValue (scale);
                     if (c.scale.value == 0)    c.scale.value = 1;
                     if (c.scale.unit  == null) c.scale.unit  = AbstractUnit.ONE;
+                }
+
+                c.width = (float) n.getOrDefault (1.0, "width");  // Note that width=0 means narrowest line possible, which isn't necessarily the best default.
+
+                String dash = n.get ("dash");
+                if (! dash.isEmpty ())
+                {
+                    String pieces[] = dash.split (":");
+                    c.dash = new float[pieces.length];
+                    for (int i = 0; i < pieces.length; i++)
+                    {
+                        try {c.dash[i] = Float.valueOf (pieces[i]);}
+                        catch (NumberFormatException error) {}
+                    }
                 }
 
                 if (c == time)
@@ -254,6 +300,8 @@ public class OutputParser
         public double      range;
         public UnitValue   scale;
         public Color       color;
+        public float       width  = 1;
+        public float[]     dash;
 
         public void computeStats ()
         {

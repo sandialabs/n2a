@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.jobs;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -31,6 +32,8 @@ public class Plot extends OutputParser
     protected XYSeriesCollection dataset1;
     protected double             range0;
     protected double             range1;
+    protected List<Column>       left;  // dataset0
+    protected List<Column>       right; // dataset1
 
     public Plot (Path path)
     {
@@ -87,8 +90,6 @@ public class Plot extends OutputParser
             }
         }
 
-        List<Column> left  = null;
-        List<Column> right = null;
         if (bestIndex < 0  ||  largestRatio < 10)
         {
             left = Arrays.asList (sorted);
@@ -243,13 +244,12 @@ public class Plot extends OutputParser
             shift = 0.75f + 0.5f / count;
         }
 
-        XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
+        XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer ();
+        renderer.setDrawSeriesLineAsPath (true);
         for (int i = 0; i < dataset0.getSeriesCount (); i++)
         {
-            renderer.setSeriesShapesVisible (i, false);
-            Color c = Color.getHSBColor ((float) i / count + shift, 1.0f, 0.9f);
-            renderer.setSeriesPaint (i, c);
-            renderer.setLegendTextPaint (i, c);
+            Column column = left.get (i);
+            styleSeries (renderer, i, column, count, shift);
         }
         plot.setRenderer (renderer);
 
@@ -278,17 +278,32 @@ public class Plot extends OutputParser
             shift = 0.25f + 0.5f / count;
 
             renderer = new XYLineAndShapeRenderer();
+            renderer.setDrawSeriesLineAsPath (true);
             for (int i = 0; i < dataset1.getSeriesCount (); i++)
             {
-                renderer.setSeriesShapesVisible (i, false);
-                Color c = Color.getHSBColor ((float) i / count + shift, 1.0f, 0.9f);
-                renderer.setSeriesPaint (i, c);
-                renderer.setLegendTextPaint (i, c);
+                Column column = right.get (i);
+                styleSeries (renderer, i, column, count, shift);
             }
             plot.setRenderer (1, renderer);
             plot.setDatasetRenderingOrder (DatasetRenderingOrder.REVERSE);
         }
 
         return chart;
+    }
+
+    public void styleSeries (XYLineAndShapeRenderer renderer, int i, Column column, int count, float shift)
+    {
+        renderer.setSeriesShapesVisible (i, false);
+
+        Color c = column.color;
+        // TODO: avoid assigning a color close to any that the user explicitly specified for some other plot line.
+        if (c == null) c = Color.getHSBColor ((float) i / count + shift, 1.0f, 0.9f);
+        renderer.setSeriesPaint (i, c);
+        renderer.setLegendTextPaint (i, c);
+
+        if (column.width != 1.0f  ||  column.dash != null)
+        {
+            renderer.setSeriesStroke (i, new BasicStroke (column.width, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10, column.dash, 0));
+        }
     }
 }
