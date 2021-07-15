@@ -357,8 +357,11 @@ namespace n2a
             return false;
         }
 
-		/// Dumps parsed data in tabular form. This can be used directly by most software.
-        void dump (std::ostream & out)
+		/**
+            Dumps parsed data in tabular form. This can be used directly by most software.
+            Pass separator="," to create CSV file.
+        **/
+        void dump (std::ostream & out, const std::string & separator = "\t")
         {
             if (columns.empty ()) return;
             Column * last = columns.back ();
@@ -369,7 +372,7 @@ namespace n2a
                 {
                     out << c->header;
                     if (c == last) out << std::endl;
-                    else           out << "\t";
+                    else           out << separator;
                 }
             }
 
@@ -381,7 +384,7 @@ namespace n2a
                     {
                         out << c->get (r);
                         if (c == last) out << std::endl;
-                        else           out << "\t";
+                        else           out << separator;
                     }
                 }
             }
