@@ -113,12 +113,14 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
         buttonPrint.setToolTipText ("Print");
         buttonPrint.addActionListener (actionPrint);
 
-        buttonBar = Lay.FL ("L", "hgap=5,vgap=1",
+        buttonBar = Lay.FL ("L", "hgap=0,vgap=1",  // no hgap, because we want to blend with button bar in PanelRun, which already supplies hgap=5 between components
             buttonProperties,
+            Box.createHorizontalStrut (5),
             buttonCopy,
+            Box.createHorizontalStrut (5),
             buttonSave,
-            buttonPrint,
-            Box.createHorizontalStrut (15)
+            Box.createHorizontalStrut (5),
+            buttonPrint
         );
     }
 

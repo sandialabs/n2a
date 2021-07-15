@@ -17,6 +17,7 @@ import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.host.Host.CopyProgress;
 import gov.sandia.n2a.host.SshFileSystemProvider.SshDirectoryStream;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import java.awt.Component;
@@ -30,9 +31,12 @@ import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,7 +56,9 @@ import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
@@ -67,6 +73,7 @@ import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
+import javax.swing.filechooser.FileFilter;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.ExpandVetoException;
@@ -79,23 +86,24 @@ public class PanelRun extends JPanel
 {
     public static PanelRun instance;  ///< Technically, this class is a singleton, because only one would normally be created.
 
-    public NodeBase         root;
-    public DefaultTreeModel model;
-    public JTree            tree;
-    public JScrollPane      treePane;
+    protected NodeBase         root;
+    protected DefaultTreeModel model;
+    public    JTree            tree;
+    protected JScrollPane      treePane;
 
-    public JButton             buttonStop;
-    public JPopupMenu          menuHost;
-    public long                menuCanceledAt;
-    public ButtonGroup         buttons;
-    public JComboBox<String>   comboScript;
-    public JTextArea           displayText;
-    public PanelChart          displayChart = new PanelChart ();
-    public JScrollPane         displayPane = new JScrollPane ();
-    public DisplayThread       displayThread = null;
-    public NodeBase            displayNode = null;
-    public MDir                runs;  // Copied from AppData for convenience
-    public Map<String,NodeJob> jobNodes = new HashMap<String,NodeJob> ();  // for quick lookup of job node based on job key.
+    protected JButton             buttonStop;
+    protected JPopupMenu          menuHost;
+    protected long                menuCanceledAt;
+    protected ButtonGroup         buttons;
+    protected JButton             buttonExport;
+    protected JComboBox<String>   comboScript;
+    protected JTextArea           displayText;
+    protected PanelChart          displayChart = new PanelChart ();
+    protected JScrollPane         displayPane = new JScrollPane ();
+    protected DisplayThread       displayThread = null;
+    protected NodeBase            displayNode = null;
+    protected MDir                runs;  // Copied from AppData for convenience
+    public    Map<String,NodeJob> jobNodes = new HashMap<String,NodeJob> ();  // for quick lookup of job node based on job key.
 
     public static ImageIcon iconConnect    = ImageUtil.getImage ("connect.gif");
     public static ImageIcon iconPause      = ImageUtil.getImage ("pause-16.png");
@@ -410,6 +418,12 @@ public class PanelRun extends JPanel
 
         displayChart.buttonBar.setVisible (false);
 
+        buttonExport = new JButton (ImageUtil.getImage ("export.gif"));
+        buttonExport.setMargin (new Insets (2, 2, 2, 2));
+        buttonExport.setFocusable (false);
+        buttonExport.setToolTipText ("Export CSV");
+        buttonExport.addActionListener (listenerExport);
+
         comboScript = new JComboBox<String> ();
         comboScript.setEditable (true);
         comboScript.setToolTipText ("Run Script");
@@ -485,6 +499,8 @@ public class PanelRun extends JPanel
                             buttonRaster,
                             Box.createHorizontalStrut (15),
                             displayChart.buttonBar,
+                            buttonExport,
+                            Box.createHorizontalStrut (15),
                             "hgap=5,vgap=1"
                         ),
                         "C", comboScript
@@ -514,6 +530,126 @@ public class PanelRun extends JPanel
         {
             scripts.set (comboScript.getItemAt (i), String.valueOf (i));
         }
+    }
+
+    // See PanelEquations for similar code
+    ActionListener listenerExport = new ActionListener ()
+    {
+        public void actionPerformed (ActionEvent e)
+        {
+            if (! (displayNode instanceof NodeFile)) return;
+            NodeFile node = (NodeFile) displayNode;
+            if (node.type != NodeFile.Type.Output  &&  node.type != NodeFile.Type.Other) return;
+            if (! isGraphable (node)) return;
+
+            // Construct and customize a file chooser
+            final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
+            String fileName = node.path.getFileName ().toString ();
+            fc.setDialogTitle ("Export \"" + fileName + "\"");
+            fc.setSelectedFile (new File (fileName));
+            FileFilter ff = new FileFilter ()
+            {
+                public boolean accept (File f)
+                {
+                    return true;
+                }
+
+                public String getDescription ()
+                {
+                    return "Comma-Separated Values (CSV)";
+                }
+            };
+            fc.addChoosableFileFilter (ff);
+            fc.setAcceptAllFileFilterUsed (false);
+            fc.setFileFilter (ff);
+
+            // Display chooser and collect result
+            int result = fc.showSaveDialog (MainFrame.instance);
+
+            // Do export
+            if (result == JFileChooser.APPROVE_OPTION)
+            {
+                // Add csv suffix
+                Path path = fc.getSelectedFile ().toPath ();
+                Path dir = path.getParent ();
+                fileName = path.getFileName ().toString ();
+                int position = fileName.lastIndexOf ('.');
+                if (position >= 0) fileName = fileName.substring (0, position);
+                fileName += ".csv";
+                path = dir.resolve (fileName);
+
+                // Read data and write out as CSV.
+                try
+                {
+                    Table table = new Table (node.path, false);
+                    table.dumpCSV (path);
+                }
+                catch (Exception error)
+                {
+                    File crashdump = new File (AppData.properties.get ("resourceDir"), "crashdump");
+                    try
+                    {
+                        PrintStream err = new PrintStream (crashdump);
+                        error.printStackTrace (err);
+                        err.close ();
+                    }
+                    catch (FileNotFoundException fnfe) {}
+
+                    JOptionPane.showMessageDialog
+                    (
+                        MainFrame.instance,
+                        "<html><body><p style='width:300px'>"
+                        + error.getMessage () + " Exception has been recorded in "
+                        + crashdump.getAbsolutePath ()
+                        + "</p></body></html>",
+                        "Export Failed",
+                        JOptionPane.WARNING_MESSAGE
+                    );
+                }
+            }
+        }
+    };
+
+    public boolean isGraphable (NodeFile node)
+    {
+        Path dir = node.path.getParent ();
+        String fileName = node.path.getFileName ().toString ();
+        boolean result = Files.exists (dir.resolve (fileName + ".columns"));  // An auxiliary column file is sufficient evidence that this is tabular data.
+        if (! result)
+        {
+            try (BufferedReader reader = Files.newBufferedReader (node.path))
+            {
+                String line = reader.readLine ();
+                result = line.startsWith ("$t")  ||  line.startsWith ("Index");
+                if (! result)
+                {
+                    // Try an alternate heuristic: Does the line appear to be a set of tab-delimited fields?
+                    // Don't allow spaces, because it could look too much like ordinary text.
+                    line = reader.readLine ();  // Get a second line, just to ensure we get past textual headers.
+                    if (line != null)
+                    {
+                        String[] pieces = line.split ("\\t");
+                        int columns = 0;
+                        for (String p : pieces)
+                        {
+                            if (p.length () < 20)
+                            {
+                                try
+                                {
+                                    Float.parseFloat (p);
+                                    columns++;  // If that didn't throw an exception, then p is likely a number.
+                                }
+                                catch (Exception e) {}
+                            }
+                        }
+                        // At least 3 viable columns, and more than half are interpretable as numbers.
+                        result = columns >= 3  &&  (double) columns / pieces.length > 0.7;
+                    }
+                }
+            }
+            catch (IOException e) {}
+        }
+        return result;
     }
 
     public class DisplayThread extends Thread
@@ -688,43 +824,7 @@ public class PanelRun extends JPanel
                 else if (! viz.equals ("Text"))
                 {
                     // Determine if the file is actually a table that can be graphed
-                    Path dir = node.path.getParent ();
-                    String fileName = node.path.getFileName ().toString ();
-                    boolean graphable = Files.exists (dir.resolve (fileName + ".columns"));  // An auxiliary column file is sufficient evidence that this is tabular data.
-                    if (! graphable)
-                    {
-                        BufferedReader reader = Files.newBufferedReader (node.path);
-                        String line = reader.readLine ();
-                        graphable = line.startsWith ("$t")  ||  line.startsWith ("Index");
-                        if (! graphable)
-                        {
-                            // Try an alternate heuristic: Does the line appear to be a set of tab-delimited fields?
-                            // Don't allow spaces, because it could look too much like ordinary text.
-                            line = reader.readLine ();  // Get a second line, just to ensure we get past textual headers.
-                            if (line != null)
-                            {
-                                String[] pieces = line.split ("\\t");
-                                int columns = 0;
-                                for (String p : pieces)
-                                {
-                                    if (p.length () < 20)
-                                    {
-                                        try
-                                        {
-                                            Float.parseFloat (p);
-                                            columns++;  // If that didn't throw an exception, then p is likely a number.
-                                        }
-                                        catch (Exception e) {}
-                                    }
-                                }
-                                // At least 3 viable columns, and more than half are interpretable as numbers.
-                                graphable = columns >= 3  &&  (double) columns / pieces.length > 0.7;
-                            }
-                        }
-                        reader.close ();
-                    }
-
-                    if (graphable)
+                    if (isGraphable (node))
                     {
                         Component panel = null;
                         if (viz.equals ("Table"))

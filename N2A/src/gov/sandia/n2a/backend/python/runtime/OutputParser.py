@@ -245,21 +245,22 @@ class OutputParser:
             if column.header != "": return True
         return False
 
-    def dump(self, out=sys.stdout):
+    def dump(self, out=sys.stdout, separator="\t"):
         """ Dumps parsed data in tabular form. This can be used directly by most software.
+            Pass separator="," to create a CSV file.
         """
         if len(self.columns) == 0: return
         last = self.columns[-1]
 
         if self.hasHeaders():
-            e = "\t"
+            e = separator
             for column in self.columns:
                 if column is last: e = "\n"
                 print(column.header, end=e, file=out)
 
         if self.hasData():
             for r in range(self.rows):
-                e = "\t"
+                e = separator
                 for column in self.columns:
                     if column is last: e = "\n"
                     print(column.get(r), end=e, file=out)

@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,6 +8,9 @@ package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Component;
 import java.awt.FontMetrics;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 
@@ -48,6 +51,50 @@ public class Table extends OutputParser
     	    for (MNode m : mapping) sortedColumns.add (columns.get (m.getInt ()));
     	    columns = sortedColumns;
     	}
+    }
+
+    public void dump (Path destination) throws IOException
+    {
+        dump (destination, "\t");
+    }
+
+    public void dumpCSV (Path destination) throws IOException
+    {
+        dump (destination, ",");
+    }
+
+    public void dump (Path destination, String separator) throws IOException
+    {
+        if (columns.isEmpty ()) return;
+        try (BufferedWriter writer = Files.newBufferedWriter (destination))
+        {
+            Column last = columns.get (columns.size () - 1);
+            String eol = String.format ("%n");
+            if (hasHeaders ())
+            {
+                for (Column c : columns)
+                {
+                    writer.write (c.header);
+                    if (c == last) writer.write (eol);
+                    else           writer.write (separator);
+                }
+            }
+            if (hasData ())
+            {
+                int rows = 0;
+                for (Column c : columns) rows = Math.max (rows, c.startRow + c.values.size ());
+
+                for (int r = 0; r < rows; r++)
+                {
+                    for (Column c : columns)
+                    {
+                        writer.write (String.valueOf (c.get (r)));
+                        if (c == last) writer.write (eol);
+                        else           writer.write (separator);
+                    }
+                }
+            }
+        }
     }
 
     public Component createVisualization ()
