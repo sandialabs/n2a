@@ -2997,7 +2997,10 @@ public class JobC extends Thread
                     {
                         // Assemble a minimal set of expressions to evaluate $project
                         List<Variable> list = new ArrayList<Variable> ();
-                        for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  project.dependsOn (t) != null) list.add (t);
+                        for (Variable t : s.variables)
+                        {
+                            if ((t.hasAttribute ("temporary")  ||  bed.localMembers.contains (t))  &&  project.dependsOn (t) != null) list.add (t);
+                        }
                         list.add (project);
                         s.simplify ("$connect", list, project);
                         if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);
@@ -3105,7 +3108,10 @@ public class JobC extends Thread
             {
                 // Assemble a minimal set of expressions to evaluate $p
                 List<Variable> list = new ArrayList<Variable> ();
-                for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null) list.add (t);
+                for (Variable t : s.variables)
+                {
+                    if ((t.hasAttribute ("temporary")  ||  bed.localMembers.contains (t))  &&  bed.p.dependsOn (t) != null) list.add (t);
+                }
                 list.add (bed.p);
                 s.simplify ("$connect", list, bed.p);
                 if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);

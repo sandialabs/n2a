@@ -86,8 +86,10 @@ public class InternalBackendData
     public Variable   type;
     public Variable   xyz;
 
-    public List<Variable> Pdependencies;   // Contains any temporary variables (in evaluation order) that $p depends on. Guaranteed non-null if $p is non-null.
-    public List<Variable> XYZdependencies; // Contains any temporary variables (in evaluation order) that $xyz depends on. Guaranteed non-null if $xyz is non-null.
+    public List<Variable> Pdependencies;       // Contains the variables (in evaluation order) that $p depends on. Guaranteed non-null if $p is non-null.
+    public List<Variable> PdependenciesTemp;   // Subset of Pdependencies that are temporary variables. Used during finish() if $p is a temporary.
+    public List<Variable> XYZdependencies;     // Contains the variables (in evaluation order) that $xyz depends on. Guaranteed non-null if $xyz is non-null.
+    public List<Variable> XYZdependenciesTemp; // Subset of XYZdependencies that are temporary variables. Used to get compartment location if $xyz is a temporary. This occurs during connect, but the compartments are evaluated as live.
 
     /**
         If the model uses events or otherwise has non-constant frequency, then we
@@ -945,12 +947,15 @@ public class InternalBackendData
 
         if (p != null)
         {
-            Pdependencies = new ArrayList<Variable> ();
+            Pdependencies     = new ArrayList<Variable> ();
+            PdependenciesTemp = new ArrayList<Variable> ();
             for (Variable t : s.ordered)
             {
-                if (t.hasAttribute ("temporary")  &&  p.dependsOn (t) != null)
+                boolean temporary = t.hasAttribute ("temporary");
+                if ((temporary  ||  localMembers.contains (t))  &&  p.dependsOn (t) != null)
                 {
                     Pdependencies.add (t);
+                    if (temporary) PdependenciesTemp.add (t);
                 }
             }
 
@@ -976,9 +981,11 @@ public class InternalBackendData
             XYZdependencies = new ArrayList<Variable> ();
             for (Variable t : s.ordered)
             {
-                if (t.hasAttribute ("temporary")  &&  xyz.dependsOn (t) != null)
+                boolean temporary = t.hasAttribute ("temporary");
+                if ((temporary  ||  localMembers.contains (t))  &&  xyz.dependsOn (t) != null)
                 {
                     XYZdependencies.add (t);
+                    if (temporary) XYZdependenciesTemp.add (t);
                 }
             }
         }
@@ -1037,7 +1044,7 @@ public class InternalBackendData
                     projectDependencies[i] = dependencies;  // Always assign, even if empty.
                     for (Variable t : s.ordered)
                     {
-                        if (t.hasAttribute ("temporary")  &&  project[i].dependsOn (t) != null)
+                        if (project[i].dependsOn (t) != null)
                         {
                             dependencies.add (t);
                         }

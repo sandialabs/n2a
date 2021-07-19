@@ -496,7 +496,7 @@ public class Part extends Instance
             {
                 // Probe $p in run phase (as opposed to connect phase).
                 InstanceTemporaries temp = new InstanceTemporaries (this, simulator);
-                for (Variable v : bed.Pdependencies)
+                for (Variable v : bed.PdependenciesTemp)
                 {
                     Type result = v.eval (temp);
                     if (result == null) temp.set (v, v.type);
@@ -600,10 +600,19 @@ public class Part extends Instance
         if (! bed.xyz.hasAttribute ("temporary")) return ((MatrixDense) get (bed.xyz)).getRawColumn (0);  // Either "constant" or stored
 
         InstanceTemporaries temp;
-        if (connect) temp = new InstanceConnect     (this, simulator);
-        else         temp = new InstanceTemporaries (this, simulator);
+        List<Variable> list;
+        if (connect)  // evaluate in connect phase
+        {
+            temp = new InstanceConnect (this, simulator);
+            list = bed.XYZdependencies;
+        }
+        else  // evaluate in live phase
+        {
+            temp = new InstanceTemporaries (this, simulator);
+            list = bed.XYZdependenciesTemp;
+        }
 
-        for (Variable v : bed.XYZdependencies)
+        for (Variable v : list)
         {
             Type result = v.eval (temp);
             if (result == null) temp.set (v, v.type);
