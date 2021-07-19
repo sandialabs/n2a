@@ -84,7 +84,8 @@ public class InternalBackend extends Backend
             try {err.set (new PrintStream (new FileOutputStream (localJobDir.resolve ("err").toFile (), true), false, "UTF-8"));}
             catch (Exception e) {}
 
-            long elapsedTime = System.nanoTime ();
+            long startTime = 0;
+            long stopTime  = 0;
             try
             {
                 Files.createFile (localJobDir.resolve ("started"));
@@ -118,21 +119,23 @@ public class InternalBackend extends Backend
                         simulator.sortEvent = -1;  // Spike events come before step events, so that latches can be set before update() is called.
                 }
 
-                elapsedTime = System.nanoTime ();
+                startTime = System.nanoTime ();
                 simulator.init ();
                 simulator.run ();  // Does not return until simulation is finished.
-                elapsedTime = System.nanoTime () - elapsedTime;
+                stopTime = System.nanoTime ();
                 if (simulator.stop) Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), localJobDir.resolve ("finished"));
                 else                Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), localJobDir.resolve ("finished"));
             }
             catch (Exception e)
             {
-                elapsedTime = System.nanoTime () - elapsedTime;
+                stopTime = System.nanoTime ();
                 if (! (e instanceof AbortRun)) e.printStackTrace (err.get ());
 
                 try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), localJobDir.resolve ("finished"));}
                 catch (Exception f) {}
             }
+            long elapsedTime = 0;
+            if (startTime != 0  &&  stopTime != 0) elapsedTime = stopTime - startTime;
 
             PrintStream e = err.get ();
             e.println ("Execution time: " + elapsedTime / 1e9 + " seconds");
