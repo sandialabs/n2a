@@ -4293,10 +4293,8 @@ public class EquationSet implements Comparable<EquationSet>
                 }
                 else  // successful resolution
                 {
-                    // Since constants have already been located (via simplify), we can be certain that any symbolic
-                    // constant has already been replaced. Therefore, only the "initOnly" attribute matters here.
                     Variable r = av.reference.variable;
-                    if (! r.hasAttribute ("initOnly")) isInitOnly = false;
+                    if (! r.hasAny ("initOnly", "constant")) isInitOnly = false;
                 }
             }
             else if (op instanceof Function)
@@ -4328,7 +4326,7 @@ public class EquationSet implements Comparable<EquationSet>
             //       that both the external part and this part always go through init at the same time.
             //       Similarly, an external reference needs to fire every cycle to ensure its target accumulates the correct value,
             //       unless it can be established that the value does not change after the init cycle of the target.
-            if (v.hasAny (new String[] {"initOnly", "constant", "dummy", "externalWrite", "reference"})) continue;
+            if (v.hasAny ("initOnly", "constant", "dummy", "externalWrite", "reference")) continue;
 
             // Count equations
             int firesDuringInit   = 0;
@@ -4578,15 +4576,12 @@ public class EquationSet implements Comparable<EquationSet>
                 needsPoll = true;  // The default is to poll, unless we can prove that we don't need to.
                 VisitInitOnly visitor = new VisitInitOnly ();
                 if (e.condition != null) e.condition.visit (visitor);
+                if (visitor.isInitOnly) e.expression.visit (visitor);
                 if (visitor.isInitOnly)
                 {
-                    e.expression.visit (visitor);
-                    if (visitor.isInitOnly)
-                    {
-                        // We have an initOnly equation. Now determine if the result is in (0,1).
-                        // The only values we can be sure about are logical results, which are exactly 1 or 0, and therefore not in (0,1).
-                        needsPoll = ! (e.expression instanceof OperatorLogical);
-                    }
+                    // We have an initOnly equation. Now determine if the result is in (0,1).
+                    // The only values we can be sure about are logical results, which are exactly 1 or 0, and therefore not in (0,1).
+                    needsPoll = ! (e.expression instanceof OperatorLogical);
                 }
             }
         }
