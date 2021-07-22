@@ -37,9 +37,9 @@ public class Pulse extends Function
         double period = 0;
         double rise   = 0;
         double fall   = 0;
-        if (operands.length >= 3) period = ((Scalar) operands[2].eval (context)).value;
-        if (operands.length >= 4) rise   = ((Scalar) operands[3].eval (context)).value;
-        if (operands.length >= 5) fall   = ((Scalar) operands[4].eval (context)).value;
+        if (operands.length > 2) period = ((Scalar) operands[2].eval (context)).value;
+        if (operands.length > 3) rise   = ((Scalar) operands[3].eval (context)).value;
+        if (operands.length > 4) fall   = ((Scalar) operands[4].eval (context)).value;
 
         if (period == 0.0)
         {
