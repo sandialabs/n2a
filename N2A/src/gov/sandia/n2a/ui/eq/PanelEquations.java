@@ -71,6 +71,7 @@ import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
@@ -166,7 +167,7 @@ public class PanelEquations extends JPanel
     protected JToggleButton buttonFilterParam;
     protected JToggleButton buttonFilterRevoked;
     protected JButton       buttonView;
-    protected JButton       buttonRun;
+    public    JButton       buttonRun;
     protected JButton       buttonStudy;
     protected JButton       buttonExport;
     protected JButton       buttonImport;
@@ -1001,7 +1002,27 @@ public class PanelEquations extends JPanel
 
     public void enableStudies ()
     {
-        buttonStudy.setEnabled (true);
+        // Studies should not be enabled until runs are enabled, since studies depend on job management.
+        if (buttonRun.isEnabled ())
+        {
+            buttonStudy.setEnabled (true);
+
+            PanelStudy ps = PanelStudy.instance;
+            ps.buttonPause.setEnabled (ps.displayStudy != null  &&  ps.displayStudy.complete () < 1);
+
+            return;
+        }
+
+        // Runs are not ready yet, so check again later.
+        Timer t = new Timer (1000, new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                enableStudies ();
+            }
+        });
+        t.setRepeats (false);
+        t.start ();
     }
 
     ActionListener listenerRun = new ActionListener ()

@@ -116,6 +116,41 @@ public class NodeJob extends NodeBase
     }
 
     /**
+        Remove all files from the job dir except the main job file.
+        This allows the job to restart cleanly, without file-creation conflicts.
+    **/
+    public synchronized void reset ()
+    {
+        // Reset variables to initial state.
+        complete        = -1;
+        dateStarted     = null;
+        dateFinished    = null;
+        expectedSimTime = 0;
+        lastMonitored   = 0;
+        lastActive      = 0;
+        lastDisplay     = 0;
+
+        // Purge files
+        Host localhost = Host.get ();
+        MNode source = getSource ();
+        Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
+        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (localJobDir))
+        {
+            for (Path path : dirStream)
+            {
+                System.out.println ("checking " + path);
+                if (path.endsWith ("job")) continue;
+                System.out.println ("  deleting");
+                localhost.deleteTree (path);  // deleteTree() works for both files and dirs, and also absorbs most exceptions. 
+            }
+        }
+        catch (IOException e) {e.printStackTrace ();}
+
+        PanelRun panelRun = PanelRun.instance;
+        if (! panelRun.tree.isCollapsed (new TreePath (getPath ()))) build (panelRun.tree);
+    }
+
+    /**
         Load job data in and decide which host thread should monitor it.
     **/
     public synchronized void distribute ()
@@ -214,7 +249,7 @@ public class NodeJob extends NodeBase
         }
         catch (IOException e) {}
         if (line == null) line = "";
-        else              line = line.trim ();  // Windows tacks a space on end of line, due to the way it interprets echo in .bat files. Rather than hack the bat, just defend against it.
+        else              line = line.trim ();  // Windows adds a space on end of line, due to the way it interprets echo in .bat files. Rather than hack the bat, just defend against it.
 
         if (line.length () >= 6  ||  Duration.between (dateFinished.toInstant (), Instant.now ()).abs ().getSeconds () > 10)
         {
@@ -505,7 +540,7 @@ public class NodeJob extends NodeBase
         if (Files.isDirectory (path))
         {
             // Check for image sequence.
-            // It's an image sequence if a random file from the dir has the right form: an integer with an standard image-file suffix.
+            // It's an image sequence if a random file from the dir has the right form: an integer with a standard image-file suffix.
             try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (path))
             {
                 Iterator<Path> it = dirStream.iterator ();

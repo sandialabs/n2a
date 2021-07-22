@@ -968,8 +968,7 @@ public abstract class Host
     **/
     public void deleteTree (Path start)
     {
-        // This is mainly for Windows, but works as a general-purpose delete-tree,
-        // even for remote filesystems.
+        // Generic implementation. Works even for remote filesystems.
         new DeleteTreeVisitor (start).walk ();
     }
 
