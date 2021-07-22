@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import gov.sandia.n2a.backend.internal.InternalBackendData;
-import gov.sandia.n2a.backend.xyce.function.Pulse;
 import gov.sandia.n2a.backend.xyce.function.Sinewave;
 import gov.sandia.n2a.backend.xyce.netlist.SymbolConstantIC;
 import gov.sandia.n2a.backend.xyce.netlist.SymbolStateVar0;
@@ -29,6 +28,7 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.plugins.extpoints.Backend;

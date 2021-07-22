@@ -38,6 +38,7 @@ import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.SumSquares;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Output;
+import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
@@ -450,6 +451,7 @@ public class Operator implements Cloneable
         register (Max              .factory ());
         register (Min              .factory ());
         register (Norm             .factory ());
+        register (Pulse            .factory ());
         register (ReadMatrix       .factory ());
         register (Round            .factory ());
         register (Rows             .factory ());

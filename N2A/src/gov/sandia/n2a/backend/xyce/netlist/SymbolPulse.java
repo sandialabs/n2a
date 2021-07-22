@@ -8,12 +8,12 @@ package gov.sandia.n2a.backend.xyce.netlist;
 
 import java.util.ArrayList;
 
-import gov.sandia.n2a.backend.xyce.function.Pulse;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Transformer;
+import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class SymbolPulse extends Symbol
