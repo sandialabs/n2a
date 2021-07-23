@@ -68,16 +68,14 @@ public class NodeJob extends NodeBase
     public    boolean old;                  // Indicates that the associated job existed before the current invocation of this app started. Used to limit which hosts are automatically enabled.
     protected boolean tryToSelectOutput;
 
+    public static final long activeTimeout = 1000 * 1000;  // 1000 seconds, or about 20 minutes
+
     public NodeJob (MNode source, boolean newlyStarted)
     {
         key = source.key ();
         setUserObject (key);  // This is fast, but the task of loading the $inherit line is slow, so we do it on the first call to monitorProgress().
         old = ! newlyStarted;
-        if (newlyStarted)
-        {
-            lastActive = System.currentTimeMillis ();  // See below. Gives new jobs time to appear in process list. Old jobs have no grace period.
-            tryToSelectOutput = true;
-        }
+        tryToSelectOutput = newlyStarted;
     }
 
     @Override
@@ -255,7 +253,7 @@ public class NodeJob extends NodeBase
         {
             if      (line.equals ("success")) complete = 1;
             else if (line.equals ("killed" )) complete = 3;
-            else                              complete = 2;  // includes "failure", "", and any other unknown string
+            else                              complete = 2;  // includes "failure", "dead", "", and any other unknown string
         }
     }
 
@@ -304,17 +302,15 @@ public class NodeJob extends NodeBase
             {
                 complete = 0;
                 dateStarted = new Date (Host.lastModified (started));
+                lastActive = dateStarted.getTime ();
             }
         }
         Backend simulator = Backend.getBackend (source.get ("backend"));
-        if (complete < 1)
+        if (complete >= 0  &&  complete < 1)
         {
             float percentDone = 0;
             if (expectedSimTime == 0) expectedSimTime = new UnitValue (source.get ("duration")).get ();
-            if (expectedSimTime > 0)
-            {
-                percentDone = (float) (simulator.currentSimTime (source) / expectedSimTime);
-            }
+            if (expectedSimTime > 0)  percentDone = (float) (simulator.currentSimTime (source) / expectedSimTime);
 
             if (Files.exists (finished))
             {
@@ -329,12 +325,12 @@ public class NodeJob extends NodeBase
                     {
                         lastActive = currentTime;
                     }
-                    else if (currentTime - lastActive > 1000000)  // 1000 seconds, or about 20 minutes
+                    else if (currentTime - lastActive > activeTimeout)
                     {
                         if (percentDone < 1)
                         {
                             // Give it up for dead.
-                            Files.copy (new ByteArrayInputStream ("killed".getBytes ("UTF-8")), finished);
+                            Files.copy (new ByteArrayInputStream ("dead".getBytes ("UTF-8")), finished);
                             complete = 4;
                         }
                         else  // Job appears to be actually finished, even though "finished" hasn't been written yet.
@@ -685,6 +681,7 @@ public class NodeJob extends NodeBase
                     {
                         if (key.equals ("seed")) return n;
                         if (key.equals ("duration")) return n;
+                        if (key.equals ("watch")  &&  n.child ("timeScale") != null) return n;
                         if (key.equals ("param")  &&  n.getFlag ()  &&  ! n.get ().equals ("watch"))
                         {
                             // Only mark overrides with "param".
@@ -707,6 +704,7 @@ public class NodeJob extends NodeBase
                         // Don't even process $metadata unless it contains useful backend info.
                         if (n.child ("seed") != null) return n;
                         if (n.child ("duration") != null) return n;
+                        if (n.child ("watch", "timeScale") != null) return n;
                         if (n.getFlag ("param")  &&  ! n.get ("param").equals ("watch"))
                         {
                             if (node instanceof MPart  &&  ! ((MPart) node).isFromTopDocument ()) continue;

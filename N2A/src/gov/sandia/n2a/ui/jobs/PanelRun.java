@@ -206,7 +206,7 @@ public class PanelRun extends JPanel
             }
         });
 
-        Thread loadHostMonitors = new Thread ("Load Host Monitors")
+        Thread loadHostMonitors = new Thread ("Prepare Host Monitors")
         {
             public void run ()
             {

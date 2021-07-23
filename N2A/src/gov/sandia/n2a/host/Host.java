@@ -293,7 +293,9 @@ public abstract class Host
 
             while (! stop)
             {
-                if (waitingForHost.isEmpty ())
+                boolean empty;
+                synchronized (waitingForHost) {empty = waitingForHost.isEmpty ();}
+                if (empty)
                 {
                     try {sleep (1000);}
                     catch (InterruptedException e) {}

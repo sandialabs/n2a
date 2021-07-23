@@ -321,7 +321,7 @@ public class EquationSet implements Comparable<EquationSet>
                             // Check for timeScale
                             EquationSet root = this;
                             while (root.container != null) root = root.container;
-                            String timeScale = root.source.get ("$metadata", "watch", "timeScale");
+                            String timeScale = root.metadata.get ("watch", "timeScale");
                             String scale = "";
                             if (v.order > 0  &&  ! timeScale.isEmpty ())
                             {
