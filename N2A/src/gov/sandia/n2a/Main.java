@@ -11,13 +11,16 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
 import gov.sandia.n2a.ui.jobs.OutputParser.Column;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
+import gov.sandia.n2a.ui.studies.Study;
 
 import java.awt.EventQueue;
 import java.io.BufferedReader;
@@ -43,19 +46,23 @@ public class Main
         ArrayList<String> pluginClassNames = new ArrayList<String> ();
         ArrayList<File>   pluginDirs       = new ArrayList<File> ();
         MNode runModel = new MVolatile ();
-        boolean headless = false;
+        String headless = "";
         for (String arg : args)
         {
-            if (arg.startsWith ("-plugin="   )) pluginClassNames.add           (arg.substring (8));
-            if (arg.startsWith ("-pluginDir=")) pluginDirs      .add (new File (arg.substring (11)));
-
-            if (arg.startsWith ("-run="))
+            if      (arg.startsWith ("-plugin="   )) pluginClassNames.add           (arg.substring (8));
+            else if (arg.startsWith ("-pluginDir=")) pluginDirs      .add (new File (arg.substring (11)));
+            else if (arg.startsWith ("-run="))
             {
                 runModel.set (arg.substring (5), "$inherit");
-                headless = true;
+                headless = "run";
             }
-            if (arg.startsWith ("-param=")) processParamFile (arg.substring (7), runModel);
-            if (! arg.startsWith ("-"))
+            else if (arg.startsWith ("-study="))
+            {
+                runModel.set (arg.substring (7), "$inherit");
+                headless = "study";
+            }
+            else if (arg.startsWith ("-param=")) processParamFile (arg.substring (7), runModel);
+            else if (! arg.startsWith ("-"))
             {
                 String[] pieces = arg.split ("=", 2);
                 String keys = pieces[0];
@@ -65,7 +72,7 @@ public class Main
             }
         }
 
-        if (! headless) setUncaughtExceptionHandler (null);
+        if (headless.isEmpty ()) setUncaughtExceptionHandler (null);
 
         // Set global application properties.
         AppData.properties.set ("Neurons to Algorithms", "name");
@@ -82,9 +89,10 @@ public class Main
         pluginDirs.add (new File (AppData.properties.get ("resourceDir"), "plugins"));
         PluginManager.initialize (new N2APlugin (), pluginClassNames, pluginDirs);
 
-        if (headless)
+        if (! headless.isEmpty ())
         {
-            runHeadless (runModel);
+            if      (headless.equals ("run"  )) runHeadless   (runModel);
+            else if (headless.equals ("study")) studyHeadless (runModel);
             return;
         }
 
@@ -156,50 +164,30 @@ public class Main
         }
     }
 
-    public static void runHeadless (MNode runModel)
+    /**
+        Assumes this app was started solely for the purpose of running one specific job.
+        This job operates outside the normal job management. The user is responsible
+        for everything, including host selection, load balancing, directory and file management.
+    **/
+    public static void runHeadless (MNode record)
     {
         Path jobDir = Paths.get (System.getProperty ("user.dir")).toAbsolutePath ();  // Use current working directory, on assumption that's what the caller wants.
-        MNode job = new MVolatile ();
+        MNode job = new MVolatile ();  // Since we don't use any real job control, don't need to save job record, and thus no need for MDoc.
         job.set (jobDir.resolve ("job").toString ());  // Make job look like an MDoc, so backend can fetch working directory.
 
-        MPart collated = new MPart (runModel);
+        MPart collated = new MPart (record);
         NodeJob.collectJobParameters (collated, collated.get ("$inherit"), job);
+        NodeJob.saveCollatedModel (collated, job);
 
-        // Save collated model.
-        // Compare with PanelEquations.saveCollatedModel() and MDoc.save().
-        // We do extra work here to avoid using MDoc, which would require duplicating the collated model in memory.
-        Path modelPath = jobDir.resolve ("model");
-        try (BufferedWriter writer = Files.newBufferedWriter (modelPath))
-        {
-            Schema.latest ().writeAll (collated, writer);
-            // File should be closed when writer is closed. It will be re-opened by backend.
-        }
-        catch (IOException e)
-        {
-            System.err.println ("Failed to write model file.");
-            e.printStackTrace ();
-            System.exit (1);
-        }
-
+        // Start the job.
+        // Don't bother with host selection or queueing.
         String simulatorName = job.get ("backend");
         Backend backend = Backend.getBackend (simulatorName);
         backend.start (job);
 
         // Wait for completion
         NodeJob node = new NodeJob (job, true);
-        long lastCheck = 0;
-        while (node.complete < 1)
-        {
-            if (lastCheck > 0)
-            {
-                long elapsed = System.currentTimeMillis () - lastCheck;
-                long wait = 1000 - elapsed;
-                try {if (wait > 0) Thread.sleep (wait);}
-                catch (InterruptedException e) {}
-            }
-            lastCheck = System.currentTimeMillis ();
-            node.monitorProgress ();
-        }
+        while (node.complete < 1) node.monitorProgress ();
 
         // Extract results requested in ASV
         MNode ASV = job.child ("$metadata", "dakota", "ASV");
@@ -218,6 +206,29 @@ public class Main
             }
         }
         catch (IOException e) {}
+    }
+
+    /**
+        Run a study from the command line.
+        Unlike runHeadless(), this function uses all the usual job management machinery.
+    **/
+    public static void studyHeadless (MNode record)
+    {
+        MPart collated = new MPart (record);
+        if (! collated.containsKey ("study")) return;
+
+        // See PanelRun constructor / prepare host monitor thread 
+        Host.restartAssignmentThread ();
+        for (Host h : Host.getHosts ()) h.restartMonitorThread ();
+
+        MNode studyNode = PanelEquations.createStudy (collated.get ("$inherit"), collated);
+        Study study = new Study (studyNode); // constructed in paused state
+        study.togglePause ();                // start
+        study.waitForCompletion ();
+
+        // See MainFrame window close listener
+        AppData.quit (); // Save any modified data, particularly the study record.
+        Host.quit ();    // Close down any ssh sessions.
     }
 
     public static void setUncaughtExceptionHandler (final JFrame parent)

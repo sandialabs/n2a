@@ -103,7 +103,8 @@ public class PanelRun extends JPanel
     protected DisplayThread       displayThread = null;
     protected NodeBase            displayNode = null;
     protected MDir                runs;  // Copied from AppData for convenience
-    public    Map<String,NodeJob> jobNodes = new HashMap<String,NodeJob> ();  // for quick lookup of job node based on job key.
+
+    public static Map<String,NodeJob> jobNodes = new HashMap<String,NodeJob> ();  // for quick lookup of job node based on job key.
 
     public static ImageIcon iconConnect    = ImageUtil.getImage ("connect.gif");
     public static ImageIcon iconPause      = ImageUtil.getImage ("pause-16.png");

@@ -44,6 +44,12 @@ import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
+/**
+    Tree node for holding simulation runs ("jobs").
+    Notice that even though this is an important part of the GUI, it is really just a data object.
+    This class does a number of utility functions outside of the GUI, and serves to keep track of jobs
+    even when running headless. 
+**/
 @SuppressWarnings("serial")
 public class NodeJob extends NodeBase
 {
@@ -206,7 +212,7 @@ public class NodeJob extends NodeBase
         because this is usually already lost from "model" by the time this function
         is called.
         @param model The input model. Should be already collated, and so generally
-        is not the original source model from the DB.
+        not the original source model from the DB.
         @param inherit Key of the source model in the DB. 
         @param job The job record to be filled in.
     **/

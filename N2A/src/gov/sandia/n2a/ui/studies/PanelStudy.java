@@ -6,21 +6,12 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.studies;
 
-import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
-import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.host.Host;
-import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
-import gov.sandia.n2a.ui.Utility;
-import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.NodeJob;
@@ -38,21 +29,8 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.Random;
-
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.DefaultListCellRenderer;
@@ -285,7 +263,6 @@ public class PanelStudy extends JPanel
         {
             public void run ()
             {
-                PanelRun pr = PanelRun.instance;
                 for (Study study : studies)
                 {
                     // It does no harm to clear the record out from under the worker thread.
@@ -301,10 +278,10 @@ public class PanelStudy extends JPanel
                         String jobKey = study.getJobKey (index);
                         if (! jobKey.startsWith (studyKey)) continue;  // Test whether this job was started directly by the study.
                         NodeJob jobNode;
-                        synchronized (pr.jobNodes) {jobNode = pr.jobNodes.get (jobKey);}
+                        synchronized (PanelRun.jobNodes) {jobNode = PanelRun.jobNodes.get (jobKey);}
                         if (jobNode != null) paths.add (new TreePath (jobNode.getPath ()));
                     }
-                    pr.delete (paths.toArray (new TreePath[paths.size ()]));
+                    PanelRun.instance.delete (paths.toArray (new TreePath[paths.size ()]));
                 }
             }
         };
@@ -317,8 +294,8 @@ public class PanelStudy extends JPanel
     **/
     public void addNewStudy (MNode node)
     {
-        Study study = new Study (node);
-        study.togglePause ();  // Study is constructed in paused state, so this will start it.
+        Study study = new Study (node); // constructed in paused state
+        study.togglePause ();           // start
 
         model.add (0, study);  // Since this always executes on event dispatch thread, it will not conflict with other code that accesses model.
         list.clearSelection ();
@@ -361,430 +338,6 @@ public class PanelStudy extends JPanel
         shutdownThread.start ();
         try {shutdownThread.join (2000);}
         catch (InterruptedException e) {}
-    }
-
-    public class Study
-    {
-        protected MNode               source;
-        protected StudyThread         thread;
-        protected StudyIterator       iterator;
-        protected int                 count;                    // Total number of samples that will be generated
-        protected int                 index;                    // Of next sample that should be created. Always 1 greater than last completed sample. When 0, study is about to start. When equal to count, study has completed.
-        protected List<String>        incomplete;
-        protected boolean             usesRandom;               // At least one iterator in the chain generates random values. It will need an instance of the internal Simulator to create a convenient environment for generating values.
-        protected Random              random;                   // random number generator used by iterator
-        protected long                startTime;                // Of main loop in thread. Used to estimate time remaining.
-        protected Map<String,Integer> jobMap;
-
-        public Study (MNode source)
-        {
-            this.source = source;
-        }
-
-        public void buildIterator ()
-        {
-            // Assumes iterator is null
-
-            MNode variables = source.childOrEmpty ("variables");
-            variables.visit (new Visitor ()
-            {
-                public boolean visit (MNode n)
-                {
-                    if (! n.data ()) return true;  // This is merely an intermediate node, not a study variable.
-                    String[] keys = n.keyPath (variables);
-                    String value = n.get ().trim ();
-
-                    StudyIterator it = null;
-                    if (value.startsWith ("["))
-                    {
-                        value = value.substring (1);
-                        value = value.split ("]", 2)[0];
-                        it = new StudyIteratorRange (keys, value);
-                    }
-                    else if (value.startsWith ("uniform")  ||  value.startsWith ("gaussian"))
-                    {
-                        it = new StudyIteratorRandom (keys, value, n);
-                        usesRandom = true;
-                    }
-                    else if (value.contains (","))
-                    {
-                        it = new StudyIteratorList (keys, value);
-                    }
-                    else return false;  // Ignore unrecognized study type. TODO: should we throw an error instead?
-
-                    if (iterator != null)
-                    {
-                        iterator.next ();  // Move to first item in sequence. At least one must exist.
-                        it.inner = iterator;
-                    }
-                    iterator = it;
-                    return false;
-                }
-            });
-        }
-
-        public synchronized void togglePause ()
-        {
-            if (thread == null)
-            {
-                if (! source.get ("finished").isEmpty ()) return;  // Don't restart a study after it completes or is killed.
-
-                thread = new StudyThread ();
-                thread.setDaemon (true);
-                thread.start ();
-            }
-            else
-            {
-                thread.stop = true;
-            }
-        }
-
-        public synchronized void stop ()
-        {
-            source.set (System.currentTimeMillis () / 1000, "finished");
-            if (thread != null) thread.stop = true;
-        }
-
-        public float complete ()
-        {
-            if (! source.get ("finished").isEmpty ()) return 1;
-            if (count == 0) return 0;
-            float complete = getJobCount () - (incomplete == null ? 0 : incomplete.size ());
-            return complete / count;
-        }
-
-        public Icon getIcon ()
-        {
-            if (! source.get ("finished").isEmpty ()) return iconComplete;
-            if (thread == null) return iconPause;
-            if (count == 0) return NodeJob.iconUnknown;
-            return Utility.makeProgressIcon (complete ());
-        }
-
-        public String toString ()
-        {
-            return source.get ("$inherit");
-        }
-
-        /**
-            @return Total number of samples that have been selected or created. May include partially-created or failed jobs.
-        **/
-        public int getJobCount ()
-        {
-            return source.getInt ("jobs");
-        }
-
-        public String getJobKey (int index)
-        {
-            String result = source.get ("jobs", index);
-            if (result.isEmpty ()) result = source.key () + "-" + index;
-            return result;
-        }
-
-        public int getIndex (String jobKey)
-        {
-            // Try to pull out the index from the key itself.
-            String[] pieces = jobKey.split ("-");
-            if (pieces.length > 1)
-            {
-                try
-                {
-                    if (jobKey.startsWith (source.key ())) return Integer.valueOf (pieces[pieces.length - 1]);
-                }
-                catch (NumberFormatException e) {}
-            }
-
-            // Check if it is a pre-existing job we collected.
-            if (jobMap == null)
-            {
-                jobMap = new HashMap<String,Integer> ();
-                for (MNode job : source.childOrEmpty ("jobs")) jobMap.put (job.get (), Integer.valueOf (job.key ()));
-            }
-            Integer index = jobMap.get (jobKey);
-            if (index != null) return index;
-
-            return -1;
-        }
-
-        public class StudyThread extends Thread
-        {
-            public boolean stop;
-
-            public StudyThread ()
-            {
-                super ("Study " + source.get ("$inherit") + " " + source.key ());
-            }
-
-            public void run ()
-            {
-                index = source.getOrDefault (0, "barrier");  // The sample immediately after the most recent barrier that was passed, if any. Implies that everything up through index-1 was fully completed.
-                if (iterator == null)
-                {
-                    buildIterator ();
-                    if (iterator == null)  // Failed to find any study variables.
-                    {
-                        // Convert this to a single run.
-                        EventQueue.invokeLater (new Runnable ()
-                        {
-                            public void run ()
-                            {
-                                list.setSelectedValue (Study.this, false); // Make ourself the current selection.
-                                delete ();                                 // Delete current selection.
-
-                                PanelEquations pe = PanelModel.instance.panelEquations;
-                                MNode doc = AppData.models.child (source.get ("$inherit"));
-                                pe.load (doc);  // Usually this record will already be loaded, since the study was launched from there.
-                                pe.launchJob ();
-                            }
-                        });
-
-                        thread = null;
-                        return;
-                    }
-
-                    if (usesRandom)
-                    {
-                        MNode seed = source.child ("config", "seed");
-                        if (seed == null) seed = source.set (System.currentTimeMillis (), "config", "seed");
-                        random = new Random (seed.getLong ());
-                    }
-
-                    if (index == 0) saveIterators ();  // Snapshot initial state. This is like a barrier.
-                }
-                count = iterator.count ();
-
-                if (usesRandom) new Simulator (random);  // Since this is a new thread, we always have to instantiate a new thread-local object.
-
-                String inherit = source.get ("$inherit");
-                MNode model = AppData.models.childOrEmpty (inherit);
-                MNode modelCopy = new MVolatile ();
-                modelCopy.merge (model);  // "model" is never touched. We only use "modelCopy".
-
-                // Gather list of incomplete jobs.
-                PanelRun pr = PanelRun.instance;
-                int jobCount = getJobCount ();
-                if (incomplete == null)
-                {
-                    incomplete = new LinkedList<String> ();
-                    while (index < jobCount)
-                    {
-                        String jobKey = getJobKey (index++);
-                        NodeJob node;
-                        synchronized (pr.jobNodes) {node = pr.jobNodes.get (jobKey);}
-                        if (node == null  ||  node.complete != 1) incomplete.add (jobKey);
-                    }
-                }
-
-                // Outer loop handles failed jobs.
-                startTime = System.currentTimeMillis ();
-                boolean done = false;  // Indicates that iterator has completed. This is different than stop.
-                int retry = source.getOrDefault (3, "config", "retry");
-                for (int retries = 0; ! stop  &&  retries <= retry; retries++)
-                {
-                    restoreIterators ();
-                    // Inner loop does the entire study, breaking only when done or if jobs failed.
-                    while (! stop)
-                    {
-                        // Update list of running jobs.
-                        int notStarted = 0;
-                        int failed     = 0;
-                        Iterator<String> it = incomplete.iterator ();
-                        while (it.hasNext ())
-                        {
-                            String jobKey = it.next ();
-                            NodeJob node;
-                            synchronized (pr.jobNodes) {node = pr.jobNodes.get (jobKey);}
-                            if      (node == null  ||  node.complete < 0) notStarted++;
-                            else if (node.complete == 1)                  it.remove ();
-                            else if (node.complete > 1)                   failed++;
-                        }
-
-                        showProgress ();
-
-                        if (notStarted > 10)  // Throttle generation of new samples.
-                        {
-                            try {sleep (1000);}
-                            catch (InterruptedException e) {}
-                            continue;
-                        }
-                        else if (iterator.barrier ()  ||  done)
-                        {
-                            if (incomplete.isEmpty ())  // Pass the barrier
-                            {
-                                saveIterators ();
-                                if (done)
-                                {
-                                    stop = true;
-                                    break;
-                                }
-                                retries = 0;  // Passing a barrier means we have resolved all errors, so don't hold them against any future retries.
-                            }
-                            else  // Wait at barrier
-                            {
-                                try {sleep (1000);}
-                                catch (InterruptedException e) {}
-                                if (failed == 0) continue;
-                                // Some jobs failed, so try again.
-                                break;
-                            }
-                        }
-
-                        // Get next sample.
-                        if (! iterator.next ())
-                        {
-                            done = true;
-                            continue;
-                        }
-
-                        // Verify that work needs to be done.
-                        String jobKey = source.key () + "-" + index++;  // source key is generated the same way regular job keys. Unless the user launches a study and a regular job in the same second, they will never overlap.
-                        NodeJob node;
-                        synchronized (pr.jobNodes) {node = pr.jobNodes.get (jobKey);}
-                        if (node != null)
-                        {
-                            if (node.complete <= 1) continue;  // Job already exists and is in good condition.
-                            node.reset ();
-                        }
-
-                        // Expand model
-                        // This allows iteration on model structure itself, for example by changing $inherit.
-                        iterator.assign (modelCopy);
-                        MNode collated = new MPart (modelCopy);
-
-                        // Launch job and maintain all records
-                        // See PanelEquations.listenerRun for similar code.
-                        final MDoc job = (MDoc) AppData.runs.childOrCreate (jobKey);
-                        NodeJob.collectJobParameters (collated, inherit, job);
-                        job.save ();
-                        NodeJob.saveCollatedModel (collated, job);
-
-                        // Update job count.
-                        // It is important to do this after the collated model is saved, so that the UI thread will see complete information.
-                        // Notice that index was incremented above, so it now gives the count of jobs rather than the job number.
-                        if (index > jobCount)
-                        {
-                            source.set (index, "jobs");
-                            incomplete.add (jobKey);
-                        }
-
-                        EventQueue.invokeLater (new Runnable ()
-                        {
-                            public void run ()
-                            {
-                                NodeJob node;
-                                synchronized (pr.jobNodes) {node = pr.jobNodes.get (jobKey);}
-                                if (node == null)
-                                {
-                                    node = PanelRun.instance.addNewRun (job, false);
-                                    if (displayStudy == Study.this) tableSamples.addJobs ();
-                                }
-                                Host.waitForHost (node);
-                            }
-                        });
-                    }
-                }
-
-                long now = System.currentTimeMillis ();
-                source.set (source.getLong ("time") + now - startTime, "time");
-                if (done) source.set (now, "finished");
-                showProgress ();
-
-                thread = null;
-            }
-        }
-
-        public void saveIterators ()
-        {
-            source.set (index, "barrier");
-            iterator.save (source);
-
-            if (! usesRandom) return;
-            try
-            {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream ();
-                ObjectOutputStream oos = new ObjectOutputStream (baos);
-                oos.writeObject (random);
-                String base64 = Base64.getEncoder ().encodeToString (baos.toByteArray ());
-                source.set (base64, "rng");
-            }
-            catch (IOException e) {}
-        }
-
-        public void restoreIterators ()
-        {
-            index = source.getOrDefault (0, "barrier");
-            iterator.load (source);
-
-            if (! usesRandom) return;
-            try
-            {
-                String rng = source.get ("rng");  // Should always exist when restoreIterators() is called
-                byte[] bytes = Base64.getDecoder ().decode (rng);
-                ByteArrayInputStream bais = new ByteArrayInputStream (bytes);
-                ObjectInputStream ois = new ObjectInputStream (bais);
-                random = (Random) ois.readObject ();
-                Simulator.instance.get ().random = random;
-            }
-            catch (Exception e) {}
-        }
-
-        public void showProgress ()
-        {
-            String status;
-            if (! source.get ("finished").isEmpty ())
-            {
-                status = "Finished in " + scaleTime (source.getLong ("time") / 1000.0);
-            }
-            else if (thread == null)
-            {
-                status = "Paused sample generation. Existing jobs will continue to run.";
-            }
-            else
-            {
-                int complete = getJobCount () - (incomplete == null ? 0 :incomplete.size ());
-                status = "" + complete + "/" + count + " samples; ";
-                if (complete == 0)
-                {
-                    status += "Unknonw time remaining";
-                }
-                else
-                {
-                    long totalTime = source.getLong ("time") + System.currentTimeMillis () - startTime;
-                    double averageTime = totalTime / (complete + 1);
-                    double ETA = averageTime * (count - complete) / 1000;  // ETA is in seconds rather than milliseconds. It is only precise to 1/10th of a second.
-                    if      (ETA > 4.3425e17) status += "This will take longer than the age of the universe.";  // 13.77 billion years, give or take a few
-                    else if (ETA > 2.3652e14) status += "Deep Thought got done sooner.";                        // 7.5 million years
-                    else                      status += scaleTime (ETA) + " remaining";
-                }
-            }
-            showStatus (Study.this, status);
-
-            EventQueue.invokeLater (new Runnable ()
-            {
-                public void run ()
-                {
-                    int row = model.indexOf (Study.this);
-                    if (row < 0) return;  // Could be negative if row no longer exists, such as during delete.
-                    list.repaint (list.getCellBounds (row, row));
-                }
-            });
-        }
-
-        public String scaleTime (double t)
-        {
-            if (t >  31536000) return formatTime (t / 31536000) + " years";
-            if (t >   2592000) return formatTime (t /  2592000) + " months";
-            if (t >    604800) return formatTime (t /   604800) + " weeks";
-            if (t >     86400) return formatTime (t /    86400) + " days";
-            if (t >      3600) return formatTime (t /     3600) + " hours";
-            if (t >        60) return formatTime (t /       60) + " minutes";
-            return                    formatTime (t           ) + " seconds";
-        }
-
-        public String formatTime (double t)
-        {
-            return String.valueOf (Math.round (t * 10) / 10.0);
-        }
     }
 
     public class SampleTable extends JTable
@@ -898,11 +451,11 @@ public class PanelStudy extends JPanel
             int index = rowCount - row - 1;
             String jobKey = displayStudy.getJobKey (index);
 
-            PanelRun pr = PanelRun.instance;
             NodeJob node;
-            synchronized (pr.jobNodes) {node = pr.jobNodes.get (jobKey);}
+            synchronized (PanelRun.jobNodes) {node = PanelRun.jobNodes.get (jobKey);}
             if (node == null) return;
             TreePath path = new TreePath (node.getPath ());
+            PanelRun pr = PanelRun.instance;
             pr.tree.setSelectionPath (path);
             pr.tree.scrollPathToVisible (path);
 
@@ -953,9 +506,8 @@ public class PanelStudy extends JPanel
             if (column == 0)
             {
                 // Determine status icon
-                PanelRun pr = PanelRun.instance;
                 NodeJob node;
-                synchronized (pr.jobNodes) {node = pr.jobNodes.get (jobKey);}
+                synchronized (PanelRun.jobNodes) {node = PanelRun.jobNodes.get (jobKey);}
                 if (node == null) return NodeJob.iconUnknown;
                 if (node.deleted) return NodeJob.iconFailed;
                 return node.getIcon (false);
@@ -1031,195 +583,6 @@ public class PanelStudy extends JPanel
             if (! (value instanceof Icon)) setIcon (NodeJob.iconFailed);
             else                           setIcon ((Icon) value);
             return this;
-        }
-    }
-
-    /**
-        A hierarchical iterator for enumerating combinations of parameters.
-        When chained with other iterators, the outermost iterator varies the fastest.
-        An empty iterator is not allowed. Every iterator must offer a sequence at least 1 item long.
-    **/
-    public static abstract class StudyIterator
-    {
-        protected StudyIterator inner;   // sub-iterator. If null, then this is the last iterator in the chain.
-        protected String[]      keyPath; // full set of keys that address the location of the variable
-        // concrete classes will also include information on the specific values to iterate over
-
-        /**
-            Immediately after construction, this iterator points before the beginning of the sequence.
-            A call to next() must come before a call to assign().
-            When composing with an inner iterator, call restart() or next() on the inner iterator to properly prepare it.
-        **/
-        public StudyIterator (String[] keys)
-        {
-            this.keyPath = keys;
-        }
-
-        public abstract int     count ();             // Returns the total number of samples that will be generated by one complete sequence.
-        public abstract void    restart ();           // Moves this iterator to start of sequence, without regard to inner iterators. An immediate call to assign() will hand out the first item. This is similar to next() but unlike the initial state after construction.
-        public abstract boolean step ();              // Moves this iterator to next item in sequence, without regard to inner iterator. Returns false if no more items are available.
-        public abstract void    assign (MNode model); // Applies current value to model. Also calls inner.assign().
-        public abstract void    save (MNode study);   // Store the state of this iterator. Also calls inner.save().
-        public abstract void    load (MNode study);   // Retrieve the saved state of this iterator so it can resume exactly where it left off. Also calls inner.load().
-
-        public boolean next ()
-        {
-            if (step ()) return true;
-            // Past end of sequence. We can only restart if there is an inner iterator that has another item to offer.
-            if (inner != null  &&  inner.next ())
-            {
-                restart ();
-                return true;
-            }
-            return false;
-        }
-
-        // Indicates that the caller should wait until all previously-generated jobs finish before calling next again.
-        public boolean barrier ()
-        {
-            return false;
-        }
-
-        /**
-            Utility function to locate the node within the study tree the contains the parameters for this iterator.
-            This can be used to further save/load state.
-        **/
-        public MNode node (MNode study)
-        {
-            List<String> keyList = new ArrayList<String> ();
-            keyList.add ("variables");
-            keyList.addAll (Arrays.asList (keyPath));
-            return study.child (keyList.toArray (new String[keyList.size ()]));  // This node will always exist, since it was used to create the iterator.
-        }
-    }
-
-    /**
-        An iterator that steps through a discrete set of items.
-    **/
-    public static abstract class StudyIteratorIndexed extends StudyIterator
-    {
-        protected int index = -1;
-        protected int count;  // Must be set by concrete class constructor.
-
-        public StudyIteratorIndexed (String[] keys)
-        {
-            super (keys);
-        }
-
-        public int count ()
-        {
-            int result = count;
-            if (inner != null) result *= inner.count ();
-            return result;
-        }
-
-        public void restart ()
-        {
-            index = 0;
-        }
-
-        public boolean step ()
-        {
-            index++;
-            return index < count;
-        }
-
-        public void save (MNode study)
-        {
-            if (inner != null) inner.save (study);
-            MNode n = node (study);
-            n.set (index, "index");
-        }
-
-        public void load (MNode study)
-        {
-            if (inner != null) inner.load (study);
-            MNode n = node (study);
-            index = n.getInt ("index");
-        }
-    }
-
-    public static class StudyIteratorList extends StudyIteratorIndexed
-    {
-        protected List<String> items;
-
-        public StudyIteratorList (String[] keys, String items)
-        {
-            super (keys);
-            this.items = Arrays.asList (items.split (","));
-            count = this.items.size ();
-        }
-
-        public void assign (MNode model)
-        {
-            if (inner != null) inner.assign (model);
-            model.set (items.get (index), keyPath);
-        }
-    }
-
-    public static class StudyIteratorRange extends StudyIteratorIndexed
-    {
-        protected double lo;
-        protected double hi;
-        protected double step;
-
-        public StudyIteratorRange (String[] keys, String range)
-        {
-            super (keys);
-            String[] pieces = range.split (",");
-            lo = Double.valueOf (pieces[0]);
-            if (pieces.length > 1) hi = Double.valueOf (pieces[0]);
-            else                   hi = lo;
-            if (pieces.length > 2)
-            {
-                step = hi;
-                hi = Double.valueOf (pieces[2]);
-            }
-            else
-            {
-                step = 1;
-            }
-            count = (int) Math.floor ((hi - lo) / step);
-        }
-
-        public void assign (MNode model)
-        {
-            if (inner != null) inner.assign (model);
-            model.set (lo + step * index, keyPath);
-        }
-    }
-
-    public static class StudyIteratorRandom extends StudyIteratorIndexed
-    {
-        protected Operator expression;
-        protected Type     nextValue;
-
-        public StudyIteratorRandom (String[] keys, String value, MNode n)
-        {
-            super (keys);
-            count = n.getOrDefault (1, "count");
-
-            try
-            {
-                expression = Operator.parse (value);
-            }
-            catch (Exception e)
-            {
-                // TODO: some form of error reporting for Study.
-            }
-        }
-
-        public boolean step ()
-        {
-            index++;
-            nextValue = expression.eval (null);
-            return index < count;
-        }
-
-        public void assign (MNode model)
-        {
-            if (inner != null) inner.assign (model);
-            model.set (nextValue, keyPath);
         }
     }
 }
