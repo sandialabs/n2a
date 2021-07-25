@@ -145,7 +145,7 @@ public class AppData
         models    .init (modelContainers);
         references.init (referenceContainers);
 
-        try (ZipInputStream zip = new ZipInputStream (AppData.class.getResource ("initialDB").openStream ()))
+        try (ZipInputStream zip = new ZipInputStream (AppData.class.getResource ("initialDB.zip").openStream ()))
         {
             ZipEntry entry;
             while ((entry = zip.getNextEntry ()) != null)
