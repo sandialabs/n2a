@@ -143,6 +143,19 @@ public class MVolatile extends MNode
     }
 
     /**
+        Adds the given node to our list of children.
+        This can be thought of as a symbolic link.
+        The node establishes no special relationship with this parent.
+        In particular, it can still be the child of another parent, including
+        one that it has a special connection with, such as an MDir.
+    **/
+    public synchronized void link (MNode node)
+    {
+        if (children == null) children = new TreeMap<String,MNode> (comparator);
+        children.put (node.key (), node);
+    }
+
+    /**
         If you already hold a reference to the node named by fromKey, then that reference remains
         valid and its key is updated.
     **/

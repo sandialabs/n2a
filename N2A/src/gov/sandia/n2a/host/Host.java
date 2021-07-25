@@ -728,6 +728,7 @@ public abstract class Host
 
     public static Path getJobDir (Path resourceDir, MNode job)
     {
+        if (AppData.properties.getBoolean ("headless")  &&  ! (resourceDir instanceof SshPath)) return Paths.get (job.get ()).getParent ();
         return resourceDir.resolve ("jobs").resolve (job.key ());
     }
 

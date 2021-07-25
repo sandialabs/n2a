@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.RemoteSlurm;
 import gov.sandia.n2a.host.RemoteUnix;
@@ -36,6 +37,10 @@ import gov.sandia.n2a.ui.settings.SettingsRepo;
 import gov.sandia.n2a.ui.studies.ActivityStudy;
 import gov.sandia.n2a.ui.settings.SettingsGeneral;
 import gov.sandia.n2a.ui.settings.SettingsHost;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import javax.swing.ImageIcon;
 
@@ -85,30 +90,36 @@ public class N2APlugin extends Plugin
     @Override
     public ExtensionPoint[] getExtensions ()
     {
-        return new ExtensionPoint[]
-        {
-            new ExportNative (),
-            gov.sandia.n2a.ui.ref.PanelSearch.exportBibTeX,
-            new ImportNative (),
-            new ImportBibTeX (),
-            new ImportEndNote (),
-            new ImportPubMed (),
-            new ImportRIS (),
-            new ActivityModel (),
-            new ActivityRun (),
-            new ActivityReference (),
-            new ActivityStudy (),
-            new ActivitySettings (),
-            new SettingsAbout (),
-            new SettingsGeneral (),
-            new SettingsHost (),
-            new SettingsLookAndFeel (),
-            new SettingsRepo (),
+        List<ExtensionPoint> result = new ArrayList<ExtensionPoint> ();
+        Collections.addAll (result,
             Unix.factory (),
             Windows.factory (),
             RemoteUnix.factory (),
             RemoteSlurm.factory ()
-        };
+        );
+        if (! AppData.properties.getBoolean ("headless"))
+        {
+            Collections.addAll (result,
+                new ExportNative (),
+                gov.sandia.n2a.ui.ref.PanelSearch.exportBibTeX,
+                new ImportNative (),
+                new ImportBibTeX (),
+                new ImportEndNote (),
+                new ImportPubMed (),
+                new ImportRIS (),
+                new ActivityModel (),
+                new ActivityRun (),
+                new ActivityReference (),
+                new ActivityStudy (),
+                new ActivitySettings (),
+                new SettingsAbout (),
+                new SettingsGeneral (),
+                new SettingsHost (),
+                new SettingsLookAndFeel (),
+                new SettingsRepo ()
+            );
+        }
+        return result.toArray (new ExtensionPoint[result.size ()]);
     }
 
     @Override

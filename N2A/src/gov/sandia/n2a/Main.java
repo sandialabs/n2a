@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
@@ -33,7 +34,11 @@ import java.lang.Thread.UncaughtExceptionHandler;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
+
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 
@@ -51,6 +56,8 @@ public class Main
         {
             if      (arg.startsWith ("-plugin="   )) pluginClassNames.add           (arg.substring (8));
             else if (arg.startsWith ("-pluginDir=")) pluginDirs      .add (new File (arg.substring (11)));
+            else if (arg.startsWith ("-param="    )) processParamFile (arg.substring (7), runModel);
+            else if (arg.startsWith ("-install"   )) headless = "install";
             else if (arg.startsWith ("-run="))
             {
                 runModel.set (arg.substring (5), "$inherit");
@@ -61,7 +68,6 @@ public class Main
                 runModel.set (arg.substring (7), "$inherit");
                 headless = "study";
             }
-            else if (arg.startsWith ("-param=")) processParamFile (arg.substring (7), runModel);
             else if (! arg.startsWith ("-"))
             {
                 String[] pieces = arg.split ("=", 2);
@@ -78,6 +84,7 @@ public class Main
         AppData.properties.set ("Neurons to Algorithms", "name");
         AppData.properties.set ("N2A",                   "abbreviation");
         AppData.properties.set ("1.1",                   "version");
+        AppData.properties.set (! headless.isEmpty (),   "headless");
         AppData.checkInitialDB ();
 
         // Load plugins
@@ -91,8 +98,9 @@ public class Main
 
         if (! headless.isEmpty ())
         {
-            if      (headless.equals ("run"  )) runHeadless   (runModel);
-            else if (headless.equals ("study")) studyHeadless (runModel);
+            if      (headless.equals ("run"    )) runHeadless   (runModel);
+            else if (headless.equals ("study"  )) studyHeadless (runModel);
+            else if (headless.equals ("install")) AppData.quit ();  // Flush new DB data.
             return;
         }
 
@@ -167,26 +175,27 @@ public class Main
     /**
         Assumes this app was started solely for the purpose of running one specific job.
         This job operates outside the normal job management. The user is responsible
-        for everything, including host selection, load balancing, directory and file management.
+        for everything, including load balancing, directory and file management.
+        Jobs can run remotely, but there is no support for retrieving results.
     **/
     public static void runHeadless (MNode record)
     {
+        // See PanelEquations.launchJob()
+
         Path jobDir = Paths.get (System.getProperty ("user.dir")).toAbsolutePath ();  // Use current working directory, on assumption that's what the caller wants.
-        MNode job = new MVolatile ();  // Since we don't use any real job control, don't need to save job record, and thus no need for MDoc.
-        job.set (jobDir.resolve ("job").toString ());  // Make job look like an MDoc, so backend can fetch working directory.
+        String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
+        MNode job = new MDoc (jobDir.resolve ("job"), jobKey);  // Make this appear as if it is from the jobs collection.
 
         MPart collated = new MPart (record);
         NodeJob.collectJobParameters (collated, collated.get ("$inherit"), job);
         NodeJob.saveCollatedModel (collated, job);
 
         // Start the job.
-        // Don't bother with host selection or queueing.
-        String simulatorName = job.get ("backend");
-        Backend backend = Backend.getBackend (simulatorName);
+        Backend backend = Backend.getBackend (job.get ("backend"));
         backend.start (job);
 
         // Wait for completion
-        NodeJob node = new NodeJob (job, true);
+        NodeJob node = new NodeJobHeadless (job);
         while (node.complete < 1) node.monitorProgress ();
 
         // Extract results requested in ASV
@@ -206,6 +215,23 @@ public class Main
             }
         }
         catch (IOException e) {}
+    }
+
+    @SuppressWarnings("serial")
+    public static class NodeJobHeadless extends NodeJob
+    {
+        protected MNode source;
+
+        public NodeJobHeadless (MNode source)
+        {
+            super (source, true);
+            this.source = source;
+        }
+
+        public MNode getSource ()
+        {
+            return source;
+        }
     }
 
     /**

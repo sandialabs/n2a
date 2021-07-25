@@ -1,14 +1,18 @@
 /*
-Copyright 2016,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.neuroml;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.swing.ImageIcon;
 
 import gov.sandia.n2a.plugins.Plugin;
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 
 public class PluginNeuroML extends Plugin
@@ -48,12 +52,14 @@ public class PluginNeuroML extends Plugin
 	@Override
 	public ExtensionPoint[] getExtensions ()
 	{
-        return new ExtensionPoint[]
+        List<ExtensionPoint> result = new ArrayList<ExtensionPoint> ();
+        result.add (new BackendNeuroML ());
+        if (! AppData.properties.getBoolean ("headless"))
         {
-            exporter,
-            new ImportNeuroML (),
-            new BackendNeuroML (),
-            new SettingsNeuroML ()
-        };
+            result.add (exporter);
+            result.add (new ImportNeuroML ());
+            result.add (new SettingsNeuroML ());
+        }
+        return result.toArray (new ExtensionPoint[result.size ()]);
 	}
 }

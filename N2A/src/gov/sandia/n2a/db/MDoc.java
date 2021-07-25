@@ -42,12 +42,21 @@ public class MDoc extends MPersistent
     }
 
     /**
-        Constructs a stand-alone document.
+        Constructs a stand-alone document with blank key.
         In this case, the value contains the full path to the file on disk.
     **/
     public MDoc (Path path)
     {
         this (null, null, path.toAbsolutePath ().toString ());
+    }
+
+    /**
+        Constructs a stand-alone document with specified key.
+        In this case, the value contains the full path to the file on disk.
+    **/
+    public MDoc (Path path, String key)
+    {
+        this (null, key, path.toAbsolutePath ().toString ());
     }
 
     protected MDoc (MDir parent, String name, String path)
