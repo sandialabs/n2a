@@ -13,6 +13,7 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.MainFrame;
@@ -20,7 +21,9 @@ import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
 import gov.sandia.n2a.ui.jobs.OutputParser.Column;
+import gov.sandia.n2a.ui.jobs.Table;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
+import gov.sandia.n2a.ui.studies.PanelStudy.SampleTableModel;
 import gov.sandia.n2a.ui.studies.Study;
 
 import java.awt.EventQueue;
@@ -50,22 +53,26 @@ public class Main
         // Parse command line
         ArrayList<String> pluginClassNames = new ArrayList<String> ();
         ArrayList<File>   pluginDirs       = new ArrayList<File> ();
-        MNode runModel = new MVolatile ();
+        MNode record = new MVolatile ();
         String headless = "";
         for (String arg : args)
         {
             if      (arg.startsWith ("-plugin="   )) pluginClassNames.add           (arg.substring (8));
             else if (arg.startsWith ("-pluginDir=")) pluginDirs      .add (new File (arg.substring (11)));
-            else if (arg.startsWith ("-param="    )) processParamFile (arg.substring (7), runModel);
+            else if (arg.startsWith ("-param="    )) processParamFile (arg.substring (7), record);
             else if (arg.startsWith ("-install"   )) headless = "install";
+            else if (arg.startsWith ("-csv"       ))
+            {
+                record.set (true, "$metadata", "csv");
+            }
             else if (arg.startsWith ("-run="))
             {
-                runModel.set (arg.substring (5), "$inherit");
+                record.set (arg.substring (5), "$inherit");
                 headless = "run";
             }
             else if (arg.startsWith ("-study="))
             {
-                runModel.set (arg.substring (7), "$inherit");
+                record.set (arg.substring (7), "$inherit");
                 headless = "study";
             }
             else if (! arg.startsWith ("-"))
@@ -74,7 +81,7 @@ public class Main
                 String keys = pieces[0];
                 String value = "";
                 if (pieces.length == 2) value = pieces[1];
-                runModel.set (value, keys.split ("\\."));
+                record.set (value, keys.split ("\\."));
             }
         }
 
@@ -98,8 +105,8 @@ public class Main
 
         if (! headless.isEmpty ())
         {
-            if      (headless.equals ("run"    )) runHeadless   (runModel);
-            else if (headless.equals ("study"  )) studyHeadless (runModel);
+            if      (headless.equals ("run"    )) runHeadless   (record);
+            else if (headless.equals ("study"  )) studyHeadless (record);
             else if (headless.equals ("install")) AppData.quit ();  // Flush new DB data.
             return;
         }
@@ -116,7 +123,7 @@ public class Main
         });
     }
 
-    public static void processParamFile (String fileName, MNode runModel)
+    public static void processParamFile (String fileName, MNode record)
     {
         // Detect type
         // We only accept an N2A file or a Dakota parameter file.
@@ -129,11 +136,11 @@ public class Main
             if (line.startsWith ("N2A.schema"))  // N2A file
             {
                 reader.reset ();
-                Schema.readAll (runModel, reader);
+                Schema.readAll (record, reader);
             }
             else if (line.contains ("variables"))  // Dakota
             {
-                runModel.set ("", "$metadata", "dakota");  // Existence of key indicates that a Dakota-style response is requested.
+                record.set ("", "$metadata", "dakota");  // Existence of key indicates that a Dakota-style response is requested.
 
                 // Variables
                 int count = Integer.parseUnsignedInt (line.trim ().split ("\\s+")[0]);
@@ -142,7 +149,7 @@ public class Main
                     line = reader.readLine ();
                     if (line == null) throw new IOException ();
                     String[] pieces = line.trim ().split ("\\s+");
-                    runModel.set (pieces[0], pieces[1].split ("\\."));
+                    record.set (pieces[0], pieces[1].split ("\\."));
                 }
 
                 // Outputs (active-set vector)
@@ -156,7 +163,7 @@ public class Main
                     String[] pieces = line.trim ().split ("\\s+");
                     // Ignore value. N2A only returns function result, not gradient or Hessian. The user is responsible to configure Dakota accordingly.
                     String name = pieces[1].split (":")[1];  // Strip off "ASV"
-                    runModel.set (name, "$metadata", "dakota", "ASV", i);
+                    record.set (name, "$metadata", "dakota", "ASV", i);
                 }
             }
             else
@@ -183,12 +190,20 @@ public class Main
         // See PanelEquations.launchJob()
 
         Path jobDir = Paths.get (System.getProperty ("user.dir")).toAbsolutePath ();  // Use current working directory, on assumption that's what the caller wants.
-        String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
-        MNode job = new MDoc (jobDir.resolve ("job"), jobKey);  // Make this appear as if it is from the jobs collection.
+        String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());  // This allows a remote job to run in the regular jobs directory there.
+        MDoc job = new MDoc (jobDir.resolve ("job"), jobKey);  // Make this appear as if it is from the jobs collection.
 
         MPart collated = new MPart (record);
         NodeJob.collectJobParameters (collated, collated.get ("$inherit"), job);
         NodeJob.saveCollatedModel (collated, job);
+
+        // Handle remote host
+        Host host = Host.get (job);  // If a remote host is used, it must be specified exactly, rather than a list of possibilities.
+        if (host instanceof Remote)  // Need to note the key so user can easily find the remote job directory.
+        {
+            job.set (jobKey, "remoteKey");
+            job.save ();
+        }
 
         // Start the job.
         Backend backend = Backend.getBackend (job.get ("backend"));
@@ -198,8 +213,16 @@ public class Main
         NodeJob node = new NodeJobHeadless (job);
         while (node.complete < 1) node.monitorProgress ();
 
+        // Convert to CSV, if requested.
+        if (record.getFlag ("$metadata", "csv"))
+        {
+            Table table = new Table (jobDir.resolve ("out"), false);
+            try {table.dumpCSV (jobDir.resolve ("out.csv"));}
+            catch (IOException e) {}
+        }
+
         // Extract results requested in ASV
-        MNode ASV = job.child ("$metadata", "dakota", "ASV");
+        MNode ASV = record.child ("$metadata", "dakota", "ASV");
         if (ASV == null) return;  // nothing more to do
         OutputParser output = new OutputParser ();
         output.parse (jobDir.resolve ("out"));
@@ -251,6 +274,52 @@ public class Main
         Study study = new Study (studyNode); // constructed in paused state
         study.togglePause ();                // start
         study.waitForCompletion ();
+
+        // Output CSV files, if requested.
+        if (record.getFlag ("$metadata", "csv"))
+        {
+            Path studyDir = study.getDir ();
+            try (BufferedWriter parms = Files.newBufferedWriter (studyDir.resolve ("study.csv")))
+            {
+                SampleTableModel samples = new SampleTableModel ();
+                samples.update (study);
+                int rows = samples.getRowCount ();
+                int cols = samples.getColumnCount ();
+                int lastCol = cols - 1;
+
+                // Header for study.csv file
+                for (int c = 1; c < cols; c++)  // first column is job status, so skip it
+                {
+                    parms.write (samples.getColumnName (c));
+                    if (c < lastCol) parms.write (",");
+                }
+                parms.newLine ();
+
+                // Rows for study.csv file, along with converted output of each job.
+                for (int r = 0; r < rows; r++)
+                {
+                    for (int c = 1; c < cols; c++)
+                    {
+                        parms.write (samples.getValueAt (r, c).toString ());
+                        if (c < lastCol) parms.write (",");
+                    }
+                    parms.newLine ();
+
+                    NodeJob jobNode = study.getJob (r);
+                    Path jobDir = Host.getJobDir (Host.getLocalResourceDir (), jobNode.getSource ());
+                    try
+                    {
+                        Table table = new Table (jobDir.resolve ("out"), false);
+                        table.dumpCSV (studyDir.resolve (r + ".csv"));
+                    }
+                    catch (IOException e) {}
+                }
+            }
+            catch (IOException e)
+            {
+                e.printStackTrace ();
+            }
+        }
 
         // See MainFrame window close listener
         AppData.quit (); // Save any modified data, particularly the study record.

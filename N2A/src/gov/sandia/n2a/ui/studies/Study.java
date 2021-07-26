@@ -26,6 +26,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.file.Path;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -193,6 +194,19 @@ public class Study
         return -1;
     }
 
+    public NodeJob getJob (int index)
+    {
+        String jobKey = getJobKey (index);
+        NodeJob result;
+        synchronized (PanelRun.jobNodes) {result = PanelRun.jobNodes.get (jobKey);}
+        return result;
+    }
+
+    public Path getDir ()
+    {
+        return Host.getLocalResourceDir ().resolve ("studies").resolve (source.key ());
+    }
+
     public class StudyThread extends Thread
     {
         public boolean stop;
@@ -355,7 +369,6 @@ public class Study
                     {
                         source.set (index, "jobs");
                         incomplete.add (jobKey);
-                        System.out.println ("adding job " + index + " " + incomplete.size ());
                     }
 
                     if (ps == null)  // headless

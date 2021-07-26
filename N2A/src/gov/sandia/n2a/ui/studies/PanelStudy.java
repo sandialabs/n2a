@@ -411,7 +411,7 @@ public class PanelStudy extends JPanel
 
         public void changeStudy ()
         {
-            modelSamples.update ();
+            modelSamples.update (displayStudy);
             modelSamples.fireTableStructureChanged ();
             updateColumnWidths ();
         }
@@ -419,7 +419,7 @@ public class PanelStudy extends JPanel
         public void addJobs ()
         {
             int oldRowCount = modelSamples.getRowCount ();
-            modelSamples.update ();
+            modelSamples.update (displayStudy);
             int addedRows = modelSamples.getRowCount () - oldRowCount;
             if (addedRows == 0) return;  // Nothing to do.
             modelSamples.fireTableRowsInserted (0, addedRows - 1);  // Does not move the viewport
@@ -449,10 +449,8 @@ public class PanelStudy extends JPanel
             if (row < 0) return;
             int rowCount = modelSamples.getRowCount ();
             int index = rowCount - row - 1;
-            String jobKey = displayStudy.getJobKey (index);
 
-            NodeJob node;
-            synchronized (PanelRun.jobNodes) {node = PanelRun.jobNodes.get (jobKey);}
+            NodeJob node = displayStudy.getJob (index);
             if (node == null) return;
             TreePath path = new TreePath (node.getPath ());
             PanelRun pr = PanelRun.instance;
@@ -465,7 +463,7 @@ public class PanelStudy extends JPanel
         }
     }
 
-    public class SampleTableModel extends AbstractTableModel
+    public static class SampleTableModel extends AbstractTableModel
     {
         protected Study          currentStudy;
         protected List<String[]> variablePaths = new ArrayList<String[]> ();
@@ -501,7 +499,7 @@ public class PanelStudy extends JPanel
             if (row < 0  ||  row >= rowCount) return null;
 
             int index = rowCount - row - 1;  // Reverse row order, so most-recently created jobs show at top.
-            String jobKey = displayStudy.getJobKey (index);
+            String jobKey = currentStudy.getJobKey (index);
 
             if (column == 0)
             {
@@ -540,7 +538,7 @@ public class PanelStudy extends JPanel
             return values[column-1];
         }
 
-        public synchronized void update ()
+        public synchronized void update (Study displayStudy)
         {
             if (currentStudy != displayStudy)
             {
@@ -549,9 +547,9 @@ public class PanelStudy extends JPanel
                 variablePaths.clear ();
                 rowValues.clear ();
 
-                if (displayStudy != null)
+                if (currentStudy != null)
                 {
-                    MNode variables = displayStudy.source.childOrEmpty ("variables");
+                    MNode variables = currentStudy.source.childOrEmpty ("variables");
                     variables.visit (new Visitor ()
                     {
                         public boolean visit (MNode n)
@@ -563,9 +561,9 @@ public class PanelStudy extends JPanel
                     });
                 }
             }
-            if (displayStudy != null)
+            if (currentStudy != null)
             {
-                int rows = displayStudy.getJobCount ();
+                int rows = currentStudy.getJobCount ();
                 while (rowValues.size () < rows) rowValues.add (null);  // We will lazy-load the actual row data, because not all rows will necessarily be displayed.
             }
         }
