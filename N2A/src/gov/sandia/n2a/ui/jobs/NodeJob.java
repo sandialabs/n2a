@@ -673,6 +673,7 @@ public class NodeJob extends NodeBase
             protected Iterator<MNode> iterator;
             protected boolean         inMetadata;
             protected boolean         inBackend;
+            protected boolean         inGui;
 
             public MNode findNext ()
             {
@@ -687,6 +688,7 @@ public class NodeJob extends NodeBase
                     {
                         if (key.equals ("seed")) return n;
                         if (key.equals ("duration")) return n;
+                        if (key.equals ("gui")  &&  n.child ("pin") != null) return n;
                         if (key.equals ("watch")  &&  n.child ("timeScale") != null) return n;
                         if (key.equals ("param")  &&  n.getFlag ()  &&  ! n.get ().equals ("watch"))
                         {
@@ -705,11 +707,17 @@ public class NodeJob extends NodeBase
                         if (key.equals (backend)) return n;
                         continue;
                     }
+                    else if (inGui)
+                    {
+                        if (key.equals ("pin")) return n;
+                        continue;
+                    }
                     else if (key.equals ("$metadata"))
                     {
                         // Don't even process $metadata unless it contains useful backend info.
                         if (n.child ("seed") != null) return n;
                         if (n.child ("duration") != null) return n;
+                        if (n.child ("gui", "pin") != null) return n;
                         if (n.child ("watch", "timeScale") != null) return n;
                         if (n.getFlag ("param")  &&  ! n.get ("param").equals ("watch"))
                         {
@@ -746,7 +754,8 @@ public class NodeJob extends NodeBase
             result.iterator = node.iterator ();
             String key = node.key ();
             result.inMetadata = key.equals ("$metadata");
-            result.inBackend  = key.equals ("backend");  // Should also check that parent is "$metadata", but this is good enough a heuristic.
+            result.inBackend  = key.equals ("backend")  &&  node.parent ().key ().equals ("$metadata");
+            result.inGui      = key.equals ("gui")      &&  node.parent ().key ().equals ("$metadata");
             result.next = result.findNext ();
             return result;
         }
