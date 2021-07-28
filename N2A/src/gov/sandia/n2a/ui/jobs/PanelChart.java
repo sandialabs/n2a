@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -60,6 +60,7 @@ import org.jfree.chart.plot.Plot;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.PlotRenderingInfo;
 import org.jfree.chart.plot.Zoomable;
+import org.jfree.chart.util.ExportUtils;
 import org.jfree.graphics2d.svg.SVGGraphics2D;
 
 import gov.sandia.n2a.ui.Lay;
@@ -622,8 +623,8 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             fileChooser.addChoosableFileFilter (filter);
             fileChooser.setFileFilter (filter);
             fileChooser.addChoosableFileFilter (new FileNameExtensionFilter ("PNG", "png"));
-            if (ChartUtils.isJFreeSVGAvailable ()) fileChooser.addChoosableFileFilter (new FileNameExtensionFilter ("SVG", "svg"));
-            if (ChartUtils.isOrsonPDFAvailable ()) fileChooser.addChoosableFileFilter (new FileNameExtensionFilter ("PDF", "pdf"));
+            fileChooser.addChoosableFileFilter (new FileNameExtensionFilter ("SVG", "svg"));
+            if (ExportUtils.isOrsonPDFAvailable ()) fileChooser.addChoosableFileFilter (new FileNameExtensionFilter ("PDF", "pdf"));
 
             int option = fileChooser.showSaveDialog (PanelChart.this);
             if (option != JFileChooser.APPROVE_OPTION) return;

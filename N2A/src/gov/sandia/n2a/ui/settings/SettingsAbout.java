@@ -102,7 +102,7 @@ public class SettingsAbout extends JPanel implements Settings
         addLicense     (licenses, "JSch",          loadResource ("jsch"));
         addLicense     (licenses, "JZlib",         loadResource ("jzlib"));
         addLicense     (licenses, "JGit",          loadResource ("jgit"));
-        addLicenseHTML (licenses, "Bouncy Castle", loadResource ("bouncycastle"));
+        addLicense     (licenses, "JavaEWAH",      loadResource ("JavaEWAH"));
         addLicense     (licenses, "SLF4J",         loadResource ("slf4j"));
         addLicenseHTML (licenses, "Eclipse",       loadResource ("eclipse"));
 
