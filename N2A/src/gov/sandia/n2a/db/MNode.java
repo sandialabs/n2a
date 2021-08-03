@@ -59,6 +59,17 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return result;
     }
 
+    /**
+        Utility function for printing node's key path.
+    **/
+    public String keyPathString ()
+    {
+        String[] keyPath = keyPath ();
+        String result = "";
+        for (String s : keyPath) result += s + ".";
+        return result.substring (0, result.length () - 1);  // Get rid of final dot.
+    }
+
     public int depth ()
     {
         return depth (null);

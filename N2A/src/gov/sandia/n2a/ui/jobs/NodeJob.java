@@ -697,6 +697,7 @@ public class NodeJob extends NodeBase
                             return n;
                         }
                         if (! key.equals ("backend")) continue;
+                        if (n.depth () == 2) return n;
                         if (n.child ("all") != null) return n;
                         if (n.child (backend) != null) return n;
                         continue;
@@ -726,6 +727,7 @@ public class NodeJob extends NodeBase
                         }
                         MNode b = n.child ("backend");
                         if (b == null) continue;
+                        if (b.depth () == 2) return n;  // Always keep top-level $metadata.backend node, because it names the backend we should use.
                         if (b.child ("all") != null) return n;
                         if (b.child (backend) != null) return n;
                         continue;
