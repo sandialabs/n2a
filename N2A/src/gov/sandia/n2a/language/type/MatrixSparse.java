@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,6 +8,7 @@ package gov.sandia.n2a.language.type;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -40,9 +41,37 @@ public class MatrixSparse extends Matrix
         for (int c = 0; c < columns; c++) data.add (null);
     }
 
+    public MatrixSparse (Matrix A)
+    {
+        int columns = A.columns ();
+        int rows    = A.rows ();
+        for (int c = 0; c < columns; c++)
+        {
+            for (int r = 0; r < rows; r++)
+            {
+                set (r, c, A.get (r, c));
+            }
+        }
+    }
+
     public MatrixSparse (BufferedReader reader)
     {
-        load (reader, false);
+        load (reader);
+    }
+
+    public MatrixSparse (Text that) throws EvaluationException
+    {
+        load (new BufferedReader (new StringReader (that.value)));
+    }
+
+    public MatrixSparse (String that) throws EvaluationException
+    {
+        load (new BufferedReader (new StringReader (that)));
+    }
+
+    public MatrixSparse (String that, boolean units) throws EvaluationException
+    {
+        load (new BufferedReader (new StringReader (that)), units);
     }
 
     public void load (BufferedReader reader) throws EvaluationException
@@ -189,7 +218,7 @@ public class MatrixSparse extends Matrix
             }
             for (int c = 0; c < ow; c++)
             {
-              for (int r = 0; r < oh; r++) result.value[c][r] += B.get (r, c);
+              for (int r = 0; r < oh; r++) result.set (r, c, result.get (r, c) + B.get (r, c));
             }
             return result;
         }
@@ -213,7 +242,7 @@ public class MatrixSparse extends Matrix
 
     // TODO: Fill in other binary operations
 
-    public Type negate () throws EvaluationException
+    public MatrixSparse negate () throws EvaluationException
     {
         int w = columns ();
         int h = rows ();
@@ -227,7 +256,7 @@ public class MatrixSparse extends Matrix
         return result;
     }
 
-    public Type transpose ()
+    public MatrixSparse transpose ()
     {
         int w = columns ();
         int h = rows ();
@@ -241,7 +270,7 @@ public class MatrixSparse extends Matrix
         return result;
     }
 
-    public Type visit (Visitor visitor)
+    public MatrixSparse visit (Visitor visitor)
     {
         int w = columns ();
         int h = rows ();

@@ -597,7 +597,7 @@ public class Part extends Instance
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         if (bed.xyz == null) return new double[3];  // default is ~[0,0,0]
-        if (! bed.xyz.hasAttribute ("temporary")) return ((MatrixDense) get (bed.xyz)).getRawColumn (0);  // Either "constant" or stored
+        if (! bed.xyz.hasAttribute ("temporary")) return ((MatrixDense) get (bed.xyz)).getData ();  // Either "constant" or stored
 
         InstanceTemporaries temp;
         List<Variable> list;
@@ -620,7 +620,7 @@ public class Part extends Instance
         }
         Type result = bed.xyz.eval (temp);
         if (result == null) return new double[3];
-        return ((MatrixDense) result).getRawColumn (0);
+        return ((MatrixDense) result).getData ();
     }
 
     public String path ()

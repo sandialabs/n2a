@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,12 +16,19 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 
 /**
-    Matrix type.
-    Many of the functions here are adapted from FL Matrix.
+    Matrix with a single block of storage and strided access pattern.
+    Strided access allows us to wrap subregions (such as single columns or rows) and transposes
+    around the same block of memory. This is arguably the most efficient representation of a dense matrix.
+    Many of the functions here are adapted from FL MatrixStrided.
 **/
 public class MatrixDense extends Matrix
 {
-    protected double[][] value;  // stored in column-major order; that is, an access to A(r,c) is fulfilled as value[c][r]
+    protected double[] data;  // stored in column-major order
+    protected int      offset;
+    protected int      rows;
+    protected int      columns;
+    protected int      strideR;
+    protected int      strideC;
 
     public MatrixDense ()
     {
@@ -29,33 +36,47 @@ public class MatrixDense extends Matrix
 
     public MatrixDense (int rows, int columns)
     {
-        value = new double[columns][rows];
+        this (rows, columns, 0);
     }
 
     public MatrixDense (int rows, int columns, double initialValue)
     {
-        value = new double[columns][rows];
-        for (int c = 0; c < columns; c++)
-        {
-            for (int r = 0; r < rows; r++)
-            {
-                value[c][r] = initialValue;
-            }
-        }
+        this.rows    = rows;
+        this.columns = columns;
+        data         = new double[rows * columns];
+        strideR      = 1;
+        strideC      = rows;
+
+        if (initialValue == 0) return;
+        for (int i = 0; i < data.length; i++) data[i] = initialValue;
     }
 
     public MatrixDense (Matrix A)
     {
-        int columns = A.columns ();
-        int rows    = A.rows ();
-        value = new double[columns][rows];
+        columns = A.columns ();
+        rows    = A.rows ();
+        data    = new double[rows * columns];
+        strideR = 1;
+        strideC = rows;
+
+        int i = 0;
         for (int c = 0; c < columns; c++)
         {
             for (int r = 0; r < rows; r++)
             {
-                value[c][r] = A.get (r, c);
+                data[i++] = A.get (r, c);
             }
         }
+    }
+
+    public MatrixDense (double[] data, int offset, int rows, int columns, int strideR, int strideC)
+    {
+        this.data    = data;
+        this.offset  = offset;
+        this.rows    = rows;
+        this.columns = columns;
+        this.strideR = strideR;
+        this.strideC = strideC;
     }
 
     public MatrixDense (BufferedReader reader) throws EvaluationException
@@ -89,7 +110,7 @@ public class MatrixDense extends Matrix
         {
             ArrayList<ArrayList<Double>> temp = new ArrayList<ArrayList<Double>> ();
             ArrayList<Double> row = new ArrayList<Double> ();
-            int columns = 0;
+            int tempC = 0;
             boolean transpose = false;
 
             // Scan for opening "["
@@ -146,8 +167,8 @@ public class MatrixDense extends Matrix
                         if (c > 0)
                         {
                             temp.add (row);
-                            columns = Math.max (columns, c);
-                            row = new ArrayList<Double> (columns);
+                            tempC = Math.max (tempC, c);
+                            row = new ArrayList<Double> (tempC);
                         }
                         break;
                     default:
@@ -155,34 +176,36 @@ public class MatrixDense extends Matrix
                 }
             }
 
-            // Assign elements to "value"
-            int rows = temp.size ();
+            // Assign elements to "data"
+            int tempR = temp.size ();
+            data      = new double[tempR * tempC];
+            offset    = 0;
+            for (int r = 0; r < tempR; r++)
+            {
+                row = temp.get (r);
+                int i = r;
+                for (int c = 0; c < row.size (); c++)
+                {
+                    data[i] = row.get (c);
+                    i += tempR;
+                }
+            }
             if (transpose)
             {
-                value = new double[rows][columns];
-                for (int r = 0; r < rows; r++)
-                {
-                    row = temp.get (r);
-                    for (int c = 0; c < row.size (); c++)
-                    {
-                        value[r][c] = row.get (c);
-                    }
-                }
+                rows    = tempC;
+                columns = tempR;
+                strideR = tempC;
+                strideC = 1;
             }
             else
             {
-                value = new double[columns][rows];
-                for (int r = 0; r < rows; r++)
-                {
-                    row = temp.get (r);
-                    for (int c = 0; c < row.size (); c++)
-                    {
-                        value[c][r] = row.get (c);
-                    }
-                }
+                rows    = tempR;
+                columns = tempC;
+                strideR = 1;
+                strideC = tempR;
             }
 
-            if (value.length == 0  ||  value[0].length == 0) throw new EvaluationException ("Empty matrix");
+            if (data.length == 0) throw new EvaluationException ("Empty matrix");
         }
         catch (IOException error)
         {
@@ -192,56 +215,79 @@ public class MatrixDense extends Matrix
 
     public int rows ()
     {
-        if (value.length < 1) return 0;
-        return value[0].length;
+        return rows;
     }
 
     public int columns ()
     {
-        return value.length;
+        return columns;
     }
 
     public double get (int row, int column)
     {
-        return value[column][row];
+        return data[offset + row * strideR + column * strideC];
     }
 
     public double get (int row)
     {
-        return value[0][row];
+        return data[offset + row * strideR];
     }
 
-    public double[] getRawColumn (int column)
+    public MatrixDense getColumn (int column)
     {
-        return value[column];
+        return new MatrixDense (data, offset + column * strideC, rows, 1, strideR, strideC);
+    }
+
+    public MatrixDense getRow (int row)
+    {
+        return new MatrixDense (data, offset + row * strideR, 1, columns, strideR, strideC);
+    }
+
+    public MatrixDense getRegion (int firstRow, int firstColumn)
+    {
+        return getRegion (firstRow, firstColumn, rows - 1, columns - 1);
+    }
+
+    public MatrixDense getRegion (int firstRow, int firstColumn, int lastRow, int lastColumn)
+    {
+        int offset  = this.offset + firstColumn * strideC + firstRow * strideR;
+        int rows    = lastRow    - firstRow    + 1;
+        int columns = lastColumn - firstColumn + 1;
+        return new MatrixDense (data, offset, rows, columns, strideR, strideC);
+    }
+
+    public MatrixDense transpose ()
+    {
+        return new MatrixDense (data, offset, columns, rows, strideC, strideR);
+    }
+
+    /**
+        If this matrix is single-column (a vector), then the raw data array is a useful
+        alternate way to access the elements.
+    **/
+    public double[] getData ()
+    {
+        return data;
     }
 
     public void set (int row, int column, double a)
     {
-        value[column][row] = a;
+        data[offset + row * strideR + column * strideC] = a;
     }
 
     public void set (int row, double a)
     {
-        value[0][row] = a;
+        data[offset + row * strideR] = a;
     }
 
-    public Type clear ()
+    public MatrixDense clear ()
     {
-        int w = value.length;
-        if (w < 1) return new MatrixDense ();
-        int h = value[0].length;
-        if (h < 1) return new MatrixDense ();
-        return new MatrixDense (h, w);
+        return new MatrixDense (rows, columns);
     }
 
     public MatrixDense clear (double initialValue)
     {
-        int w = value.length;
-        if (w < 1) return new MatrixDense ();
-        int h = value[0].length;
-        if (h < 1) return new MatrixDense ();
-        return new MatrixDense (h, w, initialValue);
+        return new MatrixDense (rows, columns, initialValue);
     }
 
     /**
@@ -249,28 +295,30 @@ public class MatrixDense extends Matrix
      */
     public MatrixDense identity ()
     {
-        int w = value.length;
-        if (w < 1) return new MatrixDense ();
-        int h = value[0].length;
-        if (h < 1) return new MatrixDense ();
-
-        MatrixDense result = new MatrixDense (h, w);
-        h = Math.min (w, h);
-        for (int r = 0; r < h; r++) result.value[r][r] = 1;
+        MatrixDense result = new MatrixDense (rows, columns);
+        int h = Math.min (rows, columns);
+        for (int r = 0; r < h; r++) result.data[r * (columns + 1)] = 1;
         return result;
     }
 
+    /**
+        Only examines elements within the defined region, rather than entire data block.
+    **/
     public boolean isZero ()
     {
-        int w = value.length;
-        if (w < 1) return true;
-        int h = value[0].length;
-        for (int c = 0; c < w; c++)
+        int step = strideC - rows * strideR;
+        int i = offset;
+        int r = 0;
+        int end = rows * columns;
+        while (r < end)
         {
-            for (int r = 0; r < h; r++)
+            int columnEnd = r + rows;
+            while (r++ < columnEnd)
             {
-                if (value[c][r] != 0) return false;
+                if (data[i] != 0) return false;
+                i += strideR;
             }
+            i += step;
         }
         return true;
     }
@@ -279,54 +327,100 @@ public class MatrixDense extends Matrix
     {
         if (that instanceof MatrixDense)
         {
-            double[][] B = ((MatrixDense) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            MatrixDense B = (MatrixDense) that;
+            int oh = Math.min (rows,    B.rows);
+            int ow = Math.min (columns, B.columns);
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA =   strideC - rows *   strideR;
+            int stepB = B.strideC - oh   * B.strideR;
+            int a =   offset;
+            int b = B.offset;
+            int r = 0;
+            int end = rows * ow;
+            while (r < end)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] + B[c][r];
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
+                int overlapEnd = r + oh;
+                int columnEnd  = r + rows;
+                while (r < overlapEnd)
+                {
+                    result.data[r++] = data[a] + B.data[b];
+                    a +=   strideR;
+                    b += B.strideR;
+                }
+                while (r < columnEnd)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
+                b += stepB;
             }
-            for (int c = ow; c < w; c++)
+            end = rows * columns;
+            while (r < end)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
+                int columnEnd = r + rows;
+                while (r < columnEnd)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
+
             return result;
         }
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.columns ());
-            int oh = Math.min (h, B.rows ());
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            int oh = Math.min (rows,    B.rows ());
+            int ow = Math.min (columns, B.columns ());
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA = strideC - rows * strideR;
+            int a = offset;
+            int r = 0;
+            for (int col = 0; col < ow; col++)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] + B.get (r, c);
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
+                int row = 0;
+                for (; row < oh; row++)
+                {
+                    result.data[r++] = data[a] + B.get (row, col);
+                    a += strideR;
+                }
+                for (; row < rows; row++)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
-            for (int c = ow; c < w; c++)
+            for (int col = ow; col < columns; col++)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
+                for (int row = 0; row < rows; row++)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
             return result;
         }
         if (that instanceof Scalar)
         {
             double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            MatrixDense result = new MatrixDense (rows, columns);
+            int step = strideC - rows * strideR;
+            int i = offset;
+            int r = 0;
+            int end = rows * columns;
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r < columnEnd)
                 {
-                    result.value[c][r] = value[c][r] + scalar;
+                    result.data[r++] = data[i] + scalar;
+                    i += strideR;
                 }
+                i += step;
             }
             return result;
         }
@@ -334,104 +428,167 @@ public class MatrixDense extends Matrix
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type subtract (Type that) throws EvaluationException
+    public MatrixDense subtract (Type that) throws EvaluationException
     {
         if (that instanceof MatrixDense)
         {
-            double[][] B = ((MatrixDense) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            MatrixDense B = (MatrixDense) that;
+            int oh = Math.min (rows,    B.rows);
+            int ow = Math.min (columns, B.columns);
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA =   strideC - rows *   strideR;
+            int stepB = B.strideC - oh   * B.strideR;
+            int a =   offset;
+            int b = B.offset;
+            int r = 0;
+            int end = rows * ow;
+            while (r < end)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] - B[c][r];
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
+                int overlapEnd = r + oh;
+                int columnEnd  = r + rows;
+                while (r < overlapEnd)
+                {
+                    result.data[r++] = data[a] - B.data[b];
+                    a +=   strideR;
+                    b += B.strideR;
+                }
+                while (r < columnEnd)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
+                b += stepB;
             }
-            for (int c = ow; c < w; c++)
+            end = rows * columns;
+            while (r < end)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
+                int columnEnd = r + rows;
+                while (r < columnEnd)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
+
             return result;
         }
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.columns ());
-            int oh = Math.min (h, B.rows ());
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            int oh = Math.min (rows,    B.rows ());
+            int ow = Math.min (columns, B.columns ());
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA = strideC - rows * strideR;
+            int a = offset;
+            int r = 0;
+            for (int col = 0; col < ow; col++)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] - B.get (r, c);
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
+                int row = 0;
+                for (; row < oh; row++)
+                {
+                    result.data[r++] = data[a] - B.get (row, col);
+                    a += strideR;
+                }
+                for (; row < rows; row++)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
-            for (int c = ow; c < w; c++)
+            for (int col = ow; col < columns; col++)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
+                for (int row = 0; row < rows; row++)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
             return result;
         }
         if (that instanceof Scalar)
         {
             double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            MatrixDense result = new MatrixDense (rows, columns);
+            int step = strideC - rows * strideR;
+            int i   = offset;
+            int r   = 0;
+            int end = rows * columns;
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r < columnEnd)
                 {
-                    result.value[c][r] = value[c][r] - scalar;
+                    result.data[r++] = data[i] - scalar;
+                    i += strideR;
                 }
+                i += step;
             }
             return result;
         }
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type multiply (Type that) throws EvaluationException
+    public MatrixDense multiply (Type that) throws EvaluationException
     {
         if (that instanceof MatrixDense)
         {
-            double[][] B = ((MatrixDense) that).value;
-            int h = value[0].length;
-            int w = B.length;
-            int m = Math.min (value.length, B[0].length);
+            MatrixDense B = (MatrixDense) that;
+            int h = rows;
+            int w = B.columns;
+            int m = Math.min (columns, B.rows);
             MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            int b = B.offset;
+            int r = 0;
+            int end = rows * B.columns;
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int a = offset;
+                int columnEnd = r + rows;
+                while (r < columnEnd)
                 {
                     double sum = 0;
-                    for (int j = 0; j < m; j++)
+                    int i = a;
+                    int j = b;
+                    int rowEnd = j + m * B.strideR;
+                    while (j != rowEnd)
                     {
-                        sum += value[j][r] * B[c][j];
+                        sum += data[i] * B.data[j];
+                        i +=   strideC;
+                        j += B.strideR;
                     }
-                    result.value[c][r] = sum;
+                    result.data[r++] = sum;
+                    a += strideR;
                 }
+                b += B.strideC;
             }
             return result;
         }
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            int h = value[0].length;
+            int h = rows;
             int w = B.columns ();
-            int m = Math.min (value.length, B.rows ());
+            int m = Math.min (columns, B.rows ());
             MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            int r = 0;
+            for (int col = 0; col < w; col++)
             {
-                for (int r = 0; r < h; r++)
+                int a = offset;
+                for (int row = 0; row < h; row++)
                 {
                     double sum = 0;
+                    int i = a;
                     for (int j = 0; j < m; j++)
                     {
-                        sum += value[j][r] * B.get (j, c);
+                        sum += data[i] * B.get (j, col);
+                        i += strideC;
                     }
-                    result.value[c][r] = sum;
+                    result.data[r++] = sum;
+                    a += strideR;
                 }
             }
             return result;
@@ -439,371 +596,573 @@ public class MatrixDense extends Matrix
         if (that instanceof Scalar)
         {
             double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            MatrixDense result = new MatrixDense (rows, columns);
+            int step = strideC - rows * strideR;
+            int i   = offset;
+            int r   = 0;
+            int end = rows * columns;
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r < columnEnd)
                 {
-                    result.value[c][r] = value[c][r] * scalar;
+                    result.data[r++] = data[i] * scalar;
+                    i += strideR;
                 }
+                i += step;
             }
             return result;
         }
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type multiplyElementwise (Type that) throws EvaluationException
+    public MatrixDense multiplyElementwise (Type that) throws EvaluationException
     {
         if (that instanceof MatrixDense)
         {
-            double[][] B = ((MatrixDense) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            MatrixDense B = (MatrixDense) that;
+            int oh = Math.min (rows,    B.rows);
+            int ow = Math.min (columns, B.columns);
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA =   strideC - rows *   strideR;
+            int stepB = B.strideC - oh   * B.strideR;
+            int a =   offset;
+            int b = B.offset;
+            int r = 0;
+            int end = rows * ow;
+            while (r < end)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] * B[c][r];
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
+                int overlapEnd = r + oh;
+                int columnEnd  = r + rows;
+                while (r < overlapEnd)
+                {
+                    result.data[r++] = data[a] * B.data[b];
+                    a +=   strideR;
+                    b += B.strideR;
+                }
+                while (r < columnEnd)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
+                b += stepB;
             }
-            for (int c = ow; c < w; c++)
+            end = rows * columns;
+            while (r < end)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
+                int columnEnd = r + rows;
+                while (r < columnEnd)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
+
             return result;
         }
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.columns ());
-            int oh = Math.min (h, B.rows ());
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            int oh = Math.min (rows,    B.rows ());
+            int ow = Math.min (columns, B.columns ());
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA = strideC - rows * strideR;
+            int a = offset;
+            int r = 0;
+            for (int col = 0; col < ow; col++)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] * B.get (r, c);
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
+                int row = 0;
+                for (; row < oh; row++)
+                {
+                    result.data[r++] = data[a] * B.get (row, col);
+                    a += strideR;
+                }
+                for (; row < rows; row++)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
-            for (int c = ow; c < w; c++)
+            for (int col = ow; col < columns; col++)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
+                for (int row = 0; row < rows; row++)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
             return result;
         }
         if (that instanceof Scalar)
         {
             double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            MatrixDense result = new MatrixDense (rows, columns);
+            int step = strideC - rows * strideR;
+            int i = offset;
+            int r = 0;
+            int end = rows * columns;
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r < columnEnd)
                 {
-                    result.value[c][r] = value[c][r] * scalar;
+                    result.data[r++] = data[i] * scalar;
+                    i += strideR;
                 }
+                i += step;
             }
             return result;
         }
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type divide (Type that) throws EvaluationException
+    public MatrixDense divide (Type that) throws EvaluationException
     {
         if (that instanceof MatrixDense)
         {
-            double[][] B = ((MatrixDense) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            MatrixDense B = (MatrixDense) that;
+            int oh = Math.min (rows,    B.rows);
+            int ow = Math.min (columns, B.columns);
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA =   strideC - rows *   strideR;
+            int stepB = B.strideC - oh   * B.strideR;
+            int a =   offset;
+            int b = B.offset;
+            int r = 0;
+            int end = rows * ow;
+            while (r < end)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] / B[c][r];
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
+                int overlapEnd = r + oh;
+                int columnEnd  = r + rows;
+                while (r < overlapEnd)
+                {
+                    result.data[r++] = data[a] / B.data[b];
+                    a +=   strideR;
+                    b += B.strideR;
+                }
+                while (r < columnEnd)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
+                b += stepB;
             }
-            for (int c = ow; c < w; c++)
+            end = rows * columns;
+            while (r < end)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
+                int columnEnd = r + rows;
+                while (r < columnEnd)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
+
             return result;
         }
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.columns ());
-            int oh = Math.min (h, B.rows ());
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            int oh = Math.min (rows,    B.rows ());
+            int ow = Math.min (columns, B.columns ());
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA = strideC - rows * strideR;
+            int a = offset;
+            int r = 0;
+            for (int col = 0; col < ow; col++)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = value[c][r] / B.get (r, c);
-              for (int r = oh; r < h;  r++) result.value[c][r] = value[c][r];
+                int row = 0;
+                for (; row < oh; row++)
+                {
+                    result.data[r++] = data[a] / B.get (row, col);
+                    a += strideR;
+                }
+                for (; row < rows; row++)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
-            for (int c = ow; c < w; c++)
+            for (int col = ow; col < columns; col++)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = value[c][r];
+                for (int row = 0; row < rows; row++)
+                {
+                    result.data[r++] = data[a];
+                    a += strideR;
+                }
+                a += stepA;
             }
             return result;
         }
         if (that instanceof Scalar)
         {
             double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            MatrixDense result = new MatrixDense (rows, columns);
+            int step = strideC - rows * strideR;
+            int i = offset;
+            int r = 0;
+            int end = rows * columns;
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r < columnEnd)
                 {
-                    result.value[c][r] = value[c][r] / scalar;
+                    result.data[r++] = data[i] / scalar;
+                    i += strideR;
                 }
+                i += step;
             }
             return result;
         }
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type min (Type that)
+    public MatrixDense min (Type that) throws EvaluationException
     {
         if (that instanceof MatrixDense)
         {
-            double[][] B = ((MatrixDense) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            MatrixDense B = (MatrixDense) that;
+            int oh = Math.min (rows,    B.rows);
+            int ow = Math.min (columns, B.columns);
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA =   strideC - rows *   strideR;
+            int stepB = B.strideC - oh   * B.strideR;
+            int a =   offset;
+            int b = B.offset;
+            int r = 0;
+            int end = rows * ow;
+            while (r < end)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = Math.min (value[c][r], B[c][r]);
-              for (int r = oh; r < h;  r++) result.value[c][r] = Math.min (value[c][r], 0);
+                int overlapEnd = r + oh;
+                int columnEnd  = r + rows;
+                while (r < overlapEnd)
+                {
+                    result.data[r++] = Math.min (data[a], B.data[b]);
+                    a +=   strideR;
+                    b += B.strideR;
+                }
+                while (r < columnEnd)
+                {
+                    result.data[r++] = Math.min (data[a], 0);
+                    a += strideR;
+                }
+                a += stepA;
+                b += stepB;
             }
-            for (int c = ow; c < w; c++)
+            end = rows * columns;
+            while (r < end)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = Math.min (value[c][r], 0);
+                int columnEnd = r + rows;
+                while (r < columnEnd)
+                {
+                    result.data[r++] = Math.min (data[a], 0);
+                    a += strideR;
+                }
+                a += stepA;
             }
+
             return result;
         }
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.columns ());
-            int oh = Math.min (h, B.rows ());
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            int oh = Math.min (rows,    B.rows ());
+            int ow = Math.min (columns, B.columns ());
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA = strideC - rows * strideR;
+            int a = offset;
+            int r = 0;
+            for (int col = 0; col < ow; col++)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = Math.min (value[c][r], B.get (r, c));
-              for (int r = oh; r < h;  r++) result.value[c][r] = Math.min (value[c][r], 0);
+                int row = 0;
+                for (; row < oh; row++)
+                {
+                    result.data[r++] = Math.min (data[a],  B.get (row, col));
+                    a += strideR;
+                }
+                for (; row < rows; row++)
+                {
+                    result.data[r++] = Math.min (data[a], 0);
+                    a += strideR;
+                }
+                a += stepA;
             }
-            for (int c = ow; c < w; c++)
+            for (int col = ow; col < columns; col++)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = Math.min (value[c][r], 0);
+                for (int row = 0; row < rows; row++)
+                {
+                    result.data[r++] = Math.min (data[a], 0);
+                    a += strideR;
+                }
+                a += stepA;
             }
             return result;
         }
         if (that instanceof Scalar)
         {
             double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            MatrixDense result = new MatrixDense (rows, columns);
+            int step = strideC - rows * strideR;
+            int i = offset;
+            int r = 0;
+            int end = rows * columns;
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r < columnEnd)
                 {
-                    result.value[c][r] = Math.min (value[c][r], scalar);
+                    result.data[r++] = Math.min (data[i], scalar);
+                    i += strideR;
                 }
+                i += step;
             }
             return result;
         }
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type max (Type that)
+    public MatrixDense max (Type that) throws EvaluationException
     {
         if (that instanceof MatrixDense)
         {
-            double[][] B = ((MatrixDense) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.length);
-            int oh = Math.min (h, B[0].length);
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            MatrixDense B = (MatrixDense) that;
+            int oh = Math.min (rows,    B.rows);
+            int ow = Math.min (columns, B.columns);
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA =   strideC - rows *   strideR;
+            int stepB = B.strideC - oh   * B.strideR;
+            int a =   offset;
+            int b = B.offset;
+            int r = 0;
+            int end = rows * ow;
+            while (r < end)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = Math.max (value[c][r], B[c][r]);
-              for (int r = oh; r < h;  r++) result.value[c][r] = Math.max (value[c][r], 0);
+                int overlapEnd = r + oh;
+                int columnEnd  = r + rows;
+                while (r < overlapEnd)
+                {
+                    result.data[r++] = Math.max (data[a], B.data[b]);
+                    a +=   strideR;
+                    b += B.strideR;
+                }
+                while (r < columnEnd)
+                {
+                    result.data[r++] = Math.max (data[a], 0);
+                    a += strideR;
+                }
+                a += stepA;
+                b += stepB;
             }
-            for (int c = ow; c < w; c++)
+            end = rows * columns;
+            while (r < end)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = Math.max (value[c][r], 0);
+                int columnEnd = r + rows;
+                while (r < columnEnd)
+                {
+                    result.data[r++] = Math.max (data[a], 0);
+                    a += strideR;
+                }
+                a += stepA;
             }
+
             return result;
         }
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            int w = value.length;
-            int h = value[0].length;
-            int ow = Math.min (w, B.columns ());
-            int oh = Math.min (h, B.rows ());
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < ow; c++)
+            int oh = Math.min (rows,    B.rows ());
+            int ow = Math.min (columns, B.columns ());
+            MatrixDense result = new MatrixDense (rows, columns);
+            int stepA = strideC - rows * strideR;
+            int a = offset;
+            int r = 0;
+            for (int col = 0; col < ow; col++)
             {
-              for (int r = 0;  r < oh; r++) result.value[c][r] = Math.max (value[c][r], B.get (r, c));
-              for (int r = oh; r < h;  r++) result.value[c][r] = Math.max (value[c][r], 0);
+                int row = 0;
+                for (; row < oh; row++)
+                {
+                    result.data[r++] = Math.max (data[a],  B.get (row, col));
+                    a += strideR;
+                }
+                for (; row < rows; row++)
+                {
+                    result.data[r++] = Math.max (data[a], 0);
+                    a += strideR;
+                }
+                a += stepA;
             }
-            for (int c = ow; c < w; c++)
+            for (int col = ow; col < columns; col++)
             {
-              for (int r = 0; r < h; r++)   result.value[c][r] = Math.max (value[c][r], 0);
+                for (int row = 0; row < rows; row++)
+                {
+                    result.data[r++] = Math.max (data[a], 0);
+                    a += strideR;
+                }
+                a += stepA;
             }
             return result;
         }
         if (that instanceof Scalar)
         {
             double scalar = ((Scalar) that).value;
-            int w = value.length;
-            int h = value[0].length;
-            MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            MatrixDense result = new MatrixDense (rows, columns);
+            int step = strideC - rows * strideR;
+            int i = offset;
+            int r = 0;
+            int end = rows * columns;
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r < columnEnd)
                 {
-                    result.value[c][r] = Math.max (value[c][r], scalar);
+                    result.data[r++] = Math.max (data[i], scalar);
+                    i += strideR;
                 }
+                i += step;
             }
             return result;
         }
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type negate () throws EvaluationException
+    public MatrixDense negate () throws EvaluationException
     {
-        int w = value.length;
-        int h = value[0].length;
-        MatrixDense result = new MatrixDense (h, w);
-        for (int c = 0; c < w; c++)
+        MatrixDense result = new MatrixDense (rows, columns);
+        int step = strideC - rows * strideR;
+        int i = offset;
+        int r = 0;
+        int end = rows * columns;
+        while (r < end)
         {
-            for (int r = 0; r < h; r++)
+            int columnEnd = r + rows;
+            while (r < columnEnd)
             {
-                result.value[c][r] = -value[c][r];
+                result.data[r++] = -data[i];
+                i += strideR;
             }
+            i += step;
         }
         return result;
     }
 
-    public Type transpose ()
+    public MatrixDense visit (Visitor visitor)
     {
-        int w = value.length;
-        int h = value[0].length;
-        MatrixDense result = new MatrixDense (w, h);
-        for (int c = 0; c < w; c++)
+        MatrixDense result = new MatrixDense (rows, columns);
+        int step = strideC - rows * strideR;
+        int i = offset;
+        int r = 0;
+        int end = rows * columns;
+        while (r < end)
         {
-            for (int r = 0; r < h; r++)
+            int columnEnd = r + rows;
+            while (r < columnEnd)
             {
-                result.value[r][c] = value[c][r];
+                result.data[r++] = visitor.apply (data[i]);
+                i += strideR;
             }
-        }
-        return result;
-    }
-
-    public Type visit (Visitor visitor)
-    {
-        int w = value.length;
-        int h = value[0].length;
-        MatrixDense result = new MatrixDense (h, w);
-        for (int c = 0; c < w; c++)
-        {
-            for (int r = 0; r < h; r++)
-            {
-                result.value[c][r] = visitor.apply (value[c][r]);
-            }
+            i += step;
         }
         return result;
     }
 
     public double determinant () throws EvaluationException
     {
-        int w = value.length;
-        int h = value[0].length;
-        if (h != w) throw new EvaluationException ("Can't compute determinant of non-square matrix.");
-        if (h == 1) return value[0][0];
-        if (h == 2) return value[0][0] * value[1][1] - value[0][1] * value[1][0];
-        if (h == 3)
+        if (rows != columns) throw new EvaluationException ("Can't compute determinant of non-square matrix.");
+        if (rows == 1) return data[offset];
+        if (rows == 2) return get (0, 0) * get (1, 1) - get (0, 1) * get (1, 0);
+        if (rows == 3)
         {
-            return   value[0][0] * value[1][1] * value[2][2]
-                   - value[0][0] * value[2][1] * value[1][2]
-                   - value[1][0] * value[0][1] * value[2][2]
-                   + value[1][0] * value[2][1] * value[0][2]
-                   + value[2][0] * value[0][1] * value[1][2]
-                   - value[2][0] * value[1][1] * value[0][2];
+            return   get (0, 0) * get (1, 1) * get (2, 2)
+                   - get (0, 0) * get (1, 2) * get (2, 1)
+                   - get (0, 1) * get (1, 0) * get (2, 2)
+                   + get (0, 1) * get (1, 2) * get (2, 0)
+                   + get (0, 2) * get (1, 0) * get (2, 1)
+                   - get (0, 2) * get (1, 1) * get (2, 0);
         }
         throw new EvaluationException ("Can't compute deteminant of matrices larger then 3x3 (because we are lazy).");
     }
 
     public double norm (double n)
     {
-        int w = value.length;
-        int h = value[0].length;
         double result = 0;
+
+        int step = strideC - rows * strideR;
+        int i = offset;
+        int r = 0;
+        int end = rows * columns;
+
         if (n == 0)
         {
-            for (int c = 0; c < w; c++)
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r++ < columnEnd)
                 {
-                    if (value[c][r] != 0) result++;
+                    if (data[i] != 0) result++;
+                    i += strideR;
                 }
+                i += step;
             }
         }
         else if (n == 1)
         {
-            for (int c = 0; c < w; c++)
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r++ < columnEnd)
                 {
-                    result += Math.abs (value[c][r]);
+                    result += Math.abs (data[i]);
+                    i += strideR;
                 }
+                i += step;
             }
         }
         else if (n == 2)
         {
-            for (int c = 0; c < w; c++)
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r++ < columnEnd)
                 {
-                    result += value[c][r] * value[c][r];
+                    double d = data[i];
+                    result += d * d;
+                    i += strideR;
                 }
+                i += step;
             }
             result = Math.sqrt (result);
         }
         else if (n == Double.POSITIVE_INFINITY)
         {
-            for (int c = 0; c < w; c++)
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r++ < columnEnd)
                 {
-                    result = Math.max (result, Math.abs (value[c][r]));
+                    result = Math.max (result, Math.abs (data[i]));
+                    i += strideR;
                 }
+                i += step;
             }
         }
         else
         {
-            for (int c = 0; c < w; c++)
+            while (r < end)
             {
-                for (int r = 0; r < h; r++)
+                int columnEnd = r + rows;
+                while (r++ < columnEnd)
                 {
-                    result += Math.pow (value[c][r], n);
+                    result += Math.pow (data[i], n);
+                    i += strideR;
                 }
+                i += step;
             }
             result = Math.pow (result, 1 / n);
         }
@@ -812,37 +1171,41 @@ public class MatrixDense extends Matrix
 
     public int compareTo (Type that)
     {
-        int cols = value.length;
-        int rows = 0;
-        if (cols != 0) rows = value[0].length;
-
         if (that instanceof MatrixDense)
         {
-            double[][] B = ((MatrixDense) that).value;
-            int Bcols = value.length;
-            int difference = cols - Bcols;
+            MatrixDense B = (MatrixDense) that;
+            int difference = columns - B.columns;
             if (difference != 0) return difference;
-            int Brows = 0;
-            if (Bcols != 0) Brows = B[0].length;
-            difference = rows - Brows;
+            difference = rows - B.rows;
             if (difference != 0) return difference;
 
-            for (int c = 0; c < cols; c++)
+            int stepA =   strideC - rows *   strideR;
+            int stepB = B.strideC - rows * B.strideR;
+            int a =   offset;
+            int b = B.offset;
+            int r = 0;
+            int end = rows * columns;
+            while (r < end)
             {
-                for (int r = 0; r < rows; r++)
+                int columnEnd = r + rows;
+                while (r++ < columnEnd)
                 {
-                    double d = value[c][r] - B[c][r];
-                    if (d > 0) return 1;
+                    double d = data[a] - B.data[b];
+                    if (d > 0) return  1;
                     if (d < 0) return -1;
+                    a +=   strideR;
+                    b += B.strideR;
                 }
+                a += stepA;
+                b += stepB;
             }
             return 0;
         }
         if (that instanceof Scalar)
         {
-            if (cols != 1) return 1;
-            if (rows != 1) return 1;
-            double d = value[0][0] - ((Scalar) that).value;
+            if (columns != 1) return 1;
+            if (rows    != 1) return 1;
+            double d = data[offset] - ((Scalar) that).value;
             if (d > 0) return 1;
             if (d < 0) return -1;
             return 0;

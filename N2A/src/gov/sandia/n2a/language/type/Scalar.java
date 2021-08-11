@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -93,7 +93,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = value - B.get (r, c);
+                    result.set (r, c, value - B.get (r, c));
                 }
             }
             return result;
@@ -128,7 +128,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = value / B.get (r, c);
+                    result.set (r, c, value / B.get (r, c));
                 }
             }
             return result;
@@ -154,7 +154,7 @@ public class Scalar extends Type
                 for (int r = 0; r < h; r++)
                 {
                     double b = B.get (r, c);
-                    result.value[c][r] = value - Math.floor (value / b) * b;
+                    result.set (r, c, value - Math.floor (value / b) * b);
                 }
             }
             return result;
@@ -175,7 +175,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = Math.pow (value, B.get (r, c));
+                    result.set (r, c, Math.pow (value, B.get (r, c)));
                 }
             }
             return result;
@@ -196,7 +196,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = Math.min (value, B.get (r, c));
+                    result.set (r, c, Math.min (value, B.get (r, c)));
                 }
             }
             return result;
@@ -217,7 +217,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = Math.max (value, B.get (r, c));
+                    result.set (r, c, Math.max (value, B.get (r, c)));
                 }
             }
             return result;
@@ -238,7 +238,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value == B.get (r, c)) ? 1 : 0;
+                    result.set (r, c, (value == B.get (r, c)) ? 1 : 0);
                 }
             }
             return result;
@@ -259,7 +259,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value != B.get (r, c)) ? 1 : 0;
+                    result.set (r, c, (value != B.get (r, c)) ? 1 : 0);
                 }
             }
             return result;
@@ -280,7 +280,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value > B.get (r, c)) ? 1 : 0;
+                    result.set (r, c, (value > B.get (r, c)) ? 1 : 0);
                 }
             }
             return result;
@@ -301,7 +301,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value >= B.get (r, c)) ? 1 : 0;
+                    result.set (r, c, (value >= B.get (r, c)) ? 1 : 0);
                 }
             }
             return result;
@@ -322,7 +322,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value < B.get (r, c)) ? 1 : 0;
+                    result.set (r, c, (value < B.get (r, c)) ? 1 : 0);
                 }
             }
             return result;
@@ -343,7 +343,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value <= B.get (r, c)) ? 1 : 0;
+                    result.set (r, c, (value <= B.get (r, c)) ? 1 : 0);
                 }
             }
             return result;
@@ -364,7 +364,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (value * B.get (r, c) != 0) ? 1 : 0;
+                    result.set (r, c, (value * B.get (r, c) != 0) ? 1 : 0);
                 }
             }
             return result;
@@ -386,7 +386,7 @@ public class Scalar extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (scalar + Math.abs (B.get (r, c)) != 0) ? 1 : 0;
+                    result.set (r, c, (scalar + Math.abs (B.get (r, c)) != 0) ? 1 : 0);
                 }
             }
             return result;

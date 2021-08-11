@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -400,7 +400,7 @@ public class Population extends Instance
                 Type result = v.eval (temp);
                 if (result != null  &&  v.writeIndex >= 0) temp.set (v, result);
             }
-            return ((MatrixDense) project.eval (temp)).getRawColumn (0);
+            return ((MatrixDense) project.eval (temp)).getData ();
         }
 
         /**

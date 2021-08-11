@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -135,7 +135,7 @@ public abstract class Matrix extends Type implements Holder
     public abstract Matrix clear (double initialValue);
 
     /**
-        @return A copy of this object, with diagonal elements set to 1 and off-diagonals set to zero.
+        @return copy of this object with diagonal elements set to 1 and off-diagonals set to zero.
     **/
     public abstract Matrix identity ();
 
@@ -144,37 +144,41 @@ public abstract class Matrix extends Type implements Holder
         return new MatrixDense (this).isZero ();
     }
 
+    /**
+        Unlike most other operations on Matrix, this one could possibly return a Text object,
+        if the user is concatenating a matrix with a string.
+    **/
     public Type add (Type that) throws EvaluationException
     {
         return new MatrixDense (this).add (that);
     }
 
-    public Type subtract (Type that) throws EvaluationException
+    public Matrix subtract (Type that) throws EvaluationException
     {
         return new MatrixDense (this).subtract (that);
     }
 
-    public Type multiply (Type that) throws EvaluationException
+    public Matrix multiply (Type that) throws EvaluationException
     {
         return new MatrixDense (this).multiply (that);
     }
 
-    public Type multiplyElementwise (Type that) throws EvaluationException
+    public Matrix multiplyElementwise (Type that) throws EvaluationException
     {
         return new MatrixDense (this).multiplyElementwise (that);
     }
 
-    public Type divide (Type that) throws EvaluationException
+    public Matrix divide (Type that) throws EvaluationException
     {
         return new MatrixDense (this).divide (that);
     }
 
-    public Type min (Type that)
+    public Matrix min (Type that)
     {
         return new MatrixDense (this).min (that);
     }
 
-    public Type max (Type that)
+    public Matrix max (Type that)
     {
         return new MatrixDense (this).max (that);
     }
@@ -192,7 +196,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) == b) ? 1 : 0;
+                    result.set (r, c, (get (r, c) == b) ? 1 : 0);
                 }
             }
             return result;
@@ -213,7 +217,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) != b) ? 1 : 0;
+                    result.set (r, c, (get (r, c) != b) ? 1 : 0);
                 }
             }
             return result;
@@ -221,7 +225,7 @@ public abstract class Matrix extends Type implements Holder
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type GT (Type that) throws EvaluationException
+    public Matrix GT (Type that) throws EvaluationException
     {
         int w = columns ();
         int h = rows ();
@@ -233,7 +237,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) > b) ? 1 : 0;
+                    result.set (r, c, (get (r, c) > b) ? 1 : 0);
                 }
             }
             return result;
@@ -248,7 +252,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) > B.get (r, c)) ? 1 : 0;
+                    result.set (r, c, (get (r, c) > B.get (r, c)) ? 1 : 0);
                 }
             }
             return result;
@@ -256,7 +260,7 @@ public abstract class Matrix extends Type implements Holder
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type GE (Type that) throws EvaluationException
+    public Matrix GE (Type that) throws EvaluationException
     {
         int w = columns ();
         int h = rows ();
@@ -268,7 +272,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) >= b) ? 1 : 0;
+                    result.set (r, c, (get (r, c) >= b) ? 1 : 0);
                 }
             }
             return result;
@@ -283,7 +287,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) >= B.get (r, c)) ? 1 : 0;
+                    result.set (r, c, (get (r, c) >= B.get (r, c)) ? 1 : 0);
                 }
             }
             return result;
@@ -291,7 +295,7 @@ public abstract class Matrix extends Type implements Holder
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type LT (Type that) throws EvaluationException
+    public Matrix LT (Type that) throws EvaluationException
     {
         int w = columns ();
         int h = rows ();
@@ -303,7 +307,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) < b) ? 1 : 0;
+                    result.set (r, c, (get (r, c) < b) ? 1 : 0);
                 }
             }
             return result;
@@ -318,7 +322,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) < B.get (r, c)) ? 1 : 0;
+                    result.set (r, c, (get (r, c) < B.get (r, c)) ? 1 : 0);
                 }
             }
             return result;
@@ -326,7 +330,7 @@ public abstract class Matrix extends Type implements Holder
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type LE (Type that) throws EvaluationException
+    public Matrix LE (Type that) throws EvaluationException
     {
         int w = columns ();
         int h = rows ();
@@ -338,7 +342,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) <= b) ? 1 : 0;
+                    result.set (r, c, (get (r, c) <= b) ? 1 : 0);
                 }
             }
             return result;
@@ -353,7 +357,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) <= B.get (r, c)) ? 1 : 0;
+                    result.set (r, c, (get (r, c) <= B.get (r, c)) ? 1 : 0);
                 }
             }
             return result;
@@ -361,7 +365,7 @@ public abstract class Matrix extends Type implements Holder
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type AND (Type that) throws EvaluationException
+    public Matrix AND (Type that) throws EvaluationException
     {
         int w = columns ();
         int h = rows ();
@@ -373,7 +377,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) * b != 0) ? 1 : 0;
+                    result.set (r, c, (get (r, c) * b != 0) ? 1 : 0);
                 }
             }
             return result;
@@ -388,7 +392,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (get (r, c) * B.get (r, c) != 0) ? 1 : 0;
+                    result.set (r, c, (get (r, c) * B.get (r, c) != 0) ? 1 : 0);
                 }
             }
             return result;
@@ -396,7 +400,7 @@ public abstract class Matrix extends Type implements Holder
         throw new EvaluationException ("type mismatch");
     }
 
-    public Type OR (Type that) throws EvaluationException
+    public Matrix OR (Type that) throws EvaluationException
     {
         int w = columns ();
         int h = rows ();
@@ -408,7 +412,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (Math.abs (get (r, c)) + b != 0) ? 1 : 0;
+                    result.set (r, c, (Math.abs (get (r, c)) + b != 0) ? 1 : 0);
                 }
             }
             return result;
@@ -423,7 +427,7 @@ public abstract class Matrix extends Type implements Holder
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.value[c][r] = (Math.abs (get (r, c)) + Math.abs (B.get (r, c)) != 0) ? 1 : 0;
+                    result.set (r, c, (Math.abs (get (r, c)) + Math.abs (B.get (r, c)) != 0) ? 1 : 0);
                 }
             }
             return result;
@@ -433,7 +437,7 @@ public abstract class Matrix extends Type implements Holder
 
     public double det22 (int r0, int r1, int c0, int c1)
     {
-        return (get (r0, c0) * get (r1, c1) - get (r0, c1) * get (r1, c0));
+        return get (r0, c0) * get (r1, c1) - get (r0, c1) * get (r1, c0);
     }
 
     public Type NOT () throws EvaluationException
@@ -449,10 +453,10 @@ public abstract class Matrix extends Type implements Holder
             double q = determinant ();
             if (q == 0) throw new EvaluationException ("invert: Matrix is singular!");
 
-            result.value[0][0] = get (1, 1) /  q;
-            result.value[0][1] = get (1, 0) / -q;
-            result.value[1][0] = get (0, 1) / -q;
-            result.value[1][1] = get (0, 0) /  q;
+            result.set (0, 0, get (1, 1) /  q);
+            result.set (1, 0, get (1, 0) / -q);
+            result.set (0, 1, get (0, 1) / -q);
+            result.set (1, 1, get (0, 0) /  q);
 
             return result;
         }
@@ -463,22 +467,22 @@ public abstract class Matrix extends Type implements Holder
             double q = determinant ();
             if (q == 0) throw new EvaluationException ("invert: Matrix is singular!");
 
-            result.value[0][0] = det22 (1, 2, 1, 2) / q;
-            result.value[0][1] = det22 (1, 2, 2, 0) / q;
-            result.value[0][2] = det22 (1, 2, 0, 1) / q;
-            result.value[1][0] = det22 (0, 2, 2, 1) / q;
-            result.value[1][1] = det22 (0, 2, 0, 2) / q;
-            result.value[1][2] = det22 (0, 2, 1, 0) / q;
-            result.value[2][0] = det22 (0, 1, 1, 2) / q;
-            result.value[2][1] = det22 (0, 1, 2, 0) / q;
-            result.value[2][2] = det22 (0, 1, 0, 1) / q;
+            result.set (0, 0, det22 (1, 2, 1, 2) / q);
+            result.set (1, 0, det22 (1, 2, 2, 0) / q);
+            result.set (2, 0, det22 (1, 2, 0, 1) / q);
+            result.set (0, 1, det22 (0, 2, 2, 1) / q);
+            result.set (1, 1, det22 (0, 2, 0, 2) / q);
+            result.set (2, 1, det22 (0, 2, 1, 0) / q);
+            result.set (0, 2, det22 (0, 1, 1, 2) / q);
+            result.set (1, 2, det22 (0, 1, 2, 0) / q);
+            result.set (2, 2, det22 (0, 1, 0, 1) / q);
 
             return result;
         }
         throw new EvaluationException ("Can't invert matrices larger then 3x3 (because we are not using a good numerical library).");
     }
 
-    public Type negate () throws EvaluationException
+    public Matrix negate () throws EvaluationException
     {
         int w = columns ();
         int h = rows ();
@@ -487,28 +491,18 @@ public abstract class Matrix extends Type implements Holder
         {
             for (int r = 0; r < h; r++)
             {
-                result.value[c][r] = -get (r, c);
+                result.set (r, c, -get (r, c));
             }
         }
         return result;
     }
 
-    public Type transpose ()
+    public Matrix transpose ()
     {
-        int w = columns ();
-        int h = rows ();
-        MatrixDense result = new MatrixDense (w, h);
-        for (int c = 0; c < w; c++)
-        {
-            for (int r = 0; r < h; r++)
-            {
-                result.value[r][c] = get (r, c);
-            }
-        }
-        return result;
+        return new MatrixDense (this).transpose ();
     }
 
-    public Type visit (Visitor visitor)
+    public Matrix visit (Visitor visitor)
     {
         int w = columns ();
         int h = rows ();
@@ -517,7 +511,7 @@ public abstract class Matrix extends Type implements Holder
         {
             for (int r = 0; r < h; r++)
             {
-                result.value[c][r] = visitor.apply (get (r, c));
+                result.set (r, c, visitor.apply (get (r, c)));
             }
         }
         return result;
@@ -629,6 +623,16 @@ public abstract class Matrix extends Type implements Holder
 
     public String toString ()
     {
+        return print (";", ",");
+    }
+
+    public String print ()
+    {
+        return print ("\n", "\t");
+    }
+
+    public String print (String rowDivider, String columnDivider)
+    {
         StringWriter stream = new StringWriter ();
 
         int columns = columns ();
@@ -645,11 +649,11 @@ public abstract class Matrix extends Type implements Holder
             {
                 stream.append (String.valueOf (get (r, c)));
                 if (++c >= columns) break;
-                stream.append (',');
+                stream.append (columnDivider);
             }
 
             if (++r >= rows) break;
-            stream.append (";");
+            stream.append (rowDivider);
         }
         stream.append ("]");
 
