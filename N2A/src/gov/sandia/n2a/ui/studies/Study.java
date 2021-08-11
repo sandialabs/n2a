@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -43,13 +44,13 @@ public class Study
     protected MNode               source;
     protected StudyThread         thread;
     protected StudyIterator       iterator;
-    protected int                 count;                    // Total number of samples that will be generated
-    protected int                 index;                    // Of next sample that should be created. Always 1 greater than last completed sample. When 0, study is about to start. When equal to count, study has completed.
+    protected int                 count;        // Total number of samples that will be generated
+    protected int                 index;        // Of next sample that should be created. Always 1 greater than last completed sample. When 0, study is about to start. When equal to count, study has completed.
     protected List<String>        incomplete;
-    protected int                 lastComplete;             // Used to throttle status messages when running headless.
-    protected boolean             usesRandom;               // At least one iterator in the chain generates random values. It will need an instance of the internal Simulator to create a convenient environment for generating values.
-    protected Random              random;                   // random number generator used by iterator
-    protected long                startTime;                // Of main loop in thread. Used to estimate time remaining.
+    protected int                 lastComplete; // Used to throttle status messages when running headless.
+    protected boolean             usesRandom;   // At least one iterator in the chain generates random values. It will need an instance of the internal Simulator to create a convenient environment for generating values.
+    protected Random              random;       // random number generator used by iterator
+    protected long                startTime;    // Of main loop in thread. Used to estimate time remaining.
     protected Map<String,Integer> jobMap;
 
     public static final ImageIcon iconPause    = ImageUtil.getImage ("pause-16.png");
@@ -63,10 +64,12 @@ public class Study
     public void buildIterator ()
     {
         // Assumes iterator is null
-
         MNode variables = source.childOrEmpty ("variables");
-        variables.visit (new Visitor ()
+        class VariableVisitor implements Visitor
         {
+            MNode goal;
+            List<MNode> optimize = new ArrayList<MNode> ();
+
             public boolean visit (MNode n)
             {
                 if (! n.data ()) return true;  // This is merely an intermediate node, not a study variable.
@@ -74,20 +77,28 @@ public class Study
                 String value = n.get ().trim ();
 
                 StudyIterator it = null;
-                if (value.startsWith ("["))
+                if (n.child ("optimize") != null)  // Identifies a variable to be optimized
+                {
+                    optimize.add (n);  // The optimizer may use value as a hint about range to work within.
+                }
+                else if (n.child ("goal") != null)  // Identifies the variable whose error value we wish to minimize.
+                {
+                    goal = n;
+                }
+                else if (value.startsWith ("["))
                 {
                     value = value.substring (1);
                     value = value.split ("]", 2)[0];
-                    it = new StudyIteratorRange (keys, value);
+                    it = new IteratorRange (keys, value);
                 }
                 else if (value.startsWith ("uniform")  ||  value.startsWith ("gaussian"))
                 {
-                    it = new StudyIteratorRandom (keys, value, n);
+                    it = new IteratorRandom (keys, value, n);
                     usesRandom = true;
                 }
                 else if (value.contains (","))
                 {
-                    it = new StudyIteratorList (keys, value);
+                    it = new IteratorList (keys, value);
                 }
                 else return false;  // Ignore unrecognized study type. TODO: should we throw an error instead?
 
@@ -99,7 +110,16 @@ public class Study
                 iterator = it;
                 return false;
             }
-        });
+        }
+        VariableVisitor visitor = new VariableVisitor ();
+        variables.visit (visitor);
+
+        // Set up optimization iterator.
+        // This must always be last, so that it forms the inner loop. Combinatorial iteration takes place around it.
+        if (visitor.goal == null) return;
+        StudyIterator it = new OptimizerLM (visitor.goal.keyPath (variables), visitor.optimize, this);
+        iterator.next ();
+        it.inner = it;
     }
 
     public synchronized void togglePause ()

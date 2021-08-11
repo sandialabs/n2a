@@ -11,12 +11,12 @@ import gov.sandia.n2a.db.MNode;
 /**
     An iterator that steps through a discrete set of items.
 **/
-public abstract class StudyIteratorIndexed extends StudyIterator
+public abstract class IteratorIndexed extends StudyIterator
 {
     protected int index = -1;
     protected int count;  // Must be set by concrete class constructor.
 
-    public StudyIteratorIndexed (String[] keys)
+    public IteratorIndexed (String[] keys)
     {
         super (keys);
     }

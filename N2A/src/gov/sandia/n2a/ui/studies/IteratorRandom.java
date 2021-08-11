@@ -10,12 +10,12 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 
-public class StudyIteratorRandom extends StudyIteratorIndexed
+public class IteratorRandom extends IteratorIndexed
 {
     protected Operator expression;
     protected Type     nextValue;
 
-    public StudyIteratorRandom (String[] keys, String value, MNode n)
+    public IteratorRandom (String[] keys, String value, MNode n)
     {
         super (keys);
         count = n.getOrDefault (1, "count");

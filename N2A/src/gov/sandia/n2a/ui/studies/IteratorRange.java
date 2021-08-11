@@ -7,24 +7,26 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.studies;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.language.UnitValue;
+import gov.sandia.n2a.language.type.Scalar;
 
-public class StudyIteratorRange extends StudyIteratorIndexed
+public class IteratorRange extends IteratorIndexed
 {
     protected double lo;
     protected double hi;
     protected double step;
 
-    public StudyIteratorRange (String[] keys, String range)
+    public IteratorRange (String[] keys, String range)
     {
         super (keys);
         String[] pieces = range.split (",");
-        lo = Double.valueOf (pieces[0]);
-        if (pieces.length > 1) hi = Double.valueOf (pieces[0]);
+        lo = new UnitValue (pieces[0]).get ();
+        if (pieces.length > 1) hi = new UnitValue (pieces[1]).get ();
         else                   hi = lo;
         if (pieces.length > 2)
         {
             step = hi;
-            hi = Double.valueOf (pieces[2]);
+            hi = new UnitValue (pieces[2]).get ();
         }
         else
         {
@@ -36,6 +38,6 @@ public class StudyIteratorRange extends StudyIteratorIndexed
     public void assign (MNode model)
     {
         if (inner != null) inner.assign (model);
-        model.set (lo + step * index, keyPath);
+        model.set (Scalar.print (lo + step * index), keyPath);
     }
 }

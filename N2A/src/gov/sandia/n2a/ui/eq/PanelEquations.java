@@ -46,6 +46,7 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
@@ -1109,6 +1110,7 @@ public class PanelEquations extends JPanel
         study.set (inherit, "$inherit");
         study.set (collated.childOrEmpty ("$metadata", "study"), "config");  // Copy top-level study tag (general parameters controlling study).
         // Collect study tags
+        MNode variables = study.childOrCreate ("variables");
         collated.visit (new Visitor ()
         {
             public boolean visit (MNode n)
@@ -1120,21 +1122,18 @@ public class PanelEquations extends JPanel
                 for (; i >= 0; i--) if (keyPath[i].equals ("$metadata")) break;
                 if (i < 0) return true;  // move along, nothing to see here
 
-                List<String> keys = new ArrayList<String> (keyPath.length);
-                keys.add ("variables");
                 if (i == keyPath.length - 2)  // immediate parent
                 {
                     if (keyPath.length < 3) return true;  // This is the top-level metadata block, so ignore study. It contains general parameters, rather than tagging a variable.
-                    for (int j = 0; j < keyPath.length - 2; j++) keys.add (keyPath[j]);  // skip up to the parent of $metadata, which should be a variable
+                    keyPath = Arrays.copyOfRange (keyPath, 0, keyPath.length - 2);  // skip up to the parent of $metadata, which should be a variable
                 }
                 else  // more distant parent, so a metadata key is the item to be iterated, rather than a variable
                 {
-                    for (int j = 0; j < keyPath.length - 1; j++) keys.add (keyPath[j]);
+                    keyPath = Arrays.copyOfRange (keyPath, 0, keyPath.length - 1);
                 }
-                keyPath = keys.toArray (new String[keys.size ()]);
 
-                study.set (n, keyPath);  // Save entire subtree under n, if it exists.
-                if (! study.data (keyPath)) study.set ("", keyPath);  // ensure node is defined so it can indicate the study variable
+                variables.set (n, keyPath);  // Save entire subtree under n, if it exists.
+                if (! variables.data (keyPath)) variables.set ("", keyPath);  // ensure node is defined so it can indicate the study variable
                 return false;  // Don't descend after finding a study tag.
             }
         });

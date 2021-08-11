@@ -11,11 +11,11 @@ import java.util.List;
 
 import gov.sandia.n2a.db.MNode;
 
-public class StudyIteratorList extends StudyIteratorIndexed
+public class IteratorList extends IteratorIndexed
 {
     protected List<String> items;
 
-    public StudyIteratorList (String[] keys, String items)
+    public IteratorList (String[] keys, String items)
     {
         super (keys);
         this.items = Arrays.asList (items.split (","));

@@ -6,10 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.studies;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 import gov.sandia.n2a.db.MNode;
 
 /**
@@ -64,9 +60,6 @@ public abstract class StudyIterator
     **/
     public MNode node (MNode study)
     {
-        List<String> keyList = new ArrayList<String> ();
-        keyList.add ("variables");
-        keyList.addAll (Arrays.asList (keyPath));
-        return study.child (keyList.toArray (new String[keyList.size ()]));  // This node will always exist, since it was used to create the iterator.
+        return study.child ("variables").child (keyPath);  // This node will always exist, since it was used to create the iterator.
     }
 }

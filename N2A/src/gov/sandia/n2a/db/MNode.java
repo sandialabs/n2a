@@ -311,12 +311,10 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     public String getOrDefault (String defaultValue, Object... keys)
     {
-        String value = get (keys);
-        if (value.isEmpty ()) return defaultValue;
-        return value;
+        return getOrDefault (defaultValue, toStrings (keys));
     }
 
-    public boolean getOrDefault (boolean defaultValue, Object... keys)
+    public boolean getOrDefault (boolean defaultValue, String... keys)
     {
         String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
@@ -324,7 +322,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return Boolean.parseBoolean (value);
     }
 
-    public int getOrDefault (int defaultValue, Object... keys)
+    public boolean getOrDefault (boolean defaultValue, Object... keys)
+    {
+        return getOrDefault (defaultValue, toStrings (keys));
+    }
+
+    public int getOrDefault (int defaultValue, String... keys)
     {
         String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
@@ -346,7 +349,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
-    public long getOrDefault (long defaultValue, Object... keys)
+    public int getOrDefault (int defaultValue, Object... keys)
+    {
+        return getOrDefault (defaultValue, toStrings (keys));
+    }
+
+    public long getOrDefault (long defaultValue, String... keys)
     {
         String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
@@ -366,7 +374,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
-    public double getOrDefault (double defaultValue, Object... keys)
+    public long getOrDefault (long defaultValue, Object... keys)
+    {
+        return getOrDefault (defaultValue, toStrings (keys));
+    }
+
+    public double getOrDefault (double defaultValue, String... keys)
     {
         String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
@@ -380,6 +393,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
+    public double getOrDefault (double defaultValue, Object... keys)
+    {
+        return getOrDefault (defaultValue, toStrings (keys));
+    }
+
     /**
         Interprets value as boolean, with a small extension to Java's string parser:
         true = "1" or "true";
@@ -387,9 +405,14 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         See getFlag() for a different way to interpret booleans. The key difference is
         that a boolean defaults to false.
     **/
-    public boolean getBoolean (Object... keys)
+    public boolean getBoolean (String... keys)
     {
         return getOrDefault (false, keys);
+    }
+
+    public boolean getBoolean (Object... keys)
+    {
+        return getBoolean (toStrings (keys));
     }
 
     /**
@@ -400,26 +423,46 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         that a flag defaults to true, so it can indicate something by merely existing, without a value.
         It also tolerates arbitrary content, so a flag can carry extra data and still be interpreted as true.
     **/
-    public boolean getFlag (Object... keys)
+    public boolean getFlag (String... keys)
     {
-        MNode c = child (toStrings (keys));
+        MNode c = child (keys);
         if (c == null  ||  c.get ().equals ("0")) return false;
         return true;
     }
 
-    public int getInt (Object... keys)
+    public boolean getFlag (Object... keys)
+    {
+        return getFlag (toStrings (keys));
+    }
+
+    public int getInt (String... keys)
     {
         return getOrDefault (0, keys);
     }
 
-    public long getLong (Object... keys)
+    public int getInt (Object... keys)
+    {
+        return getInt (toStrings (keys));
+    }
+
+    public long getLong (String... keys)
     {
         return getOrDefault (0l, keys);
     }
 
-    public double getDouble (Object... keys)
+    public long getLong (Object... keys)
+    {
+        return getLong (toStrings (keys));
+    }
+
+    public double getDouble (String... keys)
     {
         return getOrDefault (0.0, keys);
+    }
+
+    public double getDouble (Object... keys)
+    {
+        return getDouble (toStrings (keys));
     }
 
     /**
