@@ -16,6 +16,8 @@ import java.util.Iterator;
 import gov.sandia.n2a.backend.internal.Holder;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.linear.MatrixDense;
+import gov.sandia.n2a.linear.MatrixSparse;
 
 public abstract class Matrix extends Type implements Holder
 {

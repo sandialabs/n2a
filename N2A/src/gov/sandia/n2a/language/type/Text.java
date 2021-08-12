@@ -8,6 +8,7 @@ package gov.sandia.n2a.language.type;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.linear.MatrixDense;
 
 /**
     String type.

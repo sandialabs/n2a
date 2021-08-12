@@ -74,8 +74,8 @@ import gov.sandia.n2a.language.operator.NE;
 import gov.sandia.n2a.language.operator.OR;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
-import gov.sandia.n2a.language.type.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.MainFrame;
 

@@ -4,7 +4,7 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.language.type;
+package gov.sandia.n2a.linear;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,6 +14,9 @@ import java.util.ArrayList;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.type.Text;
 
 /**
     Matrix with a single block of storage and strided access pattern.
@@ -59,6 +62,7 @@ public class MatrixDense extends Matrix
         strideR = 1;
         strideC = rows;
 
+        // TODO: if A is a MatrixDense, then use direct access to A.data
         int i = 0;
         for (int c = 0; c < columns; c++)
         {

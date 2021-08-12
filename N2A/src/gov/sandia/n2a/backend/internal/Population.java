@@ -19,7 +19,7 @@ import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix.IteratorNonzero;
-import gov.sandia.n2a.language.type.MatrixDense;
+import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.language.type.Scalar;
 
 /**

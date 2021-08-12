@@ -11,7 +11,7 @@ import java.util.List;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.UnitValue;
-import gov.sandia.n2a.language.type.MatrixDense;
+import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
 

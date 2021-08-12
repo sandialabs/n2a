@@ -4,7 +4,7 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.language.type;
+package gov.sandia.n2a.linear;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -17,6 +17,9 @@ import java.util.Map.Entry;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.type.Text;
 
 public class MatrixSparse extends Matrix
 {
