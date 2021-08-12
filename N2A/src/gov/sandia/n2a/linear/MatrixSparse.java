@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map.Entry;
 
 import gov.sandia.n2a.language.EvaluationException;
-import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -176,7 +175,7 @@ public class MatrixSparse extends Matrix
         return true;
     }
 
-    public Type add (Type that) throws EvaluationException
+    public Matrix add (Matrix that) throws EvaluationException
     {
         if (that instanceof MatrixSparse)
         {
@@ -203,44 +202,41 @@ public class MatrixSparse extends Matrix
             }
             return result;
         }
-        if (that instanceof Matrix)
+
+        Matrix B = (Matrix) that;
+        int w = columns ();
+        int h = rows ();
+        int ow = Math.min (w, B.columns ());
+        int oh = Math.min (h, B.rows ());
+        MatrixDense result;
+        if (emptyValue == 0) result = new MatrixDense (h, w);
+        else                 result = new MatrixDense (h, w, emptyValue);
+        for (int c = 0; c < w; c++)
         {
-            Matrix B = (Matrix) that;
-            int w = columns ();
-            int h = rows ();
-            int ow = Math.min (w, B.columns ());
-            int oh = Math.min (h, B.rows ());
-            MatrixDense result;
-            if (emptyValue == 0) result = new MatrixDense (h, w);
-            else                 result = new MatrixDense (h, w, emptyValue);
-            for (int c = 0; c < w; c++)
-            {
-                HashMap<Integer,Double> rows = data.get (c);
-                if (rows == null) continue;
-                for (Entry<Integer,Double> row : rows.entrySet ()) result.set (row.getKey (), c, row.getValue ());
-            }
-            for (int c = 0; c < ow; c++)
-            {
-              for (int r = 0; r < oh; r++) result.set (r, c, result.get (r, c) + B.get (r, c));
-            }
-            return result;
+            HashMap<Integer,Double> rows = data.get (c);
+            if (rows == null) continue;
+            for (Entry<Integer,Double> row : rows.entrySet ()) result.set (row.getKey (), c, row.getValue ());
         }
-        if (that instanceof Scalar)
+        for (int c = 0; c < ow; c++)
         {
-            double scalar = ((Scalar) that).value;
-            int w = columns ();
-            int h = rows ();
-            MatrixSparse result = new MatrixSparse (h, w, emptyValue + scalar);
-            for (int c = 0; c < w; c++)
-            {
-                HashMap<Integer,Double> rows = data.get (c);
-                if (rows == null) continue;
-                for (Entry<Integer,Double> row : rows.entrySet ()) result.set (row.getKey (), c, row.getValue () + scalar);
-            }
-            return result;
+          for (int r = 0; r < oh; r++) result.set (r, c, result.get (r, c) + B.get (r, c));
         }
-        if (that instanceof Text) return new Text (toString ()).add (that);
-        throw new EvaluationException ("type mismatch");
+        return result;
+    }
+
+    public MatrixSparse add (Scalar that) throws EvaluationException
+    {
+        double scalar = ((Scalar) that).value;
+        int w = columns ();
+        int h = rows ();
+        MatrixSparse result = new MatrixSparse (h, w, emptyValue + scalar);
+        for (int c = 0; c < w; c++)
+        {
+            HashMap<Integer,Double> rows = data.get (c);
+            if (rows == null) continue;
+            for (Entry<Integer,Double> row : rows.entrySet ()) result.set (row.getKey (), c, row.getValue () + scalar);
+        }
+        return result;
     }
 
     // TODO: Fill in other binary operations

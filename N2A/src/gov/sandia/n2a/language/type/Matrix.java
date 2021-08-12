@@ -146,11 +146,22 @@ public abstract class Matrix extends Type implements Holder
         return new MatrixDense (this).isZero ();
     }
 
-    /**
-        Unlike most other operations on Matrix, this one could possibly return a Text object,
-        if the user is concatenating a matrix with a string.
-    **/
+    // add() is separated into type-specific functions so it can support
+    // matrix+string concatenation. Of all the operations, only add() needs
+    // to do this.
+
     public Type add (Type that) throws EvaluationException
+    {
+        if (that instanceof Text) return new Text (toString ()).add (that);
+        throw new EvaluationException ("type mismatch");
+    }
+
+    public Matrix add (Matrix that) throws EvaluationException
+    {
+        return new MatrixDense (this).add (that);
+    }
+
+    public Matrix add (Scalar that) throws EvaluationException
     {
         return new MatrixDense (this).add (that);
     }
@@ -184,6 +195,12 @@ public abstract class Matrix extends Type implements Holder
     {
         return new MatrixDense (this).max (that);
     }
+
+    // EQ() and NE() are treated differently than other comparisons.
+    // The other comparisons generate boolean matrices containing the 
+    // results of comparing matching elements between two matrices.
+    // However, EQ() and NE() assume the user wants a simple boolean
+    // value indicating whether two matrices are an exact match.
 
     public Type EQ (Type that) throws EvaluationException
     {

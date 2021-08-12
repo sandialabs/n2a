@@ -327,7 +327,7 @@ public class MatrixDense extends Matrix
         return true;
     }
 
-    public Type add (Type that) throws EvaluationException
+    public MatrixDense add (Matrix that) throws EvaluationException
     {
         if (that instanceof MatrixDense)
         {
@@ -373,63 +373,60 @@ public class MatrixDense extends Matrix
 
             return result;
         }
-        if (that instanceof Matrix)
+
+        Matrix B = (Matrix) that;
+        int oh = Math.min (rows,    B.rows ());
+        int ow = Math.min (columns, B.columns ());
+        MatrixDense result = new MatrixDense (rows, columns);
+        int stepA = strideC - rows * strideR;
+        int a = offset;
+        int r = 0;
+        for (int col = 0; col < ow; col++)
         {
-            Matrix B = (Matrix) that;
-            int oh = Math.min (rows,    B.rows ());
-            int ow = Math.min (columns, B.columns ());
-            MatrixDense result = new MatrixDense (rows, columns);
-            int stepA = strideC - rows * strideR;
-            int a = offset;
-            int r = 0;
-            for (int col = 0; col < ow; col++)
+            int row = 0;
+            for (; row < oh; row++)
             {
-                int row = 0;
-                for (; row < oh; row++)
-                {
-                    result.data[r++] = data[a] + B.get (row, col);
-                    a += strideR;
-                }
-                for (; row < rows; row++)
-                {
-                    result.data[r++] = data[a];
-                    a += strideR;
-                }
-                a += stepA;
+                result.data[r++] = data[a] + B.get (row, col);
+                a += strideR;
             }
-            for (int col = ow; col < columns; col++)
+            for (; row < rows; row++)
             {
-                for (int row = 0; row < rows; row++)
-                {
-                    result.data[r++] = data[a];
-                    a += strideR;
-                }
-                a += stepA;
+                result.data[r++] = data[a];
+                a += strideR;
             }
-            return result;
+            a += stepA;
         }
-        if (that instanceof Scalar)
+        for (int col = ow; col < columns; col++)
         {
-            double scalar = ((Scalar) that).value;
-            MatrixDense result = new MatrixDense (rows, columns);
-            int step = strideC - rows * strideR;
-            int i = offset;
-            int r = 0;
-            int end = rows * columns;
-            while (r < end)
+            for (int row = 0; row < rows; row++)
             {
-                int columnEnd = r + rows;
-                while (r < columnEnd)
-                {
-                    result.data[r++] = data[i] + scalar;
-                    i += strideR;
-                }
-                i += step;
+                result.data[r++] = data[a];
+                a += strideR;
             }
-            return result;
+            a += stepA;
         }
-        if (that instanceof Text) return new Text (toString ()).add (that);
-        throw new EvaluationException ("type mismatch");
+        return result;
+    }
+
+    public MatrixDense add (Scalar that) throws EvaluationException
+    {
+        double scalar = ((Scalar) that).value;
+        MatrixDense result = new MatrixDense (rows, columns);
+        int step = strideC - rows * strideR;
+        int i = offset;
+        int r = 0;
+        int end = rows * columns;
+        while (r < end)
+        {
+            int columnEnd = r + rows;
+            while (r < columnEnd)
+            {
+                result.data[r++] = data[i] + scalar;
+                i += strideR;
+            }
+            i += step;
+        }
+        return result;
     }
 
     public MatrixDense subtract (Type that) throws EvaluationException

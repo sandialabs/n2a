@@ -36,34 +36,31 @@ public class FactorQR
         {
             // Compute 2-norm of k-th column without under/overflow.
             double nrm = 0;
-            for (int i = k; i < m; i++)
-            {
-                nrm = hypot (nrm, QR.get (i, k));
-            }
+            int kk  = k * m + k;
+            int i   = kk;
+            int end = k * m + m;
+            while (i < end) nrm = hypot (nrm, QR.data[i++]);
 
             if (nrm != 0.0)
             {
                 // Form k-th Householder vector.
-                if (QR.get (k, k) < 0) nrm = -nrm;
-                for (int i = k; i < m; i++)
-                {
-                    QR.set (i, k, QR.get (i, k) / nrm);
-                }
-                QR.set (k, k, QR.get (k, k) + 1);
+                if (QR.data[kk] < 0) nrm = -nrm;
+                i = kk;
+                while (i < end) QR.data[i++] /= nrm;
+                QR.data[kk] += 1;
 
                 // Apply transformation to remaining columns.
                 for (int j = k + 1; j < n; j++)
                 {
                     double s = 0.0;
-                    for (int i = k; i < m; i++)
-                    {
-                        s += QR.get (i, k) * QR.get (i, j);
-                    }
-                    s = -s / QR.get (k, k);
-                    for (int i = k; i < m; i++)
-                    {
-                        QR.set (i, j, QR.get (i, j) + s * QR.get (i, k));
-                    }
+                    i = kk;
+                    int kj = j * m + k;
+                    int l = kj;
+                    while (i < end) s += QR.data[i++] * QR.data[l++];
+                    s = -s / QR.data[kk];
+                    i = kk;
+                    l = kj;
+                    while (i < end) QR.data[l++] += s * QR.data[i++];
                 }
             }
             Rdiag[k] = -nrm;
@@ -91,10 +88,9 @@ public class FactorQR
         MatrixDense H = new MatrixDense (m, n);
         for (int j = 0; j < n; j++)
         {
-            for (int i = j; i < m; i++)
-            {
-                H.set (i, j, QR.get (i, j));
-            }
+            int i   = j * m + j;
+            int end = j * m + m;
+            while (i < end) H.data[i] = QR.data[i++];
         }
         return H;
     }
@@ -105,10 +101,19 @@ public class FactorQR
     public MatrixDense getR ()
     {
         MatrixDense R = new MatrixDense (n, n);
+        int end = R.data.length;
         for (int i = 0; i < n; i++)
         {
-            R.set (i, i, Rdiag[i]);
-            for (int j = i + 1; j < n; j++) R.set (i, j, QR.get (i, j));
+            int r = i * n + i;  // Index into R, initially at (i,i)
+            R.data[r] = Rdiag[i];
+            r += n;  // advance by 1 column, to (i,i+1)
+            int j = (i + 1) * m + i;  // Index into QR, initially at (i,i+1)
+            while (r < end)
+            {
+                R.data[r] = QR.data[j];
+                r += n;
+                j += m;
+            }
         }
         return R;
     }
@@ -121,22 +126,21 @@ public class FactorQR
         MatrixDense Q = new MatrixDense (m, n);
         for (int k = n - 1; k >= 0; k--)
         {
-            Q.set (k, k, 1);
+            int kk  = k * m + k;
+            int end = k * m + m;
+            Q.data[kk] = 1;
+            if (QR.data[kk] == 0) continue;
+
             for (int j = k; j < n; j++)
             {
-                if (QR.get (k, k) != 0)
-                {
-                    double s = 0.0;
-                    for (int i = k; i < m; i++)
-                    {
-                        s += QR.get (i, k) * Q.get (i, j);
-                    }
-                    s = -s / QR.get (k, k);
-                    for (int i = k; i < m; i++)
-                    {
-                        Q.set (i, j, Q.get (i, j) + s * QR.get (i, k));
-                    }
-                }
+                double s = 0;
+                int i = kk;
+                int q = j * m + k;
+                while (i < end) s += QR.data[i++] * Q.data[q++];
+                s = -s / QR.data[kk];
+                i = kk;
+                q = j * m + k;
+                while (i < end) Q.data[q++] += s * QR.data[i++];
             }
         }
         return Q;
@@ -144,7 +148,7 @@ public class FactorQR
 
     /**
         Least squares solution of A*X = B
-        @param B Matrix with as many rows as A and any number of columns.
+        @param B Matrix with exactly as many rows as A, along with any number of columns.
         @return X that minimizes the two norm of Q*R*X-B.
     **/
     public MatrixDense solve (Matrix B)
@@ -159,32 +163,41 @@ public class FactorQR
         // Compute Y = transpose(Q)*B
         for (int k = 0; k < n; k++)
         {
+            int kk  = k * m + k;
+            int end = k * m + m;
             for (int j = 0; j < nx; j++)
             {
-                double s = 0.0;
-                for (int i = k; i < m; i++)
-                {
-                    s += QR.get (i, k) * X.get (i, j);
-                }
-                s = -s / QR.get (k, k);
-                for (int i = k; i < m; i++)
-                {
-                    X.set (i, j, X.get (i, j) + s * QR.get (i, k));
-                }
+                double s = 0;
+                int a = kk;
+                int x = j * m + k;
+                while (a < end) s += QR.data[a++] * X.data[x++];
+                s = -s / QR.data[kk];
+                a = kk;
+                x = j * m + k;
+                while (a < end) X.data[x++] += s * QR.data[a++];
             }
         }
         // Solve R*X = Y;
         for (int k = n - 1; k >= 0; k--)
         {
-            for (int j = 0; j < nx; j++)
+            int j = k;  // iterate over row k
+            while (j < X.data.length)
             {
-                X.set (k, j, X.get (k, j) / Rdiag[k]);
+                X.data[j] /= Rdiag[k];
+                j += m;
             }
+
+            int a = k * m;  // iterate over column k
             for (int i = 0; i < k; i++)
             {
-                for (int j = 0; j < nx; j++)
+                j     = i;  // iterate over row i
+                int l = k;  // iterate over row k
+                double qr = QR.data[a++];
+                while (j < X.data.length)
                 {
-                    X.set (i, j, X.get (i, j) - X.get (k, j) * QR.get (i, k));
+                    X.data[j] -= X.data[l] * qr;
+                    j += m;
+                    l += m;
                 }
             }
         }
