@@ -978,7 +978,8 @@ public class InternalBackendData
 
         if (xyz != null)
         {
-            XYZdependencies = new ArrayList<Variable> ();
+            XYZdependencies     = new ArrayList<Variable> ();
+            XYZdependenciesTemp = new ArrayList<Variable> ();
             for (Variable t : s.ordered)
             {
                 boolean temporary = t.hasAttribute ("temporary");
