@@ -3843,7 +3843,7 @@ public class EquationSet implements Comparable<EquationSet>
                             }
                         }
                     }
-                    if (v.name.equals ("$t")  &&  v.order == 1  &&  container != null)  // $t'
+                    else if (v.name.equals ("$t")  &&  v.order == 1  &&  container != null)  // $t'
                     {
                         // Copy constant $t' from container.
                         Variable parentDt = container.find (v);
@@ -3851,7 +3851,6 @@ public class EquationSet implements Comparable<EquationSet>
                         {
                             changed = true;
                             v.addAttribute ("constant");
-                            if (v.name.equals ("i")) System.out.println ("  constant 4");
                             EquationEntry e = new EquationEntry (v, "");
                             v.add (e);
 
