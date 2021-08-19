@@ -3820,20 +3820,45 @@ public class EquationSet implements Comparable<EquationSet>
 
             if (v.equations.size () != 1)
             {
-                if (v.equations.isEmpty ()  &&  v.name.equals ("$t")  &&  v.order == 1  &&  container != null)  // special case for $t'
+                if (v.equations.isEmpty ())  // Special cases for $variables
                 {
-                    // Copy constant $t' from container.
-                    Variable parentDt = container.find (v);
-                    if (parentDt.hasAttribute ("constant"))
+                    if (v.name.equals ("$index"))
                     {
-                        changed = true;
-                        v.addAttribute ("constant");
-                        EquationEntry e = new EquationEntry (v, "");
-                        v.add (e);
+                        // Check if $n has become constant 1, that is, if we have detected a singleton in later processing.
+                        // In this case, $index should become constant 0.
+                        Variable n = find (new Variable ("$n"));
+                        if (n != null  &&  n.hasAttribute ("constant"))
+                        {
+                            if (n.equations.first ().expression.getDouble () == 1)
+                            {
+                                changed = true;
+                                v.removeAttribute ("initOnly");
+                                v.addAttribute ("constant");
+                                v.unit = AbstractUnit.ONE;
+                                v.equations = new TreeSet<EquationEntry> ();
+                                EquationEntry e = new EquationEntry (v, "");
+                                e.expression = new Constant (0);
+                                e.expression.unit = AbstractUnit.ONE;
+                                v.add (e);
+                            }
+                        }
+                    }
+                    if (v.name.equals ("$t")  &&  v.order == 1  &&  container != null)  // $t'
+                    {
+                        // Copy constant $t' from container.
+                        Variable parentDt = container.find (v);
+                        if (parentDt.hasAttribute ("constant"))
+                        {
+                            changed = true;
+                            v.addAttribute ("constant");
+                            if (v.name.equals ("i")) System.out.println ("  constant 4");
+                            EquationEntry e = new EquationEntry (v, "");
+                            v.add (e);
 
-                        EquationEntry parentE = parentDt.equations.first ();
-                        e.expression = new Constant (parentE.expression.getDouble ());
-                        e.expression.unit = AbstractUnit.ONE;
+                            EquationEntry parentE = parentDt.equations.first ();
+                            e.expression = new Constant (parentE.expression.getDouble ());
+                            e.expression.unit = AbstractUnit.ONE;
+                        }
                     }
                 }
                 continue;
