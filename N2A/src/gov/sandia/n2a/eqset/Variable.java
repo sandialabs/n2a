@@ -338,6 +338,10 @@ public class Variable implements Comparable<Variable>, Cloneable
         for (EquationEntry e : result.equations) newEquations.add (e.deepCopy (result));
         result.equations = newEquations;
 
+        if (attributes != null) result.attributes = new HashSet<String> (attributes);
+
+        // Don't worry about uses and usedBy, since we don't consider our neighbors.
+
         return result;
     }
 
