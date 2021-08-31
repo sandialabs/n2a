@@ -33,19 +33,17 @@ public class Pulse extends Function
     public Type eval (Instance context)
     {
         double t      = ((Scalar) operands[0].eval (context)).value;
-        double width  = ((Scalar) operands[1].eval (context)).value;
+        double width  = Double.POSITIVE_INFINITY;
         double period = 0;
         double rise   = 0;
         double fall   = 0;
+        if (operands.length > 1) width  = ((Scalar) operands[1].eval (context)).value;
         if (operands.length > 2) period = ((Scalar) operands[2].eval (context)).value;
         if (operands.length > 3) rise   = ((Scalar) operands[3].eval (context)).value;
         if (operands.length > 4) fall   = ((Scalar) operands[4].eval (context)).value;
 
-        if (period == 0.0)
-        {
-            if (t < 0) return new Scalar (0);
-        }
-        else t %= period;
+        if (t < 0) return new Scalar (0);
+        if (period != 0) t %= period;
         if (t < rise) return new Scalar (t / rise);
         t -= rise;
         if (t < width) return new Scalar (1);
