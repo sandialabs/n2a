@@ -6,26 +6,23 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.plugins;
 
-import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
-import java.util.Set;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 
 
 /**
@@ -194,7 +191,7 @@ public class PluginManager
 
     // Initialization
 
-    public static void initialize (Plugin platformPlugin, List<String> loadFromMemByName, List<File> loadFromPluginDirs)
+    public static void initialize (Plugin platformPlugin, List<String> loadFromMemByName, List<Path> loadFromPluginDirs)
     {
         // Load an initial platform plug-in if provided.
         if (platformPlugin != null)
@@ -210,8 +207,47 @@ public class PluginManager
             }
         }
 
+        // Create temporary class path for SPI
+        List<URL> urls = new ArrayList<URL> ();
+        if (loadFromPluginDirs != null)
+        {
+            for (Path dir : loadFromPluginDirs)
+            {
+                if (! Files.exists (dir))
+                {
+                    System.err.println ("Plugin dir missing: " + dir);
+                    continue;
+                }
+
+                try
+                {
+                    Files.walkFileTree (dir, new SimpleFileVisitor<Path> ()
+                    {
+                        public FileVisitResult visitFile (Path file, BasicFileAttributes attrs) throws IOException
+                        {
+                            if (file.getFileName ().toString ().toLowerCase ().endsWith (".jar"))
+                            {
+                                try
+                                {
+                                    urls.add (file.toUri ().toURL ());
+                                }
+                                catch (MalformedURLException e) {}  // If the file exists, this exception should never happen.
+                            }
+                            return FileVisitResult.CONTINUE;
+                        }
+                    });
+                }
+                catch (IOException e)
+                {
+                    System.err.println ("Exception will scanning plugin dir: " + dir);
+                    e.printStackTrace (System.err);
+                }
+            }
+        }
+        URLClassLoader tempLoader = new URLClassLoader (urls.toArray (new URL[urls.size ()]));
+
         // Check for any plugins provided by SPI.
-        ServiceLoader<Plugin> loader = ServiceLoader.load (Plugin.class);
+        ServiceLoader<Plugin> loader = ServiceLoader.load (Plugin.class, tempLoader);
         Iterator<Plugin> pit = loader.iterator ();
         while (pit.hasNext ())
         {
@@ -240,22 +276,6 @@ public class PluginManager
                 catch (Exception e)
                 {
                     System.err.println ("Error loading named plugin: " + className);
-                    e.printStackTrace (System.err);
-                }
-            }
-        }
-
-        if (loadFromPluginDirs != null)
-        {
-            for (File jarDir : loadFromPluginDirs)
-            {
-                try
-                {
-                    loadFromJarsInDirectory (jarDir);
-                }
-                catch (Exception e)
-                {
-                    System.err.println ("Error loading plugin jars from dir: " + jarDir);
                     e.printStackTrace (System.err);
                 }
             }
@@ -297,9 +317,9 @@ public class PluginManager
         Plugin plugin;
         try
         {
-            Class<?> pluginClass = Class.forName(pluginClassName);
-            Constructor<?> ctor = pluginClass.getConstructor(new Class<?>[0]);
-            plugin = (Plugin) ctor.newInstance(new Object[0]);
+            Class<?> pluginClass = Class.forName (pluginClassName);
+            Constructor<?> ctor = pluginClass.getConstructor (new Class<?>[0]);
+            plugin = (Plugin) ctor.newInstance (new Object[0]);
         }
         catch (ClassNotFoundException e)
         {
@@ -451,139 +471,6 @@ public class PluginManager
                 }
                 s = s.substring (2);  // to remove the leading ", "
                 throw new Exception ("The extension point '" + extPointId + "' has not been declared by any plug-in, but it is used by extension classes: " + s);
-            }
-        }
-    }
-
-    public static Map<File, Boolean> loadJarFiles (File directory, int maxRecurseDepth)
-    {
-        Map<File, Boolean> success = new HashMap<File, Boolean> ();
-        loadJarFilesInternal (directory, maxRecurseDepth, 0, success);
-        return success;
-    }
-
-    protected static void loadJarFilesInternal (File directory, int maxRecurseDepth, int curDepth, Map<File,Boolean> success)
-    {
-        if (directory == null  ||  ! directory.exists ()  ||  ! directory.isDirectory ()) return;
-        FileFilter jarFilter = new FileFilter ()
-        {
-            public boolean accept (File path)
-            {
-                return path.isDirectory ()  ||  path.getName ().endsWith (".jar");
-            }
-        };
-        for (File file : directory.listFiles (jarFilter))
-        {
-            if (file.isDirectory ())
-            {
-                if (maxRecurseDepth > curDepth)
-                {
-                    loadJarFilesInternal (file, maxRecurseDepth, curDepth + 1, success);
-                }
-            }
-            else
-            {
-                try
-                {
-                    addURL (file.toURI ().toURL ());
-                    success.put (file, true);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace ();
-                    success.put (file, false);
-                }
-            }
-        }
-    }
-
-    protected static void addURL (URL u) throws IOException
-    {
-        // Compare with Host.invoke()
-        URLClassLoader sysloader = (URLClassLoader) ClassLoader.getSystemClassLoader ();
-        Class<?> sysclass = URLClassLoader.class;
-        try
-        {
-            Method method = sysclass.getDeclaredMethod ("addURL", new Class[] {URL.class});
-            method.setAccessible (true);
-            method.invoke (sysloader, new Object[] {u});
-        }
-        catch (Throwable t)
-        {
-            t.printStackTrace ();
-            throw new IOException ("Error, could not add URL to system classloader");
-        }
-    }
-
-    public static String[] listJarClasses (File path) throws IOException
-    {
-        try (JarFile jar = new JarFile (path))
-        {
-            Set<String> extractedClasses = new HashSet<String> ();
-            Enumeration<JarEntry> entries = jar.entries ();
-            while (entries.hasMoreElements ())
-            {
-                JarEntry entry = entries.nextElement ();
-                String name = entry.toString ();
-                if (! name.endsWith (".class")) continue;
-                if (! name.contains ("$"))
-                {
-                    name = name.replaceAll ("/", ".");
-                    name = name.replaceAll ("\\.class$", "");
-                    extractedClasses.add (name);
-                }
-            }
-
-            return extractedClasses.toArray (new String[0]);
-        }
-    }
-
-    public static void loadFromJarsInDirectory(File directory) {
-
-        // Do nothing if the directory does not exist.
-        if(!directory.exists() || !directory.isDirectory()) {
-            return;
-        }
-
-        // Place all JAR files in this directory, or in one
-        // level of subdirectories on the class path.
-        Map<File, Boolean> success = loadJarFiles(directory, 1);
-
-        // For all of those JAR files that were successfully loaded...
-        for(File f : success.keySet()) {
-            if(success.get(f)) {
-                try {
-                    String[] classes = listJarClasses(f);
-
-                    for(String s : classes) {
-                        Class<?> pluginClass;
-                        try {
-                            // TODO: Is there a technique that prevents the
-                            // need to load all the classes in the JAR file
-                            // into memory?  Would be nice if we could just
-                            // find the plug-in classes without doing this.
-                            pluginClass = Class.forName(s);
-                        } catch(Exception e) {
-                            System.out.println("classforname");
-                            e.printStackTrace();
-                            continue;
-                        }
-
-                        // If the class implements the Plugin interface
-                        // attempt to load it.
-                        if(Plugin.class.isAssignableFrom(pluginClass)) {
-                            try {
-                                loadFromMemoryByName(s);
-                            } catch(Exception e) {
-                                System.out.println("loadfromclasses");
-                                e.printStackTrace();
-                            }
-                        }
-                    }
-                } catch(Exception e) {
-                    System.out.println("listjarclasses");
-                    e.printStackTrace();
-                }
             }
         }
     }

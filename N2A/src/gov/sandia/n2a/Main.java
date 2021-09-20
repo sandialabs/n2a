@@ -29,7 +29,6 @@ import gov.sandia.n2a.ui.studies.Study;
 import java.awt.EventQueue;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -52,13 +51,13 @@ public class Main
     {
         // Parse command line
         ArrayList<String> pluginClassNames = new ArrayList<String> ();
-        ArrayList<File>   pluginDirs       = new ArrayList<File> ();
+        ArrayList<Path>   pluginDirs       = new ArrayList<Path> ();
         MNode record = new MVolatile ();
         String headless = "";
         for (String arg : args)
         {
-            if      (arg.startsWith ("-plugin="   )) pluginClassNames.add           (arg.substring (8));
-            else if (arg.startsWith ("-pluginDir=")) pluginDirs      .add (new File (arg.substring (11)));
+            if      (arg.startsWith ("-plugin="   )) pluginClassNames.add            (arg.substring (8));
+            else if (arg.startsWith ("-pluginDir=")) pluginDirs      .add (Paths.get (arg.substring (11)).toAbsolutePath ());
             else if (arg.startsWith ("-param="    )) processParamFile (arg.substring (7), record);
             else if (arg.startsWith ("-install"   )) headless = "install";
             else if (arg.startsWith ("-csv"       ))
@@ -100,7 +99,7 @@ public class Main
         pluginClassNames.add ("gov.sandia.n2a.backend.c.PluginC");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuroml.PluginNeuroML");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuron.PluginNeuron");
-        pluginDirs.add (new File (AppData.properties.get ("resourceDir"), "plugins"));
+        pluginDirs.add (Paths.get (AppData.properties.get ("resourceDir"), "plugins").toAbsolutePath ());
         PluginManager.initialize (new N2APlugin (), pluginClassNames, pluginDirs);
 
         if (! headless.isEmpty ())
@@ -332,10 +331,10 @@ public class Main
         {
             public void uncaughtException (Thread thread, final Throwable throwable)
             {
-                File crashdump = new File (AppData.properties.get ("resourceDir"), "crashdump");
+                Path crashdump = Paths.get (AppData.properties.get ("resourceDir"), "crashdump");
                 try
                 {
-                    PrintStream err = new PrintStream (crashdump);
+                    PrintStream err = new PrintStream (crashdump.toFile ());
                     throwable.printStackTrace (err);
                     err.close ();
                 }
@@ -346,7 +345,7 @@ public class Main
                     parent,
                     "<html><body><p style='width:300px'>"
                     + "You've exposed a bug in the program! Please help us by filing a report on github. Describe what you were doing at the time, and include the file "
-                    + crashdump.getAbsolutePath ()
+                    + crashdump.toAbsolutePath ()
                     + "</p></body></html>",
                     "Internal Error",
                     JOptionPane.ERROR_MESSAGE
