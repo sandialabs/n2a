@@ -319,10 +319,9 @@ public class EquationSet implements Comparable<EquationSet>
                             while (find (new Variable (dummy, -1)) != null  ||  source.child (dummy) != null) dummy = "x" + suffix++;
 
                             // Check for timeScale
-                            EquationSet root = this;
-                            while (root.container != null) root = root.container;
-                            String timeScale = root.metadata.get ("watch", "timeScale");
-                            String scale = "";
+                            EquationSet root = getRoot ();
+                            String timeScale = root.metadata.get ("watch", "timeScale");  // typically the horizontal axis
+                            String scale = "";                                            // typically the vertical axis
                             if (v.order > 0  &&  ! timeScale.isEmpty ())
                             {
                                 try
@@ -337,8 +336,11 @@ public class EquationSet implements Comparable<EquationSet>
                                 catch (Exception ex) {}
                             }
 
+                            // Check for interval (output at less than every timestep)
+                            String interval = root.metadata.get ("watch", "interval");
+
                             // Create output expression
-                            String expression = "output(\"\"," + v.nameString ();
+                            String expression = dummy + "=output(\"\"," + v.nameString ();
                             if (! timeScale.isEmpty ())
                             {
                                 expression += ",\"\",\"timeScale=" + timeScale;
@@ -346,8 +348,8 @@ public class EquationSet implements Comparable<EquationSet>
                                 expression += "\"";
                             }
                             expression += ")";
-                            Variable o = new Variable (this, new MVolatile (expression, dummy));
-                            variables.add (o);
+                            if (! interval.isEmpty ()) expression += "@$t%" + interval + "<$t'/2";
+                            override (expression);
                         }
                     }
                 }
