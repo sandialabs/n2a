@@ -14,25 +14,28 @@ public class IteratorRange extends IteratorIndexed
 {
     protected double lo;
     protected double hi;
-    protected double step;
+    protected double step = 1;
 
     public IteratorRange (String[] keys, String range)
     {
         super (keys);
         String[] pieces = range.split (",");
-        lo = new UnitValue (pieces[0]).get ();
-        if (pieces.length > 1) hi = new UnitValue (pieces[1]).get ();
-        else                   hi = lo;
+        hi = new UnitValue (pieces[0]).get ();
+        if (pieces.length > 1)
+        {
+            lo = hi;
+            hi = new UnitValue (pieces[1]).get ();
+        }
         if (pieces.length > 2)
         {
-            step = hi;
-            hi = new UnitValue (pieces[2]).get ();
+            step = new UnitValue (pieces[2]).get ();
         }
-        else
-        {
-            step = 1;
-        }
-        count = (int) Math.floor ((hi - lo) / step);
+
+        count = (int) Math.floor ((hi - lo) / step) + 1;  // basic formula
+        // Compensate for finite precision
+        double epsilon = 1e-6;
+        double beyond = lo + step * count;  // This should be one full step past hi, but if hi falls slightly short of a step quantum, this could be slightly greater than hi. It will never be less than hi.
+        if ((beyond - hi) / step < epsilon) count++;
     }
 
     public void assign (MNode model)
