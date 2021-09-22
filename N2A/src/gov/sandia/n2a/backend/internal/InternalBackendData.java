@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.internal;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.AccountableConnection;
@@ -708,7 +709,8 @@ public class InternalBackendData
 
     public void analyze (final EquationSet s)
     {
-        System.out.println (s.name);
+        boolean headless = AppData.properties.getBoolean ("headless");
+        if (! headless) System.out.println (s.name);
         if (s.connectionBindings != null)
         {
             endpoints = countLocalObject;  // Note that populations have already been allocated in the constructor.
@@ -717,11 +719,14 @@ public class InternalBackendData
 
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
-            String className = "null";
-            if (v.type != null) className = v.type.getClass ().getSimpleName ();
-            String dimensionName = "";
-            if (v.unit != null) dimensionName = v.unit.toString ();
-            System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className + " " + dimensionName);
+            if (! headless)
+            {
+                String className = "null";
+                if (v.type != null) className = v.type.getClass ().getSimpleName ();
+                String dimensionName = "";
+                if (v.unit != null) dimensionName = v.unit.toString ();
+                System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className + " " + dimensionName);
+            }
 
             if      (v.name.equals ("$connect")                  ) connect = v;
             else if (v.name.equals ("$index"  )                  ) index   = v;

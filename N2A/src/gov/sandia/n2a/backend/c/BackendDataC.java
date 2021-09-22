@@ -12,6 +12,7 @@ import java.util.List;
 import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
@@ -155,12 +156,16 @@ public class BackendDataC
 
     public void analyze (final EquationSet s)
     {
-        System.out.println (s.name);
+        boolean headless = AppData.properties.getBoolean ("headless");
+        if (! headless) System.out.println (s.name);
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
-            String className = "null";
-            if (v.type != null) className = v.type.getClass ().getSimpleName ();
-            System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className);
+            if (! headless)
+            {
+                String className = "null";
+                if (v.type != null) className = v.type.getClass ().getSimpleName ();
+                System.out.println ("  " + v.nameString () + " " + v.attributeString () + " " + className);
+            }
 
             if      (v.name.equals ("$p"    )  &&  v.order == 0) p     = v;
             else if (v.name.equals ("$type" )                  ) type  = v;
