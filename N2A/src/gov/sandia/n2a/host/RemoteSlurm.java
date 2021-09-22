@@ -27,16 +27,11 @@ public class RemoteSlurm extends RemoteUnix
 {
     public static Factory factory ()
     {
-        return new Factory ()
+        return new FactoryRemote ()
         {
             public String className ()
             {
                 return "RemoteSlurm";
-            }
-
-            public boolean isRemote ()
-            {
-                return true;
             }
 
             public Host createInstance ()

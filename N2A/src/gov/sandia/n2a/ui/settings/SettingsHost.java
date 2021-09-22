@@ -1,5 +1,5 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.settings;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.host.Host.Factory;
+import gov.sandia.n2a.host.Host.FactoryRemote;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Settings;
@@ -142,7 +143,7 @@ public class SettingsHost implements Settings
         for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
         {
             Factory f = (Factory) ext;
-            if (f.isRemote ()) comboClass.addItem (f.className ());
+            if (f instanceof FactoryRemote) comboClass.addItem (f.className ());
         }
         comboClass.addActionListener (new ActionListener ()
         {

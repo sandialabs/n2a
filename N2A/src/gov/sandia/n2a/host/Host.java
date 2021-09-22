@@ -99,9 +99,13 @@ public abstract class Host
 
     public interface Factory extends ExtensionPoint
     {
-        public String  className ();
-        public boolean isRemote ();
-        public Host    createInstance (); // not yet bound to app state
+        public String className ();
+        public Host   createInstance (); // not yet bound to app state
+    }
+
+    // Promises to make an instances of Remote
+    public interface FactoryRemote extends Factory
+    {
     }
 
     public static Host createHostOfClass (String className)

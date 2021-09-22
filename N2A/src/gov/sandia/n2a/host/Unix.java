@@ -32,11 +32,6 @@ public class Unix extends Host
                 return "Unix";
             }
 
-            public boolean isRemote ()
-            {
-                return false;
-            }
-
             public Host createInstance ()
             {
                 return new Unix ();

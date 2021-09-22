@@ -41,16 +41,11 @@ public class RemoteUnix extends Unix implements Remote
 
     public static Factory factory ()
     {
-        return new Factory ()
+        return new FactoryRemote ()
         {
             public String className ()
             {
                 return "RemoteUnix";
-            }
-
-            public boolean isRemote ()
-            {
-                return true;
             }
 
             public Host createInstance ()
