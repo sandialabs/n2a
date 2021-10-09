@@ -179,15 +179,17 @@ public class PanelDiff extends JTree
 
     public static class DiffRenderer extends DefaultTreeCellRenderer
     {
-        Color colorA;    // in A only
-        Color colorB;    // in B only
-        Color colorSame; // in both, and the same
-        Color colorDiff; // in both, and different
+        public Color  colorA;     // in A only
+        public Color  colorB;     // in B only
+        public Color  colorSame;  // in both, and the same
+        public Color  colorDiff;  // in both, and different
+        public String colorAhtml; // HMTL string version of colorA
+        public String colorBhtml; // ditto for B
         // Versions of the above colors for the selected cell.
-        Color colorSelectedA;
-        Color colorSelectedB;
-        Color colorSelectedSame;
-        Color colorSelectedDiff;
+        public Color colorSelectedA;
+        public Color colorSelectedB;
+        public Color colorSelectedSame;
+        public Color colorSelectedDiff;
 
         public void updateUI ()
         {
@@ -210,6 +212,8 @@ public class PanelDiff extends JTree
                 colorA    = Color.red;
                 colorB    = Color.green.darker ();
             }
+            colorAhtml = "#" + Integer.toHexString (colorA.getRGB () & 0xFFFFFF);
+            colorBhtml = "#" + Integer.toHexString (colorB.getRGB () & 0xFFFFFF);
 
             fg = UIManager.getColor ("Tree.selectionForeground");
             Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), hsb);
@@ -368,8 +372,8 @@ public class PanelDiff extends JTree
                         else  // different
                         {
                             result  = "<html>";
-                            result += "<s>" + NodeBase.escapeHTML (key, true) + " = " + NodeBase.escapeHTML (A.get (), true) + "</s><br/>";
-                            result +=         NodeBase.escapeHTML (key, true) + " = " + NodeBase.escapeHTML (B.get (), true);
+                            result += "<span style=\"color:" + renderer.colorAhtml + "\">" + NodeBase.escapeHTML (key, true) + " = " + NodeBase.escapeHTML (A.get (), true) + "</span><br/>";
+                            result += "<span style=\"color:" + renderer.colorBhtml + "\">" + NodeBase.escapeHTML (key, true) + " = " + NodeBase.escapeHTML (B.get (), true) + "</span>";
                             result += "</html>";
                         }
                     }

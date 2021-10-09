@@ -360,7 +360,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             public void focusGained (FocusEvent e)
             {
-                if (needSave)  // Indicates that focus previously left this settings tab.
+                if (needSave)  // Indicates that focus previously left this settings tab. Also true when this tab is first exposed.
                 {
                     // Save name of currently-focused document
                     String file = null;
@@ -384,6 +384,11 @@ public class SettingsRepo extends JScrollPane implements Settings
                                 break;
                             }
                         }
+                    }
+                    else if (repoModel.getRowCount () > 0)  // No repo is selected, but one could be selected.
+                    {
+                        repoTable.changeSelection (0, 4, false, false);
+                        repoTable.requestFocusInWindow ();
                     }
                 }
 
@@ -530,7 +535,6 @@ public class SettingsRepo extends JScrollPane implements Settings
         });
 
         labelStatus = new JLabel ();
-        buttonPush.setMargin (new Insets (2, 2, 2, 2));
 
         fieldAuthor = new JTextField ();
         fieldAuthor.setColumns (30);
