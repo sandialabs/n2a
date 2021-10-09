@@ -1170,6 +1170,33 @@ public class MatrixDense extends Matrix
         return result;
     }
 
+    public double dot (Matrix that)
+    {
+        double result = 0;
+        int m   = Math.min (rows (), that.rows ());
+        int a   = offset;
+        int end = offset + m * strideR;
+        if (that instanceof MatrixDense)
+        {
+            MatrixDense B = (MatrixDense) that;
+            int b = B.offset;
+            while (a != end)
+            {
+                result += data[a] * B.data[b];
+                a +=   strideR;
+                b += B.strideR;
+            }
+            return result;
+        }
+
+        for (int r = 0; r < m; r++)
+        {
+            result += data[a] * that.get (r);
+            a += strideR;
+        }
+        return result;
+    }
+
     public int compareTo (Type that)
     {
         if (that instanceof MatrixDense)

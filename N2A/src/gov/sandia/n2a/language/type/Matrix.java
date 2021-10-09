@@ -152,7 +152,9 @@ public abstract class Matrix extends Type implements Holder
 
     public Type add (Type that) throws EvaluationException
     {
-        if (that instanceof Text) return new Text (toString ()).add (that);
+        if (that instanceof Matrix) return add ((Matrix) that);
+        if (that instanceof Scalar) return add ((Scalar) that);
+        if (that instanceof Text)   return new Text (toString ()).add (that);
         throw new EvaluationException ("type mismatch");
     }
 
@@ -613,6 +615,14 @@ public abstract class Matrix extends Type implements Holder
             }
             result = Math.pow (result, 1 / n);
         }
+        return result;
+    }
+
+    public double dot (Matrix that)
+    {
+        double result = 0;
+        int m = Math.min (rows (), that.rows ());
+        for (int r = 0; r < m; r++) result += get (r) * that.get (r);
         return result;
     }
 

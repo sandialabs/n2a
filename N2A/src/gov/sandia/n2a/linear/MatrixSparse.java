@@ -208,9 +208,7 @@ public class MatrixSparse extends Matrix
         int h = rows ();
         int ow = Math.min (w, B.columns ());
         int oh = Math.min (h, B.rows ());
-        MatrixDense result;
-        if (emptyValue == 0) result = new MatrixDense (h, w);
-        else                 result = new MatrixDense (h, w, emptyValue);
+        MatrixDense result = new MatrixDense (h, w, emptyValue);
         for (int c = 0; c < w; c++)
         {
             HashMap<Integer,Double> rows = data.get (c);
