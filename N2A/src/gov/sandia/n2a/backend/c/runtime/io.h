@@ -97,8 +97,8 @@ public:
     int                            timeColumn;
     bool                           timeColumnSet;
     bool                           time;     ///< mode
-    bool                           csv;      ///< indicates that this file is comma rather than space/tab delimited.
-    bool                           csvSet;   ///< indicates that CSV detection has already been done, so "csv" is a usable value.
+    char                           delimiter;
+    bool                           delimiterSet;
     T                              epsilon;  ///< for time values
 #   ifdef n2a_FP
     int                            exponent;  ///< of value returned by get()

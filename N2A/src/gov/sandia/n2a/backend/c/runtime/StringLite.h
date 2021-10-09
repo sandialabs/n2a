@@ -372,6 +372,53 @@ public:
         return npos;
     }
 
+    size_t find_first_of (char pattern, size_t pos = 0) const
+    {
+        if (memory == top  ||  ! pattern) return npos;
+        char * c = memory + pos;
+        while (c < top)
+        {
+            if (*c == pattern) return c - memory;
+            c++;
+        }
+        return npos;
+    }
+
+    size_t find_first_not_of (const char * pattern, size_t pos = 0) const
+    {
+        if (memory == top  ||  ! pattern) return npos;
+        char * c = memory + pos;
+        while (c < top)
+        {
+            bool found = false;
+            const char * p = pattern;
+            while (*p)
+            {
+                if (*p == *c)
+                {
+                    found = true;
+                    break;
+                }
+                p++;
+            }
+            if (! found) return c - memory;
+            c++;
+        }
+        return npos;
+    }
+
+    size_t find_first_not_of (char pattern, size_t pos = 0) const
+    {
+        if (memory == top  ||  ! pattern) return npos;
+        char * c = memory + pos;
+        while (c < top)
+        {
+            if (*c != pattern) return c - memory;
+            c++;
+        }
+        return npos;
+    }
+
     const char * begin () const
     {
         return memory;

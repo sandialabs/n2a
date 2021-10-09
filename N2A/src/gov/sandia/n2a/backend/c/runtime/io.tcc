@@ -458,8 +458,8 @@ InputHolder<T>::InputHolder (const String & fileName)
     timeColumn       = 0;
     timeColumnSet    = false;
     time             = false;
-    csv              = false;
-    csvSet           = false;
+    delimiter        = ' ';
+    delimiterSet     = false;
 #   ifdef n2a_FP
     epsilon          = 1;
 #   else
@@ -495,21 +495,16 @@ InputHolder<T>::getRow (T row)
             getline (*in, line);
             if (! line.empty ())
             {
-                if (! csvSet)
+                if (! delimiterSet)
                 {
-                    csv =  line.find_first_of (",") != String::npos;
-                    csvSet = true;
+                    if      (line.find_first_of ('\t') != String::npos) delimiter = '\t'; // highest precedence
+                    else if (line.find_first_of (',' ) != String::npos) delimiter = ',';
+                    // space character is lowest precedence
+                    delimiterSet =  delimiter != ' '  ||  line.find_first_not_of (' ') != String::npos;
                 }
 
                 int tempCount = 1;
-                if (csv)
-                {
-                    for (auto it : line) if (it == ',') tempCount++;
-                }
-                else
-                {
-                    for (auto it : line) if (it == ' '  ||  it == '\t') tempCount++;
-                }
+                for (auto it : line) if (it == delimiter) tempCount++;
                 columnCount = std::max (columnCount, tempCount);
 
                 // Decide whether this is a header row or a value row
@@ -523,8 +518,7 @@ InputHolder<T>::getRow (T row)
                     while (i < end)
                     {
                         int j;
-                        if (csv) j = line.find_first_of (",",   i);
-                        else     j = line.find_first_of (" \t", i);
+                        j = line.find_first_of (delimiter, i);
                         if (j == String::npos) j = end;
                         if (j > i) columnMap.emplace (line.substr (i, j - i), index);
                         i = j + 1;
@@ -566,8 +560,7 @@ InputHolder<T>::getRow (T row)
                 for (; index < tempCount; index++)
                 {
                     int j;
-                    if (csv) j = line.find_first_of (",",   i);
-                    else     j = line.find_first_of (" \t", i);
+                    j = line.find_first_of (delimiter, i);
                     if (j == String::npos) j = line.size ();
                     if (j == i)
                     {

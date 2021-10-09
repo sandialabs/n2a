@@ -11,7 +11,7 @@ the U.S. Government retains certain rights in this software.
 #ifndef output_parser_h
 #define output_parser_h
 
-#include <string>
+#include <string>  // We use the provided STL string class rather than our own minimalist String implementation.
 #include <vector>
 #include <limits>
 #include <fstream>
@@ -79,6 +79,40 @@ namespace n2a
             if (row < 0  ||  row >= values.size ()) return defaultValue;
             return values[row];
         }
+
+        void set (int row, float value)
+        {
+            fill (row, 0);
+            values[row - startRow] = value;
+        }
+
+        bool fill (int row, float defaultValue = 0)
+        {
+            if (row < startRow)
+            {
+                values.insert (values.begin (), startRow - row, defaultValue);
+                startRow = row;
+                return true;
+            }
+            int last = startRow + values.size () - 1;
+            if (row > last)
+            {
+                values.insert (values.end (), row - last, defaultValue);
+                return true;
+            }
+            return false;
+        }
+
+        /**
+            Creates a new row at the given index with the given value.
+            If the new row comes before or after the current block of rows,
+            then the block is simply extended.
+        **/
+        void insert (int row, float defaultValue)
+        {
+            if (fill (row, defaultValue)) return;
+            values.insert (values.begin () + row, defaultValue);
+        }
     };
 
     /**
@@ -99,6 +133,8 @@ namespace n2a
         std::vector<Column *> columns;
         std::ifstream *       in;
         bool                  raw;        // Indicates that all column names are empty, likely the result of output() in raw mode.
+        char                  delimiter;
+        bool                  delimiterSet;
         bool                  isXycePRN;
         Column *              time;
         bool                  timeFound;  // Indicates that time is a properly-labeled column, rather than a fallback.
@@ -123,12 +159,14 @@ namespace n2a
         void open (const std::string & fileName)
         {
             close ();
-            in        = new std::ifstream (fileName.c_str ());
-            raw       = true;  // Will be negated if any non-empty column name is found.
-            isXycePRN = false;
-            time      = 0;
-            timeFound = false;
-            rows      = 0;
+            in           = new std::ifstream (fileName.c_str ());
+            raw          = true;  // Will be negated if any non-empty column name is found.
+            isXycePRN    = false;
+            time         = 0;
+            timeFound    = false;
+            rows         = 0;
+            delimiter    = ' ';
+            delimiterSet = false;
         }
 
         void close ()
@@ -154,10 +192,23 @@ namespace n2a
                 getline (*in, line);
                 if (! in->good ()) return 0;
                 if (line.empty ()) continue;
+                if (line[line.size () - 1] == '\r')  // Hack to handle CRLF line ending when c runtime fails to recognize it.
+                {
+                    line.resize (line.size () - 1);
+                    if (line.empty ()) continue;
+                }
                 if (line.substr (0, 6) == "End of") return 0;  // Don't mistake Xyce final output line as a column header.
 
+                if (! delimiterSet)
+                {
+                    if      (line.find_first_of ('\t') != std::string::npos) delimiter = '\t'; // highest precedence
+                    else if (line.find_first_of (',' ) != std::string::npos) delimiter = ',';
+                    // space character is lowest precedence
+                    delimiterSet =  delimiter != ' '  ||  line.find_first_not_of (' ') != std::string::npos;
+                }
+
                 int c = 0;  // Column index
-                int start = 0;  // Current position for column scan.
+                std::string::size_type start = 0;  // Current position for column scan.
                 char l = line[0];
                 bool isHeader = (l < '0'  ||  l > '9')  &&  l != '+'  &&  l != '-';
                 if (isHeader) raw = false;
@@ -165,7 +216,7 @@ namespace n2a
                 {
                     std::string::size_type length;
                     std::string::size_type next;
-                    std::string::size_type pos = line.find_first_of (" \t", start);
+                    std::string::size_type pos = line.find_first_of (delimiter, start);
                     if (pos == std::string::npos)
                     {
                         length = std::string::npos;
@@ -343,6 +394,42 @@ namespace n2a
         {
             if (columnNumber >= columns.size ()) return defaultValue;
             return columns[columnNumber]->get (row);
+        }
+
+        void set (const std::string & columnName, int row, float value)
+        {
+            Column * c = getColumn (columnName);
+            if (c == 0)
+            {
+                c = new Column (columnName);
+                columns.push_back (c);
+            }
+            c->set (row, value);
+            int newRows = c->startRow + c->values.size ();
+            if (newRows > rows) rows = newRows;
+        }
+
+        void set (int columnNumber, int row, float value)
+        {
+            while (columns.size () <= columnNumber) columns.push_back (new Column (""));
+            Column * c = columns[columnNumber];
+            c->set (row, value);
+            int newRows = c->startRow + c->values.size ();
+            if (newRows > rows) rows = newRows;
+        }
+
+        /**
+            Open a new row across all columns at the given row index.
+            All values will be filled with the default, including the time column if one exists.
+        **/
+        void insertRow (int row)
+        {
+            for (Column * c : columns)
+            {
+                c->insert (row, defaultValue);
+                int newRows = c->startRow + c->values.size ();
+                if (newRows > rows) rows = newRows;
+            }
         }
 
         bool hasData ()

@@ -40,8 +40,6 @@ class Column:
         return self.values[row]
 
     def set(self, row, value):
-        """ Utility function for abusing this as a column in a data frame.
-        """
         self.fill(row, 0.0)
         self.values[row - self.startRow] = value
 
@@ -57,9 +55,9 @@ class Column:
         return False
 
     def insert(self, row, defaultValue = 0.0):
-        """ Utility function for abusing this as a column in a data frame.
-            Creates a new row at the given index with the given value.
-            Pads the before or after the column as needed.
+        """ Creates a new row at the given index with the given value.
+            If the new row comes before or after the current block of rows,
+            then the block is simply extended.
         """
         if self.fill(row, defaultValue): return
         self.values.insert(row, defaultValue)
@@ -278,14 +276,15 @@ class OutputParser:
                 c = Column(columnNameOrNumber)
                 self.columns.append(c)
         c.set(row, value)
+        self.rows = max(self.rows, c.startRow + len(c.values))
 
     def insertRow(self, row):
-        """ Utility function to abuse this as a data frame.
-            This will open a new row across all columns at the given row index.
+        """ Open a new row across all columns at the given row index.
             All values will be filled with the default, including the time column if one exists.
         """
-        for c in self.columns: c.insert(row, self.defaultValue)
-        self.rows += 1
+        for c in self.columns:
+            c.insert(row, self.defaultValue)
+            self.rows = max(self.rows, c.startRow + len(c.values))
 
     def hasData(self):
         for column in self.columns:
@@ -330,5 +329,4 @@ if __name__ == "__main__":
     # Example of the all-at-once interface.
     o = OutputParser()
     o.parse("C:/Users/frothga/n2a/jobs/2020-05-27-205826-0/out")
-    o.dump()
     print('done')
