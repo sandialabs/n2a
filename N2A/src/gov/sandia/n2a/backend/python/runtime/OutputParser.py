@@ -39,6 +39,31 @@ class Column:
         if row < 0 or row >= len(self.values): return defaultValue
         return self.values[row]
 
+    def set(self, row, value):
+        """ Utility function for abusing this as a column in a data frame.
+        """
+        self.fill(row, 0.0)
+        self.values[row - self.startRow] = value
+
+    def fill(self, row, defaultValue = 0.0):
+        if row < self.startRow:
+            self.values = [defaultValue] * (self.startRow - row) + self.values
+            self.startRow = row
+            return True
+        last = self.startRow + len(self.values) - 1
+        if row > last:
+            self.values += [defaultValue] * (row - last)
+            return True
+        return False
+
+    def insert(self, row, defaultValue = 0.0):
+        """ Utility function for abusing this as a column in a data frame.
+            Creates a new row at the given index with the given value.
+            Pads the before or after the column as needed.
+        """
+        if self.fill(row, defaultValue): return
+        self.values.insert(row, defaultValue)
+
 class OutputParser:
     """ Primary class for reading and accessing data in an augmented output file.
         There are two main ways to use this class. One is to read the entire file into
@@ -47,7 +72,7 @@ class OutputParser:
         output files which exceed your system's memory capacity.
         Both interfaces use the get() functions to retrieve buffered values.
         The all-at-once interface uses the parse() function.
-        The row-by-row interface uses the open(), nextRow() functions.
+        The row-by-row interface uses the open() and nextRow() functions.
         It's a good idea not to mix these usages. Note that the parse() function is
         actually built on top of the row-by-row functions.
     """
@@ -56,6 +81,8 @@ class OutputParser:
         self.columns      = []
         self.inFile       = None
         self.raw          = False  # Indicates that all column names are empty, likely the result of output() in raw mode.
+        self.delimiter    = ' '
+        self.delimiterSet = False
         self.isXycePRN    = False
         self.time         = None
         self.timeFound    = False  # Indicates that time is a properly-labeled column, rather than a fallback.
@@ -67,12 +94,14 @@ class OutputParser:
             without filling memory with more than one row.
         """
         self.close()
-        self.inFile    = open(fileName)
-        self.raw       = True  # Will be negated if any non-empty column name is found.
-        self.isXycePRN = False
-        self.time      = None
-        self.timeFound = False
-        self.rows      = 0
+        self.inFile       = open(fileName)
+        self.raw          = True  # Will be negated if any non-empty column name is found.
+        self.delimiter    = ' '
+        self.delimiterSet = False
+        self.isXycePRN    = False
+        self.time         = None
+        self.timeFound    = False
+        self.rows         = 0
 
     def close(self):
         if self.inFile: self.inFile.close()
@@ -86,11 +115,17 @@ class OutputParser:
             has been reached or there is an error.
         """
         if self.inFile is None: return 0
-        whitespace = re.compile("[ \t]")
         for line in self.inFile:
             if line == "\n": continue
             if line[:6] == "End of": return 0  # Don't mistake Xyce final output line as a column header.
             if line[-1] == "\n": line = line[0:-1]  # strip trailing newline
+
+            # Determine delimiter
+            if not self.delimiterSet:
+                if   '\t' in line: self.delimiter = '\t'  # highest precedence
+                elif ','  in line: self.delimiter = ','
+                # space character is lowest precedence
+                self.delimiterSet = self.delimiter != ' ' or line.strip()
 
             c = 0  # Column index
             start = 0  # Current position for column scan.
@@ -98,14 +133,13 @@ class OutputParser:
             isHeader = (l < "0"  or  l > "9")  and  l != "+"  and  l != "-"  # any character other than the start of a float
             if isHeader: self.raw = False
             while True:
-                pos = whitespace.search(line, start)
-                if pos:
-                    pos = pos.start()
-                    value = line[start:pos]
-                    next = pos + 1
-                else:
+                pos = line.find(self.delimiter, start)
+                if pos == -1:
                     value = line[start:]
-                    next = -1
+                    start = -1
+                else:
+                    value = line[start:pos]
+                    start = pos + 1
 
                 # Notice that c can never be greater than column count, because we always fill in columns as we go.
                 if isHeader:
@@ -121,8 +155,7 @@ class OutputParser:
                         column.value = float(value)
 
                 c += 1
-                if next == -1: break
-                start = next
+                if start == -1: break
 
             if isHeader:
                 self.isXycePRN =  self.columns[0].header == "Index"
@@ -234,6 +267,25 @@ class OutputParser:
             for r in range(column.startRow,self.rows):
                 result[r,c] = column.values[r-column.startRow]
         return result
+
+    def set(self, columnNameOrNumber, row, value):
+        c = self.getColumn(columnNameOrNumber)
+        if not c:
+            if type(columnNameOrNumber) is int:
+                while len(self.columns) <= columnNameOrNumber: self.columns.append(Column(str(len(self.columns))))
+                c = self.columns[columnNameOrNumber]
+            else:
+                c = Column(columnNameOrNumber)
+                self.columns.append(c)
+        c.set(row, value)
+
+    def insertRow(self, row):
+        """ Utility function to abuse this as a data frame.
+            This will open a new row across all columns at the given row index.
+            All values will be filled with the default, including the time column if one exists.
+        """
+        for c in self.columns: c.insert(row, self.defaultValue)
+        self.rows += 1
 
     def hasData(self):
         for column in self.columns:
