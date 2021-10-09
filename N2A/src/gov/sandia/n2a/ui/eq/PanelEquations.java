@@ -1425,11 +1425,13 @@ public class PanelEquations extends JPanel
                         modifiers = xferNode.modifiers;
                     }
                 }
+                else return false;  // Can happen during paste. In that case, canImport() is not called, so another flavor might slip in.
             }
             catch (IOException | UnsupportedFlavorException e)
             {
                 return false;
             }
+            if (schema == null  &&  image == null) return false;  // Not sure if this can actually occur. One cause would be an empty file list.
 
             // Determine paste/drop target.
             JTree              tree = null;  // Will be non-null as much as possible. The following target variables will only be non-null if they actually received the drop or paste.
