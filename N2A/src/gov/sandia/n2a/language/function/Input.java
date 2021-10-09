@@ -129,7 +129,7 @@ public class Input extends Function
         public boolean             time;              // mode flag
         public int                 timeColumn;        // We assume column 0, unless a header overrides this.
         public boolean             timeColumnSet;     // Indicates that a header appeared in the file, so timeColumn has been evaluated.
-        public String              delimiter = "\\s"; // Regular expression for separator character. Allows switch between comma and space/tab.
+        public String              delimiter = " ";   // Regular expression for separator character. Allows switch between comma and space/tab.
         public boolean             delimiterSet;      // Indicates that check for CSV has been performed. Avoids constant re-checking.
         public double              epsilon;
 
@@ -175,10 +175,12 @@ public class Input extends Function
                     String line = stream.readLine ();
                     if (line != null  &&  ! line.isEmpty ())
                     {
-                        if (! delimiterSet  &&  ! line.trim ().isEmpty ())
+                        if (! delimiterSet)
                         {
-                            if (line.contains (",")) delimiter = ",";
-                            delimiterSet = true;
+                            if      (line.contains ("\t")) delimiter = "\t"; // highest precedence
+                            else if (line.contains (","))  delimiter = ",";
+                            // space character is lowest precedence
+                            delimiterSet =  ! delimiter.equals (" ")  ||  ! line.trim ().isEmpty ();
                         }
                         String[] columns = line.split (delimiter, -1);  // -1 means that trailing tabs/spaces will produce additional columns. We assume that every tab/space is placed intentionally to indicate a column.
                         columnCount = Math.max (columnCount, columns.length);

@@ -76,7 +76,9 @@ public class OutputParser
 
         try (BufferedReader br = Files.newBufferedReader (f))
         {
-            int row = 0;
+            int     row          = 0;
+            String  delimiter    = " ";
+            boolean delimiterSet = false;
             while (true)
             {
                 String line = br.readLine ();
@@ -84,7 +86,14 @@ public class OutputParser
             	if (line.length () == 0) continue;
             	if (line.startsWith ("End of")) continue;
 
-                String[] parts = line.split ("\\s");
+                if (! delimiterSet)
+                {
+                    if      (line.contains ("\t")) delimiter = "\t"; // highest precedence
+                    else if (line.contains (","))  delimiter = ",";
+                    // space character is lowest precedence
+                    delimiterSet =  ! delimiter.equals (" ")  ||  ! line.trim ().isEmpty ();
+                }
+                String[] parts = line.split (delimiter, -1);  // -1 means that trailing delimiters will produce additional columns. Internal and C backends do not produce trailing delimiters, but other simulators might.
                 int lastSize = columns.size ();
                 while (columns.size () < parts.length)
                 {
