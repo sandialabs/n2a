@@ -153,7 +153,7 @@ public class SettingsLookAndFeel extends JPanel implements Settings
             }
         };
 
-        JLabel labelFontScale = new JLabel ("Font Scale:");
+        JLabel labelFontScale = new JLabel ("Font Scale");
         fieldFontScale = new JTextField (Float.toString (fontScale), 10);
         fieldFontScale.addActionListener (new ActionListener ()
         {

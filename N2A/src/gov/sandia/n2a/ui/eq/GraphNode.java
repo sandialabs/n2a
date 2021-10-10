@@ -415,6 +415,7 @@ public class GraphNode extends JPanel
         if (dx != 0  ||  np != node) metadata.set (now.x - parent.offset.x + dx, "gui", "bounds", "x");
         if (dy != 0  ||  np != node) metadata.set (now.y - parent.offset.y + dy, "gui", "bounds", "y");
         ChangeAnnotations ca = new ChangeAnnotations (np, metadata);
+        ca.graph = true;
 
         UndoManager um = MainFrame.instance.undoManager;
         if (selection.isEmpty ())
@@ -423,7 +424,6 @@ public class GraphNode extends JPanel
         }
         else
         {
-            ca.multiGraph = true;
             CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
             um.addEdit (compound);
             compound.addEdit (ca);  // delayed execution
@@ -451,7 +451,7 @@ public class GraphNode extends JPanel
                 if (dx != 0  ||  np != node) bounds.set (now.x - parent.offset.x + dx, "x");
                 if (dy != 0  ||  np != node) bounds.set (now.y - parent.offset.y + dy, "y");
                 ca = new ChangeAnnotations (np, metadata);
-                ca.multiGraph = true;
+                ca.graph = true;
                 compound.addEdit (ca);
             }
             um.endCompoundEdit ();
@@ -954,26 +954,26 @@ public class GraphNode extends JPanel
 
                     if (! node.source.isFromTopDocument ()) return;
 
-                    List<GraphNode> selected = parent.getSelection ();
-                    selected.remove (GraphNode.this);
-                    selected.remove (container.panelEquationGraph.graphPanel.pinIn);
-                    selected.remove (container.panelEquationGraph.graphPanel.pinOut);
+                    List<GraphNode> selection = parent.getSelection ();
+                    selection.remove (GraphNode.this);
+                    selection.remove (container.panelEquationGraph.graphPanel.pinIn);
+                    selection.remove (container.panelEquationGraph.graphPanel.pinOut);
                     container.panelEquationGraph.clearSelection ();  // In case pinIn or pinOut were selected. After delete, nothing should be selected.
 
                     UndoManager um = MainFrame.instance.undoManager;
-                    if (selected.isEmpty ())
+                    if (selection.isEmpty ())
                     {
                         um.apply (new DeletePart (node, false));
                     }
                     else
                     {
-                        selected.add (GraphNode.this);  // Now at end of list, which is where we want it.
+                        selection.add (GraphNode.this);  // Now at end of list, which is where we want it.
                         CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
                         compound.leadPath = node.getKeyPath ();
                         um.addEdit (compound);
-                        int last = selected.size () - 1;
+                        int last = selection.size () - 1;
                         int i = 0;
-                        for (GraphNode g : selected)
+                        for (GraphNode g : selection)
                         {
                             DeletePart d = new DeletePart (g.node, false);
                             d.setMulti (true);
@@ -1017,7 +1017,7 @@ public class GraphNode extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    GraphNode.this.selected = ! GraphNode.this.selected;
+                    setSelected (! GraphNode.this.selected);
                 }
             });
 
@@ -1030,10 +1030,10 @@ public class GraphNode extends JPanel
                     me.setSource (GraphNode.this);
                 }
 
+                // Notice that this method is only called if a drag did not occur.
+                // On drag, resizeListener.mouseReleased() does all the work.
                 public void mouseClicked (MouseEvent me)
                 {
-                    timer.stop ();
-
                     if (side != null)  // This is a pin IO block.
                     {
                         // Shift focus to $metadata.gui.pin.side in parent part.
@@ -1050,7 +1050,7 @@ public class GraphNode extends JPanel
                     int x = me.getX ();
                     int y = me.getY ();
                     int clicks = me.getClickCount ();
-                    boolean extendSelection =  me.isControlDown ()  ||  me.isShiftDown ();
+                    boolean extendSelection = me.isShiftDown ();
 
                     if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ()  &&  Host.isMac ())
                     {
@@ -1083,16 +1083,20 @@ public class GraphNode extends JPanel
                             }
                             if (extendSelection)
                             {
-                                GraphNode.this.selected = true;
+                                // See similar code in resizeListener.mouseReleased()
                                 // In case we are not the focus, ensure that the current focus is also selected.
                                 GraphNode g = PanelModel.getGraphNode (KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ());
-                                if (g != null) g.setSelected (true);
+                                if (g != GraphNode.this)
+                                {
+                                    if (g != null) g.setSelected (true);
+                                    setSelected (! GraphNode.this.selected);
+                                }
                             }
                             else
                             {
                                 container.panelEquationGraph.clearSelection ();
+                                switchFocus (true, false);
                             }
-                            switchFocus (true, false);
                         }
                         else if (clicks == 2)  // Drill down
                         {
@@ -1123,6 +1127,7 @@ public class GraphNode extends JPanel
 
                 public void mousePressed (MouseEvent me)
                 {
+                    timer.stop ();
                     translate (me);
                     resizeListener.mousePressed (me);
                 }
@@ -1135,7 +1140,7 @@ public class GraphNode extends JPanel
 
                 public void mouseReleased (MouseEvent me)
                 {
-                    titleFocused = true;  // When resizeListener processes this event, it will call takeFocus(). The focus should always go to title when title was clicked.
+                    titleFocused = true;  // When resizeListener processes this event after a drag, it calls takeFocus(). The focus should always go to title when title was clicked.
                     translate (me);
                     resizeListener.mouseReleased (me);
                 }
@@ -1256,6 +1261,7 @@ public class GraphNode extends JPanel
         Rectangle       old;
         boolean         connect;
         GraphEdge       edge;  // Paints edge when in dragging in connect mode.
+        boolean         dragged;
         MouseEvent      lastEvent;
         Timer           timer = new Timer (100, this);
         List<GraphNode> selection;
@@ -1308,6 +1314,7 @@ public class GraphNode extends JPanel
             old     = getBounds ();
             connect = me.isShiftDown ();
             edge    = null;
+            dragged = false;
             cursor  = border.getCursor (me);
             setCursor (Cursor.getPredefinedCursor (cursor));
 
@@ -1319,9 +1326,9 @@ public class GraphNode extends JPanel
             // If targeted is neither focused nor selected, then only targeted should be moved.
             //     Selection is cleared and focus is ignored. Afterward, targeted becomes new focus.
             selection = container.panelEquationGraph.getSelection ();
-            if (selection.contains (GraphNode.this))  // Target is in selection.
+            if (selection.contains (GraphNode.this))  // Target is selected.
             {
-                // The code that handles drag expects that the target is not included in selection.
+                // The code that handles drag expects that the target is not included in "selection".
                 selection.remove (GraphNode.this);
 
                 // If focused node is not the target, then ensure it gets moved along with selection.
@@ -1342,6 +1349,7 @@ public class GraphNode extends JPanel
         public void mouseDragged (MouseEvent me)
         {
             if (start == null) return;
+            dragged = true;
 
             JViewport vp = (JViewport) parent.getParent ();
             Point pp = vp.getLocationOnScreen ();
@@ -1383,15 +1391,23 @@ public class GraphNode extends JPanel
             {
                 if (edge == null)
                 {
-                    // Create and install edge
-                    edge = new GraphEdge (GraphNode.this, null, "");
-                    edge.anchor = new Point (start);  // Position in this component where drag started.
-                    edge.tip = new Vector2 (0, 0);  // This is normally created by GraphEdge.updateShape(), but we don't call that first.
-                    parent.edges.add (edge);
+                    Point     c = me.getPoint ();
+                    Dimension d = getSize ();
+                    if (c.x < 0  ||  c.x > d.width  ||  c.y < 0  ||  c.y > d.height)
+                    {
+                        // Create and install edge
+                        edge = new GraphEdge (GraphNode.this, null, "");
+                        edge.anchor = new Point (start);  // Position in this component where drag started.
+                        edge.tip = new Vector2 (0, 0);  // This is normally created by GraphEdge.updateShape(), but we don't call that first.
+                        parent.edges.add (edge);
+                    }
                 }
-                int nx = Math.max (x + me.getX (), 0);
-                int ny = Math.max (y + me.getY (), 0);
-                edge.animate (new Point (nx, ny));
+                if (edge != null)
+                {
+                    int nx = Math.max (x + me.getX (), 0);
+                    int ny = Math.max (y + me.getY (), 0);
+                    edge.animate (new Point (nx, ny));
+                }
                 return;
             }
 
@@ -1532,10 +1548,25 @@ public class GraphNode extends JPanel
                 UndoManager um = MainFrame.instance.undoManager;
                 if (connect)
                 {
-                    if (edge != null)
+                    if (edge == null)  // extend selection, because mouse never left the node boundary
+                    {
+                        if (dragged)  // and therefore mouseClicked() in TitleRenderer will not be called.
+                        {
+                            // In case we are not the focus, ensure that the current focus is also selected.
+                            GraphNode g = PanelModel.getGraphNode (KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ());
+                            if (g != GraphNode.this)
+                            {
+                                if (g != null) g.setSelected (true);
+                                setSelected (! selected);
+                            }
+                        }
+                    }
+                    else  // actually connect, because mouse left node boundary
                     {
                         parent.edges.remove (edge);
                         parent.repaint (edge.bounds);
+                        edge = null;
+                        container.panelEquationGraph.clearSelection ();
 
                         Point p = new Point (getX () + me.getX (), getY () + me.getY ());
                         GraphNode gn = parent.findNodeAt (p, true);
@@ -1587,11 +1618,6 @@ public class GraphNode extends JPanel
                                 PanelModel.instance.panelSearch.search (query);
                             }
                         }
-
-                        edge = null;
-                        GraphNode.this.selected = false;  // Don't let clearSelection() trigger an update to our renderer.
-                        container.panelEquationGraph.clearSelection ();
-                        // takeFocus() is called below
                     }
                 }
                 else if (cursor != Cursor.DEFAULT_CURSOR)
@@ -1639,13 +1665,14 @@ public class GraphNode extends JPanel
                     {
                         boolean multi =  moved  &&  ! selection.isEmpty ();
                         ChangeAnnotations ca = new ChangeAnnotations (np, metadata);
+                        ca.graph = true;
                         if (! multi)
                         {
                             um.apply (ca);
+                            takeFocus ();
                         }
                         else
                         {
-                            ca.multiGraph = true;
                             CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
                             um.addEdit (compound);
                             compound.addEdit (ca);  // delayed execution
@@ -1673,7 +1700,7 @@ public class GraphNode extends JPanel
                                 bounds.set (now.x - parent.offset.x, "x");
                                 bounds.set (now.y - parent.offset.y, "y");
                                 ca = new ChangeAnnotations (np, metadata);
-                                ca.multiGraph = true;
+                                ca.graph = true;
                                 compound.addEdit (ca);
                             }
                             um.endCompoundEdit ();
@@ -1682,8 +1709,6 @@ public class GraphNode extends JPanel
                     }
                 }
             }
-
-            takeFocus ();
         }
 
         public void actionPerformed (ActionEvent e)
