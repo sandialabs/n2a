@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,8 +14,8 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
-import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import tech.units.indriya.AbstractUnit;
 
@@ -55,43 +55,20 @@ public class ReadMatrix extends Function
         String mode = "";
         int lastParm = operands.length - 1;
         if (lastParm > 0) mode = operands[lastParm].getString ();
-        boolean RC = mode.contains ("rows")  ||  mode.contains ("columns");
 
-        lastParm = Math.min (lastParm, 2);
-        for (int i = 1; i <= lastParm; i++) operands[i].determineExponent (context);
-
-        if (RC)
-        {
-            updateExponent (context, MSB, 0);  // Return an integer
-        }
-        else
-        {
-            int centerNew   = MSB / 2;
-            int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
-            updateExponent (context, exponentNew, centerNew);
-        }
+        int centerNew   = MSB / 2;
+        int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
+        updateExponent (context, exponentNew, centerNew);
     }
 
     public void determineExponentNext ()
     {
-        String mode = "";
-        int lastParm = operands.length - 1;
-        if (lastParm > 0) mode = operands[lastParm].getString ();
-        boolean raw = mode.contains ("raw");
-
-        lastParm = Math.min (lastParm, 2);
-        for (int i = 1; i <= lastParm; i++)
-        {
-            Operator op = operands[i];
-            if (raw) op.exponentNext = MSB;  // We expect an integer.
-            else     op.exponentNext = 0;    // We expect a number in [0,1], with some provision for going slightly out of bounds.
-            op.determineExponentNext ();
-        }
+        exponent = exponentNext;
+        // All our operands are strings, so no point in passing the exponent down.
     }
 
     public void determineUnit (boolean fatal) throws Exception
     {
-        for (int i = 0; i < operands.length; i++) operands[i].determineUnit (fatal);
         unit = AbstractUnit.ONE;
     }
 
@@ -117,23 +94,14 @@ public class ReadMatrix extends Function
 
     public Type getType ()
     {
-        return new Scalar ();
+        return new MatrixDense ();
     }
 
     public Type eval (Instance context)
     {
         Matrix A = open (context);
-        if (A == null) return new Scalar (0);
-
-        String mode = "";
-        int lastParm = operands.length - 1;
-        if (lastParm > 0) mode = operands[lastParm].getString ();  // Must be a constant string, not computed.
-        if (mode.equals ("columns")) return new Scalar (A.columns ());
-        if (mode.equals ("rows"   )) return new Scalar (A.rows    ());
-
-        double row    = ((Scalar) operands[1].eval (context)).value;
-        double column = ((Scalar) operands[2].eval (context)).value;
-        return new Scalar (A.get (row, column, mode.equals ("raw")));
+        if (A == null) return new MatrixDense ();
+        return A;
     }
 
     public String toString ()
