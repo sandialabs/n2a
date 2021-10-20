@@ -572,6 +572,10 @@ public class JobC extends Thread
         }
         result.append ("#include \"Matrix.tcc\"\n");
         result.append ("#include \"MatrixFixed.tcc\"\n");
+        if (T.equals ("int"))
+        {
+            result.append ("#include \"fixedpoint.tcc\"\n");
+        }
         result.append ("\n");
         result.append ("#include <iostream>\n");
         result.append ("#include <vector>\n");
@@ -4063,7 +4067,10 @@ public class JobC extends Thread
         if (v.type instanceof Matrix)
         {
             Matrix m = (Matrix) v.type;
-            return "MatrixFixed<" + T + "," + m.rows () + "," + m.columns () + ">";
+            int rows = m.rows ();
+            int cols = m.columns ();
+            if (rows > 0  &&  cols > 0) return "MatrixFixed<" + T + "," + rows + "," + cols + ">";  // Known dimension, so use more efficient storage.
+            return "Matrix<" + T + ">";  // Arbitrary dimension
         }
         if (v.type instanceof Text) return "String";
         return T;

@@ -1,8 +1,9 @@
-/**
-    A lightweight drop-in replacement for stl::string.
-    Avoids STL bloat (locales, exceptions ...) and only deals with single-byte characters.
-    This class only implements functions that are actually used by the runtime engine.
-**/
+/*
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
 
 #ifndef n2a_string_h
 #define n2a_string_h
@@ -16,6 +17,11 @@
 #endif
 
 
+/**
+    A lightweight drop-in replacement for stl::string.
+    Avoids STL bloat (locales, exceptions ...) and only deals with single-byte characters.
+    This class only implements functions that are actually used by the runtime engine.
+**/
 class String    // Note the initial capital letter. This name will not conflict with std::string.
 {
 public:

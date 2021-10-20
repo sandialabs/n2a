@@ -1,3 +1,10 @@
+/*
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
+
 #ifndef n2a_fixedpoint_h
 #define n2a_fixedpoint_h
 
@@ -35,8 +42,8 @@ int tanh     (int a,                               int exponentA);              
 
 // Extended operations on MatrixFixed<int,R,C> -------------------------------
 
-template<int R, int C>        MatrixFixed<int,R,C> shiftUp             (const MatrixFixed<int,R,C> & A,                                 int shift);
-template<int R, int C>        MatrixFixed<int,R,C> shiftDown           (const MatrixFixed<int,R,C> & A,                                 int shift);
+                              Matrix<int>          shift               (const MatrixAbstract<int>  & A,                                 int shift);
+template<int R, int C>        MatrixFixed<int,R,C> shift               (const MatrixFixed<int,R,C> & A,                                 int shift);
 
 template<int R, int C>        MatrixFixed<int,R,C> multiplyElementwise (const MatrixFixed<int,R,C> & A, const MatrixFixed<int,R,C> & B, int shift);
 template<int R, int C, int O> MatrixFixed<int,R,C> multiply            (const MatrixFixed<int,R,O> & A, const MatrixFixed<int,O,C> & B, int shift);

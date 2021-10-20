@@ -82,8 +82,8 @@ public abstract class Matrix extends Type implements Holder
         }
         else
         {
-            row    *= lastRow;
-            column *= lastColumn;
+            row    = row    * rows    - 0.5;
+            column = column * columns - 0.5;
             int r = (int) Math.floor (row);
             int c = (int) Math.floor (column);
             if (r < 0)

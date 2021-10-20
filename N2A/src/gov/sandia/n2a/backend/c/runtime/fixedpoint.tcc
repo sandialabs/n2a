@@ -1,5 +1,5 @@
 /*
-Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,25 +14,14 @@ the U.S. Government retains certain rights in this software.
 
 template<int R, int C>
 MatrixFixed<int,R,C>
-shiftUp (const MatrixFixed<int,R,C> & A, int shift)
+shift (const MatrixFixed<int,R,C> & A, int shift)
 {
     MatrixFixed<int,R,C> result;
     const int * a   = A.data[0];
     int *       r   = result.data[0];
     int *       end = r + R * C;
-    while (r < end) *r++ = *a++ << shift;
-    return result;
-}
-
-template<int R, int C>
-MatrixFixed<int,R,C>
-shiftDown (const MatrixFixed<int,R,C> & A, int shift)
-{
-    MatrixFixed<int,R,C> result;
-    const int * a   = A.data[0];
-    int *       r   = result.data[0];
-    int *       end = r + R * C;
-    while (r < end) *r++ = *a++ >> shift;
+    if (shift >= 0) while (r < end) *r++ = *a++ << shift;
+    else            while (r < end) *r++ = *a++ >> -shift;
     return result;
 }
 

@@ -1,3 +1,10 @@
+/*
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
+
 #ifndef n2a_io_h
 #define n2a_io_h
 
@@ -67,11 +74,6 @@ public:
 
     MatrixInput (const String & fileName);
     virtual ~MatrixInput ();
-
-    T   get     (T row, T column);
-    T   getRaw  (T row, T column);
-    int rows    ();
-    int columns ();
 
     IteratorNonzero<T> * getIterator ();  // Returns an object that iterates over nonzero elements of A.
 };

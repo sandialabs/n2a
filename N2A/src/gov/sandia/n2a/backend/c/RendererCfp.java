@@ -145,7 +145,7 @@ public class RendererCfp extends RendererC
                 {
                     if (shift > 0)
                     {
-                        result.append ("shiftUp (");
+                        result.append ("shift (");
                         escalate (b);
                         result.append (", " + shift + ")");
                     }
@@ -225,9 +225,9 @@ public class RendererCfp extends RendererC
                     }
                     else
                     {
-                        result.append ("shiftDown (");
+                        result.append ("shift (");
                         escalate (d);
-                        result.append (", " + -shift + ")");
+                        result.append (", " + shift + ")");
                     }
                 }
                 else
@@ -286,10 +286,9 @@ public class RendererCfp extends RendererC
             if (shift == 0) return super.render (op);
             if (op.getType () instanceof Matrix)
             {
-                if (shift > 0) result.append ("shiftUp (");
-                else           result.append ("shiftDown (");
+                result.append ("shift (");
                 escalate (op);
-                result.append (", " + Math.abs (shift) + ")");
+                result.append (", " + shift + ")");
             }
             else
             {
@@ -461,17 +460,15 @@ public class RendererCfp extends RendererC
 
             if (op.getType () instanceof Matrix)
             {
-                if (shift > 0) result.append ("shiftUp (");
-                else           result.append ("shiftDown (");
+                result.append ("shift (");
                 escalate (op);
-                result.append (", " + Math.abs (shift) + ")");
+                result.append (", " + shift + ")");
             }
             else
             {
                 result.append ("(");
                 escalate (op);
-                result.append (printShift (shift));
-                result.append (")");
+                result.append (printShift (shift) + ")");
             }
             return true;
         }

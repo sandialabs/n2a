@@ -5,7 +5,7 @@ Copyright (c) 2001-2004 Dept. of Computer Science and Beckman Institute,
 Distributed under the UIUC/NCSA Open Source License.
 
 
-Copyright 2005, 2009, 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -41,6 +41,7 @@ clear (MatrixAbstract<T> & A, const T scalar)
     }
 }
 
+#ifndef n2a_FP
 template<class T>
 T
 norm (const MatrixAbstract<T> & A, T n)
@@ -109,6 +110,7 @@ norm (const MatrixAbstract<T> & A, T n)
         return (T) std::pow (result, (T) (1.0 / n));
     }
 }
+#endif
 
 template<class T>
 T
@@ -386,6 +388,7 @@ clear (MatrixStrided<T> & A, const T scalar)
     }
 }
 
+#ifndef n2a_FP
 template<class T>
 T
 norm (const MatrixStrided<T> & A, T n)
@@ -474,6 +477,7 @@ norm (const MatrixStrided<T> & A, T n)
         return (T) std::pow (result, (T) (1.0 / n));
     }
 }
+#endif
 
 template<class T>
 Matrix<T>

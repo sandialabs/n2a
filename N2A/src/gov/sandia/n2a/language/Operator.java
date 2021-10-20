@@ -40,6 +40,7 @@ import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.Uniform;
+import gov.sandia.n2a.language.function.UnitMap;
 import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Divide;
@@ -463,6 +464,7 @@ public class Operator implements Cloneable
         register (Tangent          .factory ());
         register (Output           .factory ());
         register (Uniform          .factory ());
+        register (UnitMap          .factory ());
         operators.put ("pow", Power.factory ());  // hack to map pow() function to ^ operator
 
         // Operators

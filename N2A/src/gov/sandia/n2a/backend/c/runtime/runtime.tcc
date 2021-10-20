@@ -1,3 +1,10 @@
+/*
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
+
 #ifndef n2a_runtime_tcc
 #define n2a_runtime_tcc
 
@@ -98,6 +105,54 @@ gridRaw (int i, int nx, int ny, int nz)
     return result;
 }
 
+template<class T>
+T
+unitmap (const MatrixAbstract<T> & A, T row, T column)
+{
+    // Just assume handle is good.
+    int rows    = A.rows ();
+    int columns = A.columns ();
+    int lastRow    = rows    - 1;
+    int lastColumn = columns - 1;
+    row    = row    * rows    - (T) 0.5;
+    column = column * columns - (T) 0.5;
+    int r = (int) floor (row);
+    int c = (int) floor (column);
+    if (r < 0)
+    {
+        if      (c <  0         ) return A(0,0         );
+        else if (c >= lastColumn) return A(0,lastColumn);
+        else
+        {
+            T b = column - c;
+            return (1 - b) * A(0,c) + b * A(0,c+1);
+        }
+    }
+    else if (r >= lastRow)
+    {
+        if      (c <  0         ) return A(lastRow,0         );
+        else if (c >= lastColumn) return A(lastRow,lastColumn);
+        else
+        {
+            T b = column - c;
+            return (1 - b) * A(lastRow,c) + b * A(lastRow,c+1);
+        }
+    }
+    else
+    {
+        T a = row - r;
+        T a1 = 1 - a;
+        if      (c <  0         ) return a1 * A(r,0         ) + a * A(r+1,0         );
+        else if (c >= lastColumn) return a1 * A(r,lastColumn) + a * A(r+1,lastColumn);
+        else
+        {
+            T b = column - c;
+            return   (1 - b) * (a1 * A(r,c  ) + a * A(r+1,c  ))
+                   +      b  * (a1 * A(r,c+1) + a * A(r+1,c+1));
+        }
+    }
+}
+
 #ifdef n2a_FP
 
 template<>
@@ -178,6 +233,57 @@ grid (int i, int nx, int ny, int nz)
     result[1] = (((int64_t) result[1] << 1) + 1 << FP_MSB) / ny;
     result[2] = (((int64_t) result[2] << 1) + 1 << FP_MSB) / nz;
     return result;
+}
+
+template<>
+int
+unitmap (const MatrixAbstract<int> & A, int row, int column)  // row and column have exponent=0
+{
+    // Just assume handle is good.
+    int rows    = A.rows ();  // exponent=MSB
+    int columns = A.columns ();
+    int lastRow    = rows    - 1;
+    int lastColumn = columns - 1;
+    int64_t scaledRow    = row    * rows    - (0x1 << FP_MSB - 1);   // raw exponent = 0+MSB-MSB = 0
+    int64_t scaledColumn = column * columns - (0x1 << FP_MSB - 1);
+    int r = scaledRow    >> FP_MSB;  // to turn raw result into integer, shift = 0-MSB = -MSB
+    int c = scaledColumn >> FP_MSB;
+    if (r < 0)
+    {
+        if      (c <  0         ) return A(0,0         );
+        else if (c >= lastColumn) return A(0,lastColumn);
+        else
+        {
+            int b = scaledColumn & 0x3FFFFFFF;  // fractional part, with exponent = 0 (same as raw exponent)
+            int b1 = (1 << FP_MSB) - b;
+            return (int64_t) b1 * A(0,c) + (int64_t) b * A(0,c+1) >> FP_MSB;
+        }
+    }
+    else if (r >= lastRow)
+    {
+        if      (c <  0         ) return A(lastRow,0         );
+        else if (c >= lastColumn) return A(lastRow,lastColumn);
+        else
+        {
+            int b = scaledColumn & 0x3FFFFFFF;
+            int b1 = (1 << FP_MSB) - b;
+            return (int64_t) b1 * A(lastRow,c) + (int64_t) b * A(lastRow,c+1) >> FP_MSB;
+        }
+    }
+    else
+    {
+        int a = scaledRow & 0x3FFFFFFF;
+        int a1 = (1 << FP_MSB) - a;
+        if      (c <  0         ) return (int64_t) a1 * A(r,0         ) + (int64_t) a * A(r+1,0         ) >> FP_MSB;
+        else if (c >= lastColumn) return (int64_t) a1 * A(r,lastColumn) + (int64_t) a * A(r+1,lastColumn) >> FP_MSB;
+        else
+        {
+            int b = scaledColumn & 0x3FFFFFFF;
+            int b1 = (1 << FP_MSB) - b;
+            return   b1 * ((int64_t) a1 * A(r,c  ) + (int64_t) a * A(r+1,c  ) >> FP_MSB)
+                   + b  * ((int64_t) a1 * A(r,c+1) + (int64_t) a * A(r+1,c+1) >> FP_MSB) >> FP_MSB;
+        }
+    }
 }
 
 #endif

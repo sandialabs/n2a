@@ -1,3 +1,10 @@
+/*
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
+
 #ifndef n2a_runtime_h
 #define n2a_runtime_h
 
@@ -76,6 +83,11 @@ template<class T, int R, int C> MatrixFixed<T,R,1> gaussian (const MatrixFixed<T
 
 template<class T> MatrixFixed<T,3,1> grid    (int i, int nx = 1, int ny = 1, int nz = 1);
 template<class T> MatrixFixed<T,3,1> gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);
+
+template<class T> T unitmap (const MatrixAbstract<T> & A, T row, T column = (T) 0.5);
+#ifdef n2a_FP
+template<int> int unitmap (const MatrixAbstract<int> & A, int row, int column = 0x1 << FP_MSB - 1);
+#endif
 
 #ifndef N2A_SPINNAKER
 extern void signalHandler (int number);

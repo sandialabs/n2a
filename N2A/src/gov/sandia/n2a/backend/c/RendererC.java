@@ -104,9 +104,24 @@ public class RendererC extends Renderer
         {
             AccessVariable av = (AccessVariable) op;
             int shift = av.exponent - av.exponentNext;
-            if (useExponent  &&  shift != 0) result.append ("(");
+            if (useExponent  &&  shift != 0)
+            {
+                if (av.getType () instanceof Matrix) result.append ("shift ");
+                result.append ("(");
+            }
             result.append (job.resolve (av.reference, this, false));
-            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
+            if (useExponent  &&  shift != 0)
+            {
+                if (av.getType () instanceof Matrix)
+                {
+                    result.append (", " + shift);
+                }
+                else
+                {
+                    result.append (printShift (shift));
+                }
+                result.append (")");
+            }
             return true;
         }
         if (op instanceof Atan)
@@ -310,13 +325,11 @@ public class RendererC extends Renderer
             {
                 Operator a = m.operands[i];
                 result.append ("max (");
-                a.render (this);
-                appendType (a);
+                renderType (a);
                 result.append (", ");
             }
             Operator b = m.operands[m.operands.length - 1];
-            b.render (this);
-            appendType (b);
+            renderType (b);
             for (int i = 0; i < m.operands.length - 1; i++) result.append (")");
             return true;
         }
@@ -327,13 +340,11 @@ public class RendererC extends Renderer
             {
                 Operator a = m.operands[i];
                 result.append ("min (");
-                a.render (this);
-                appendType (a);
+                renderType (a);
                 result.append (", ");
             }
             Operator b = m.operands[m.operands.length - 1];
-            b.render (this);
-            appendType (b);
+            renderType (b);
             for (int i = 0; i < m.operands.length - 1; i++) result.append (")");
             return true;
         }
@@ -414,43 +425,9 @@ public class RendererC extends Renderer
         if (op instanceof ReadMatrix)
         {
             ReadMatrix r = (ReadMatrix) op;
-
-            String mode = "";
-            int lastParm = r.operands.length - 1;
-            if (lastParm > 0)
-            {
-                if (r.operands[lastParm] instanceof Constant)
-                {
-                    Constant c = (Constant) r.operands[lastParm];
-                    if (c.value instanceof Text)
-                    {
-                        mode = ((Text) c.value).value;
-                    }
-                }
-            }
-
-            int shift = r.exponent - r.exponentNext;
-            if (useExponent  &&  shift != 0) result.append ("(");
-            if (mode.equals ("rows"))
-            {
-                result.append (r.name + "->rows ()");
-            }
-            else if (mode.equals ("columns"))
-            {
-                result.append (r.name + "->columns ()");
-            }
-            else
-            {
-                result.append (r.name + "->get");
-                if (mode.equals ("raw")) result.append ("Raw");
-                result.append (" (");
-                r.operands[1].render (this);
-                result.append (", ");
-                r.operands[2].render (this);
-                result.append (")");
-            }
-            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
-
+            // Currently, ReadMatrix sets its exponent = exponentNext, so we will never do a shift here.
+            // Any shifting should be handled by matrixHelper while loading and converting the matrix to integer.
+            result.append ("*" + r.name + "->A");  // matrices are held in pointers, so need to dereference
             return true;
         }
         if (op instanceof Rows)
@@ -471,17 +448,14 @@ public class RendererC extends Renderer
 
             result.append ("max (");
             if (s.operands.length == 2) result.append ("-1 * (");
-            lower.render (this);
-            appendType (lower);
+            renderType (lower);
             if (s.operands.length == 2) result.append (")");
 
             result.append (", min (");
-            upper.render (this);
-            appendType (upper);
+            renderType (upper);
 
             result.append (", ");
-            a.render (this);
-            appendType (a);
+            renderType (a);
 
             result.append ("))");
             return true;
@@ -555,16 +529,24 @@ public class RendererC extends Renderer
         Add the float type indicator that print() omits, in order to overcome type matching
         problems for certain functions, such as min() and max().
     **/
-    public void appendType (Operator a)
+    public void renderType (Operator a)
     {
         if (a.isScalar ())
         {
+            a.render (this);
             double d = a.getDouble ();
             if ((int) d == d)
             {
                 if      (job.T.equals ("float" )) result.append (".0f");
                 else if (job.T.equals ("double")) result.append (".0");
             }
+        }
+        else
+        {
+            // It's ugly to put casts in front of everything. The way to do better is to determine
+            // if the result of the expression is an integer. That's more analysis than it's worth.
+            if ("float|double".contains (job.T)) result.append ("(" + job.T + ") ");
+            a.render (this);
         }
     }
 

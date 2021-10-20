@@ -121,7 +121,16 @@ public class AccessElement extends Function
     public void determineExponentNext ()
     {
         Operator v = operands[0];
-        v.exponentNext = exponentNext;
+        if (v instanceof Constant  ||  v instanceof AccessVariable)  // The preferred use of this function is to access a non-calculated matrix.
+        {
+            v.exponentNext = v.exponent;  // Let matrix output in its natural exponent.
+            exponent       = v.exponent;  // Force our output to be shifted after the fact.
+        }
+        else  // A matrix expression of some sort, so pass the required exponent on to it. This case should be rare.
+        {
+            v.exponentNext = exponentNext;  // Pass the required exponent on to the expression
+            exponent       = exponentNext;  // and expect that we require not further adjustment.
+        }
         v.determineExponentNext ();
 
         for (int i = 1; i < operands.length; i++)

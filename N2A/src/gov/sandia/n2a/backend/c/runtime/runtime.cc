@@ -1,3 +1,10 @@
+/*
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
+
 #include "runtime.tcc"
 #include "MatrixFixed.tcc"
 #include "Matrix.tcc"
@@ -19,6 +26,8 @@ template n2a_T gaussian (n2a_T sigma);
 
 template MatrixFixed<n2a_T,3,1> grid    (int i, int nx, int ny, int nz);
 template MatrixFixed<n2a_T,3,1> gridRaw (int i, int nx, int ny, int nz);
+
+template n2a_T unitmap (const MatrixAbstract<n2a_T> & A, n2a_T row, n2a_T column);
 
 #ifndef N2A_SPINNAKER
 void signalHandler (int number)
