@@ -56,14 +56,11 @@ public class Main
         String headless = "";
         for (String arg : args)
         {
-            if      (arg.startsWith ("-plugin="   )) pluginClassNames.add            (arg.substring (8));
-            else if (arg.startsWith ("-pluginDir=")) pluginDirs      .add (Paths.get (arg.substring (11)).toAbsolutePath ());
-            else if (arg.startsWith ("-param="    )) processParamFile (arg.substring (7), record);
-            else if (arg.startsWith ("-install"   )) headless = "install";
-            else if (arg.startsWith ("-csv"       ))
-            {
-                record.set (true, "$metadata", "csv");
-            }
+            if      (arg.startsWith ("-plugin="    )) pluginClassNames.add            (arg.substring (8));
+            else if (arg.startsWith ("-pluginDir=" )) pluginDirs      .add (Paths.get (arg.substring (11)).toAbsolutePath ());
+            else if (arg.startsWith ("-param="     )) processParamFile (arg.substring (7), record);
+            else if (arg.startsWith ("-install"    )) headless = "install";
+            else if (arg.startsWith ("-csv"        )) record.set (true, "$metadata", "csv");
             else if (arg.startsWith ("-run="))
             {
                 record.set (arg.substring (5), "$inherit");
