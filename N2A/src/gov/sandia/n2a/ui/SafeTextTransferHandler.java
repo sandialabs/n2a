@@ -61,28 +61,25 @@ public class SafeTextTransferHandler extends TransferHandler
             {
                 if (safeTypes == null) return false;
 
-                BufferedReader br     = new BufferedReader (new StringReader (data));
-                Schema         schema = Schema.read (br);
-                if (schema.type.startsWith ("Clip")) schema.type = schema.type.substring (4);
-                if (! safeTypes.contains (schema.type))
+                try (BufferedReader br = new BufferedReader (new StringReader (data)))
                 {
-                    br.close ();
-                    return false;
-                }
+                    Schema schema = Schema.read (br);
+                    if (! schema.type.startsWith ("Clip")  &&  ! safeTypes.contains (schema.type)) return false;
+                    MNode nodes = new MVolatile ();
+                    schema.read (nodes, br);
 
-                MNode nodes = new MVolatile ();
-                schema.read (nodes, br);
-                br.close ();
-
-                // Process into a suitable string
-                for (MNode n : nodes)
-                {
-                    String key   = n.key ();
-                    String value = n.get ();
-                    if      (key.startsWith ("@")) data = value + key;
-                    else if (value.isEmpty ())     data = key;
-                    else                           data = key + "=" + value;
-                    break;  // Only process the first node
+                    // Process into a suitable string
+                    for (MNode n : nodes)
+                    {
+                        String type  = n.getOrDefault (schema.type, "$clip");
+                        if (! safeTypes.contains (type)) return false;
+                        String key   = n.key ();
+                        String value = n.get ();
+                        if      (key.startsWith ("@")) data = value + key;
+                        else if (value.isEmpty ())     data = key;
+                        else                           data = key + "=" + value;
+                        break;  // Only process the first node
+                    }
                 }
             }
 
