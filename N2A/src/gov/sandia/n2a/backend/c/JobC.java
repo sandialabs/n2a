@@ -124,7 +124,7 @@ public class JobC extends Thread
             Path resourceDir = env.getResourceDir ();
             jobDir           = Host.getJobDir (resourceDir, job);  // Unlike localJobDir (which is created by MDir), this may not exist until we explicitly create it.
             gcc              = resourceDir.getFileSystem ().getPath (env.config.getOrDefault ("g++", "backend", "c", "cxx"));  // No good way to decide absolute path for the default value. Maybe need to call "which" command for this.
-            runtimeDir       = resourceDir.resolve ("cruntime");
+            runtimeDir       = resourceDir.resolve ("backend").resolve ("c");
             rebuildRuntime ();
 
             digestedModel = new EquationSet (model);
@@ -193,18 +193,7 @@ public class JobC extends Thread
         boolean changed = false;
         if (needRuntime)
         {
-            changed = unpackRuntime
-            (
-                JobC.class, runtimeDir,
-                "fixedpoint.cc", "fixedpoint.h", "fixedpoint.tcc",
-                "io.cc", "io.h", "io.tcc",
-                "KDTree.h", "StringLite.h",
-                "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
-                "nosys.h",
-                "runtime.cc", "runtime.h", "runtime.tcc",
-                "profiling.h", "profiling.cc",
-                "OutputParser.h"  // Not needed by runtime, but provided as a utility for users.
-            );
+            changed = unpackRuntime ();
             needRuntime = false;   // Stop checking files for this session.
         }
 
@@ -248,13 +237,33 @@ public class JobC extends Thread
         }
     }
 
-    public boolean unpackRuntime (Class<?> from, Path runtimeDir, String... names) throws Exception
+    /**
+        Places resources specific to this backend into runtimeDir.
+        runtimeDir must be set before calling this function.
+    **/
+    public boolean unpackRuntime () throws Exception
+    {
+        return unpackRuntime
+        (
+            JobC.class, runtimeDir, "runtime/",
+            "fixedpoint.cc", "fixedpoint.h", "fixedpoint.tcc",
+            "io.cc", "io.h", "io.tcc",
+            "KDTree.h", "StringLite.h",
+            "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
+            "nosys.h",
+            "runtime.cc", "runtime.h", "runtime.tcc",
+            "profiling.h", "profiling.cc",
+            "OutputParser.h"  // Not needed by runtime, but provided as a utility for users.
+        );
+    }
+
+    public static boolean unpackRuntime (Class<?> from, Path runtimeDir, String prefix, String... names) throws Exception
     {
         boolean changed = false;
         Files.createDirectories (runtimeDir);
         for (String s : names)
         {
-            URL url = from.getResource ("runtime/" + s);
+            URL url = from.getResource (prefix + s);
             long resourceModified = url.openConnection ().getLastModified ();
             Path f = runtimeDir.resolve (s);
             long fileModified = Host.lastModified (f);

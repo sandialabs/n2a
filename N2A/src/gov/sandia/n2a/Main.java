@@ -6,6 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a;
 
+import gov.sandia.n2a.backend.c.JobC;
+import gov.sandia.n2a.backend.python.JobPython;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
@@ -89,6 +91,7 @@ public class Main
         AppData.properties.set ("1.1",                   "version");
         AppData.properties.set (! headless.isEmpty (),   "headless");
         AppData.checkInitialDB ();
+        Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
 
         // Load plugins
         pluginClassNames.add ("gov.sandia.n2a.backend.internal.InternalPlugin");
@@ -96,14 +99,35 @@ public class Main
         pluginClassNames.add ("gov.sandia.n2a.backend.c.PluginC");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuroml.PluginNeuroML");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuron.PluginNeuron");
-        pluginDirs.add (Paths.get (AppData.properties.get ("resourceDir"), "plugins").toAbsolutePath ());
+        Path pluginDir = resourceDir.resolve ("plugins").toAbsolutePath ();
+        try {Files.createDirectories (pluginDir);}
+        catch (IOException e) {}
+        pluginDirs.add (pluginDir);
         PluginManager.initialize (new N2APlugin (), pluginClassNames, pluginDirs);
 
         if (! headless.isEmpty ())
         {
             if      (headless.equals ("run"    )) runHeadless   (record);
             else if (headless.equals ("study"  )) studyHeadless (record);
-            else if (headless.equals ("install")) AppData.quit ();  // Flush new DB data.
+            else if (headless.equals ("install"))
+            {
+                try
+                {
+                    JobC jobC = new JobC (null);
+                    jobC.runtimeDir = resourceDir.resolve ("backend").resolve ("c");
+                    jobC.unpackRuntime ();
+
+                    JobPython jobPython = new JobPython ();
+                    jobPython.runtimeDir = resourceDir.resolve ("backend").resolve ("python");
+                    jobPython.unpackRuntime ();
+                }
+                catch (Exception e)
+                {
+                    System.err.println ("Failed to unpack runtime resources.");
+                }
+
+                AppData.quit ();  // Flush new DB data.
+            }
             return;
         }
 

@@ -1,39 +1,30 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.python;
 
-import java.net.URL;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 
 import gov.sandia.n2a.backend.c.JobC;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
-import gov.sandia.n2a.host.Host;
 
 public class JobPython extends Thread
 {
     // TODO: copy JobC and rewrite for Python
 
-    public static void unpackRuntime (Class<?> from, Path runtimeDir, String prefix, String... names) throws Exception
+    public Path runtimeDir; // local or remote
+
+    /**
+        Places resources specific to this backend into runtimeDir.
+        runtimeDir must be set before calling this function.
+    **/
+    public boolean unpackRuntime () throws Exception
     {
-        Files.createDirectories (runtimeDir);
-        for (String s : names)
-        {
-            URL url = from.getResource (prefix + s);
-            long resourceModified = url.openConnection ().getLastModified ();
-            Path f = runtimeDir.resolve (s);
-            long fileModified = Host.lastModified (f);
-            if (resourceModified > fileModified)
-            {
-                Files.copy (url.openStream (), f, StandardCopyOption.REPLACE_EXISTING);
-            }
-        }
+        return JobC.unpackRuntime (JobPython.class, runtimeDir, "runtime/", "OutputHolder.py", "OutputParser.py", "runtime.py");
     }
 
     public String mangle (Variable v)
