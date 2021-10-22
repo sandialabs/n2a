@@ -25,8 +25,10 @@ import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import tech.units.indriya.AbstractUnit;
 
@@ -89,7 +91,6 @@ public class Input extends Function
         String mode = "";
         int lastParm = operands.length - 1;
         if (lastParm > 0) mode = operands[lastParm].getString ();
-        boolean raw  = mode.contains ("raw");
         boolean time = mode.contains ("time");
 
         if (lastParm >= 1)
@@ -102,8 +103,7 @@ public class Input extends Function
         if (lastParm >= 2)
         {
             Operator op = operands[2];
-            if (raw) op.exponentNext = MSB;  // We expect an integer.
-            else     op.exponentNext = 0;    // We expect a number in [0,1], with some provision for going slightly out of bounds.
+            op.exponentNext = MSB;  // We expect an integer.
             op.determineExponentNext ();
         }
     }
@@ -121,16 +121,18 @@ public class Input extends Function
         public BufferedReader      stream;
         public double              currentLine   = -1;
         public double[]            currentValues = empty;
-        public double              nextLine      = Double.NaN;  // Initial condition is no line available.
+        public double              nextLine      = Double.NaN; // Initial condition is no line available.
         public double[]            nextValues    = empty;
+        public Matrix              A;                          // Matrix value returned if in whole-row mode (column parameter < 0)
+        public double              Alast         = -2;         // Line number when A was last generated. -2 means never
         public Map<String,Integer> columnMap     = new TreeMap<String,Integer> ();
         public List<String>        headers       = new ArrayList<String> ();  // The inverse of columnMap
         public int                 columnCount;
-        public boolean             time;              // mode flag
-        public int                 timeColumn;        // We assume column 0, unless a header overrides this.
-        public boolean             timeColumnSet;     // Indicates that a header appeared in the file, so timeColumn has been evaluated.
-        public String              delimiter = " ";   // Regular expression for separator character. Allows switch between comma and space/tab.
-        public boolean             delimiterSet;      // Indicates that check for CSV has been performed. Avoids constant re-checking.
+        public boolean             time;                       // mode flag
+        public int                 timeColumn;                 // We assume column 0, unless a header overrides this.
+        public boolean             timeColumnSet;              // Indicates that a header appeared in the file, so timeColumn has been evaluated.
+        public String              delimiter = " ";            // Regular expression for separator character. Allows switch between comma and space/tab.
+        public boolean             delimiterSet;               // Indicates that check for CSV has been performed. Avoids constant re-checking.
         public double              epsilon;
 
         public static Holder get (Simulator simulator, String path, boolean time) throws IOException
@@ -182,11 +184,12 @@ public class Input extends Function
                             // space character is lowest precedence
                             delimiterSet =  ! delimiter.equals (" ")  ||  ! line.trim ().isEmpty ();
                         }
-                        String[] columns = line.split (delimiter, -1);  // -1 means that trailing tabs/spaces will produce additional columns. We assume that every tab/space is placed intentionally to indicate a column.
+                        String[] columns = line.split (delimiter, -1);  // -1 means that trailing delimiters will produce additional columns. We assume that every delimiter is placed intentionally to indicate a column.
                         columnCount = Math.max (columnCount, columns.length);
 
                         // Decide whether this is a header row or a value row
-                        if (! columns[0].isEmpty ())  // Assumes that columns never contain white-space. This is only a question for CSV.
+                        // This approach assumes that columns never start with white-space.
+                        if (! columns[0].isEmpty ())
                         {
                             char firstCharacter = columns[0].charAt (0);
                             if (firstCharacter < '-'  ||  firstCharacter == '/'  ||  firstCharacter > '9')  // not a number, so must be column header
@@ -201,6 +204,9 @@ public class Input extends Function
                                         headers.add (header);
                                     }
                                 }
+
+                                // Make column count accessible to other code before first row of data is read.
+                                if (A == null  &&  columnCount > 1) currentValues = new double[columnCount];
 
                                 // Select time column
                                 // The time column should be specified in the first row of headers, if at all.
@@ -238,24 +244,41 @@ public class Input extends Function
                             String c = columns[i];
                             if (c.isEmpty ()) continue;  // and use default value of 0 that the array element was initialized with
 
-                            // Special case for formatted date
-                            // There are many possible formats for date. This one is use-case-specific.
-                            // Others can be added as needed.
-                            if (i == timeColumn  &&  c.length () == 10  &&  c.charAt (4) == '-'  &&  c.charAt (7) == '-')
+                            // General case
+                            try {nextValues[i] = Double.parseDouble (c);}
+                            catch (NumberFormatException e) {}  // should leave nextValues[i] at 0
+
+                            // Special case for ISO 8601 formatted date
+                            // Convert date to Unix time. Dates before epoch will be negative.
+                            if (i == timeColumn)
                             {
                                 try
                                 {
-                                    // Convert date to Unix time. Dates before epoch will be negative.
-                                    SimpleDateFormat format = new SimpleDateFormat ("yyyy-MM-dd");
-                                    format.setTimeZone (TimeZone.getTimeZone ("GMT"));  // When time zone is not explicit in the data, we want to avoid arbitrary local offset.
-                                    nextValues[i] = format.parse (c).toInstant ().toEpochMilli () / 1000.0;
-                                    continue;
+                                    SimpleDateFormat format = null;
+                                    if (nextValues[i] < 3000  &&  nextValues[i] > 0)  // Just the year
+                                    {
+                                        format = new SimpleDateFormat ("yyyy");
+                                    }
+                                    else if (c.contains ("-"))  // Other parts of date/time are present
+                                    {
+                                        switch (c.length ())
+                                        {
+                                            case 7:  format = new SimpleDateFormat ("yyyy-MM");                   break;
+                                            case 10: format = new SimpleDateFormat ("yyyy-MM-dd");                break;
+                                            case 13: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH");           break;
+                                            case 16: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm");        break;
+                                            case 19: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm:ss");     break;
+                                            case 23: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm:ss.SSS"); break;
+                                        }
+                                    }
+                                    if (format != null)
+                                    {
+                                        format.setTimeZone (TimeZone.getTimeZone ("GMT"));
+                                        nextValues[i] = format.parse (c).toInstant ().toEpochMilli () / 1000.0;
+                                    }
                                 }
                                 catch (ParseException e) {}
                             }
-
-                            // General case
-                            nextValues[i] = Double.parseDouble (c);
                         }
                         if (time) nextLine = nextValues[timeColumn];
                         else      nextLine = currentLine + 1;
@@ -274,7 +297,7 @@ public class Input extends Function
         }
     }
 
-    public Holder getRow (Instance context, Type op1, boolean time)
+    public Holder getRow (Instance context, double line, boolean time)
     {
         Simulator simulator = Simulator.instance.get ();
         if (simulator == null) return null;  // If we can't cache a line from the requested stream, then semantics of this function are lost, so give up.
@@ -292,8 +315,7 @@ public class Input extends Function
                 timeWarning = true;
             }
 
-            if (op1 instanceof Scalar) H.getRow (((Scalar) op1).value);
-            else                       H.getRow (0);
+            H.getRow (line);
         }
         catch (IOException e)
         {
@@ -305,44 +327,46 @@ public class Input extends Function
 
     public Type getType ()
     {
-        return new Scalar ();
+        // 1  argument  -- Just filename, so always return a matrix.
+        // 2  arguments -- Filename, plus either row or mode, so always return a matrix
+        // 3+ arguments -- Filename, row and column. Only return matrix if column<=0
+        if (operands.length < 3  ||  operands[2].getDouble () < 0) return new MatrixDense ();
+        return new Scalar (0);
     }
 
     public Type eval (Instance context)
     {
-        Type op1 = operands[1].eval (context);
+        Type op1 = null;
+        if (operands.length > 1) op1 = operands[1].eval (context);
 
         String mode = "";
         if      (operands.length > 3) mode = ((Text) operands[3].eval (context)).value;
         else if (op1 instanceof Text) mode = ((Text) op1                       ).value;
         boolean time = mode.contains ("time");
 
-        Holder H = getRow (context, op1, time);
-        if (H == null) return new Scalar (0);
+        double line = 0;
+        if (op1 instanceof Scalar) line = ((Scalar) op1).value;
 
-        if (mode.contains ("columns"))
-        {
-            int result = H.columnCount;
-            if (time) result = Math.max (0, result - 1);
-            return new Scalar (result);
-        }
+        Holder H = getRow (context, line, time);
+        if (H == null) return getType ();
 
-        double column;
-        Type columnSpec = operands[2].eval (context);
-        if (columnSpec instanceof Text)
+        double column = -1;
+        if (operands.length > 2)
         {
-            Integer columnMapping = H.columnMap.get (((Text) columnSpec).value);
-            if (columnMapping == null) return new Scalar (0);
-            return new Scalar (H.currentValues[columnMapping]);  // If it's in the column map, we can safely assume that the index is in range.
-        }
-        else  // just assume it is a Scalar
-        {
+            Type columnSpec = operands[2].eval (context);
+            if (columnSpec instanceof Text)
+            {
+                Integer columnMapping = H.columnMap.get (((Text) columnSpec).value);
+                if (columnMapping == null) return new Scalar (0);
+                return new Scalar (H.currentValues[columnMapping]);  // If it's in the column map, we can safely assume that the index is in range.
+            }
+            // Otherwise, just assume it is a Scalar
             column = ((Scalar) columnSpec).value;
         }
 
         int columns    = H.currentValues.length;
         int lastColumn = columns - 1;
-        if (mode.contains ("raw"))
+        if (column >= 0)
         {
             int c = (int) Math.round (column);
             if (time  &&  c >= H.timeColumn) c++;  // time column is not included in raw index
@@ -352,28 +376,40 @@ public class Input extends Function
         }
         else
         {
-            if (time) column *= (lastColumn - 1);  // time column is not included in interpolation
-            else      column *=  lastColumn;
-            int c = (int) Math.floor (column);
-            double b = column - c;
-            int d = c + 1;
-            if (time)
+            if (H.Alast == H.currentLine) return H.A;
+
+            // Create a new matrix
+            if (time  &&  columns > 1)
             {
-                if (c >= H.timeColumn) c++;  // Implicitly, d will also be >= timeColumn.
-                if (d >= H.timeColumn) d++; 
+                columns--;
+                H.A = new MatrixDense (1, columns);
+                int from = 0;
+                for (int to = 0; to < columns; to++)
+                {
+                    if (from == H.timeColumn) from++;
+                    H.A.set (0, to, H.currentValues[from++]);
+                }
             }
-            if (c < 0)
+            else
             {
-                if (time  &&  H.timeColumn == 0  &&  H.currentValues.length > 1) return new Scalar (H.currentValues[1]);
-                return new Scalar (H.currentValues[0]);
+                H.A = new MatrixDense (H.currentValues, 0, 1, columns, columns, 1);
             }
-            if (c >= lastColumn)
-            {
-                if (time  &&  H.timeColumn == lastColumn  &&  H.currentValues.length > 1) return new Scalar (H.currentValues[lastColumn - 1]);
-                return new Scalar (H.currentValues[lastColumn]);
-            }
-            return new Scalar ((1 - b) * H.currentValues[c] + b * H.currentValues[d]);
+            H.Alast = H.currentLine;
+            return H.A;
         }
+    }
+
+    /**
+        Attempt to retrieve mode flag, if it exists.
+        If not, the returned string may be empty or a parameter unrelated to mode.
+        In the latter case, it will generally not contain a meaingful mode, such
+        as "time" or "smooth".
+    **/
+    public String getMode ()
+    {
+        if (operands.length == 2) return operands[1].getString ();
+        if (operands.length >= 4) return operands[3].getString ();
+        return "";
     }
 
     public String toString ()

@@ -842,6 +842,10 @@ public class JobC extends Thread
             result.append ("    " + i.name + " = inputHelper<" + T + "> (\"" + i.operands[0].getString () + "\"");
             if (T.equals ("int")) result.append (", " + i.exponent);
             result.append (");\n");
+            if (i.getMode ().contains ("time"))
+            {
+                result.append ("    " + i.name + "->time = true;\n");
+            }
         }
         for (Output o : mainOutput)
         {
@@ -3793,6 +3797,7 @@ public class JobC extends Thread
     public void prepareStaticObjects (Operator op, final RendererC context, final String pad) throws Exception
     {
         final BackendDataC bed = context.bed;
+
         Visitor visitor = new Visitor ()
         {
             public boolean visit (Operator op)
@@ -3844,20 +3849,16 @@ public class JobC extends Thread
                     Input i = (Input) op;
                     if (i.operands[0] instanceof Constant)
                     {
-                        if (T.equals ("int"))
+                        if (i.getMode ().contains ("time"))
                         {
-                            context.result.append (pad + i.name + "->exponent = " + i.exponent + ";\n");
-                        }
-
-                        // Detect time flag
-                        String mode = "";
-                        if      (i.operands.length == 2) mode = i.operands[1].getString ();
-                        else if (i.operands.length >  3) mode = i.operands[3].getString ();
-                        if (mode.contains ("time"))
-                        {
-                            context.result.append (pad + i.name + "->time = true;\n");
                             if (! context.global  &&  ! T.equals ("int"))  // Note: In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
                             {
+                                // TODO: This is a bad way to set time epsilon, but not sure if there is a better one.
+                                // The main problem is that several different instances may all do the same initialization,
+                                // and they may disagree on epsilon, perhaps even by several orders of magnitude.
+                                // We could make a compile-time estimate of the smallest dt, and use dt/1000 everywhere.
+                                // This is similar to the current approach for estimating time exponent for fixed-point.
+
                                 // Read $t' as an lvalue, to ensure we get any newly-set frequency.
                                 // However, can't do this if $t' is a constant. In that case, no variable exists.
                                 boolean lvalue = ! bed.dt.hasAttribute ("constant");
@@ -3957,12 +3958,7 @@ public class JobC extends Thread
                         context.result.append (pad + "InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (" + i.fileName);
                         if (T.equals ("int")) context.result.append (", " + i.exponent);
                         context.result.append (");\n");
-
-                        // Detect time flag
-                        String mode = "";
-                        if      (i.operands.length == 2) mode = i.operands[1].getString ();
-                        else if (i.operands.length >= 4) mode = i.operands[3].getString ();
-                        if (mode.contains ("time"))
+                        if (i.getMode ().contains ("time"))
                         {
                             context.result.append (pad + i.name + "->time = true;\n");
                             if (! context.global  &&  ! T.equals ("int"))

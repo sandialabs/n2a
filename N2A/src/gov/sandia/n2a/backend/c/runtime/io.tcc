@@ -326,13 +326,15 @@ template<class T>
 InputHolder<T>::InputHolder (const String & fileName)
 :   Holder (fileName)
 {
-    currentLine      = -1;
+    currentLine      = (T) -1;
     currentValues    = new T[1];
     currentValues[0] = (T) 0;
     currentCount     = 1;
     nextLine         = (T) NAN;
     nextValues       = 0;
     nextCount        = 0;
+    A                = 0;
+    Alast            = (T) -2;
     columnCount      = 0;
     timeColumn       = 0;
     timeColumnSet    = false;
@@ -355,6 +357,7 @@ InputHolder<T>::~InputHolder ()
     if (in  &&  in != &std::cin) delete in;
     if (currentValues) delete[] currentValues;
     if (nextValues   ) delete[] nextValues;
+    if (A)             delete A;
 }
 
 template<class T>
@@ -404,6 +407,15 @@ InputHolder<T>::getRow (T row)
                         index++;
                     }
 
+                    // Make column count accessible to other code before first row of data is read.
+                    if (! A  &&  currentCount < columnCount)
+                    {
+                        delete[] currentValues;
+                        currentValues = new T[columnCount];
+                        currentCount = columnCount;
+                        memset (&currentValues[0], 0, columnCount * sizeof (T));
+                    }
+
                     // Select time column
                     if (time  &&  ! timeColumnSet)
                     {
@@ -449,55 +461,101 @@ InputHolder<T>::getRow (T row)
                     {
                         String field = line.substr (i, j - i);
 
-                        // Hack to detect a specific date format. Others can be added.
-                        if (index == timeColumn  &&  field.size () == 10  &&  field[4] == '-'  &&  field[7] == '-')
+                        // General case
+#                       ifdef n2a_FP
+                        if (time  &&  timeColumnSet  &&  index == timeColumn)
                         {
-                            int day   = atoi (field.substr (8, 2).c_str ());
-                            int month = atoi (field.substr (5, 2).c_str ()) - 1;
-                            int year  = atoi (field.substr (0, 4).c_str ()) - 1900;
-
-                            struct tm date;
-                            date.tm_sec   = 0;
-                            date.tm_min   = 0;
-                            date.tm_hour  = 0;
-                            date.tm_isdst = 0;  // time is strictly UTC, with no DST
-                            // ignoring tm_wday and tm_yday, as mktime() doesn't do anything with them
-
-                            // Hack to adjust for mktime() that can't handle dates before posix epoch (1970/1/1).
-                            // Solution comes from https://bugs.php.net/bug.php?id=17123
-                            // Alternate solution would be to implement a simple mktime() right here.
-                            // Since we don't care about DST or timezones, all it has to do is handle Gregorion leap-years.
-                            time_t offset = 0;
-                            if (year <= 70)  // Yes, that includes 1970 itself.
-                            {
-                                // The referenced post suggested 56 years, which apparently makes week days align correctly.
-                                year += 56;
-                                date.tm_mday = 1;
-                                date.tm_mon  = 0;
-                                date.tm_year = 70 + 56;
-                                offset = mktime (&date);
-                            }
-
-                            date.tm_mday = day;
-                            date.tm_mon  = month;
-                            date.tm_year = year;
-
-                            nextValues[index] = mktime (&date) - offset;
+                            nextValues[index] = convert (field, Event<T>::exponent);
                         }
-                        else  // General case.
+                        else
                         {
-#                           ifdef n2a_FP
-                            if (time  &&  timeColumnSet  &&  index == timeColumn)
+                            nextValues[index] = convert (field, exponent);
+                        }
+#                       else
+                        nextValues[index] = (T) atof (field.c_str ());
+#                       endif
+
+                        // Special case for ISO 8601 formatted date
+                        // Convert date to Unix time. Dates before epoch will be negative.
+                        if (index == timeColumn)
+                        {
+                            bool valid = false;
+                            int year   = 1970;  // will be adjusted below for mktime()
+                            int month  = 1;     // ditto
+                            int day    = 1;
+                            int hour   = 0;
+                            int minute = 0;
+                            int second = 0;
+
+                            int length = field.size ();
+                            if (length <= 4)
                             {
-                                nextValues[index] = convert (field, Event<T>::exponent);
+                                if (nextValues[index] < 3000  &&  nextValues[index] > 0)
+                                {
+                                    valid = true;
+                                    year = nextValues[index];
+                                }
                             }
-                            else
+                            else if (length >= 7  &&  field[4] == '-')
                             {
-                                nextValues[index] = convert (field, exponent);
+                                valid = true;
+                                year  = atoi (field.substr (0, 4).c_str ());
+                                month = atoi (field.substr (5, 2).c_str ());
+                                if (length >= 10  &&  field[7] == '-')
+                                {
+                                    day = atoi (field.substr (8, 2).c_str ());
+                                    if (length >= 13  &&  field[10] == 'T')
+                                    {
+                                        hour = atoi (field.substr (11, 2).c_str ());
+                                        if (length >= 16  &&  field[13] == ':')
+                                        {
+                                            minute = atoi (field.substr (14, 2).c_str ());
+                                            if (length >= 19  &&  field[16] == ':')
+                                            {
+                                                second = atoi (field.substr (17, 2).c_str ());
+                                            }
+                                        }
+                                    }
+                                }
                             }
-#                           else
-                            nextValues[index] = (T) atof (field.c_str ());
-#                           endif
+
+                            if (valid)
+                            {
+                                month -= 1;
+                                year  -= 1900;
+
+                                struct tm date;
+                                date.tm_isdst = 0;  // time is strictly UTC, with no DST
+                                // ignoring tm_wday and tm_yday, as mktime() doesn't do anything with them
+
+                                // Hack to adjust for mktime() that can't handle dates before posix epoch (1970/1/1).
+                                // This simple hack only works for years after ~1900.
+                                // Solution comes from https://bugs.php.net/bug.php?id=17123
+                                // Alternate solution would be to implement a simple mktime() right here.
+                                // Since we don't care about DST or timezones, all it has to do is handle Gregorion leap-years.
+                                time_t offset = 0;
+                                if (year <= 70)  // Yes, that includes 1970 itself.
+                                {
+                                    // The referenced post suggested 56 years, which apparently makes week days align correctly.
+                                    year += 56;
+                                    date.tm_year = 70 + 56;
+                                    date.tm_mon  = 0;
+                                    date.tm_mday = 1;
+                                    date.tm_hour = 0;
+                                    date.tm_min  = 0;
+                                    date.tm_sec  = 0;
+                                    offset = mktime (&date);
+                                }
+
+                                date.tm_year = year;
+                                date.tm_mon  = month;
+                                date.tm_mday = day;
+                                date.tm_hour = hour;
+                                date.tm_min  = minute;
+                                date.tm_sec  = second;
+
+                                nextValues[index] = mktime (&date) - offset;
+                            }
                         }
                     }
                     i = j + 1;
@@ -530,15 +588,6 @@ InputHolder<T>::getRow (T row)
 }
 
 template<class T>
-int
-InputHolder<T>::getColumns ()
-{
-    getRow (0);
-    if (time) return std::max (0, columnCount - 1);
-    return columnCount;
-}
-
-template<class T>
 T
 InputHolder<T>::get (T row, const String & column)
 {
@@ -553,75 +602,39 @@ T
 InputHolder<T>::get (T row, T column)
 {
     getRow (row);
-    int lastColumn = currentCount - 1;
-    if (time) column *= (lastColumn - 1);  // time column is not included in interpolation
-    else      column *=  lastColumn;
-    int c = (int) floor (column);
-    T b = column - c;
-    int d = c + 1;
-    if (time)
-    {
-        if (c >= timeColumn) c++;  // Implicitly, d will also be >= timeColumn.
-        if (d >= timeColumn) d++;
-    }
-    if (c < 0)
-    {
-        if (time  &&  timeColumn == 0  &&  currentCount > 1) return currentValues[1];
-        return currentValues[0];
-    }
-    if (c >= lastColumn)
-    {
-        if (time  &&  timeColumn == lastColumn  &&  currentCount > 1) return currentValues[lastColumn-1];
-        return currentValues[lastColumn];
-    }
-    return (1 - b) * currentValues[c] + b * currentValues[d];
-}
-
-#ifdef n2a_FP
-
-template<>
-int
-InputHolder<int>::get (int row, int column)
-{
-    getRow (row);
-    int lastColumn = currentCount - 1;
-    int64_t scaledColumn;
-    if (time) scaledColumn = (int64_t) column * (lastColumn - 1);  // time column is not included in interpolation
-    else      scaledColumn = (int64_t) column *  lastColumn;
-    int c = scaledColumn >> FP_MSB;
-    int d = c + 1;
-    if (time)
-    {
-        if (c >= timeColumn) c++;  // Implicitly, d will also be >= timeColumn.
-        if (d >= timeColumn) d++;
-    }
-    if (c < 0)
-    {
-        if (time  &&  timeColumn == 0  &&  currentCount > 1) return currentValues[1];
-        return currentValues[0];
-    }
-    if (c >= lastColumn)
-    {
-        if (time  &&  timeColumn == lastColumn  &&  currentCount > 1) return currentValues[lastColumn-1];
-        return currentValues[lastColumn];
-    }
-    int b = scaledColumn & 0x3FFFFFFF;
-    int b1 = (1 << FP_MSB) - b;
-    return (int64_t) b1 * currentValues[c] + (int64_t) b * currentValues[d] >> FP_MSB;
-}
-
-#endif
-
-template<class T>
-T
-InputHolder<T>::getRaw (T row, T column)
-{
-    getRow (row);
     int c = (int) round (column);
     if (time  &&  c >= timeColumn) c++;  // time column is not included in raw index
     if      (c < 0            ) c = 0;
     else if (c >= currentCount) c = currentCount - 1;
     return currentValues[c];
+}
+
+template<class T>
+Matrix<T>
+InputHolder<T>::get (T row)
+{
+    getRow (row);
+    if (Alast == currentLine) return *A;
+
+    // Create a new matrix
+    if (A) delete A;
+    if (time  &&  currentCount > 1)
+    {
+        int columns = currentCount - 1;
+        A = new Matrix<T> (1, columns);
+        int from = 0;
+        for (int to = 0; to < columns; to++)
+        {
+            if (from == timeColumn) from++;
+            (*A)(0,to) = currentValues[from++];
+        }
+    }
+    else
+    {
+        A = new Matrix<T> (currentValues, 0, 1, currentCount, currentCount, 1);
+    }
+    Alast = currentLine;
+    return *A;
 }
 
 std::vector<Holder *> inputMap;

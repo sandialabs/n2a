@@ -94,6 +94,8 @@ public:
     T                              nextLine;
     T *                            nextValues;
     int                            nextCount;
+    Matrix<T> *                    A;
+    T                              Alast;
     int                            columnCount;
     std::unordered_map<String,int> columnMap;
     int                            timeColumn;
@@ -109,11 +111,10 @@ public:
     InputHolder (const String & fileName);
     virtual ~InputHolder ();
 
-    void getRow     (T row); ///< subroutine of get() and getRaw()
-    int  getColumns ();      ///< Returns number of columns seen so far.
-    T    get        (T row, const String & column);
-    T    get        (T row, T column);
-    T    getRaw     (T row, T column);
+    void      getRow (T row); ///< subroutine of get()
+    T         get    (T row, const String & column);
+    T         get    (T row, T column);
+    Matrix<T> get    (T row);
 };
 #ifdef n2a_FP
 template<class T> extern InputHolder<T> * inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle = 0);

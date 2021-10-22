@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -282,30 +282,33 @@ public class RendererC extends Renderer
         {
             Input i = (Input) op;
 
-            String mode = "";
-            if      (i.operands.length == 2) mode = i.operands[1].getString ();
-            else if (i.operands.length >= 4) mode = i.operands[3].getString ();
-
             int shift = i.exponent - i.exponentNext;
             if (useExponent  &&  shift != 0) result.append ("(");
-            if (mode.contains ("columns"))
-            {
-                result.append (i.name + "->getColumns ()");
-            }
-            else
-            {
-                Operator op1 = i.operands[1];
-                Operator op2 = i.operands[2];
-                result.append (i.name + "->get");
-                if (mode.contains ("raw")) result.append ("Raw");
-                result.append (" (");
-                op1.render (this);
-                result.append (", ");
-                op2.render (this);
-                result.append (")");
-            }
-            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
 
+            result.append (i.name + "->get");
+            result.append (" (");
+            if (i.operands.length < 3  ||  i.operands[2].getDouble () < 0)  // return matrix
+            {
+                if (i.operands.length > 1)
+                {
+                    Operator op1 = i.operands[1];
+                    if (op1.getType () instanceof Scalar) op1.render (this);   // expression for line
+                    else                                  result.append ("0"); // op1 is probably the mode flag
+                }
+                else  // line is not specified. We're probably just retrieving a dummy matrix to get column count.
+                {
+                    result.append ("0");
+                }
+            }
+            else  // return scalar
+            {
+                i.operands[1].render (this);
+                result.append (", ");
+                i.operands[2].render (this);
+            }
+            result.append (")");
+
+            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
         if (op instanceof Log)
