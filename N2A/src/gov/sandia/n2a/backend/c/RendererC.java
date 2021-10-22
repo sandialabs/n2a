@@ -289,15 +289,17 @@ public class RendererC extends Renderer
             result.append (" (");
             if (i.operands.length < 3  ||  i.operands[2].getDouble () < 0)  // return matrix
             {
+                boolean time = i.getMode ().contains ("time");
+                String defaultLine = time ? "-INFINITY" : "0";
                 if (i.operands.length > 1)
                 {
                     Operator op1 = i.operands[1];
-                    if (op1.getType () instanceof Scalar) op1.render (this);   // expression for line
-                    else                                  result.append ("0"); // op1 is probably the mode flag
+                    if (op1.getType () instanceof Scalar) op1.render (this);           // expression for line
+                    else                                  result.append (defaultLine); // op1 is probably the mode flag
                 }
                 else  // line is not specified. We're probably just retrieving a dummy matrix to get column count.
                 {
-                    result.append ("0");
+                    result.append (defaultLine);
                 }
             }
             else  // return scalar

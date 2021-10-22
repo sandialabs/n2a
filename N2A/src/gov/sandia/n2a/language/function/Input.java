@@ -344,7 +344,7 @@ public class Input extends Function
         else if (op1 instanceof Text) mode = ((Text) op1                       ).value;
         boolean time = mode.contains ("time");
 
-        double line = 0;
+        double line = time ? Double.NEGATIVE_INFINITY : 0;
         if (op1 instanceof Scalar) line = ((Scalar) op1).value;
 
         Holder H = getRow (context, line, time);
