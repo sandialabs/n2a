@@ -67,40 +67,26 @@ public class Input extends Function
 
     public void determineExponent (ExponentContext context)
     {
-        String mode = "";
-        int lastParm = operands.length - 1;
-        if (lastParm > 0) mode = operands[lastParm].getString ();
-        boolean columns = mode.contains ("columns");
+        for (int i = 1; i < operands.length; i++) operands[i].determineExponent (context);
 
-        for (int i = 1; i <= lastParm; i++) operands[i].determineExponent (context);
-
-        if (columns)
-        {
-            updateExponent (context, MSB, 0);  // Return an integer
-        }
-        else
-        {
-            int centerNew   = MSB / 2;
-            int exponentNew = getExponentHint (mode, 0) + MSB - centerNew;
-            updateExponent (context, exponentNew, centerNew);
-        }
+        int centerNew   = MSB / 2;
+        int exponentNew = getExponentHint (getMode (), 0) + MSB - centerNew;
+        updateExponent (context, exponentNew, centerNew);
     }
 
     public void determineExponentNext ()
     {
-        String mode = "";
-        int lastParm = operands.length - 1;
-        if (lastParm > 0) mode = operands[lastParm].getString ();
-        boolean time = mode.contains ("time");
+        String mode = getMode ();
+        boolean time = mode.contains ("time")  ||  mode.contains ("smooth");
 
-        if (lastParm >= 1)
+        if (operands.length > 1)
         {
             Operator op = operands[1];
             if (time) op.exponentNext = exponentTime;
             else      op.exponentNext = MSB;  // We expect an integer.
             op.determineExponentNext ();
         }
-        if (lastParm >= 2)
+        if (operands.length > 2)
         {
             Operator op = operands[2];
             op.exponentNext = MSB;  // We expect an integer.
@@ -124,11 +110,12 @@ public class Input extends Function
         public double              nextLine      = Double.NaN; // Initial condition is no line available.
         public double[]            nextValues    = empty;
         public Matrix              A;                          // Matrix value returned if in whole-row mode (column parameter < 0)
-        public double              Alast         = -2;         // Line number when A was last generated. -2 means never
+        public double              Alast         = Double.NaN; // Line number when A was last generated.
         public Map<String,Integer> columnMap     = new TreeMap<String,Integer> ();
         public List<String>        headers       = new ArrayList<String> ();  // The inverse of columnMap
         public int                 columnCount;
         public boolean             time;                       // mode flag
+        public boolean             smooth;                     // mode flag. When true, time must also be true. Does not change the behavior of Holder, just stored here for convenience.
         public int                 timeColumn;                 // We assume column 0, unless a header overrides this.
         public boolean             timeColumnSet;              // Indicates that a header appeared in the file, so timeColumn has been evaluated.
         public String              delimiter = " ";            // Regular expression for separator character. Allows switch between comma and space/tab.
@@ -206,7 +193,11 @@ public class Input extends Function
                                 }
 
                                 // Make column count accessible to other code before first row of data is read.
-                                if (A == null  &&  columnCount > 1) currentValues = new double[columnCount];
+                                if (A == null)
+                                {
+                                    if (time) currentLine = Double.NEGATIVE_INFINITY;
+                                    if (currentValues.length != columnCount) currentValues = new double[columnCount];
+                                }
 
                                 // Select time column
                                 // The time column should be specified in the first row of headers, if at all.
@@ -255,7 +246,7 @@ public class Input extends Function
                                 try
                                 {
                                     SimpleDateFormat format = null;
-                                    if (nextValues[i] < 3000  &&  nextValues[i] > 0)  // Just the year
+                                    if (nextValues[i] < 3000  &&  nextValues[i] > 1000)  // Just the year. Two-digit years are not accepted.
                                     {
                                         format = new SimpleDateFormat ("yyyy");
                                     }
@@ -297,7 +288,7 @@ public class Input extends Function
         }
     }
 
-    public Holder getRow (Instance context, double line, boolean time)
+    public Holder getRow (Instance context, double line)
     {
         Simulator simulator = Simulator.instance.get ();
         if (simulator == null) return null;  // If we can't cache a line from the requested stream, then semantics of this function are lost, so give up.
@@ -305,6 +296,10 @@ public class Input extends Function
         Holder H = null;
         try
         {
+            String mode = getMode ();
+            boolean smooth =             mode.contains ("smooth");
+            boolean time   = smooth  ||  mode.contains ("time");
+
             // get an input holder
             String path = ((Text) operands[0].eval (context)).value;
             H = Holder.get (simulator, path, time);
@@ -314,7 +309,9 @@ public class Input extends Function
                 Backend.err.get ().println ("WARNING: Changed time mode for input(" + path + ")");
                 timeWarning = true;
             }
+            H.smooth = smooth;  // remember for use by caller
 
+            if (! H.time  &&  Double.isInfinite (line)) line = 0;
             H.getRow (line);
         }
         catch (IOException e)
@@ -336,21 +333,15 @@ public class Input extends Function
 
     public Type eval (Instance context)
     {
+        double line = Double.NEGATIVE_INFINITY;
         Type op1 = null;
         if (operands.length > 1) op1 = operands[1].eval (context);
-
-        String mode = "";
-        if      (operands.length > 3) mode = ((Text) operands[3].eval (context)).value;
-        else if (op1 instanceof Text) mode = ((Text) op1                       ).value;
-        boolean time = mode.contains ("time");
-
-        double line = time ? Double.NEGATIVE_INFINITY : 0;
         if (op1 instanceof Scalar) line = ((Scalar) op1).value;
 
-        Holder H = getRow (context, line, time);
+        Holder H = getRow (context, line);
         if (H == null) return getType ();
 
-        double column = -1;
+        int c = -1;
         if (operands.length > 2)
         {
             Type columnSpec = operands[2].eval (context);
@@ -358,44 +349,87 @@ public class Input extends Function
             {
                 Integer columnMapping = H.columnMap.get (((Text) columnSpec).value);
                 if (columnMapping == null) return new Scalar (0);
-                return new Scalar (H.currentValues[columnMapping]);  // If it's in the column map, we can safely assume that the index is in range.
+                c = columnMapping;
             }
-            // Otherwise, just assume it is a Scalar
-            column = ((Scalar) columnSpec).value;
+            else  // Otherwise, just assume it is a Scalar
+            {
+                c = (int) Math.round (((Scalar) columnSpec).value);
+            }
         }
 
         int columns    = H.currentValues.length;
         int lastColumn = columns - 1;
-        if (column >= 0)
+        if (H.smooth  &&  line >= H.currentLine  &&  Double.isFinite (H.currentLine)  &&  ! Double.isNaN (H.nextLine))
         {
-            int c = (int) Math.round (column);
-            if (time  &&  c >= H.timeColumn) c++;  // time column is not included in raw index
-            if      (c < 0       ) c = 0;
-            else if (c >= columns) c = lastColumn;
-            return new Scalar (H.currentValues[c]);
-        }
-        else
-        {
-            if (H.Alast == H.currentLine) return H.A;
-
-            // Create a new matrix
-            if (time  &&  columns > 1)
+            double b  = (line - H.currentLine) / (H.nextLine - H.currentLine);  // This should still work, even if line < H.currentLine.
+            double b1 = 1 - b;
+            if (c >= 0)
             {
-                columns--;
-                H.A = new MatrixDense (1, columns);
-                int from = 0;
-                for (int to = 0; to < columns; to++)
-                {
-                    if (from == H.timeColumn) from++;
-                    H.A.set (0, to, H.currentValues[from++]);
-                }
+                if (c >= H.timeColumn) c++;  // time column is not included in raw index
+                if      (c < 0       ) c = 0;
+                else if (c >= columns) c = lastColumn;
+                return new Scalar (b * H.nextValues[c] + b1 * H.currentValues[c]);
             }
             else
             {
-                H.A = new MatrixDense (H.currentValues, 0, 1, columns, columns, 1);
+                if (H.Alast == line) return H.A;
+
+                // Create a new matrix
+                if (columns > 1)
+                {
+                    columns--;
+                    H.A = new MatrixDense (1, columns);
+                    int from = 0;
+                    for (int to = 0; to < columns; to++)
+                    {
+                        if (from == H.timeColumn) from++;
+                        H.A.set (0, to, b * H.nextValues[from] + b1 * H.currentValues[from]);
+                        from++;
+                    }
+                }
+                else  // There is always at least 1 column, enforced by Holder.
+                {
+                    H.A = new MatrixDense (1, 1);
+                    H.A.set (0, 0, b * H.nextValues[0] + b1 * H.currentValues[0]);
+                }
+
+                H.Alast = line;
+                return H.A;
             }
-            H.Alast = H.currentLine;
-            return H.A;
+        }
+        else
+        {
+            if (c >= 0)
+            {
+                if (H.time  &&  c >= H.timeColumn) c++;  // time column is not included in raw index
+                if      (c < 0       ) c = 0;
+                else if (c >= columns) c = lastColumn;
+                return new Scalar (H.currentValues[c]);
+            }
+            else
+            {
+                if (H.Alast == H.currentLine) return H.A;
+
+                // Create a new matrix
+                if (H.time  &&  columns > 1)
+                {
+                    columns--;
+                    H.A = new MatrixDense (1, columns);
+                    int from = 0;
+                    for (int to = 0; to < columns; to++)
+                    {
+                        if (from == H.timeColumn) from++;
+                        H.A.set (0, to, H.currentValues[from++]);
+                    }
+                }
+                else
+                {
+                    H.A = new MatrixDense (H.currentValues, 0, 1, columns, columns, 1);
+                }
+
+                H.Alast = H.currentLine;
+                return H.A;
+            }
         }
     }
 

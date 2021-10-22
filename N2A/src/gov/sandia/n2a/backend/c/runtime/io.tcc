@@ -334,11 +334,12 @@ InputHolder<T>::InputHolder (const String & fileName)
     nextValues       = 0;
     nextCount        = 0;
     A                = 0;
-    Alast            = (T) -2;
+    Alast            = (T) NAN;
     columnCount      = 0;
     timeColumn       = 0;
     timeColumnSet    = false;
     time             = false;
+    smooth           = false;
     delimiter        = ' ';
     delimiterSet     = false;
 #   ifdef n2a_FP
@@ -408,12 +409,16 @@ InputHolder<T>::getRow (T row)
                     }
 
                     // Make column count accessible to other code before first row of data is read.
-                    if (! A  &&  currentCount < columnCount)
+                    if (! A)
                     {
-                        delete[] currentValues;
-                        currentValues = new T[columnCount];
-                        currentCount = columnCount;
-                        memset (&currentValues[0], 0, columnCount * sizeof (T));
+                        if (time) currentLine = -INFINITY;
+                        if (currentCount != columnCount)
+                        {
+                            delete[] currentValues;
+                            currentValues = new T[columnCount];
+                            currentCount = columnCount;
+                            memset (&currentValues[0], 0, columnCount * sizeof (T));
+                        }
                     }
 
                     // Select time column
@@ -461,25 +466,11 @@ InputHolder<T>::getRow (T row)
                     {
                         String field = line.substr (i, j - i);
 
-                        // General case
-#                       ifdef n2a_FP
-                        if (time  &&  timeColumnSet  &&  index == timeColumn)
-                        {
-                            nextValues[index] = convert (field, Event<T>::exponent);
-                        }
-                        else
-                        {
-                            nextValues[index] = convert (field, exponent);
-                        }
-#                       else
-                        nextValues[index] = (T) atof (field.c_str ());
-#                       endif
-
                         // Special case for ISO 8601 formatted date
                         // Convert date to Unix time. Dates before epoch will be negative.
+                        bool valid = false;
                         if (index == timeColumn)
                         {
-                            bool valid = false;
                             int year   = 1970;  // will be adjusted below for mktime()
                             int month  = 1;     // ditto
                             int day    = 1;
@@ -488,13 +479,10 @@ InputHolder<T>::getRow (T row)
                             int second = 0;
 
                             int length = field.size ();
-                            if (length <= 4)
+                            if (length == 4)
                             {
-                                if (nextValues[index] < 3000  &&  nextValues[index] > 0)
-                                {
-                                    valid = true;
-                                    year = nextValues[index];
-                                }
+                                year  = atoi (field.c_str ());
+                                valid =  year < 3000  &&  year > 1000;
                             }
                             else if (length >= 7  &&  field[4] == '-')
                             {
@@ -554,8 +542,23 @@ InputHolder<T>::getRow (T row)
                                 date.tm_min  = minute;
                                 date.tm_sec  = second;
 
-                                nextValues[index] = mktime (&date) - offset;
+                                nextValues[index] = mktime (&date) - offset;  // Unix time; an integer, so exponent=MSB
+#                               ifdef n2a_FP
+                                // Need to put value in expected exponent.
+                                int shift = FP_MSB - (time ? Event<T>::exponent : exponent);
+                                if (shift >= 0) nextValues[index] <<= shift;
+                                else            nextValues[index] >>= -shift;
+#                               endif
                             }
+                        }
+
+                        if (! valid)  // Not a date, so general case ...
+                        {
+#                           ifdef n2a_FP
+                            nextValues[index] = convert (field, time  &&  index == timeColumn ? Event<T>::exponent : exponent);
+#                           else
+                            nextValues[index] = (T) atof (field.c_str ());
+#                           endif
                         }
                     }
                     i = j + 1;
@@ -594,6 +597,23 @@ InputHolder<T>::get (T row, const String & column)
     getRow (row);
     std::unordered_map<String,int>::const_iterator it = columnMap.find (column);
     if (it == columnMap.end ()) return 0;
+
+#   ifdef n2a_FP
+    if (smooth  &&  row >= currentLine  &&  currentLine != -INFINITY  &&  nextLine != NAN)
+    {
+        // We don't need to know what exponent the line values have, as long as they match.
+        int b = ((int64_t) (row - currentLine) << FP_MSB) / (nextLine - currentLine);
+        int b1 = (1 << FP_MSB) - b;
+        return (int64_t) b * nextValues[it->second] + (int64_t) b1 * currentValues[it->second] >> FP_MSB;
+    }
+#   else
+    if (smooth  &&  row >= currentLine  &&  std::isfinite (currentLine)  &&  std::isfinite (nextLine))
+    {
+        T b = (row - currentLine) / (nextLine - currentLine);
+        return b * nextValues[it->second] + (1-b) * currentValues[it->second];
+    }
+#   endif
+
     return currentValues[it->second];
 }
 
@@ -606,6 +626,22 @@ InputHolder<T>::get (T row, T column)
     if (time  &&  c >= timeColumn) c++;  // time column is not included in raw index
     if      (c < 0            ) c = 0;
     else if (c >= currentCount) c = currentCount - 1;
+
+#   ifdef n2a_FP
+    if (smooth  &&  row >= currentLine  &&  currentLine != -INFINITY  &&  nextLine != NAN)
+    {
+        int b  = ((int64_t) (row - currentLine) << FP_MSB) / (nextLine - currentLine);
+        int b1 = (1 << FP_MSB) - b;
+        return (int64_t) b * nextValues[c] + (int64_t) b1 * currentValues[c] >> FP_MSB;
+    }
+#   else
+    if (smooth  &&  row >= currentLine  &&  std::isfinite (currentLine)  &&  std::isfinite (nextLine))
+    {
+        T b = (row - currentLine) / (nextLine - currentLine);
+        return b * nextValues[c] + (1-b) * currentValues[c];
+    }
+#   endif
+
     return currentValues[c];
 }
 
@@ -614,6 +650,69 @@ Matrix<T>
 InputHolder<T>::get (T row)
 {
     getRow (row);
+
+#   ifdef n2a_FP
+    if (smooth  &&  row >= currentLine  &&  currentLine != -INFINITY  &&  nextLine != NAN)
+    {
+        if (Alast == row) return *A;
+
+        // Create a new matrix
+        if (A) delete A;
+        int b  = ((int64_t) (row - currentLine) << FP_MSB) / (nextLine - currentLine);
+        int b1 = (1 << FP_MSB) - b;
+        if (currentCount > 1)
+        {
+            int columns = currentCount - 1;
+            A = new Matrix<T> (1, columns);
+            int from = 0;
+            for (int to = 0; to < columns; to++)
+            {
+                if (from == timeColumn) from++;
+                (*A)(0,to) = (int64_t) b * nextValues[from] + (int64_t) b1 * currentValues[from] >> FP_MSB;
+                from++;
+            }
+        }
+        else
+        {
+            A = new Matrix<T> (1, 1);
+            (*A)(0,0) = (int64_t) b * nextValues[0] + (int64_t) b1 * currentValues[0] >> FP_MSB;
+        }
+
+        Alast = row;
+        return *A;
+    }
+#   else
+    if (smooth  &&  row >= currentLine  &&  std::isfinite (currentLine)  &&  std::isfinite (nextLine))
+    {
+        if (Alast == row) return *A;
+
+        // Create a new matrix
+        if (A) delete A;
+        T b  = (row - currentLine) / (nextLine - currentLine);
+        T b1 = 1 - b;
+        if (currentCount > 1)
+        {
+            int columns = currentCount - 1;
+            A = new Matrix<T> (1, columns);
+            int from = 0;
+            for (int to = 0; to < columns; to++)
+            {
+                if (from == timeColumn) from++;
+                (*A)(0,to) = b * nextValues[from] + b1 * currentValues[from];
+                from++;
+            }
+        }
+        else
+        {
+            A = new Matrix<T> (1, 1);
+            (*A)(0,0) = b * nextValues[0] + b1 * currentValues[0];
+        }
+
+        Alast = row;
+        return *A;
+    }
+#   endif
+
     if (Alast == currentLine) return *A;
 
     // Create a new matrix

@@ -101,6 +101,7 @@ public:
     int                            timeColumn;
     bool                           timeColumnSet;
     bool                           time;     ///< mode
+    bool                           smooth;   ///< mode; when true, time must also be true
     char                           delimiter;
     bool                           delimiterSet;
     T                              epsilon;  ///< for time values

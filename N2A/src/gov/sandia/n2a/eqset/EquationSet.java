@@ -3311,33 +3311,31 @@ public class EquationSet implements Comparable<EquationSet>
                     if (op instanceof Input)
                     {
                         Input i = (Input) op;
-                        if (i.operands.length >= 4)
+                        String mode = i.getMode ();
+                        if (mode.contains ("time")  ||  mode.contains ("smooth"))
                         {
-                            if (i.operands[3].getString ().contains ("time"))
+                            Object key = null;
+                            Operator path = i.operands[0];
+                            if (path instanceof Constant)
                             {
-                                Object key = null;
-                                Operator path = i.operands[0];
-                                if (path instanceof Constant)
+                                key = path.getString ();
+                            }
+                            else if (path instanceof AccessVariable)
+                            {
+                                key = ((AccessVariable) path).reference.variable;
+                            }
+                            // TODO: should also find a way to turn more complicated expressions into keys.
+                            // For example, "bob"+$index should compare equal if it appears in two separate
+                            // input() statements.
+                            if (key != null)
+                            {
+                                ArrayList<Input> list = context.inputs.get (key);
+                                if (list == null)
                                 {
-                                    key = path.getString ();
+                                    list = new ArrayList<Input> ();
+                                    context.inputs.put (key, list);
                                 }
-                                else if (path instanceof AccessVariable)
-                                {
-                                    key = ((AccessVariable) path).reference.variable;
-                                }
-                                // TODO: should also find a way to turn more complicated expressions into keys.
-                                // For example, "bob"+$index should compare equal if it appears in two separate
-                                // input() statements.
-                                if (key != null)
-                                {
-                                    ArrayList<Input> list = context.inputs.get (key);
-                                    if (list == null)
-                                    {
-                                        list = new ArrayList<Input> ();
-                                        context.inputs.put (key, list);
-                                    }
-                                    list.add (i);
-                                }
+                                list.add (i);
                             }
                         }
                     }
