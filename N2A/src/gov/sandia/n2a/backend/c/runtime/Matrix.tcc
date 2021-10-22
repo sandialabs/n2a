@@ -1052,41 +1052,6 @@ Matrix<T>::resize (const int rows, const int columns)
 }
 
 template<class T>
-int
-Matrix<T>::rows () const
-{
-    return rows_;
-}
-
-template<class T>
-int
-Matrix<T>::columns () const
-{
-    return columns_;
-}
-
-template<class T>
-T *
-Matrix<T>::base () const
-{
-    return (T *) data + offset;
-}
-
-template<class T>
-int
-Matrix<T>::strideR () const
-{
-    return strideR_;
-}
-
-template<class T>
-int
-Matrix<T>::strideC () const
-{
-    return strideC_;
-}
-
-template<class T>
 Matrix<T>
 operator ~ (const Matrix<T> & A)
 {

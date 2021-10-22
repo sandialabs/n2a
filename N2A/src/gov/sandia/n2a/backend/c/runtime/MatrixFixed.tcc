@@ -129,41 +129,6 @@ MatrixFixed<T,R,C>::classID () const
 }
 
 template<class T, int R, int C>
-int
-MatrixFixed<T,R,C>::rows () const
-{
-    return R;
-}
-
-template<class T, int R, int C>
-int
-MatrixFixed<T,R,C>::columns () const
-{
-    return C;
-}
-
-template<class T, int R, int C>
-T *
-MatrixFixed<T,R,C>::base () const
-{
-    return const_cast<T *> (data[0]);
-}
-
-template<class T, int R, int C>
-int
-MatrixFixed<T,R,C>::strideR () const
-{
-    return 1;
-}
-
-template<class T, int R, int C>
-int
-MatrixFixed<T,R,C>::strideC () const
-{
-    return R;
-}
-
-template<class T, int R, int C>
 MatrixFixed<T,C,R>
 operator ~ (const MatrixFixed<T,R,C> & A)
 {

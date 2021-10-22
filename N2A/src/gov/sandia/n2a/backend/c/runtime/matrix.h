@@ -5,7 +5,7 @@ Copyright (c) 2001-2004 Dept. of Computer Science and Beckman Institute,
 Distributed under the UIUC/NCSA Open Source License.
 
 
-Copyright 2005, 2009, 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -150,11 +150,26 @@ public:
     {
         return ((T *) data)[offset + row * strideR_];
     }
-    virtual int rows    () const;
-    virtual int columns () const;
-    virtual T * base    () const;
-    virtual int strideR () const;
-    virtual int strideC () const;
+    virtual int rows () const
+    {
+        return rows_;
+    }
+    virtual int columns () const
+    {
+        return columns_;
+    }
+    virtual T * base () const
+    {
+        return (T *) data + offset;
+    }
+    virtual int strideR () const
+    {
+        return strideR_;
+    }
+    virtual int strideC () const
+    {
+        return strideC_;
+    }
 };
 
 template<class T> Matrix<T> operator ~ (const Matrix<T> & A);
@@ -178,11 +193,26 @@ public:
     {
         return ((T *) data)[row];
     }
-    virtual int rows    () const;
-    virtual int columns () const;
-    virtual T * base    () const;
-    virtual int strideR () const;
-    virtual int strideC () const;
+    virtual int rows () const
+    {
+        return R;
+    }
+    virtual int columns () const
+    {
+        return C;
+    }
+    virtual T * base () const
+    {
+        return const_cast<T *> (data[0]);
+    }
+    virtual int strideR () const
+    {
+        return 1;
+    }
+    virtual int strideC () const
+    {
+        return R;
+    }
 };
 
 template<class T> T det (const MatrixFixed<T,2,2> & A);  ///< Subroutine for operator !
