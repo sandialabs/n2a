@@ -4,12 +4,14 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.backend.neuroml;
+package gov.sandia.n2a.linear;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class MatrixBoolean
+import gov.sandia.n2a.language.type.Matrix;
+
+public class MatrixBoolean extends Matrix
 {
     protected List<boolean[]> data     = new ArrayList<boolean[]> ();
     protected int             rowCount = 0;  // (One more than) the greatest row index that has been touched by either a set() or clear().
@@ -48,12 +50,22 @@ public class MatrixBoolean
         return data.size ();
     }
 
-    public boolean get (int row, int col)
+    public double get (int row, int col)
+    {
+        return getBoolean (row, col) ? 1 : 0;
+    }
+
+    public boolean getBoolean (int row, int col)
     {
         if (col >= data.size ()) return false;
         boolean[] column = data.get (col);
         if (row >= column.length) return false;
         return column[row];
+    }
+
+    public void set (int row, int column, double a)
+    {
+        set (row, column, a != 0);
     }
 
     public void set (int row, int col)
@@ -97,6 +109,11 @@ public class MatrixBoolean
         }
     }
 
+    public Matrix clear (double initialValue)
+    {
+        return new MatrixBoolean (rowCount, data.size ());
+    }
+
     public void clear (int row, int col)
     {
         if (row >= rowCount) rowCount = row + 1;
@@ -116,6 +133,14 @@ public class MatrixBoolean
         for (int r = 0; r < column.length; r++) column[r] = false;
     }
 
+    public Matrix identity ()
+    {
+        MatrixBoolean result = new MatrixBoolean (rowCount, data.size ());
+        int rc = Math.min (rowCount, data.size ());
+        for (int i = 0; i < rc; i++) result.set (i, i);
+        return result;
+    }
+
     /**
         Makes a shallow copy of the requested column.
     **/
@@ -126,6 +151,11 @@ public class MatrixBoolean
         result.data.add (value);
         result.rowCount = value.length;
         return result;
+    }
+
+    public boolean[] columnBoolean (int col)
+    {
+        return data.get (col);
     }
 
     /**
@@ -230,7 +260,7 @@ public class MatrixBoolean
                 boolean match = true;
                 for (int c = 0; c < columnCount; c++)
                 {
-                    if (mask.get (0, c)  &&  get (r, c) != F.get (f, c))
+                    if (mask.getBoolean (0, c)  &&  getBoolean (r, c) != F.getBoolean (f, c))
                     {
                         match = false;
                         break;
@@ -239,7 +269,7 @@ public class MatrixBoolean
                 if (match) break;
             }
             P.set (r, f);
-            for (int c = 0; c < columnCount; c++) F.set (f, c,  F.get (f, c)  ||  get (r, c));
+            for (int c = 0; c < columnCount; c++) F.set (f, c,  F.getBoolean (f, c)  ||  getBoolean (r, c));
         }
     }
 

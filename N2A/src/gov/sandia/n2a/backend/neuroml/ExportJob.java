@@ -75,6 +75,7 @@ import gov.sandia.n2a.language.operator.OR;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.linear.MatrixBoolean;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.MainFrame;
@@ -1707,7 +1708,7 @@ public class ExportJob extends XMLutility
                 int pnlidCount = 0;
                 for (int c = 0; c < P.columns (); c++)
                 {
-                    if (! P.get (row, c)  ||  P.columnNorm0 (c) > 1) continue;
+                    if (! P.getBoolean (row, c)  ||  P.columnNorm0 (c) > 1) continue;
                     Property property = properties.get (c);
                     if (property instanceof PropertyNeuroLexID)
                     {
@@ -1824,7 +1825,7 @@ public class ExportJob extends XMLutility
                 int rows = blocks.size ();
                 for (int r = 0; r < rows; r++)
                 {
-                    if (P.get (r, column))
+                    if (P.getBoolean (r, column))
                     {
                         lastFound = blocks.get (r);
                         count += lastFound.segments.size ();
@@ -1867,7 +1868,7 @@ public class ExportJob extends XMLutility
                         groups.put (segmentGroupName, group);
                         for (int r = 0; r < rows; r++)
                         {
-                            if (P.get (r, column))
+                            if (P.getBoolean (r, column))
                             {
                                 SegmentBlock b = blocks.get (r);
                                 String name = b.block.key ();
@@ -2006,7 +2007,7 @@ public class ExportJob extends XMLutility
                         int rows = blocks.size ();
                         for (int r = 0; r < rows; r++)
                         {
-                            if (P.get (r, column))
+                            if (P.getBoolean (r, column))
                             {
                                 inhomo.addAll (blocks.get (r).inhomo);
                             }

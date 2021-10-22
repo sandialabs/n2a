@@ -23,6 +23,7 @@ import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.linear.MatrixBoolean;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
@@ -1384,7 +1385,7 @@ public class ImportJob extends XMLutility
                             for (int c = 0; c < G.columns (); c++)
                             {
                                 if (c == currentColumn) continue;
-                                if (! G.get (r, c)) continue;
+                                if (! G.getBoolean (r, c)) continue;
 
                                 int count = G.columnNorm0 (c);
                                 if (count > bestCount)
@@ -1466,14 +1467,14 @@ public class ImportJob extends XMLutility
             while (it.hasNext ())
             {
                 int i = it.next ();
-                boolean[] columnA = M.data.get (i);
+                boolean[] columnA = M.columnBoolean (i);
                 int bestCount = 0;
                 int bestIndex = -1;
                 for (int j = 0; j < columnsG; j++)
                 {
                     int count = 0;
                     boolean subset = true;
-                    boolean[] columnG = G.data.get (j);
+                    boolean[] columnG = G.columnBoolean (j);
                     int rows = Math.min (columnA.length, columnG.length);
                     int r = 0;
                     for (; r < rows; r++)
@@ -1544,7 +1545,7 @@ public class ImportJob extends XMLutility
                 //   rows of O are new parts (columns of M); columns of O are original segment groups
                 for (int i = 0; i < columnsG; i++)
                 {
-                    if (! O.get (c, i)) continue;
+                    if (! O.getBoolean (c, i)) continue;
                     String groupName = groupIndex.get (i);  // Name from the original set of groups, not the new groups
                     MNode group = cell.child ("$group", groupName);
 
@@ -1619,7 +1620,7 @@ public class ImportJob extends XMLutility
                 int index = 0;
                 for (int r = 0; r < M.rows (); r++)
                 {
-                    if (! M.get (r, c)) continue;
+                    if (! M.getBoolean (r, c)) continue;
                     Segment s = segments.get (r);
 
                     if (! s.neuroLexID.isEmpty ()  &&  ! neuroLexIDs.contains (s.neuroLexID))
@@ -2435,7 +2436,7 @@ public class ImportJob extends XMLutility
                 int count = M.columns ();
                 for (int c = 0; c < count; c++)
                 {
-                    if (M.get (id, c))
+                    if (M.getBoolean (id, c))
                     {
                         group = cell.groupIndex.get (c);
                         segment = models.child (modelName, cellID, group);
