@@ -428,7 +428,7 @@ InputHolder<T>::getRow (T row)
                         for (auto it : columnMap)
                         {
                             int potentialMatch = 0;
-                            String header = it.first.tolower ();
+                            String header = it.first.toLowerCase ();
                             if      (header == "t"   ) potentialMatch = 1;
                             else if (header == "date") potentialMatch = 1;
                             else if (header == "time") potentialMatch = 2;

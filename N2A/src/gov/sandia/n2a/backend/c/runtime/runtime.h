@@ -84,6 +84,8 @@ template<class T, int R, int C> MatrixFixed<T,R,1> gaussian (const MatrixFixed<T
 template<class T> MatrixFixed<T,3,1> grid    (int i, int nx = 1, int ny = 1, int nz = 1);
 template<class T> MatrixFixed<T,3,1> gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);
 
+template<class T> T pulse (T t, T width = (T) INFINITY, T period = (T) 0, T rise = (T) 0, T fall = (T) 0);
+
 template<class T> T unitmap (const MatrixAbstract<T> & A, T row, T column = (T) 0.5);
 #ifdef n2a_FP
 template<int> int unitmap (const MatrixAbstract<int> & A, int row, int column = 0x1 << FP_MSB - 1);

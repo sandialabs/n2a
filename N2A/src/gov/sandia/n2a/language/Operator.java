@@ -249,6 +249,7 @@ public class Operator implements Cloneable
     {
         for (String p : mode.split (","))
         {
+            p = p.trim ();
             if (p.startsWith ("median"))
             {
                 String magnitude = "";

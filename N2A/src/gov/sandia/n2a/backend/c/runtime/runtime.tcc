@@ -107,6 +107,20 @@ gridRaw (int i, int nx, int ny, int nz)
 
 template<class T>
 T
+pulse (T t, T width, T period, T rise, T fall)
+{
+    if (t < 0) return 0;
+    if (period != 0) t = std::fmod (t, period);
+    if (t < rise) return t / rise;
+    t -= rise;
+    if (t < width) return 1;
+    t -= width;
+    if (t < fall) return (T) 1 - t / fall;
+    return 0;
+}
+
+template<class T>
+T
 unitmap (const MatrixAbstract<T> & A, T row, T column)
 {
     // Just assume handle is good.
@@ -233,6 +247,20 @@ grid (int i, int nx, int ny, int nz)
     result[1] = (((int64_t) result[1] << 1) + 1 << FP_MSB) / ny;
     result[2] = (((int64_t) result[2] << 1) + 1 << FP_MSB) / nz;
     return result;
+}
+
+template<class>
+int
+pulse (int t, int width, int period, int rise, int fall)
+{
+    if (t < 0) return 0;
+    if (period != 0) t %= period;
+    if (t < rise) return ((int64_t) t << FP_MSB) / rise;
+    t -= rise;
+    if (t < width) return 1 << FP_MSB;
+    t -= width;
+    if (t < fall) return (1 << FP_MSB) - (int) (((int64_t) t << FP_MSB) / fall);
+    return 0;
 }
 
 template<>

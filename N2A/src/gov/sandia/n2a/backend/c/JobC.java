@@ -36,6 +36,8 @@ import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.ui.jobs.NodeJob;
@@ -51,6 +53,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -59,41 +62,50 @@ import java.util.TreeSet;
 
 public class JobC extends Thread
 {
-    protected static boolean needRuntime = true;  // always rebuild runtime once per session
+    protected static Set<Host>              runtimeBuilt    = new HashSet<Host> ();              // collection of Hosts for which runtime has already been checked/built during this session.
+    protected static Map<Host,List<String>> providedObjects = new HashMap<Host,List<String>> (); // object code or archives provided by extensions. The string is suitable for constructing compiler command line.
 
-    public MNode       job;
-    public EquationSet digestedModel;
+    public    MNode       job;
+    protected EquationSet digestedModel;
 
-    public Host env;
-    public Path localJobDir;
-    public Path jobDir;     // local or remote
-    public Path runtimeDir; // local or remote
-    public Path gcc;        // local or remote
+    public    Host env;
+    protected Path localJobDir;
+    protected Path jobDir;     // local or remote
+    public    Path runtimeDir; // local or remote
+    public    Path gcc;        // local or remote
 
-    public String  T;
-    public long    seed;
-    public boolean during;
-    public boolean after;
-    public boolean profile;
+    public    String  T;
+    protected long    seed;
+    protected boolean during;
+    protected boolean after;
+    protected boolean kokkos;
+    public    boolean gprof;
+    protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
     
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
-    public HashMap<Object,String> matrixNames = new HashMap<Object,String> ();
-    public HashMap<Object,String> inputNames  = new HashMap<Object,String> ();
-    public HashMap<Object,String> outputNames = new HashMap<Object,String> ();
-    public HashMap<Object,String> stringNames = new HashMap<Object,String> ();
+    protected HashMap<Object,String> matrixNames    = new HashMap<Object,String> ();
+    protected HashMap<Object,String> inputNames     = new HashMap<Object,String> ();
+    protected HashMap<Object,String> outputNames    = new HashMap<Object,String> ();
+    public    HashMap<Object,String> stringNames    = new HashMap<Object,String> ();
+    public    HashMap<Object,String> extensionNames = new HashMap<Object,String> ();  // Shared by all extension-provided operators.
 
     // Work around the initialization sequencing problem by delaying the call to holderHelper until main().
     // To do this, we need to stash variable names. This may seem redundant with the above maps,
     // but this is a more limited case.
-    public List<ReadMatrix> mainMatrix = new ArrayList<ReadMatrix> ();
-    public List<Input>      mainInput  = new ArrayList<Input> ();
-    public List<Output>     mainOutput = new ArrayList<Output> ();
+    protected List<ReadMatrix> mainMatrix    = new ArrayList<ReadMatrix> ();
+    protected List<Input>      mainInput     = new ArrayList<Input> ();
+    protected List<Output>     mainOutput    = new ArrayList<Output> ();
+    public    List<Operator>   mainExtension = new ArrayList<Operator> ();  // Shared by all extension-provided operators.
 
     public JobC (MNode job)
     {
         super ("C Job");
         this.job = job;
+
+        // Collect plugin renderers
+        List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (ProvideOperator.class);
+        for (ExtensionPoint exp : exps) extensions.add ((ProvideOperator) exp);
     }
 
     public void run ()
@@ -154,7 +166,8 @@ public class JobC extends Thread
                     after  = false;
             }
 
-            profile = model.getFlag ("$metadata", "backend", "c", "profile");
+            kokkos = model.getFlag ("$metadata", "backend", "c", "kokkos");
+            gprof  = model.getFlag ("$metadata", "backend", "c", "gprof");
 
             System.out.println (digestedModel.dump (false));
 
@@ -191,10 +204,22 @@ public class JobC extends Thread
     {
         // Update runtime source files, if necessary
         boolean changed = false;
-        if (needRuntime)
+        if (! runtimeBuilt.contains (env))
         {
             changed = unpackRuntime ();
-            needRuntime = false;   // Stop checking files for this session.
+            for (ProvideOperator pf : extensions)
+            {
+                String po = pf.rebuildRuntime (this);
+                if (po == null) continue;
+                List<String> envProvidedObjects = providedObjects.get (env);
+                if (envProvidedObjects == null)
+                {
+                    envProvidedObjects = new ArrayList<String> ();
+                    providedObjects.put (env, envProvidedObjects);
+                }
+                envProvidedObjects.add (po);
+            }
+            runtimeBuilt.add (env);  // Stop checking files for this session.
         }
 
         if (changed)  // Delete existing object files
@@ -224,15 +249,23 @@ public class JobC extends Thread
             Path object = runtimeDir.resolve (objectName);
             if (Files.exists (object)) continue;
             Path source = runtimeDir.resolve (stem + ".cc");
-            Path out = runCommand
-            (
-                gcc.toString (), "-c", "-O3", "-std=c++11",
-                "-ffunction-sections", "-fdata-sections",
-                "-I" + runtimeDir,
-                "-Dn2a_T=" + T,
-                (T.equals ("int") ? "-Dn2a_FP" : ""),
-                "-o", env.quote (object), env.quote (source)
-            );
+
+            List<String> command = new ArrayList<String> ();
+            command.add (gcc.toString ());
+            command.add ("-c");
+            command.add ("-O3");
+            if (gprof) command.add ("-pg");
+            command.add ("-std=c++17");
+            command.add ("-ffunction-sections");
+            command.add ("-fdata-sections");
+            command.add ("-I" + env.quote (runtimeDir));
+            command.add ("-Dn2a_T=" + T);
+            if (T.equals ("int")) command.add ("-Dn2a_FP");
+            command.add ("-o");  // goes with next line ...
+            command.add (env.quote (object));
+            command.add (env.quote (source));
+
+            Path out = runCommand (command.toArray (new String[command.size ()]));
             Files.delete (out);
         }
     }
@@ -281,19 +314,38 @@ public class JobC extends Thread
         String stem = source.getFileName ().toString ().split ("\\.", 2)[0];
         Path binary = source.getParent ().resolve (stem + ".bin");
 
-        Path out = runCommand
-        (
-            gcc.toString (), "-O3", "-std=c++11",
-            "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
-            "-I" + env.quote (runtimeDir),
-            "-Dn2a_T=" + T,
-            (T.equals ("int") ? "-Dn2a_FP" : ""),
-            env.quote (runtimeDir.resolve ("runtime_" + T + ".o")),
-            env.quote (runtimeDir.resolve ("io_"      + T + ".o")),
-            (T.equals ("int") ? env.quote (runtimeDir.resolve ("fixedpoint_" + T + ".o")) : ""),
-            (profile ? env.quote (runtimeDir.resolve ("profiling.o")) : ""), (profile ? "-ldl" : ""),
-            "-o", env.quote (binary), env.quote (source)
-        );
+        List<String> command = new ArrayList<String> ();
+        command.add (gcc.toString ());
+        command.add ("-O3");
+        if (gprof) command.add ("-pg");
+        command.add ("-std=c++17");
+        command.add ("-ffunction-sections");
+        command.add ("-fdata-sections");
+        command.add ("-Wl,--gc-sections");
+        command.add ("-I" + env.quote (runtimeDir));
+        for (ProvideOperator po : extensions)
+        {
+            Path include = po.include (this);
+            if (include == null) continue;
+            command.add ("-I" + env.quote (include.getParent ()));
+        }
+        command.add ("-Dn2a_T=" + T);
+        if (T.equals ("int")) command.add ("-Dn2a_FP");
+        command.add ("-o");  // goes with next line ...
+        command.add (env.quote (binary));
+        command.add (env.quote (source));
+        command.add (                      env.quote (runtimeDir.resolve ("runtime_"    + T + ".o")));
+        command.add (                      env.quote (runtimeDir.resolve ("io_"         + T + ".o")));
+        if (T.equals ("int")) command.add (env.quote (runtimeDir.resolve ("fixedpoint_" + T + ".o")));
+        List<String> envProvidedObjects = providedObjects.get (env);
+        if (envProvidedObjects != null) for (String po : envProvidedObjects) command.add (po);  // These have already been quoted.
+        if (kokkos)
+        {
+            command.add (env.quote (runtimeDir.resolve ("profiling.o")));
+            command.add ("-ldl");
+        }
+
+        Path out = runCommand (command.toArray (new String[command.size ()]));
         Files.delete (out);
 
         return binary;
@@ -573,7 +625,7 @@ public class JobC extends Thread
         else                  context = new RendererC   (this, result);
 
         result.append ("#include \"runtime.h\"\n");
-        if (profile)
+        if (kokkos)
         {
             result.append ("#include \"profiling.h\"\n");
         }
@@ -582,6 +634,12 @@ public class JobC extends Thread
         if (T.equals ("int"))
         {
             result.append ("#include \"fixedpoint.tcc\"\n");
+        }
+        for (ProvideOperator po : extensions)
+        {
+            Path include = po.include (this);
+            if (include == null) continue;
+            result.append ("#include <" + include.getFileName () + ">\n");
         }
         result.append ("\n");
         result.append ("#include <iostream>\n");
@@ -621,11 +679,11 @@ public class JobC extends Thread
         result.append ("\n");
         result.append ("  try\n");
         result.append ("  {\n");
-        if (profile)
+        if (kokkos)
         {
             result.append ("    get_callbacks ();\n");
         }
-        generateMainInitializers (result);
+        generateMainInitializers (context);
         result.append ("\n");
         if (seed >= 0)
         {
@@ -645,7 +703,7 @@ public class JobC extends Thread
         result.append ("    Simulator<" + T + ">::instance.run (wrapper);\n");
         result.append ("\n");
         result.append ("    outputClose ();\n");
-        if (profile)
+        if (kokkos)
         {
             result.append ("    finalize_profiling ();\n");
         }
@@ -681,6 +739,11 @@ public class JobC extends Thread
             public boolean global;
             public boolean visit (Operator op)
             {
+                for (ProvideOperator po : extensions)
+                {
+                    Boolean result = po.generateStatic (context, op);
+                    if (result != null) return result;
+                }
                 if (op instanceof BuildMatrix)
                 {
                     BuildMatrix m = (BuildMatrix) op;
@@ -836,8 +899,10 @@ public class JobC extends Thread
         }
     }
 
-    public void generateMainInitializers (StringBuilder result)
+    public void generateMainInitializers (RendererC context)
     {
+        StringBuilder result = context.result;
+        for (ProvideOperator po : extensions) po.generateMainInitializers (context);
         for (ReadMatrix r : mainMatrix)
         {
             result.append ("    " + r.name + " = matrixHelper<" + T + "> (\"" + r.operands[0].getString () + "\"");
@@ -3466,12 +3531,12 @@ public class JobC extends Thread
 
     public void push_region (StringBuilder result, String name)
     {
-        if (profile) result.append ("push_region (\"" + name +"\");\n");
+        if (kokkos) result.append ("push_region (\"" + name +"\");\n");
     }
 
     public void pop_region (StringBuilder result)
     {
-        if (profile) result.append ("pop_region ();\n");
+        if (kokkos) result.append ("pop_region ();\n");
     }
 
     public void eventGenerate (String pad, EventTarget et, RendererC context, boolean multi)
@@ -3803,7 +3868,7 @@ public class JobC extends Thread
         result.append (";\n");
     }
 
-    public void prepareStaticObjects (Operator op, final RendererC context, final String pad) throws Exception
+    public void prepareStaticObjects (Operator op, RendererC context, String pad)
     {
         final BackendDataC bed = context.bed;
 
@@ -3811,6 +3876,11 @@ public class JobC extends Thread
         {
             public boolean visit (Operator op)
             {
+                for (ProvideOperator po : extensions)
+                {
+                    Boolean result = po.prepareStaticObjects (op, context, pad);
+                    if (result != null) return result;
+                }
                 if (op instanceof Output)
                 {
                     Output o = (Output) op;
@@ -3886,7 +3956,7 @@ public class JobC extends Thread
     /**
         Build complex sub-expressions into a single local variable that can be referenced by the equation.
     **/
-    public void prepareDynamicObjects (Operator op, final RendererC context, final boolean init, final String pad) throws Exception
+    public void prepareDynamicObjects (Operator op, RendererC context, boolean init, String pad)
     {
         final BackendDataC bed = context.bed;
 

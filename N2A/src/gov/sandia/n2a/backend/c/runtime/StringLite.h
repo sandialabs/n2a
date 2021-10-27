@@ -479,10 +479,10 @@ public:
     }
 
     /**
-        Returns a new string where all characters are lower-case versions of the this string.
+        Returns a new string where all characters are lower-case versions of this string.
         Used for case-insensitive comparison.
     **/
-    String tolower () const
+    String toLowerCase () const
     {
         String result;
         int length = top - memory;
@@ -497,7 +497,34 @@ public:
         while (from < top)
         {
             char temp = *from++;
-            if (temp >= 65  &&  temp <= 90) temp |= 0x20;
+            if (temp >= 65  &&  temp <= 90) temp |= 0x20;  // set bit 5
+            *to++ = temp;
+        }
+        *result.top = 0;
+
+        return result;
+    }
+
+    /**
+        Returns a new string where all characters are upper-case versions of this string.
+        Used for case-insensitive comparison.
+    **/
+    String toUpperCase () const
+    {
+        String result;
+        int length = top - memory;
+        if (length <= 0) return result;
+
+        result.capacity = length + 1;
+        result.memory   = (char *) malloc (result.capacity);
+        result.top      = result.memory + length;
+
+        char * from = memory;
+        char * to   = result.memory;
+        while (from < top)
+        {
+            char temp = *from++;
+            if (temp >= 97  &&  temp <= 122) temp &= 0xDF;  // clear bit 5
             *to++ = temp;
         }
         *result.top = 0;
@@ -557,6 +584,36 @@ inline void split (const String & source, const String & delimiter, String & fir
         first = temp.substr (0, index);
         second = temp.substr (index + delimiter.size ());
     }
+}
+
+inline bool operator== (const char * A, const String & B)
+{
+    return B.compare (A) == 0;
+}
+
+inline bool operator!= (const char * A, const String & B)
+{
+    return B.compare (A) != 0;
+}
+
+inline bool operator< (const char * A, const String & B)
+{
+    return B.compare (A) > 0;
+}
+
+inline bool operator<= (const char * A, const String & B)
+{
+    return B.compare (A) >= 0;
+}
+
+inline bool operator> (const char * A, const String & B)
+{
+    return B.compare (A) < 0;
+}
+
+inline bool operator>= (const char * A, const String & B)
+{
+    return B.compare (A) <= 0;
 }
 
 namespace std

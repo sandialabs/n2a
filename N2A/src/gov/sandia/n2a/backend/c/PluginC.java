@@ -23,11 +23,13 @@ public class PluginC extends Plugin
 		return "N2A C Backend";
 	}
 
+    @Override
     public String getVersion()
     {
-        return "0.9";
+        return "1.2";
     }
 
+    @Override
     public String getProvider ()
     {
         return "Sandia National Laboratories";
@@ -45,7 +47,17 @@ public class PluginC extends Plugin
 		return "N2A C Backend";
 	}
 
-	@Override
+    @Override
+    @SuppressWarnings("unchecked")
+    public Class<? extends ExtensionPoint>[] getExtensionPoints()
+    {
+        return new Class[]
+        {
+            ProvideOperator.class
+        };
+    }
+
+    @Override
 	public ExtensionPoint[] getExtensions ()
 	{
         List<ExtensionPoint> result = new ArrayList<ExtensionPoint> ();

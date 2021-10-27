@@ -9,6 +9,7 @@ package gov.sandia.n2a.backend.c;
 import java.util.HashSet;
 
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -22,10 +23,8 @@ import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Floor;
-import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Grid;
 import gov.sandia.n2a.language.function.HyperbolicTangent;
-import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
@@ -36,7 +35,6 @@ import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.SumSquares;
 import gov.sandia.n2a.language.function.Tangent;
-import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Divide;
@@ -58,9 +56,7 @@ public class RendererCfp extends RendererC
     {
         operatorsWithExponent.add (Atan      .class);
         operatorsWithExponent.add (Exp       .class);
-        operatorsWithExponent.add (Gaussian  .class);
         operatorsWithExponent.add (Grid      .class);
-        operatorsWithExponent.add (Input     .class);
         operatorsWithExponent.add (Log       .class);
         operatorsWithExponent.add (Norm      .class);
         operatorsWithExponent.add (Output    .class);
@@ -69,7 +65,6 @@ public class RendererCfp extends RendererC
         operatorsWithExponent.add (SquareRoot.class);
         operatorsWithExponent.add (SumSquares.class);
         operatorsWithExponent.add (Tangent   .class);
-        operatorsWithExponent.add (Uniform   .class);
     }
 
     public RendererCfp (JobC job, StringBuilder result)
@@ -307,6 +302,30 @@ public class RendererCfp extends RendererC
 
         // Functions
         // These are listed in alphabetical order, with a catch-all at the end.
+        if (op instanceof AccessVariable)  // Actually just an operator, not a function
+        {
+            AccessVariable av = (AccessVariable) op;
+            int shift = av.exponent - av.exponentNext;
+            if (shift != 0)
+            {
+                if (av.getType () instanceof Matrix) result.append ("shift ");
+                result.append ("(");
+            }
+            result.append (job.resolve (av.reference, this, false));
+            if (useExponent  &&  shift != 0)
+            {
+                if (av.getType () instanceof Matrix)
+                {
+                    result.append (", " + shift);
+                }
+                else
+                {
+                    result.append (printShift (shift));
+                }
+                result.append (")");
+            }
+            return true;
+        }
         if (op instanceof Ceil)
         {
             Ceil f = (Ceil) op;

@@ -29,6 +29,7 @@ import gov.sandia.n2a.language.function.Max;
 import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
+import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Rows;
 import gov.sandia.n2a.language.function.Sat;
@@ -45,12 +46,12 @@ import gov.sandia.n2a.language.type.Text;
 
 public class RendererC extends Renderer
 {
-    public JobC         job;
-    public EquationSet  part;
-    public BackendDataC bed;
-    public boolean      global;   ///< Whether this is in the population object (true) or a part object (false)
-    public boolean      hasEvent; ///< Indicates that event has been retrieved within current scope.
-    public boolean      useExponent;  ///< Some functions have extra parameters in fixed-point mode. Rather than duplicate rendering code, we tack on the extra parameters here.
+    public    JobC           job;
+    protected EquationSet    part;
+    protected BackendDataC   bed;
+    protected boolean        global;      // Whether this is in the population object (true) or a part object (false)
+    protected boolean        hasEvent;    // Indicates that event has been retrieved within current scope.
+    public    boolean        useExponent; // Some functions have extra parameters in fixed-point mode. Rather than duplicate rendering code, we tack on the extra parameters here.
 
     public RendererC (JobC job, StringBuilder result)
     {
@@ -68,6 +69,12 @@ public class RendererC extends Renderer
     {
         // TODO: for "3 letter" functions (sin, cos, pow, etc) on matrices, render as visitor which produces a matrix result
         // TODO: implement min and max on matrices
+
+        for (ProvideOperator po : job.extensions)
+        {
+            Boolean result = po.render (this, op);
+            if (result != null) return result;
+        }
 
         if (op instanceof Add)
         {
@@ -103,25 +110,7 @@ public class RendererC extends Renderer
         if (op instanceof AccessVariable)
         {
             AccessVariable av = (AccessVariable) op;
-            int shift = av.exponent - av.exponentNext;
-            if (useExponent  &&  shift != 0)
-            {
-                if (av.getType () instanceof Matrix) result.append ("shift ");
-                result.append ("(");
-            }
             result.append (job.resolve (av.reference, this, false));
-            if (useExponent  &&  shift != 0)
-            {
-                if (av.getType () instanceof Matrix)
-                {
-                    result.append (", " + shift);
-                }
-                else
-                {
-                    result.append (printShift (shift));
-                }
-                result.append (")");
-            }
             return true;
         }
         if (op instanceof Atan)
@@ -235,15 +224,12 @@ public class RendererC extends Renderer
         if (op instanceof Gaussian)
         {
             Gaussian g = (Gaussian) op;
-            int shift = op.exponent - op.exponentNext;
-            if (useExponent  &&  shift != 0) result.append ("(");
             result.append ("gaussian<" + job.T + "> (");
             if (g.operands.length > 0)
             {
                 g.operands[0].render (this);
             }
             result.append (")");
-            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
         if (op instanceof Grid)
@@ -281,12 +267,7 @@ public class RendererC extends Renderer
         if (op instanceof Input)
         {
             Input i = (Input) op;
-
-            int shift = i.exponent - i.exponentNext;
-            if (useExponent  &&  shift != 0) result.append ("(");
-
-            result.append (i.name + "->get");
-            result.append (" (");
+            result.append (i.name + "->get (");
             if (i.operands.length < 3  ||  i.operands[2].getDouble () < 0)  // return matrix
             {
                 boolean time = i.getMode ().contains ("time");
@@ -309,8 +290,6 @@ public class RendererC extends Renderer
                 i.operands[2].render (this);
             }
             result.append (")");
-
-            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
         if (op instanceof Log)
@@ -427,6 +406,20 @@ public class RendererC extends Renderer
             result.append (")");
             return true;
         }
+        if (op instanceof Pulse)
+        {
+            Pulse p = (Pulse) op;
+            Operator t = p.operands[0];
+            result.append ("pulse (");
+            renderType (t);
+            for (int i = 1; i < p.operands.length; i++)
+            {
+                result.append (", ");
+                renderType (p.operands[i]);
+            }
+            result.append (")");
+            return true;
+        }
         if (op instanceof ReadMatrix)
         {
             ReadMatrix r = (ReadMatrix) op;
@@ -498,15 +491,12 @@ public class RendererC extends Renderer
         if (op instanceof Uniform)
         {
             Uniform u = (Uniform) op;
-            int shift = op.exponent - op.exponentNext;
-            if (useExponent  &&  shift != 0) result.append ("(");
             result.append ("uniform<" + job.T + "> (");
             if (u.operands.length > 0)
             {
                 u.operands[0].render (this);
             }
             result.append (")");
-            if (useExponent  &&  shift != 0) result.append (printShift (shift) + ")");
             return true;
         }
 
