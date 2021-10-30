@@ -27,42 +27,42 @@ class String    // Note the initial capital letter. This name will not conflict 
 public:
     char * memory;
     char * top;       // position of null terminator in memory block
-    size_t capacity;  // size of currently-allocated memory block
+    size_t capacity_;  // size of currently-allocated memory block
 
     static const size_t npos    = static_cast<size_t> (-1);
     static const size_t maxSize = 0x1000000;  // 16Mb. This is suitable for most systems.
 
     String ()
     {
-        memory   = 0;
-        top      = 0;
-        capacity = 0;
+        memory    = 0;
+        top       = 0;
+        capacity_ = 0;
     }
 
     String (const char * value)
     {
-        memory   = 0;
-        top      = 0;
-        capacity = 0;
+        memory    = 0;
+        top       = 0;
+        capacity_ = 0;
         if (value) assign (value, strlen (value));
     }
 
     String (const String & that)
     {
-        memory   = 0;
-        top      = 0;
-        capacity = 0;
+        memory    = 0;
+        top       = 0;
+        capacity_ = 0;
         assign (that.memory, that.top - that.memory);  // If that is an empty string, then that.memory may be null. assign() handles this case properly.
     }
 
     String (String && that) noexcept
     {
-        memory   = that.memory;
-        top      = that.top;
-        capacity = that.capacity;
-        that.memory   = 0;
-        that.top      = 0;
-        that.capacity = 0;
+        memory    = that.memory;
+        top       = that.top;
+        capacity_ = that.capacity_;
+        that.memory    = 0;
+        that.top       = 0;
+        that.capacity_ = 0;
     }
 
     ~String ()
@@ -75,11 +75,11 @@ public:
         if (value  &&  n  &&  n <= maxSize)  // We should really throw an error if n > max_size, but this library supports bare metal so it does not throw exceptions.
         {
             size_t requiredCapacity = n + 1;
-            if (requiredCapacity > capacity)
+            if (requiredCapacity > capacity_)
             {
                 if (memory) free (memory);
-                capacity = requiredCapacity;
-                memory = (char *) malloc (capacity);
+                capacity_ = requiredCapacity;
+                memory = (char *) malloc (capacity_);
             }
             memcpy (memory, value, n);  // Saves space (size of executable) rather than time.
             top = memory + n;
@@ -103,12 +103,12 @@ public:
         if (this != &that)
         {
             if (memory) free (memory);
-            memory   = that.memory;
-            top      = that.top;
-            capacity = that.capacity;
-            that.memory   = 0;
-            that.top      = 0;
-            that.capacity = 0;
+            memory    = that.memory;
+            top       = that.top;
+            capacity_ = that.capacity_;
+            that.memory    = 0;
+            that.top       = 0;
+            that.capacity_ = 0;
         }
         return *this;
     }
@@ -134,19 +134,21 @@ public:
         return maxSize;
     }
 
-    /**
-        @param n Number of bytes to reserve. The number characters that can actually be
-        stored is 1 less than capacity (due to null termination).
-        This is subtly different than std::string.
-    **/
+    size_t capacity () const
+    {
+        if (capacity_ <= 0) return 0;
+        return capacity_ - 1;
+    }
+
     void reserve (size_t n = 0)
     {
-        if (n <= capacity) return;
+        n++;  // Add one byte for null termination.
+        if (n <= capacity_) return;
         char * temp = memory;
         char * end  = top;
-        memory   = (char *) malloc (n);
-        top      = memory + (end - temp);
-        capacity = n;
+        memory    = (char *) malloc (n);
+        top       = memory + (end - temp);
+        capacity_ = n;
         if (! temp) return;
         char * m = memory;
         char * a = temp;
@@ -234,8 +236,8 @@ public:
     {
         String result;
         int length = (top - memory) + (that.top - that.memory);
-        result.capacity = length + 1;
-        result.memory = (char *) malloc (result.capacity);
+        result.capacity_ = length + 1;
+        result.memory = (char *) malloc (result.capacity_);
         combine (memory, that.memory, result.memory);
         result.top = result.memory + length;
         return result;
@@ -246,8 +248,8 @@ public:
         String result;
         int length = top - memory;
         if (that) length += strlen (that);
-        result.capacity = length + 1;
-        result.memory = (char *) malloc (result.capacity);
+        result.capacity_ = length + 1;
+        result.memory = (char *) malloc (result.capacity_);
         combine (memory, that, result.memory);
         result.top = result.memory + length;
         return result;
@@ -272,11 +274,11 @@ public:
         size_t length = (top - memory) + n;
         if (! length) return *this;
         size_t requiredCapacity = length + 1;
-        if (requiredCapacity > capacity)
+        if (requiredCapacity > capacity_)
         {
             char * temp = memory;
-            capacity = requiredCapacity;
-            memory = (char *) malloc (capacity);
+            capacity_ = requiredCapacity;
+            memory = (char *) malloc (capacity_);
 
             char * m = memory;
             char * a = temp;
@@ -503,9 +505,9 @@ public:
         int length = top - memory;
         if (length <= 0) return result;
 
-        result.capacity = length + 1;
-        result.memory   = (char *) malloc (result.capacity);
-        result.top      = result.memory + length;
+        result.capacity_ = length + 1;
+        result.memory    = (char *) malloc (result.capacity_);
+        result.top       = result.memory + length;
 
         char * from = memory;
         char * to   = result.memory;
@@ -530,9 +532,9 @@ public:
         int length = top - memory;
         if (length <= 0) return result;
 
-        result.capacity = length + 1;
-        result.memory   = (char *) malloc (result.capacity);
-        result.top      = result.memory + length;
+        result.capacity_ = length + 1;
+        result.memory    = (char *) malloc (result.capacity_);
+        result.top       = result.memory + length;
 
         char * from = memory;
         char * to   = result.memory;
