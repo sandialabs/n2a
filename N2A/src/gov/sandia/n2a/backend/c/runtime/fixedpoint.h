@@ -8,6 +8,11 @@ the U.S. Government retains certain rights in this software.
 #ifndef n2a_fixedpoint_h
 #define n2a_fixedpoint_h
 
+#ifndef n2a_FP
+
+#define ISNAN(x) std::isnan (x)
+
+#else
 
 #include "nosys.h"
 #include "matrix.h"
@@ -22,6 +27,7 @@ the U.S. Government retains certain rights in this software.
 #undef INFINITY
 #define NAN       0x80000000
 #define INFINITY  0x7FFFFFFF
+#define ISNAN(x) (x == NAN)
 
 
 // Transcendental functions --------------------------------------------------
@@ -54,4 +60,5 @@ template<int R, int C>        MatrixFixed<int,R,C> divide              (const Ma
 template<int R, int C>        MatrixFixed<int,R,C> divide              (int a,                          const MatrixFixed<int,R,C> & B, int shift);
 
 
-#endif
+#endif  // n2a_FP
+#endif  // n2a_fixedpoint_h

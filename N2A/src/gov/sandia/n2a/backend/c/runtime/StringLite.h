@@ -425,10 +425,25 @@ public:
         return npos;
     }
 
+    bool ends_with (const String & that) const
+    {
+        int lengthA =      top -      memory;
+        int lengthB = that.top - that.memory;
+        if (lengthB > lengthA) return false;
+        if (memory == 0) return true;  // both are empty
+
+        char * end = top;
+        char * a   = end - lengthB;
+        char * b   = that.memory;
+        while (a < end) if (*a++ != *b++) return false;
+        return true;
+    }
+
     const char * begin () const
     {
         return memory;
     }
+
     const char * end () const
     {
         return top;

@@ -99,10 +99,7 @@ MatrixSparse<T>::operator () (const int row, const int column) const
     {
         std::map<int, T> & c = (*data)[column];
         typename std::map<int, T>::iterator i = c.find (row);
-        if (i != c.end ())
-        {
-            return i->second;
-        }
+        if (i != c.end ()) return i->second;
     }
     static T zero;
     zero = (T) 0;
