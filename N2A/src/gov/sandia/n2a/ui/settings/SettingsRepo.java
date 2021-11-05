@@ -76,6 +76,7 @@ import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JScrollPane;
+import javax.swing.JSeparator;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -693,13 +694,19 @@ public class SettingsRepo extends JScrollPane implements Settings
         boolean sourceEditable =  AppData.repos.getBoolean (repoName, "editable")  ||  repoName.equals (primary);
 
         JPopupMenu result = new JPopupMenu ();
+
+        JMenuItem item = new JMenuItem ("Move to repo");
+        item.setEnabled (false);
+        result.add (item);
+        result.add (new JSeparator ());
+
         for (MNode repo : repoModel.repos)
         {
             String key = repo.key ();
             boolean editable =  sourceEditable  &&  (repo.getBoolean ("editable")  ||  key.equals (primary));
             boolean selected = key.equals (repoName);
 
-            JMenuItem item = new JRadioButtonMenuItem (key);
+            item = new JRadioButtonMenuItem (key);
             item.setSelected (selected);
             item.setEnabled (editable);
             result.add (item);

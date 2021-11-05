@@ -68,6 +68,7 @@ import javax.swing.JPopupMenu;
 import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
 import javax.swing.border.Border;
@@ -221,7 +222,7 @@ public class PanelSearch extends JPanel
                     }
                     takeFocus ();
 
-                    if (path != null  &&  me.isControlDown ())  // Bring up context menu for moving between repos.
+                    if (path != null  &&  (me.isControlDown ()  ||  SwingUtilities.isRightMouseButton (me)))  // Bring up context menu for moving between repos.
                     {
                         Object o = path.getLastPathComponent ();
                         if (o instanceof NodeModel)
