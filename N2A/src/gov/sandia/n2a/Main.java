@@ -95,8 +95,9 @@ public class Main
 
         // Load plugins
         pluginClassNames.add ("gov.sandia.n2a.backend.internal.InternalPlugin");
-        pluginClassNames.add ("gov.sandia.n2a.backend.xyce.XycePlugin");
         pluginClassNames.add ("gov.sandia.n2a.backend.c.PluginC");
+        pluginClassNames.add ("gov.sandia.n2a.backend.python.PluginPython");
+        pluginClassNames.add ("gov.sandia.n2a.backend.xyce.XycePlugin");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuroml.PluginNeuroML");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuron.PluginNeuron");
         Path pluginDir = resourceDir.resolve ("plugins").toAbsolutePath ();

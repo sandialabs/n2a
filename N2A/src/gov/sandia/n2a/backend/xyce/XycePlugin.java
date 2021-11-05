@@ -1,5 +1,5 @@
 /*
-Copyright 2013,2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,9 +7,13 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.xyce;
 
 import gov.sandia.n2a.backend.xyce.function.Sinewave;
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.plugins.Plugin;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.ui.images.ImageUtil;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.ImageIcon;
 
@@ -42,10 +46,13 @@ public class XycePlugin extends Plugin
 
     public ExtensionPoint[] getExtensions ()
     {
-        return new ExtensionPoint[]
+        List<ExtensionPoint> result = new ArrayList<ExtensionPoint> ();
+        result.add (new XyceBackend ());
+        result.add (Sinewave.factory ());
+        if (! AppData.properties.getBoolean ("headless"))
         {
-            new XyceBackend (),
-            Sinewave.factory ()
-        };
+            result.add (new SettingsXyce ());
+        }
+        return result.toArray (new ExtensionPoint[result.size ()]);
     }
 }
