@@ -168,14 +168,6 @@ public class VariableReference implements Comparable<VariableReference>
 
     public String toString ()
     {
-        String result = "";
-        for (Object o : resolution)
-        {
-            result += ", ";
-            if (o instanceof EquationSet) result += ((EquationSet) o).name;
-            else if (o instanceof ConnectionBinding) result += ((ConnectionBinding) o).alias;
-        }
-        if (! result.isEmpty ()) result = result.substring (2);
         return variable.fullName () + " " + dumpResolution ();
     }
 
