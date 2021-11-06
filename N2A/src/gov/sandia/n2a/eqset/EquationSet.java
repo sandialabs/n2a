@@ -29,7 +29,6 @@ import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
-import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
@@ -37,8 +36,8 @@ import gov.sandia.n2a.language.operator.LE;
 import gov.sandia.n2a.language.operator.LT;
 import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Matrix.IteratorNonzero;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
@@ -161,9 +160,25 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
+    /**
+        Marks an operator as capable of iterating through a matrix-like collection of values,
+        skipping elements with value zero. This makes the process of forming connection more
+        efficient for sparse collections. In that case, the compiler optimizes how the connection
+        is formed.
+        The operator promises to evaluate to exactly zero if no simulator is available.
+        This helps with the analysis.
+    **/
+    public interface NonzeroIterable
+    {
+        Operator        operandA ();
+        Operator        operandB ();
+        boolean         hasCorrectForm ();
+        IteratorNonzero getIteratorNonzero (Instance context);
+    }
+
     public class ConnectionMatrix
     {
-        public ReadMatrix A;
+        public NonzeroIterable A;
 
         // Bindings for populations associated with the rows/columns of the matrix.
         public ConnectionBinding rows;
@@ -173,22 +188,24 @@ public class EquationSet implements Comparable<EquationSet>
         public Equality rowMapping;
         public Equality colMapping;
 
-        public ConnectionMatrix (ReadMatrix A)
+        public ConnectionMatrix (NonzeroIterable A)
         {
             this.A = A;
-            if (A.operands.length < 3) return;
-            AccessVariable av1 = endpoint (A.operands[1]);
-            AccessVariable av2 = endpoint (A.operands[2]);
+            Operator op1 = A.operandA ();
+            Operator op2 = A.operandB ();
+            if (op1 == null  ||  op2 == null) return;
+            AccessVariable av1 = endpoint (op1);
+            AccessVariable av2 = endpoint (op2);
             if (av1 == null  ||  av2 == null) return;
 
             rows = findConnection (av1.reference);
             cols = findConnection (av2.reference);
             if (rows == null  ||  cols == null) return;
 
-            rowMapping = new Equality (A.operands[1], av1);
+            rowMapping = new Equality (op1, av1);
             rowMapping.solve ();
             if (rowMapping.lhs != rowMapping.target) rowMapping = null;
-            colMapping = new Equality (A.operands[2], av2);
+            colMapping = new Equality (op2, av2);
             colMapping.solve ();
             if (colMapping.lhs != colMapping.target) colMapping = null;
         }
@@ -206,7 +223,7 @@ public class EquationSet implements Comparable<EquationSet>
                     if (op instanceof AccessVariable)
                     {
                         AccessVariable av = (AccessVariable) op;
-                        if (av.name.contains ("$index"))
+                        if (av.name.endsWith ("$index"))
                         {
                             found = av;
                             return false;
@@ -4059,8 +4076,9 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Assign priority field, so that ReplaceConstants can know when to assume a variable reference is zero.
-        // This optimization is only available during the init phase. In other phases, it is necessary to look up current value.
-        if (phase.equals ("$init"))
+        // This optimization is only available during the init and connect phases.
+        // In other phases, it is necessary to look up current value.
+        if (phase.equals ("$init")  ||  phase.equals ("$connect"))
         {
             determineOrderInit (list);
             int i = 0;
@@ -4156,10 +4174,10 @@ public class EquationSet implements Comparable<EquationSet>
                 else if (init  &&  v.container == self.container  &&  priorityKnown  &&  v.priority >= self.priority)  // Reference to a variable that has not yet been assigned by init.
                 {
                     // Ordinary variables have default value 0 until they are assigned by init.
-                    // If a variable could be initialied to something besides 0 before init, then we must treat it as unknown.
+                    // If a variable could be initialized to something besides 0 before init, then we must treat it as unknown.
                     // * Variables could be assigned by a type split before init runs.
+                    // * $p defaults to 1 until explicitly assigned. Only unknown if this is the result of a split.
                     // * $n will return the current size of the population. If it shows up here, it is unknown.
-                    // * $p defaults to 1 until explicitly assigned.
                     // * $t and $t' will have values from the current event, and thus are unknown.
                     // Other $variables will either be constant and therefore not show up here,
                     // or they will not yet be assigned. Treat them as ordinary variables with value 0.
@@ -4560,6 +4578,7 @@ public class EquationSet implements Comparable<EquationSet>
     public double determinePoll ()
     {
         if (connectionBindings == null) return -1;
+        if (connectionMatrix != null) return -1;  // Somewhat of a hack. cm is a one-time process, so we shouldn't do polling.
         Variable p = find (new Variable ("$p"));
         if (p == null) return -1;
 
@@ -4569,14 +4588,18 @@ public class EquationSet implements Comparable<EquationSet>
         for (EquationEntry e : p.equations)
         {
             // Assume a condition always fires, unless we can prove it does not.
+            boolean couldFire   = true;
+            boolean alwaysFires = true;
             if (e.condition != null)
             {
                 Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (p, true);
-                if (test.isScalar ()  &&  test.getDouble () == 0) continue;
+                if (test.isScalar ()) couldFire = alwaysFires = test.getDouble () != 0;
+                else                  alwaysFires = false;
             }
-            fires.add (e);
+            if (couldFire) fires.add (e);
+            if (alwaysFires) break;
         }
-        if (fires.isEmpty ()) return -1;  // $p=1 at connect, always
+        if (fires.isEmpty ()) return -1;  // $p has default value (1 at connect)
 
         boolean needsPoll = fires.size () > 1;  // Multiple connect conditions means unpredictable, so needs polling.
         if (! needsPoll)
@@ -4639,7 +4662,7 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Detects if $p depends on a sparse matrix.
+        Detects if $p depends on a NonzeroIterable operator.
         Depends on results of: determineTypes() and clearVariables() -- To provide fake values.
     **/
     public void findConnectionMatrix ()
@@ -4673,7 +4696,7 @@ public class EquationSet implements Comparable<EquationSet>
                 predicate = e.expression;
                 break;
             }
-            Object doit = e.condition.eval (instance);
+            Type doit = e.condition.eval (instance);
             if (doit instanceof Scalar  &&  ((Scalar) doit).value != 0)
             {
                 predicate = e.expression;
@@ -4682,55 +4705,55 @@ public class EquationSet implements Comparable<EquationSet>
         }
         if (predicate == null) return;
 
-        // Detect if equation or direct dependency contains a ReadMatrix function
+        // TODO: Verify that predicate and all its dependencies are constant w.r.t. external information.
+        // For example, the file name for loading a matrix should not be calculated from $index of either endpoint.
+        // These are unlikely use-cases, but we should eliminate them in order to be strictly correct.
+
+        // Detect if equation or direct dependency contains a NonzeroIterable.
+        // Move complex arrangements of equations are possible but unlikely.
         class ContainsTransformer implements Transformer
         {
-            public ReadMatrix found;
-            public int        countFound;
-            public int        countVariable;
+            public NonzeroIterable found;
+            public int             countFound;
+            public int             countVariable;
             public Operator transform (Operator op)
             {
-                if (op instanceof ReadMatrix)
+                if (op instanceof NonzeroIterable)
                 {
-                    found = (ReadMatrix) op;
+                    found = (NonzeroIterable) op;
                     countFound++;
                     return op;
                 }
                 if (op instanceof AccessVariable)
                 {
-                    // It is possible to be a little more liberal by recursively descending a tree
-                    // of temporary variables, but right now there is no use-case for it.
-
+                    // Check if this is a simple reference to a variable that could be iterated.
                     countVariable++;
                     AccessVariable av = (AccessVariable) op;
                     Variable v = av.reference.variable;
-                    if (v.container != p.container) return op;  // Stop descent. We only examine one level of dependencies, regardless of whether one matches our criteria or not.
-                    if (! v.hasAttribute ("temporary")) return op;
+                    if (v.container != p.container) return op;  // We only examine one level of dependencies, regardless of whether it matches our criteria or not.
                     if (v.equations.size () != 1) return op;
                     EquationEntry e = v.equations.first ();
                     if (e.condition != null) return op;
-                    if (e.expression instanceof ReadMatrix)
+                    if (e.expression instanceof NonzeroIterable)
                     {
-                        found = (ReadMatrix) e.expression;
+                        found = (NonzeroIterable) e.expression;
                         countFound++;
                         countVariable--;
-                        return found;  // Replace temporary variable with its equivalent ReadMatrix call.
+                        return e.expression;  // Replace temporary variable with its equivalent NonzeroIterator.
                     }
                     return op;
                 }
-                return null;
+                return null;  // continue descent
             }
         }
         ContainsTransformer ct = new ContainsTransformer ();
         Operator p2 = predicate.deepCopy ();
         p2.transform (ct);
-        if (ct.countFound != 1  ||  ct.countVariable != 0) return;  // Must have exactly one ReadMatrix surrounded by only constants.
-        if (ct.found.operands.length < 3) return;  // Must have a file name, a row and a column specifier
-        if (! (ct.found.operands[0] instanceof Constant)) return;  // File name must be constant
-        if (! (((Constant) ct.found.operands[0]).value instanceof Text)) return;  // File name must be a string
+        if (ct.countFound != 1  ||  ct.countVariable != 0) return;  // Must have exactly one NonzeroIterable surrounded by only constants.
+        if (! ct.found.hasCorrectForm ()) return;
 
         // Check if zero elements in matrix prevent connection.
-        // During analysis (like now), there is no simulator object available. This causes ReadMatrix to return 0.
+        // During analysis (like now), there is no simulator object available. This causes NonzeroIterable to return 0.
         // If that results in $p evaluating to constant 0, and $p is a sufficiently simple expression,
         // then only non-zero elements will produce connections.
         try
@@ -4745,18 +4768,30 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Construct
-        // It is necessary to scan predicate itself, not merely its deep copy.
-        // This ensures that object identity holds in the finished model, so that
-        // values set in ReadMatrix.name or fileName will be available.
+        // The NonzeroIterable we found above was a deep-copy, not the original.
+        // We need to locate and work with the original in order to maintain object
+        // identity in the finished model.
         predicate.visit (new Visitor ()
         {
             public boolean visit (Operator op)
             {
-                if (op instanceof ReadMatrix)
+                if (op instanceof NonzeroIterable)
                 {
-                    ConnectionMatrix cm = new ConnectionMatrix ((ReadMatrix) op);
+                    ConnectionMatrix cm = new ConnectionMatrix ((NonzeroIterable) op);
                     if (cm.rowMapping != null  &&  cm.colMapping != null) connectionMatrix = cm;
                     return false;
+                }
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    Variable v = av.reference.variable;
+                    EquationEntry e = v.equations.first ();
+                    if (e.expression instanceof NonzeroIterable)
+                    {
+                        ConnectionMatrix cm = new ConnectionMatrix ((NonzeroIterable) e.expression);
+                        if (cm.rowMapping != null  &&  cm.colMapping != null) connectionMatrix = cm;
+                        return false;
+                    }
                 }
                 return true;
             }

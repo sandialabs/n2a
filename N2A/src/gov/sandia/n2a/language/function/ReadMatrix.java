@@ -100,7 +100,7 @@ public class ReadMatrix extends Function
     public Type eval (Instance context)
     {
         Matrix A = open (context);
-        if (A == null) return new MatrixDense ();
+        if (A == null) return new MatrixDense ();  // C backend depends on this being a zero-dimensional matrix.
         return A;
     }
 

@@ -8,6 +8,7 @@ package gov.sandia.n2a.backend.c;
 
 import java.nio.file.Path;
 
+import gov.sandia.n2a.eqset.EquationSet.NonzeroIterable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 
@@ -81,4 +82,9 @@ public interface ProvideOperator extends ExtensionPoint
         return from visitor function (true to continue visiting; false to stop).
     **/
     public Boolean prepareDynamicObjects (Operator op, RendererC context, boolean init, String pad);
+
+    /**
+        @return true if the operator was recognized/processed
+    **/
+    public boolean getIterator (NonzeroIterable nzit, RendererC context);
 }

@@ -24,6 +24,7 @@ template class IteratorSparse<n2a_T>;
 template class MatrixInput<n2a_T>;
 template class InputHolder<n2a_T>;
 template class OutputHolder<n2a_T>;
+template IteratorNonzero<n2a_T> * getIterator (MatrixAbstract<n2a_T> * A);
 #ifdef n2a_FP
 template MatrixInput<n2a_T> *  matrixHelper (const String & fileName, int exponent, MatrixInput<n2a_T> *  oldHandle);
 template InputHolder<n2a_T> *  inputHelper  (const String & fileName, int exponent, InputHolder<n2a_T> *  oldHandle);

@@ -20,6 +20,7 @@ import gov.sandia.n2a.eqset.EquationSet.ConnectionMatrix;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
+import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Function;
@@ -1394,12 +1395,13 @@ public class JobC extends Thread
         BackendDataC  bed    = context.bed;
         StringBuilder result = context.result;
         context.global = true;
-        String ns = prefix (s) + "_Population::";  // namespace for all functions associated with part s
+        String ps = prefix (s);
+        String ns = ps + "_Population::";  // namespace for all functions associated with part s
 
         // Population ctor
         if (bed.needGlobalCtor)
         {
-            result.append (ns + prefix (s) + "_Population ()\n");
+            result.append (ns + ps + "_Population ()\n");
             result.append ("{\n");
             if (! bed.singleton)
             {
@@ -1431,7 +1433,7 @@ public class JobC extends Thread
         // Population dtor
         if (bed.needGlobalDtor)
         {
-            result.append (ns + "~" + prefix (s) + "_Population ()\n");
+            result.append (ns + "~" + ps + "_Population ()\n");
             result.append ("{\n");
             if (bed.needGlobalDerivative)
             {
@@ -1455,7 +1457,7 @@ public class JobC extends Thread
         {
             result.append ("Part<" + T + "> * " + ns + "create ()\n");
             result.append ("{\n");
-            result.append ("  " + prefix (s) + " * p = new " + prefix (s) + ";\n");
+            result.append ("  " + ps + " * p = new " + ps + ";\n");
             if (bed.pathToContainer == null) result.append ("  p->container = (" + prefix (s.container) + " *) container;\n");
             result.append ("  return p;\n");
             result.append ("}\n");
@@ -1467,7 +1469,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "add (Part<" + T + "> * part)\n");
             result.append ("{\n");
-            result.append ("  " + prefix (s) + " * p = (" + prefix (s) + " *) part;\n");
+            result.append ("  " + ps + " * p = (" + ps + " *) part;\n");
             if (bed.trackInstances)
             {
                 result.append ("  if (p->__24index < 0)\n");
@@ -1496,7 +1498,7 @@ public class JobC extends Thread
             {
                 result.append ("void " + ns + "remove (Part<" + T + "> * part)\n");
                 result.append ("{\n");
-                result.append ("  " + prefix (s) + " * p = (" + prefix (s) + " *) part;\n");
+                result.append ("  " + ps + " * p = (" + ps + " *) part;\n");
                 result.append ("  instances[p->__24index] = 0;\n");
                 result.append ("  Population<" + T + ">::remove (part);\n");
                 result.append ("}\n");
@@ -1906,7 +1908,7 @@ public class JobC extends Thread
                 result.append ("  int count = instances.size ();\n");
                 result.append ("  for (int i = firstborn; i < count; i++)\n");
                 result.append ("  {\n");
-                result.append ("    " + prefix (s) + " * p = instances[i];\n");
+                result.append ("    " + ps + " * p = instances[i];\n");
                 result.append ("    if (p) p->flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.newborn + ");\n");
                 result.append ("  }\n");
                 result.append ("  firstborn = count;\n");
@@ -2098,8 +2100,54 @@ public class JobC extends Thread
                 ConnectionMatrix cm = s.connectionMatrix;
                 result.append ("  ConnectPopulation<" + T + "> * rows = getIterator (" + cm.rows.index + ");\n");
                 result.append ("  ConnectPopulation<" + T + "> * cols = getIterator (" + cm.cols.index + ");\n");
-                result.append ("  IteratorNonzero<" + T + "> * it = " + cm.A.name + "->getIterator ();\n");
-                result.append ("  Part<" + T + "> * dummy = create ();\n");
+                result.append ("  " + ps + " * dummy = (" + ps + " *) create ();\n");  // Will be deleted when ConnectMatrix is deleted.
+                result.append ("  dummy->setPart (0, (*rows->instances)[0]);\n");
+                result.append ("  dummy->setPart (1, (*cols->instances)[0]);\n");
+                result.append ("  dummy->getP ();\n");  // We don't actually want $p. This just forces "dummy" to initialize any local matrix variables.
+
+                // Create iterator
+                result.append ("  IteratorNonzero<" + T + "> * it = ");
+                boolean found = false;
+                for (ProvideOperator po : extensions)
+                {
+                    if (po.getIterator (cm.A, context))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (! found  &&  cm.A instanceof AccessElement)
+                {
+                    AccessElement ae = (AccessElement) cm.A;
+                    Operator op0 = ae.operands[0];
+                    result.append ("::getIterator (");
+                    if (op0 instanceof AccessVariable)
+                    {
+                        AccessVariable av = (AccessVariable) op0;
+                        Variable v = av.reference.variable;
+                        if (v.hasAttribute ("temporary"))
+                        {
+                            // Just assume that v is an alias for ReadMatrix.
+                            // Also, matrix must be a static object. Enforced by AccessElement.hasCorrectForm().
+                            ReadMatrix r = (ReadMatrix) v.equations.first ().expression;
+                            result.append (r.name + "->A");
+                        }
+                        else
+                        {
+                            result.append ("& ");
+                            context.global = false;
+                            result.append (resolve (av.reference, context, false, "dummy->", false));
+                            context.global = true;
+                        }
+                    }
+                    else  // Must be a constant. Enforced by AccessElement.hasCorrectForm().
+                    {
+                        Constant c = (Constant) op0;
+                        result.append (c.name);
+                    }
+                    result.append (");\n");
+                }
+
                 result.append ("  return new ConnectMatrix<" + T + "> (rows, cols, it, dummy);\n");
             }
             result.append ("}\n");
@@ -2706,7 +2754,7 @@ public class JobC extends Thread
                     {
                         // Assemble a minimal set of expressions to evaluate $p
                         List<Variable> list = new ArrayList<Variable> ();
-                        for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null) list.add (t);
+                        for (Variable t : s.ordered) if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null) list.add (t);
                         list.add (bed.p);
                         s.simplify ("$live", list, bed.p);
                         if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);
@@ -3079,7 +3127,7 @@ public class JobC extends Thread
                     {
                         // Assemble a minimal set of expressions to evaluate $project
                         List<Variable> list = new ArrayList<Variable> ();
-                        for (Variable t : s.variables)
+                        for (Variable t : s.ordered)
                         {
                             if ((t.hasAttribute ("temporary")  ||  bed.localMembers.contains (t))  &&  project.dependsOn (t) != null) list.add (t);
                         }
@@ -3190,7 +3238,7 @@ public class JobC extends Thread
             {
                 // Assemble a minimal set of expressions to evaluate $p
                 List<Variable> list = new ArrayList<Variable> ();
-                for (Variable t : s.variables)
+                for (Variable t : s.ordered)
                 {
                     if ((t.hasAttribute ("temporary")  ||  bed.localMembers.contains (t))  &&  bed.p.dependsOn (t) != null) list.add (t);
                 }
@@ -3221,7 +3269,7 @@ public class JobC extends Thread
             {
                 // Assemble a minimal set of expressions to evaluate $xyz
                 List<Variable> list = new ArrayList<Variable> ();
-                for (Variable t : s.variables) if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null) list.add (t);
+                for (Variable t : s.ordered) if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null) list.add (t);
                 list.add (bed.xyz);
                 s.simplify ("$live", list, bed.xyz);  // evaluate in $live phase, because endpoints already exist when connection is evaluated.
                 if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);

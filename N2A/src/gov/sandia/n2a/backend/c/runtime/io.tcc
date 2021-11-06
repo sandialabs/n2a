@@ -114,9 +114,10 @@ MatrixInput<T>::~MatrixInput ()
     if (A) delete A;
 }
 
+// Notice that this is not part of MatrixInput. It is a global function.
 template<class T>
 IteratorNonzero<T> *
-MatrixInput<T>::getIterator ()
+getIterator (MatrixAbstract<T> * A)
 {
     if (A->classID () & MatrixSparseID) return new IteratorSparse<T> ((MatrixSparse<T> *) A);
     return new IteratorSkip<T> ((Matrix<T> *) A);

@@ -888,8 +888,8 @@ public class InternalBackendData
             }
         }
 
-        determineOrderInit (s, localInit);
-        determineOrderInit (s, globalInit);
+        determineOrderInit ("$init", s, localInit);
+        determineOrderInit ("$init", s, globalInit);
 
         singleton = s.isSingleton (true);
         populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
@@ -963,6 +963,8 @@ public class InternalBackendData
                     if (temporary) PdependenciesTemp.add (t);
                 }
             }
+            determineOrderInit ("$connect", s, Pdependencies);
+            // determineOrderInit() is not needed for PdepenciesTemp, because temps are already in the correct order.
 
             poll = s.determinePoll ();
             if (poll >= 0)
@@ -1336,7 +1338,7 @@ public class InternalBackendData
         list and establish an internally-coherent set of dependencies.
         We don't do that here because we need to keep Java object identity across all lists.
     **/
-    public static void determineOrderInit (EquationSet s, List<Variable> list)
+    public static void determineOrderInit (String phase, EquationSet s, List<Variable> list)
     {
         // Back up dependency info.
         int count = list.size ();
@@ -1350,8 +1352,8 @@ public class InternalBackendData
             v.uses   = null;
         }
 
-        ReplaceConstants replace = s.new ReplaceConstants ("$init");
-        replace.priorityKnown = false;
+        ReplaceConstants replace = s.new ReplaceConstants (phase);
+        replace.priorityKnown = false;  // This renders replace.init moot.
 
         class DependencyVisitor implements Visitor
         {
@@ -1384,14 +1386,8 @@ public class InternalBackendData
                 {
                     e.condition.visit (depend);  // We will at least have to evaluate the condition, so add its dependencies.
                     Operator test = e.condition.deepCopy ().transform (replace).simplify (v, true);
-                    if (test.isScalar ())
-                    {
-                        couldFire = alwaysFires = test.getDouble () != 0;
-                    }
-                    else
-                    {
-                        alwaysFires = false;
-                    }
+                    if (test.isScalar ()) couldFire = alwaysFires = test.getDouble () != 0;
+                    else                  alwaysFires = false;
                 }
                 if (couldFire  &&  e.expression != null) e.expression.visit (depend);
                 if (alwaysFires) break;  // Don't check any more equations, because Internal will stop here.

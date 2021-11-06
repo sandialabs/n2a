@@ -977,8 +977,6 @@ ConnectMatrix<T>::ConnectMatrix (ConnectPopulation<T> * rows, ConnectPopulation<
     it    (it),
     dummy (dummy)
 {
-    dummy->setPart (0, (*rows->instances)[0]);
-    dummy->setPart (1, (*cols->instances)[0]);
 }
 
 template<class T>

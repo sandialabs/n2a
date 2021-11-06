@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,14 +8,17 @@ package gov.sandia.n2a.language;
 
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
+import gov.sandia.n2a.eqset.EquationSet.NonzeroIterable;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Matrix.IteratorNonzero;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class AccessElement extends Function
+public class AccessElement extends Function implements NonzeroIterable
 {
     public void getOperandsFrom (SimpleNode node) throws Exception
     {
@@ -172,9 +175,50 @@ public class AccessElement extends Function
     public Type eval (Instance instance)
     {
         Matrix A = (Matrix) operands[0].eval (instance);
-        int row = (int) ((Scalar) operands[1].eval (instance)).value;
-        int column = 0;
-        if (operands.length > 2) column = (int) ((Scalar) operands[2].eval (instance)).value;
-        return new Scalar (A.get (row, column));
+        double row = ((Scalar) operands[1].eval (instance)).value;
+        double column = 0;
+        if (operands.length > 2) column = ((Scalar) operands[2].eval (instance)).value;
+        return new Scalar (A.get (row, column, true));  // This access function does bounds check.
+    }
+
+    public Operator operandA ()
+    {
+        if (operands.length > 1) return operands[1];
+        return null;
+    }
+
+    public Operator operandB ()
+    {
+        if (operands.length > 2) return operands[2];
+        return null;
+    }
+
+    public IteratorNonzero getIteratorNonzero (Instance context)
+    {
+        Matrix A = (Matrix) operands[0].eval (context);
+        return A.getIteratorNonzero ();
+    }
+
+    public boolean hasCorrectForm ()
+    {
+        if (operands.length < 3) return false;  // Must be 2-dimensional access
+        Operator op0 = operands[0];
+        if (op0 instanceof Constant) return true;
+        if (! (op0 instanceof AccessVariable)) return false;  // Some other matrix expression.
+
+        // Simply assume that the variable is of type Matrix.
+        // Need to know if it is sufficiently constant.
+        AccessVariable av = (AccessVariable) op0;
+        Variable v = av.reference.variable;
+        if (v.hasAny ("constant", "initOnly")) return true;
+
+        // See if v is just an alias for ReadMatrix.
+        if (! v.hasAttribute ("temporary")) return false;
+        if (v.equations.size () != 1) return false;
+        EquationEntry e = v.equations.first ();
+        if (e.condition != null) return false;
+        if (! (e.expression instanceof ReadMatrix)) return false;
+        ReadMatrix r = (ReadMatrix) e.expression;
+        return r.operands[0] instanceof Constant;
     }
 }

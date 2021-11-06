@@ -74,14 +74,14 @@ public:
 
     MatrixInput (const String & fileName);
     virtual ~MatrixInput ();
-
-    IteratorNonzero<T> * getIterator ();  // Returns an object that iterates over nonzero elements of A.
 };
 #ifdef n2a_FP
 template<class T> extern MatrixInput<T> * matrixHelper (const String & fileName, int exponent, MatrixInput<T> * oldHandle = 0);
 #else
 template<class T> extern MatrixInput<T> * matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle = 0);
 #endif
+
+template<class T> extern IteratorNonzero<T> * getIterator (MatrixAbstract<T> * A);  // Returns an object that iterates over nonzero elements of A.
 
 template<class T>
 class InputHolder : public Holder

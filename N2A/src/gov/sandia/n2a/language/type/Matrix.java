@@ -67,17 +67,18 @@ public abstract class Matrix extends Type implements Holder
     {
         int rows    = rows ();
         int columns = columns ();
+        if (rows == 0  ||  columns == 0) return 0;  // To be completely safe, we must handle empty matrix.
         int lastRow    = rows    - 1;
         int lastColumn = columns - 1;
 
         if (raw)
         {
-            int r = (int) Math.floor (row);
-            int c = (int) Math.floor (column);
-            if      (r < 0    ) r = 0;
-            else if (r >= rows) r = lastRow;
-            if      (c < 0       ) c = 0;
-            else if (c >= columns) c = lastColumn;
+            int r = (int) row;
+            int c = (int) column;
+            if      (r < 0      ) r = 0;
+            else if (r > lastRow) r = lastRow;
+            if      (c < 0         ) c = 0;
+            else if (c > lastColumn) c = lastColumn;
             return get (r, c);
         }
         else

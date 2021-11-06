@@ -561,14 +561,15 @@ public class Population extends Instance
         public ArrayList<Part>     rows;
         public ArrayList<Part>     cols;
         public Part                c;
-        public Part                dummy;  // Pre-loaded with arbitrary intance from rows and cols. Used to evaluate mappings back to indices. Provides access to population variables.
+        public Part                dummy;  // Pre-loaded with arbitrary instance from rows and cols. Used to evaluate mappings back to indices. Provides access to population variables.
+        public InstanceConnect     dummyContext;
         public IteratorNonzero     it;
         public int                 rowCount;
         public int                 colCount;
         public InternalBackendData Abed;
         public InternalBackendData Bbed;
 
-        public ConnectMatrix (ConnectionMatrix cm, ConnectPopulation rowIterator, ConnectPopulation colIterator)
+        public ConnectMatrix (ConnectionMatrix cm, ConnectPopulation rowIterator, ConnectPopulation colIterator, Simulator simulator)
         {
             this.cm  = cm;
             rows     = rowIterator.instances;
@@ -581,16 +582,28 @@ public class Population extends Instance
             Abed = (InternalBackendData) A.equations.backendData;
             Bbed = (InternalBackendData) B.equations.backendData;
 
+            // Prepare "dummy" part.
+            // This is the context in which the connect iterator evaluates.
             dummy = new Part (equations, (Part) container);
             dummy.setPart (0, A);
             dummy.setPart (1, B);
             dummy.resolve ();
+            dummyContext = new InstanceConnect (dummy, simulator);
+            for (Variable v : dummyContext.bed.Pdependencies)
+            {
+                Type result = v.eval (dummyContext);
+                // v will not be an external reference, because EquationSet.findConnectionMatrix() excludes that case.
+                // Thus there is no need to handle combiners (Instance.applyResultInit()).
+                // Pdependencies should be in init order (maximal propagation of info) rather than update order.
+                if (result == null) dummyContext.setFinal (v, v.type);
+                else                dummyContext.setFinal (v, result);
+            }
         }
 
         public boolean setProbe (Part probe)
         {
             c = probe;
-            if (it == null) it = cm.A.open (c).getIteratorNonzero ();  // If A can't open, we're dead anyway, so don't bother checking for null pointer.
+            if (it == null) it = cm.A.getIteratorNonzero (dummyContext);  // If A can't open, we're dead anyway, so don't bother checking for null pointer.
             return false;
         }
 
@@ -598,8 +611,8 @@ public class Population extends Instance
         {
             while (it.next () != null)
             {
-                int a = cm.rowMapping.getIndex (dummy, it.getRow ());
-                int b = cm.colMapping.getIndex (dummy, it.getColumn ());
+                int a = cm.rowMapping.getIndex (dummyContext, it.getRow ());
+                int b = cm.colMapping.getIndex (dummyContext, it.getColumn ());
                 if (a < 0  ||  a >= rowCount  ||  b < 0  ||  b >= colCount) continue;
                 Part A = rows.get (a);
                 Part B = cols.get (b);
@@ -639,9 +652,9 @@ public class Population extends Instance
             // TODO: Guard against deep paths to populations. The row and column collections should each be a simple list from a single population.
             ConnectMatrix result;
             ConnectionBinding A = equations.connectionBindings.get (0);
-            if (A == cm.rows) result = new ConnectMatrix (cm, iterators.get (0), iterators.get (1));
-            else              result = new ConnectMatrix (cm, iterators.get (1), iterators.get (0));
-            return result;
+            if (A == cm.rows) result = new ConnectMatrix (cm, iterators.get (0), iterators.get (1), simulator);
+            else              result = new ConnectMatrix (cm, iterators.get (1), iterators.get (0), simulator);
+            return result;  // cm takes precedence over any other iteration method.
         }
 
         // Sort so that population with the most old entries is the outermost iterator.

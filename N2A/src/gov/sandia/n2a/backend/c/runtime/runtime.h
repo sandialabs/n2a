@@ -197,7 +197,7 @@ public:
     virtual Part<T> * getPart    (int i);                           ///< @return Pointer to the instance of population i.
     virtual int       getCount   (int i);                           ///< @return Number of connections of this type attached to the part indexed by i.
     virtual void      getProject (int i, MatrixFixed<T,3,1> & xyz); ///< Determine position of endpoint i as projected into this connection's space. Default is the endpoint's own $xyz.
-    virtual int       mapIndex   (int i, int rc);                   ///< Converts matrix index to population $index. Generally, rows map to endpoint 0 and columns to endpoint 1.
+    virtual int       mapIndex   (int i, int rc);                   ///< Applies user-specified transformation formula between matrix index and population $index. Parameter i indicates which endpoint to process. Generally, but not always, rows are endpoint 0 and columns are endpoint 1.
     virtual bool      getNewborn ();                                ///< @return The value of the newborn flag (or false if it doesn't exist in this part). Unlike the above, this is a direct function of the endpoint.
 
     // Accessors for $variables
