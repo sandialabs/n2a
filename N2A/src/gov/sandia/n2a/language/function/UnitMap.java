@@ -93,7 +93,7 @@ public class UnitMap extends Function
             Type op2 = operands[2].eval (context);
             if (op2 instanceof Scalar) c = ((Scalar) op2).value;
         }
-        return new Scalar (A.get (r, c, false));
+        return new Scalar (A.get (r, c, Matrix.UNITMAP));
     }
 
     public String toString ()

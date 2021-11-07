@@ -178,7 +178,7 @@ public class AccessElement extends Function implements NonzeroIterable
         double row = ((Scalar) operands[1].eval (instance)).value;
         double column = 0;
         if (operands.length > 2) column = ((Scalar) operands[2].eval (instance)).value;
-        return new Scalar (A.get (row, column, true));  // This access function does bounds check.
+        return new Scalar (A.get (row, column, Matrix.INTERPOLATE));  // This access function does bounds check.
     }
 
     public Operator operandA ()

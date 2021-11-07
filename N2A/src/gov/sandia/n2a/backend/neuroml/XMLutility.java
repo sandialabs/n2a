@@ -122,6 +122,16 @@ public class XMLutility
         return Scalar.print (d);
     }
 
+    // Not used by NeuroML tools, but makes sense to concentrate all XML utilities here.
+    public static Node getChild (Node parent, String name)
+    {
+        for (Node child = parent.getFirstChild (); child != null; child = child.getNextSibling ())
+        {
+            if (child.getNodeName ().equals (name)) return child;
+        }
+        return null;
+    }
+
     public static String getText (Node node)
     {
         String result = "";

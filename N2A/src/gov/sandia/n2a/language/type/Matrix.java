@@ -63,7 +63,11 @@ public abstract class Matrix extends Type implements Holder
         return get (row, 0);
     }
 
-    public double get (double row, double column, boolean raw)
+    public static final int RAW         = 0;  // same as regular get(r,c) but with bounds checking
+    public static final int UNITMAP     = 1;  // applies offset and scaling for unitmap()
+    public static final int INTERPOLATE = 2;  // similar to regular get(r,c) but with non-integer coordinates
+
+    public double get (double row, double column, int mode)
     {
         int rows    = rows ();
         int columns = columns ();
@@ -71,7 +75,7 @@ public abstract class Matrix extends Type implements Holder
         int lastRow    = rows    - 1;
         int lastColumn = columns - 1;
 
-        if (raw)
+        if (mode == RAW)
         {
             int r = (int) row;
             int c = (int) column;
@@ -81,10 +85,14 @@ public abstract class Matrix extends Type implements Holder
             else if (c > lastColumn) c = lastColumn;
             return get (r, c);
         }
-        else
+        else  // Either interpolate mode or unitmap mode. In unitmap mode, the caller is responsible to offset coordinates.
         {
-            row    = row    * rows    - 0.5;
-            column = column * columns - 0.5;
+            if (mode == UNITMAP)
+            {
+                row    = row    * rows    - 0.5;
+                column = column * columns - 0.5;
+            }
+
             int r = (int) Math.floor (row);
             int c = (int) Math.floor (column);
             if (r < 0)

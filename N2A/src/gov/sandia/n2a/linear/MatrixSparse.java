@@ -350,41 +350,60 @@ public class MatrixSparse extends Matrix
     {
         protected MatrixSparse                    A;
         protected int                             columns;
+        protected int                             ar;  // anchor row, for iterating over region
 
+        protected Double                          nextValue;
+        protected int                             nextRow;
+        protected int                             nextColumn;
         protected Iterator<Entry<Integer,Double>> it;
-        protected double                          value;
+
+        protected Double                          value;
         protected int                             row;
         protected int                             column;
 
-        public IteratorSparse (MatrixSparse A)
+        public IteratorSparse (MatrixSparse A, int ar, int ac)
         {
-            this.A = A;
-            columns = A.columns ();
-            if (columns > 0)
-            {
-                HashMap<Integer,Double> rows = A.data.get (0);
-                if (rows != null) it = rows.entrySet ().iterator ();
-            }
+            this.A     = A;
+            columns    = A.columns ();
+            this.ar    = ar;
+            nextColumn = ac - 1;
+            getNext ();
         }
 
-        public boolean hasNext ()
+        protected void getNext ()
         {
             while (true)
             {
-                if (it != null  &&  it.hasNext ()) return true;
-                if (++column >= columns) return false;
-                HashMap<Integer,Double> rows = A.data.get (column);
+                while (it != null  &&  it.hasNext ())
+                {
+                    Entry<Integer,Double> e = it.next ();
+                    nextRow = e.getKey ();
+                    if (nextRow < ar) continue;
+                    nextValue = e.getValue ();
+                    return;
+                }
+                if (++nextColumn >= columns)
+                {
+                    nextValue = null;
+                    return;
+                }
+                HashMap<Integer,Double> rows = A.data.get (nextColumn);
                 if (rows == null) it = null;
                 else              it = rows.entrySet ().iterator ();
             }
         }
 
+        public boolean hasNext ()
+        {
+            return nextValue != null;
+        }
+
         public Double next ()
         {
-            if (! hasNext ()) return null;
-            Entry<Integer,Double> e = it.next ();
-            row = e.getKey ();
-            value = e.getValue ();
+            value  = nextValue;
+            row    = nextRow;
+            column = nextColumn;
+            getNext ();
             return value;
         }
 
@@ -401,6 +420,6 @@ public class MatrixSparse extends Matrix
 
     public IteratorNonzero getIteratorNonzero ()
     {
-        return new IteratorSparse (this);
+        return new IteratorSparse (this, 0, 0);
     }
 }
