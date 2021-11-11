@@ -3711,7 +3711,7 @@ public class JobC extends Thread
     {
         boolean connect = context.part.getConnect ();
         boolean init    = context.part.getInit ();
-        boolean isType = v.name.equals ("$type");
+        boolean isType  = v.name.equals ("$type");
 
         if (v.hasAttribute ("temporary")) context.result.append (pad + type (v) + " " + mangle (v) + ";\n");
 
@@ -3805,8 +3805,9 @@ public class JobC extends Thread
                     if (   v.assignment == Variable.REPLACE
                         && v.reference.variable.container == v.container   // local to the equation set, not a reference to an outside variable
                         && v.equations.size () > 0
-                        && v.hasAny ("cycle", "externalRead")
-                        && ! v.hasAttribute ("initOnly"))
+                        && v.hasAny ("cycle", "externalRead")  // buffered
+                        && ! v.hasAttribute ("initOnly")
+                        && ! init  &&  ! connect)  // not in a phase that skips buffering
                     {
                         defaultValue = resolve (v.reference, context, false);  // copy previous value
                     }
