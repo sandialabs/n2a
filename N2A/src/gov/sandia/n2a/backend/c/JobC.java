@@ -1340,7 +1340,7 @@ public class JobC extends Thread
         {
             result.append ("  virtual bool getNewborn ();\n");
         }
-        if (s.connectionMatrix != null)
+        if (s.connectionMatrix != null  &&  s.connectionMatrix.needsMapping)
         {
             result.append ("  virtual int mapIndex (int i, int rc);\n");
         }
@@ -3158,7 +3158,7 @@ public class JobC extends Thread
         }
 
         // Unit mapIndex
-        if (s.connectionMatrix != null)
+        if (s.connectionMatrix != null  &&  s.connectionMatrix.needsMapping)
         {
             result.append ("int " + ns + "mapIndex (int i, int rc)\n");
             result.append ("{\n");
@@ -3175,7 +3175,7 @@ public class JobC extends Thread
             cm.rowMapping.replaceRC (av);
             cm.colMapping.replaceRC (av);
 
-            result.append ("  if (i == 0) return ");
+            result.append ("  if (i == " + cm.rows.index + ") return ");
             cm.rowMapping.rhs.render (context);
             result.append (";\n");
             result.append ("  return ");

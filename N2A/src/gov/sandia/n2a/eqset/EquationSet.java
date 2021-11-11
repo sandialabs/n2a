@@ -187,6 +187,7 @@ public class EquationSet implements Comparable<EquationSet>
         // Mappings from row/column position to $index of respective population.
         public Equality rowMapping;
         public Equality colMapping;
+        public boolean  needsMapping;  // Indicates that at least one of rowMapping or colMapping requires some calculation.
 
         public ConnectionMatrix (NonzeroIterable A)
         {
@@ -204,10 +205,11 @@ public class EquationSet implements Comparable<EquationSet>
 
             rowMapping = new Equality (op1, av1);
             rowMapping.solve ();
-            if (rowMapping.lhs != rowMapping.target) rowMapping = null;
+            if (rowMapping.lhs != rowMapping.target) rowMapping = null;  // failed to solve for "target"
             colMapping = new Equality (op2, av2);
             colMapping.solve ();
             if (colMapping.lhs != colMapping.target) colMapping = null;
+            needsMapping =  colMapping.rhs != colMapping.rc  ||  rowMapping.rhs != rowMapping.rc;
         }
 
         /**

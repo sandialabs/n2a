@@ -516,7 +516,7 @@ template<class T>
 int
 Part<T>::mapIndex (int i, int rc)
 {
-    return 0;
+    return rc;
 }
 
 template<class T>
