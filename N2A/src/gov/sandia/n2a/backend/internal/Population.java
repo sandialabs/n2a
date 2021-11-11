@@ -566,8 +566,8 @@ public class Population extends Instance
         public IteratorNonzero     it;
         public int                 rowCount;
         public int                 colCount;
-        public InternalBackendData Abed;
-        public InternalBackendData Bbed;
+        public InternalBackendData rowBed;
+        public InternalBackendData colBed;
 
         public ConnectMatrix (ConnectionMatrix cm, ConnectPopulation rowIterator, ConnectPopulation colIterator, Simulator simulator)
         {
@@ -577,16 +577,16 @@ public class Population extends Instance
             rowCount = rows.size ();
             colCount = cols.size ();
 
-            Part A = rows.get (0);
-            Part B = cols.get (0);
-            Abed = (InternalBackendData) A.equations.backendData;
-            Bbed = (InternalBackendData) B.equations.backendData;
+            Part row = rows.get (0);
+            Part col = cols.get (0);
+            rowBed = (InternalBackendData) row.equations.backendData;
+            colBed = (InternalBackendData) col.equations.backendData;
 
             // Prepare "dummy" part.
             // This is the context in which the connect iterator evaluates.
             dummy = new Part (equations, (Part) container);
-            dummy.setPart (0, A);
-            dummy.setPart (1, B);
+            dummy.setPart (cm.rows.index, row);
+            dummy.setPart (cm.cols.index, col);
             dummy.resolve ();
             dummyContext = new InstanceConnect (dummy, simulator);
             for (Variable v : dummyContext.bed.Pdependencies)
@@ -598,12 +598,13 @@ public class Population extends Instance
                 if (result == null) dummyContext.setFinal (v, v.type);
                 else                dummyContext.setFinal (v, result);
             }
+
+            it = cm.A.getIteratorNonzero (dummyContext);  // If A can't open, we're dead anyway, so don't bother checking for null pointer.
         }
 
         public boolean setProbe (Part probe)
         {
             c = probe;
-            if (it == null) it = cm.A.getIteratorNonzero (dummyContext);  // If A can't open, we're dead anyway, so don't bother checking for null pointer.
             return false;
         }
 
@@ -614,12 +615,12 @@ public class Population extends Instance
                 int a = cm.rowMapping.getIndex (dummyContext, it.getRow ());
                 int b = cm.colMapping.getIndex (dummyContext, it.getColumn ());
                 if (a < 0  ||  a >= rowCount  ||  b < 0  ||  b >= colCount) continue;
-                Part A = rows.get (a);
-                Part B = cols.get (b);
-                if (A.valuesFloat[Abed.newborn] != 0  ||  B.valuesFloat[Bbed.newborn] != 0)
+                Part row = rows.get (a);
+                Part col = cols.get (b);
+                if (row.valuesFloat[rowBed.newborn] != 0  ||  col.valuesFloat[colBed.newborn] != 0)
                 {
-                    c.setPart (0, A);
-                    c.setPart (1, B);
+                    c.setPart (cm.rows.index, row);
+                    c.setPart (cm.cols.index, col);
                     return true;
                 }
             }
@@ -650,11 +651,7 @@ public class Population extends Instance
         if (cm != null)  // Use sparse-matrix optimization
         {
             // TODO: Guard against deep paths to populations. The row and column collections should each be a simple list from a single population.
-            ConnectMatrix result;
-            ConnectionBinding A = equations.connectionBindings.get (0);
-            if (A == cm.rows) result = new ConnectMatrix (cm, iterators.get (0), iterators.get (1), simulator);
-            else              result = new ConnectMatrix (cm, iterators.get (1), iterators.get (0), simulator);
-            return result;  // cm takes precedence over any other iteration method.
+            return new ConnectMatrix (cm, iterators.get (cm.rows.index), iterators.get (cm.cols.index), simulator);  // cm takes precedence over any other iteration method.
         }
 
         // Sort so that population with the most old entries is the outermost iterator.

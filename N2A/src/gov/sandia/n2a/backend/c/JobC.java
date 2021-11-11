@@ -2101,8 +2101,8 @@ public class JobC extends Thread
                 result.append ("  ConnectPopulation<" + T + "> * rows = getIterator (" + cm.rows.index + ");\n");
                 result.append ("  ConnectPopulation<" + T + "> * cols = getIterator (" + cm.cols.index + ");\n");
                 result.append ("  " + ps + " * dummy = (" + ps + " *) create ();\n");  // Will be deleted when ConnectMatrix is deleted.
-                result.append ("  dummy->setPart (0, (*rows->instances)[0]);\n");
-                result.append ("  dummy->setPart (1, (*cols->instances)[0]);\n");
+                result.append ("  dummy->setPart (" + cm.rows.index + ", (*rows->instances)[0]);\n");
+                result.append ("  dummy->setPart (" + cm.cols.index + ", (*cols->instances)[0]);\n");
                 result.append ("  dummy->getP ();\n");  // We don't actually want $p. This just forces "dummy" to initialize any local matrix variables.
 
                 // Create iterator
@@ -2148,7 +2148,7 @@ public class JobC extends Thread
                     result.append (");\n");
                 }
 
-                result.append ("  return new ConnectMatrix<" + T + "> (rows, cols, it, dummy);\n");
+                result.append ("  return new ConnectMatrix<" + T + "> (rows, cols, " + cm.rows.index + ", " + cm.cols.index + ", it, dummy);\n");
             }
             result.append ("}\n");
             result.append ("\n");

@@ -971,11 +971,13 @@ ConnectPopulationNN<T>::reset (bool newOnly)
 // class ConnectMatrix -------------------------------------------------------
 
 template<class T>
-ConnectMatrix<T>::ConnectMatrix (ConnectPopulation<T> * rows, ConnectPopulation<T> * cols, IteratorNonzero<T> * it, Part<T> * dummy)
-:   rows  (rows),
-    cols  (cols),
-    it    (it),
-    dummy (dummy)
+ConnectMatrix<T>::ConnectMatrix (ConnectPopulation<T> * rows, ConnectPopulation<T> * cols, int rowIndex, int colIndex, IteratorNonzero<T> * it, Part<T> * dummy)
+:   rows     (rows),
+    cols     (cols),
+    rowIndex (rowIndex),
+    colIndex (colIndex),
+    it       (it),
+    dummy    (dummy)
 {
 }
 
@@ -1002,15 +1004,15 @@ ConnectMatrix<T>::next ()
 {
     while (it->next ())
     {
-        int a = dummy->mapIndex (0, it->row);
-        int b = dummy->mapIndex (1, it->column);
+        int a = dummy->mapIndex (rowIndex, it->row);
+        int b = dummy->mapIndex (colIndex, it->column);
         if (a < 0  ||  a >= rows->size  ||  b < 0  ||  b >= cols->size) continue;
-        Part<T> * A = (*rows->instances)[a];
-        Part<T> * B = (*cols->instances)[b];
-        if (A->getNewborn ()  ||  B->getNewborn ())
+        Part<T> * row = (*rows->instances)[a];
+        Part<T> * col = (*cols->instances)[b];
+        if (row->getNewborn ()  ||  col->getNewborn ())
         {
-            c->setPart (0, A);
-            c->setPart (1, B);
+            c->setPart (rowIndex, row);
+            c->setPart (colIndex, col);
             return true;
         }
     }

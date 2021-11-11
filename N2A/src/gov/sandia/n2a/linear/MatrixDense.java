@@ -208,8 +208,6 @@ public class MatrixDense extends Matrix
                 strideR = 1;
                 strideC = tempR;
             }
-
-            if (data.length == 0) throw new EvaluationException ("Empty matrix");
         }
         catch (IOException error)
         {
@@ -1229,15 +1227,6 @@ public class MatrixDense extends Matrix
             }
             return 0;
         }
-        if (that instanceof Scalar)
-        {
-            if (columns != 1) return 1;
-            if (rows    != 1) return 1;
-            double d = data[offset] - ((Scalar) that).value;
-            if (d > 0) return 1;
-            if (d < 0) return -1;
-            return 0;
-        }
-        throw new EvaluationException ("type mismatch");
+        return super.compareTo (that);
     }
 }

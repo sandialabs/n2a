@@ -351,6 +351,7 @@ public class MatrixSparse extends Matrix
         protected MatrixSparse                    A;
         protected int                             columns;
         protected int                             ar;  // anchor row, for iterating over region
+        protected int                             ac;  // anchor column
 
         protected Double                          nextValue;
         protected int                             nextRow;
@@ -366,6 +367,7 @@ public class MatrixSparse extends Matrix
             this.A     = A;
             columns    = A.columns ();
             this.ar    = ar;
+            this.ac    = ac;
             nextColumn = ac - 1;
             getNext ();
         }
@@ -401,8 +403,8 @@ public class MatrixSparse extends Matrix
         public Double next ()
         {
             value  = nextValue;
-            row    = nextRow;
-            column = nextColumn;
+            row    = nextRow    - ar;
+            column = nextColumn - ac;
             getNext ();
             return value;
         }

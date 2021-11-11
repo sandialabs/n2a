@@ -334,11 +334,13 @@ class ConnectMatrix : public ConnectIterator<T>
 public:
     ConnectPopulation<T> * rows;
     ConnectPopulation<T> * cols;
+    int                    rowIndex;
+    int                    colIndex;
     IteratorNonzero<T>   * it;
     Part<T>              * dummy; ///< Temporary connection used to evaluate index mappings.
     Part<T>              * c;
 
-    ConnectMatrix (ConnectPopulation<T> * rows, ConnectPopulation<T> * cols, IteratorNonzero<T> * it, Part<T> * dummy);
+    ConnectMatrix (ConnectPopulation<T> * rows, ConnectPopulation<T> * cols, int rowIndex, int colIndex, IteratorNonzero<T> * it, Part<T> * dummy);
     virtual ~ConnectMatrix ();
 
     virtual bool setProbe (Part<T> * probe);
