@@ -4711,47 +4711,50 @@ public class EquationSet implements Comparable<EquationSet>
         // For example, the file name for loading a matrix should not be calculated from $index of either endpoint.
         // These are unlikely use-cases, but we should eliminate them in order to be strictly correct.
 
-        // Detect if equation or direct dependency contains a NonzeroIterable.
-        // Move complex arrangements of equations are possible but unlikely.
+        // Detect if equation or dependency contains a NonzeroIterable.
         class ContainsTransformer implements Transformer
         {
             public NonzeroIterable found;
-            public int             countFound;
-            public int             countVariable;
+            public int             count;  // Number of times a nonzero iterable was found
+            public boolean         substituted;
             public Operator transform (Operator op)
             {
                 if (op instanceof NonzeroIterable)
                 {
                     found = (NonzeroIterable) op;
-                    countFound++;
+                    count++;
                     return op;
                 }
                 if (op instanceof AccessVariable)
                 {
-                    // Check if this is a simple reference to a variable that could be iterated.
-                    countVariable++;
+                    // Check if this is a local reference to a single equation.
                     AccessVariable av = (AccessVariable) op;
                     Variable v = av.reference.variable;
-                    if (v.container != p.container) return op;  // We only examine one level of dependencies, regardless of whether it matches our criteria or not.
+                    if (v.container != p.container) return op;  // We only examine local dependencies.
                     if (v.equations.size () != 1) return op;
                     EquationEntry e = v.equations.first ();
                     if (e.condition != null) return op;
-                    if (e.expression instanceof NonzeroIterable)
-                    {
-                        found = (NonzeroIterable) e.expression;
-                        countFound++;
-                        countVariable--;
-                        return e.expression;  // Replace temporary variable with its equivalent NonzeroIterator.
-                    }
-                    return op;
+
+                    // Substitute the equation into the predicate.
+                    substituted = true;
+                    Operator result = e.expression.deepCopy ();
+                    result.parent = op.parent;
+                    return result;
                 }
                 return null;  // continue descent
             }
         }
         ContainsTransformer ct = new ContainsTransformer ();
         Operator p2 = predicate.deepCopy ();
-        p2.transform (ct);
-        if (ct.countFound != 1  ||  ct.countVariable != 0) return;  // Must have exactly one NonzeroIterable surrounded by only constants.
+        int depthLimit = variables.size ();  // to prevent infinite recursion
+        do
+        {
+            ct.count = 0;
+            ct.substituted = false;
+            p2 = p2.transform (ct);
+        }
+        while (ct.substituted  &&  depthLimit-- > 0);
+        if (ct.count != 1) return;
         if (! ct.found.hasCorrectForm ()) return;
 
         // Check if zero elements in matrix prevent connection.
@@ -4761,8 +4764,8 @@ public class EquationSet implements Comparable<EquationSet>
         try
         {
             Type result = p2.eval (instance);
-            if (! (result instanceof Scalar)) return;
-            if (((Scalar) result).value != 0) return;
+            if (! (result instanceof Scalar)) return;  // Any type other than Scalar is treated as "true", so p2 fails the test.
+            if (((Scalar) result).value != 0) return;  // Any nonzero value is treated as "true".
         }
         catch (EvaluationException e)
         {
@@ -4775,6 +4778,7 @@ public class EquationSet implements Comparable<EquationSet>
         // identity in the finished model.
         predicate.visit (new Visitor ()
         {
+            public int depthLimit = variables.size ();
             public boolean visit (Operator op)
             {
                 if (op instanceof NonzeroIterable)
@@ -4787,13 +4791,13 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     AccessVariable av = (AccessVariable) op;
                     Variable v = av.reference.variable;
+                    if (v.container != p.container) return false;
+                    if (v.equations.size () != 1) return false;
                     EquationEntry e = v.equations.first ();
-                    if (e.expression instanceof NonzeroIterable)
-                    {
-                        ConnectionMatrix cm = new ConnectionMatrix ((NonzeroIterable) e.expression);
-                        if (cm.rowMapping != null  &&  cm.colMapping != null) connectionMatrix = cm;
-                        return false;
-                    }
+                    if (e.condition != null) return false;
+                    depthLimit--;
+                    if (depthLimit >= 0) e.expression.visit (this);
+                    depthLimit++;
                 }
                 return true;
             }
