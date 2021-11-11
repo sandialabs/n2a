@@ -65,7 +65,7 @@ public class Draw extends Function
         return new Scalar ();
     }
 
-    public static class Holder implements gov.sandia.n2a.backend.internal.Holder
+    public static class Holder implements AutoCloseable
     {
         public Path    path;
         public boolean single;              // Store a single frame rather than an image sequence.

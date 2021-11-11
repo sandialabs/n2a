@@ -13,13 +13,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
 
-import gov.sandia.n2a.backend.internal.Holder;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.linear.MatrixSparse;
 
-public abstract class Matrix extends Type implements Holder
+public abstract class Matrix extends Type
 {
     public interface Visitor
     {
@@ -45,11 +44,6 @@ public abstract class Matrix extends Type implements Holder
         {
             throw new EvaluationException ("Can't open matrix file");
         }
-    }
-
-    public void close ()
-    {
-        // Don't do anything, since we load the entire matrix into memory, so have already closed the file.
     }
 
     public abstract int rows ();

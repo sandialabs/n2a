@@ -6,7 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
-import gov.sandia.n2a.backend.internal.Holder;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.Function;
@@ -78,7 +77,7 @@ public class ReadMatrix extends Function
         if (simulator == null) return null;  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
         String path = ((Text) operands[0].eval (context)).value;
-        Holder A = simulator.holders.get (path);
+        Object A = simulator.holders.get (path);
         if (A == null)
         {
             A = Matrix.factory (simulator.jobDir.resolve (path));

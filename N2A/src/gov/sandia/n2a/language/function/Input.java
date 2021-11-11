@@ -100,7 +100,7 @@ public class Input extends Function
         unit = AbstractUnit.ONE;
     }
 
-    public static class Holder implements gov.sandia.n2a.backend.internal.Holder
+    public static class Holder implements AutoCloseable
     {
         public static final double[] empty = {0};
 

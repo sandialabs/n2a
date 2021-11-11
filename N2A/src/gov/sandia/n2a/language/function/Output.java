@@ -104,7 +104,7 @@ public class Output extends Function
         }
     }
 
-    public static class Holder implements gov.sandia.n2a.backend.internal.Holder
+    public static class Holder implements AutoCloseable
     {
         public Map<String,Integer> columnMap    = new HashMap<String,Integer> ();  // Maps from column name to column position.
         public MDoc                columnMode;                                     // Maps from column name to a set of mode flags.

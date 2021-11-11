@@ -50,7 +50,7 @@ public class Simulator implements Iterable<Part>
 
     // Global shared data
     public Path               jobDir;
-    public Map<String,Holder> holders = new HashMap<String,Holder> ();
+    public Map<String,Object> holders = new HashMap<String,Object> ();
     public PrintStream        out;
     // Note: System.in will get bound into an Input.Holder if used at all.
 
@@ -142,7 +142,14 @@ public class Simulator implements Iterable<Part>
 
     public void closeStreams ()
     {
-        for (Holder h : holders.values ()) h.close ();
+        for (Object h : holders.values ())
+        {
+            if (h instanceof AutoCloseable)
+            {
+                try {((AutoCloseable) h).close ();}
+                catch (Exception e) {}
+            }
+        }
     }
 
     public void integrate (Instance i)
