@@ -112,8 +112,11 @@ public class Instance extends Type
     **/
     public Type get (Variable v)
     {
-        if (v.readIndex == -2) return this;
-        if (v.readIndex < 0) return v.type;
+        if (v.readIndex < 0)
+        {
+            if (v.readIndex == -2) return this;
+            return v.type;
+        }
         if (v.type instanceof Scalar) return new Scalar (valuesFloat[v.readIndex]);
         Type result = (Type) valuesObject[v.readIndex];
         if (result == null) return v.type;  // assumes that we never modify the returned object, and that previously it was set to the equivalent of 0
