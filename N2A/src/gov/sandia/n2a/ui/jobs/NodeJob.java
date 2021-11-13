@@ -27,7 +27,6 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.Schema;
-import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.language.UnitValue;
@@ -681,25 +680,10 @@ public class NodeJob extends NodeBase
                 {
                     MNode n = iterator.next ();
 
-                    // We must look ahead to decide whether to descend into a node.
-                    // Unfortunately, this creates a lot of redundant checks.
                     String key = n.key ();
                     if (inMetadata)
                     {
-                        if (key.equals ("seed")) return n;
-                        if (key.equals ("duration")) return n;
-                        if (key.equals ("gui")  &&  n.child ("pin") != null) return n;
-                        if (key.equals ("watch")  &&  n.child ("timeScale") != null) return n;
-                        if (key.equals ("param")  &&  n.getFlag ()  &&  ! n.get ().equals ("watch"))
-                        {
-                            // Only mark overrides with "param".
-                            if (node instanceof MPart  &&  ! ((MPart) node.parent ()).isFromTopDocument ()) continue;
-                            return n;
-                        }
-                        if (! key.equals ("backend")) continue;
-                        if (n.depth () == 2) return n;
-                        if (n.child ("all") != null) return n;
-                        if (n.child (backend) != null) return n;
+                        if (filterMetadata (n)) return n;
                         continue;
                     }
                     else if (inBackend)
@@ -716,25 +700,34 @@ public class NodeJob extends NodeBase
                     else if (key.equals ("$metadata"))
                     {
                         // Don't even process $metadata unless it contains useful backend info.
-                        if (n.child ("seed") != null) return n;
-                        if (n.child ("duration") != null) return n;
-                        if (n.child ("gui", "pin") != null) return n;
-                        if (n.child ("watch", "timeScale") != null) return n;
-                        if (n.getFlag ("param")  &&  ! n.get ("param").equals ("watch"))
-                        {
-                            if (node instanceof MPart  &&  ! ((MPart) node).isFromTopDocument ()) continue;
-                            return n;
-                        }
-                        MNode b = n.child ("backend");
-                        if (b == null) continue;
-                        if (b.depth () == 2) return n;  // Always keep top-level $metadata.backend node, because it names the backend we should use.
-                        if (b.child ("all") != null) return n;
-                        if (b.child (backend) != null) return n;
+                        // Unfortunately, we end up checking metadata children twice: once to decide
+                        // whether to descend into the metadata, and again to filter children while there.
+                        for (MNode c : n) if (filterMetadata (c)) return n;
                         continue;
                     }
                     return n;
                 }
                 return null;
+            }
+
+            /**
+                @param n an immediate child of $metadata
+            **/
+            public boolean filterMetadata (MNode n)
+            {
+                String key = n.key ();
+                if (key.equals ("seed")) return true;
+                if (key.equals ("duration")) return true;
+                if (key.equals ("gui")  &&  n.child ("pin") != null) return true;
+                if (key.equals ("watch")  &&  n.child ("timeScale") != null) return true;
+                if (key.equals ("study")) return true;
+                if (key.equals ("param")  &&  n.getFlag ()  &&  ! n.get ().equals ("watch")) return true;
+
+                if (! key.equals ("backend")) return false;
+                if (n.depth () == 2) return true;
+                if (n.child ("all") != null) return true;
+                if (n.child (backend) != null) return true;
+                return false;
             }
 
             public boolean hasNext ()
