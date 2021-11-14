@@ -98,6 +98,7 @@ extern void signalHandler (int number);
 
 // Simulation classes --------------------------------------------------------
 
+template<class T> class Parameters;
 template<class T> class Simulatable;
 template<class T> class Part;
 template<class T> class PartTime;
@@ -123,6 +124,21 @@ template<class T> class VisitorStep;
 template<class T> class VisitorSpikeMulti;
 template<class T> class DelayBuffer;
 
+
+/**
+    Utility class for reading/accessing command-line parameters.
+    These are primarily intended to override parameters within the model.
+**/
+template<class T>
+class Parameters
+{
+public:
+    std::unordered_map<String,String> namedValues;
+
+    void   parse (int argc, char * argv[]);
+    T      get   (const String & name, T defaultValue = 0) const;
+    String get   (const String & name, const String & defaultValue = "") const;
+};
 
 /**
     The universal interface through which the runtime accesses model

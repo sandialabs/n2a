@@ -77,6 +77,7 @@ holderHelper (vector<Holder *> & holders, const String & fileName, Holder * oldH
 
 // classes -------------------------------------------------------------------
 
+template class Parameters<n2a_T>;
 template class Simulatable<n2a_T>;
 template class Part<n2a_T>;
 template void removeMonitor (std::vector<Part<n2a_T> *> & partList, Part<n2a_T> * part);

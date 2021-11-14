@@ -12,9 +12,8 @@ the U.S. Government retains certain rights in this software.
 #include "runtime.h"
 #include "matrix.h"
 #include <limits.h>
-#ifdef n2a_FP
-# include "fixedpoint.h"
-#endif
+#include "fixedpoint.h"
+
 #ifdef _WIN32
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
@@ -316,26 +315,50 @@ unitmap (const MatrixAbstract<int> & A, int row, int column)  // row and column 
 
 #endif
 
-namespace n2a
+
+// class Parameters ----------------------------------------------------------
+
+template<class T>
+void
+Parameters<T>::parse (int argc, char * argv[])
 {
+    for (int i = 1; i < argc; i++)
+    {
+        String a = argv[i];
+        int pos = a.find_first_of ('=');
+        if (pos == String::npos)
+        {
+            namedValues[a] = "";
+        }
+        else
+        {
+            namedValues[a.substr (0, pos)] = a.substr (pos + 1);
+        }
+    }
+}
+
+template<class T>
+T
+Parameters<T>::get (const String & name, T defaultValue) const
+{
+    std::unordered_map<String,String>::const_iterator it = namedValues.find (name);
+    if (it == namedValues.end ()) return defaultValue;
+    const String & value = it->second;
+
 #   ifdef n2a_FP
-
-    inline bool isnan (int a)
-    {
-        return a == NAN;
-    }
-
-    inline bool isinf (int a)
-    {
-        return abs (a) == INFINITY;
-    }
-
+    return (T) atoi (value.c_str ());
 #   else
+    return (T) atof (value.c_str ());
+#   endif
+}
 
-    using std::isnan;
-    using std::isinf;
-
-#   endif    
+template<class T>
+String
+Parameters<T>::get (const String & name, const String & defaultValue) const
+{
+    std::unordered_map<String,String>::const_iterator it = namedValues.find (name);
+    if (it == namedValues.end ()) return defaultValue;
+    return it->second;
 }
 
 

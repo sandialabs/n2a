@@ -10,13 +10,21 @@ the U.S. Government retains certain rights in this software.
 
 #ifndef n2a_FP
 
-#define ISNAN(x) std::isnan (x)
+
+#include <cmath>
+
+namespace n2a
+{
+    using std::isnan;
+    using std::isinf;
+}
+
 
 #else
 
+
 #include "nosys.h"
 #include "matrix.h"
-
 
 #define FP_MSB    30
 #define FP_MSB2   15
@@ -27,7 +35,19 @@ the U.S. Government retains certain rights in this software.
 #undef INFINITY
 #define NAN       0x80000000
 #define INFINITY  0x7FFFFFFF
-#define ISNAN(x) (x == NAN)
+
+namespace n2a
+{
+    inline bool isnan (int a)
+    {
+        return a == NAN;
+    }
+
+    inline bool isinf (int a)
+    {
+        return abs (a) == INFINITY;
+    }
+}
 
 
 // Transcendental functions --------------------------------------------------

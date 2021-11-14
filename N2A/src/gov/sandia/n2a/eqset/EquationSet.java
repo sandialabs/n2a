@@ -277,6 +277,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Construct a hierarchical tree of parts from a fully-resolved model.
+        The given part must have a proper key.
     **/
     public EquationSet (MNode part) throws Exception
     {
@@ -285,15 +286,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     public EquationSet (EquationSet container, MNode source) throws Exception
     {
-        if (container == null)  // top-level model, so pay special attention to name
-        {
-            name = source.getOrDefault ("Model", "$inherit").split (",", 2)[0].replace ("\"", "");
-        }
-        else
-        {
-            name = source.key ();
-        }
-
+        name           = source.key ();
         this.source    = source;
         this.container = container;
         variables      = new TreeSet<Variable> ();
@@ -3627,38 +3620,55 @@ public class EquationSet implements Comparable<EquationSet>
     public void determineDuration ()
     {
         Variable p = find (new Variable ("$p"));
-        if (p != null  &&  p.equations.size () == 1)
-        {
-            Operator expression = p.equations.first ().expression;
-            Operator variable = null;
-            Operator value    = null;
-            if (expression instanceof LT  ||  expression instanceof LE)  // only true if expression is not null
-            {
-                OperatorBinary comparison = (OperatorBinary) expression;
-                variable = comparison.operand0;
-                value    = comparison.operand1;
-            }
-            else if (expression instanceof GT  ||  expression instanceof GE)
-            {
-                OperatorBinary comparison = (OperatorBinary) expression;
-                variable = comparison.operand1;
-                value    = comparison.operand0;
-            }
+        if (p == null) return;
+        if (p.equations.size () != 1) return;
 
-            if (variable instanceof AccessVariable  &&  ((AccessVariable) variable).name.equals ("$t"))
+        Operator expression = p.equations.first ().expression;
+        Operator variable = null;
+        Operator value    = null;
+        if (expression instanceof LT  ||  expression instanceof LE)  // only true if expression is not null
+        {
+            OperatorBinary comparison = (OperatorBinary) expression;
+            variable = comparison.operand0;
+            value    = comparison.operand1;
+        }
+        else if (expression instanceof GT  ||  expression instanceof GE)
+        {
+            OperatorBinary comparison = (OperatorBinary) expression;
+            variable = comparison.operand1;
+            value    = comparison.operand0;
+        }
+
+        if (! (variable instanceof AccessVariable)) return;
+        if (! ((AccessVariable) variable).name.equals ("$t")) return;
+
+        // Method 1 -- check for reference to simple value, for example a "duration" parameter
+        if (value instanceof AccessVariable)
+        {
+            AccessVariable av = (AccessVariable) value;
+            Variable v = av.reference.variable;
+            if (v.equations.size () == 1)
             {
-                Instance instance = new Instance ()
+                EquationEntry e = v.equations.first ();
+                if (e.condition == null  &&  e.expression instanceof Constant)
                 {
-                    // all AccessVariable objects will reach here first, and get back the Variable.type field
-                    public Type get (VariableReference r) throws EvaluationException
-                    {
-                        return r.variable.type;
-                    }
-                };
-                Type result = value.eval (instance);
-                if (result instanceof Scalar) metadata.set (((Scalar) result).value, "duration");
+                    metadata.set (e.expression.getDouble (), "duration");
+                    return;
+                }
             }
         }
+
+        // Method 2 -- try to calculate the value
+        Instance instance = new Instance ()
+        {
+            // all AccessVariable objects will reach here first, and get back the Variable.type field
+            public Type get (VariableReference r) throws EvaluationException
+            {
+                return r.variable.type;
+            }
+        };
+        Type result = value.eval (instance);
+        if (result instanceof Scalar) metadata.set (((Scalar) result).value, "duration");
     }
 
     /**
@@ -3750,8 +3760,9 @@ public class EquationSet implements Comparable<EquationSet>
             if (v.simplify ()) changed = true;
 
             // Check if we have a constant
-            if (v.hasAttribute ("constant")) continue;  // If this already has a "constant" tag, it was specially added so presumably correct.
-            if (v.hasAttribute ("externalWrite")) continue;  // Regardless of the local math, a variable that gets written is not constant.
+            // "constant", "initOnly" -- The tag was specially added so presumably correct.
+            // "externalWrite" -- Regardless of the local math, a variable that gets written is not constant.
+            if (v.hasAny ("constant", "initOnly", "externalWrite")) continue;
 
             if (v.derivative != null)  // A variable with a derivative is usually not constant, with the following exceptions ...
             {

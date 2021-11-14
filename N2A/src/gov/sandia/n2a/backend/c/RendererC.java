@@ -515,6 +515,7 @@ public class RendererC extends Renderer
     **/
     public String print (double d, int exponent)
     {
+        if (Double.isInfinite (d)) return (d < 0 ? "-" : "") + "INFINITY";
         String result = Scalar.print (d);
         if ((int) d != d  &&  job.T.equals ("float")) result += "f";  // Tell C compiler that our type is float, not double.
         return result;

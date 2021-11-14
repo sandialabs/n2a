@@ -10,15 +10,12 @@ the U.S. Government retains certain rights in this software.
 
 
 #include "io.h"
-
-#include <fstream>
-#include <cmath>
-#include <stdlib.h>
-#include <time.h>
-#ifdef n2a_FP
 #include "runtime.h"   // For Event::exponent
 #include "fixedpoint.h"
-#endif
+
+#include <fstream>
+#include <stdlib.h>
+#include <time.h>
 
 
 // class IteratorSkip --------------------------------------------------------
@@ -369,11 +366,7 @@ InputHolder<T>::getRow (T row)
     while (true)
     {
         // Read and process next line
-#       ifdef n2a_FP
-        if (nextLine == NAN  &&  in->good ())
-#       else
-        if (std::isnan (nextLine)  &&  in->good ())
-#       endif
+        if (n2a::isnan (nextLine)  &&  in->good ())
         {
             String line;
             getline (*in, line);
@@ -573,11 +566,7 @@ InputHolder<T>::getRow (T row)
 
         // Determine if we have the requested data
         if (row <= currentLine) break;
-#       ifdef n2a_FP
-        if (nextLine == NAN) break;  // Return the current line, because another is not (yet) available. In general, we don't stall the simulator to wait for data.
-#       else
-        if (std::isnan (nextLine)) break;
-#       endif
+        if (n2a::isnan (nextLine)) break;  // Return the current line, because another is not (yet) available. In general, we don't stall the simulator to wait for data.
         if (row < nextLine - epsilon) break;
 
         T * tempValues = currentValues;

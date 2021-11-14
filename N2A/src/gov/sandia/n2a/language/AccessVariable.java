@@ -60,8 +60,8 @@ public class AccessVariable extends Operator
     {
         if (reference == null  ||  reference.variable == null) return this;  // unresolved!
         Variable v = reference.variable;
-        if (v.name.equals ("$connect")  ||  v.name.equals ("$init")  ||  v.name.equals ("$live")) return this;  // specifically prevent phase indicators from being replaced by a Constant
-        if (v.hasAttribute ("externalWrite")) return this;  // A variable may locally evaluate to a constant, yet be subject to change from outside equations.
+        if (v.name.equals ("$connect")  ||  v.name.equals ("$init")  ||  v.name.equals ("$live")) return this;  // Specifically prevent phase indicators from being replaced by a constant. They are tagged "initOnly", but that designation can change, particularly for $live.
+        if (v.hasAny ("externalWrite", "initOnly")) return this;  // A variable may locally evaluate to a constant, yet be subject to change from outside.
         if (v.equations.size () != 1) return this;
         EquationEntry e = v.equations.first ();
         if (e.expression == null) return this;

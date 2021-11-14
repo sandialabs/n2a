@@ -21,9 +21,7 @@ the U.S. Government retains certain rights in this software.
 #include <queue>
 #include <cmath>
 #include <limits.h>
-#ifdef n2a_FP
 #include "fixedpoint.h"
-#endif
 
 
 template<class T> class Part;

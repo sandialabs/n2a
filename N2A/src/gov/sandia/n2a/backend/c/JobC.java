@@ -43,10 +43,12 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 
+import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.io.Writer;
 import java.net.URL;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -79,8 +81,9 @@ public class JobC extends Thread
     protected long    seed;
     protected boolean during;
     protected boolean after;
-    protected boolean kokkos;
-    public    boolean gprof;
+    protected boolean kokkos;  // profiling method
+    public    boolean gprof;   // profiling method
+    protected boolean cli;     // command-line interface
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
     
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
@@ -133,6 +136,25 @@ public class JobC extends Thread
                 Backend.err.get ().println ("WARNING: Unsupported numeric type. Defaulting to single-precision float.");
             }
 
+            kokkos = model.getFlag ("$metadata", "backend", "c", "kokkos");
+            gprof  = model.getFlag ("$metadata", "backend", "c", "gprof");
+            cli    = model.getFlag ("$metadata", "backend", "c", "cli");
+
+            String e = model.get ("$metadata", "backend", "all", "event");
+            switch (e)
+            {
+                case "before":
+                    during = false;
+                    after  = false;
+                    break;
+                case "after":
+                    during = false;
+                    after  = true;
+                default:  // during
+                    during = true;
+                    after  = false;
+            }
+
             env              = Host.get (job);
             Path resourceDir = env.getResourceDir ();
             jobDir           = Host.getJobDir (resourceDir, job);  // Unlike localJobDir (which is created by MDir), this may not exist until we explicitly create it.
@@ -151,24 +173,6 @@ public class JobC extends Thread
                 seed = model.getOrDefault (System.currentTimeMillis (), "$metadata", "seed");
                 job.set (seed, "seed");
             }
-
-            String e = model.get ("$metadata", "backend", "all", "event");
-            switch (e)
-            {
-                case "before":
-                    during = false;
-                    after  = false;
-                    break;
-                case "after":
-                    during = false;
-                    after  = true;
-                default:  // during
-                    during = true;
-                    after  = false;
-            }
-
-            kokkos = model.getFlag ("$metadata", "backend", "c", "kokkos");
-            gprof  = model.getFlag ("$metadata", "backend", "c", "gprof");
 
             System.out.println (digestedModel.dump (false));
 
@@ -413,6 +417,14 @@ public class JobC extends Thread
         digestedModel.addAttribute ("global",      false, true,  "$max", "$min", "$k", "$radius");
         digestedModel.addAttribute ("global",      false, false, "$n");
         digestedModel.addAttribute ("preexistent", true,  false, "$index", "$t'", "$t");  // Technically, $index is not pre-existent, but always receives special handling which has the same effect.
+        if (cli)
+        {
+            try (BufferedWriter params = Files.newBufferedWriter (jobDir.resolve ("params")))
+            {
+                tagCommandLineParameters (digestedModel, params);
+            }
+            catch (Exception e) {e.printStackTrace ();}
+        }
         digestedModel.resolveLHS ();
         digestedModel.fillIntegratedVariables ();
         digestedModel.findIntegrated ();
@@ -448,6 +460,42 @@ public class JobC extends Thread
         digestedModel.findConnectionMatrix ();
         analyzeEvents (digestedModel);
         analyze (digestedModel);
+    }
+
+    public void tagCommandLineParameters (EquationSet s, Writer params) throws IOException
+    {
+        for (Variable v : s.variables)
+        {
+            // Must be a simple constant tagged "param"
+            if (v.metadata == null) continue;  // This can happen for $variables that are added at compile time.
+            MNode nodeCLI = v.metadata.child ("backend", "c", "cli");
+            if (nodeCLI == null)  // Without CLI flag, base decision on param flag.
+            {
+                if (! v.metadata.getFlag ("param")) continue;
+            }
+            else  // CLI flag takes precedence over everything else.
+            {
+                if (! nodeCLI.getFlag ()) continue;
+            }
+            if (v.equations.size () != 1) continue;
+            EquationEntry e = v.equations.first ();
+            if (e.condition != null) continue;
+            if (! (e.expression instanceof Constant)) continue;
+            v.addAttribute ("initOnly");  // prevents v from being eliminated by simplify
+            v.addAttribute ("cli");  // private tag to remind us to generate CLI code for this variable
+
+            String defaultValue = s.source.get (v.nameString ());
+
+            // Determine parameter format/range hint
+            String hint = v.metadata.get ("param");
+            if (hint.isEmpty ()) hint = v.metadata.get ("study");
+
+            params.append (v.fullName () + "=" + defaultValue);
+            if (! hint.isEmpty ()) params.append (";" + hint);
+            params.append ("\n");
+        }
+
+        for (EquationSet p : s.parts) tagCommandLineParameters (p, params);
     }
 
     /**
@@ -651,6 +699,10 @@ public class JobC extends Thread
         result.append ("using namespace std;\n");
         result.append ("using namespace fl;\n");
         result.append ("\n");
+        if (cli)
+        {
+            result.append ("Parameters<" + T + "> params;\n");
+        }
         generateStatic (context, digestedModel);
         result.append ("\n");
         generateClassList (digestedModel, result);
@@ -683,6 +735,10 @@ public class JobC extends Thread
         if (kokkos)
         {
             result.append ("    get_callbacks ();\n");
+        }
+        if (cli)
+        {
+            result.append ("    params.parse (argc, argv);\n");
         }
         generateMainInitializers (context);
         result.append ("\n");
@@ -3903,8 +3959,12 @@ public class JobC extends Thread
                     result.append (" = max (" + LHS + ", ");
             }
 
+            boolean cli = e.variable.hasAttribute ("cli");
+            if (cli) result.append ("params.get (\"" + e.variable.fullName () + "\", ");
+
             e.expression.render (context);
 
+            if (cli) result.append (")");
             if (e.variable.assignment == Variable.MAX  ||  e.variable.assignment == Variable.MIN)
             {
                 result.append (")");
