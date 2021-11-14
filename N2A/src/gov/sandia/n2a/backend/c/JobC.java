@@ -260,7 +260,7 @@ public class JobC extends Thread
             command.add ("-c");
             command.add ("-O3");
             if (gprof) command.add ("-pg");
-            command.add ("-std=c++17");
+            command.add ("-std=c++11");
             command.add ("-ffunction-sections");
             command.add ("-fdata-sections");
             command.add ("-I" + env.quote (runtimeDir));
@@ -323,7 +323,7 @@ public class JobC extends Thread
         command.add (gcc.toString ());
         command.add ("-O3");
         if (gprof) command.add ("-pg");
-        command.add ("-std=c++17");
+        command.add ("-std=c++11");
         command.add ("-ffunction-sections");
         command.add ("-fdata-sections");
         command.add ("-Wl,--gc-sections");
