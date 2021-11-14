@@ -15,6 +15,7 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MNode;
 
 /**
@@ -38,6 +39,14 @@ public class MPart extends MNode
     protected MPart container;
     protected NavigableMap<String,MPart> children;
 
+    protected static final ThreadLocal<MCombo> models = new ThreadLocal<MCombo> ()
+    {
+        protected MCombo initialValue ()
+        {
+            return AppData.models;
+        }
+    };
+
     /**
         Collates a full model from the given source document.
     **/
@@ -52,6 +61,23 @@ public class MPart extends MNode
         expand ();
     }
 
+    /**
+        Constructs an MPart tree for the model with the given key,
+        using the given snapshot to override the main database.
+    **/
+    public static MPart fromSnapshot (String key, MNode snapshot)
+    {
+        List<MNode> containers = new ArrayList<MNode> (2);
+        containers.add (snapshot);
+        containers.add (AppData.models);
+        MCombo temp = new MCombo ("temp", containers);
+        models.set (temp);
+        MPart result = new MPart (temp.child (key));
+        models.set (AppData.models);
+        temp.done ();
+        return result;
+    }
+
     protected MPart (MPart container, MPart inheritedFrom, MNode source)
     {
         this.container     = container;
@@ -63,7 +89,7 @@ public class MPart extends MNode
     /**
         Convenience method for expand(LinkedList<MNode>).
     **/
-    public synchronized void expand ()
+    protected synchronized void expand ()
     {
         LinkedList<MNode> visited = new LinkedList<MNode> ();
         visited.push (((MPart) root ()).source);
@@ -78,7 +104,7 @@ public class MPart extends MNode
         lingering structure that we might otherwise build now.
         @param visited Used to guard against a document loading itself.
     **/
-    public synchronized void expand (LinkedList<MNode> visited)
+    protected synchronized void expand (LinkedList<MNode> visited)
     {
         inherit (visited);
         for (MNode n : this)
@@ -93,7 +119,7 @@ public class MPart extends MNode
         using the current value of $inherit in our collated children.
         @param visited Used to guard against a document loading itself.
     **/
-    public synchronized void inherit (LinkedList<MNode> visited)
+    protected synchronized void inherit (LinkedList<MNode> visited)
     {
         if (children == null) return;
         MPart root = children.get ("$inherit");
@@ -110,9 +136,10 @@ public class MPart extends MNode
         @param from The $inherit node to be processed. We parse this into a set of part names
         which we retrieve from the database.
     **/
-    public synchronized void inherit (LinkedList<MNode> visited, MPart root, MNode from)
+    protected synchronized void inherit (LinkedList<MNode> visited, MPart root, MNode from)
     {
-        boolean maintainable =  from == root  &&  root.isFromTopDocument ()  &&  AppData.models.isWriteable (((MPart) root.root ()).source);
+        MCombo models = MPart.models.get ();
+        boolean maintainable =  from == root  &&  root.isFromTopDocument ()  &&  models.isWriteable (((MPart) root.root ()).source);
         boolean changedName = false;  // Indicates that at least one name changed due to ID resolution. This lets us delay updating the field until all names are processed.
         boolean changedID   = false;
 
@@ -122,7 +149,7 @@ public class MPart extends MNode
         {
             String parentName = parentNames[i];
             parentName = parentName.trim ().replace ("\"", "");
-            MNode parentSource = AppData.models.child (parentName);
+            MNode parentSource = models.child (parentName);
 
             String id = "";
             if (i < IDs.size ()) id = IDs.get (i).trim ();
@@ -191,7 +218,7 @@ public class MPart extends MNode
         so it is safe to run more than once for a given $inherit statement.
         @param newSource The current node in the source document which corresponds to this node in the MPart tree.
     **/
-    public synchronized void underride (MPart from, MNode newSource)
+    protected synchronized void underride (MPart from, MNode newSource)
     {
         if (inheritedFrom == null  &&  from != this)  // The second clause is for very peculiar case. We don't allow incoming $inherit lines to underride the $inherit that brought them in, since their existence is completely contingent on it.
         {
@@ -207,7 +234,7 @@ public class MPart extends MNode
         See note on underride(MPart,MNode). This is safe to run more than once for a given $inherit statement.
         @param newSource The current node in the source document which matches this node in the MPart tree.
     **/
-    public synchronized void underrideChildren (MPart from, MNode newSource)
+    protected synchronized void underrideChildren (MPart from, MNode newSource)
     {
         if (newSource.size () == 0) return;
         if (children == null) children = new TreeMap<String,MPart> (comparator);
@@ -498,7 +525,7 @@ public class MPart extends MNode
         {
             String parentName = parentNames[i];
             parentName = parentName.trim ().replace ("\"", "");
-            MNode parentSource = AppData.models.child (parentName);
+            MNode parentSource = models.get ().child (parentName);
             if (parentSource == null) newIDs.add ("");
             else                      newIDs.add (parentSource.get ("$metadata", "id"));
         }

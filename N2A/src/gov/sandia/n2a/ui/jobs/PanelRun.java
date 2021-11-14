@@ -1035,43 +1035,47 @@ public class PanelRun extends JPanel
         contents.append ("\n");
 
         // Walk the model and display all overridden parameters.
-        // Note that this code depends on the current state of the model in the DB.
+        // Only examines node paths that exist in current database model, but gets
+        // the values from snapshot (if available). This includes the "param" tag.
         // What it reports can change as the model changes, and may not capture everything that
         // was tagged as a parameter at the time the simulation was run. This is a
         // compromise that allows fast display while being reasonably useful in most cases.
-        MNode doc = AppData.models.child (jobNode.inherit);  // Not collated, so only top-level keys
-        if (doc != null)
+        if (jobNode.hasSnapshot ())
         {
-            MNode model = jobNode.getModel ();  // Collated and frozen at time job was created.
-            doc.visit (new Visitor ()
+            MNode doc = AppData.models.child (jobNode.inherit);  // Not collated, so only top-level keys
+            if (doc != null)
             {
-                public boolean visit (MNode node)
+                MNode model = jobNode.getModel ();  // Best available reconstruction of collated model at time job was created.
+                doc.visit (new Visitor ()
                 {
-                    List<String> keyList   = Arrays.asList (node.keyPath (doc));
-                    List<String> paramPath = new ArrayList<String> (keyList);
-                    paramPath.add ("$metadata");
-                    paramPath.add ("param");
-                    Object[] paramArray = paramPath.toArray ();
-                    if (! model.getFlag (paramArray)) return true;  // node is not a parameter
-                    if (model.get (paramArray).equals ("watch")) return true;  // watchable items aren't of interest for this summary
-
-                    String[] keyPath = keyList.toArray (new String[keyList.size ()]);
-                    String key = keyPath[0];
-                    for (int i = 1; i < keyPath.length; i++) key += "." + keyPath[i];
-
-                    ParsedValue pv = new ParsedValue (model.get (keyPath));
-                    contents.append (key + " =" + pv.combiner + " " + pv.expression + "\n");
-                    if (pv.expression.isEmpty ())  // Could be multi-valued
+                    public boolean visit (MNode node)
                     {
-                        for (MNode v : model.childOrEmpty (keyPath))
+                        List<String> keyList   = Arrays.asList (node.keyPath (doc));
+                        List<String> paramPath = new ArrayList<String> (keyList);
+                        paramPath.add ("$metadata");
+                        paramPath.add ("param");
+                        Object[] paramArray = paramPath.toArray ();
+                        if (! model.getFlag (paramArray)) return true;  // node is not a parameter
+                        if (model.get (paramArray).equals ("watch")) return true;  // watchable items aren't of interest for this summary
+
+                        String[] keyPath = keyList.toArray (new String[keyList.size ()]);
+                        String key = keyPath[0];
+                        for (int i = 1; i < keyPath.length; i++) key += "." + keyPath[i];
+
+                        ParsedValue pv = new ParsedValue (model.get (keyPath));
+                        contents.append (key + " =" + pv.combiner + " " + pv.expression + "\n");
+                        if (pv.expression.isEmpty ())  // Could be multi-valued
                         {
-                            key = v.key ();
-                            if (key.contains ("@")) contents.append ("\t" + v.get () + "\t" + key + "\n");
+                            for (MNode v : model.childOrEmpty (keyPath))
+                            {
+                                key = v.key ();
+                                if (key.contains ("@")) contents.append ("\t" + v.get () + "\t" + key + "\n");
+                            }
                         }
+                        return true;
                     }
-                    return true;
-                }
-            });
+                });
+            }
         }
 
         synchronized (displayText)

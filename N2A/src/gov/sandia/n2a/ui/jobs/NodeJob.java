@@ -26,7 +26,9 @@ import java.util.TreeMap;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
+import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.language.UnitValue;
@@ -108,6 +110,16 @@ public class NodeJob extends NodeBase
     public MNode getModel ()
     {
         return getModel (getSource ());
+    }
+
+    public boolean hasSnapshot ()
+    {
+        MNode job = getSource ();
+        if (job == null) return false;
+        Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
+        if (Files.exists (localJobDir.resolve ("snapshot"))) return true;
+        if (Files.exists (localJobDir.resolve ("model"))) return true;
+        return false;
     }
 
     /**
@@ -567,7 +579,8 @@ public class NodeJob extends NodeBase
 
             if (fileName.startsWith ("n2a_job" )) return false;
             if (fileName.equals     ("job"     )) return false;  // The primary record for the jobs repo.
-            if (fileName.equals     ("model"   )) return false;  // This is the file associated with our own "source"
+            if (fileName.equals     ("snapshot")) return false;  // copy of models as they existed at start of job
+            if (fileName.equals     ("model"   )) return false;  // ditto (old style)
             if (fileName.equals     ("started" )) return false;
             if (fileName.equals     ("finished")) return false;
             if (fileName.startsWith ("compile" )) return false;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
@@ -595,19 +608,38 @@ public class NodeJob extends NodeBase
     // in the job dir. They are not directly related to NodeJob, but this is as good a place
     // as any to collect these routines.
 
-    public static MDoc getModel (String jobKey)
+    public static MNode getModel (String jobKey)
     {
         return getModel (AppData.runs.child (jobKey));
     }
 
-    public static MDoc getModel (MNode job)
+    /**
+        @return A fully-collated model. The key of the root node is usable as main model name
+        for the purposes of backend processing.
+    **/
+    public static MNode getModel (MNode job)
     {
         if (job == null) return null;
-        Path modelPath = Host.getJobDir (Host.getLocalResourceDir (), job).resolve ("model");
-        MDoc result = new MDoc (modelPath);
-        // EquationSet will replace the name of the top-level model with the value from $inherit.
-        // We do not modify $inherit in saveCollatedModel(), so we need to do that now.
-        result.set (job.get ("$inherit"), "$inherit");  // This change is never saved.
+        Path localJobDir  = Host.getJobDir (Host.getLocalResourceDir (), job);
+        Path snapshotPath = localJobDir.resolve ("snapshot");
+        Path modelPath    = localJobDir.resolve ("model");
+        String key        = job.get ("$inherit");
+
+        MNode result;
+        if (Files.exists (snapshotPath))  // mini-repo snapshot
+        {
+            MDoc snapshot = new MDoc (snapshotPath);
+            result = MPart.fromSnapshot (key, snapshot);
+        }
+        else if (Files.exists (modelPath))  // collated snapshot
+        {
+            result = new MDoc (modelPath, key);
+        }
+        else  // no snapshot
+        {
+            // Retrieve directly from database.
+            result = new MPart (AppData.models.child (key));
+        }
         return result;
     }
 
@@ -618,141 +650,47 @@ public class NodeJob extends NodeBase
     **/
     public static void saveCollatedModel (MNode collated, MNode job)
     {
-        Path jobDir    = Host.getJobDir (Host.getLocalResourceDir (), job);  // The path is also contained in the job MDoc node.
-        Path modelPath = jobDir.resolve ("model");
-        MFilter filtered = new MFilter (collated, job.get ("backend"));
+        String snapshotMode = AppData.state.get ("General", "snapshot");
+        if (snapshotMode.startsWith ("No")) return;  // Save nothing
+
+        // Save main model (all other snapshot modes)
+        MVolatile snapshot = new MVolatile ();
+        String inherit = job.get ("$inherit");  // name of main model
+        MNode doc = AppData.models.child (inherit);
+        snapshot.link (doc);
+
+        // Save referenced models
+        if (snapshotMode.startsWith ("All")) addInherits (doc, snapshot);
+
+        // Write snapshot to disk
         // See MDoc.save () for similar code.
         // We don't create an MDoc here because it would require duplicating the collated model in memory,
         // and the model could be very large.
+        Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);  // The path is also contained in the job MDoc node.
+        Path modelPath   = localJobDir.resolve ("snapshot");
         try (BufferedWriter writer = Files.newBufferedWriter (modelPath))
         {
-            Schema.latest ().writeAll (filtered, writer);
-            // File should be closed when writer is closed. It may be re-opened by backend.
+            Schema.latest ().writeAll (snapshot, writer);
         }
         catch (IOException e)
         {
-            System.err.println ("Failed to write model file.");
+            System.err.println ("Failed to write snapshot file.");
             e.printStackTrace ();
         }
     }
 
-    /**
-        Wrapper which removes nodes not needed in the snapshot model stored to disk.
-        This is a minimal implementation, just enough to support serialization by the Schema class.
-    **/
-    public static class MFilter extends MNode
+    public static void addInherits (MNode n, MVolatile snapshot)
     {
-        protected MNode  node;    // what we are wrapping
-        protected String backend; // name of target backend
-
-        public MFilter (MNode node, String backend)
+        String inherits = n.get ("$inherit");
+        for (String inherit : inherits.split (","))
         {
-            this.node    = node;
-            this.backend = backend;
+            inherit = inherit.trim ().replace ("\"", "");
+            if (snapshot.child (inherit) != null) continue;
+            MNode p = AppData.models.child (inherit);
+            if (p == null) continue;
+            snapshot.link (p);
+            addInherits (p, snapshot);
         }
-
-        public String key ()
-        {
-            return node.key ();
-        }
-
-        public boolean data ()
-        {
-            return node.data ();
-        }
-
-        public String getOrDefault (String defaultValue)
-        {
-            return node.getOrDefault (defaultValue);
-        }
-
-        public class IteratorFilter implements Iterator<MNode>
-        {
-            protected MNode           next;
-            protected Iterator<MNode> iterator;
-            protected boolean         inMetadata;
-            protected boolean         inBackend;
-            protected boolean         inGui;
-
-            public MNode findNext ()
-            {
-                while (iterator.hasNext ())
-                {
-                    MNode n = iterator.next ();
-
-                    String key = n.key ();
-                    if (inMetadata)
-                    {
-                        if (filterMetadata (n)) return n;
-                        continue;
-                    }
-                    else if (inBackend)
-                    {
-                        if (key.equals ("all")) return n;
-                        if (key.equals (backend)) return n;
-                        continue;
-                    }
-                    else if (inGui)
-                    {
-                        if (key.equals ("pin")) return n;
-                        continue;
-                    }
-                    else if (key.equals ("$metadata"))
-                    {
-                        // Don't even process $metadata unless it contains useful backend info.
-                        // Unfortunately, we end up checking metadata children twice: once to decide
-                        // whether to descend into the metadata, and again to filter children while there.
-                        for (MNode c : n) if (filterMetadata (c)) return n;
-                        continue;
-                    }
-                    return n;
-                }
-                return null;
-            }
-
-            /**
-                @param n an immediate child of $metadata
-            **/
-            public boolean filterMetadata (MNode n)
-            {
-                String key = n.key ();
-                if (key.equals ("seed")) return true;
-                if (key.equals ("duration")) return true;
-                if (key.equals ("gui")  &&  n.child ("pin") != null) return true;
-                if (key.equals ("watch")  &&  n.child ("timeScale") != null) return true;
-                if (key.equals ("study")) return true;
-                if (key.equals ("param")  &&  n.getFlag ()  &&  ! n.get ().equals ("watch")) return true;
-
-                if (! key.equals ("backend")) return false;
-                if (n.depth () == 2) return true;
-                if (n.child ("all") != null) return true;
-                if (n.child (backend) != null) return true;
-                return false;
-            }
-
-            public boolean hasNext ()
-            {
-                return next != null;
-            }
-
-            public MNode next ()
-            {
-                MNode result = new MFilter (next, backend);
-                next = findNext ();
-                return result;
-            }
-        }
-
-        public Iterator<MNode> iterator ()
-        {
-            IteratorFilter result = new IteratorFilter ();
-            result.iterator = node.iterator ();
-            String key = node.key ();
-            result.inMetadata = key.equals ("$metadata");
-            result.inBackend  = key.equals ("backend")  &&  node.parent ().key ().equals ("$metadata");
-            result.inGui      = key.equals ("gui")      &&  node.parent ().key ().equals ("$metadata");
-            result.next = result.findNext ();
-            return result;
-        }
+        for (MNode c : n) addInherits (c, snapshot);
     }
 }

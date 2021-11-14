@@ -46,6 +46,16 @@ public class MCombo extends MNode implements MNodeListener
         fireChanged ();
     }
 
+    /**
+        Release resources when this instance is going out of use.
+        Only need to call this for temporary objects, that is, objects whose
+        lifespan is shorter than the application as a whole.
+    **/
+    public void done ()
+    {
+        for (MNode c : containers) c.removeListener (this);
+    }
+
     public String key ()
     {
         if (name == null) return "";
@@ -102,6 +112,7 @@ public class MCombo extends MNode implements MNodeListener
 
     public synchronized MNode containerFor (String key)
     {
+        load ();
         return children.get (key);
     }
 
@@ -312,6 +323,12 @@ public class MCombo extends MNode implements MNodeListener
                 MDir dir = (MDir) container;
                 dir.load ();
                 for (String key : dir.children.keySet ()) children.put (key, container);
+            }
+            else if (container instanceof MCombo)  // Ditto
+            {
+                MCombo combo = (MCombo) container;
+                combo.load ();
+                for (String key : combo.children.keySet ()) children.put (key, container);
             }
             else  // General case
             {
