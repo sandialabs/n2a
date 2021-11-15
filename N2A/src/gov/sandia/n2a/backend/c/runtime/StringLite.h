@@ -456,7 +456,7 @@ public:
     /**
         Remove leading and trailing white space.
         Unlike standard member functions, this mutates the object (modification in place).
-        The reason is that in practice that untrimmed string is almost never used afterward.
+        The reason is that in practice the untrimmed string is almost never used afterward.
     **/
     String & trim ()
     {

@@ -15,6 +15,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.TimeZone;
 import java.util.TreeMap;
 
@@ -183,7 +184,7 @@ public class Input extends Function
                             {
                                 for (int i = 0; i < columns.length; i++)
                                 {
-                                    String header = columns[i];
+                                    String header = columns[i].trim ().replace ("\"", "");
                                     if (! header.isEmpty ())
                                     {
                                         columnMap.put (header, i);
@@ -204,22 +205,25 @@ public class Input extends Function
                                 if (time  &&  ! timeColumnSet)
                                 {
                                     int timeMatch = 0;
-                                    for (String header : columnMap.keySet ())
+                                    for (Entry<String,Integer> e : columnMap.entrySet ())
                                     {
                                         int potentialMatch = 0;
-                                        switch (header.toLowerCase ())
+                                        String header = e.getKey ().toLowerCase ();
+                                        switch (header)
                                         {
                                             case "t":
                                             case "date":
-                                                potentialMatch = 1;
+                                                potentialMatch = 2;
                                                 break;
-                                            case "time": potentialMatch = 2; break;
-                                            case "$t":   potentialMatch = 3; break;
+                                            case "time": potentialMatch = 3; break;
+                                            case "$t":   potentialMatch = 4; break;
+                                            default:
+                                                if (header.contains ("time")) potentialMatch = 1;
                                         }
                                         if (potentialMatch > timeMatch)
                                         {
                                             timeMatch = potentialMatch;
-                                            timeColumn = columnMap.get (header);
+                                            timeColumn = e.getValue ();
                                         }
                                     }
                                     timeColumnSet = true;
@@ -342,6 +346,7 @@ public class Input extends Function
         if (H == null) return getType ();
 
         int c = -1;
+        boolean namedColumn = false;
         if (operands.length > 2)
         {
             Type columnSpec = operands[2].eval (context);
@@ -350,6 +355,7 @@ public class Input extends Function
                 Integer columnMapping = H.columnMap.get (((Text) columnSpec).value);
                 if (columnMapping == null) return new Scalar (0);
                 c = columnMapping;
+                namedColumn = true;
             }
             else  // Otherwise, just assume it is a Scalar
             {
@@ -365,9 +371,8 @@ public class Input extends Function
             double b1 = 1 - b;
             if (c >= 0)
             {
-                if (c >= H.timeColumn) c++;  // time column is not included in raw index
-                if      (c < 0       ) c = 0;
-                else if (c >= columns) c = lastColumn;
+                if (H.time  &&  ! namedColumn  &&  c >= H.timeColumn) c++;  // time column is not included in raw index
+                if (c >= columns) c = lastColumn;
                 return new Scalar (b * H.nextValues[c] + b1 * H.currentValues[c]);
             }
             else
@@ -401,9 +406,8 @@ public class Input extends Function
         {
             if (c >= 0)
             {
-                if (H.time  &&  c >= H.timeColumn) c++;  // time column is not included in raw index
-                if      (c < 0       ) c = 0;
-                else if (c >= columns) c = lastColumn;
+                if (H.time  &&  ! namedColumn  &&  c >= H.timeColumn) c++;  // time column is not included in raw index
+                if (c >= columns) c = lastColumn;
                 return new Scalar (H.currentValues[c]);
             }
             else

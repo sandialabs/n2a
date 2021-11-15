@@ -397,7 +397,11 @@ InputHolder<T>::getRow (T row)
                         int j;
                         j = line.find_first_of (delimiter, i);
                         if (j == String::npos) j = end;
-                        if (j > i) columnMap.emplace (line.substr (i, j - i), index);
+                        String header = line.substr (i, j - i);
+                        header.trim ();
+                        int last = header.size () - 1;
+                        if (header[0] == '"'  &&  header[last] == '"') header = header.substr (1, last - 1);
+                        if (j > i) columnMap.emplace (header, index);
                         i = j + 1;
                         index++;
                     }
@@ -423,10 +427,11 @@ InputHolder<T>::getRow (T row)
                         {
                             int potentialMatch = 0;
                             String header = it.first.toLowerCase ();
-                            if      (header == "t"   ) potentialMatch = 1;
-                            else if (header == "date") potentialMatch = 1;
-                            else if (header == "time") potentialMatch = 2;
-                            else if (header == "$t"  ) potentialMatch = 3;
+                            if      (header == "t"   ) potentialMatch = 2;
+                            else if (header == "date") potentialMatch = 2;
+                            else if (header == "time") potentialMatch = 3;
+                            else if (header == "$t"  ) potentialMatch = 4;
+                            else if (header.find ("time") != String::npos) potentialMatch = 1;
                             if (potentialMatch > timeMatch)
                             {
                                 timeMatch = potentialMatch;
