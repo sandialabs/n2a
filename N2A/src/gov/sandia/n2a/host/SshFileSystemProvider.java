@@ -224,7 +224,12 @@ public class SshFileSystemProvider extends FileSystemProvider
             catch (NoSuchFileException e)
             {
                 if (! create  &&  ! createNew) throw e;
+                checkAccess (A.getParent ());
             }
+        }
+        else
+        {
+            checkAccess (A.getParent ());
         }
 
         try
