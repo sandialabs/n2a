@@ -162,6 +162,7 @@ public class JobC extends Thread
             runtimeDir       = resourceDir.resolve ("backend").resolve ("c");
             rebuildRuntime ();
 
+            Files.createDirectories (jobDir);  // digestModel() might write to a remote file (params), so we need to ensure the dir exists first.
             digestedModel = new EquationSet (model);
             digestModel ();
             String duration = digestedModel.metadata.get ("duration");
@@ -176,7 +177,6 @@ public class JobC extends Thread
 
             System.out.println (digestedModel.dump (false));
 
-            Files.createDirectories (jobDir);
             Path source = jobDir.resolve ("model.cc");
             generateCode (source);
             String command = env.quote (build (source));
