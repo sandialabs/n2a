@@ -18,6 +18,7 @@ template class Matrix<n2a_T>;
 template class MatrixSparse<n2a_T>;
 template ostream & operator << (ostream & stream, const MatrixAbstract<n2a_T> & A);
 
+template class Parameters<n2a_T>;
 template class IteratorNonzero<n2a_T>;
 template class IteratorSkip<n2a_T>;
 template class IteratorSparse<n2a_T>;

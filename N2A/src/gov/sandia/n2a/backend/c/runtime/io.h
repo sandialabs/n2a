@@ -17,6 +17,25 @@ the U.S. Government retains certain rights in this software.
 #include <unordered_map>
 
 
+/**
+    Utility class for reading/accessing command-line parameters.
+    These are primarily intended to override parameters within the model.
+**/
+template<class T>
+class Parameters
+{
+public:
+    std::unordered_map<String,String> namedValues;
+
+    void   parse (const String & line);
+    void   parse (int argc, char * argv[]);
+    void   read  (const String & parmFileName);
+    void   read  (std::istream & stream);
+
+    T      get   (const String & name, T defaultValue = 0) const;
+    String get   (const String & name, const String & defaultValue = "") const;
+};
+
 // Holder and its utility functions are declared in each platform's io.h, but only defined once in runtime.cc
 // The alternative would be a "io_common.h", but this seems like overkill for so few items.
 class Holder

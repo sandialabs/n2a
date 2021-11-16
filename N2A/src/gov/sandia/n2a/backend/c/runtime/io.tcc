@@ -18,6 +18,79 @@ the U.S. Government retains certain rights in this software.
 #include <time.h>
 
 
+// class Parameters ----------------------------------------------------------
+
+template<class T>
+void
+Parameters<T>::parse (const String & line)
+{
+    int pos = line.find_first_of ('=');
+    if (pos == String::npos)
+    {
+        namedValues[line] = "";
+    }
+    else
+    {
+        String name  = line.substr (0, pos);
+        String value = line.substr (pos + 1);
+        if (name == "-include") read (value);
+        else                    namedValues[name] = value;
+    }
+}
+
+template<class T>
+void
+Parameters<T>::parse (int argc, char * argv[])
+{
+    for (int i = 1; i < argc; i++) parse (argv[i]);
+}
+
+template<class T>
+void
+Parameters<T>::read (const String & parmFileName)
+{
+    std::ifstream ifs (parmFileName.c_str ());
+    read (ifs);
+}
+
+template<class T>
+void
+Parameters<T>::read (std::istream & stream)
+{
+    while (stream.good ())
+    {
+        String line;
+        getline (stream, line);
+        line.trim ();
+        parse (line);
+    }
+}
+
+template<class T>
+T
+Parameters<T>::get (const String & name, T defaultValue) const
+{
+    std::unordered_map<String,String>::const_iterator it = namedValues.find (name);
+    if (it == namedValues.end ()) return defaultValue;
+    const String & value = it->second;
+
+#   ifdef n2a_FP
+    return (T) atoi (value.c_str ());
+#   else
+    return (T) atof (value.c_str ());
+#   endif
+}
+
+template<class T>
+String
+Parameters<T>::get (const String & name, const String & defaultValue) const
+{
+    std::unordered_map<String,String>::const_iterator it = namedValues.find (name);
+    if (it == namedValues.end ()) return defaultValue;
+    return it->second;
+}
+
+
 // class IteratorSkip --------------------------------------------------------
 
 template<class T>
