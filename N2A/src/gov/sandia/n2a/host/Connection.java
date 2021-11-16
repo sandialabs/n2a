@@ -97,7 +97,7 @@ public class Connection implements Closeable
 
     public synchronized void connect () throws JSchException
     {
-        if (session != null  &&  session.isConnected ()) return;
+        if (isConnected ()) return;
 
         session = jsch.getSession (username, hostname, port);
         session.setUserInfo (passwords);
@@ -107,7 +107,7 @@ public class Connection implements Closeable
 
     public synchronized void close ()
     {
-        if (session != null  &&  session.isConnected ()) session.disconnect ();
+        if (isConnected ()) session.disconnect ();
         session = null;
     }
 

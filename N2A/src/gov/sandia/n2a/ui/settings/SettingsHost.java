@@ -79,6 +79,7 @@ public class SettingsHost implements Settings
         for (Host h : Host.getHosts ()) if (h instanceof Remote) model.addElement (h);
 
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
+        list.setToolTipText ("Press Insert to create host. Press Delete to remove host.");
 
         InputMap inputMap = list.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
@@ -133,10 +134,11 @@ public class SettingsHost implements Settings
         {
             public void stateChanged (ChangeEvent e)
             {
-                Host current = list.getSelectedValue ();
-                current.name = fieldName.getText ();
+                Host h = list.getSelectedValue ();
+                String newName = fieldName.getText ();
+                Host.rename (h, newName);
                 list.repaint ();
-                if (editor instanceof NameChangeListener) ((NameChangeListener) editor).nameChanged (current.name);
+                if (editor instanceof NameChangeListener) ((NameChangeListener) editor).nameChanged (h.name);
             }
         });
 

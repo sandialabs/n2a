@@ -83,6 +83,7 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
             password = field.getText ();
             return true;
         }
+        allowDialogs = false;  // If the user cancels, then they want to stop trying.
         return false;
     }
 
@@ -98,6 +99,7 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
             passphrase = field.getText ();
             return true;
         }
+        allowDialogs = false;
         return false;
     }
 
@@ -168,6 +170,7 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
             for (int i = 0; i < prompt.length; i++) response[i] = texts[i].getText ();
             return response;
         }
+        allowDialogs = false;
         return null; // cancel
     }
 }

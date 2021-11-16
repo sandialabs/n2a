@@ -169,6 +169,13 @@ public abstract class Host
         return h;
     }
 
+    public static void rename (Host h, String newName)
+    {
+        hosts.remove (h.name);
+        h.name = newName;
+        hosts.put (newName, h);
+    }
+
     public static void remove (Host h, boolean delete)
     {
         h.stopMonitorThread ();
@@ -387,7 +394,11 @@ public abstract class Host
                         // Enable host, but only for newly-launched jobs.
                         // If the job pre-existed the current session of this app,
                         // then wait for the user to explicitly enable the host.
-                        if (! job.old  &&  h instanceof Remote) ((Remote) h).enable ();
+                        if (! job.old  &&  h instanceof Remote)
+                        {
+                            job.old = true;  // Only allow ourselves this privilege once. Otherwise, user could get hammered with login prompts.
+                            ((Remote) h).enable ();
+                        }
 
                         // Throttle runs on the same host, so each has time to allocate resources
                         // before the next one starts.

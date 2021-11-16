@@ -106,10 +106,10 @@ public class PanelRun extends JPanel
 
     public static Map<String,NodeJob> jobNodes = new HashMap<String,NodeJob> ();  // for quick lookup of job node based on job key.
 
-    public static ImageIcon iconConnect    = ImageUtil.getImage ("connect.gif");
-    public static ImageIcon iconPause      = ImageUtil.getImage ("pause-16.png");
-    //public static ImageIcon iconDisconnect = ImageUtil.getImage ("disconnect.gif");
-    public static ImageIcon iconStop       = ImageUtil.getImage ("stop.gif");
+    public static ImageIcon iconConnect      = ImageUtil.getImage ("connect.gif");
+    public static ImageIcon iconPause        = ImageUtil.getImage ("pause-16.png");
+    public static ImageIcon iconDisconnected = ImageUtil.getImage ("disconnected.png");
+    public static ImageIcon iconStop         = ImageUtil.getImage ("stop.gif");
 
     public PanelRun ()
     {
@@ -309,13 +309,7 @@ public class PanelRun extends JPanel
             }
         });
 
-        // Icon options:
-        // a cloud, similar to the pull or push icons on git tab
-        // "connect.gif" -- connection icon
-        // "disconnect.gif" -- connection with X
-        // "refresh.gif" -- yin-yang-ish arrows
-        // "warn.gif" -- yellow sign with exclamation point
-        JButton buttonHost = new JButton (ImageUtil.getImage ("connect.gif"));
+        JButton buttonHost = new JButton (iconConnect);
         buttonHost.setToolTipText ("Remote Hosts");
         buttonHost.setMargin (new Insets (2, 2, 2, 2));
         buttonHost.setFocusable (false);
@@ -343,7 +337,8 @@ public class PanelRun extends JPanel
                     Remote remote = (Remote) h;
                     JMenuItem item = new JMenuItem (h.name);
                     if      (remote.isConnected ()) item.setIcon (iconConnect);
-                    else if (! remote.isEnabled ()) item.setIcon (iconPause);
+                    else if (remote.isEnabled ())   item.setIcon (iconDisconnected);
+                    else                            item.setIcon (iconPause);
                     item.addActionListener (new ActionListener ()
                     {
                         public void actionPerformed (ActionEvent e)

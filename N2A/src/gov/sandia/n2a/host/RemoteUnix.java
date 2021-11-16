@@ -70,8 +70,9 @@ public class RemoteUnix extends Unix implements Remote
         public MPasswordField fieldPassword = new MPasswordField (config, "password");
         public JLabel         labelWarning  = new JLabel ("<html>WARNING: Passoword is stored in plain text.<br>If this is a security concern, then you can leave the field blank.<br>You will be prompted for a password once per session.<br>That password will only be held in volatile memory.</html>");
         public MTextField     fieldHome     = new MTextField (config, "home", "/home/" + config.getOrDefault (System.getProperty ("user.name"), "username"));
+        public JButton        buttonConnect = new JButton ("Reset Connection");
         public JButton        buttonRestart = new JButton ("Restart Monitor Thread");
-        public JButton        buttonZombie  = new JButton ("Scan for Leaked Job Resources");
+        public JButton        buttonZombie  = new JButton ("Scan for Zombie Jobs");
 
         public EditorPanel ()
         {
@@ -83,7 +84,7 @@ public class RemoteUnix extends Unix implements Remote
                     Lay.BL ("W", Lay.FL ("H", new JLabel ("Password"), fieldPassword)),
                     Lay.BL ("W", Lay.FL ("H", labelWarning)),
                     Lay.BL ("W", Lay.FL ("H", new JLabel ("Home Directory"), fieldHome)),
-                    Lay.BL ("W", Lay.FL ("H", buttonRestart, buttonZombie))
+                    Lay.BL ("W", Lay.FL ("H", buttonConnect, buttonRestart, buttonZombie))
                 )
             );
         }
@@ -98,6 +99,24 @@ public class RemoteUnix extends Unix implements Remote
                 }
             });
 
+            buttonConnect.setToolTipText ("Updated settings will be used for next connection attempt.");
+            buttonConnect.addActionListener (new ActionListener ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    Thread shutdownThread = new Thread ("Reset " + name)
+                    {
+                        public void run ()
+                        {
+                            close ();
+                        }
+                    };
+                    shutdownThread.setDaemon (true);
+                    shutdownThread.start ();
+                }
+            });
+
+            buttonRestart.setToolTipText ("In case the thread crashed.");
             buttonRestart.addActionListener (new ActionListener ()
             {
                 public void actionPerformed (ActionEvent e)
@@ -106,6 +125,7 @@ public class RemoteUnix extends Unix implements Remote
                 }
             });
 
+            buttonZombie.setToolTipText ("Updates local list of jobs to include any lingering job directories on remote host.");
             buttonZombie.addActionListener (new ActionListener ()
             {
                 public void actionPerformed (ActionEvent e)
@@ -173,6 +193,7 @@ public class RemoteUnix extends Unix implements Remote
     public synchronized void close ()
     {
         if (connection != null) connection.close ();
+        connection = null;
     }
 
     @Override
