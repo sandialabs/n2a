@@ -59,6 +59,7 @@ import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
@@ -409,12 +410,14 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
         String text;
         String param;
-        if (FilteredTreeModel.showParam  &&  editingNode instanceof NodeVariable  &&  editingNode.isParam ()  &&  ! ((NodeVariable) editingNode).hasEquations ())
+        boolean isSimpleVariable =  editingNode instanceof NodeVariable  &&  ! ((NodeVariable) editingNode).hasEquations ();
+        boolean isAnnotation     =  editingNode instanceof NodeAnnotation;
+        if (FilteredTreeModel.showParam  &&  editingNode.isParam ()  &&  (isSimpleVariable  ||  isAnnotation))
         {
             // Add static labels for all columns except the value. See EquationTreeCellRenderer.getTreeCellRendererComponent()
             NodeBase      p            = editingNode.getTrueParent ();
             List<Integer> columnWidths = p.getMaxColumnWidths (editingNode.getColumnGroup (), fm);
-            List<String>  columns      = editingNode.getColumns (true, expanded);  // NodeVariable should always return 3 columns.
+            List<String>  columns      = editingNode.getColumns (true, expanded);  // NodeVariable and NodeAnnotation return at least 3 columns.
             for (int i = 0; i < 2; i++)  // Set up the first two columns to display as fixed text in the editor.
             {
                 JLabel l = labels.get (i);
@@ -426,7 +429,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             }
 
             text = columns.get (2);  // 3rd column contains the value of the parameter.
-            param = editingNode.source.get ("$metadata", "param");
+            if (isAnnotation) param = editingNode.source.get ("param");
+            else              param = editingNode.source.get ("$metadata", "param");
         }
         else
         {

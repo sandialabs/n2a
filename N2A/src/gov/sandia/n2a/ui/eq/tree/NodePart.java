@@ -249,11 +249,21 @@ public class NodePart extends NodeContainer
     {
         // Under "parent" graph node, don't display child parts, as these will have separate graph nodes.
         if (hide  ||  parent == null) return false;
+        return super.visible ();
+    }
 
-        if (FilteredTreeModel.showParam) return ! isRevoked ();  // Even if we don't contain parameters.
-        if (isRevoked ()) return FilteredTreeModel.showRevoked;  // TODO: implement a way to revoke parts
-        if (isLocal ())   return FilteredTreeModel.showLocal;
-        else              return FilteredTreeModel.showInherited;
+    @Override
+    public boolean isRevoked ()
+    {
+        // TODO: implement a way to revoke parts
+        return false;
+    }
+
+    @Override
+    public boolean isParam ()
+    {
+        // Check if we have subnodes and at least some of them are visible.
+        return  children != null  &&  children.size () > 0  &&  (filtered == null  ||  filtered.size () > 0);
     }
 
     @Override

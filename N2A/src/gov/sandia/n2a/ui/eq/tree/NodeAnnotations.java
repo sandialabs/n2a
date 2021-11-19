@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -39,6 +39,14 @@ public class NodeAnnotations extends NodeContainer
             add (a);
             a.build ();
         }
+    }
+
+    @Override
+    public boolean isParam ()
+    {
+        // If this node contains parameters, then it must also be visible.
+        // This behavior is similar to NodePart.
+        return  children != null  &&  children.size () > 0  &&  (filtered == null  ||  filtered.size () > 0);
     }
 
     @Override

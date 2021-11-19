@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -59,7 +59,7 @@ public class NodeAnnotation extends NodeContainer
 
     public void buildFolded ()
     {
-        if (folded.size () == 1  &&  folded.get ().isEmpty ())
+        if (folded.size () == 1  &&  folded.get ().isEmpty ()  &&  ! (FilteredTreeModel.showParam  &&  isParam ()))
         {
             folded = (MPart) folded.iterator ().next ();  // Retrieve the only child.
             buildFolded ();
@@ -105,6 +105,17 @@ public class NodeAnnotation extends NodeContainer
     }
 
     @Override
+    public boolean isParam ()
+    {
+        // We tag a metadata node simply by adding another metadata node immediately under it.
+        if (source.getFlag ("param")) return true;
+
+        // If this node contains other nodes that are parameters, then we must also be visible.
+        // This behavior is similar to NodePart and NodeAnnotations.
+        return  children != null  &&  children.size () > 0  &&  (filtered == null  ||  filtered.size () > 0);
+    }
+
+    @Override
     public Icon getIcon (boolean expanded)
     {
         return icon;
@@ -133,10 +144,21 @@ public class NodeAnnotation extends NodeContainer
     {
         truncated = false;
 
-        List<String> result = new ArrayList<String> (2);
+        List<String> result = new ArrayList<String> (3);
         result.add (key ());
+
         String value = folded.get ();
-        if (! value.isEmpty ()) result.add ("= " + value);
+        if (value.isEmpty ())
+        {
+            result.add (FilteredTreeModel.showParam  &&  isParam () ? "=" : "");
+            result.add ("");
+        }
+        else
+        {
+            result.add ("=");
+            result.add (value);
+        }
+
         return result;
     }
 
@@ -149,9 +171,10 @@ public class NodeAnnotation extends NodeContainer
     @Override
     public List<Integer> getColumnWidths (FontMetrics fm)
     {
-        List<Integer> columnWidths = new ArrayList<Integer> (1);
-        columnWidths.add (fm.stringWidth (key () + " "));
-        return columnWidths;
+        List<Integer> result = new ArrayList<Integer> (2);
+        result.add (fm.stringWidth (key () + " "));
+        result.add (fm.stringWidth ("= "));
+        return result;
     }
 
     @Override
