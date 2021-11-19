@@ -101,6 +101,7 @@ public class SettingsHost implements Settings
                 if (index < 0) index = model.getSize ();
                 model.add (index, h);
                 list.setSelectedIndex (index);  // Assumption: this triggers a selection change event, which will in turn call displayRecord().
+                fieldName.requestFocusInWindow ();
             }
         });
         actionMap.put ("delete", new AbstractAction ()

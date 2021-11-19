@@ -18,6 +18,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,14 +35,15 @@ import gov.sandia.n2a.host.Host.AnyProcessBuilder;
 
 public class Connection implements Closeable
 {
-    protected Session        session;
+    protected MNode          config;
+    protected List<Session>  sessions = new ArrayList<Session> ();
+    protected Session        session;      // The main session. Final entry in "sessions".
     protected FileSystem     sshfs;
-    protected ConnectionInfo passwords = new ConnectionInfo ();
     protected String         hostname;
     protected String         username;
-    protected int            port;
     protected int            timeout;
-    protected String         home;  // Path of user's home directory on remote system. Includes leading slash.
+    protected String         home;         // Path of user's home directory on remote system. Includes leading slash.
+    protected boolean        allowDialogs; // Initially false. Dialogs must be specifically enabled by the user.
 
     public static JSch jsch = new JSch ();  // shared between remote execution system and git wrapper
     static
@@ -75,6 +77,7 @@ public class Connection implements Closeable
                 {
                     if (Files.isDirectory (path)) continue;
                     String name = path.getFileName ().toString ();
+                    // TODO: the criteria here are too rigid. It would be better to read the beginning of each file to decide if it is an identity.
                     if (! name.startsWith ("id_")) continue;
                     if (name.contains (".")) continue;  // avoid .pub files
                     jsch.addIdentity (path.toAbsolutePath ().toString ());
@@ -86,28 +89,98 @@ public class Connection implements Closeable
 
     public Connection (MNode config)
     {
+        this.config = config;
         hostname = config.getOrDefault (config.key (),                    "address");
         username = config.getOrDefault (System.getProperty ("user.name"), "username");
-        port     = config.getOrDefault (22,                               "port");
         home     = config.getOrDefault ("/home/" + username,              "home");
         timeout  = config.getOrDefault (20000,                            "timeout");  // default is 20 seconds
-
-        passwords.password = config.get ("password");  // may be empty
     }
 
     public synchronized void connect () throws JSchException
     {
         if (isConnected ()) return;
+        // Not connected all the way to target host, but there may be relays that are still up.
+        // For a given instance of this class, assume that configuration data does not change.
+        // Thus, we can try to re-use some portion of the relay path to the target host.
+        // If config does change, then we should call close() before connect().
+        boolean haveSessions = ! sessions.isEmpty ();  // If not empty, then it must be exactly the right size.
 
-        session = jsch.getSession (username, hostname, port);
-        session.setUserInfo (passwords);
-        session.setTimeout (timeout);  // Applies to all communication, not just initial connection.
-        session.connect ();  // Uses timeout set above.
+        int last = config.childOrEmpty ("relay").size ();
+        session = null;
+        String password = config.get ("password");  // may be empty
+        for (int i = 0; i <= last; i++)
+        {
+            ConnectionInfo ci;
+            if (haveSessions)
+            {
+                Session s = sessions.get (i);
+                if (s.isConnected ())
+                {
+                    session = s;
+                    continue;
+                }
+                // Otherwise the session must be created again. Based on googling, it appears illegal to reconnect sessions.
+                ci = (ConnectionInfo) s.getUserInfo ();  // But recycle our user info object, because it may contain successful login info.
+                ci.triedPassword   = false;
+                ci.triedPassphrase = false;
+            }
+            else
+            {
+                ci = new ConnectionInfo (this);
+            }
+
+            String rhost;
+            int    rport;
+            String ruser;
+            String rpassword;
+            if (i == last)  // Use main config
+            {
+                rhost     = hostname;
+                rport     = config.getOrDefault (22, "port");
+                ruser     = username;
+                rpassword = password;
+            }
+            else  // Use relay config
+            {
+                MNode relay = config.child ("relay", i + 1);
+                rhost     = relay.get ("address");
+                rport     = relay.getOrDefault (22, "port");
+                ruser     = relay.getOrDefault (username, "username");
+                rpassword = relay.getOrDefault (password, "password");
+            }
+            if (! haveSessions)
+            {
+                ci.password = rpassword;
+                ci.hostname = rhost;
+            }
+
+            if (session == null)
+            {
+                session = jsch.getSession (ruser, rhost, rport);
+            }
+            else
+            {
+                int p = session.setPortForwardingL (0, rhost, rport);
+                session = jsch.getSession (ruser, "127.0.0.1", p);
+                session.setHostKeyAlias (rhost);
+            }
+            session.setUserInfo (ci);
+            session.setTimeout (timeout); // Applies to all communication, not just initial connection.
+            session.setConfig ("StrictHostKeyChecking", "no");  // Don't prompt user; just accept the host key and add to known_hosts file.
+            session.connect ();           // Uses timeout set above.
+            if (haveSessions) sessions.set (i, session);
+            else              sessions.add (session);
+        }
     }
 
     public synchronized void close ()
     {
-        if (isConnected ()) session.disconnect ();
+        for (int i = sessions.size () - 1; i >= 0; i--)
+        {
+            Session s = sessions.get (i);
+            if (s.isConnected ()) s.disconnect ();
+        }
+        sessions.clear ();
         session = null;
     }
 

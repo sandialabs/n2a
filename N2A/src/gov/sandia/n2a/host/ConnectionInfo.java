@@ -31,12 +31,18 @@ import gov.sandia.n2a.ui.MainFrame;
 **/
 public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
 {
+    protected Connection  connection;
     protected String      password   = "";
     protected String      passphrase = "";
     protected Set<String> messages = new HashSet<String> ();  // Remember messages, so we only display them once per session.
+    protected String      hostname;        // for displaying where messages come from
     protected boolean     triedPassword;   // The stored password has already been tried, so need to prompt user.
     protected boolean     triedPassphrase; // ditto for passphrase
-    protected boolean     allowDialogs;    // Initially false. Dialogs must be specifically enabled by the user.
+
+    public ConnectionInfo (Connection connection)
+    {
+        this.connection = connection;
+    }
 
     public String getPassword ()
     {
@@ -74,7 +80,7 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
     public boolean promptPassword (String message)
     {
         if (! password.isEmpty ()  &&  ! triedPassword) return true;
-        if (! allowDialogs) return false;
+        if (! connection.allowDialogs) return false;
         JTextField field = makePasswordField (password);
         Object[] contents = {field};
         int result = JOptionPane.showConfirmDialog (MainFrame.instance, contents, message, JOptionPane.OK_CANCEL_OPTION);
@@ -83,14 +89,14 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
             password = field.getText ();
             return true;
         }
-        allowDialogs = false;  // If the user cancels, then they want to stop trying.
+        connection.allowDialogs = false;  // If the user cancels, then they want to stop trying.
         return false;
     }
 
     public boolean promptPassphrase (String message)
     {
         if (! passphrase.isEmpty ()  &&  ! triedPassphrase) return true;
-        if (! allowDialogs) return false;
+        if (! connection.allowDialogs) return false;
         JTextField field = makePasswordField (passphrase);
         Object[] contents = {field};
         int result = JOptionPane.showConfirmDialog (MainFrame.instance, contents, message, JOptionPane.OK_CANCEL_OPTION);
@@ -99,13 +105,13 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
             passphrase = field.getText ();
             return true;
         }
-        allowDialogs = false;
+        connection.allowDialogs = false;
         return false;
     }
 
     public boolean promptYesNo (String message)
     {
-        if (! allowDialogs) return false;
+        if (! connection.allowDialogs) return false;
         int result = JOptionPane.showConfirmDialog (MainFrame.instance, message, "Question", JOptionPane.YES_NO_OPTION);
         return result == JOptionPane.OK_OPTION;
     }
@@ -114,12 +120,13 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
     {
         if (messages.contains (message)) return;
         messages.add (message);
-        // TODO: let user view saved messages via sessions menu
+        if (! connection.allowDialogs) return;
+        JOptionPane.showMessageDialog (MainFrame.instance, message, hostname, JOptionPane.INFORMATION_MESSAGE);
     }
 
     public String[] promptKeyboardInteractive (String destination, String name, String instruction, String[] prompt, boolean[] echo)
     {
-        if (! allowDialogs) return null;
+        if (! connection.allowDialogs) return null;
 
         JPanel panel = new JPanel ();
         panel.setLayout (new GridBagLayout());
@@ -170,7 +177,7 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
             for (int i = 0; i < prompt.length; i++) response[i] = texts[i].getText ();
             return response;
         }
-        allowDialogs = false;
+        connection.allowDialogs = false;
         return null; // cancel
     }
 }
