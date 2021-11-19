@@ -63,8 +63,9 @@ public class InternalBackend extends Backend
     {
         SimulationThread s = getThread (job);
         if (s == null) return;
-        if (! force  &&  s.simulator != null) s.simulator.stop = true;
-        else                                  s.stop ();
+        if (s.simulator == null) return;
+        if (force) s.stop ();
+        else       s.simulator.stop = true;
     }
 
     public class SimulationThread extends Thread

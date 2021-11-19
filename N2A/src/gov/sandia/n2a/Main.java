@@ -353,6 +353,8 @@ public class Main
         {
             public void uncaughtException (Thread thread, final Throwable throwable)
             {
+                if (throwable instanceof ThreadDeath) return;  // Caused by Thread.stop(), which only occurs in InternalBackend.kill(). Should be ignored.
+
                 Path crashdump = Paths.get (AppData.properties.get ("resourceDir"), "crashdump");
                 try
                 {
