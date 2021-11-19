@@ -167,7 +167,7 @@ public class SettingsLookAndFeel extends JPanel implements Settings
             }
         });
         fieldFontScale.setTransferHandler (new SafeTextTransferHandler ());
-        JPanel panelFontScale = Lay.FL ("L", labelFontScale, fieldFontScale);
+        JPanel panelFontScale = Lay.FL (labelFontScale, fieldFontScale);
         panelFontScale.setAlignmentX (LEFT_ALIGNMENT);
         JPanel menu = Lay.BxL
         (

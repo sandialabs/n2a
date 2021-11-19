@@ -40,7 +40,7 @@ public class SettingsC extends SettingsBackend
     public JPanel getEditor ()
     {
         return Lay.BxL (
-            Lay.BL ("W", Lay.FL ("H", new JLabel ("Compiler path"), fieldCpp))
+            Lay.FL (new JLabel ("Compiler path"), fieldCpp)
         );
     }
 }

@@ -172,7 +172,7 @@ public class PanelStudy extends JPanel
 
         displayPanel = Lay.BL
         (
-            "N", Lay.BL ("W", Lay.FL ("H", buttonPause, labelStatus, "hgap=5,vgap=1")),
+            "N", Lay.FL (buttonPause, labelStatus, "hgap=5,vgap=1"),
             "C", Lay.sp (tabbedResults)
         );
 

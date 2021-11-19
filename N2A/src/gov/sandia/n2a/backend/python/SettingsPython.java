@@ -40,7 +40,7 @@ public class SettingsPython extends SettingsBackend
     public JPanel getEditor ()
     {
         return Lay.BxL (
-            Lay.BL ("W", Lay.FL ("H", new JLabel ("Python path"), fieldPython))
+            Lay.FL (new JLabel ("Python path"), fieldPython)
         );
     }
 }

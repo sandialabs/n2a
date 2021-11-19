@@ -184,8 +184,8 @@ public class SettingsHost implements Settings
                     Box.createHorizontalStrut (5),
                     Lay.BL ("N",
                         Lay.BxL (
-                            Lay.BL ("W", Lay.FL ("H", Lay.lb ("Name"), fieldName)),
-                            Lay.BL ("W", Lay.FL ("H", Lay.lb ("Class"), comboClass)),
+                            Lay.FL (Lay.lb ("Name"), fieldName),
+                            Lay.FL (Lay.lb ("Class"), comboClass),
                             editorHolder
                         )
                     )

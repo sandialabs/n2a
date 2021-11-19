@@ -39,8 +39,8 @@ import gov.sandia.n2a.ui.settings.SettingsHost.NameChangeListener;
 **/
 public class RemoteUnix extends Unix implements Remote
 {
-    protected Connection connection;
-    protected JPanel     panel;
+    protected Connection  connection;
+    protected EditorPanel panel;
 
     public static Factory factory ()
     {
@@ -61,7 +61,11 @@ public class RemoteUnix extends Unix implements Remote
     @Override
     public JPanel getEditor ()
     {
-        if (panel == null) panel = new EditorPanel ();
+        if (panel == null)
+        {
+            panel = new EditorPanel ();
+            panel.arrange ();
+        }
         return panel;
     }
 
@@ -79,23 +83,22 @@ public class RemoteUnix extends Unix implements Remote
         public JButton        buttonRestart  = new JButton ("Restart Monitor Thread");
         public JButton        buttonZombie   = new JButton ("Scan for Zombie Jobs");
 
-        public EditorPanel ()
+        public void arrange ()
         {
-            prepare ();
             Lay.BLtg (this, "N",
                 Lay.BxL ("V",
-                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Address"), fieldAddress)),
-                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Username"), fieldUsername)),
-                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Password"), fieldPassword)),
-                    Lay.BL ("W", Lay.FL ("H", labelWarning)),
-                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Home Directory"), fieldHome)),
-                    Lay.BL ("W", panelRelays),
-                    Lay.BL ("W", Lay.FL ("H", buttonConnect, buttonRestart, buttonZombie))
+                    Lay.FL (new JLabel ("Address"), fieldAddress),
+                    Lay.FL (new JLabel ("Username"), fieldUsername),
+                    Lay.FL (new JLabel ("Password"), fieldPassword),
+                    Lay.FL (labelWarning),
+                    Lay.FL (new JLabel ("Home Directory"), fieldHome),
+                    Lay.FL (panelRelays),
+                    Lay.FL (buttonConnect, buttonRestart, buttonZombie)
                 )
             );
         }
 
-        public void prepare ()
+        public EditorPanel ()
         {
             fieldUsername.addChangeListener (new ChangeListener ()
             {
@@ -117,11 +120,9 @@ public class RemoteUnix extends Unix implements Remote
                 }
             });
 
-            JLabel  labelRelayAdd  = new JLabel ("Add SSH Relay");
+            JLabel labelRelayAdd = new JLabel ("Add SSH Relay");
             Lay.BxLtg (panelRelays, "V",
-                Lay.BL ("W",
-                    Lay.FL ("H", buttonRelayAdd, labelRelayAdd)
-                )
+                Lay.FL (buttonRelayAdd, labelRelayAdd)
             );
 
             MNode relays = config.childOrEmpty ("relay");
@@ -262,15 +263,13 @@ public class RemoteUnix extends Unix implements Remote
             });
             
             JPanel panelRelay = Lay.BxL ("V",
-                Lay.BL ("W", Lay.FL ("H", buttonRemove, labelRelay)),
-                Lay.BL ("W",
-                    Lay.FL ("H",
-                        Box.createHorizontalStrut (30),
-                        Lay.BxL ("V",
-                            Lay.BL ("W", Lay.FL ("H", new JLabel ("Address"), fieldRelayAddress)),
-                            Lay.BL ("W", Lay.FL ("H", new JLabel ("Username"), fieldRelayUsername)),
-                            Lay.BL ("W", Lay.FL ("H", new JLabel ("Password"), fieldRelayPassword))
-                        )
+                Lay.FL (buttonRemove, labelRelay),
+                Lay.FL (
+                    Box.createHorizontalStrut (30),
+                    Lay.BxL ("V",
+                        Lay.FL (new JLabel ("Address"), fieldRelayAddress),
+                        Lay.FL (new JLabel ("Username"), fieldRelayUsername),
+                        Lay.FL (new JLabel ("Password"), fieldRelayPassword)
                     )
                 )
             );

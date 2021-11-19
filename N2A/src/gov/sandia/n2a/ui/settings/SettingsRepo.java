@@ -652,7 +652,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                             "N", Lay.BxL (
                                 Lay.FL (Lay.lb ("Author"), fieldAuthor),
                                 Box.createVerticalStrut (5),
-                                Lay.BL ("W", Lay.lb ("Commit message:")),
+                                Lay.FL (Lay.lb ("Commit message:")),
                                 paneMessage
                             )
                         )

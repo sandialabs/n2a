@@ -40,7 +40,7 @@ public class SettingsXyce extends SettingsBackend
     public JPanel getEditor ()
     {
         return Lay.BxL (
-            Lay.BL ("W", Lay.FL ("H", new JLabel ("Xyce path"), fieldXyce))
+            Lay.FL (new JLabel ("Xyce path"), fieldXyce)
         );
     }
 }

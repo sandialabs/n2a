@@ -44,7 +44,11 @@ public class RemoteSlurm extends RemoteUnix
     @Override
     public JPanel getEditor ()
     {
-        if (panel == null) panel = new EditorPanel2 ();
+        if (panel == null)
+        {
+            panel = new EditorPanel2 ();
+            panel.arrange ();
+        }
         return panel;
     }
 
@@ -53,19 +57,18 @@ public class RemoteSlurm extends RemoteUnix
     {
         public MTextField fieldAccount = new MTextField (config, "account");
 
-        public EditorPanel2 ()
+        public void arrange ()
         {
-            prepare ();
             Lay.BLtg (this, "N",
                 Lay.BxL ("V",
-                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Address"), fieldAddress)),
-                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Username"), fieldUsername)),
-                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Password"), fieldPassword)),
-                    Lay.BL ("W", Lay.FL ("H", labelWarning)),
-                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Home Directory"), fieldHome)),
-                    Lay.BL ("W", Lay.FL ("H", new JLabel ("Slurm Account"), fieldAccount)),
-                    Lay.BL ("W", panelRelays),
-                    Lay.BL ("W", Lay.FL ("H", buttonConnect, buttonRestart, buttonZombie))
+                    Lay.FL (new JLabel ("Address"), fieldAddress),
+                    Lay.FL (new JLabel ("Username"), fieldUsername),
+                    Lay.FL (new JLabel ("Password"), fieldPassword),
+                    Lay.FL (labelWarning),
+                    Lay.FL (new JLabel ("Home Directory"), fieldHome),
+                    Lay.FL (new JLabel ("Slurm Account"), fieldAccount),
+                    Lay.FL (panelRelays),
+                    Lay.FL (buttonConnect, buttonRestart, buttonZombie)
                 )
             );
         }

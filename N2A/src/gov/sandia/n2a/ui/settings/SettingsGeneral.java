@@ -44,7 +44,7 @@ public class SettingsGeneral extends JPanel implements Settings
                 AppData.state.set (field.getText (), "General", key);
             }
         });
-        return Lay.BL ("W", Lay.FL ("H", label, field));
+        return Lay.FL (label, field);
     }
 
     public JPanel addFieldSystemProperty (final String key, String description, int width, String systemPropertyName)
@@ -72,7 +72,7 @@ public class SettingsGeneral extends JPanel implements Settings
                 if (! value.isEmpty ()) System.setProperty (systemPropertyName, value);
             }
         });
-        return Lay.BL ("W", Lay.FL ("H", label, field));
+        return Lay.FL (label, field);
     }
 
     public JPanel addCombo (final String key, String description, int defaultIndex, String... choices)
@@ -95,7 +95,7 @@ public class SettingsGeneral extends JPanel implements Settings
                 AppData.state.set (field.getSelectedItem (), "General", key);
             }
         });
-        return Lay.BL ("W", Lay.FL ("H", label, field));
+        return Lay.FL (label, field);
     }
 
     public SettingsGeneral ()

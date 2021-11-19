@@ -40,7 +40,7 @@ public class SettingsNeuroML extends SettingsBackend
     public JPanel getEditor ()
     {
         return Lay.BxL (
-            Lay.BL ("W", Lay.FL ("H", new JLabel ("JNML_HOME"), fieldHome))
+            Lay.FL (new JLabel ("JNML_HOME"), fieldHome)
         );
     }
 }

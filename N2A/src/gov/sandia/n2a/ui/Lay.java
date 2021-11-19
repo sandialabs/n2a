@@ -469,7 +469,7 @@ public class Lay {
     public static JPanel FLtg(Container target, Object... args) {
         HintList hints = new HintList();
         List<Component> cmpsChosen = new ArrayList<Component>();
-        FlowLayout fl = new FlowLayout(FlowLayout.CENTER, 5, 5);
+        FlowLayout fl = new FlowLayout(FlowLayout.LEFT, 5, 5);
 
         for(Object arg : args) {
             if(arg instanceof String) {
