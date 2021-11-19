@@ -953,12 +953,15 @@ public class PanelRun extends JPanel
         contents.append ("\n");
 
         MNode job = jobNode.getSource ();
-        appendMetadata (job, contents, "backend");
-        appendMetadata (job, contents, "duration");
-        appendMetadata (job, contents, "host");
-        appendMetadata (job, contents, "pid");
-        appendMetadata (job, contents, "seed");
-        contents.append ("\n");
+        if (job != null)  // job can be null if it is deleted while we are preparing this status text. 
+        {
+            appendMetadata (job, contents, "backend");
+            appendMetadata (job, contents, "duration");
+            appendMetadata (job, contents, "host");
+            appendMetadata (job, contents, "pid");
+            appendMetadata (job, contents, "seed");
+            contents.append ("\n");
+        }
 
         // Walk the model and display all overridden parameters.
         // Only examines node paths that exist in current database model, but gets
