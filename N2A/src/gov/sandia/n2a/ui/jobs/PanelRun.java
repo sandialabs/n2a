@@ -49,13 +49,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
-import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
@@ -96,7 +94,6 @@ public class PanelRun extends JPanel
     protected long                menuCanceledAt;
     protected ButtonGroup         buttons;
     protected JButton             buttonExport;
-    protected JComboBox<String>   comboScript;
     protected JTextArea           displayText;
     protected PanelChart          displayChart = new PanelChart ();
     protected JScrollPane         displayPane = new JScrollPane ();
@@ -420,70 +417,15 @@ public class PanelRun extends JPanel
         buttonExport.setToolTipText ("Export CSV");
         buttonExport.addActionListener (listenerExport);
 
-        comboScript = new JComboBox<String> ();
-        comboScript.setEditable (true);
-        comboScript.setToolTipText ("Run Script");
-        comboScript.addActionListener (new ActionListener ()
-        {
-            public void actionPerformed (ActionEvent e)
-            {
-                if (e.getActionCommand ().equals ("comboBoxEdited"))
-                {
-                    String script = (String) comboScript.getSelectedItem ();
-                    script = script.trim ();
-                    comboScript.removeItem (script);
-                    comboScript.insertItemAt (script, 0);
-                    comboScript.setSelectedItem (script);
-                    saveScripts ();
-
-                    // Execute script
-                    Path path = null;
-                    if      (displayNode instanceof NodeJob ) path = ((NodeJob ) displayNode).getJobPath ();
-                    else if (displayNode instanceof NodeFile) path = ((NodeFile) displayNode).path;
-                    if (path != null)
-                    {
-                        String jobDirString      = path.getParent ().toAbsolutePath ().toString ();
-                        String pathString        = path.toAbsolutePath ().toString ();
-                        String resourceDirString = AppData.properties.get ("resourceDir");
-                        script = script.replaceAll ("\\%d", Matcher.quoteReplacement (jobDirString));
-                        script = script.replaceAll ("\\%f", Matcher.quoteReplacement (pathString));
-                        script = script.replaceAll ("\\%r", Matcher.quoteReplacement (resourceDirString));
-                        System.out.println ("script = " + script);
-                        try {Runtime.getRuntime ().exec (script);}
-                        catch (IOException error) {error.printStackTrace ();}
-                    }
-                }
-            }
-        });
-        comboScript.getEditor ().getEditorComponent ().addKeyListener (new KeyAdapter ()
-        {
-            public void keyPressed (KeyEvent e)
-            {
-                if (e.getKeyCode () == KeyEvent.VK_DELETE  &&  e.isControlDown ())
-                {
-                    String script = (String) comboScript.getSelectedItem ();
-                    comboScript.removeItem (script);
-                    saveScripts ();
-                    e.consume ();
-                }
-            }
-        });
-        for (MNode n : AppData.state.childOrCreate ("PanelRun", "scripts")) comboScript.addItem (n.get ());
-
         JSplitPane split;
         Lay.BLtg
         (
             this,
-            split = Lay.SPL
-            (
+            split = Lay.SPL (
                 treePane = Lay.sp (tree),
-                Lay.BL
-                (
-                    "N", Lay.BL
-                    (
-                        "W", Lay.FL
-                        (
-                            "L",
+                Lay.BL (
+                    "N", Lay.BL (
+                        "W", Lay.FL (
                             buttonHost,
                             Box.createHorizontalStrut (15),
                             buttonStop,
@@ -498,8 +440,7 @@ public class PanelRun extends JPanel
                             buttonExport,
                             Box.createHorizontalStrut (15),
                             "hgap=5,vgap=1"
-                        ),
-                        "C", comboScript
+                        )
                     ),
                     "C", displayPane
                 )
@@ -516,16 +457,6 @@ public class PanelRun extends JPanel
                 if (o instanceof Integer) AppData.state.set (o, "PanelRun", "divider");
             }
         });
-    }
-
-    public void saveScripts ()
-    {
-        MNode scripts = AppData.state.childOrCreate ("PanelRun", "scripts");
-        scripts.clear ();
-        for (int i = 0; i < comboScript.getItemCount (); i++)
-        {
-            scripts.set (comboScript.getItemAt (i), String.valueOf (i));
-        }
     }
 
     // See PanelEquations for similar code
