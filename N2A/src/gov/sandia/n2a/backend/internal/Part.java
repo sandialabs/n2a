@@ -77,8 +77,16 @@ public class Part extends Instance
 
     public void die ()
     {
-        // set $live to false, if it is stored in this part
         InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (bed.fastExit)
+        {
+            Simulator s = Simulator.instance.get ();
+            s.stop     = true;
+            s.fastExit = true;
+            return;  // The bookkeeping below is no longer relevant.
+        }
+
+        // set $live to false, if it is stored in this part
         if (bed.liveStorage == InternalBackendData.LIVE_STORED)
         {
             set (bed.live, new Scalar (0));

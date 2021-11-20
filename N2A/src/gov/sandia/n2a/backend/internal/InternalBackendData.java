@@ -119,11 +119,12 @@ public class InternalBackendData
     public int     pollDeadline;            // position in population valuesFloat of time by which current poll cycle must complete. Only valid if poll>=0.
     public int     pollSorted;              // position in population valuesObject of sorted list of connections. Only valid if poll>=0.
 
-    public int indexNext;      // position in population valuesFloat of index counter
-    public int indexAvailable; // position in population valuesObject of list of dead indices
-    public int instances = -1; // position in population valuesObject of instances list; -1 means don't track instances
-    public int firstborn;      // position in population valuesFloat of index of first newborn instance for current cycle
-    public int newborn;        // position in instance valuesFloat of newborn flag
+    public int     indexNext;      // position in population valuesFloat of index counter
+    public int     indexAvailable; // position in population valuesObject of list of dead indices
+    public int     instances = -1; // position in population valuesObject of instances list; -1 means don't track instances
+    public int     firstborn;      // position in population valuesFloat of index of first newborn instance for current cycle
+    public int     newborn;        // position in instance valuesFloat of newborn flag
+    public boolean fastExit;       // The simulation should terminate ASAP when this part dies. May skip termination of dependent parts. Outputs will be flushed and closed properly.
 
     public int liveStorage;
     public static final int LIVE_STORED   = 0;
@@ -711,11 +712,14 @@ public class InternalBackendData
     {
         boolean headless = AppData.properties.getBoolean ("headless");
         if (! headless) System.out.println (s.name);
+
         if (s.connectionBindings != null)
         {
             endpoints = countLocalObject;  // Note that populations have already been allocated in the constructor.
             countLocalObject += s.connectionBindings.size ();
         }
+
+        fastExit = s.metadata.getFlag ("backend", "all", "fastExit");
 
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {

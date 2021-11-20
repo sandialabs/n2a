@@ -124,8 +124,14 @@ public class InternalBackend extends Backend
                 simulator.init ();
                 simulator.run ();  // Does not return until simulation is finished.
                 stopTime = System.nanoTime ();
-                if (simulator.stop) Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), localJobDir.resolve ("finished"));
-                else                Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), localJobDir.resolve ("finished"));
+                if (simulator.stop  &&  ! simulator.fastExit)
+                {
+                    Files.copy (new ByteArrayInputStream ("killed" .getBytes ("UTF-8")), localJobDir.resolve ("finished"));
+                }
+                else
+                {
+                    Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), localJobDir.resolve ("finished"));
+                }
             }
             catch (Exception e)
             {

@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -401,7 +401,8 @@ public class BackendDataC
             }
         }
 
-        refcount       = s.referenced  &&  s.canDie ();
+        boolean canDie = s.canDie ();
+        refcount       = s.referenced  &&  canDie;
         singleton      = s.isSingleton (true);
         canResize      = globalMembers.contains (n);  // Works correctly even if n is null.
         trackInstances = s.connected  ||  s.needInstanceTracking  ||  canResize;
@@ -470,7 +471,7 @@ public class BackendDataC
         needLocalPreserve           = ! Euler  &&  (needLocalIntegrate  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0);
         needLocalDtor               = needLocalPreserve  ||  needLocalDerivative;
         needLocalCtor               = needLocalDtor  ||  s.accountableConnections != null  ||  refcount  ||  index != null  ||  localMembers.size () > 0  ||  s.parts.size () > 0;
-        needLocalDie                = s.canDie ()  &&  (liveFlag >= 0  ||  trackN  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
+        needLocalDie                = canDie  &&  (liveFlag >= 0  ||  trackN  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
         needLocalInit               =    localBufferedExternal.size () > 0
                                       || eventTargets.size () > 0
                                       || ! localFlagType.isEmpty ()
@@ -481,7 +482,7 @@ public class BackendDataC
                                       || eventTargets.size () > 0
                                       || s.parts.size () > 0;
         needLocalUpdate             = localUpdate.size () > 0;
-        needLocalFinalize           = localBufferedExternal.size () > 0  ||  type != null  ||  s.canDie ();
+        needLocalFinalize           = localBufferedExternal.size () > 0  ||  type != null  ||  canDie;
         needLocalUpdateDerivative   = ! Euler  &&  localDerivativeUpdate.size () > 0;
         needLocalFinalizeDerivative = ! Euler  &&  localBufferedExternalDerivative.size () > 0;
 

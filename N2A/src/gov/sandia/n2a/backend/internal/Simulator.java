@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -58,7 +58,8 @@ public class Simulator implements Iterable<Part>
     public int     sortEvent = -1;   // -1 means other events sort before EventStep when they have the same timestamp. 1 means they sort after.
 
     public Event currentEvent;
-    public boolean stop;  // Flag to terminate event loop as soon as possible
+    public boolean stop;     // Flag to terminate event loop as soon as possible
+    public boolean fastExit; // Indicates that stop flag was set by fastExit, so doesn't represent a failure.
 
     public class ResizeRequest
     {

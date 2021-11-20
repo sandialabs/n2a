@@ -2346,28 +2346,35 @@ public class JobC extends Thread
             result.append ("void " + ns + "die ()\n");
             result.append ("{\n");
 
-            // tag part as dead
-            if (bed.liveFlag >= 0)  // $live is stored in this part
+            if (s.metadata.getFlag ("backend", "all", "fastExit"))
             {
-                result.append ("  flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ");\n");
+                result.append ("  Simulator<" + T + ">::instance.stop = true;\n");
             }
-
-            // instance counting
-            if (bed.n != null  &&  ! bed.singleton) result.append ("  container->" + mangle (s.name) + ".n--;\n");
-
-            for (String alias : bed.accountableEndpoints)
+            else
             {
-                result.append ("  " + mangle (alias) + "->" + prefix (s) + "_" + mangle (alias) + "_count--;\n");
-            }
-
-            // release event monitors
-            for (EventTarget et : bed.eventTargets)
-            {
-                for (EventSource es : et.sources)
+                // tag part as dead
+                if (bed.liveFlag >= 0)  // $live is stored in this part
                 {
-                    String part = "";
-                    if (es.reference != null) part = resolveContainer (es.reference, context, "");
-                    result.append ("  removeMonitor (" + part + "eventMonitor_" + prefix (s) + ", this);\n");
+                    result.append ("  flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ");\n");
+                }
+
+                // instance counting
+                if (bed.n != null  &&  ! bed.singleton) result.append ("  container->" + mangle (s.name) + ".n--;\n");
+
+                for (String alias : bed.accountableEndpoints)
+                {
+                    result.append ("  " + mangle (alias) + "->" + prefix (s) + "_" + mangle (alias) + "_count--;\n");
+                }
+
+                // release event monitors
+                for (EventTarget et : bed.eventTargets)
+                {
+                    for (EventSource es : et.sources)
+                    {
+                        String part = "";
+                        if (es.reference != null) part = resolveContainer (es.reference, context, "");
+                        result.append ("  removeMonitor (" + part + "eventMonitor_" + prefix (s) + ", this);\n");
+                    }
                 }
             }
 

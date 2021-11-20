@@ -1623,6 +1623,7 @@ EventStep<T>::run ()
             p->leaveSimulation ();
         }
     });
+    if (Simulator<T>::instance.stop) return;
 
     Simulator<T>::instance.updatePopulations ();
     requeue ();
