@@ -219,6 +219,24 @@ public class Video extends JPanel
         thread.start ();
     }
 
+    /**
+        Variant of play() called by PanelRun display thread when downloading remote image sequence.
+        @param last Expected index of final image, based on size of remote dir.
+    **/
+    public void refresh (int last)
+    {
+        if (panelImage == null) return;
+        if (thread != null  &&  thread.playing) return;
+        if (last > this.last)
+        {
+            this.last = last;
+            scrollbar.setMaximum (last + 1);
+        }
+        thread = new PlayThread ();
+        thread.setDaemon (true);
+        thread.start ();
+    }
+
     public void pause ()
     {
         if (thread != null) thread.playing = false;

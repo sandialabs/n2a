@@ -45,23 +45,24 @@ public class TextPaneANSI extends JTextPane
 
     public void setText (String t)
     {
-        int e = t.indexOf (27);
-        if (e < 0)  // Early out if no escape sequences.
-        {
-            super.setText (t);
-            return;
-        }
-
         super.setText ("");
-        int b = 0;
+        append (t);
+    }
+
+    public void append (String t)
+    {
+        int count = t.length ();
         SimpleAttributeSet attributes = new SimpleAttributeSet ();
-        while (true)
+        for (int b = 0; b < count; b++)
         {
-            if (b < e)  // There is some text to append.
+            int e = t.indexOf (27, b);
+            if (e < 0)
             {
-                append (t.substring (b, e), attributes);
+                append (t.substring (b), attributes);
+                break;
             }
-            if (e >= t.length ()) return;  // no more text left
+            if (b < e) append (t.substring (b, e), attributes);  // There is some text to append.
+            if (e >= count) break;  // no more text left
 
             // Find end of escape sequence.
             e++;
@@ -192,14 +193,6 @@ public class TextPaneANSI extends JTextPane
                     }
                 }
             }
-            b++;
-            if (b >= t.length ()) break;
-            e = t.indexOf (27, b);
-            if (e < 0)
-            {
-                append (t.substring (b), attributes);
-                break;
-            }
         }
     }
 
@@ -229,7 +222,7 @@ public class TextPaneANSI extends JTextPane
     public void append (String s, AttributeSet attributes)
     {
         int length = getDocument ().getLength ();
-        try {getDocument ().insertString (length, s, attributes);} 
+        try {getDocument ().insertString (length, s, attributes);}
         catch (BadLocationException e) {}
     }
 

@@ -9,6 +9,10 @@ package gov.sandia.n2a.ui.jobs;
 import java.awt.Color;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.Reader;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -25,15 +29,19 @@ import tech.units.indriya.AbstractUnit;
 public class OutputParser
 {
     public List<Column> columns = new ArrayList<Column> ();
-    public boolean      raw;        // Indicates that all column names are empty, likely the result of output() in raw mode.
+    public boolean      raw = true;  // Indicates that all column names are empty, likely the result of output() in raw mode. Will be changed to false if any non-empty column name is found.
+    public String       delimiter = " ";
+    public boolean      delimiterSet;
     public boolean      isXycePRN;
     public Column       time;
     public boolean      timeFound;  // Indicates that time is a properly-labeled column, rather than a fallback.
+    public int          rows;
+    public long         nextPosition;   // Position in file where read should resume when more data arrives.
     public float        defaultValue;
-    public double       xmin;  // Bounds for chart. If not specified, then simply fit to data.
-    public double       xmax;  // Note that "x" is always time.
-    public double       ymin;
-    public double       ymax;
+    public double       xmin = Double.NEGATIVE_INFINITY; // Bounds for chart. If not specified, then simply fit to data.
+    public double       xmax = Double.POSITIVE_INFINITY; // Note that "x" is always time.
+    public double       ymin = Double.NaN;
+    public double       ymax = Double.NaN;
 
     public static Map<String,Color> HTMLcolors = new HashMap<String,Color> ();
     static
@@ -59,26 +67,58 @@ public class OutputParser
 
     public void parse (Path f)
     {
-        parse (f, 0.0f);
-    }
-
-    public void parse (Path f, float defaultValue)
-    {
-        columns           = new ArrayList<Column> ();
-        raw               = true;  // Will be negated if any non-empty column name is found.
-        isXycePRN         = false;
-        time              = null;
-        this.defaultValue = defaultValue;
-        xmin              = Double.NEGATIVE_INFINITY;
-        xmax              = Double.POSITIVE_INFINITY;
-        ymin              = Double.NaN;
-        ymax              = Double.NaN;
-
-        try (BufferedReader br = Files.newBufferedReader (f))
+        try (SeekableByteChannel channel = Files.newByteChannel (f);
+             Reader reader = Channels.newReader (channel, "UTF-8");
+             BufferedReader br = new BufferedReader (reader))
         {
-            int     row          = 0;
-            String  delimiter    = " ";
-            boolean delimiterSet = false;
+            // Adjust start position to be first character after last end-of-line character previously read.
+            if (nextPosition > 0)  // Note that "nextPosition" refers to bytes, not characters.
+            {
+                channel.position (nextPosition - 1);
+                ByteBuffer buffer = ByteBuffer.allocate (1);
+                channel.read (buffer);
+                byte b = buffer.get (0);
+                if (b != 13  &&  b != 10)  // Last character is not CR or LF
+                {
+                    // Remove last row of loaded data, since we will read the whole row again.
+                    if (rows > 0)
+                    {
+                        rows--;
+                        for (Column c : columns) if (c.values.size () + c.startRow > rows) c.values.remove (c.values.size () - 1);
+                    }
+
+                    // Step backwards until we find a CR or LF
+                    boolean found = false;
+                    nextPosition--;  // Because we already checked the last byte.
+                    int step = 2048;
+                    while (nextPosition > 0  &&  ! found)
+                    {
+                        nextPosition -= step;
+                        if (nextPosition < 0)
+                        {
+                            step += nextPosition;
+                            nextPosition = 0;
+                        }
+
+                        channel.position (nextPosition);
+                        if (buffer.array ().length != step) buffer = ByteBuffer.allocate (step);
+                        else                                buffer.clear ();
+                        channel.read (buffer);
+                        for (int i = step - 1; i >= 0; i--)
+                        {
+                            b = buffer.get (i);
+                            if (b == 13  ||  b == 10)
+                            {
+                                found = true;
+                                nextPosition += i + 1;
+                                break;
+                            }
+                        }
+                    }
+                }
+                channel.position (nextPosition);
+            }
+
             while (true)
             {
                 String line = br.readLine ();
@@ -98,7 +138,7 @@ public class OutputParser
                 while (columns.size () < parts.length)
                 {
                 	Column c = new Column ();
-                	c.startRow = row;
+                	c.startRow = rows;
                 	columns.add (c);
                 }
 
@@ -118,7 +158,7 @@ public class OutputParser
                         c.values.add (value);
                     }
                     for (; p < columns.size (); p++) columns.get (p).values.add (defaultValue);  // Because the structure is not sparse, we must fill out every row.
-                    row++;
+                    rows++;
                 }
                 else  // column header
                 {
@@ -130,6 +170,8 @@ public class OutputParser
                     }
                 }
             }
+
+            nextPosition = Files.size (f);
         }
         catch (IOException e)
         {
@@ -311,6 +353,7 @@ public class OutputParser
         public Color       color;
         public float       width  = 1;
         public float[]     dash;
+        public Object      data;  // optional data that client code associates with this column
 
         public void computeStats ()
         {

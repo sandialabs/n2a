@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
@@ -153,9 +154,7 @@ public class NodeJob extends NodeBase
         {
             for (Path path : dirStream)
             {
-                System.out.println ("checking " + path);
                 if (path.endsWith ("job")) continue;
-                System.out.println ("  deleting");
                 localhost.deleteTree (path);  // deleteTree() works for both files and dirs, and also absorbs most exceptions. 
             }
         }
@@ -383,7 +382,7 @@ public class NodeJob extends NodeBase
                     if (panelRun.displayNode == NodeJob.this)
                     {
                         panelRun.buttonStop.setEnabled (complete < 1  ||  complete == 3);
-                        panelRun.viewJob ();
+                        panelRun.viewJob (true);
                     }
                     else if (panelRun.displayNode instanceof NodeFile  &&  panelRun.displayNode.getParent () == NodeJob.this)
                     {
@@ -395,7 +394,7 @@ public class NodeJob extends NodeBase
                         if (complete >= 1  &&  complete != 3  ||  panelRun.displayThread == null  &&  currentTime - lastDisplay > 5000)
                         {
                             lastDisplay = currentTime;
-                            panelRun.viewFile (false);
+                            panelRun.viewFile (true);
                         }
                     }
 
@@ -448,6 +447,8 @@ public class NodeJob extends NodeBase
             for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
         }
         catch (IOException e) {}
+        if (changed) applyChanges (tree, selected, existing);  // Update display immediately, before waiting on remote.
+        changed = false;
 
         // Scan remote job dir. Because this is done second, remote files take lower precedence than local files.
         Host env = Host.get (source);
@@ -465,73 +466,74 @@ public class NodeJob extends NodeBase
             catch (Exception e) {}
         }
 
-        for (NodeFile nf : existing.values ())
+        List<String> keys = new ArrayList<String> (existing.keySet ());
+        for (String key : keys)
         {
+            NodeFile nf = existing.get (key);
             if (! nf.found)
             {
-                remove (nf);
                 changed = true;
+                existing.remove (key);
             }
         }
+        if (changed) applyChanges (tree, selected, existing);
+    }
 
-        if (changed)
+    public synchronized void applyChanges (JTree tree, NodeBase selected, Map<String,NodeFile> existing)
+    {
+        if (MainFrame.instance.tabs.getSelectedComponent () != PanelRun.instance)
         {
-            if (MainFrame.instance.tabs.getSelectedComponent () != PanelRun.instance)
-            {
-                tryToSelectOutput = false;
-                selected = null;
-                if (getChildCount () == 0) tree.collapsePath (new TreePath (getPath ()));
-            }
-
-            if (selected != null)
-            {
-                if (selected instanceof NodeFile)
-                {
-                    NodeBase parent = (NodeBase) selected.getParent ();
-                    if (parent != NodeJob.this) selected = null;
-                    else if (! ((NodeFile) selected).found) selected = parent;
-                }
-
-                // Try to select an output file when it first appears for the newest job, but only if the job is still selected.
-                if (tryToSelectOutput  &&  selected == NodeJob.this  &&  selected == tree.getPathForRow (0).getLastPathComponent ())
-                {
-                    NodeFile bestFile = null;
-                    for (NodeFile nf : existing.values ())
-                    {
-                        if (nf.type.priority == 0) continue;
-                        if (bestFile == null  ||  nf.type.priority > bestFile.type.priority)
-                        {
-                            bestFile = nf;
-                        }
-                    }
-                    if (bestFile != null)
-                    {
-                        selected = bestFile;
-                        tryToSelectOutput = false;
-                    }
-                }
-            }
-
-            final NodeBase finalSelected = selected;
-            Runnable update = new Runnable ()
-            {
-                public void run ()
-                {
-                    removeAllChildren ();
-                    for (NodeFile nf : existing.values ()) add (nf);
-                    DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
-                    model.nodeStructureChanged (NodeJob.this);
-
-                    if (finalSelected != null)
-                    {
-                        TreePath selectedPath = new TreePath (finalSelected.getPath ());
-                        tree.setSelectionPath (selectedPath);
-                        tree.scrollPathToVisible (selectedPath);
-                    }
-                }
-            };
-            EventQueue.invokeLater (update);
+            tryToSelectOutput = false;
+            selected = null;
+            if (getChildCount () == 0) tree.collapsePath (new TreePath (getPath ()));
         }
+
+        if (selected == null) return;
+        if (selected instanceof NodeFile)
+        {
+            NodeBase parent = (NodeBase) selected.getParent ();
+            if (parent != NodeJob.this) selected = null;
+            else if (! ((NodeFile) selected).found) selected = parent;
+        }
+
+        // Try to select an output file when it first appears for the newest job, but only if the job is still selected.
+        if (tryToSelectOutput  &&  selected == NodeJob.this  &&  selected == tree.getPathForRow (0).getLastPathComponent ())
+        {
+            NodeFile bestFile = null;
+            for (NodeFile nf : existing.values ())
+            {
+                if (nf.type.priority == 0) continue;
+                if (bestFile == null  ||  nf.type.priority > bestFile.type.priority)
+                {
+                    bestFile = nf;
+                }
+            }
+            if (bestFile != null)
+            {
+                selected = bestFile;
+                tryToSelectOutput = false;
+            }
+        }
+
+        final NodeBase finalSelected = selected;
+        Runnable update = new Runnable ()
+        {
+            public void run ()
+            {
+                removeAllChildren ();
+                for (NodeFile nf : existing.values ()) add (nf);
+                DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
+                model.nodeStructureChanged (NodeJob.this);
+
+                if (finalSelected != null)
+                {
+                    TreePath selectedPath = new TreePath (finalSelected.getPath ());
+                    tree.setSelectionPath (selectedPath);
+                    tree.scrollPathToVisible (selectedPath);
+                }
+            }
+        };
+        EventQueue.invokeLater (update);
     }
 
     /**

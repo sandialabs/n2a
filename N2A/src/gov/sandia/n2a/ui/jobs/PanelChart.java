@@ -70,12 +70,14 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 @SuppressWarnings("serial")
 public class PanelChart extends JPanel implements ChartChangeListener, Printable
 {
+    protected OutputParser       source;
     protected JFreeChart         chart;
     protected Plot               plot;
     protected ChartRenderingInfo info;
 
     protected BufferedImage buffer;
     protected DrawThread    drawThread;
+    protected boolean       offscreen;  // Don't repaint until chart is completely done. This produces smoother display during periodic updates.
 
     protected Point       zoomPoint;
     protected Rectangle2D zoomRectangle;
@@ -129,10 +131,11 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
         @param newChart If null, then releases current chart so it can be garbage collected. However, does not
         put this panel in a state where it can be displayed. When this panel is visible, it must always have a valid chart.
     **/
-    public void setChart (JFreeChart newChart)
+    public void setChart (JFreeChart newChart, OutputParser newSource)
     {
         if (chart != null) chart.removeChangeListener (this);
-        chart = newChart;
+        source = newSource;
+        chart  = newChart;
         if (chart == null)
         {
             plot = null;
@@ -221,6 +224,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
                     p.panRangeAxes  (wPercent, info.getPlotInfo (), panLast);
                 }
                 plot.setNotify (true);
+                offscreen = false;
                 panLast = e.getPoint ();
                 return;
             }
@@ -346,6 +350,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
                                 z.zoomRangeAxes  (vLower, vUpper, plotInfo, selectOrigin);
                             }
                             plot.setNotify (true);
+                            offscreen = false;
                         }
                     }
                 }
@@ -400,6 +405,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
             if (domain) z.zoomDomainAxes (factor, pri, c, true);
             if (range)  z.zoomRangeAxes  (factor, pri, c, true);
             plot.setNotify (true);
+            offscreen = false;
         }
 
         public void drawZoomRectangle (Graphics2D g2)
@@ -457,6 +463,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
         z.zoomDomainAxes (0, pri, zp);
         z.zoomRangeAxes  (0, pri, zp);
         plot.setNotify (true);
+        offscreen = false;
     }
 
     public Dimension getMinimumSize ()
@@ -558,7 +565,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
         public void actionPerformed (ActionEvent e)
         {
             age++;
-            repaint ();
+            if (! offscreen) repaint ();
         }
 
         /**

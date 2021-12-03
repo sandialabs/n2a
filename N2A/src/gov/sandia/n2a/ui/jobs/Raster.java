@@ -17,6 +17,7 @@ import java.util.List;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.event.RendererChangeEvent;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.PlotRenderingInfo;
 import org.jfree.chart.plot.XYPlot;
@@ -31,19 +32,20 @@ import org.jfree.data.xy.XYSeriesCollection;
 **/
 public class Raster extends OutputParser
 {
-    public XYSeriesCollection dataset     = new XYSeriesCollection ();
-    public List<Color>        colors      = new ArrayList<Color> ();  // correspond 1-to-1 with series added to dataset
-    public double             timeQuantum = 1;  // The closest spacing between two spikes on a single row.
+    protected Path               path;
+    protected XYSeriesCollection dataset     = new XYSeriesCollection ();
+    protected List<Color>        colors      = new ArrayList<Color> ();  // correspond 1-to-1 with series added to dataset
+    protected double             timeQuantum = 1;  // The closest spacing between two spikes on a single row.
 
     public Raster (Path path)
     {
-    	parse (path);
-        createDataset ();
+        this.path = path;
     }
 
-    public void createDataset ()
+    public void updateDataset ()
     {
-        assignSpikeIndices ();
+        parse (path);
+        assignSpikeIndices ();  // This won't change spike indices that have already been assigned, because column order remains constant.
 
         int totalCount = 0;
         for (Column c : columns) if (! timeFound  ||  c != time) totalCount += c.values.size ();
@@ -52,47 +54,68 @@ public class Raster extends OutputParser
         Color red = Color.getHSBColor (0.0f, 1.0f, 0.8f);
         for (Column c : columns)
         {
-            XYSeries series = new XYSeries (c.header);
-            dataset.addSeries (series);
-
-            if (c.color == null) colors.add (red);
-            else                 colors.add (c.color);
-
             int count = c.values.size ();
+            if (timeFound  &&  c == time)
+            {
+                double previousTime = c.values.get (0);
+                double minTimeQuantum = (c.values.get (count - 1) - previousTime) / totalCount;
+                for (int r = 1; r < count; r++)
+                {
+                    double thisTime = c.values.get (r);
+                    double diff = thisTime - previousTime;
+                    // If diff is less than minTimeQuantum, it could be due to jittering for "before" or "after" event delivery.
+                    if (diff >= minTimeQuantum) timeQuantum = Math.min (timeQuantum, diff);
+                    previousTime = thisTime;
+                }
+                continue;
+            }
+
+            XYSeries series;
+            int newRow;
+            if (c.data == null)
+            {
+                series = new XYSeries (c.header);
+                newRow = 0;
+            }
+            else
+            {
+                series = (XYSeries) c.data;
+                newRow = series.getItemCount ();
+            }
+
             if (timeFound)
             {
-                if (c == time)
+                for (int r = newRow; r < count; r++)
                 {
-                    double lastTime = c.values.get (0);
-                    double minTimeQuantum = (c.values.get (count - 1) - lastTime) / totalCount;
-                    for (int r = 1; r < count; r++)
-                    {
-                        double thisTime = c.values.get (r);
-                        double diff = thisTime - lastTime;
-                        // If diff is less than minTimeQuantum, it could be due to jittering for "before" or "after" event delivery.
-                        if (diff >= minTimeQuantum) timeQuantum = Math.min (timeQuantum, diff);
-                        lastTime = thisTime;
-                    }
-                    continue;
-                }
-                for (int r = 0; r < count; r++)
-                {
-                    if (c.values.get (r) != 0) series.add (time.values.get (r + c.startRow).doubleValue (), c.index);
+                    if (c.values.get (r) != 0) series.add (time.values.get (r + c.startRow).doubleValue (), c.index, false);
                 }
             }
             else
             {
-                for (int r = 0; r < count; r++)
+                for (int r = newRow; r < count; r++)
                 {
-                    if (c.values.get (r) != 0) series.add (r + c.startRow, c.index);
+                    if (c.values.get (r) != 0) series.add (r + c.startRow, c.index, false);
                 }
+            }
+
+            if (c.data == null)
+            {
+                dataset.addSeries (series);
+                c.data = series;
+
+                if (c.color == null) colors.add (red);
+                else                 colors.add (c.color);
+            }
+            else
+            {
+                series.fireSeriesChanged ();
             }
         }
     }
 
     public JFreeChart createChart ()
     {
-        final JFreeChart chart = ChartFactory.createScatterPlot
+        JFreeChart chart = ChartFactory.createScatterPlot
         (
             null,                     // chart title
             null,                     // x axis label
@@ -114,10 +137,26 @@ public class Raster extends OutputParser
         TickRenderer renderer = new TickRenderer ();
         plot.setRenderer (renderer);
 
-        int count = colors.size ();
-        for (int i = 0; i < count; i++) renderer.setSeriesPaint (i, colors.get (i));
-
+        updateChart (chart);
         return chart;
+    }
+
+    public void updateChart (JFreeChart chart)
+    {
+        XYPlot plot = chart.getXYPlot ();
+        plot.setNotify (false);
+
+        int newRow = colors.size ();
+        updateDataset ();
+        int count = colors.size ();
+        if (newRow < count)
+        {
+            TickRenderer tr = (TickRenderer) plot.getRenderer ();
+            for (int i = newRow; i < count; i++) tr.setSeriesPaint (i, colors.get (i), false);
+            tr.notifyListeners (new RendererChangeEvent (tr));  // This is the same event as issued by setSeriesPaint() when notify is true.
+        }
+
+        plot.setNotify (true);
     }
 
     @SuppressWarnings("serial")

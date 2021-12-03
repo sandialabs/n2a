@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Component;
+import java.awt.EventQueue;
 import java.awt.FontMetrics;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -19,21 +20,28 @@ import javax.swing.JTable;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumnModel;
-
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.language.type.Scalar;
 
 public class Table extends OutputParser
 {
-    int rows;
+    protected Path    path;
+    protected boolean sorted;
 
     public Table (Path path, boolean sorted)
     {
-    	parse (path, Float.NaN);
-    	for (Column c : columns) rows = Math.max (rows, c.startRow + c.values.size ());
+        this.path   = path;
+        this.sorted = sorted;
 
-    	int t = columns.indexOf (time);
+        defaultValue = Float.NaN;
+        parse (path);
+        adjustColumns ();
+    }
+
+    public void adjustColumns ()
+    {
+        int t = columns.indexOf (time);
     	if (t > 0)
     	{
     	    columns.remove (t);
@@ -133,6 +141,40 @@ public class Table extends OutputParser
                 int width = Math.max (digitWidth * c.textWidth, fm.stringWidth (c.header) + digitWidth);
                 width = Math.min (width, maxTextWidth);  // Avoid absurdly wide columns, because it's hard to read table.
                 cols.getColumn (i).setPreferredWidth (width);
+            }
+        }
+
+        /**
+            Load any data that has been appended to file, and update display.
+            This does not change the current selection or scroll position.
+        **/
+        public void refresh ()
+        {
+            int oldRows = rows;
+            int oldCols = columns.size ();
+            parse (path);
+
+            OutputTableModel model = (OutputTableModel) getModel ();
+            if (columns.size () != oldCols)
+            {
+                adjustColumns ();
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        model.fireTableStructureChanged ();
+                    }
+                });
+            }
+            else if (rows != oldRows)
+            {
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        model.fireTableRowsInserted (oldRows, rows-1);
+                    }
+                });
             }
         }
     }
