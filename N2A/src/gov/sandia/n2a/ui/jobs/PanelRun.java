@@ -11,6 +11,7 @@ import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
+import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable.ParsedValue;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
@@ -1098,47 +1099,55 @@ public class PanelRun extends JPanel
         }
 
         // Walk the model and display all overridden parameters.
-        // Only examines node paths that exist in current database model, but gets
-        // the values from snapshot (if available). This includes the "param" tag.
-        // What it reports can change as the model changes, and may not capture everything that
-        // was tagged as a parameter at the time the simulation was run. This is a
-        // compromise that allows fast display while being reasonably useful in most cases.
-        if (jobNode.hasSnapshot ())
+        if (job != null  &&  jobNode.hasSnapshot ())
         {
-            MNode doc = AppData.models.child (jobNode.inherit);  // Not collated, so only top-level keys
-            if (doc != null)
+            // Obtain top-level model and collated model
+            MNode doc;
+            MNode model;
+            String key = job.get ("$inherit");
+            Path localJobDir  = Host.getJobDir (Host.getLocalResourceDir (), job);
+            Path snapshotPath = localJobDir.resolve ("snapshot");
+            if (Files.exists (snapshotPath))
             {
-                MNode model = jobNode.getModel ();  // Best available reconstruction of collated model at time job was created.
-                doc.visit (new Visitor ()
-                {
-                    public boolean visit (MNode node)
-                    {
-                        List<String> keyList   = Arrays.asList (node.keyPath (doc));
-                        List<String> paramPath = new ArrayList<String> (keyList);
-                        paramPath.add ("$metadata");
-                        paramPath.add ("param");
-                        Object[] paramArray = paramPath.toArray ();
-                        if (! model.getFlag (paramArray)) return true;  // node is not a parameter
-                        if (model.get (paramArray).equals ("watch")) return true;  // watchable items aren't of interest for this summary
-
-                        String[] keyPath = keyList.toArray (new String[keyList.size ()]);
-                        String key = keyPath[0];
-                        for (int i = 1; i < keyPath.length; i++) key += "." + keyPath[i];
-
-                        ParsedValue pv = new ParsedValue (model.get (keyPath));
-                        contents.append (key + " =" + pv.combiner + " " + pv.expression + "\n");
-                        if (pv.expression.isEmpty ())  // Could be multi-valued
-                        {
-                            for (MNode v : model.childOrEmpty (keyPath))
-                            {
-                                key = v.key ();
-                                if (key.contains ("@")) contents.append ("\t" + v.get () + "\t" + key + "\n");
-                            }
-                        }
-                        return true;
-                    }
-                });
+                MNode snapshot = new MDoc (snapshotPath);
+                doc   = snapshot.child (key);
+                model = MPart.fromSnapshot (key, snapshot);
             }
+            else
+            {
+                doc   = AppData.models.childOrEmpty (key);
+                model = new MDoc (localJobDir.resolve ("model"), key);
+            }
+
+            doc.visit (new Visitor ()
+            {
+                public boolean visit (MNode node)
+                {
+                    List<String> keyList   = Arrays.asList (node.keyPath (doc));
+                    List<String> paramPath = new ArrayList<String> (keyList);
+                    paramPath.add ("$metadata");
+                    paramPath.add ("param");
+                    Object[] paramArray = paramPath.toArray ();
+                    if (! model.getFlag (paramArray)) return true;  // node is not a parameter
+                    if (model.get (paramArray).equals ("watch")) return true;  // watchable items aren't of interest for this summary
+
+                    String[] keyPath = keyList.toArray (new String[keyList.size ()]);
+                    String key = keyPath[0];
+                    for (int i = 1; i < keyPath.length; i++) key += "." + keyPath[i];
+
+                    ParsedValue pv = new ParsedValue (model.get (keyPath));
+                    contents.append (key + " =" + pv.combiner + " " + pv.expression + "\n");
+                    if (pv.expression.isEmpty ())  // Could be multi-valued
+                    {
+                        for (MNode v : model.childOrEmpty (keyPath))
+                        {
+                            key = v.key ();
+                            if (key.contains ("@")) contents.append ("\t" + v.get () + "\t" + key + "\n");
+                        }
+                    }
+                    return true;
+                }
+            });
         }
 
         synchronized (displayText)

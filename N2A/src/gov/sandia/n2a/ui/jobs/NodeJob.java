@@ -108,11 +108,6 @@ public class NodeJob extends NodeBase
         return AppData.runs.child (key);
     }
 
-    public MNode getModel ()
-    {
-        return getModel (getSource ());
-    }
-
     public boolean hasSnapshot ()
     {
         MNode job = getSource ();
@@ -616,8 +611,9 @@ public class NodeJob extends NodeBase
     }
 
     /**
-        @return A fully-collated model. The key of the root node is usable as main model name
-        for the purposes of backend processing.
+        @return Best-possible reconstruction of the fully-collated model associated
+        with the given job at the time it was created. The key of the returned node
+        is usable as main model name for the purposes of backend processing.
     **/
     public static MNode getModel (MNode job)
     {
@@ -627,22 +623,17 @@ public class NodeJob extends NodeBase
         Path modelPath    = localJobDir.resolve ("model");
         String key        = job.get ("$inherit");
 
-        MNode result;
         if (Files.exists (snapshotPath))  // mini-repo snapshot
         {
-            MDoc snapshot = new MDoc (snapshotPath);
-            result = MPart.fromSnapshot (key, snapshot);
+            MNode snapshot = new MDoc (snapshotPath);  // Load the mini-repo
+            return MPart.fromSnapshot (key, snapshot);
         }
-        else if (Files.exists (modelPath))  // collated snapshot
+        if (Files.exists (modelPath))  // collated snapshot
         {
-            result = new MDoc (modelPath, key);
+            return new MDoc (modelPath, key);
         }
-        else  // no snapshot
-        {
-            // Retrieve directly from database.
-            result = new MPart (AppData.models.child (key));
-        }
-        return result;
+        // No snapshot. Retrieve directly from database.
+        return new MPart (AppData.models.child (key));
     }
 
     /**
