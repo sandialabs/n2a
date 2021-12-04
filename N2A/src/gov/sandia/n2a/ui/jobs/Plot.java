@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,13 +16,13 @@ import java.util.List;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.axis.ValueAxis;
 import org.jfree.chart.plot.DatasetRenderingOrder;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYItemRenderer;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.chart.title.LegendTitle;
-import org.jfree.data.Range;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 
@@ -66,6 +66,14 @@ public class Plot extends OutputParser
             aux.scaledRows = count;
         }
 
+        // Determine range of x axis
+        if (! Double.isNaN (xmin)  ||  ! Double.isNaN (xmax))
+        {
+            time.computeStats ();
+            if (Double.isNaN (xmin)) xmin = time.min;
+            if (Double.isNaN (xmax)) xmax = time.max;
+        }
+
         // Decide between one or two axis display
 
         columnCount = columns.size () - 1;   // Subtract 1 to account for time column.
@@ -83,7 +91,7 @@ public class Plot extends OutputParser
         int bestIndex = -1;  // Breakpoint between left and right column sets. This is the index just before the separation.
         double largestRatio = 1;
         int flatCount = 0;
-        boolean rangeLocked =  ! (Double.isNaN (ymin)  &&  Double.isNaN (ymax));
+        boolean rangeLocked =  ! Double.isNaN (ymin)  ||  ! Double.isNaN (ymax);
         if (! rangeLocked)
         {
             for (i = 0; i < columnCount - 1; i++)
@@ -192,7 +200,7 @@ public class Plot extends OutputParser
             if (Double.isNaN (ymin)) ymin = min;
             else                     min  = ymin;
             if (Double.isNaN (ymax)) ymax = max;
-            else                     max = ymax;
+            else                     max  = ymax;
         }
     	range0 = max - min;
 
@@ -265,9 +273,12 @@ public class Plot extends OutputParser
         axis0.setAutoRangeIncludesZero (false);
         if (range0 > 0) axis0.setAutoRangeMinimumSize (range0 / 2);
         else            axis0.setAutoRangeMinimumSize (1);
-        if (! (Double.isNaN (ymin)  &&  Double.isNaN (ymax)))  // range locked
+        if (! Double.isNaN (ymin)) axis0.setRange (ymin, ymax);  // range locked
+
+        if (! Double.isNaN (xmin))
         {
-            axis0.setRange (new Range (ymin, ymax));
+            ValueAxis x = plot.getDomainAxis ();
+            x.setRange (xmin, xmax);
         }
 
         int count = dataset0.getSeriesCount ();

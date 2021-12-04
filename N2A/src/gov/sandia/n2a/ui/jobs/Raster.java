@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,6 +17,7 @@ import java.util.List;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.axis.ValueAxis;
 import org.jfree.chart.event.RendererChangeEvent;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.PlotRenderingInfo;
@@ -50,25 +51,39 @@ public class Raster extends OutputParser
         int totalCount = 0;
         for (Column c : columns) if (! timeFound  ||  c != time) totalCount += c.values.size ();
 
+        if (timeFound)
+        {
+            int count = time.values.size ();
+            if (time.scale != null)
+            {
+                double scale = time.scale.get ();
+                for (int i = 0; i < count; i++) time.values.set (i, (float) (time.values.get (i) / scale));
+            }
+
+            if (! Double.isNaN (xmin)  ||  ! Double.isNaN (xmax))
+            {
+                time.computeStats ();
+                if (Double.isNaN (xmin)) xmin = time.min;
+                if (Double.isNaN (xmax)) xmax = time.max;
+            }
+
+            double previousTime = time.values.get (0);
+            double minTimeQuantum = (time.values.get (count - 1) - previousTime) / totalCount;
+            for (int r = 1; r < count; r++)
+            {
+                double thisTime = time.values.get (r);
+                double diff = thisTime - previousTime;
+                // If diff is less than minTimeQuantum, it could be due to jittering for "before" or "after" event delivery.
+                if (diff >= minTimeQuantum) timeQuantum = Math.min (timeQuantum, diff);
+                previousTime = thisTime;
+            }
+        }
+
         // Generate dateset
         Color red = Color.getHSBColor (0.0f, 1.0f, 0.8f);
         for (Column c : columns)
         {
-            int count = c.values.size ();
-            if (timeFound  &&  c == time)
-            {
-                double previousTime = c.values.get (0);
-                double minTimeQuantum = (c.values.get (count - 1) - previousTime) / totalCount;
-                for (int r = 1; r < count; r++)
-                {
-                    double thisTime = c.values.get (r);
-                    double diff = thisTime - previousTime;
-                    // If diff is less than minTimeQuantum, it could be due to jittering for "before" or "after" event delivery.
-                    if (diff >= minTimeQuantum) timeQuantum = Math.min (timeQuantum, diff);
-                    previousTime = thisTime;
-                }
-                continue;
-            }
+            if (timeFound  &&  c == time) continue;
 
             XYSeries series;
             int newRow;
@@ -82,6 +97,7 @@ public class Raster extends OutputParser
                 series = (XYSeries) c.data;
                 newRow = series.getItemCount ();
             }
+            int count = c.values.size ();
 
             if (timeFound)
             {
@@ -154,6 +170,12 @@ public class Raster extends OutputParser
             TickRenderer tr = (TickRenderer) plot.getRenderer ();
             for (int i = newRow; i < count; i++) tr.setSeriesPaint (i, colors.get (i), false);
             tr.notifyListeners (new RendererChangeEvent (tr));  // This is the same event as issued by setSeriesPaint() when notify is true.
+        }
+
+        if (! Double.isNaN (xmin))
+        {
+            ValueAxis x = plot.getDomainAxis ();
+            x.setRange (xmin, xmax);
         }
 
         plot.setNotify (true);

@@ -38,8 +38,8 @@ public class OutputParser
     public int          rows;
     public long         nextPosition;   // Position in file where read should resume when more data arrives.
     public float        defaultValue;
-    public double       xmin = Double.NEGATIVE_INFINITY; // Bounds for chart. If not specified, then simply fit to data.
-    public double       xmax = Double.POSITIVE_INFINITY; // Note that "x" is always time.
+    public double       xmin = Double.NaN; // Bounds for chart. If not specified, then simply fit to data.
+    public double       xmax = Double.NaN; // Note that "x" is always time.
     public double       ymin = Double.NaN;
     public double       ymax = Double.NaN;
 
