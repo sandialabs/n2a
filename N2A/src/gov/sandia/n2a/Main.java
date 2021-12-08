@@ -65,12 +65,16 @@ public class Main
             else if (arg.startsWith ("-csv"        )) record.set (true, "$metadata", "csv");
             else if (arg.startsWith ("-run="))
             {
-                record.set (arg.substring (5), "$inherit");
+                MNode temp = new MVolatile ("", arg.substring (5));
+                temp.merge (record);
+                record = temp;
                 headless = "run";
             }
             else if (arg.startsWith ("-study="))
             {
-                record.set (arg.substring (7), "$inherit");
+                MNode temp = new MVolatile ("", arg.substring (7));
+                temp.merge (record);
+                record = temp;
                 headless = "study";
             }
             else if (! arg.startsWith ("-"))
@@ -214,9 +218,12 @@ public class Main
         String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());  // This allows a remote job to run in the regular jobs directory there.
         MDoc job = new MDoc (jobDir.resolve ("job"), jobKey);  // Make this appear as if it is from the jobs collection.
 
-        MPart collated = new MPart (record);
-        NodeJob.collectJobParameters (collated, collated.get ("$inherit"), job);
-        NodeJob.saveCollatedModel (collated, job);
+        String key = record.key ();
+        MNode doc = AppData.models.childOrEmpty (key);
+        record.mergeUnder (doc);
+        MPart collated = new MPart (record);  // TODO: the only reason to collate here is to ensure that host and backend are correctly identified if they are inherited. Need a more efficient method, such as lazy collation in MPart.
+        NodeJob.collectJobParameters (collated, key, job);
+        NodeJob.saveSnapshot (record, job);
 
         // Handle remote host
         Host host = Host.get (job);  // If a remote host is used, it must be specified exactly, rather than a list of possibilities.
@@ -284,14 +291,17 @@ public class Main
     **/
     public static void studyHeadless (MNode record)
     {
+        String key = record.key ();
+        MNode doc = AppData.models.childOrEmpty (key);
+        record.mergeUnder (doc);
         MPart collated = new MPart (record);
         if (! collated.containsKey ("study")) return;
 
-        // See PanelRun constructor / prepare host monitor thread 
+        // Start host monitor threads (see PanelRun constructor for non-headless procedure)
         Host.restartAssignmentThread ();
         for (Host h : Host.getHosts ()) h.restartMonitorThread ();
 
-        MNode studyNode = PanelEquations.createStudy (collated.get ("$inherit"), collated);
+        MNode studyNode = PanelEquations.createStudy (key, collated);
         Study study = new Study (studyNode); // constructed in paused state
         study.togglePause ();                // start
         study.waitForCompletion ();

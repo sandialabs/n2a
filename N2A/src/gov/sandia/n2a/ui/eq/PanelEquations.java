@@ -1043,7 +1043,7 @@ public class PanelEquations extends JPanel
         MDoc job = (MDoc) AppData.runs.childOrCreate (jobKey);
         NodeJob.collectJobParameters (root.source, record.key (), job);
         job.save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
-        NodeJob.saveCollatedModel (root.source, job);
+        NodeJob.saveSnapshot (record, job);
 
         MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
         mtp.setPreferredFocus (PanelRun.instance, PanelRun.instance.tree);

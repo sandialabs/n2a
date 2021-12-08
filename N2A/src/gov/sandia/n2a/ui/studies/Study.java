@@ -282,7 +282,7 @@ public class Study
 
             String inherit = source.get ("$inherit");
             MNode model = AppData.models.childOrEmpty (inherit);
-            MNode modelCopy = new MVolatile ();
+            MNode modelCopy = new MVolatile ("", inherit);
             modelCopy.merge (model);  // "model" is never touched. We only use "modelCopy".
 
             // Gather list of incomplete jobs.
@@ -370,17 +370,14 @@ public class Study
                         node.reset ();
                     }
 
-                    // Expand model
-                    // This allows iteration on model structure itself, for example by changing $inherit.
-                    iterator.assign (modelCopy);
-                    MNode collated = new MPart (modelCopy);
-
                     // Launch job and maintain all records
                     // See PanelEquations.listenerRun for similar code.
                     final MDoc job = (MDoc) AppData.runs.childOrCreate (jobKey);
+                    iterator.assign (modelCopy);  // Overlay current parameters. This can include $inherit itself, allowing iteration over model structure.
+                    MNode collated = new MPart (modelCopy);  // TODO: the only reason to collate here is to ensure that host and backend are correctly identified if they are inherited. Need a more efficient method, such as lazy collation in MPart.
                     NodeJob.collectJobParameters (collated, inherit, job);
                     job.save ();
-                    NodeJob.saveCollatedModel (collated, job);
+                    NodeJob.saveSnapshot (modelCopy, job);
 
                     // Update job count.
                     // It is important to do this after the collated model is saved, so that the UI thread will see complete information.

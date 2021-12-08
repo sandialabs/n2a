@@ -216,8 +216,10 @@ public class NodeJob extends NodeBase
         for the job record. The caller is responsible for assigning $inherit,
         because this is usually already lost from "model" by the time this function
         is called.
-        @param model The input model. Should be already collated, and so generally
-        not the original source model from the DB.
+        @param model The input model. This may be the original from the model DB
+        or a collated version. Collating is not required. However, the model should
+        contain the correct host and backend. Typically these are provided by the
+        main model, but they could also be inherited.
         @param inherit Key of the source model in the DB. 
         @param job The job record to be filled in.
     **/
@@ -638,18 +640,17 @@ public class NodeJob extends NodeBase
 
     /**
         Writes the collated model to the local job directory.
-        @param collated The fully-expanded model.
+        @param doc The main model (not collated). May be directly from the model DB, or a temporary node.
+        In either case, its key must be the model name as it would appear in the DB.
         @param job The job record, used only to determine name of job directory.
     **/
-    public static void saveCollatedModel (MNode collated, MNode job)
+    public static void saveSnapshot (MNode doc, MNode job)
     {
         String snapshotMode = AppData.state.get ("General", "snapshot");
         if (snapshotMode.startsWith ("No")) return;  // Save nothing
 
         // Save main model (all other snapshot modes)
         MVolatile snapshot = new MVolatile ();
-        String inherit = job.get ("$inherit");  // name of main model
-        MNode doc = AppData.models.child (inherit);
         snapshot.link (doc);
 
         // Save referenced models
@@ -657,8 +658,7 @@ public class NodeJob extends NodeBase
 
         // Write snapshot to disk
         // See MDoc.save () for similar code.
-        // We don't create an MDoc here because it would require duplicating the collated model in memory,
-        // and the model could be very large.
+        // We don't create an MDoc here because it would require duplicating the snapshot in memory.
         Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);  // The path is also contained in the job MDoc node.
         Path modelPath   = localJobDir.resolve ("snapshot");
         try (BufferedWriter writer = Files.newBufferedWriter (modelPath))
