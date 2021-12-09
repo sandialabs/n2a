@@ -1099,15 +1099,15 @@ public class PanelEquations extends JPanel
             MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
             mtp.setPreferredFocus (PanelStudy.instance, PanelStudy.instance.list);
             mtp.selectTab ("Studies");
-            PanelStudy.instance.addNewStudy (createStudy (record.key (), root.source));
+            PanelStudy.instance.addNewStudy (createStudy (root.source));
         }
     };
 
-    public static MDoc createStudy (String inherit, MNode collated)
+    public static MDoc createStudy (MNode collated)
     {
         String key = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
         MDoc study = (MDoc) AppData.studies.childOrCreate (key);
-        study.set (inherit, "$inherit");
+        study.set (collated.key (), "$inherit");
         study.set (collated.childOrEmpty ("$metadata", "study"), "config");  // Copy top-level study tag (general parameters controlling study).
         // Collect study tags
         MNode variables = study.childOrCreate ("variables");

@@ -301,7 +301,7 @@ public class Main
         Host.restartAssignmentThread ();
         for (Host h : Host.getHosts ()) h.restartMonitorThread ();
 
-        MNode studyNode = PanelEquations.createStudy (key, collated);
+        MNode studyNode = PanelEquations.createStudy (collated);
         Study study = new Study (studyNode); // constructed in paused state
         study.togglePause ();                // start
         study.waitForCompletion ();
