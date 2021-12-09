@@ -657,7 +657,7 @@ public class PanelEquations extends JPanel
             }
             else
             {
-                fce.subpart = active.root.source.key ();
+                fce.subpart = active.root.source.key ();  // TODO: Brad Aimone once made this line produce a NullPointerException, but not sure how (can't reproduce).
                 fce = createFocus (active.root);
                 if (active.root.graph != null) fce.titleFocused = active.root.graph.titleFocused;
             }
