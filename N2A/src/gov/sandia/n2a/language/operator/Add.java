@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -44,17 +44,28 @@ public class Add extends OperatorBinary
         Operator result = super.simplify (from, evalOnly);
         if (result != this) return result;
 
-        if (operand0.isScalar ()  &&  operand0.getDouble () == 0)
+        if (operand0.isScalar ()  &&  operand0.getDouble () == 0)  // 0+B --> B
         {
             from.changed = true;
             operand1.parent = parent;
             return operand1;
         }
-        else if (operand1.isScalar ()  &&  operand1.getDouble () == 0)
+        else if (operand1.isScalar ()  &&  operand1.getDouble () == 0)  // A+0 --> A
         {
             from.changed = true;
             operand0.parent = parent;
             return operand0;
+        }
+        else if (operand1 instanceof Negate)  // A+(-B) --> A-B
+        {
+            from.changed = true;
+            Subtract s = new Subtract ();
+            s.parent = parent;
+            s.operand0 = operand0;
+            s.operand0.parent = s;
+            s.operand1 = ((Negate) operand1).operand;
+            s.operand1.parent = s;
+            return s;
         }
         return this;
     }
