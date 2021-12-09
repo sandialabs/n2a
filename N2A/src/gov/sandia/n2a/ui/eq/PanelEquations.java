@@ -737,7 +737,8 @@ public class PanelEquations extends JPanel
         titleFocused = ontoTitle;
         if (ontoTitle)
         {
-            breadcrumbRenderer.requestFocusInWindow ();
+            if (breadcrumbRenderer.hasFocus ()) breadcrumbRenderer.restoreFocus ();
+            else                                breadcrumbRenderer.requestFocusInWindow ();
         }
         else
         {
@@ -2175,22 +2176,7 @@ public class PanelEquations extends JPanel
             {
                 public void focusGained (FocusEvent e)
                 {
-                    if (view == NODE)
-                    {
-                        active = panelParent.panelEquationTree;
-                    }
-                    else
-                    {
-                        active = panelEquationTree;
-                        if (part != panelEquationTree.root)
-                        {
-                            panelEquationTree.loadPart (part);
-                            FocusCacheEntry fce = createFocus (part);
-                            if (fce.sp != null) fce.sp.restore (panelEquationTree.tree, false);
-                        }
-                    }
-                    getTreeCellRendererComponent (true, true);
-                    panelBreadcrumb.repaint ();
+                    restoreFocus ();
                 }
 
                 public void focusLost (FocusEvent e)
@@ -2205,6 +2191,26 @@ public class PanelEquations extends JPanel
         {
             super.updateUI ();
             UIupdated = true;
+        }
+
+        public void restoreFocus ()
+        {
+            if (view == NODE)
+            {
+                active = panelParent.panelEquationTree;
+            }
+            else
+            {
+                active = panelEquationTree;
+                if (part != panelEquationTree.root)
+                {
+                    panelEquationTree.loadPart (part);
+                    FocusCacheEntry fce = createFocus (part);
+                    if (fce.sp != null) fce.sp.restore (panelEquationTree.tree, false);
+                }
+            }
+            getTreeCellRendererComponent (true, true);
+            panelBreadcrumb.repaint ();
         }
 
         public String getToolTipText ()
