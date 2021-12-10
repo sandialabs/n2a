@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -24,8 +24,17 @@ public class Comparison extends OperatorBinary implements OperatorLogical
         {
             from.changed = true;
             if (! evalOnly) releaseDependencies (from);
-            operand0 = operand1 = new Constant (new Scalar (0));
+            operand0 = operand1 = new Constant (0);
             result = new Constant (eval (null));
+            result.parent = parent;
+            return result;
+        }
+
+        // Any comparison with NaN is false
+        if (Double.isNaN (operand0.getDouble ())  ||  Double.isNaN (operand1.getDouble ()))
+        {
+            from.changed = true;
+            result = new Constant (0);
             result.parent = parent;
             return result;
         }
