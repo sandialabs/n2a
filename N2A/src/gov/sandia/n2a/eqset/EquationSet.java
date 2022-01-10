@@ -1436,7 +1436,7 @@ public class EquationSet implements Comparable<EquationSet>
         for (EquationSet p : parts)
         {
             p.sortParts ();  // Apply this process recursively.
-            p.priority = 0;  // Should not generally be needed, since we do this process only once, and priority is initialize to zero.
+            p.priority = 0;  // Should not generally be needed, since we do this process only once, and priority is initialized to zero.
         }
 
         for (EquationSet p : parts)
@@ -2170,7 +2170,8 @@ public class EquationSet implements Comparable<EquationSet>
                         List<Variable> uses = new ArrayList<Variable> (from.uses.keySet ());  // copy, in case it gets modified
                         for (Variable v : uses)
                         {
-                            if (v.reference.variable != from) continue;  // Must be one of our external writers.
+                            if (v.container == null) continue;  // Null container indicates a connection binding, which won't write to "from" and is not a member of the part being flattened.
+                            if (v.reference.variable != from) continue;  // Skip variables that are not external writers of "from".
                             user = v;
                             if (from != to)
                             {
@@ -2212,7 +2213,7 @@ public class EquationSet implements Comparable<EquationSet>
             Redirector redirector = new Redirector ();
 
             //     For each variable v, one of 3 things will happen:
-            //     1) v matches an existing $variable --> dependent references will be redirected, and v with be forgotten.
+            //     1) v matches an existing $variable --> dependent references will be redirected, and v will be forgotten.
             //     2) v is a reference that matches an existing variable --> equations will be merged.
             //     3) v is unique --> v will be moved from s to this container. All dependent references remain valid, but resolution paths must be updated.
             //          Note that v may have the same name as a variable in this container. Prefixing will make the name unique.
@@ -3787,7 +3788,7 @@ public class EquationSet implements Comparable<EquationSet>
 
                 // 2a) Check for pure circular dependency.
                 Variable top = v;
-                while (top.uses.size () == 1)  // This single dependency must be the derivative.
+                while (top.uses != null  &&  top.uses.size () == 1)  // This single dependency must be the derivative.
                 {
                     if (top.derivative != null)
                     {
@@ -4588,14 +4589,36 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
-    public double determinePoll ()
+    /**
+        Checks if connection requires polling.
+        The result is a metadata tag on $p. If the tag exists, polling is required and the tag gives the time period
+        (0 for every cycle, >0 for quantity of time to complete one poll).
+        The user can specify this tag ahead of time. Specifying -1 will suppress polling even if it is required.
+        Specifying poll >= 0 will not force polling if it is not required. Instead, the tag will be cleared by this function.
+        Depends on results of: findInitOnly()
+        Must be run before purgeInitOnlyTemporary(), because that function removes information critical for our processing.
+        findConnectionMatrix() will clear the metadata tag if it succeeds, because that kind of connection is a one-time process,
+        no need for polling.
+    **/
+    public void determinePoll ()
     {
-        if (connectionBindings == null) return -1;
-        if (connectionMatrix != null) return -1;  // Somewhat of a hack. cm is a one-time process, so we shouldn't do polling.
-        Variable p = find (new Variable ("$p"));
-        if (p == null) return -1;
+        for (EquationSet s : parts) s.determinePoll ();
 
-        List<EquationEntry> fires = new ArrayList<EquationEntry> ();
+        if (connectionBindings == null) return;
+        Variable p = find (new Variable ("$p"));
+        if (p == null) return;
+
+        // Look up metadata to determine polling period.
+        String pollString = p.metadata.getOrDefault ("0", "poll");  // Default is full poll every cycle. After determinePoll() finishes, the default will be no polling. This simplifies later processing.
+        double pollValue  = new UnitValue (pollString).get ();
+        if (pollValue < 0)  // Don't do analysis if polling is suppressed in any case.
+        {
+            p.metadata.clear ("poll");
+            return;
+        }
+
+        List<EquationEntry> fires        = new ArrayList<EquationEntry> ();
+        boolean             firesBoolean = true;  // All equations in "fires" return 0 or 1.
         ReplacePhaseIndicators replacePhase = new ReplacePhaseIndicators ();
         replacePhase.connect = 1;  // And other indicators are 0
         for (EquationEntry e : p.equations)
@@ -4609,15 +4632,41 @@ public class EquationSet implements Comparable<EquationSet>
                 if (test.isScalar ()) couldFire = alwaysFires = test.getDouble () != 0;
                 else                  alwaysFires = false;
             }
-            if (couldFire) fires.add (e);
+            if (couldFire)
+            {
+                fires.add (e);
+                Operator expression = e.expression.deepCopy ().transform (replacePhase).simplify (p, true);
+                if (expression.isScalar ())
+                {
+                    double value = expression.getDouble ();
+                    if (value != 0  &&  value != 1) firesBoolean = false;
+                }
+                else
+                {
+                    firesBoolean = false;
+                }
+            }
             if (alwaysFires) break;
         }
-        if (fires.isEmpty ()) return -1;  // $p has default value (1 at connect)
-
-        boolean needsPoll = fires.size () > 1;  // Multiple connect conditions means unpredictable, so needs polling.
-        if (! needsPoll)
+        if (fires.isEmpty ())  // $p has default value (1 at connect)
         {
-            // Determine if the expression for $p requires polling.
+            p.metadata.clear ("poll");
+            return;
+        }
+
+        boolean needsPoll;
+        if (fires.size () > 1)
+        {
+            // Multiple connect conditions means unpredictable, so needs polling.
+            // The exception is if $p is initOnly and all equations are either 0 or 1.
+            // In that case, polling is unneeded because the existence of the part is
+            // already known at init time.
+            System.out.println ("fires " + fires.size () + " " + prefix ());
+            needsPoll =  ! p.hasAttribute ("initOnly")  ||  ! firesBoolean;
+        }
+        else
+        {
+            // Determine if the single expression for $p requires polling.
             // The possibilities for NOT polling are:
             // * a Scalar that is either 1 or 0
             // * a boolean expression that depends on nothing more than initOnly variables
@@ -4646,10 +4695,14 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
 
-        if (! needsPoll) return -1;
-        // Look up metadata to determine polling period.
-        String poll = p.metadata.getOrDefault ("0", "poll");
-        return new UnitValue (poll).get ();
+        if (needsPoll)
+        {
+            if (p.metadata.child ("poll") == null) p.metadata.set ("0", "poll");  // If poll is not otherwise specified, then do full poll at every cycle.
+        }
+        else
+        {
+            p.metadata.clear ("poll");
+        }
     }
 
     /**
@@ -4795,7 +4848,11 @@ public class EquationSet implements Comparable<EquationSet>
                 if (op instanceof NonzeroIterable)
                 {
                     ConnectionMatrix cm = new ConnectionMatrix ((NonzeroIterable) op);
-                    if (cm.rowMapping != null  &&  cm.colMapping != null) connectionMatrix = cm;
+                    if (cm.rowMapping != null  &&  cm.colMapping != null)
+                    {
+                        connectionMatrix = cm;
+                        p.metadata.clear ("poll");  // Somewhat of a hack. cm is a one-time process, so we shouldn't do polling.
+                    }
                     return false;
                 }
                 if (op instanceof AccessVariable)

@@ -20,6 +20,7 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Event;
@@ -675,7 +676,7 @@ public class InternalBackendData
     {
         // Avoid redundancy between references and connections, since many references simply target connection endpoints.
         Object last = r.resolution.get (r.resolution.size () - 1);  // There should always be at least one entry. This is enforced by the caller.
-        if (last instanceof ConnectionBinding  &&  s.connectionBindings.contains (last))
+        if (last instanceof ConnectionBinding  &&  s.connectionBindings != null  &&  s.connectionBindings.contains (last))
         {
             r.index = endpoints + ((ConnectionBinding) last).index;
             return;
@@ -930,10 +931,7 @@ public class InternalBackendData
 
             if (s.connected)  // in addition, track newly created instances
             {
-                if (! singleton)
-                {
-                    firstborn = allocateGlobalFloat ("firstborn");
-                }
+                if (! singleton) firstborn = allocateGlobalFloat ("firstborn");
                 newborn = allocateLocalFloat ("newborn");
             }
         }
@@ -970,7 +968,9 @@ public class InternalBackendData
             determineOrderInit ("$connect", s, Pdependencies);
             // determineOrderInit() is not needed for PdepenciesTemp, because temps are already in the correct order.
 
-            poll = s.determinePoll ();
+            String pollString = "-1";  // Default is no polling
+            if (p.metadata != null) pollString = p.metadata.getOrDefault (pollString, "poll");
+            poll = new UnitValue (pollString).get ();
             if (poll >= 0)
             {
                 pollDeadline = allocateGlobalFloat ("pollDeadline");

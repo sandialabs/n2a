@@ -725,7 +725,7 @@ public class Population extends Instance
             if (t >= pollDeadline)
             {
                 poll = true;
-                valuesFloat[bed.pollDeadline] = (float) (t + bed.poll);
+                valuesFloat[bed.pollDeadline] = (float) (pollDeadline + bed.poll);
             }
         }
 

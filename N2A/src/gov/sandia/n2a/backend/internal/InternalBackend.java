@@ -217,6 +217,7 @@ public class InternalBackend extends Backend
         e.determineOrder ();
         e.findDerivative ();
         e.findInitOnly ();
+        e.determinePoll ();
         e.purgeInitOnlyTemporary ();
         e.setAttributesLive ();
         e.forceTemporaryStorageForSpecials ();
