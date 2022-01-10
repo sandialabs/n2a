@@ -1,19 +1,21 @@
 /*
-Copyright 2018-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.neuroml;
 
+import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -37,7 +39,9 @@ import javax.xml.transform.stream.StreamResult;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
+import gov.sandia.n2a.backend.internal.InstanceTemporaries;
 import gov.sandia.n2a.backend.internal.InternalBackend;
+import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.backend.internal.Wrapper;
 import gov.sandia.n2a.backend.neuroml.PartMap.NameMap;
@@ -52,6 +56,8 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
+import gov.sandia.n2a.eqset.EquationSet.UnresolvedVariable;
+import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Comparison;
 import gov.sandia.n2a.language.Constant;
@@ -101,8 +107,9 @@ public class ExportJob extends XMLutility
     public Map<Unit<?>,String>   unitsUsed      = new HashMap<Unit<?>,String> ();
     public Map<String,Dimension> dimensionsUsed = new HashMap<String,Dimension> ();
     public boolean               requiresNML    = false;  // Indicates that no NeuroML parts were emitted.
+    public String                suffix;                  // Recommended suffix for the output file
     public String                duration;
-    public boolean               forBackend;  // The output is for backend use, rather than general export to another tool. Enables a few hacks to make backend interaction smoother.
+    public boolean               forBackend;              // The output is for backend use, rather than general export to another tool. Enables a few hacks to make backend interaction smoother.
 
     public static Unit<?> um        = UCUM.parse ("um");            // micrometers, used for morphology
     public static double  baseRatio = Math.log (10) / Math.log (2); // log_2 (10), how many binary digits it takes to represent one decimal digit
@@ -134,13 +141,19 @@ public class ExportJob extends XMLutility
 
             process (mpart);  // Convert top-level N2A part into top-level NeuroML elements
 
+            String name = destination.getFileName ().toString ();
+            if (! name.contains (".")) destination = destination.getParent ().resolve (name + "." + suffix);
+
             DOMSource dom = new DOMSource (doc);
-            StreamResult stream = new StreamResult (new OutputStreamWriter (new FileOutputStream (destination.toFile ()), "UTF-8"));
             TransformerFactory factoryXform = TransformerFactory.newInstance ();
             factoryXform.setAttribute ("indent-number", 4);
             javax.xml.transform.Transformer xform = factoryXform.newTransformer ();
             xform.setOutputProperty (OutputKeys.INDENT, "yes");
-            xform.transform (dom, stream);
+            try (BufferedWriter writer = Files.newBufferedWriter (destination))
+            {
+                StreamResult stream = new StreamResult (writer);
+                xform.transform (dom, stream);
+            }
         }
         catch (Exception e)
         {
@@ -303,6 +316,7 @@ public class ExportJob extends XMLutility
         Element root;
         if (componentTypes.isEmpty ()  &&  ! forBackend)
         {
+            suffix = "nml";
             root = doc.createElement ("neuroml");
             root.setAttribute ("xmlns",              "http://www.neuroml.org/schema/neuroml2");
             root.setAttribute ("xmlns:xsi",          "http://www.w3.org/2001/XMLSchema-instance");
@@ -311,6 +325,7 @@ public class ExportJob extends XMLutility
         }
         else
         {
+            suffix = "xml";
             root = doc.createElement ("Lems");
             if (requiresNML)
             {
@@ -340,6 +355,8 @@ public class ExportJob extends XMLutility
 
     public void topLevelPart (MPart source)
     {
+        if (source == null) return;  // Guard against N2A_fakePart
+
         String           type    = source.get ("$metadata", "backend", "lems", "part");
         String           inherit = source.get ("$inherit");
         SimulationTarget target  = null;
@@ -451,8 +468,8 @@ public class ExportJob extends XMLutility
                 if (! p.isPart ()) continue;
 
                 boolean DL = false;
-                Population population = populations.get (c.get ("B"));
-                if (population != null) DL = population.cell.DL;
+                Population population = populations.get (p.get ("B"));
+                if (population != null) DL = population.cell.DL;  // It's possible for the B side to not be connected.
 
                 String type = p.get ("$metadata", "backend", "lems", "part");
                 String inherit = p.get ("$inherit").replace ("\"", "");
@@ -474,12 +491,33 @@ public class ExportJob extends XMLutility
                     Synapse s = addSynapse (p, true, DL);
                     connections (source, result, "electricalConnection", s.id, s.id);
                 }
-                else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))  // unary connection with embedded input
+                else if (type.contains ("Input")  ||  type.contains ("Generator")  ||  type.contains ("Clamp")  ||  type.contains ("spikeArray")  ||  type.contains ("PointCurrent"))
                 {
-                    String inputID = input (p, elements, null, DL);
-                    if (! Operator.containsConnect (p.get ("B")))  // There are NeuroML files that create an input without incorporating it into a network, yet our importer wraps the whole result in a network. This guard prevents a malformed element in the output.
+                    // This type can take several different forms:
+                    // * Shared input. Binary connections are created separately in the type.isEmpty() case below.
+                    //   - Treated as population. This obscure case is based solely on LEMS_NML2_Ex27_MultiSynapses.xml
+                    // * Unary connection with embedded input.
+                    //   - Disconnected. Might only occur in NML example files.
+                    String inputID = input (p, elements, null, DL);  // Construct the input generator element.
+                    String B = p.get ("B");
+                    if (B.isEmpty ()  ||  B.startsWith ("$kill"))  // Shared input
                     {
-                        //connections (p, null, networkElements, "explicitInput", inputID, "");
+                        EquationSet part = getEquations (p);
+                        Variable n = part.find (new Variable ("$n"));
+                        int size = 1;
+                        if (n != null) size = (int) Math.floor (((Scalar) n.eval (context)).value);
+                        if (size > 1)  // The input should be treated like a population. This should only happen for spike generators.
+                        {
+                            Element pop = addElement ("population", networkElements);
+                            pop.setAttribute ("id", p.key ());
+                            pop.setAttribute ("component", inputID);
+                            pop.setAttribute ("size", String.valueOf (size));
+                        }
+                    }
+                    else if (! Operator.containsConnect (B))  // unary connection that is actually connected
+                    {
+                        // TODO: create explicitInput?
+                        // connections (p, null, networkElements, "explicitInput", inputID, "");
                         Element result = addElement ("inputList", networkElements);
                         result.setAttribute ("component", inputID);
                         connections (p, result, "input", "", "");
@@ -791,8 +829,8 @@ public class ExportJob extends XMLutility
             }
 
             // Prepare list of conditions
-            MNode originalP = source.child ("$p");
             MVolatile p = new MVolatile ();
+            MNode originalP = source.child ("$p");
             if (originalP == null)  // no $p, so all-to-all connection
             {
                 // Generate every possible combination
@@ -806,6 +844,8 @@ public class ExportJob extends XMLutility
                     String A;
                     if (preSegment.isEmpty ()) A = "A.$index==" + i;
                     else                       A = "A.$up.$index==" + i;
+                    // We don't bother with the segment index, because NeuroML doesn't represent that information.
+                    // We create it on import and lose it on export.
 
                     for (int j = 0; j < postN; j++)
                     {
@@ -887,8 +927,8 @@ public class ExportJob extends XMLutility
                             if (! mappedID.equals ("0")) connection.setAttribute ("pre" + Segment, mappedID);
                         }
                     }
-                    if (prePopulation.list) index = "../" + prePopulationID + "/" + index +  "/" + preCell.id;
-                    else                    index = "../" + prePopulationID + "[" + index + "]";
+                    if (prePopulation != null  &&  prePopulation.list) index = "../" + prePopulationID + "/" + index +  "/" + preCell.id;
+                    else                                               index = "../" + prePopulationID + "[" + index + "]";
                     connection.setAttribute ("pre" + Cell, index);
                 }
 
@@ -910,8 +950,8 @@ public class ExportJob extends XMLutility
                         }
                     }
                 }
-                if (postPopulation.list) index = postPopulationID + "/" + index +  "/" + postCell.id;
-                else                     index = postPopulationID + "[" + index + "]";
+                if (postPopulation != null  &&  postPopulation.list) index = postPopulationID + "/" + index +  "/" + postCell.id;
+                else                                                 index = postPopulationID + "[" + index + "]";
                 if (! explicitInput) index = "../" + index;
                 if (inputList  ||  explicitInput) connection.setAttribute ("target",      index);
                 else                              connection.setAttribute ("post" + Cell, index);
@@ -960,8 +1000,34 @@ public class ExportJob extends XMLutility
 
     public Synapse addSynapse (MPart source, boolean electrical, boolean DL)
     {
+        // Check for doubleSynapse
+        String type = source.get ("$metadata", "backend", "lems", "part");
+        if (type.equals ("doubleSynapse"))
+        {
+            List<String> ids = new ArrayList<String> ();
+            for (MNode c : source)
+            {
+                MPart p = (MPart) c;
+                if (! p.isPart ()) continue;
+                Synapse s = addSynapse (new Synapse (p, electrical, DL));
+                ids.add (s.id);
+            }
+            return addSynapse (new Synapse (source, ids.get (0), ids.get (1)));
+        }
+
         // Construct unique synapse object
-        Synapse s = new Synapse (source, electrical, DL);
+        Synapse s = addSynapse (new Synapse (source, electrical, DL));
+
+        // Check for embedded input
+        // This is somewhat of an abuse of the Synapse class, since the object is really an input.
+        MPart A = (MPart) source.child ("A");
+        if (A == null  ||  A.size () == 0) return s;
+        Synapse s2 = new Synapse (s.id, A, DL);
+        return addSynapse (s2);
+    }
+
+    public Synapse addSynapse (Synapse s)
+    {
         int index = synapses.indexOf (s);
         if (index >= 0)
         {
@@ -972,34 +1038,21 @@ public class ExportJob extends XMLutility
             synapses.add (s);
             s.append ();
         }
-
-        // Check for chained synapse (embedded input)
-        MPart A = (MPart) source.child ("A");
-        if (A == null  ||  A.size () == 0) return s;
-        Synapse s2 = new Synapse (s.id, A, DL);
-
-        index = synapses.indexOf (s2);
-        if (index >= 0)
-        {
-            s2 = synapses.get (index);
-        }
-        else
-        {
-            synapses.add (s2);
-            s2.append ();
-        }
-        return s2;
+        return s;
     }
 
     public class Synapse
     {
-        String  id;
-        String  chainID = "";
-        MPart   source;
-        MNode   base    = new MVolatile ();
-        boolean electrical;  // A hint about context. Shouldn't change identity.
-        boolean usedInCell;  // This is a Coupling between segments in a single cell model, and thus should not be emitted. (Parameter overrides, such as to G, are not supported in this case.)
-        boolean DL;
+        String       id;
+        String       chainID = "";  // for embedded input
+        String       synapse1 = ""; // for doubleSynapse
+        String       synapse2 = ""; // ditto
+        MPart        source;
+        MNode        base     = new MVolatile ();
+        List<String> skipList = new ArrayList<String> ();
+        boolean      electrical;  // A hint about context. Shouldn't change identity.
+        boolean      usedInCell;  // This is a Coupling between segments in a single cell model, and thus should not be emitted. (Parameter overrides, such as to G, are not supported in this case.)
+        boolean      DL;
 
         public Synapse (MPart source, boolean electrical, boolean DL)
         {
@@ -1009,13 +1062,26 @@ public class ExportJob extends XMLutility
 
             // Assemble a part that best recreates the underlying synapse before it got incorporated into a projection
             base.merge (source);
-            for (String key : new String[] {"A", "B", "$p", "weight", "delay", "preFraction", "postFraction"}) base.clear (key);
+            for (String key : new String[] {"A", "B", "$p", "weight", "delay", "preFraction", "postFraction"})
+            {
+                base.clear (key);
+                skipList.add (key);
+            }
             String type = source.get ("$metadata", "backend", "lems", "part");
             if (type.contains ("gapJunction")  ||  type.contains ("silentSynapse")  ||  type.contains ("gradedSynapse"))
             {
-                for (String key : new String[] {"A.I", "B.I", "V", "Vpeer"}) base.clear (key);
+                for (String key : new String[] {"A.I", "B.I", "V", "Vpeer"})
+                {
+                    base.clear (key);
+                    skipList.add (key);
+                }
             }
 
+            determineID ();
+        }
+
+        public void determineID ()
+        {
             String inherit = source.get ("$inherit").replace ("\"", "");
             if (inherit.startsWith (modelName))
             {
@@ -1024,7 +1090,7 @@ public class ExportJob extends XMLutility
             else
             {
                 id = source.get ("$metadata", "backend", "lems", "id");
-                if (id.isEmpty ()) id = "N2A_Synapse" + synapses.size ();
+                if (id.isEmpty ()) id = source.key ();
             }
         }
 
@@ -1038,13 +1104,33 @@ public class ExportJob extends XMLutility
             if (! lemsID.isEmpty ()) id = lemsID;
         }
 
+        public Synapse (MPart source, String synapse1, String synapse2)
+        {
+            this.source   = source;
+            this.synapse1 = synapse1;
+            this.synapse2 = synapse2;
+            determineID ();
+        }
+
         public void append ()
         {
             if (usedInCell) return;
 
-            if (! chainID.isEmpty ())  // We have embedded input, so the main synapse will be emitted elsewhere.
+            if (! chainID.isEmpty ())  // We are an embedded input, so the main synapse will be emitted elsewhere.
             {
                 input (source, elements, this, DL);
+                return;
+            }
+
+            if (! synapse1.isEmpty ())  // We are the outer wrapper of a doubleSynapse.
+            {
+                Element synapse = addElement ("doubleSynapse", elements);
+                standalone (source, synapse);
+                synapse.setAttribute ("id", id);
+                synapse.setAttribute ("synapse1", synapse1);
+                synapse.setAttribute ("synapse1Path", "./" + synapse1);
+                synapse.setAttribute ("synapse2", synapse2);
+                synapse.setAttribute ("synapse2Path", "./" + synapse2);
                 return;
             }
 
@@ -1055,6 +1141,7 @@ public class ExportJob extends XMLutility
                 double conductance = ((Scalar) G.eval (context)).value;
 
                 Element synapse = addElement ("gapJunction", elements);
+                standalone (source, synapse);
                 synapse.setAttribute ("id", id);
                 synapse.setAttribute ("conductance", print (conductance));
                 return;
@@ -1064,7 +1151,6 @@ public class ExportJob extends XMLutility
             if (type.startsWith ("gap")  &&  ! electrical) type = "linearGradedSynapse";
 
             List<Element> synapseElements = new ArrayList<Element> ();
-            ArrayList<String> skip = new ArrayList<String> ();
             for (MNode c : source)
             {
                 MPart p = (MPart) c;
@@ -1072,7 +1158,8 @@ public class ExportJob extends XMLutility
                 String partType = p.get ("$metadata", "backend", "lems", "part").split (",")[0];
                 if (partType.startsWith ("tsodyksMarkramDep"))
                 {
-                    skip.add (key);
+                    type = "blockingPlasticSynapse";
+                    skipList.add (key);
                     Element plasticity = addElement ("plasticityMechanism", synapseElements);
                     genericPart (p, plasticity);
 
@@ -1083,20 +1170,20 @@ public class ExportJob extends XMLutility
                 }
                 else if (partType.contains ("BlockMechanism"))
                 {
-                    skip.add (key);
+                    type = "blockingPlasticSynapse";
+                    skipList.add (key);
                     Element block = addElement ("blockMechanism", synapseElements);
                     block.setAttribute ("type", "voltageConcDepBlockMechanism");
                     block.setAttribute ("species", p.get ("$metadata", "species"));
                     genericPart (p, block);
                 }
             }
-            if (skip.size () > 0) type = "blockingPlasticSynapse";
-            skip.add ("A");
 
-            Element s = addElement (type, elements);
-            s.setAttribute ("id", id);
-            sequencer.append (s, synapseElements);
-            genericPart (source, s, DL, skip);
+            Element synapse = addElement (type, elements);
+            standalone (source, synapse);
+            synapse.setAttribute ("id", id);
+            sequencer.append (synapse, synapseElements);
+            genericPart (source, synapse, DL, skipList);
         }
 
         public boolean equals (Object o)
@@ -1106,6 +1193,11 @@ public class ExportJob extends XMLutility
             if (! chainID.isEmpty ()  ||  ! that.chainID.isEmpty ())
             {
                 return chainID.equals (that.chainID)  &&  source.equals (that.source);
+            }
+            if (! synapse1.isEmpty ()  ||  ! that.synapse1.isEmpty ())
+            {
+                // These are the only attributes of a doubleSynapse. No need to compare anything else ...
+                return synapse1.equals (that.synapse1)  &&  synapse2.equals (that.synapse2);
             }
             return base.equals (that.base);
         }
@@ -1131,7 +1223,6 @@ public class ExportJob extends XMLutility
                 String[] pieces = p.get ().split ("\\[", 2)[1].split ("]", 2)[0].split (";");
                 for (int i = 0; i < pieces.length; i++)
                 {
-                    if (Scalar.convert (pieces[i]) == Double.POSITIVE_INFINITY) continue;
                     Element spike = addElement ("spike", inputElements);
                     spike.setAttribute ("id", String.valueOf (i));
                     spike.setAttribute ("time", biophysicalUnits (pieces[i]));
@@ -1161,24 +1252,41 @@ public class ExportJob extends XMLutility
         }
         else if (type.startsWith ("sine"))
         {
+            type = "sineGenerator";
             if (DL) type += "DL";
         }
-        else if (type.contains (","))  // more action is needed
+        else if (type.contains ("Synaptic"))
         {
-            if (synapse != null)
-            {
-                String[] types = type.split (",");
-                for (String t : types)
-                {
-                    if (t.contains ("Synap"))  // prefix of both "Synapse" and "Synaptic"
-                    {
-                        type = t;
-                        break;
-                    }
-                }
-            }
-            type = type.split (",")[0];  // remove any remaining ambiguity
+            if (synapse == null) type = "spikeArray";
+            else                 type = "timedSynapticInput";
         }
+        else if (type.contains ("Poisson"))
+        {
+            EquationSet part = getEquations (source);
+            if (synapse == null)
+            {
+                // Determine if this is refractory ("ref") or not
+                Variable v = part.find (new Variable ("minISI"));
+                if (v != null  &&  ((Scalar) v.eval (context)).value != 0) type = "spikeGeneratorRefPoisson";
+                else                                                       type = "spikeGeneratorPoisson";
+            }
+            else
+            {
+                // Determine if this is "transient" or not
+                // Either nonzero delay or nonzero duration is sufficient for transient. 
+                boolean trans = false;
+                Variable v = part.find (new Variable ("delay"));
+                if (v != null  &&  ((Scalar) v.eval (context)).value != 0) trans = true;
+                if (! trans)
+                {
+                    v = part.find (new Variable ("duration"));
+                    if (v != null  &&  Double.isFinite (((Scalar) v.eval (context)).value)) trans = true;
+                }
+                if (trans) type = "transientPoissonFiringSynapse";
+                else       type = "poissonFiringSynapse";
+            }
+        }
+        type = type.split (",")[0];  // remove any remaining ambiguity
 
         if (DL)
         {
@@ -1215,11 +1323,10 @@ public class ExportJob extends XMLutility
         {
             cell = new Cell (source);
         }
-        else if (type.endsWith ("Cell")  ||  type.contains ("baseCell"))  // Standard point cell, or custom LEMS cell.
+        else  // All other classes that pretend to be cells: standard point cell, custom LEMS cell, spike source
         {
             cell = new AbstractCell (source);
         }
-        if (cell == null) throw new RuntimeException ("Not a cell type");
 
         int index = cells.indexOf (cell);
         if (index >= 0) return cells.get (index);
@@ -1341,7 +1448,7 @@ public class ExportJob extends XMLutility
         public List<Property>      properties     = new ArrayList<Property> ();
         public List<Segment>       segments       = new ArrayList<Segment> ();
         public List<SegmentBlock>  blocks         = new ArrayList<SegmentBlock> ();  // entries map to rows of P
-        public MatrixBoolean       P              = new MatrixBoolean ();
+        public MatrixBoolean       P              = new MatrixBoolean ();            // Maps from properties (columns) to segment blocks (rows)
         public MatrixBoolean       G              = new MatrixBoolean ();            // Maps blocks (rows) to added combo groups (columns)
         public List<String>        Gnames         = new ArrayList<String> ();        // Group name associated with each column of G
         public Map<String,Element> groups         = new TreeMap<String,Element> ();  // The elements associated with every segmentGroup
@@ -1365,10 +1472,10 @@ public class ExportJob extends XMLutility
 
             // Collect Segments and transform them into distinct property sets.
             // This reverses the import process, which converts property sets into distinct segment populations.
+            Map<String,SegmentBlock> blockNames = new TreeMap<String,SegmentBlock> ();  // for easy lookup by name
             EquationSet part = getEquations (source);
             if (source.get ("$metadata", "backend", "lems", "part").equals ("segment"))  // segment pretending to be a cell (such as HH)
             {
-                Map<String,SegmentBlock> blockNames = new TreeMap<String,SegmentBlock> ();  // for easy lookup by name
                 SegmentBlock sb = new SegmentBlock (part);
                 blocks.add (sb);
                 blockNames.put (part.name, sb);
@@ -1389,7 +1496,6 @@ public class ExportJob extends XMLutility
             }
             else  // conventional cell
             {
-                Map<String,SegmentBlock> blockNames = new TreeMap<String,SegmentBlock> ();  // for easy lookup by name
                 for (EquationSet s : part.parts)
                 {
                     if (! s.source.get ("$metadata", "backend", "lems", "part").equals ("segment")) continue;  // Generally, the only other component will be a "Coupling", which we must ignore.
@@ -1591,7 +1697,7 @@ public class ExportJob extends XMLutility
         {
             public EquationSet   part;
             public MNode         block;
-            public int           row;  // in P.
+            public int           row;  // in P
             public List<Segment> segments   = new ArrayList<Segment> ();
             public List<String>  inhomo     = new ArrayList<String> ();
 
@@ -1644,11 +1750,9 @@ public class ExportJob extends XMLutility
                 }
 
                 //   initMembPotential
-                String value = getLocalProperty ("V", block);
-                int position = value.indexOf ("@$init");
-                if (position >= 0)  // This also tests whether the string is empty.
+                String value = getLocalProperty ("Vinit", block);
+                if (! value.isEmpty ())
                 {
-                    value = value.substring (0, position);
                     addUnique (new PropertyMembrane (membrane, "initMembPotential", value));
                 }
 
@@ -1912,7 +2016,7 @@ public class ExportJob extends XMLutility
             public void append ()
             {
                 if (done) return;
-                done = true;  // Has no real effect, since done is about pre-emptive emission of property.
+                done = true;  // Has no real effect, since done is about preemptive emission of property.
 
                 generateSegmentGroup (true);
                 if (! segmentName.isEmpty ())  // Single specific segment.
@@ -2048,9 +2152,9 @@ public class ExportJob extends XMLutility
                 }
                 boolean nonuniform = skipList.size () > 0;
 
-                IonChannel ic = addChannel (source, nonuniform, ca2);
+                IonChannel ic = addChannel (source);
                 skipList.addAll (ic.skipList);
-                Element channel = ic.appendWrapper (membrane, skipList);
+                Element channel = ic.appendWrapper (source, membrane, skipList, nonuniform, ca2);
 
                 generateSegmentGroup (false);
                 if (nonuniform)
@@ -2128,13 +2232,12 @@ public class ExportJob extends XMLutility
         }
     }
 
-    public IonChannel addChannel (MPart source, boolean nonuniform, boolean ca2)
+    public IonChannel addChannel (MPart source)
     {
         IonChannel result = new IonChannel (source);
         int index = channels.indexOf (result);
         if (index >= 0) return channels.get (index);
         channels.add (result);
-        result.determineType (nonuniform, ca2);
         result.append ();
         return result;
     }
@@ -2142,34 +2245,34 @@ public class ExportJob extends XMLutility
     public class IonChannel
     {
         public String        id;
-        public MPart         source;    // from original document
-        public MNode         base;      // pseudo-document with modifications to factor out changes made by Segment
-        public String        inherit;   // model name of parent channel, without the Potential
-        public String        potential; // model name for the Potential, if specified. null if no Potential is given.
-        public String        type;
+        public MPart         source;           // From original document. Note that several different sources might map to the same ion channel, but still produce different wrappers. Thus, appendWrapper() takes source as an explicit parameter.
+        public MNode         base;             // pseudo-document with modifications to factor out changes made by Segment
+        public String        inherit;          // model name of parent channel
+        public MNode         potential;        // Child node which specifies Potential, if present. Otherwise null.
+        public String        potentialInherit; // Pre-processed potential.$inherit. Only meaningful if potential is not null.
         public List<Element> channelElements = new ArrayList<Element> ();
         public List<String>  skipList        = new ArrayList<String> ();  // A hint to wrapper element about which attributes it should skip.
 
         public IonChannel (MPart source)
         {
             this.source = source;
+            inherit = source.get ("$inherit").replace ("\"", "");
 
-            String[] inherits = source.get ("$inherit").split (",");
-            if (inherits.length > 2  ||  inherits.length == 0) throw new RuntimeException ("Channel $inherit has unexpected form");
-            if (inherits.length == 1)
+            // Scan children for an included Potential
+            for (MNode c : source)
             {
-                inherit = inherits[0].replace ("\"", "");
-            }
-            else
-            {
-                potential = inherits[0].replace ("\"", "");
-                inherit   = inherits[1].replace ("\"", "");
+                potentialInherit = c.get ("$inherit").replace ("\"", "");  // potential will always have single inheritance
+                if (potentialInherit.startsWith ("Potential "))
+                {
+                    potential = c;
+                    break;
+                }
             }
 
             // Assemble a part that best recreates the underlying channel before it got incorporated into a property
             base = new MVolatile ();
-            base.set (inherit, "$inherit");  // skip potential, if it existed
-            List<String> forbidden = Arrays.asList ("$inherit", "c", "E", "Gall", "Gdensity", "population", "permeability");
+            List<String> forbidden = Arrays.asList ("E", "Gall", "Gdensity", "population");
+            if (potential != null) forbidden.add (potential.key ());
             skipList.add ("Gall");  // "Gall" should not appear in either wrapper or ion channel.
             EquationSet channelEquations = getEquations (source);
             for (MNode c : source)
@@ -2180,7 +2283,7 @@ public class ExportJob extends XMLutility
                 if (v != null  &&  v.hasAttribute ("dummy")) continue;
 
                 base.set (c, key);
-                skipList.add (key);
+                skipList.add (key); // This lets us use genericPart() to emit only wrapper fields.
             }
 
             // Suggest an id
@@ -2195,16 +2298,20 @@ public class ExportJob extends XMLutility
             }
         }
 
-        public void determineType (boolean nonuniform, boolean ca2)
+        public Element appendWrapper (MPart source, List<Element> containerElements, List<String> skipList, boolean nonuniform, boolean ca2)
         {
-            type = "channelPopulation";
+            // Determine wrapper type
+            String type = "channelPopulation";
             if (! source.get ("Gall").contains ("population"))
             {
-                String potential = findPotential (source);
-                if (potential.startsWith ("Potential "))
+                if (potential == null)
                 {
-                    potential = potential.substring (10);
-                    switch (potential)
+                    if (nonuniform) type = "channelDensityNonUniform";
+                    else            type = "channelDensity";
+                }
+                else
+                {
+                    switch (potentialInherit.substring (10))  // Skip leading "Potential ". Note the space at the end.
                     {
                         case "Nernst":
                             if (nonuniform) type = "channelDensityNonUniformNernst";
@@ -2220,64 +2327,63 @@ public class ExportJob extends XMLutility
                             break;
                     }
                 }
-                else  // potential is empty
-                {
-                    if (nonuniform) type = "channelDensityNonUniform";
-                    else            type = "channelDensity";
-                }
             }
-        }
 
-        public String findPotential (MNode source)
-        {
-            String[] parents = source.get ("$inherit").split (",");
-            for (String p : parents)
-            {
-                p = p.replace ("\"", "");
-                if (p.startsWith ("Potential ")) return p;
-                MNode c = AppData.models.child (p);
-                if (c != null)
-                {
-                    String result = findPotential (c);
-                    if (! result.isEmpty ()) return result;
-                }
-            }
-            return "";
-        }
-
-        public Element appendWrapper (List<Element> containerElements, List<String> skipList)
-        {
             Element result = addElement (type, containerElements);
-            genericPart (source, result, false, skipList);
+            genericPart (source, result, false, skipList);  // skipList is set up in ctor to eliminate all fields from the base ion channel, so we only get wrapper fields.
             result.setAttribute ("id", source.key ());
             result.setAttribute ("ionChannel", id);
             String ion = source.get ("$metadata", "species");
             if (! ion.isEmpty ()) result.setAttribute ("ion", ion);
+            if (potential != null)
+            {
+                String permeability = potential.get ("permeability");
+                if (! permeability.isEmpty ()) result.setAttribute ("permeability", permeability);
+            }
             return result;
         }
 
         public void append ()
         {
-            // If we contain a kinetic scheme, type is "ionChannelKS". Otherwise it is simply "ionChannel".
-            String type = "ionChannel";  // prefer over "ionChannelHH", because NeuroML_v2beta4.xsd hints that it is deprecated
-            for (MNode c : source)
+            String name = null;
+            if (inherit.contains ("Passive")) name = "ionChannelPassive";
+            if (name == null)
             {
-                if (c.get ("$inherit").contains ("Kinetic"))
+                MPart Vshift = (MPart) source.child ("Vshift");
+                if (Vshift.isFromTopDocument ()) name = "ionChannelVShift";
+            }
+            if (name == null)
+            {
+                // Check for kinetic scheme.
+                for (MNode gate : source)
                 {
-                    type = "ionChannelKS";
-                    break;
+                    for (MNode c : gate)
+                    {
+                        if (c.get ("$inherit").contains ("Kinetic"))
+                        {
+                            name = "ionChannelKS";
+                            break;
+                        }
+                    }
+                    if (name != null) break;
                 }
             }
+            if (name == null) name = "ionChannelHH";
 
-            Element channel = addElement (type, elements);
+            Element channel = addElement (name, elements);
             standalone (source, channel, channelElements);
             channel.setAttribute ("id", id);
 
             // Attributes
-            if (inherit.contains ("Passive")) channel.setAttribute ("type", "ionChannelPassive");
-            String G1 = source.get ("G1");
-            if (! G1.isEmpty ()) channel.setAttribute ("conductance", biophysicalUnits (G1));
-            MPart species = (MPart) source.child ("c");
+            Variable G1 = getEquations (source).find (new Variable ("G1"));
+            if (G1 != null)
+            {
+                double value = ((Scalar) G1.eval (context)).value;
+                if (value != 0) channel.setAttribute ("conductance", biophysicalUnits (source.get ("G1")));
+            }
+
+            MPart species = null;
+            if (potential != null) species = (MPart) potential.child ("c");
             if (species == null)
             {
                 String s = source.get ("$metadata", "species");
@@ -2291,11 +2397,12 @@ public class ExportJob extends XMLutility
             // Subparts
             for (MNode c : source)
             {
+                if (c == potential) continue;
                 MPart p = (MPart) c;
                 if (! p.isPart ()) continue;
-                type = p.get ("$metadata", "backend", "lems", "part");
-                if      (type.contains ("Q10"))  q10 (p, "q10ConductanceScaling", channelElements);
-                else if (type.contains ("gate")) gate (p, channelElements);
+                String part = p.get ("$metadata", "backend", "lems", "part");
+                if      (part.contains ("Q10"))  q10 (p, "q10ConductanceScaling", channelElements);
+                else if (part.contains ("gate")) gate (p, channelElements);
                 else                             genericPart (p, channelElements);
             }
             sequencer.append (channel, channelElements);
@@ -2428,7 +2535,7 @@ public class ExportJob extends XMLutility
                 try
                 {
                     Operator op = Operator.parse (value);
-                    if (op instanceof Constant)
+                    if (op.getDouble () != 0)
                     {
                         Element t = addElement ("timeCourse", gateElements);
                         t.setAttribute ("type", "HHTime");
@@ -2452,6 +2559,7 @@ public class ExportJob extends XMLutility
                 case beta : name = "reverseRate"; break;
                 case tau  : name = "timeCourse";  break;
                 case inf  : name = "steadyState"; break;
+                default   : name = "rate";
             }
 
             String type = part.get ("$metadata", "backend", "lems", "name");
@@ -2486,34 +2594,37 @@ public class ExportJob extends XMLutility
 
         public void kineticTransition (MPart part, List<Element> parentElements)
         {
-            int flags = 0;
-            Map<String,Integer> typeMap = new HashMap<String,Integer> ();
-            flags |= check (part, "forward", alpha, typeMap);
-            flags |= check (part, "reverse", beta,  typeMap);
-            flags |= check (part, "τ",       tau,   typeMap);
-            flags |= check (part, "inf",     inf,   typeMap);
-
             List<Element> transitionElements = new ArrayList<Element> ();
-            flags |= checkTau (part, "τ", transitionElements);
-            for (MNode c : part)
+            String type = part.get ("$metadata", "backend", "lems", "part");
+            if (! type.equals ("vHalfTransition"))  // That is, everything else.
             {
-                MPart p = (MPart) c;
-                if (p.isPart ()) rate (p, typeMap, transitionElements);
-            }
+                int flags = 0;
+                Map<String,Integer> typeMap = new HashMap<String,Integer> ();
+                flags |= check (part, "forward", alpha, typeMap);
+                flags |= check (part, "reverse", beta,  typeMap);
+                flags |= check (part, "τ",       tau,   typeMap);
+                flags |= check (part, "inf",     inf,   typeMap);
+                flags |= checkTau (part, "τ", transitionElements);
+                for (MNode c : part)
+                {
+                    MPart p = (MPart) c;
+                    if (p.isPart ()) rate (p, typeMap, transitionElements);
+                }
 
-            String type = part.get ("$metadata", "backend", "lems", "part");  // allows for vHalfTransition
-            switch (flags)
-            {
-                case alpha     : type = "forwardTransition"; break;
-                case beta      : type = "reverseTransition"; break;
-                case tau | inf : type = "tauInfTransition";  break;
+                switch (flags)
+                {
+                    case alpha     : type = "forwardTransition"; break;
+                    case beta      : type = "reverseTransition"; break;
+                    case tau | inf : type = "tauInfTransition";  break;
+                }
             }
 
             Element transition = addElement (type, parentElements);
             transition.setAttribute ("id",   part.key ());
             transition.setAttribute ("from", part.get ("from"));
             transition.setAttribute ("to",   part.get ("to"));
-            sequencer.append (transition, transitionElements);
+            if (type.equals ("vHalfTransition")) genericPart (part, transition, "id", "from", "to"); 
+            else                                 sequencer.append (transition, transitionElements);
         }
 
         public boolean equals (Object that)
@@ -2544,7 +2655,34 @@ public class ExportJob extends XMLutility
         {
             Type result = operands[1].eval (context);
             Simulator simulator = Simulator.instance.get ();
-            if (simulator != null) simulation.add (this);
+            if (simulator != null)
+            {
+                // Capture $index, in case instances need to be enumerated.
+                columnName = "0";  // Not really column name. We're cheating by claiming an unused field for this.
+                if (context instanceof InstanceTemporaries)
+                {
+                    InstanceTemporaries it = (InstanceTemporaries) context;
+                    InternalBackendData bed = it.bed;
+                    if (it.wrapped.equations.connectionBindings == null)
+                    {
+                        if (bed.index != null) columnName = context.get (bed.index).toString ();
+                    }
+                    else
+                    {
+                        ConnectionBinding B = it.wrapped.equations.findConnection ("B");  // Somewhat heuristic. All imported NeuroML models will use B for downstream, but others might not.
+                        if (B != null)
+                        {
+                            InternalBackendData Bbed = (InternalBackendData) B.endpoint.backendData;
+                            if (Bbed.index != null)
+                            {
+                                Instance b = (Instance) it.wrapped.valuesObject[bed.endpoints + B.index];
+                                columnName = b.get (Bbed.index).toString ();
+                            }
+                        }
+                    }
+                }
+                simulation.add (this);
+            }
             return result;
         }
     }
@@ -2705,7 +2843,7 @@ public class ExportJob extends XMLutility
             }
             if (forBackend) display.type = "OutputFile";  // Force the choice in this case;
 
-            Display.Line line = display.addLine ();
+            Display.Line line = display.newLine ();
 
             AccessVariable av = (AccessVariable) output.operands[1];
             EquationSet container = av.reference.variable.container;
@@ -2728,7 +2866,7 @@ public class ExportJob extends XMLutility
             {
                 if (! p.metadata.get ("backend", "lems", "target").isEmpty ()) break;
                 String prefix = p.name;
-                if (! p.metadata.get ("backend", "lems", "enumerate").isEmpty ()) prefix += "[0]";
+                if (! p.metadata.get ("backend", "lems", "enumerate").isEmpty ()) prefix += "[" + output.columnName + "]";  // Actually, columnName contains $index in string form.
                 if (p.metadata.get ("backend", "lems", "part").contains ("ionChannel"))  // an ionChannel folded into a channelPopulation
                 {
                     // Determine if the path name below this one (processed in previous loop) is
@@ -2740,15 +2878,21 @@ public class ExportJob extends XMLutility
                     String previous = name.split ("/")[0];
                     if (! forbidden.contains (previous))
                     {
-                        String inherit = p.source.get ("$inherit").replace ("\"", "");
-                        if (inherit.startsWith (modelName)) inherit = inherit.substring (modelName.length ()).trim ();
-                        prefix += "/" + inherit;
+                        String id = p.source.get ("$metadata", "backend", "lems", "id");
+                        if (id.isEmpty ())
+                        {
+                            id = p.source.get ("$inherit").replace ("\"", "");
+                            if (id.startsWith (modelName)) id = id.substring (modelName.length ()).trim ();
+                        }
+                        prefix += "/" + id;
                     }
                 }
                 name = prefix + "/" + name;
                 p = p.container;
             }
             line.quantity = name;
+            if (display.lines.contains (line)) return;
+            display.lines.add (line);
 
             // Determine column name
             // See Ouptut.eval() for similar code. This version must work with static model information
@@ -2862,16 +3006,14 @@ public class ExportJob extends XMLutility
                 return name;
             }
 
-            public Line addLine ()
+            public Line newLine ()
             {
-                Line result = new Line ();
-                lines.add (result);
-                return result;
+                return new Line ();
             }
 
             public class Line
             {
-                String id;
+                String id;        // equivalent to column name
                 String quantity;  // a path to the value
                 String scale;
                 String timeScale;
@@ -2896,6 +3038,12 @@ public class ExportJob extends XMLutility
                     if (! scale    .isEmpty ()) ps.println (" scale:"     + scale);
                     if (! timeScale.isEmpty ()) ps.println (" timeScale:" + timeScale);
                     if (! color    .isEmpty ()) ps.println (" color:"     + color);
+                }
+
+                public boolean equals (Object o)
+                {
+                    Line that = (Line) o;
+                    return quantity.equals (that.quantity);
                 }
             }
 
@@ -3640,10 +3788,13 @@ public class ExportJob extends XMLutility
             public void parse (String value)
             {
                 String[] splits = value.split ("\\(", 2);
-                external = splits[0];
-                splits = splits[1].split ("\\)", 2);
-                description = splits[1].trim ();
-                dimension   = splits[0];  // This is merely the raw name of the unit. Still needs to be converted to dimension.
+                external = splits[0].trim ();
+                if (splits.length > 1)
+                {
+                    splits = splits[1].split ("\\)", 2);
+                    dimension = splits[0].trim ();  // This is merely the raw name of the unit. Still needs to be converted to dimension.
+                    if (splits.length > 1) description = splits[1].trim ();
+                }
             }
 
             public boolean equals (Object o)
@@ -3920,6 +4071,9 @@ public class ExportJob extends XMLutility
             String key = p.key ();
             if (partEquations.findConnection (key) != null) continue;  // Skip connection bindings. They are unpacked elsewhere.
             if (skipList.contains (key)) continue;
+            String value = p.get ();
+            if (value.startsWith ("$kill")) continue;
+
             if (key.startsWith ("$"))
             {
                 // Store special values in componentType, in case we need to emit it.
@@ -3929,15 +4083,11 @@ public class ExportJob extends XMLutility
                 }
                 else if (key.equals ("$metadata"))
                 {
-                    MNode backendLems = p.child ("backend", "lems");
-                    if (backendLems != null)
+                    for (MNode m : p.childOrEmpty ("backend", "lems"))
                     {
-                        for (MNode m : backendLems)
-                        {
-                            String mkey = m.key ();
-                            if (mkey.endsWith ("id")) continue;
-                            componentType.set (m, "$metadata", "backend", "lems", mkey);
-                        }
+                        String mkey = m.key ();
+                        if (mkey.endsWith ("id")) continue;
+                        componentType.set (m, "$metadata", "backend", "lems", mkey);
                     }
                 }
                 continue;
@@ -3950,8 +4100,8 @@ public class ExportJob extends XMLutility
                 if (! overridden) continue;
                 if (p.get ("$metadata", "backend", "lems", "part").contains ("ionChannel"))
                 {
-                    IonChannel ic = addChannel (p, false, false);
-                    ic.appendWrapper (resultElements, ic.skipList);
+                    IonChannel ic = addChannel (p);
+                    ic.appendWrapper (p, resultElements, ic.skipList, false, false);
                 }
                 else
                 {
@@ -3966,8 +4116,24 @@ public class ExportJob extends XMLutility
                 // A constant that is either overridden or required should be emitted here.
                 // An override that is an expression should trigger a LEMS extension part.
 
-                Variable v = partEquations.find (Variable.fromLHS (key));
-                boolean constant = v != null  &&  v.hasAttribute ("constant");  // v could be null if it is revoked (MPart still contains the variable, but EquationSet eliminates it).
+                Variable v = partEquations.find (Variable.fromLHS (key));  // v could be null if it is revoked (MPart still contains the variable, but EquationSet eliminates it).
+
+                // Avoid output equations.
+                if (v != null)
+                {
+                    boolean output = false;
+                    for (EquationEntry e : v.equations)
+                    {
+                        if (e.expression.isOutput ())
+                        {
+                            output = true;
+                            break;
+                        }
+                    }
+                    if (output) continue;
+                }
+
+                boolean constant =  v != null  &&  v.hasAttribute ("constant");
 
                 String name = nameMap.exportName (key, type);
                 boolean required = sequencer.isRequired (result, name);
@@ -3976,7 +4142,6 @@ public class ExportJob extends XMLutility
 
                 if (required  ||  (overridden  &&  constant  &&  param))
                 {
-                    String value = p.get ();
                     if (constant)
                     {
                         try
@@ -4000,11 +4165,14 @@ public class ExportJob extends XMLutility
                     }
                     result.setAttribute (name, biophysicalUnits (value));  // biophysicalUnits() should return strings (non-numbers) unmodified
                 }
-                if (overridden  &&  (! constant  ||  ! param)  &&  ! v.hasAttribute ("dummy"))
+                if (overridden  &&  ! (constant  &&  param))  // Only an actual equation creates the need to emit a ComponentType.
                 {
-                    needsComponentType = true;  // Only an actual equation creates the need to emit a ComponentType.
+                    System.out.println ("need CT due to " + p.keyPathString () + " = " + p.get ());
+                    needsComponentType = true;
                     // Emit an embedded LEMS type separately from its parent, regardless of whether
                     // it is defined locally or in some other part we inherit from.
+                    // TODO: The following seems like it is designed for parts, yet it appears in a section for variables.
+                    // Should it be moved to above? Alternately, should we save the part rather than p?
                     if (p.isFromTopDocument ()  ||  ! (parent instanceof MDoc))
                     {
                         inheritedOnly = false;
@@ -4039,12 +4207,21 @@ public class ExportJob extends XMLutility
         {
             for (MNode m : metadata)
             {
-                if (! ((MPart) m).isFromTopDocument ()) continue;
+                MPart p = (MPart) m;
+                boolean overridden = p.isFromTopDocument ();
+                if (! overridden)
+                {
+                    MNode parent = p.getSource ().parent ().parent ();  // The model that actually provided p.
+                    overridden = parent.get ("$metadata", "backend", "lems", "part").isEmpty ();  // If true, parent is not a base model.
+                }
+                if (! overridden) continue;
+
                 String key = m.key ();
                 switch (key)
                 {
                     case "backend":
                     case "gui":
+                    case "species":  // Stashed outside of backend.lems because it seems like a general attribute someone might want to assign to any ion channel model, not just NeuroML/LEMS ones.
                     case "id":  // our internal id, not NeuroML id
                         // ignore
                         break;
@@ -4080,11 +4257,15 @@ public class ExportJob extends XMLutility
     **/
     public static void makeExecutable (EquationSet equations, boolean findConstants)
     {
+        EquationSet fakePart = new EquationSet (equations, "N2A_fakePart");  // This name should be unique enough that we don't have to check.
+        equations.parts.add (fakePart);  // Always added, even if we don't need it.
+        fakeConnectionTarget (equations);
         try
         {
             equations.resolveConnectionBindings ();
         }
         catch (Exception e) {}  // Still try to finish rest of compilation. Maybe only one or two minor parts were affected.
+
         try
         {
             equations.addGlobalConstants ();
@@ -4092,14 +4273,69 @@ public class ExportJob extends XMLutility
             equations.resolveLHS ();
             equations.fillIntegratedVariables ();
             equations.findIntegrated ();
-            equations.resolveRHS ();
+
+            LinkedList<UnresolvedVariable> unresolved = new LinkedList<UnresolvedVariable> ();
+            equations.resolveRHS (unresolved);
+            if (unresolved.size () > 0)  // Make one attempt to fake the variables
+            {
+                for (UnresolvedVariable uv : unresolved)
+                {
+                    if (! uv.name.startsWith ("A.")  &&  ! uv.name.startsWith ("B.")) continue;
+                    String name = uv.name.substring (2);
+                    Variable v = Variable.from (name + "=0");
+                    if (fakePart.add (v))
+                    {
+                        v.reference = new VariableReference ();
+                        v.reference.variable = v;
+                    }
+                }
+                equations.resolveRHS ();  // Creates excess dependency counts on connection bindings, but is otherwise OK to run again.
+            }
+
+            equations.findExternal ();
+            equations.sortParts ();
             equations.determineUnits ();
-            if (findConstants) equations.findConstants ();  // This could hurt the analysis. It simplifies expressions and substitutes constants, breaking some dependency chains.
+            if (findConstants) equations.findConstants ();  // This can hurt the analysis. It simplifies expressions and substitutes constants, breaking some dependency chains.
             equations.determineTraceVariableName ();
             equations.determineTypes ();
             equations.clearVariables ();
         }
-        catch (Exception e) {}  // It may still be possible to complete the export.
+        catch (Exception e) {e.printStackTrace ();}  // It may still be possible to complete the export.
+    }
+
+    /**
+        Replace any entries of the form A=connect() with A=N2A_fakePart.
+    **/
+    public static boolean fakeConnectionTarget (EquationSet s)
+    {
+        boolean result = false;
+        for (Variable v : s.variables)
+        {
+            if (v.equations.size () == 0)  // may be due to unreadable part names in connect()
+            {
+                String value = s.source.get (v.nameString ());
+                if (! Operator.containsConnect (value)) continue;
+                try
+                {
+                    v.add (new EquationEntry ("N2A_fakePart"));
+                    result = true;
+                }
+                catch (Exception e) {}
+            }
+            else if (v.equations.size () == 1)  // could be a properly-parsed connect() line
+            {
+                EquationEntry e = v.equations.first ();
+                if (! (e.expression instanceof AccessElement)) continue;  // connect() appears like AccessElement during initial parse
+                AccessElement ae = (AccessElement) e.expression;
+                AccessVariable av = (AccessVariable) ae.operands[0];
+                if (! av.name.equals ("connect")) continue;
+                av.name = "N2A_fakePart";
+                e.expression = av;
+                result = true;
+            }
+        }
+        for (EquationSet p : s.parts) if (fakeConnectionTarget (p)) result = true;
+        return result;
     }
 
     public EquationSet getEquations (MPart p)

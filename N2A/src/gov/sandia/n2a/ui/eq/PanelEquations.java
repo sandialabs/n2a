@@ -388,8 +388,8 @@ public class PanelEquations extends JPanel
                 buttonRun,
                 buttonStudy,
                 Box.createHorizontalStrut (15),
-                buttonExport,
                 buttonImport,
+                buttonExport,
                 "hgap=5,vgap=1"
             )
         );

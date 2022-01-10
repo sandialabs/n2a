@@ -34,6 +34,19 @@ public class MatrixBoolean extends Matrix
         }
     }
 
+    public MatrixBoolean (Matrix A)
+    {
+        int columns = A.columns ();
+        int rows    = A.rows ();
+        for (int c = 0; c < columns; c++)
+        {
+            for (int r = 0; r < rows; r++)
+            {
+                set (r, c, A.get (r, c));
+            }
+        }
+    }
+
     public MatrixBoolean (int rows, int columns)
     {
         for (int c = 0; c < columns; c++) data.add (new boolean[rows]);
@@ -324,13 +337,21 @@ public class MatrixBoolean extends Matrix
         return true;
     }
 
-    @Override
-    public String toString ()
+    public String print (String rowDivider, String columnDivider)
     {
         StringBuilder result = new StringBuilder ();
-        for (int r = 0; r < rowCount; r++)
+
+        int columns = columns ();
+        if (columns == 0) return "[]";
+        int rows    = rows ();
+        if (rows    == 0) return "[]";
+
+        result.append ("[");
+        int r = 0;
+        while (true)
         {
-            for (int c = 0; c < data.size (); c++)
+            int c = 0;
+            while (true)
             {
                 boolean[] column = data.get (c);
                 if (column.length <= r)
@@ -342,9 +363,15 @@ public class MatrixBoolean extends Matrix
                     if (column[r]) result.append ("1");
                     else           result.append ("0");
                 }
+                if (++c >= columns) break;
+                result.append (columnDivider);
             }
-            result.append ("\n");
+
+            if (++r >= rows) break;
+            result.append (rowDivider);
         }
+        result.append ("]");
+
         return result.toString ();
     }
 }

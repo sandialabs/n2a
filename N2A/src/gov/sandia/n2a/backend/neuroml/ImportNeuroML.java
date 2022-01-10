@@ -84,14 +84,18 @@ public class ImportNeuroML implements ImportModel
 
         try (BufferedReader reader = Files.newBufferedReader (source))
         {
-            String line = reader.readLine ();
+            String line = "";
+            while (line.isEmpty ())
+            {
+                line = reader.readLine ();
+                if (line == null) return 0;
+                line = line.trim ();
+            }
             if (line.startsWith ("<Lems")) return 1.0f;
             if (line.startsWith ("<?xml")) return 0.8f;
             // To be absolutely certain, could check for top-level tags that normally start a NeuroML section.
         }
-        catch (IOException e)
-        {
-        }
+        catch (IOException e) {}
         return 0;
     }
 

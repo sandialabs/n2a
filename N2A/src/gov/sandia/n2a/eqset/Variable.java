@@ -1226,8 +1226,6 @@ public class Variable implements Comparable<Variable>, Cloneable
 
     /**
         Record other variables that this variable depends on.
-        @param incrementCount Indicates that we should do reference counting for this
-        dependency. If false, the dependency will be recorded only once.
     **/
     public void addDependencyOn (Variable whatWeNeed)
     {

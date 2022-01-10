@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,6 +8,7 @@ package gov.sandia.n2a.backend.neuroml;
 
 import gov.sandia.n2a.backend.neuroml.PartMap.NameMap;
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
@@ -22,6 +23,7 @@ import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.parse.ExpressionParser;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Matrix.IteratorNonzero;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.linear.MatrixBoolean;
 import gov.sandia.n2a.linear.MatrixDense;
@@ -116,7 +118,16 @@ public class ImportJob extends XMLutility
             Document doc = builder.parse (source.toFile ());
 
             // Extract models
-            process (doc);
+            Node node = doc.getDocumentElement ();
+            switch (node.getNodeName ())
+            {
+                case "morphml":
+                case "channelml":
+                case "networkml":
+                case "neuroml":
+                case "Lems":
+                    neuroml (node);
+            }
         }
         catch (IOException e)
         {
@@ -128,27 +139,6 @@ public class ImportJob extends XMLutility
         {
         }
         sources.pop ();
-    }
-
-    public void process (Node node)
-    {
-        if (node.getNodeType () != Node.ELEMENT_NODE)  // For all other node types, recurse into structure, looking for ELEMENT nodes.
-        {
-            for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ()) process (child);
-            return;
-        }
-
-        // Triage the element type
-        switch (node.getNodeName ())
-        {
-            case "morphml":
-            case "channelml":
-            case "networkml":
-            case "neuroml":
-            case "Lems":
-                neuroml (node);
-                break;
-        }
     }
 
     public void neuroml (Node node)
@@ -199,6 +189,7 @@ public class ImportJob extends XMLutility
                 case "ionChannel":
                 case "ionChannelHH":
                 case "ionChannelKS":
+                case "ionChannelVShift":
                     ionChannel (child);
                     break;
                 case "decayingPoolConcentrationModel":
@@ -213,8 +204,17 @@ public class ImportJob extends XMLutility
                     biophysics.put (getAttribute (child, "id"), child);
                     break;
                 case "cell":
-                    Cell cell = new Cell (child);
-                    cells.put (cell.id, cell);
+                    // Check if this should actually be a Compartment (point cell) rather than a regular (multi-compartment) cell.
+                    String type = getAttribute (child, "type");
+                    if (type.isEmpty ())
+                    {
+                        Cell cell = new Cell (child);
+                        cells.put (cell.id, cell);
+                    }
+                    else
+                    {
+                        genericPart (child, model);
+                    }
                     break;
                 case "fitzHughNagumoCell":
                     MNode FN = genericPart (child, model);
@@ -228,6 +228,9 @@ public class ImportJob extends XMLutility
                     break;
                 case "compoundInput":
                     compoundInput (child);
+                    break;
+                case "doubleSynapse":
+                    doubleSynapse (child);
                     break;
                 case "network":
                     Network network = new Network (child);
@@ -328,12 +331,12 @@ public class ImportJob extends XMLutility
     **/
     public void postprocess ()
     {
-        for (Entry<String,ComponentType> e : components.entrySet ()) e.getValue ().finish1 ();
-        for (Entry<String,ComponentType> e : components.entrySet ()) e.getValue ().finish2 ();
-        for (Entry<String,Cell>          e : cells     .entrySet ()) e.getValue ().finish ();
-        for (Entry<String,Network>       e : networks  .entrySet ()) e.getValue ().finish1 ();
-        for (Entry<String,Network>       e : networks  .entrySet ()) e.getValue ().finish2 ();
-        for (Output                      o : outputs               ) o            .finish ();
+        for (ComponentType c : components.values ()) c.finish1 ();
+        for (ComponentType c : components.values ()) c.finish2 ();
+        for (Cell          c : cells     .values ()) c.finish  ();
+        for (Network       n : networks  .values ()) n.finish1 ();
+        for (Network       n : networks  .values ()) n.finish2 ();
+        for (Output        o : outputs             ) o.finish  ();
 
         // (Obscure case) Find spike sources that reference a target synapse but did not get used.
         // Need to construct fused parts so they are functional on their own.
@@ -360,7 +363,7 @@ public class ImportJob extends XMLutility
             spikeSource.merge (fused);
             addDependency (spikeSource, spikeSource.get ("$inherit").replace ("\"", ""));
             A = spikeSource.child ("A");
-            addDependency (A, A.get ("$inherit").replace ("\"", ""));  // Don't do "FromConnection", because we've already injected the part.
+            addDependency (A, A.get ("$inherit").replace ("\"", ""));  // Don't do addDependencyFromConnection(), because we've already injected the part.
 
             if (synapse.getInt ("$count") == 0  &&  synapse.child ("$lems") == null) kill.add (synapseName);
         }
@@ -376,7 +379,7 @@ public class ImportJob extends XMLutility
         }
 
         // Resolve referenced parts
-        //System.out.println (models);  // Most useful for debugging structure.
+        //System.out.println (models);  // for debugging structure
         while (dependents.size () > 0) resolve (dependents.iterator ().next ());
 
         // Move heavy-weight parts into separate models
@@ -537,25 +540,13 @@ public class ImportJob extends XMLutility
                 }
                 else  // count > 1 and not connected, so could be moved out to independent model
                 {
-                    // Criterion: If a part has subparts, then it is heavy-weight and should be moved out.
-                    // A part that merely sets some parameters on an inherited model is lightweight, and
-                    // should simply be merged everywhere it is used.
-                    // A LEMS part presumably does more than just set parameters. When it has multiple users,
-                    // it should always be treated as heavy-weight.
-                    boolean heavy = lems;
-                    if (! lems)
-                    {
-                        for (MNode s : source)
-                        {
-                            if (MPart.isPart (s))
-                            {
-                                heavy = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (heavy) count = -3;
-                    else       count = -2;
+                    // Criteria:
+                    // * A part that merely sets some parameters on an inherited model is lightweight, and
+                    //   should simply be merged everywhere it is used. This is true even if it has sub-parts.
+                    // * A LEMS part presumably does more than just set parameters. When it has multiple users,
+                    //   it should always be treated as heavy-weight.
+                    if (lems) count = -3;
+                    else      count = -2;
                 }
                 source.set (count, "$count");
                 if (count >= -3  &&  lems) source.set (source.key (), "$metadata", "backend", "lems", "name");  // Save original ComponentType name.
@@ -756,6 +747,14 @@ public class ImportJob extends XMLutility
     public void transition (Node node, MNode container)
     {
         String id = getAttribute (node, "id");
+        if (id.isEmpty ())  // Shouldn't happen for any transition type, but can happen for vHalfTransition, since it is not properly declared in NeuroML 2.1 schema.
+        {
+            // Construct id from endpoint names
+            String from = getAttribute (node, "from");
+            String to   = getAttribute (node, "to");
+            id = from + "_" + to;
+        }
+
         MNode part = container.childOrCreate (id);
         NameMap nameMap = partMap.importMap (node.getNodeName ());
         part.set (nameMap.internal, "$inherit");
@@ -799,6 +798,12 @@ public class ImportJob extends XMLutility
                 container.set (biophysicalUnits (tau), var);
                 return;
             }
+        }
+        else if (name.equals ("rate"))  // specific to KS
+        {
+            String parentName = node.getParentNode ().getNodeName ();
+            if (parentName.startsWith ("forward")) var = "forward";
+            else                                   var = "reverse";
         }
 
         String inherit = getAttribute (node, "type");
@@ -875,7 +880,7 @@ public class ImportJob extends XMLutility
             rows are segment indices
         M matrix  -- "membership"
             columns are groups with unique combinations of properties
-            rowas are segment indices
+            rows are segment indices
         O matrix -- "optimized"
             columns are groups as detected in original input file
             rows are groups with unique combinations of properties
@@ -1157,7 +1162,7 @@ public class ImportJob extends XMLutility
                             property.set (value, "Cspecific");
                             break;
                         case "initMembPotential":
-                            property.set (value + "@$init", "V");
+                            property.set (value, "Vinit");
                             break;
                     }
                 }
@@ -1433,7 +1438,7 @@ public class ImportJob extends XMLutility
             // All remaining sets get a generated name.
 
             MatrixBoolean mask = new MatrixBoolean ();
-            for (MNode g : cell.child ("$group"))
+            for (MNode g : cell.childOrEmpty ("$group"))  // It is possible for no groups to be defined.
             {
                 mask.set (0, g.getInt ("$G"), g.getInt ("$properties") > 0);
             }
@@ -1580,7 +1585,7 @@ public class ImportJob extends XMLutility
 
                 // Collect inhomogeneous variables
                 // TODO: What is the correct interpretation of translationStart and normalizationEnd?
-                // Here we assume they are a linear transformation of the path length: variable = pathLength * normalizatonEnd + translationStart
+                // Here we assume they are a linear transformation of the path length: variable = pathLength * normalizationEnd + translationStart
                 String pathLength = "";
                 for (MNode v : part)
                 {
@@ -1833,7 +1838,7 @@ public class ImportJob extends XMLutility
                 if (l == 0) return "0";
                 return l + "um";
             }
-            return d + "um";
+            return print (d) + "um";
         }
 
         public String format (Matrix A)
@@ -1853,39 +1858,51 @@ public class ImportJob extends XMLutility
 
     public void channel (Node node, MNode part, boolean doDependency)
     {
-        String name       = node.getNodeName ();
-        String number     = getAttribute (node, "number");  // part contains renamed value. This is just to test for presence of attribute in original node, which indicate population object.
         String ionChannel = part.get ("ionChannel");
-
+        part.set (ionChannel, "$inherit");
         part.clear ("ionChannel");
         NameMap nameMap = partMap.importMap ("ionChannel");  // There is only one internal part for all ion-channel-related components from NeuroML. It includes both individual channels and populations/densities.
         remap (part, nameMap);
+        if (doDependency) addDependency (part, ionChannel);
 
-        // multiple inheritance, combining the ion channel with the given mix-in
+        String name = node.getNodeName ();
+        if (name.contains ("Population"))
+        {
+            part.set ("G1*population", "Gall");  // The default is Gdensity*surfaceArea
+            return;  // Population model obviates Potential model.
+        }
+
         String potential = "";
         if      (name.contains ("Nernst")) potential = "Potential Nernst";
         else if (name.contains ("GHK2"  )) potential = "Potential GHK 2";
         else if (name.contains ("GHK"   )) potential = "Potential GHK";
-        if (potential.isEmpty ())
-        {
-            part.set (ionChannel, "$inherit");
-        }
-        else
-        {
-            // For now, assume that ion channel is already defined
-            String species = "ca";
-            if (name.contains ("Ca2")) species = "ca2";
-            species = models.getOrDefault (species, modelName, ionChannel, "$metadata", "species");
-            part.set (species,                      "c");  // connect to species/concentration model, which the user is responsible to create 
-            part.set (potential + "," + ionChannel, "$inherit");
-            if (doDependency) addDependency (part, potential);
-        }
-        if (doDependency) addDependency (part, ionChannel);
+        if (potential.isEmpty ()) return;
 
-        if (! number.isEmpty ())
+        // Define subpart for potential
+        String id = "Potential";
+        String stem = id;
+        int suffix = 2;
+        while (part.child (id) != null) id = stem + suffix++;
+        MNode subpart = part.childOrCreate (id);
+        subpart.set (potential, "$inherit");
+
+        String species = "ca";
+        if (name.contains ("Ca2")) species = "ca2";
+        species = models.getOrDefault (species, modelName, ionChannel, "$metadata", "species");
+        subpart.set (species, "c");  // connect to species/concentration model, which the user is responsible to create
+
+        if (potential.equals ("Potential GHK"))  // the only type that has a parameter
         {
-            part.set ("G1*population", "Gall");  // The default is Gdensity*surfaceArea
+            String key = "permeability";  // Don't use name mapping here, because "potential" classes are not a formal part of NeuroML.
+            MNode permeability = part.child (key);
+            if (permeability != null)
+            {
+                subpart.set (permeability, key);
+                part.clear (key);
+            }
         }
+
+        if (doDependency) addDependency (subpart, potential);
     }
 
     public String biophysicalUnits (String value)
@@ -1962,9 +1979,10 @@ public class ImportJob extends XMLutility
         }
         if (sorted.size () > 0)  // generate spikeArray-like code
         {
+            // No need to sort. Well-formed NeuroML should provide the times in increasing order.
+            // TODO: convert to single unit, like ms, and remove units from individual entries.
             String times = "";
             for (String s : sorted.values ()) times += ";" + s;
-            times += ";∞";  // This shuts down spiking after last specified time.
             times = "[" + times.substring (1) + "]";
             part.set (times, "times");
         }
@@ -1977,10 +1995,45 @@ public class ImportJob extends XMLutility
         part.clear ("$inherit");
         if (! inherit.isEmpty ()) removeDependency (part, inherit);
         part.set ("compoundInput", "$metadata", "backend", "lems", "part");
+        part.set ("connect(Compartment)", "B");  // Treat compountInput as if it were a DB part that is already defined, so need for dependency tracking.
         for (MNode c : part)
         {
             if (c.child ("$inherit") == null) continue;  // not a sub-part
-            c.set ("$kill", "B");  // force sub-part to get its connection binding from us
+            c.set ("$kill", "B");  // force sub-part to get its connection binding from part
+        }
+    }
+
+    public void doubleSynapse (Node node)
+    {
+        // Treat "doubleSynapse" as if it were a DB part that is already defined.
+        // In particular, don't record any dependencies, either for the part itself
+        // or its connections.
+        MNode part = genericPart (node, models.child (modelName));
+        String inherit  = part.get ("$inherit").replace ("\"", "");
+        part.clear ("$inherit");
+        if (! inherit.isEmpty ()) removeDependency (part, inherit);
+        part.set ("doubleSynapse", "$metadata", "backend", "lems", "part");
+
+        String baseSpikeSource = partMap.importName ("baseSpikeSource");
+        part.set ("connect(" + baseSpikeSource + ")", "A");
+        String baseCell = partMap.importName ("baseCell");
+        part.set ("connect(" + baseCell + ")", "B");
+
+        List<String> ids = new ArrayList<String> ();
+        for (int i = 1; i <= 2; i++)
+        {
+            ids.add (part.get ("synapse" + i));
+            part.clear ("synapse" + i);
+            part.clear ("synapse" + i + "Path");
+        }
+        for (int i = 0; i < 2; i++)
+        {
+            String id = ids.get (i);
+            MNode synapse = part.childOrCreate (id);
+            synapse.set (id, "$inherit");
+            addDependency (synapse, id);
+            synapse.set ("$kill", "A");  // force synapse to get its connection bindings from part
+            synapse.set ("$kill", "B");
         }
     }
 
@@ -1988,10 +2041,11 @@ public class ImportJob extends XMLutility
     {
         String id;
         MNode network;
-        List<Node>   extracellularProperties = new ArrayList<Node> ();
-        List<Node>   projections             = new ArrayList<Node> ();
-        List<Node>   explicitInputs          = new ArrayList<Node> ();
-        Set<String>  explicitInputRecheck    = new TreeSet<String> ();
+        List<Node>               extracellularProperties = new ArrayList<Node> ();
+        List<Node>               projections             = new ArrayList<Node> ();
+        List<Node>               explicitInputs          = new ArrayList<Node> ();
+        List<ExplicitConnection> explicitConnections     = new ArrayList<ExplicitConnection> ();
+        Set<String>              explicitInputRecheck    = new TreeSet<String> ();
 
         public Network (Node node)
         {
@@ -2021,13 +2075,14 @@ public class ImportJob extends XMLutility
                         population (child);
                         break;
                     // TODO: cellSet -- Ignoring. Has one attribute and no elements. Attribute is ill-defined.
-                    // TODO: synapticConnection -- Appears to be deprecated.
                     case "projection":
                     case "continuousProjection":
                     case "electricalProjection":
                     case "inputList":
                         projections.add (child);
                         break;
+                    case "synapticConnection":
+                    case "synapticConnectionWD":
                     case "explicitInput":
                         explicitInputs.add (child);
                         break;
@@ -2196,8 +2251,8 @@ public class ImportJob extends XMLutility
             String id        = getAttribute  (node, "id");
             String inherit   = getAttribute  (node, "synapse");
             String component = getAttribute  (node, "component");
-            String A         = getAttribute  (node, "presynapticPopulation");
-            String B         = getAttributes (node, "postsynapticPopulation", "population");
+            String A         = getAttributes (node, "presynapticPopulation", "from");
+            String B         = getAttributes (node, "postsynapticPopulation", "population", "to");
 
             MNode base = new MVolatile ();
             if (inherit.isEmpty ()) inherit = node.getNodeName ();
@@ -2449,70 +2504,178 @@ public class ImportJob extends XMLutility
 
         public void explicitInput (Node node)
         {
-            String input  = getAttribute (node, "input");
-            String target = getAttribute (node, "target");
+            String source  = getAttributes (node, "input", "from");
+            String target  = getAttributes (node, "target", "to");
+            String synapse = getAttribute  (node, "synapse");
 
-            int index = 0;
-            int i = target.indexOf ('[');
+            int a = 0;
+            int i = source.indexOf ('[');
             if (i >= 0)
             {
-                String suffix = target.substring (i + 1);
+                String suffix = source.substring (i + 1).replace ("]", "");
+                source = source.substring (0, i);
+                a = Integer.valueOf (suffix);
+            }
+
+            int b = 0;
+            i = target.indexOf ('[');
+            if (i >= 0)
+            {
+                String suffix = target.substring (i + 1).replace ("]", "");
                 target = target.substring (0, i);
-                i = suffix.indexOf (']');
-                if (i >= 0) suffix = suffix.substring (0, i);
-                index = Integer.valueOf (suffix);
+                b = Integer.valueOf (suffix);
             }
-            MNode targetPart = network.child (target);
-            MNode sourcePart = models.child (modelName, input);
 
-            String name = input + "_to_" + target;
-            MNode part = network.childOrCreate (name);
-
-            String synapse = sourcePart.get ("$metadata", "backend", "lems", "synapse");
-            if (synapse.isEmpty ())
+            ExplicitConnection ec = new ExplicitConnection ();
+            if (synapse.isEmpty ())  // explicitInput
             {
-                part.set (input, "$inherit");
-                addDependency (part, input);
-                // The unresolved question here is whether sourcePart is shared with any other input.
-                // The only way to be certain is to check after all inputs have been created.
-                // If this is the case, then sourcePart should be changed into a connection endpoint,
-                // and this connection object should get some added equations to move the values.
-                explicitInputRecheck.add (name);
+                ec.A = models.child (modelName, source);
+                ec.synapse = ec.A.get ("$metadata", "backend", "lems", "synapse");
             }
-            else
+            else  // synapticConnection*
             {
-                part.set (synapse, "$inherit");
-                addDependency (part, synapse);
-                MNode connection = part.set (input, "A");
-                addDependencyFromConnection (connection, input);
+                ec.A = network.child (source);
+                ec.synapse = synapse;
+            }
+            ec.B = network.child (target);
+
+            i = explicitConnections.indexOf (ec);
+            if (i >= 0) ec = explicitConnections.get (i);
+            else        explicitConnections.add (ec);
+            ec.connect (a, b);
+        }
+
+        public class ExplicitConnection
+        {
+            public MNode         A;       // from population
+            public MNode         B;       // to population
+            public String        synapse; // id of connection class; can be blank
+            public MatrixBoolean C;       // connection map
+            public SegmentFinder finderB;
+
+            public void connect (int a, int b)
+            {
+                if (C == null)
+                {
+                    int cols = A.getOrDefault (1, "$n");
+                    int rows = B.getOrDefault (1, "$n");
+                    C = new MatrixBoolean (rows, cols);
+                }
+                C.set (b, a);  // source in columns, destination in rows
             }
 
-            // If this is a multi-compartment cell, it cannot be the direct target of a connection.
-            // Find the first segment and use that instead.
-            SegmentFinder finder = new SegmentFinder ();
-            finder.find ("0", target);
-            if (finder.segment != null) target += "." + finder.segment.key ();
-
-            part.set (target, "B");
-
-            String p = "";
-            if (targetPart == null  ||  targetPart.getOrDefault (1, "$n") != 1)  // We only have to set $p explicitly if the target part has more than one instance.
+            public void makePart ()
             {
-                if (finder.segment == null) p = "B.$index=="     + index;
-                else                        p = "B.$up.$index==" + index;
+                String input  = A.key ();
+                String target = B.key ();
+
+                // Must synthesize a name because no id is provided with explicitInput or explicitConnection.
+                // If synapse specification is provided, use its id. However, this is not guaranteed to be
+                // unique within the network, because the same synapse spec may be used for several different
+                // connections. If synapse spec is not provided, then name connection after the input.
+                // In that case, the connection must have a name distinct from the input. Later, input
+                // might get folded into a unary connection. In that case, the ideal name is simply the input id.
+                String name = synapse;
+                String stem = synapse;
+                int suffix = 2;
+                if (synapse.isEmpty ())
+                {
+                    name = input + "1";
+                    stem = input;
+                }
+                while (network.child (name) != null) name = stem + suffix++;
+                MNode part = network.childOrCreate (name);
+
+                if (synapse.isEmpty ())  // direct input from current source
+                {
+                    part.set (input, "$inherit");
+                    addDependency (part, input);
+                    // The unresolved question here is whether sourcePart is shared with any other input.
+                    // The only way to be certain is to check after all inputs have been created.
+                    // If this is the case, then sourcePart should be changed into a connection endpoint,
+                    // and this connection object should get some added equations to move the values.
+                    explicitInputRecheck.add (name);
+                    part.set ("", "$noID");  // If input remains embedded, then get rid of trailing "1" in name.
+                }
+                else  // connection mediated by synapse (spikes in, current out)
+                {
+                    part.set (synapse, "$inherit");
+                    addDependency (part, synapse);
+                    MNode connection = part.set (input, "A");
+                    addDependencyFromConnection (connection, input);
+                }
+
+                // If A is a multi-compartment cell, it cannot be the direct target of a connection.
+                // Find the first segment and use that instead.
+                // Note that for synapticConnection, A could also be a multi-compartment cell. We don't handle that case yet.
+                finderB = new SegmentFinder ();
+                finderB.find ("0", target);
+                if (finderB.segment != null) target += "." + finderB.segment.key ();  // "target" now refers to inner population, rather than part B itself
+
+                part.set (target, "B");
+
+                String segmentB = "";
+                if (finderB.index >= 0) segmentB = "B.$index==" + finderB.index;
+                int nonzeroC = (int) C.norm (0);
+                int totalC   = C.rows () * C.columns ();
+                if (nonzeroC == totalC)  // all-to-all (100% fill-in)
+                {
+                    // Only create p if we need to select the target segment.
+                    if (! segmentB.isEmpty ()) part.set (segmentB, "$p");
+                }
+                else if (nonzeroC > 0)  // less than all-to-all
+                {
+                    if (! segmentB.isEmpty ()) segmentB = "&&" + segmentB;  // so it can be appended to all other clauses
+
+                    IteratorNonzero it = C.getIteratorNonzero ();
+                    while (it.hasNext ())
+                    {
+                        it.next ();
+                        int a = it.getColumn ();
+                        int b = it.getRow ();
+
+                        String p;
+                        if (A.getOrDefault (1, "$n") == 1) p = "";
+                        else                               p = "A.$index==" + a;
+
+                        if (B.getOrDefault (1, "$n") != 1)
+                        {
+                            if (! p.isEmpty ()) p += "&&";
+                            if (finderB.segment == null) p += "B.$index=="     + b;
+                            else                         p += "B.$up.$index==" + b;  // In this case, "B" refers to the inner population of segments, not to part B itself.
+                        }
+
+                        p += segmentB;  // segmentB could be empty
+                        part.set ("1", "$p", "@" + p);
+                    }
+                    MNode p = part.child ("$p");
+                    if (p.size () == 1)  // convert to single-line
+                    {
+                        Iterator<MNode> pit = p.iterator ();
+                        String clause = pit.next ().key ();
+                        pit.remove ();
+                        p.set (clause.substring (1));
+                    }
+                    else
+                    {
+                        part.set ("0", "$p", "@");  // Default clause. Necessary because $p otherwise defaults to 1.
+                    }
+                }
             }
-            if (finder.index >= 0)
+
+            public boolean equals (Object o)
             {
-                if (! p.isEmpty ()) p += "&&";
-                p += "B.$index==" + finder.index;
+                if (! (o instanceof ExplicitConnection)) return false;
+                ExplicitConnection that = (ExplicitConnection) o;
+                return  A == that.A  &&  B == that.B  &&  synapse.equals (that.synapse);
             }
-            if (! p.isEmpty ()) part.set (p, "$p");
         }
 
         public void finish1 ()
         {
-            for (Node p : projections)    projection (p);
-            for (Node e : explicitInputs) explicitInput (e);
+            for (Node p               : projections)         projection (p);
+            for (Node e               : explicitInputs)      explicitInput (e);
+            for (ExplicitConnection c : explicitConnections) c.makePart ();
             network.clear ("$space");
             network.clear ("$region");
             for (MNode p : network) p.clear ("$instance");
@@ -2523,9 +2686,23 @@ public class ImportJob extends XMLutility
             for (String name : explicitInputRecheck)
             {
                 MNode part = network.child (name);
+                boolean noID = part.getFlag ("$noID");  // part name was synthesized
+                part.clear ("$noID");
                 String inherit = part.get ("$inherit").replace ("\"", "");
                 MNode sourcePart = models.child (modelName, inherit);
-                if (sourcePart.getInt ("$count") <= 1) continue;  // We are the only user, so can directly embed input. That's the current arrangement, so nothing to do.
+                if (sourcePart.getInt ("$count") <= 1)  // We are the only user, so can directly embed input. That's the current arrangement.
+                {
+                    if (noID)  // Name currently ends with "1", because we allowed the possibility of multiple connections from the same source.
+                    {
+                        // Instead, use simple name of source.
+                        // However, not sure whether IDs at the outer level are also unique within the network.
+                        String newName = inherit;
+                        int suffix = 2;
+                        while (network.child (newName) != null) newName = inherit + suffix++;
+                        network.move (name, newName);
+                    }
+                    continue;
+                }
 
                 removeDependency (part, inherit);
                 part.clear ("$inherit");
@@ -2658,8 +2835,8 @@ public class ImportJob extends XMLutility
     {
         MNode      part;
         String     fileName;
-        String     chartParameters;
-        List<Line> lines = new ArrayList<Line> ();
+        MNode      chartParameters = new MVolatile ();
+        List<Line> lines           = new ArrayList<Line> ();
 
         public Output (Node node, MNode part)
         {
@@ -2675,16 +2852,14 @@ public class ImportJob extends XMLutility
             String ymin      = getAttribute (node, "ymin");
             String ymax      = getAttribute (node, "ymax");
 
-            if (fileName.isEmpty ()) fileName = title;
-            if (! path.isEmpty ()) fileName = path + "/" + fileName;
+            if (fileName.isEmpty ()) fileName = MDir.validFilenameFrom (title);
+            if (! path.isEmpty ()) fileName = MDir.validFilenameFrom (path) + "/" + fileName;
 
-            chartParameters = "";
-            if (! timeScale.isEmpty ()) chartParameters  = "timeScale=" + timeScale;
-            if (! xmin     .isEmpty ()) chartParameters += ",xmin="     + xmin;
-            if (! xmax     .isEmpty ()) chartParameters += ",xmax="     + xmax;
-            if (! ymin     .isEmpty ()) chartParameters += ",ymin="     + ymin;
-            if (! ymax     .isEmpty ()) chartParameters += ",ymax="     + ymax;
-            if (chartParameters.startsWith (",")) chartParameters = chartParameters.substring (1);
+            if (! timeScale.isEmpty ()) chartParameters.set (timeScale, "timeScale");
+            if (! xmin     .isEmpty ()) chartParameters.set (xmin,      "xmin");
+            if (! xmax     .isEmpty ()) chartParameters.set (xmax,      "xmax");
+            if (! ymin     .isEmpty ()) chartParameters.set (ymin,      "ymin");
+            if (! ymax     .isEmpty ()) chartParameters.set (ymax,      "ymax");
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
@@ -2702,31 +2877,29 @@ public class ImportJob extends XMLutility
         {
             String id;
             String quantity;
-            String mode;
+            MNode  mode = new MVolatile ();
             String event;
 
             public Line (Node node)
             {
-                id                   = getAttribute (node, "id");  // Presumably determines data series name, or equivalently, column heading.
-                quantity             = getAttribute (node, "quantity");
-                String select        = getAttribute (node, "select");
-                event                = getAttribute (node, "eventPort");
-                String scale         = getAttribute (node, "scale");
-                String lineTimeScale = getAttribute (node, "timeScale");
-                String color         = getAttribute (node, "color");
+                id               = getAttribute (node, "id");  // Presumably determines data series name, or equivalently, column heading.
+                quantity         = getAttribute (node, "quantity");
+                String select    = getAttribute (node, "select");
+                event            = getAttribute (node, "eventPort");
+                String scale     = getAttribute (node, "scale");
+                String timeScale = getAttribute (node, "timeScale");
+                String color     = getAttribute (node, "color");
 
                 if (quantity.isEmpty ()  &&  ! select.isEmpty ()) quantity = select + "/ignored";
 
-                mode = "";
-                if (! scale        .isEmpty ()) mode  = "scale="          + scale;
-                if (! color        .isEmpty ()) mode += ",color="         + color;
-                if (! lineTimeScale.isEmpty ()) mode += ",lineTimeScale=" + lineTimeScale;
-                if (mode.startsWith (",")) mode = mode.substring (1);
-                if (! chartParameters.isEmpty ())
+                mode.merge (chartParameters);
+                chartParameters.clear ();
+                if (! scale    .isEmpty ()) mode.set (scale, "scale");
+                if (! color    .isEmpty ()) mode.set (color, "color");
+                if (! timeScale.isEmpty ())
                 {
-                    if (! mode.isEmpty ()) mode += ",";
-                    mode += chartParameters;
-                    chartParameters = "";  // Only output once
+                    mode.set (timeScale, "lineTimeScale");
+                    if (mode.child ("timeScale") == null) mode.set (timeScale, "timeScale");  // If time scale is not specified at the chart level, then copy it from the data series. Our plotter only pays attention to chart-level timeScale.
                 }
             }
 
@@ -2755,9 +2928,17 @@ public class ImportJob extends XMLutility
                 if (! fileName.isEmpty ()) output += "\"" + fileName + "\",";
                 output += variable;
                 if (! id.isEmpty ()) output += ",\"" + id + "\"";
-                if (! mode.isEmpty ()) output += ",\"" + mode + "\"";
+                if (mode.size () > 0)
+                {
+                    String temp = "";
+                    for (MNode m : mode) temp += "," + m.key () + "=" + m.get ();
+                    output += ",\"" + temp.substring (1) + "\"";
+                }
                 output += ")";
-                if (! condition.isEmpty ()) output += "@" + condition;
+                if (! condition.isEmpty ()  &&  ! condition.equals (container.get ("$p")))
+                {
+                    output += "@" + condition;
+                }
                 container.set (output, dummy);
             }
         }
@@ -2794,14 +2975,14 @@ public class ImportJob extends XMLutility
         while (container.child (id) != null) id = stem + suffix++;
         MNode part = container.childOrCreate (id);
 
-        nodeName = getAttribute (node, "type", nodeName);
+        String type = getAttribute (node, "type", nodeName);
 
         List<MNode> parents = collectParents (container);
-        String inherit = typeFor (nodeName, parents);
+        String inherit = typeFor (type, parents);
         NameMap nameMap;
         if (inherit.isEmpty ())
         {
-            nameMap = partMap.importMap (nodeName);
+            nameMap = partMap.importMap (type);
             inherit = nameMap.internal;
         }
         else
@@ -2850,7 +3031,7 @@ public class ImportJob extends XMLutility
         // component types that appear as child nodes. IE: every child under a generic instantiation
         // also gets processed via genericPart(), but not every child is necessarily generic.
         // Thus, we add hacks here to detect these special cases and do the extra processing.
-        if (nodeName.startsWith ("channel")) channel (node, part, true);
+        if (type.startsWith ("channel")) channel (node, part, true);
 
 
         for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
@@ -2904,9 +3085,9 @@ public class ImportJob extends XMLutility
         for (int i = 0; i < count; i++)
         {
             Node a = attributes.item (i);
-            String name  = a.getNodeName ();
-            String value = a.getNodeValue ();
+            String name = a.getNodeName ();
             if (forbiddenList.contains (name)) continue;
+            String value = a.getNodeValue ();
             if (name.equals ("neuroLexId"))
             {
                 part.set (value, "$metadata", "neuroLexID");
@@ -4021,6 +4202,7 @@ public class ImportJob extends XMLutility
     {
         public String partName;
         public String condition = "";
+        public String up        = "$up";  // How to get from this part to the part the precedes us in the path. Could also be a connection binding ("B").
         public MNode  part;
 
         public XPathPart (String part)
@@ -4061,7 +4243,12 @@ public class ImportJob extends XMLutility
         public XPath (String path)
         {
             String[] pieces = path.split ("/");
-            for (String p : pieces) parts.add (new XPathPart (p));
+            for (String p : pieces)
+            {
+                if (p.equals ("biophysicalProperties")) continue;
+                if (p.equals ("membraneProperties")) continue;
+                parts.add (new XPathPart (p));
+            }
         }
 
         /**
@@ -4075,9 +4262,6 @@ public class ImportJob extends XMLutility
             {
                 if (! p.condition.isEmpty ()) isDirect = false;
 
-                List<MNode> lineage = collectParents (current);
-                lineage.add (current);
-
                 // Name-map the last path entry (the variable)
                 if (i == parts.size () - 1)
                 {
@@ -4089,9 +4273,13 @@ public class ImportJob extends XMLutility
                     }
                 }
 
-                // Try members of root or its parents
+                // Try members (either direct or by inheritance)
+                // This is necessary even for the last entry in the path.
+                List<MNode> lineage = collectParents (current);
+                lineage.add (current);
                 MNode next = definitionFor (p.partName, lineage);
-                // If that fails, try aliases
+
+                // Try aliases
                 if (next == null)
                 {
                     Set<String> names = aliases.get (p.partName);
@@ -4104,7 +4292,8 @@ public class ImportJob extends XMLutility
                         }
                     }
                 }
-                // If that fails, try child part
+
+                // Try member type (children, attachments)
                 if (next == null)
                 {
                     String typeName = typeFor (p.partName, lineage);
@@ -4114,16 +4303,63 @@ public class ImportJob extends XMLutility
                         isDirect = false;
                     }
                 }
-                // If that fails, check for a folded part
+
+                // Try segment in a multi-compartment cell.
+                // The assumption is that "current" is a population, thus inherit points to a call.
+                if (next == null)
+                {
+                    String inherit = current.get ("$inherit").replace ("\"", "");
+                    MNode parent = models.child (modelName, inherit);
+                    if (parent != null  &&  parent.get ("$metadata", "backend", "lems", "part").equals ("cell"))
+                    {
+                        // Scan all segments for one that contains the property.
+                        // TODO: sort segments and check closest to soma first. However, all of this is a workaround for weaknesses in the NeuroML specification, so it's a bit arbitrary.
+                        for (MNode segment : parent)
+                        {
+                            if (i < parts.size () - 1)
+                            {
+                                next = segment.child (p.partName);
+                                if (next != null) p.up = "$up.$up";
+                            }
+                            else  // End of path
+                            {
+                                // Check for variable in segment. The most common case is V.
+                                //   Name map
+                                String name = p.partName;
+                                MNode base = findBasePart (segment);
+                                if (base != null)
+                                {
+                                    NameMap nameMap = partMap.exportMap (base);
+                                    name = nameMap.importName (name);
+                                }
+                                //   Check entire inheritance hierarchy
+                                lineage = collectParents (segment);
+                                lineage.add (segment);
+                                next = definitionFor (name, lineage);
+                                if (next != null)
+                                {
+                                    p.partName = name;
+                                    if (parts.size () > 1)  // Rewrite path after the fact.
+                                    {
+                                        XPathPart previous = parts.get (i - 1);
+                                        previous.part = segment;
+                                        previous.up   = "$up.$up";
+                                    }
+                                }
+                            }
+                            if (next != null) break;
+                        }
+                    }
+                }
+
+                // Check for a folded part
                 if (next == null)
                 {
                     String inherit = current.get ("$inherit").replaceAll ("\"", "");
-                    if (p.partName.equals (inherit))  // When an ionChannel gets folded into a channelPopulation, and made into a standalone part, the standalone part is named after the embedded ionChannel.
-                    {
-                        next = current;
-                    }
+                    if (p.partName.equals (inherit)) next = current;  // When an ionChannel gets folded into a channelPopulation, and made into a standalone part, the standalone part is named after the embedded ionChannel.
                 }
-                // If that fails, check for folded connection
+
+                // Check for folded connection
                 if (next == null)
                 {
                     // Scan for connections that target current, and check if the other target matches the given name.
@@ -4139,13 +4375,14 @@ public class ImportJob extends XMLutility
                         String inherit = c.get ("$inherit").replace ("\"", "");
                         if (p.partName.equals (inherit))
                         {
+                            p.up = "B";
                             next = c;
                             break;
                         }
                     }
                 }
 
-                // Check if connection
+                // Check if unspecified connection()
                 if (next != null)
                 {
                     String connection = next.get ();
@@ -4189,7 +4426,7 @@ public class ImportJob extends XMLutility
                         result += up + condition;
                     }
                 }
-                up += "$up.";
+                up += p.up + ".";
             }
             return result;
         }
@@ -4203,8 +4440,9 @@ public class ImportJob extends XMLutility
 
         public String up ()
         {
+            // Should be built exactly the same way as "up" in condition().
             String result = "";
-            for (int i = 0; i < parts.size () - 1; i++) result = "$up." + result;
+            for (int i = parts.size () - 2; i >= 0; i--) result += parts.get (i).up + ".";
             return result;
         }
 
@@ -4219,10 +4457,10 @@ public class ImportJob extends XMLutility
             String result = "";
             for (XPathPart p : parts)
             {
-                if (! result.isEmpty ()) result += ".";
-                if      (  p.partName.equals ("..")) result += "$up";
-                else if (! p.partName.equals ("." )) result += p.partName;
+                if      (  p.partName.equals ("..")) result += ".$up";
+                else if (! p.partName.equals ("." )) result += "." + p.partName;
             }
+            if (result.startsWith (".")) return result.substring (1);
             return result;
         }
 

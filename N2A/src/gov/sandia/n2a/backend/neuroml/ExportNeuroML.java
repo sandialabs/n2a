@@ -31,7 +31,7 @@ public class ExportNeuroML implements ExportModel
         if (PluginNeuroML.sequencer == null)
         {
             PluginNeuroML.sequencer = new Sequencer ();
-            PluginNeuroML.sequencer.loadXSD ("NeuroML_v2beta4.xsd");
+            PluginNeuroML.sequencer.loadXSD ("NeuroML_v2.1.xsd");
             PluginNeuroML.sequencer.loadXSD ("LEMS_v0.7.4.xsd");
         }
 
