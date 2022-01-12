@@ -77,6 +77,7 @@ import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
 import gov.sandia.n2a.language.operator.LT;
 import gov.sandia.n2a.language.operator.NE;
+import gov.sandia.n2a.language.operator.Negate;
 import gov.sandia.n2a.language.operator.OR;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
@@ -3501,7 +3502,15 @@ public class ExportJob extends XMLutility
                 if (v.equations.size () == 1)
                 {
                     EquationEntry e = v.equations.first ();
-                    constant = e.condition == null  &&  e.expression instanceof gov.sandia.n2a.language.Constant;
+                    if (e.condition == null)
+                    {
+                        if (e.expression instanceof Negate)
+                        {
+                            Negate n = (Negate) e.expression;
+                            if (n.operand instanceof gov.sandia.n2a.language.Constant) e.expression = n.simplify (v, true);
+                        }
+                        constant = e.expression instanceof gov.sandia.n2a.language.Constant;
+                    }
                 }
 
                 if (! constant  &&  ! parameter) continue;
@@ -4620,11 +4629,11 @@ public class ExportJob extends XMLutility
             // Determine offset
             Unit systemUnit = key.getSystemUnit ();
             UnitConverter converter = key.getConverterTo (systemUnit);
-            double offset = converter.convert (new Integer (0)).doubleValue ();
+            double offset = converter.convert (Integer.valueOf (0)).doubleValue ();
             if (offset != 0) unit.setAttribute ("offset", String.valueOf (offset));
 
             // Determine power*scale
-            double scale = converter.convert (new Integer (1)).doubleValue () - offset;
+            double scale = converter.convert (Integer.valueOf (1)).doubleValue () - offset;
             int power = (int) Math.round (Math.log (scale) / Math.log (10));
             if (Math.abs (scale - Math.pow (10, power)) < epsilon)
             {

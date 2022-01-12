@@ -1807,7 +1807,7 @@ public class PanelEquations extends JPanel
                     i++;
                 }
 
-                if ((modifiers & (InputEvent.CTRL_MASK | InputEvent.SHIFT_MASK)) == 0)  // Could filter on drop action instead. However, this allows us to discriminate any combination of modifiers, not just Swing's interpretation of them.
+                if ((modifiers & (InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK)) == 0)  // Could filter on drop action instead. However, this allows us to discriminate any combination of modifiers, not just Swing's interpretation of them.
                 {
                     NodePart.suggestConnections (newParts, oldParts);
                     NodePart.suggestConnections (oldParts, newParts);

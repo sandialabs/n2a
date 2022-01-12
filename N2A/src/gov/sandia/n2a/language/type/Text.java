@@ -176,7 +176,7 @@ public class Text extends Type
     public int compareTo (Type that)
     {
         if (that instanceof Text    ) return value.compareTo (((Text) that).value);
-        if (that instanceof Scalar  ) return new Double (value).compareTo (new Double (((Scalar) that).value));
+        if (that instanceof Scalar  ) return Double.valueOf (value).compareTo (Double.valueOf (((Scalar) that).value));
         if (that instanceof Matrix  ) return new MatrixDense (this).compareTo (that);
         if (that instanceof Instance) return -1;
         throw new EvaluationException ("type mismatch");

@@ -362,7 +362,7 @@ public class PanelSearch extends JPanel
             int modifiers;
             public void exportAsDrag (JComponent comp, InputEvent e, int action)
             {
-                modifiers = e.getModifiers ();
+                modifiers = e.getModifiersEx ();
                 super.exportAsDrag (comp, e, action);
             }
 

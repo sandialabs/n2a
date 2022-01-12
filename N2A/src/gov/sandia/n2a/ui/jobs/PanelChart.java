@@ -33,6 +33,7 @@ import java.awt.print.PrinterJob;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -678,7 +679,8 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
                     try
                     {
                         Class<?> pdfDocClass = Class.forName ("com.orsonpdf.PDFDocument");
-                        Object pdfDoc = pdfDocClass.newInstance ();
+                        Constructor<?> ctor = pdfDocClass.getConstructor ();
+                        Object pdfDoc = ctor.newInstance ();
 
                         Method m = pdfDocClass.getMethod ("createPage", Rectangle2D.class);
                         Object page = m.invoke (pdfDoc, new Rectangle (w, h));

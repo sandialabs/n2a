@@ -940,7 +940,7 @@ public class PanelRun extends JPanel
                                         magic.x = Math.min (magic.x, visible.x + visible.width - w);
                                         magic.y = Math.max (magic.y, visible.y == 0 ? 0 : visible.y + h);
                                         magic.y = Math.min (magic.y, visible.y + visible.height - h);
-                                        dot = mark = displayANSI.viewToModel (magic);
+                                        dot = mark = displayANSI.viewToModel2D (magic);
                                     }
 
                                     displayANSI.setText (contents);
@@ -1174,7 +1174,7 @@ public class PanelRun extends JPanel
                     magic.x = Math.min (magic.x, visible.x + visible.width - w);
                     magic.y = Math.max (magic.y, visible.y == 0 ? 0 : visible.y + h);
                     magic.y = Math.min (magic.y, visible.y + visible.height - h);
-                    dot = mark = displayText.viewToModel (magic);
+                    dot = mark = displayText.viewToModel2D (magic);
                 }
 
                 displayText.setText (contents.toString ());

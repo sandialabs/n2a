@@ -99,7 +99,7 @@ public class XyceRenderer extends Renderer
         if (r.variable.name.equals ("$t" ))
         {
             if (r.variable.order == 0) return "TIME";
-            if (r.variable.order == 1) return new Double (simulator.getNextDt ()).toString ();
+            if (r.variable.order == 1) return Double.valueOf (simulator.getNextDt ()).toString ();
         }
 
         if (r.variable.hasAttribute ("initOnly")) return pi.get (r).toString ();

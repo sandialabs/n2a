@@ -861,7 +861,7 @@ public class SshFileSystemProvider extends FileSystemProvider
             {
                 String line = reader.readLine ();
                 if (line == null) return null;
-                return new Long (line);
+                return Long.valueOf (line);
             }
             catch (Exception e) {}
             return null;

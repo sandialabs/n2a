@@ -3319,8 +3319,8 @@ public class ImportJob extends XMLutility
         catch (MeasurementParseException | TokenException e) {}
         if (temp != null  &&  temp.isCompatible (unit))  // found a unit with matching dimension ...
         {
-            Number tempScale = temp.getConverterTo (temp.getSystemUnit ()).convert (new Integer (1));
-            Number unitScale = temp.getConverterTo (unit.getSystemUnit ()).convert (new Integer (1));
+            Number tempScale = temp.getConverterTo (temp.getSystemUnit ()).convert (Integer.valueOf (1));
+            Number unitScale = temp.getConverterTo (unit.getSystemUnit ()).convert (Integer.valueOf (1));
             if (tempScale.equals (unitScale))  // ... and matching scale ...
             {
                 int unitLength = UCUM.format (unit).length ();
