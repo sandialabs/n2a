@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -951,6 +951,9 @@ public class ImportJob extends XMLutility
   
         public void morphology (Node node)
         {
+            String id = getAttribute (node, "id");
+            if (! id.isEmpty ()) cell.set (id, "$metadata", "backend", "lems", "morphology");
+
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
                 if (child.getNodeType () != Node.ELEMENT_NODE) continue;
@@ -1123,6 +1126,10 @@ public class ImportJob extends XMLutility
 
         public void biophysicalProperties (Node node)
         {
+            // Save ID to help resolve XPath references
+            String id = getAttribute (node, "id");
+            if (! id.isEmpty ()) cell.set (id, "$metadata", "backend", "lems", "biophysicalProperties");
+
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {
                 if (child.getNodeType () != Node.ELEMENT_NODE) continue;
@@ -4243,12 +4250,7 @@ public class ImportJob extends XMLutility
         public XPath (String path)
         {
             String[] pieces = path.split ("/");
-            for (String p : pieces)
-            {
-                if (p.equals ("biophysicalProperties")) continue;
-                if (p.equals ("membraneProperties")) continue;
-                parts.add (new XPathPart (p));
-            }
+            for (String p : pieces) parts.add (new XPathPart (p));
         }
 
         /**
@@ -4304,7 +4306,7 @@ public class ImportJob extends XMLutility
                     }
                 }
 
-                // Try segment in a multi-compartment cell.
+                // Special handling for multi-compartment cell.
                 // The assumption is that "current" is a population, thus inherit points to a call.
                 if (next == null)
                 {
@@ -4312,6 +4314,18 @@ public class ImportJob extends XMLutility
                     MNode parent = models.child (modelName, inherit);
                     if (parent != null  &&  parent.get ("$metadata", "backend", "lems", "part").equals ("cell"))
                     {
+                        // Check if p.partName refers to a property wrapper.
+                        String bp = parent.get ("$metadata", "backend", "lems", "biophysicalProperties");
+                        if (   p.partName.equals ("biophysicalProperties")
+                            || p.partName.equals ("membraneProperties")
+                            || p.partName.equals (bp))
+                        {
+                            p.part = current;
+                            p.up = "";
+                            i++;
+                            continue;
+                        }
+
                         // Scan all segments for one that contains the property.
                         // TODO: sort segments and check closest to soma first. However, all of this is a workaround for weaknesses in the NeuroML specification, so it's a bit arbitrary.
                         for (MNode segment : parent)
@@ -4426,7 +4440,7 @@ public class ImportJob extends XMLutility
                         result += up + condition;
                     }
                 }
-                up += p.up + ".";
+                if (! p.up.isEmpty ()) up += p.up + ".";
             }
             return result;
         }
@@ -4442,7 +4456,11 @@ public class ImportJob extends XMLutility
         {
             // Should be built exactly the same way as "up" in condition().
             String result = "";
-            for (int i = parts.size () - 2; i >= 0; i--) result += parts.get (i).up + ".";
+            for (int i = parts.size () - 2; i >= 0; i--)
+            {
+                XPathPart p = parts.get (i);
+                if (! p.up.isEmpty ()) result += p.up + ".";
+            }
             return result;
         }
 
@@ -4472,7 +4490,7 @@ public class ImportJob extends XMLutility
                 XPathPart p = parts.get (i);
                 if (source.get (p.partName).startsWith ("connect(")) return;  // We only modify the variable if it does not go through a connection, that is, only if the variable is fully contained under us.
 
-                name = "$up." + name;
+                name = "$up." + name;  // TODO: respect p.up
                 MNode child = source.child (p.partName);
                 if (child == null)
                 {

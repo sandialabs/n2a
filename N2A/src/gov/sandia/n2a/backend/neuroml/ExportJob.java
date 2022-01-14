@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1535,7 +1535,9 @@ public class ExportJob extends XMLutility
             if (! morphology.isEmpty ())
             {
                 Element e = addElement ("morphology", cellElements);
-                e.setAttribute ("id", "morphology");
+                String morphologyID = source.get ("$metadata", "backend", "lems", "morphology");
+                if (morphologyID.isEmpty ()) morphologyID = "morphology";
+                e.setAttribute ("id", morphologyID);
                 sequencer.append (e, morphology);
             }
 
@@ -1559,7 +1561,9 @@ public class ExportJob extends XMLutility
             if (! biophysical.isEmpty ())
             {
                 Element e = addElement ("biophysicalProperties", cellElements);
-                e.setAttribute ("id", "properties");
+                String bpID = source.get ("$metadata", "backend", "lems", "biophysicalProperties");
+                if (bpID.isEmpty ()) bpID = "properties";
+                e.setAttribute ("id", bpID);
                 sequencer.append (e, biophysical);
             }
 
@@ -2868,14 +2872,15 @@ public class ExportJob extends XMLutility
                 if (! p.metadata.get ("backend", "lems", "target").isEmpty ()) break;
                 String prefix = p.name;
                 if (! p.metadata.get ("backend", "lems", "enumerate").isEmpty ()) prefix += "[" + output.columnName + "]";  // Actually, columnName contains $index in string form.
-                if (p.metadata.get ("backend", "lems", "part").contains ("ionChannel"))  // an ionChannel folded into a channelPopulation
+                String partName = p.metadata.get ("backend", "lems", "part");
+                if (partName.contains ("ionChannel"))  // an ionChannel folded into a channelPopulation
                 {
                     // Determine if the path name below this one (processed in previous loop) is
                     // specifically a member of the ionChannel rather than the channelPopulation.
                     // In that case, we must insert the ionChannel name into the path as well as the channelPopulation.
                     // The following list of names are (unfortunately) a duplicate of the list in the IonChannel constructor,
                     // except that it uses external rather than internal names.
-                    List<String> forbidden = Arrays.asList ("c", "number", "erev", "geff", "i", "condDensity", "permeability");
+                    List<String> forbidden = Arrays.asList ("c", "number", "erev", "geff", "i", "condDensity", "permeability", "gDensity", "iDensity");
                     String previous = name.split ("/")[0];
                     if (! forbidden.contains (previous))
                     {
@@ -2888,7 +2893,28 @@ public class ExportJob extends XMLutility
                         prefix += "/" + id;
                     }
                 }
-                name = prefix + "/" + name;
+                else if (partName.equals ("segment"))
+                {
+                    // Segment doesn't normally have a path entry in NeuroML.
+                    // Instead, the path goes to the containing cell or to the cell's properties.
+                    // First confirm that this segment is actually in a cell, rather than standalone.
+                    String containerPartName = p.container.metadata.get ("backend", "lems", "part");
+                    if (containerPartName.equals ("cell"))
+                    {
+                        List<String> cellValues = Arrays.asList ("v", "spiking");
+                        String previous = name.split ("/")[0];
+                        if (cellValues.contains (previous))
+                        {
+                            prefix = "";
+                        }
+                        else
+                        {
+                            prefix  = p.container.metadata.getOrDefault ("biophysicalProperties", "backend", "lems", "biophysicalProperties");
+                            prefix += "/membraneProperties";
+                        }
+                    }
+                }
+                if (! prefix.isEmpty ()) name = prefix + "/" + name;
                 p = p.container;
             }
             line.quantity = name;

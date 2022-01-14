@@ -7,6 +7,8 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -120,21 +122,33 @@ public class Output extends Function
             if (path.isEmpty ())
             {
                 out = simulator.out;
-                columnMode = new MDoc (simulator.jobDir.resolve ("out.columns"));
+                path = "out";
             }
             else
             {
                 try
                 {
-                    out = new PrintStream (simulator.jobDir.resolve (path).toFile (), "UTF-8");
-                    columnMode = new MDoc (simulator.jobDir.resolve (path + ".columns"));
+                    // Trap paths to non-existent directories, typically sub-directories of jobDir.
+                    // The assumption is that in most cases the user wants output to go somewhere in
+                    // jobDir. A sub-directory of jobDir is (currently) not visible in the jobs tab,
+                    // so flatten the path. OTOH, a path to an external dir that does exist indicates
+                    // that the user really wants the output to go to a special location.
+                    Path target = simulator.jobDir.resolve (path);
+                    if (! Files.exists (target.getParent ()))
+                    {
+                        path = path.replace ("/", "_");
+                        path = path.replace ("\\", "_");
+                        target = simulator.jobDir.resolve (path);
+                    }
+                    out = new PrintStream (target.toFile (), "UTF-8");
                 }
                 catch (Exception e)
                 {
                     out = simulator.out;
-                    columnMode = new MDoc (simulator.jobDir.resolve ("out.columns"));
+                    path = "out";
                 }
             }
+            columnMode = new MDoc (simulator.jobDir.resolve (path + ".columns"));
         }
 
         public static Holder get (Simulator simulator, String path, boolean raw)
