@@ -11,6 +11,7 @@ import java.util.List;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.UnitValue;
+import gov.sandia.n2a.linear.FactorQR;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
@@ -28,6 +29,7 @@ public class OptimizerLM extends StudyIterator
     protected List<MNode> variables;
     protected double      toleranceF;
     protected double      toleranceX;
+    protected double      toleranceG = 0;
     protected double      perturbation;
 
     protected MatrixDense x;       // current state vector
@@ -41,7 +43,7 @@ public class OptimizerLM extends StudyIterator
     protected double      par;     // Levenberg-Marquardt parameter (mix between Gauss-Newton and gradient-descent)
     protected double      xnorm;
     protected double      ynorm;
-    protected double      delta;
+    protected double      delta;   // step bound
 
     public OptimizerLM (String[] keys, List<MNode> variables, Study study)
     {
@@ -101,7 +103,6 @@ public class OptimizerLM extends StudyIterator
     public void restart ()
     {
         iteration = -2;
-        sample    = 0;
     }
 
     public boolean step ()
@@ -112,13 +113,87 @@ public class OptimizerLM extends StudyIterator
             return true;
         }
 
+        if (iteration == -1)  // Collect results of first job. This establishes number of rows in Jacobian.
+        {
+            OutputParser.Column series = getSeries (baseIndex - 1);
+            int m = series.startRow + series.values.size ();
+            y = new MatrixDense (m, 1);
+            for (int r = 0; r < m; r++) y.set (r, series.get (r));
+            ynorm = y.norm (2);
+
+            iteration = 0;
+            sample    = -1;  // Collect the base sample. Note that in subsequent iterations, the base sample will come from the last step of lmpar.
+            return true;
+        }
+
+        if (iteration > maxIterations) return false;
+
         sample++;
-        // TODO: Determine if current iteration of LM is complete
-        boolean iterationDone = true;
-        if (iterationDone) baseIndex = study.index;
-        // TODO: Determine if entire optimization is done.
-        boolean optimizationDone = true;
-        return optimizationDone;
+        int n = variables.size ();
+        if (sample < n) return true;  // Collect remaining samples needed to build Jacobian.
+
+        // If all samples have completed, build Jacobian.
+        int m = y.rows ();
+        if (J == null)  // Only done once per iteration.
+        {
+            J = new MatrixDense (m, n);
+            for (int c = 0; c < n; c++)
+            {
+                OutputParser.Column series = getSeries (baseIndex + c);
+                double h = H.get (c);
+                double norm = 0;
+                for (int r = 0; r < m; r++)
+                {
+                    double value = (series.get (r) - y.get (r)) / h;
+                    J.set (r, c, value);
+                    norm += value * value;
+                }
+                Jnorms.set (c, Math.sqrt (norm));
+            }
+
+            if (iteration == 0)
+            {
+                // Scale according to the norms of the columns of the initial Jacobian.
+                for (int j = 0; j < n; j++)
+                {
+                    double scale = Jnorms.get (j);
+                    if (scale == 0) scale = 1;
+                    scales.set (j, scale);
+                }
+
+                xnorm = ((MatrixDense) x.multiplyElementwise (scales)).norm (2);
+                if (xnorm == 0) delta = 1;
+                else            delta = xnorm;
+            }
+        }
+
+        // Factorize J
+        FactorQR qr = new FactorQR (J);
+        MatrixDense Qy = qr.getQ ().transpose ().multiply (y);
+
+        // compute the norm of the scaled gradient
+        if (ynorm == 0) return false;  // Exact convergence (unlikely).
+        double gnorm = 0;
+        for (int j = 0; j < n; j++)
+        {
+            double jnorm = Jnorms.get (j);
+            if (jnorm == 0) continue;
+            double temp = J.getColumn (j).dot (Qy);  // equivalent to ~J * y using the original J.  (That is, ~R * ~Q * y, where J = QR)
+            gnorm = Math.max (gnorm, Math.abs (temp / (ynorm * jnorm)));  // infinity norm of g = ~J * y / |y| with some additional scaling
+        }
+        if (gnorm <= toleranceG) return false;  // Gradient has gotten too small to follow.
+
+        // rescale if necessary
+        for (int j = 0; j < n; j++) scales.set (j, Math.max (scales.get (j), Jnorms.get (j)));
+
+        // Inner loop of algorithm
+        // Search over possible step sizes until we find one that gives acceptable improvement
+        
+
+        // STOPPED HERE --------------------------------------
+
+        iteration++;
+        return true;
     }
 
     public boolean barrier ()
@@ -165,7 +240,7 @@ public class OptimizerLM extends StudyIterator
 
         // First-time initialization. We need the model in hand to do this, mainly to get the initial value of x.
         MNode root = study.source.child ("variables");
-        if (iteration == -1)
+        if (sample < 0)
         {
             for (int r = 0; r < n; r++)
             {
@@ -183,14 +258,6 @@ public class OptimizerLM extends StudyIterator
             }
             return;  // Run first job on unperturbed initial value of x.
         }
-        if (iteration == 0  &&  sample == 0)  // Collect results of first job. This establishes number of rows in Jacobian.
-        {
-            OutputParser.Column series = getSeries (baseIndex - 1);
-            int m = series.startRow + series.values.size ();
-            y = new MatrixDense (m, 1);
-            for (int r = 0; r < m; r++) y.set (r, series.get (r));
-            ynorm = y.getColumn (0).norm (2);
-        }
 
         if (sample < n)  // Finite-difference samples to create Jacobian
         {
@@ -198,7 +265,7 @@ public class OptimizerLM extends StudyIterator
             // Requires either user-specified structure, or detect structure by observing zeroes in elements of J
             // for the entire run up to now. If the squared error is over something like a time series, it is
             // unlikely that any variables are separable. Only when subsets of the output are uniquely connected
-            // to subsets of the inputs do we get separability. In that case, it is possible to do fewer samples
+            // to subsets of the input do we get separability. In that case, it is possible to do fewer samples
             // than the number of variables.
             for (int c = 0; c < n; c++)
             {
@@ -214,47 +281,10 @@ public class OptimizerLM extends StudyIterator
                 }
                 model.set (value, keyPath);
             }
+            return;
         }
-        else  // Main LM algorithm
-        {
-            int m = y.rows ();
 
-            // On first sample after perturbations are done, load data and compute Jacobian.
-            if (J == null)
-            {
-                J = new MatrixDense (m, n);
-                for (int c = 0; c < n; c++)
-                {
-                    OutputParser.Column series = getSeries (baseIndex + c);
-                    double h = H.get (c);
-                    double norm = 0;
-                    for (int r = 0; r < m; r++)
-                    {
-                        double value = (series.get (r) - y.get (r)) / h;
-                        J.set (r, c, value);
-                        norm += value * value;
-                    }
-                    Jnorms.set (c, Math.sqrt (norm));
-                }
-
-                if (iteration == 0)
-                {
-                    // Scale according to the norms of the columns of the initial Jacobian.
-                    for (int j = 0; j < n; j++)
-                    {
-                        double scale = Jnorms.get (j);
-                        if (scale == 0) scale = 1;
-                        scales.set (j, scale);
-                    }
-
-                    xnorm = ((MatrixDense) x.multiplyElementwise (scales)).norm (2);
-                    if (xnorm == 0) delta = 1;
-                    else            delta = xnorm;
-                }
-            }
-
-            // Factorize J
-        }
+        // TODO: sample for step
     }
 
     public OutputParser.Column getSeries (int index)
