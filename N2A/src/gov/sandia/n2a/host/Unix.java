@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -93,7 +94,7 @@ public class Unix extends Host
     }
 
     @Override
-    public void submitJob (MNode job, boolean out2err, String... command) throws Exception
+    public void submitJob (MNode job, boolean out2err, List<List<String>> commands) throws Exception
     {
         Path resourceDir = getResourceDir ();
         Path binDir      = resourceDir.resolve ("bin");
@@ -102,26 +103,39 @@ public class Unix extends Host
         {
             writeBackgroundScript = false;
             Files.createDirectories (binDir);
-            stringToFile (background,
-                  "#!/bin/bash\n"
-                + "$1 > /dev/null 2> /dev/null &\n"  // Redirecting to /dev/null allows ssh exec to return immediately.
-            );
+            try (BufferedWriter writer = Files.newBufferedWriter (background))
+            {
+                writer.append ("#!/bin/bash\n");
+                writer.append ("$1 > /dev/null 2> /dev/null &\n");  // Redirecting to /dev/null allows ssh exec to return immediately.
+            }
             Files.setPosixFilePermissions (background, PosixFilePermissions.fromString ("rwxr--r--"));
         }
 
         Path jobDir = Host.getJobDir (resourceDir, job);
         Path script = jobDir.resolve ("n2a_job");
-        String combined = combine (command);
         String out = out2err ? "err" : "out";
-        stringToFile (script,
-              "#!/bin/bash\n"
-            + "cd " + quote (jobDir) + "\n"
-            + "if " + combined + " > " + out + " 2>> err; then\n"   // Wait for process to finish.
-            + "  echo success > finished\n"
-            + "else\n"
-            + "  echo failure > finished\n"
-            + "fi"
-        );
+        String combined = "";  // The last assembled command-line. Used to find PID for single-command jobs (the usual case).
+        try (BufferedWriter writer = Files.newBufferedWriter (script))
+        {
+            writer.append ("#!/bin/bash\n");
+            writer.append ("cd " + quote (jobDir) + "\n");
+
+            combined = combine (commands.get (0));
+            writer.append (combined + " >> " + out + " 2>> err\n");
+
+            int count = commands.size ();
+            for (int i = 1; i < count; i++)
+            {
+                combined = combine (commands.get (i));
+                writer.append ("test $? -eq 0 && " + combined + " >> " + out + " 2>> err\n");
+            }
+
+            writer.append ("if [ $? -eq 0 ]; then\n");  // Wait for process to finish.
+            writer.append ("  echo success > finished\n");
+            writer.append ("else\n");
+            writer.append ("  echo failure > finished\n");
+            writer.append ("fi");
+        }
         Files.setPosixFilePermissions (script, PosixFilePermissions.fromString ("rwxr--r--"));
 
         try (AnyProcess proc = build (quote (background), quote (script)).start ();)

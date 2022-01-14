@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -104,6 +104,7 @@ public class Main
         pluginClassNames.add ("gov.sandia.n2a.backend.xyce.XycePlugin");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuroml.PluginNeuroML");
         pluginClassNames.add ("gov.sandia.n2a.backend.neuron.PluginNeuron");
+        pluginClassNames.add ("gov.sandia.n2a.backend.stacs.PluginSTACS");
         Path pluginDir = resourceDir.resolve ("plugins").toAbsolutePath ();
         try {Files.createDirectories (pluginDir);}
         catch (IOException e) {}

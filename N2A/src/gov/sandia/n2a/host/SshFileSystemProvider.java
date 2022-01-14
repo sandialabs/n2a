@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -287,24 +287,15 @@ public class SshFileSystemProvider extends FileSystemProvider
     }
 
     @SuppressWarnings("unchecked")
-    public void createDirectory (Path dir, FileAttribute<?>... attrs) throws IOException
+    public void createDirectory (Path dir, FileAttribute<?>... attributes) throws IOException
     {
-        Set<PosixFilePermission> permissions = null;
-        for (FileAttribute<?> fileAttribute : attrs)
-        {
-            if (fileAttribute.name ().equals ("posix:permissions"))
-            {
-                permissions = (Set<PosixFilePermission>) fileAttribute.value();
-            }
-        }
-
         SshPath A = (SshPath) dir;
         String name = A.toAbsolutePath ().toString ();
         try
         {
             WrapperSftp sftp = A.getSftp ();
             sftp.mkdir (name);
-            if (permissions != null) sftp.chmod (sftpPermissions (permissions), name);
+            applyAttributes (A, attributes);
         }
         catch (SftpException e)
         {
@@ -316,11 +307,28 @@ public class SshFileSystemProvider extends FileSystemProvider
         }
     }
 
-    @SuppressWarnings("unchecked")
-    PosixFileAttributes createFile (SshPath path, FileAttribute<?>... attributes) throws IOException
+    public void createSymbolicLink (Path link, Path target, FileAttribute<?>... attributes) throws IOException
     {
-        execute (path, "touch", path.quote ());
+        if (isSameFile (link, target)) throw new IOException ("Can't link to self");
 
+        SshPath A = (SshPath) link;
+        SshPath B = (SshPath) target;
+        if (A.fileSystem != B.fileSystem) throw new IOException ("Can't link across file systems");
+        String Astring = A.toAbsolutePath ().toString ();
+        String Bstring = B.toAbsolutePath ().toString ();
+
+        List<String> args = new ArrayList<String> ();
+        args.add ("ln");
+        args.add ("-s");
+        args.add (Astring);
+        args.add (Bstring);
+        execute (A, args);
+        applyAttributes (A, attributes);
+    }
+
+    @SuppressWarnings("unchecked")
+    protected SshFileAttributeView applyAttributes (SshPath path, FileAttribute<?>... attributes) throws IOException
+    {
         SshFileAttributeView view = new SshFileAttributeView ((SshPath) path);
         for (FileAttribute<?> a : attributes)
         {
@@ -336,8 +344,13 @@ public class SshFileSystemProvider extends FileSystemProvider
                     view.setGroup ((GroupPrincipal) a.value());
             }
         }
+        return view;
+    }
 
-        return view.readAttributes ();
+    protected PosixFileAttributes createFile (SshPath path, FileAttribute<?>... attributes) throws IOException
+    {
+        execute (path, "touch", path.quote ());
+        return applyAttributes (path, attributes).readAttributes ();
     }
 
     public void delete (Path path) throws IOException

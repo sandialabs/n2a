@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,7 +12,9 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MTextField;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -116,19 +118,28 @@ public class RemoteSlurm extends RemoteUnix
     }
 
     @Override
+    public void submitJob (MNode job, boolean out2err, List<List<String>> commands) throws Exception
+    {
+        if (commands.size () != 1) throw new Exception ("RemoteSlurm only supports jobs with a single command");  // TODO: handle multi-command job
+        List<String> command = commands.get (0);
+        submitJob (job, out2err, command.toArray (new String[command.size ()]));
+    }
+
+    @Override
     public void submitJob (MNode job, boolean out2err, String... command) throws Exception
     {
         Path resourceDir = getResourceDir ();  // implies connect()
         Path jobsDir     = resourceDir.resolve ("jobs");
         Path jobDir      = jobsDir.resolve (job.key ());
 
-        String cores = job.getOrDefault ("1", "host", "cores");
-        String nodes = job.getOrDefault ("1", "host", "nodes");
+        int cores = job.getOrDefault (1, "host", "cores");
+        int nodes = job.getOrDefault (1, "host", "nodes");
 
-        stringToFile (jobDir.resolve ("n2a_job"),
-              "#!/bin/bash\n"
-            + "mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + combine (command)
-        );
+        try (BufferedWriter writer = Files.newBufferedWriter (jobDir.resolve ("n2a_job")))
+        {
+            writer.write ("#!/bin/bash\n");
+            writer.write ("mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + combine (command) + "\n");
+        }
 
         // Note: There may be other sbatch parameters that are worth controlling here.
         try (AnyProcess proc = build (

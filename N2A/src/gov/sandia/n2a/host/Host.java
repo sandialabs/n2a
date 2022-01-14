@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -41,6 +41,7 @@ import java.nio.file.attribute.DosFileAttributeView;
 import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -554,10 +555,17 @@ public abstract class Host
         return new JPanel ();
     }
 
-    public abstract boolean           isActive       (MNode job)                                     throws Exception;  // check if the given job is active
-    public abstract List<ProcessInfo> getActiveProcs ()                                              throws Exception;  // enumerate all of our active jobs
-    public abstract void              submitJob      (MNode job, boolean out2err, String... command) throws Exception;  // out2err indicates that stdout should be directed to same file as stderr, rather than "out"
-    public abstract void              killJob        (MNode job, boolean force)                      throws Exception;
+    public abstract boolean           isActive       (MNode job)                                              throws Exception;  // check if the given job is active
+    public abstract List<ProcessInfo> getActiveProcs ()                                                       throws Exception;  // enumerate all of our active jobs
+    public abstract void              submitJob      (MNode job, boolean out2err, List<List<String>> command) throws Exception;  // Job consists of a sequence of commands. Generally this will get converted to a shell script on the host, with the reserved name "script".
+    public abstract void              killJob        (MNode job, boolean force)                               throws Exception;
+
+    public void submitJob (MNode job, boolean out2err, String... command) throws Exception
+    {
+        List<List<String>> commands = new ArrayList<List<String>> ();
+        commands.add (Arrays.asList (command));
+        submitJob (job, out2err, commands);
+    }
 
     public class ProcessInfo
     {
@@ -766,6 +774,11 @@ public abstract class Host
         if (command.length > 0) result = command[0];
         for (int i = 1; i < command.length; i++) result += " " + command[i];
         return result;
+    }
+
+    public String combine (List<String> command)
+    {
+        return combine (command.toArray (new String[command.size ()]));
     }
 
     public long getMemoryTotal ()

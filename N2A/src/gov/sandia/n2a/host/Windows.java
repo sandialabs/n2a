@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -125,23 +126,31 @@ public class Windows extends Host
     }
 
     @Override
-    public void submitJob (MNode job, boolean out2err, String... command) throws Exception
+    public void submitJob (MNode job, boolean out2err, List<List<String>> commands) throws Exception
     {
         Path jobDir = Paths.get (job.get ()).getParent ();
         Path script = jobDir.resolve ("n2a_job.bat");
-        String combined = combine (command);
         String out = out2err ? "err" : "out";
-        stringToFile
-        (
-            script,
-            "cd " + jobDir + "\r\n"
-            + combined + " > " + out + " 2>> err\r\n"
-            + "if errorlevel 0 (\r\n"
-            + "  echo success > finished\r\n"
-            + ") else (\r\n"
-            + "  echo failure > finished\r\n"
-            + ")\r\n"
-        );
+        try (BufferedWriter writer = Files.newBufferedWriter (script))
+        {
+            writer.append ("cd " + jobDir + "\r\n");
+
+            String combined = combine (commands.get (0));
+            writer.append (combined + " >> " + out + " 2>> err\n");
+
+            int count = commands.size ();
+            for (int i = 1; i < count; i++)
+            {
+                combined = combine (commands.get (i));
+                writer.append ("if errorlevel 0 (" + combined + " >> " + out + " 2>> err)\n");
+            }
+
+            writer.append ("if errorlevel 0 (\r\n");
+            writer.append ("  echo success > finished\r\n");
+            writer.append (") else (\r\n");
+            writer.append ("  echo failure > finished\r\n");
+            writer.append (")\r\n");
+        }
 
         Process proc = new ProcessBuilder ("cmd", "/c", "start", "/b", script.toString ()).start ();
         proc.waitFor ();
