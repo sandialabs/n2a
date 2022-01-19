@@ -13,6 +13,7 @@ import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Component;
+import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -78,11 +79,16 @@ public class SettingsLookAndFeel extends JPanel implements Settings
                 AppData.state.set (this,      "LookAndFeel");
                 AppData.state.set (fontScale, "FontScale");
 
-                // Set scaled fonts.
-                if (fontScale != 1)
+                // Rescale UI elements
+                int dpi = Toolkit.getDefaultToolkit ().getScreenResolution ();
+                float uiScale = dpi / 96f;
+                float applyScale = fontScale * uiScale;
+                UIDefaults defaults = UIManager.getDefaults ();
+
+                //   Set scaled fonts.
+                if (applyScale != 1)
                 {
                     overriddenKeys = new TreeSet<Object> ();
-                    UIDefaults defaults = UIManager.getDefaults ();
                     for (Entry<Object,Object> e : defaults.entrySet ())
                     {
                         Object key   = e.getKey ();
@@ -90,9 +96,20 @@ public class SettingsLookAndFeel extends JPanel implements Settings
                         if (value instanceof FontUIResource)
                         {
                             FontUIResource fr = (FontUIResource) value;
-                            defaults.put (key, new FontUIResource (fr.deriveFont (fr.getSize2D () * fontScale)));
+                            defaults.put (key, new FontUIResource (fr.deriveFont (fr.getSize2D () * applyScale)));
                             overriddenKeys.add (key);
                         }
+                    }
+                }
+
+                //   Modify controls that shouldn't get too small
+                if (uiScale > 1)
+                {
+                    for (String key : new String[] {"ScrollBar.width", "SplitPane.dividerSize"})
+                    {
+                        int value = (Integer) defaults.get (key);
+                        defaults.put (key, (int) Math.floor (value * uiScale));
+                        overriddenKeys.add (key);
                     }
                 }
             }

@@ -97,6 +97,10 @@ public class Main
         AppData.checkInitialDB ();
         Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
 
+        // Get rid of eye-stab HiDPI scaling in recent JDKs. Instead, we handle DPI in SettingsLookAndFeel.
+        // Must be done before any code activates Swing.
+        System.setProperty ("sun.java2d.uiScale", "1.0");
+
         // Load plugins
         pluginClassNames.add ("gov.sandia.n2a.backend.internal.InternalPlugin");
         pluginClassNames.add ("gov.sandia.n2a.backend.c.PluginC");
