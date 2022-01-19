@@ -286,7 +286,6 @@ public class SshFileSystemProvider extends FileSystemProvider
         return new SshDirectoryStream ((SshPath) dir, filter);
     }
 
-    @SuppressWarnings("unchecked")
     public void createDirectory (Path dir, FileAttribute<?>... attributes) throws IOException
     {
         SshPath A = (SshPath) dir;
@@ -320,8 +319,8 @@ public class SshFileSystemProvider extends FileSystemProvider
         List<String> args = new ArrayList<String> ();
         args.add ("ln");
         args.add ("-s");
-        args.add (Astring);
         args.add (Bstring);
+        args.add (Astring);
         execute (A, args);
         applyAttributes (A, attributes);
     }
