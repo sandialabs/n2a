@@ -102,7 +102,7 @@ public class JobSTACS extends Thread
             command.add ("config.yml");
             commands.add (command);
 
-            env.submitJob (job, false, commands);
+            env.submitJob (job, true, commands);
         }
         catch (Exception e)
         {

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -37,6 +37,8 @@ public class Raster extends OutputParser
     protected XYSeriesCollection dataset     = new XYSeriesCollection ();
     protected List<Color>        colors      = new ArrayList<Color> ();  // correspond 1-to-1 with series added to dataset
     protected double             timeQuantum = 1;  // The closest spacing between two spikes on a single row.
+    protected boolean            needXmin;  // indicates that xmin was not provided explicitly, and therefore should be calculated from data
+    protected boolean            needXmax;  // ditto for xmax
 
     public Raster (Path path)
     {
@@ -53,23 +55,28 @@ public class Raster extends OutputParser
 
         if (timeFound)
         {
+            if (time.data == null)
+            {
+                time.data = 0;
+                needXmin = Double.isNaN (xmin);
+                needXmax = Double.isNaN (xmax);
+            }
+            int nextRow = (Integer) time.data;
+
             int count = time.values.size ();
             if (time.scale != null)
             {
                 double scale = time.scale.get ();
-                for (int i = 0; i < count; i++) time.values.set (i, (float) (time.values.get (i) / scale));
+                for (int i = nextRow; i < count; i++) time.values.set (i, (float) (time.values.get (i) / scale));
             }
 
-            if (! Double.isNaN (xmin)  ||  ! Double.isNaN (xmax))
-            {
-                time.computeStats ();
-                if (Double.isNaN (xmin)) xmin = time.min;
-                if (Double.isNaN (xmax)) xmax = time.max;
-            }
-
-            double previousTime = time.values.get (0);
-            double minTimeQuantum = (time.values.get (count - 1) - previousTime) / totalCount;
-            for (int r = 1; r < count; r++)
+            if (needXmin) xmin = time.values.get (0);
+            if (needXmax) xmax = time.values.get (count - 1);
+            double minTimeQuantum = (xmax - xmin) / totalCount;
+            int lastRow = nextRow - 1;
+            if (lastRow < 0) lastRow = 0;
+            double previousTime = time.values.get (lastRow);
+            for (int r = lastRow + 1; r < count; r++)
             {
                 double thisTime = time.values.get (r);
                 double diff = thisTime - previousTime;
@@ -77,9 +84,11 @@ public class Raster extends OutputParser
                 if (diff >= minTimeQuantum) timeQuantum = Math.min (timeQuantum, diff);
                 previousTime = thisTime;
             }
+
+            time.data = count;
         }
 
-        // Generate dateset
+        // Generate dataset
         Color red = Color.getHSBColor (0.0f, 1.0f, 0.8f);
         for (Column c : columns)
         {
@@ -103,6 +112,7 @@ public class Raster extends OutputParser
             {
                 for (int r = newRow; r < count; r++)
                 {
+                    // This assumes that time.startRow == 0
                     if (c.values.get (r) != 0) series.add (time.values.get (r + c.startRow).doubleValue (), c.index, false);
                 }
             }

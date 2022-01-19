@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -20,7 +20,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -499,8 +498,8 @@ public class NodeJob extends NodeBase
             NodeFile bestFile = null;
             for (NodeFile nf : existing.values ())
             {
-                if (nf.type.priority == 0) continue;
-                if (bestFile == null  ||  nf.type.priority > bestFile.type.priority)
+                if (nf.priority == 0) continue;
+                if (bestFile == null  ||  nf.priority > bestFile.priority)
                 {
                     bestFile = nf;
                 }
@@ -548,28 +547,39 @@ public class NodeJob extends NodeBase
             return false;
         }
 
-        NodeFile newNode;
+        NodeFile newNode = null;
         if (Files.isDirectory (path))
         {
-            // Check for image sequence.
-            // It's an image sequence if a random file from the dir has the right form: an integer with a standard image-file suffix.
+            // Check for sub-directory type output.
             try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (path))
             {
-                Iterator<Path> it = dirStream.iterator ();
-                if (! it.hasNext ()) return false;
-                Path p = it.next ();
-                String[] pieces = p.getFileName ().toString ().split ("\\.");
-                if (pieces.length != 2) return false;
-                try {Integer.valueOf (pieces[0]);}
-                catch (NumberFormatException e) {return false;}
-                String suffix = pieces[1].toLowerCase ();
-                if (imageFileSuffixes.indexOf (suffix) < 0) return false;
-                newNode = new NodeFile (NodeFile.Type.Video, path);
+                for (Path p : dirStream)
+                {
+                    String name = p.getFileName ().toString ();
+                    if (name.startsWith (".")) continue;
+
+                    // Check for STACS output
+                    // Form is a name containing the magic string "evtlog"
+                    if (name.contains ("evtlog"))
+                    {
+                        newNode = new NodeSTACS (path);
+                        break;
+                    }
+
+                    // Check for image sequence
+                    // Form is an integer with a standard image-file suffix.
+                    String[] pieces = name.split ("\\.");
+                    if (pieces.length != 2) return false;
+                    try {Integer.valueOf (pieces[0]);}
+                    catch (NumberFormatException e) {return false;}
+                    String suffix = pieces[1].toLowerCase ();
+                    if (imageFileSuffixes.indexOf (suffix) < 0) return false;
+                    newNode = new NodeVideo (path);
+                    break;  // Only visit the first file
+                }
             }
-            catch (Exception e)
-            {
-                return false;
-            }
+            catch (Exception e) {}
+            if (newNode == null) return false;
         }
         else
         {
@@ -592,10 +602,10 @@ public class NodeJob extends NodeBase
             String[] pieces = fileName.split ("\\.");
             if (pieces.length > 1) suffix = pieces[pieces.length-1].toLowerCase ();
 
-            if      (fileName.endsWith ("out"))               newNode = new NodeFile (NodeFile.Type.Output,  path);
-            else if (fileName.endsWith ("err"))               newNode = new NodeFile (NodeFile.Type.Error,   path);
-            else if (imageFileSuffixes.indexOf (suffix) >= 0) newNode = new NodeFile (NodeFile.Type.Picture, path);
-            else                                              newNode = new NodeFile (NodeFile.Type.Other,   path);
+            if      (fileName.endsWith ("out"))               newNode = new NodeOutput (path);
+            else if (fileName.endsWith ("err"))               newNode = new NodeError  (path);
+            else if (imageFileSuffixes.indexOf (suffix) >= 0) newNode = new NodeImage  (path);
+            else                                              newNode = new NodeFile   (path);
         }
 
         existing.put (fileName, newNode);

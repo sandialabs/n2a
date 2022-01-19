@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -36,7 +36,6 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -70,6 +69,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
+import javax.swing.JViewport;
 import javax.swing.UIManager;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
@@ -103,10 +103,10 @@ public class PanelRun extends JPanel
     protected JButton             buttonExport;
     protected JTextArea           displayText;
     protected TextPaneANSI        displayANSI;
-    protected PanelChart          displayChart = new PanelChart ();
-    protected JScrollPane         displayPane = new JScrollPane ();
+    protected PanelChart          displayChart  = new PanelChart ();
+    protected JScrollPane         displayPane   = new JScrollPane ();
     protected DisplayThread       displayThread = null;
-    protected NodeBase            displayNode = null;
+    protected NodeBase            displayNode   = null;
     protected MDir                runs;  // Copied from AppData for convenience
 
     public static Map<String,NodeJob> jobNodes = new HashMap<String,NodeJob> ();  // for quick lookup of job node based on job key.
@@ -510,8 +510,7 @@ public class PanelRun extends JPanel
         {
             if (! (displayNode instanceof NodeFile)) return;
             NodeFile node = (NodeFile) displayNode;
-            if (node.type != NodeFile.Type.Output  &&  node.type != NodeFile.Type.Other) return;
-            if (! isGraphable (node)) return;
+            if (! node.isGraphable ()) return;
 
             // Construct and customize a file chooser
             final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));
@@ -581,48 +580,6 @@ public class PanelRun extends JPanel
         }
     };
 
-    public boolean isGraphable (NodeFile node)
-    {
-        Path dir = node.path.getParent ();
-        String fileName = node.path.getFileName ().toString ();
-        boolean result = Files.exists (dir.resolve (fileName + ".columns"));  // An auxiliary column file is sufficient evidence that this is tabular data.
-        if (! result)
-        {
-            try (BufferedReader reader = Files.newBufferedReader (node.path))
-            {
-                String line = reader.readLine ();
-                result = line.startsWith ("$t")  ||  line.startsWith ("Index");
-                if (! result)
-                {
-                    // Try an alternate heuristic: Does the line appear to be a set of tab-delimited fields?
-                    // Don't allow spaces, because it could look too much like ordinary text.
-                    line = reader.readLine ();  // Get a second line, just to ensure we get past textual headers.
-                    if (line != null)
-                    {
-                        String[] pieces = line.split ("\\t");
-                        int columns = 0;
-                        for (String p : pieces)
-                        {
-                            if (p.length () < 20)
-                            {
-                                try
-                                {
-                                    Float.parseFloat (p);
-                                    columns++;  // If that didn't throw an exception, then p is likely a number.
-                                }
-                                catch (Exception e) {}
-                            }
-                        }
-                        // At least 3 viable columns, and more than half are interpretable as numbers.
-                        result = columns >= 3  &&  (double) columns / pieces.length > 0.7;
-                    }
-                }
-            }
-            catch (IOException e) {}
-        }
-        return result;
-    }
-
     public class DisplayThread extends Thread
     {
         public NodeFile      node;
@@ -657,7 +614,7 @@ public class PanelRun extends JPanel
                 {
                     Path   localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
                     String fileName    = node.path.getFileName ().toString ();
-                    Path   localPath   = localJobDir .resolve (fileName);
+                    Path   localPath   = localJobDir.resolve (fileName);
                     node.path = localPath;  // Force to use local copy, regardless of whether it was local or remote before.
 
                     if (localThread == null  &&  ! refresh)
@@ -675,12 +632,19 @@ public class PanelRun extends JPanel
                         BasicFileAttributes localAttributes  = null;
                         BasicFileAttributes remoteAttributes = null;
                         try {remoteAttributes = Files.readAttributes (remotePath, BasicFileAttributes.class);}
-                        catch (Exception e) {return;}  // Can't access remote file, so no point in continuing.
+                        catch (Exception e)
+                        {
+                            // Can't access remote file, so no point in continuing.
+                            signalDone ();  // Only needed when refresh is true.
+                            return;
+                        }
                         try {localAttributes  = Files.readAttributes (localPath,  BasicFileAttributes.class);}
                         catch (Exception e) {}
 
+                        boolean newData = false;
                         if (remoteAttributes.isDirectory ())  // An image sequence stored in a sub-directory.
                         {
+                            JViewport vp = displayPane.getViewport ();
                             // Copy any remote files that are not present in local directory.
                             if (localAttributes == null) Files.createDirectories (localPath);
                             // else local should be a directory. Otherwise, this will fail silently.
@@ -689,85 +653,102 @@ public class PanelRun extends JPanel
                                 int last = ((SshDirectoryStream) stream).count () - 1;
                                 for (Path rp : stream)
                                 {
+                                    // TODO: Handle files that were only partially written when we last tried to copy them
                                     Path lp = localPath.resolve (rp.getFileName ().toString ());
                                     if (! Files.exists (lp))
                                     {
+                                        newData = true;
                                         try {Files.copy (rp, lp);}
                                         catch (IOException e) {}
                                     }
 
-                                    Component p = displayPane.getViewport ().getView ();
-                                    if (p instanceof Video)
+                                    if (last >= 0)  // Only prod video player once.
                                     {
-                                        Video v = (Video) p;
-                                        if (v.dir.equals (localPath)) v.refresh (last);
+                                        last = -1;
+                                        Component p = vp.getView ();
+                                        if (p instanceof Video)
+                                        {
+                                            Video v = (Video) p;
+                                            if (v.dir.equals (localPath)) v.refresh (last);
+                                        }
                                     }
                                 }
                             }
-                            return;  // The video player will be installed by localThread so we shouldn't try to install another.
-                        }
-
-                        // remote is simple file
-                        long position = 0;
-                        if (localAttributes == null)
-                        {
-                            Files.createFile (localPath);
-                        }
-                        else
-                        {
-                            position = localAttributes.size ();
-                            if (localPath.endsWith ("err")) position -= job.getLong ("errSize");  // Append to, rather than replace, any locally-generated error text.
-                        }
-                        long count = remoteAttributes.size () - position;
-                        boolean newData = count > 0;
-
-                        CopyProgress progress = null;
-                        if (position == 0)
-                        {
-                            new CopyProgress ()
+                            Component p = vp.getView ();
+                            if (p instanceof Video)
                             {
-                                public void update (float percent)
-                                {
-                                    synchronized (displayText) {displayText.setText (String.format ("Downloading %2.0f%%", percent * 100));}
-                                }
-                            };
-                        }
-
-                        if (newData)
-                        {
-                            try (InputStream remoteStream = Files.newInputStream (remotePath);
-                                 OutputStream localStream = Files.newOutputStream (localPath, StandardOpenOption.WRITE, StandardOpenOption.APPEND);)
-                            {
-                                remoteStream.skip (position);
-                                Host.copy (remoteStream, localStream, count, progress);
+                                // The video player will be installed by localThread so we shouldn't try to install another.
+                                signalDone ();
+                                return;
                             }
                         }
-
-                        // Also download columns file, if it exists.
-                        if (node.type == NodeFile.Type.Output  ||  node.type == NodeFile.Type.Other)
+                        else  // remote is simple file
                         {
-                            localPath  = localJobDir .resolve (fileName + ".columns");
-                            remotePath = remoteJobDir.resolve (fileName + ".columns");
-                            localAttributes  = null;
-                            remoteAttributes = null;
-                            try {localAttributes  = Files.readAttributes (localPath,  BasicFileAttributes.class);}
-                            catch (Exception e) {}
-                            try {remoteAttributes = Files.readAttributes (remotePath, BasicFileAttributes.class);}
-                            catch (Exception e) {}
-
-                            if (remoteAttributes != null  &&  (localAttributes == null  ||  localAttributes.size () < remoteAttributes.size ()))
+                            long position = 0;
+                            if (localAttributes == null)
                             {
-                                newData = true;
-                                // Always overwrite column file completely, because it can change structure over
-                                // time in a way that is not amenable to incremental download.
+                                Files.createFile (localPath);
+                            }
+                            else
+                            {
+                                position = localAttributes.size ();
+                                if (localPath.endsWith ("err")) position -= job.getLong ("errSize");  // Append to, rather than replace, any locally-generated error text.
+                            }
+                            long count = remoteAttributes.size () - position;
+                            newData = count > 0;
+
+                            CopyProgress progress = null;
+                            if (position == 0)
+                            {
+                                new CopyProgress ()
+                                {
+                                    public void update (float percent)
+                                    {
+                                        synchronized (displayText) {displayText.setText (String.format ("Downloading %2.0f%%", percent * 100));}
+                                    }
+                                };
+                            }
+
+                            if (newData)
+                            {
                                 try (InputStream remoteStream = Files.newInputStream (remotePath);
-                                     OutputStream localStream = Files.newOutputStream (localPath);)
+                                     OutputStream localStream = Files.newOutputStream (localPath, StandardOpenOption.WRITE, StandardOpenOption.APPEND);)
                                 {
-                                    Host.copy (remoteStream, localStream, remoteAttributes.size (), progress);
+                                    remoteStream.skip (position);
+                                    Host.copy (remoteStream, localStream, count, progress);
+                                }
+                            }
+
+                            // Also download columns file, if it exists.
+                            if (node.couldHaveColumns ())
+                            {
+                                localPath  = localJobDir .resolve (fileName + ".columns");
+                                remotePath = remoteJobDir.resolve (fileName + ".columns");
+                                localAttributes  = null;
+                                remoteAttributes = null;
+                                try {localAttributes  = Files.readAttributes (localPath,  BasicFileAttributes.class);}
+                                catch (Exception e) {}
+                                try {remoteAttributes = Files.readAttributes (remotePath, BasicFileAttributes.class);}
+                                catch (Exception e) {}
+
+                                if (remoteAttributes != null  &&  (localAttributes == null  ||  localAttributes.size () < remoteAttributes.size ()))
+                                {
+                                    newData = true;
+                                    // Always overwrite column file completely, because it can change structure over
+                                    // time in a way that is not amenable to incremental download.
+                                    try (InputStream remoteStream = Files.newInputStream (remotePath);
+                                         OutputStream localStream = Files.newOutputStream (localPath);)
+                                    {
+                                        Host.copy (remoteStream, localStream, remoteAttributes.size (), progress);
+                                    }
                                 }
                             }
                         }
-                        if (! newData) return;
+                        if (! newData)
+                        {
+                            signalDone ();
+                            return;
+                        }
 
                         if (localThread != null)
                         {
@@ -785,131 +766,98 @@ public class PanelRun extends JPanel
                 // Step 2 -- Render data
                 // The exact method depends on node type and the current display mode, selected by pushbuttons and stored in viz
 
-                if (node.type == NodeFile.Type.Video)
+                if (node.render (this))
                 {
-                    // If refresh is true, then the player is already busy-waiting for more frames, so there is nothing to do.
-                    if (! refresh)
+                    signalDone ();
+                    return;
+                }
+
+                if (! viz.equals ("Text")  &&  node.isGraphable ())
+                {
+                    Component panel   = null;
+                    Component current = displayPane.getViewport ().getView ();
+                    if (viz.startsWith ("Table"))
                     {
-                        final Video v = new Video (node);
+                        if (refresh)
+                        {
+                            if (current instanceof Table.OutputTable)
+                            {
+                                ((Table.OutputTable) current).refresh ();
+                                stop = true;
+                            }
+                        }
+                        if (! stop)
+                        {
+                            Table table = new Table (node.path, viz.endsWith ("Sorted"));
+                            if (table.hasData ()) panel = table.createVisualization ();
+                        }
+                    }
+                    else if (viz.equals ("Raster"))
+                    {
+                        if (refresh)
+                        {
+                            if (current == displayChart  &&  displayChart.source instanceof Raster)
+                            {
+                                ((Raster) displayChart.source).updateChart (displayChart.chart);
+                                displayChart.offscreen = true;
+                                stop = true;
+                            }
+                        }
+                        if (! stop)
+                        {
+                            Raster raster = new Raster (node.path);
+                            displayChart.setChart (raster.createChart (), raster);
+                            displayChart.offscreen = false;
+                            panel = displayChart;
+                        }
+                    }
+                    else  // "Graph"
+                    {
+                        if (refresh)
+                        {
+                            if (current == displayChart  &&  displayChart.source instanceof Plot)
+                            {
+                                ((Plot) displayChart.source).updateChart (displayChart.chart);
+                                displayChart.offscreen = true;
+                                stop = true;
+                            }
+                        }
+                        if (! stop)
+                        {
+                            Plot plot = new Plot (node.path);
+                            displayChart.setChart (plot.createChart (), plot);
+                            displayChart.offscreen = false;
+                            panel = displayChart;
+                        }
+                    }
+
+                    if (stop)
+                    {
+                        signalDone ();
+                        return;
+                    }
+                    if (panel != null)
+                    {
+                        final Component p = panel;
                         EventQueue.invokeLater (new Runnable ()
                         {
                             public void run ()
                             {
                                 if (stop) return;
-                                displayChart.buttonBar.setVisible (false);
-                                displayPane.setViewportView (v);
-                                v.play ();
+                                displayChart.buttonBar.setVisible (p == displayChart);
+                                displayPane.setViewportView (p);
                             }
                         });
-                    }
-                    signalDone ();
-                    return;
-                }
-                else if (node.type == NodeFile.Type.Picture)
-                {
-                    final Picture p = new Picture (node.path);
-                    EventQueue.invokeLater (new Runnable ()
-                    {
-                        public void run ()
-                        {
-                            if (stop) return;
-                            displayChart.buttonBar.setVisible (false);
-                            displayPane.setViewportView (p);
-                        }
-                    });
-                    signalDone ();
-                    return;
-                }
-                else if (! viz.equals ("Text"))
-                {
-                    // Determine if the file is actually a table that can be graphed
-                    if (isGraphable (node))
-                    {
-                        Component panel   = null;
-                        Component current = displayPane.getViewport ().getView ();
-                        if (viz.startsWith ("Table"))
-                        {
-                            if (refresh)
-                            {
-                                if (current instanceof Table.OutputTable)
-                                {
-                                    ((Table.OutputTable) current).refresh ();
-                                    stop = true;
-                                }
-                            }
-                            if (! stop)
-                            {
-                                Table table = new Table (node.path, viz.endsWith ("Sorted"));
-                                if (table.hasData ()) panel = table.createVisualization ();
-                            }
-                        }
-                        else if (viz.equals ("Raster"))
-                        {
-                            if (refresh)
-                            {
-                                if (current == displayChart  &&  displayChart.source instanceof Raster)
-                                {
-                                    ((Raster) displayChart.source).updateChart (displayChart.chart);
-                                    displayChart.offscreen = true;
-                                    stop = true;
-                                }
-                            }
-                            if (! stop)
-                            {
-                                Raster raster = new Raster (node.path);
-                                displayChart.setChart (raster.createChart (), raster);
-                                displayChart.offscreen = false;
-                                panel = displayChart;
-                            }
-                        }
-                        else  // "Graph"
-                        {
-                            if (refresh)
-                            {
-                                if (current == displayChart  &&  displayChart.source instanceof Plot)
-                                {
-                                    ((Plot) displayChart.source).updateChart (displayChart.chart);
-                                    displayChart.offscreen = true;
-                                    stop = true;
-                                }
-                            }
-                            if (! stop)
-                            {
-                                Plot plot = new Plot (node.path);
-                                displayChart.setChart (plot.createChart (), plot);
-                                displayChart.offscreen = false;
-                                panel = displayChart;
-                            }
-                        }
 
-                        if (stop)
-                        {
-                            signalDone ();
-                            return;
-                        }
-                        if (panel != null)
-                        {
-                            final Component p = panel;
-                            EventQueue.invokeLater (new Runnable ()
-                            {
-                                public void run ()
-                                {
-                                    if (stop) return;
-                                    displayChart.buttonBar.setVisible (p == displayChart);
-                                    displayPane.setViewportView (p);
-                                }
-                            });
-
-                            signalDone ();
-                            return;
-                        }
-                        // Otherwise, fall through ...
+                        signalDone ();
+                        return;
                     }
+                    // Otherwise, fall through ...
                 }
 
                 // Default is plain text
-                String contents = Host.fileToString (node.path);
-                if (node.type == NodeFile.Type.Error)  // Special case for "err": show ANSI colors
+                String contents = Host.fileToString (node.path);  // This will return empty string if node.path is a directory. This can happen for STACS output.
+                if (node instanceof NodeError)  // Special case for "err": show ANSI colors
                 {
                     EventQueue.invokeLater (new Runnable ()
                     {
@@ -1404,7 +1352,7 @@ public class PanelRun extends JPanel
                             env.deleteTree (remoteFile);  // In case this is a video directory rather than just a file, use deleteTree().
 
                             // Also delete auxiliary columns file.
-                            if (nf.type == NodeFile.Type.Output  ||  nf.type == NodeFile.Type.Other)
+                            if (nf.couldHaveColumns ())
                             {
                                 remoteFile = remoteJobDir.resolve (fileName + ".columns");
                                 env.deleteTree (remoteFile);  // Even though this is definitely not a tree, it is still convenient to call deleteTre(), because it absorbs a lot of potential errors.
@@ -1414,7 +1362,7 @@ public class PanelRun extends JPanel
                         Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
                         Path localFile = localJobDir.resolve (fileName);
                         Host.get ().deleteTree (localFile);
-                        if (nf.type == NodeFile.Type.Output  ||  nf.type == NodeFile.Type.Other)
+                        if (nf.couldHaveColumns ())
                         {
                             localFile = localJobDir.resolve (fileName + ".columns");
                             Host.get ().deleteTree (localFile);
