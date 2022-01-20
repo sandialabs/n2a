@@ -377,6 +377,7 @@ public class OutputParser
 
         public void open (Path path) throws IOException
         {
+            if (channel != null) channel.close ();
             if (this.path != null  &&  ! path.equals (this.path)) nextPosition = 0;
             this.path = path;
             channel = Files.newByteChannel (path);
@@ -385,7 +386,11 @@ public class OutputParser
 
         public void close ()
         {
-            try {channel.close ();}
+            try
+            {
+                channel.close ();
+                channel = null;
+            }
             catch (IOException e) {}
         }
 

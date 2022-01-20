@@ -6,12 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.jobs;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.Reader;
-import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.SeekableByteChannel;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,8 +26,8 @@ public class RasterSTACS extends Raster
     public static class ComputeNode
     {
         public List<Path> paths = new ArrayList<Path> ();
-        public int  lastStep;     // Index in paths. Presumably, this is the only file that might be partially processed.
-        public long nextPosition; // Position in file where read should resume when more data arrives.
+        public int        lastStep;  // Index in paths. Presumably, this is the only file that might be partially processed.
+        public SafeReader reader;
     }
 
     public RasterSTACS (Path path)
@@ -49,7 +44,6 @@ public class RasterSTACS extends Raster
             for (Path p : dirStream)
             {
                 // Sort files into nodes
-
                 String name = p.getFileName ().toString ();
                 if (name.startsWith (".")) continue;
                 String[] pieces = name.split ("\\.");
@@ -71,56 +65,13 @@ public class RasterSTACS extends Raster
             {
                 // Process file
                 Path p = node.paths.get (node.lastStep);
-                try (SeekableByteChannel channel = Files.newByteChannel (p);
-                     Reader reader = Channels.newReader (channel, "UTF-8");
-                     BufferedReader br = new BufferedReader (reader))
+                try
                 {
-                    // Adjust start position to be first character after last end-of-line character previously read.
-                    // Compare with code in OutputParser.parse(File)
-                    if (node.nextPosition > 0)  // Note that "nextPosition" refers to bytes, not characters.
-                    {
-                        channel.position (node.nextPosition - 1);
-                        ByteBuffer buffer = ByteBuffer.allocate (1);
-                        channel.read (buffer);
-                        byte b = buffer.get (0);
-                        if (b != 13  &&  b != 10)  // Last character is not CR or LF
-                        {
-                            // Step backwards until we find a CR or LF
-                            boolean found = false;
-                            node.nextPosition--;  // Because we already checked the last byte.
-                            int step = 32;
-                            while (node.nextPosition > 0  &&  ! found)
-                            {
-                                node.nextPosition -= step;
-                                if (node.nextPosition < 0)
-                                {
-                                    step += node.nextPosition;
-                                    node.nextPosition = 0;
-                                }
-
-                                channel.position (node.nextPosition);
-                                if (buffer.array ().length != step) buffer = ByteBuffer.allocate (step);
-                                else                                buffer.clear ();
-                                channel.read (buffer);
-                                for (int i = step - 1; i >= 0; i--)
-                                {
-                                    b = buffer.get (i);
-                                    if (b == 13  ||  b == 10)
-                                    {
-                                        found = true;
-                                        node.nextPosition += i + 1;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        channel.position (node.nextPosition);
-                    }
-
-                    // Read lines and process
+                    if (node.reader == null) node.reader = new SafeReader (p);
+                    else                     node.reader.open (p);
                     while (true)
                     {
-                        String line = br.readLine ();
+                        String line = node.reader.readLine ();
                         if (line == null) break;  // indicates end of stream
                         if (line.isBlank ()) continue;
 
@@ -140,15 +91,13 @@ public class RasterSTACS extends Raster
                         }
                         c.values.add ((float) time);  // loses precision
                     }
-
-                    node.nextPosition = Files.size (p);
                 }
                 catch (IOException e) {}
+                if (node.reader != null) node.reader.close ();
 
                 // Advance to next file, if it exists
                 if (node.lastStep + 1 >= node.paths.size ()) break;
                 node.lastStep++;
-                node.nextPosition = 0;
             }
         }
     }
