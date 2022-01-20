@@ -33,12 +33,14 @@ import org.jfree.data.xy.XYSeriesCollection;
 **/
 public class Raster extends OutputParser
 {
-    protected Path               path;
-    protected XYSeriesCollection dataset     = new XYSeriesCollection ();
-    protected List<Color>        colors      = new ArrayList<Color> ();  // correspond 1-to-1 with series added to dataset
-    protected double             timeQuantum = 1;  // The closest spacing between two spikes on a single row.
-    protected boolean            needXmin;  // indicates that xmin was not provided explicitly, and therefore should be calculated from data
-    protected boolean            needXmax;  // ditto for xmax
+    protected Path        path;
+    protected XYDataset   dataset;
+    protected List<Color> colors      = new ArrayList<Color> ();  // correspond 1-to-1 with series added to dataset
+    protected double      timeQuantum = 1;  // The closest spacing between two spikes on a single row.
+    protected boolean     needXmin;  // indicates that xmin was not provided explicitly, and therefore should be calculated from data
+    protected boolean     needXmax;  // ditto for xmax
+
+    public static final Color red = Color.getHSBColor (0.0f, 1.0f, 0.8f);
 
     public Raster (Path path)
     {
@@ -89,7 +91,6 @@ public class Raster extends OutputParser
         }
 
         // Generate dataset
-        Color red = Color.getHSBColor (0.0f, 1.0f, 0.8f);
         for (Column c : columns)
         {
             if (timeFound  &&  c == time) continue;
@@ -126,7 +127,7 @@ public class Raster extends OutputParser
 
             if (c.data == null)
             {
-                dataset.addSeries (series);
+                ((XYSeriesCollection) dataset).addSeries (series);
                 c.data = series;
 
                 if (c.color == null) colors.add (red);
@@ -141,6 +142,8 @@ public class Raster extends OutputParser
 
     public JFreeChart createChart ()
     {
+        if (dataset == null) dataset = new XYSeriesCollection ();
+
         JFreeChart chart = ChartFactory.createScatterPlot
         (
             null,                     // chart title

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -23,25 +23,22 @@ import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYItemRenderer;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.chart.title.LegendTitle;
-import org.jfree.data.xy.XYSeries;
-import org.jfree.data.xy.XYSeriesCollection;
+import org.jfree.data.DomainOrder;
+import org.jfree.data.general.DatasetChangeEvent;
+import org.jfree.data.general.DatasetChangeListener;
+import org.jfree.data.general.DatasetGroup;
+import org.jfree.data.xy.XYDataset;
 
 public class Plot extends OutputParser
 {
-    protected Path               path;
-    protected int                columnCount;
-    protected XYSeriesCollection dataset0 = new XYSeriesCollection();
-    protected XYSeriesCollection dataset1;
-    protected double             range0;
-    protected double             range1;
-    protected List<Column>       left;  // dataset0
-    protected List<Column>       right; // dataset1
-
-    public static class AuxData
-    {
-        public int      scaledRows; // Rows before this have already been scale-converted.
-        public XYSeries series;
-    }
+    protected Path                  path;
+    protected int                   columnCount;
+    protected JFDataset             dataset0 = new JFDataset ();
+    protected JFDataset             dataset1;
+    protected double                range0;
+    protected double                range1;
+    protected List<Column>          left;  // dataset0
+    protected List<Column>          right; // dataset1
 
     public Plot (Path path)
     {
@@ -55,15 +52,29 @@ public class Plot extends OutputParser
         // Convert units
         for (Column c : columns)  // Includes time column, which can also be scaled.
         {
-            if (c.data == null) c.data = new AuxData ();
-            if (c.scale == null) continue;
-            double scale = c.scale.get ();  // Conversion factor. Only works for simple scaling, not offset. For example, converting from degrees C to F does not work, while kilograms to pounds does.
-            //if (! raw) c.header += "(" + c.scale + ")";
-            if (scale == 1) continue;
-            AuxData aux = (AuxData) c.data;
+            if (c.data == null) c.data = 0;
             int count = c.values.size ();
-            for (int i = aux.scaledRows; i < count; i++) c.values.set (i, (float) (c.values.get (i) / scale));
-            aux.scaledRows = count;
+            if (c.scale != null)
+            {
+                double scale = c.scale.get ();  // Conversion factor. Only works for simple scaling, not offset. For example, converting from degrees C to F does not work, while kilograms to pounds does.
+                //if (! raw) c.header += "(" + c.scale + ")";
+                if (scale != 1)
+                {
+                    for (int i = (Integer) c.data; i < count; i++)
+                    {
+                        Float value = c.values.get (i);
+                        if (value.isInfinite ()  ||  value.isNaN ()) c.values.set (i, 0.0f);  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
+                        else                                         c.values.set (i, (float) (value / scale));
+                    }
+                    c.data = count;  // Prevents the loop below from running.
+                }
+            }
+            for (int i = (Integer) c.data; i < count; i++)
+            {
+                Float value = c.values.get (i);
+                if (value.isInfinite ()  ||  value.isNaN ()) c.values.set (i, 0.0f);
+            }
+            c.data = count;
         }
 
         // Determine range of x axis
@@ -176,22 +187,12 @@ public class Plot extends OutputParser
 
         // Generate data series
 
-        dataset0.removeAllSeries ();  // Ensure that sort order is retained. This produces a nice rainbow pattern.
+        dataset0.columns = left;
+        dataset0.listener.datasetChanged (new DatasetChangeEvent (dataset0, dataset0));
         double min = Double.POSITIVE_INFINITY;
         double max = Double.NEGATIVE_INFINITY;
     	for (Column c : left)
         {
-    	    AuxData aux = (AuxData) c.data;
-    	    if (aux.series == null) aux.series = new XYSeries (c.header);
-            int newRow = aux.series.getItemCount ();
-    	    int count = c.values.size ();
-            for (int r = newRow; r < count; r++)
-            {
-                Float value = c.values.get (r);
-                if (value.isInfinite ()  ||  value.isNaN ()) value = 0.0f;  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
-                aux.series.add (time.values.get (r + c.startRow), value, false);
-            }
-            dataset0.addSeries (aux.series);
             min = Math.min (min, c.min);
             max = Math.max (max, c.max);
         }
@@ -210,23 +211,12 @@ public class Plot extends OutputParser
     	}
     	else
     	{
-    	    if (dataset1 == null) dataset1 = new XYSeriesCollection();
-    	    else                  dataset1.removeAllSeries ();
+    	    if (dataset1 == null) dataset1 = new JFDataset ();
+    	    dataset1.columns = right;
             min = Double.POSITIVE_INFINITY;
             max = Double.NEGATIVE_INFINITY;
             for (Column c : right)
             {
-                AuxData aux = (AuxData) c.data;
-                if (aux.series == null) aux.series = new XYSeries (c.header);
-                int newRow = aux.series.getItemCount ();
-                int count = c.values.size ();
-                for (int r = newRow; r < count; r++)
-                {
-                    Float value = c.values.get (r);
-                    if (value.isInfinite ()  ||  value.isNaN ()) value = 0.0f;  // JFreeChart chokes on infinity (how to determine a vertical scale for that?)
-                    aux.series.add (time.values.get (r + c.startRow), value);
-                }
-                dataset1.addSeries (aux.series);
                 min = Math.min (min, c.min);
                 max = Math.max (max, c.max);
             }
@@ -382,6 +372,85 @@ public class Plot extends OutputParser
         if (column.width != 1.0f  ||  column.dash != null)
         {
             renderer.setSeriesStroke (i, new BasicStroke (column.width, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10, column.dash, 0), false);
+        }
+    }
+
+    public class JFDataset implements XYDataset
+    {
+        protected List<Column>          columns;
+        protected DatasetChangeListener listener;
+        protected DatasetGroup          group;
+
+        public int getSeriesCount ()
+        {
+            if (columns == null) return 0;
+            return columns.size ();
+        }
+
+        public Comparable<?> getSeriesKey (int series)
+        {
+            Column c = columns.get (series);
+            return c.header;
+        }
+
+        @SuppressWarnings("rawtypes")
+        public int indexOf (Comparable seriesKey)
+        {
+            int count = columns.size ();
+            for (int i = 0; i < count; i++) if (columns.get (i).header.equals (seriesKey)) return i;
+            return -1;
+        }
+
+        public void addChangeListener (DatasetChangeListener listener)
+        {
+            this.listener = listener;
+        }
+
+        public void removeChangeListener (DatasetChangeListener listener)
+        {
+        }
+
+        public DatasetGroup getGroup ()
+        {
+            return group;
+        }
+
+        public void setGroup (DatasetGroup group)
+        {
+            this.group = group;
+        }
+
+        public DomainOrder getDomainOrder ()
+        {
+            return DomainOrder.ASCENDING;
+        }
+
+        public int getItemCount (int series)
+        {
+            Column c = columns.get (series);
+            return c.values.size ();
+        }
+
+        public Number getX (int series, int item)
+        {
+            return getXValue (series, item);
+        }
+
+        public double getXValue (int series, int item)
+        {
+            Column c = columns.get (series);
+            return time.values.get (item + c.startRow);  // assumes time.startRow == 0
+        }
+
+        public Number getY (int series, int item)
+        {
+            return getYValue (series, item);
+        }
+
+        public double getYValue (int series, int item)
+        {
+            Column c = columns.get (series);
+            return c.values.get (item);
         }
     }
 }
