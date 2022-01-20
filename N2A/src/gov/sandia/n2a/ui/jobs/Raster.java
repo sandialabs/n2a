@@ -24,21 +24,25 @@ import org.jfree.chart.plot.PlotRenderingInfo;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYDotRenderer;
 import org.jfree.chart.renderer.xy.XYItemRendererState;
+import org.jfree.data.DomainOrder;
+import org.jfree.data.general.DatasetChangeEvent;
+import org.jfree.data.general.DatasetChangeListener;
+import org.jfree.data.general.DatasetGroup;
 import org.jfree.data.xy.XYDataset;
-import org.jfree.data.xy.XYSeries;
-import org.jfree.data.xy.XYSeriesCollection;
 
 /**
     Create a spike-raster plot.
 **/
-public class Raster extends OutputParser
+public class Raster extends OutputParser implements XYDataset
 {
-    protected Path        path;
-    protected XYDataset   dataset;
-    protected List<Color> colors      = new ArrayList<Color> ();  // correspond 1-to-1 with series added to dataset
-    protected double      timeQuantum = 1;  // The closest spacing between two spikes on a single row.
-    protected boolean     needXmin;  // indicates that xmin was not provided explicitly, and therefore should be calculated from data
-    protected boolean     needXmax;  // ditto for xmax
+    protected Path                  path;
+    protected List<Color>           colors      = new ArrayList<Color> ();  // correspond 1-to-1 with series added to dataset
+    protected double                timeQuantum = 1;  // The closest spacing between two spikes on a single row.
+    protected boolean               needXmin;  // indicates that xmin was not provided explicitly, and therefore should be calculated from data
+    protected boolean               needXmax;  // ditto for xmax
+    protected DatasetGroup          group;
+    protected DatasetChangeListener listener;  // no need to keep a list, because it is always only our own chart
+    protected int                   startRow;  // row index of first newly-added value during a refresh cycle
 
     public static final Color red = Color.getHSBColor (0.0f, 1.0f, 0.8f);
 
@@ -51,9 +55,6 @@ public class Raster extends OutputParser
     {
         parse (path);
         assignSpikeIndices ();  // This won't change spike indices that have already been assigned, because column order remains constant.
-
-        int totalCount = 0;
-        for (Column c : columns) if (! timeFound  ||  c != time) totalCount += c.values.size ();
 
         if (timeFound)
         {
@@ -74,82 +75,63 @@ public class Raster extends OutputParser
 
             if (needXmin) xmin = time.values.get (0);
             if (needXmax) xmax = time.values.get (count - 1);
-            double minTimeQuantum = (xmax - xmin) / totalCount;
             int lastRow = nextRow - 1;
             if (lastRow < 0) lastRow = 0;
             double previousTime = time.values.get (lastRow);
             for (int r = lastRow + 1; r < count; r++)
             {
                 double thisTime = time.values.get (r);
-                double diff = thisTime - previousTime;
-                // If diff is less than minTimeQuantum, it could be due to jittering for "before" or "after" event delivery.
-                if (diff >= minTimeQuantum) timeQuantum = Math.min (timeQuantum, diff);
+                timeQuantum = Math.min (timeQuantum, thisTime - previousTime);
                 previousTime = thisTime;
             }
 
             time.data = count;
         }
 
-        // Generate dataset
+        int columnCount = columns.size ();
+        for (int i = colors.size (); i < columnCount; i++)
+        {
+            Column c = columns.get (i);
+            if (c.color == null) colors.add (red);
+            else                 colors.add (c.color);
+        }
+
+        // Convert data to event times
         for (Column c : columns)
         {
             if (timeFound  &&  c == time) continue;
 
-            XYSeries series;
-            int newRow;
-            if (c.data == null)
-            {
-                series = new XYSeries (c.header);
-                newRow = 0;
-            }
-            else
-            {
-                series = (XYSeries) c.data;
-                newRow = series.getItemCount ();
-            }
             int count = c.values.size ();
-
-            if (timeFound)
+            int i = startRow - c.startRow;  // Destination index for next converted value.
+            for (int r = i; r < count; r++)
             {
-                for (int r = newRow; r < count; r++)
-                {
-                    // This assumes that time.startRow == 0
-                    if (c.values.get (r) != 0) series.add (time.values.get (r + c.startRow).doubleValue (), c.index, false);
-                }
+                if (c.values.get (r) == 0) continue;
+                int step = r + c.startRow;
+                float t = timeFound ? time.values.get (step) : step;
+                c.values.set (i++, t);
             }
-            else
-            {
-                for (int r = newRow; r < count; r++)
-                {
-                    if (c.values.get (r) != 0) series.add (r + c.startRow, c.index, false);
-                }
-            }
-
-            if (c.data == null)
-            {
-                ((XYSeriesCollection) dataset).addSeries (series);
-                c.data = series;
-
-                if (c.color == null) colors.add (red);
-                else                 colors.add (c.color);
-            }
-            else
-            {
-                series.fireSeriesChanged ();
-            }
+            c.values.subList (i, count).clear ();  // "i" is effectively the new count
+            c.startRow = rows - i;
         }
+        startRow = rows;
+        listener.datasetChanged (new DatasetChangeEvent (this, this));
+
+        // Lower limit on size of timeQuantum
+        // Small timesteps could be due to jittering for "before" or "after" event delivery.
+        int totalCount = 0;
+        for (Column c : columns) if (! timeFound  ||  c != time) totalCount += c.values.size ();
+        double minTimeQuantum = (xmax - xmin) / totalCount;
+        timeQuantum = Math.max (timeQuantum, minTimeQuantum);
     }
 
     public JFreeChart createChart ()
     {
-        if (dataset == null) dataset = new XYSeriesCollection ();
-
         JFreeChart chart = ChartFactory.createScatterPlot
         (
             null,                     // chart title
             null,                     // x axis label
             null,                     // y axis label
-            dataset,                  // data
+            this,                     // data
             PlotOrientation.VERTICAL,
             false,                    // include legend
             true,                     // tooltips
@@ -185,7 +167,7 @@ public class Raster extends OutputParser
             tr.notifyListeners (new RendererChangeEvent (tr));  // This is the same event as issued by setSeriesPaint() when notify is true.
         }
 
-        if (! Double.isNaN (xmin))
+        if (xmin < xmax)
         {
             ValueAxis x = plot.getDomainAxis ();
             x.setRange (xmin, xmax);
@@ -217,5 +199,77 @@ public class Raster extends OutputParser
 
             return super.initialise (g2, dataArea, plot, dataset, info);
         }
+    }
+
+    public int getSeriesCount ()
+    {
+        return columns.size ();
+    }
+
+    public Comparable<?> getSeriesKey (int series)
+    {
+        return series;
+    }
+
+    @SuppressWarnings("rawtypes")
+    public int indexOf (Comparable seriesKey)
+    {
+        return (Integer) seriesKey;
+    }
+
+    public void addChangeListener (DatasetChangeListener listener)
+    {
+        this.listener = listener;
+    }
+
+    public void removeChangeListener (DatasetChangeListener listener)
+    {
+    }
+
+    public DatasetGroup getGroup ()
+    {
+        return group;
+    }
+
+    public void setGroup (DatasetGroup group)
+    {
+        this.group = group;
+    }
+
+    public DomainOrder getDomainOrder ()
+    {
+        return DomainOrder.ASCENDING;
+    }
+
+    public int getItemCount (int series)
+    {
+        Column c = columns.get (series);
+        if (c == null) return 0;
+        if (timeFound  &&  c == time) return 0;
+        return c.values.size ();
+    }
+
+    public Number getX (int series, int item)
+    {
+        return getXValue (series, item);
+    }
+
+    public double getXValue (int series, int item)
+    {
+        Column c = columns.get (series);
+        if (c == null) return 0;
+        return c.values.get (item);
+    }
+
+    public Number getY (int series, int item)
+    {
+        return getYValue (series, item);
+    }
+
+    public double getYValue (int series, int item)
+    {
+        Column c = columns.get (series);
+        if (c == null) return 0;
+        return c.index;
     }
 }

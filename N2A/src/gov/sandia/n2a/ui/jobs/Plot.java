@@ -31,14 +31,14 @@ import org.jfree.data.xy.XYDataset;
 
 public class Plot extends OutputParser
 {
-    protected Path                  path;
-    protected int                   columnCount;
-    protected JFDataset             dataset0 = new JFDataset ();
-    protected JFDataset             dataset1;
-    protected double                range0;
-    protected double                range1;
-    protected List<Column>          left;  // dataset0
-    protected List<Column>          right; // dataset1
+    protected Path         path;
+    protected int          columnCount;
+    protected JFDataset    dataset0 = new JFDataset ();
+    protected JFDataset    dataset1;
+    protected double       range0;
+    protected double       range1;
+    protected List<Column> left;  // dataset0
+    protected List<Column> right; // dataset1
 
     public Plot (Path path)
     {

@@ -16,30 +16,17 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
-import org.jfree.data.DomainOrder;
 import org.jfree.data.general.DatasetChangeEvent;
-import org.jfree.data.general.DatasetChangeListener;
-import org.jfree.data.general.DatasetGroup;
-import org.jfree.data.xy.XYDataset;
-import org.jfree.data.xy.XYSeries;
 
 /**
     Create a spike-raster plot.
 **/
-public class RasterSTACS extends Raster implements XYDataset
+public class RasterSTACS extends Raster
 {
-    protected List<ComputeNode>     nodes = new ArrayList<ComputeNode> ();
-    protected Column                empty;
-    protected DatasetGroup          group;
-    protected DatasetChangeListener listener;  // no need to keep a list, because it is always only our own chart
-
-    public static class AuxData
-    {
-        public int      nextRow;          // that should be analyzed by updateDataset()
-        public XYSeries series;
-    }
+    protected List<ComputeNode> nodes = new ArrayList<ComputeNode> ();
 
     public static class ComputeNode
     {
@@ -51,10 +38,7 @@ public class RasterSTACS extends Raster implements XYDataset
     public RasterSTACS (Path path)
     {
         super (path);
-        dataset     = this;
         timeQuantum = 1e-3;
-
-        empty = new Column ();
     }
 
     public void parse (Path path)
@@ -155,10 +139,6 @@ public class RasterSTACS extends Raster implements XYDataset
                             c.index = vertex;
                         }
                         c.values.add ((float) time);  // loses precision
-
-                        //xmin = Math.min (xmin, time);
-                        //xmax = Math.max (xmax, time);
-                        //totalCount++;
                     }
 
                     node.nextPosition = Files.size (p);
@@ -171,8 +151,6 @@ public class RasterSTACS extends Raster implements XYDataset
                 node.nextPosition = 0;
             }
         }
-
-        //timeQuantum = (xmax - xmin) * columns.size () / totalCount;
     }
 
     public void updateDataset ()
@@ -188,77 +166,15 @@ public class RasterSTACS extends Raster implements XYDataset
             else                                colors.add (c.color);
         }
 
+        // Sort data series in each column
+        // Apparently, JFreeChart assumes a sorted list, and takes advantage of this for
+        // early-out when displaying a portion of the graph.
+        for (Column c : columns)
+        {
+            if (c == null) continue;
+            Collections.sort (c.values);
+        }
+
         listener.datasetChanged (new DatasetChangeEvent (this, this));
-    }
-
-    public int getSeriesCount ()
-    {
-        return columns.size ();
-    }
-
-    public Comparable<?> getSeriesKey (int series)
-    {
-        return series;
-    }
-
-    @SuppressWarnings("rawtypes")
-    public int indexOf (Comparable seriesKey)
-    {
-        return (Integer) seriesKey;
-    }
-
-    public void addChangeListener (DatasetChangeListener listener)
-    {
-        this.listener = listener;
-    }
-
-    public void removeChangeListener (DatasetChangeListener listener)
-    {
-    }
-
-    public DatasetGroup getGroup ()
-    {
-        return group;
-    }
-
-    public void setGroup (DatasetGroup group)
-    {
-        this.group = group;
-    }
-
-    public DomainOrder getDomainOrder ()
-    {
-        return DomainOrder.ASCENDING;
-    }
-
-    public int getItemCount (int series)
-    {
-        Column c = columns.get (series);
-        if (c == null) return 0;
-        return c.values.size ();
-    }
-
-    public Number getX (int series, int item)
-    {
-        return getXValue (series, item);
-    }
-
-    public double getXValue (int series, int item)
-    {
-        Column c = columns.get (series);
-        if (c == null) return 0;
-        return c.values.get (item);
-    }
-
-    public Number getY (int series, int item)
-    {
-        return getYValue (series, item);
-    }
-
-    public double getYValue (int series, int item)
-    {
-        Column c = columns.get (series);
-        if (c == null) return 0;
-        return c.index;
     }
 }

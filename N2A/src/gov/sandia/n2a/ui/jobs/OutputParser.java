@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,11 +7,9 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.jobs;
 
 import java.awt.Color;
-import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.Reader;
 import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,7 +34,7 @@ public class OutputParser
     public Column       time;
     public boolean      timeFound;  // Indicates that time is a properly-labeled column, rather than a fallback.
     public int          rows;
-    public long         nextPosition;   // Position in file where read should resume when more data arrives.
+    public SafeReader   reader;
     public float        defaultValue;
     public double       xmin = Double.NaN; // Bounds for chart. If not specified, then simply fit to data.
     public double       xmax = Double.NaN; // Note that "x" is always time.
@@ -65,63 +63,15 @@ public class OutputParser
         HTMLcolors.put ("purple",  new Color (0x800080));
     }
 
-    public void parse (Path f)
+    public void parse (Path path)
     {
-        try (SeekableByteChannel channel = Files.newByteChannel (f);
-             Reader reader = Channels.newReader (channel, "UTF-8");
-             BufferedReader br = new BufferedReader (reader))
+        try
         {
-            // Adjust start position to be first character after last end-of-line character previously read.
-            if (nextPosition > 0)  // Note that "nextPosition" refers to bytes, not characters.
-            {
-                channel.position (nextPosition - 1);
-                ByteBuffer buffer = ByteBuffer.allocate (1);
-                channel.read (buffer);
-                byte b = buffer.get (0);
-                if (b != 13  &&  b != 10)  // Last character is not CR or LF
-                {
-                    // Remove last row of loaded data, since we will read the whole row again.
-                    if (rows > 0)
-                    {
-                        rows--;
-                        for (Column c : columns) if (c.values.size () + c.startRow > rows) c.values.remove (c.values.size () - 1);
-                    }
-
-                    // Step backwards until we find a CR or LF
-                    boolean found = false;
-                    nextPosition--;  // Because we already checked the last byte.
-                    int step = 2048;
-                    while (nextPosition > 0  &&  ! found)
-                    {
-                        nextPosition -= step;
-                        if (nextPosition < 0)
-                        {
-                            step += nextPosition;
-                            nextPosition = 0;
-                        }
-
-                        channel.position (nextPosition);
-                        if (buffer.array ().length != step) buffer = ByteBuffer.allocate (step);
-                        else                                buffer.clear ();
-                        channel.read (buffer);
-                        for (int i = step - 1; i >= 0; i--)
-                        {
-                            b = buffer.get (i);
-                            if (b == 13  ||  b == 10)
-                            {
-                                found = true;
-                                nextPosition += i + 1;
-                                break;
-                            }
-                        }
-                    }
-                }
-                channel.position (nextPosition);
-            }
-
+            if (reader == null) reader = new SafeReader (path);
+            else                reader.open (path);
             while (true)
             {
-                String line = br.readLine ();
+                String line = reader.readLine ();
                 if (line == null) break;  // indicates end of stream
             	if (line.length () == 0) continue;
             	if (line.startsWith ("End of")) continue;
@@ -131,7 +81,7 @@ public class OutputParser
                     if      (line.contains ("\t")) delimiter = "\t"; // highest precedence
                     else if (line.contains (","))  delimiter = ",";
                     // space character is lowest precedence
-                    delimiterSet =  ! delimiter.equals (" ")  ||  ! line.trim ().isEmpty ();
+                    delimiterSet =  ! delimiter.equals (" ")  ||  ! line.isBlank ();
                 }
                 String[] parts = line.split (delimiter, -1);  // -1 means that trailing delimiters will produce additional columns. Internal and C backends do not produce trailing delimiters, but other simulators might.
                 int lastSize = columns.size ();
@@ -142,7 +92,7 @@ public class OutputParser
                 	columns.add (c);
                 }
 
-                char fc = parts[0].charAt (0);  // first character
+                char fc = parts[0].charAt (0);  // first character. There should always be something in first column, because we put either "$t" or current timestamp there.
                 if (fc == '-'  ||  fc == '+'  ||  fc == '.'  ||  fc >= '0'  &&  fc <= '9')  // number
                 {
                     int p = isXycePRN ? 1 : 0;  // skip parsing Index column, since we don't use it
@@ -170,40 +120,24 @@ public class OutputParser
                     }
                 }
             }
-
-            nextPosition = Files.size (f);
         }
         catch (IOException e)
         {
 		}
+        if (reader != null) reader.close ();
         if (columns.size () == 0) return;
 
-        // Determine time column
-        time = columns.get (0);  // fallback, in case we don't find it by name
-        int timeMatch = 0;
-        for (Column c : columns)
-        {
-            int potentialMatch = 0;
-            if      (c.header.equals ("t"   )) potentialMatch = 1;
-            else if (c.header.equals ("TIME")) potentialMatch = 2;
-            else if (c.header.equals ("$t"  )) potentialMatch = 3;
-            if (potentialMatch > timeMatch)
-            {
-                timeMatch = potentialMatch;
-                time = c;
-                timeFound = true;
-            }
-        }
-
         // Get rid of Index column. No subclass uses it.
+        // If this is a Xyce PRN file, then there won't also be a columns file, so no need to worry about column numbering.
         if (isXycePRN) columns.remove (0);
 
         // If there is a separate columns file, open and parse it.
-        Path jobDir = f.getParent ();
-        Path columnPath = jobDir.resolve (f.getFileName ().toString () + ".columns");
+        MDoc columnFile = null;
+        Path jobDir = path.getParent ();
+        Path columnPath = jobDir.resolve (path.getFileName ().toString () + ".columns");
         if (Files.isReadable (columnPath))
         {
-            MDoc columnFile = new MDoc (columnPath);
+            columnFile = new MDoc (columnPath);
             for (MNode n : columnFile)
             {
                 int columnIndex = Integer.valueOf (n.key ());
@@ -256,9 +190,28 @@ public class OutputParser
                         catch (NumberFormatException error) {}
                     }
                 }
+            }
+        }
 
-                if (c == time)
+        // Determine time column
+        time = columns.get (0);  // fallback, in case we don't find it by name
+        int timeMatch = 0;
+        for (int i = 0; i < columns.size (); i++)
+        {
+            Column c = columns.get (i);
+
+            int potentialMatch = 0;
+            if      (c.header.equals ("t"   )) potentialMatch = 1;
+            else if (c.header.equals ("TIME")) potentialMatch = 2;
+            else if (c.header.equals ("$t"  )) potentialMatch = 3;
+            if (potentialMatch > timeMatch)
+            {
+                timeMatch = potentialMatch;
+                time = c;
+                timeFound = true;
+                if (columnFile != null)
                 {
+                    MNode n = columnFile.child (i);
                     xmin = (float) n.getOrDefault (xmin, "xmin");
                     xmax = (float) n.getOrDefault (xmax, "xmax");
                     ymin = (float) n.getOrDefault (ymin, "ymin");
@@ -402,6 +355,78 @@ public class OutputParser
             if (a.range > b.range) return  1;
             if (a.range < b.range) return -1;
             return 0;
+        }
+    }
+
+    public static class SafeReader implements AutoCloseable
+    {
+        protected Path                  path;           // The file we are watching.
+        protected long                  nextPosition;   // Position in file where read should resume when more data arrives.
+        protected SeekableByteChannel   channel;
+        protected ByteBuffer            readBuffer;     // for direct IO
+        protected long                  readBufferBase; // position in file of first bye in readBuffer, if there is one
+        protected ByteArrayOutputStream lineBuffer;     // for accumulating the return string
+
+        public SafeReader (Path path) throws IOException
+        {
+            open (path);
+            readBuffer = ByteBuffer.allocate (8192);
+            readBuffer.limit (0);  // Indicates that buffer is initially empty.
+            lineBuffer = new ByteArrayOutputStream ();
+        }
+
+        public void open (Path path) throws IOException
+        {
+            if (this.path != null  &&  ! path.equals (this.path)) nextPosition = 0;
+            this.path = path;
+            channel = Files.newByteChannel (path);
+            channel.position (nextPosition);
+        }
+
+        public void close ()
+        {
+            try {channel.close ();}
+            catch (IOException e) {}
+        }
+
+        public String readLine () throws IOException
+        {
+            String result = null;
+            lineBuffer.reset ();
+            boolean eol = false;  // Indicates that we've encountered CR/LF, and are consuming any remaining CR/LF characters.
+            while (true)
+            {
+                // Scan for next CR/LF
+                while (readBuffer.hasRemaining ())
+                {
+                    byte b = readBuffer.get ();
+                    if (b == 13  ||  b == 10)
+                    {
+                        nextPosition = readBufferBase + readBuffer.position ();  // one byte beyond the one we just read
+                        if (! eol) result = lineBuffer.toString ("UTF-8");
+                        eol = true;
+                        continue;
+                    }
+                    if (eol)
+                    {
+                        readBuffer.position (readBuffer.position () - 1);  // Put back the character we just read. Want to use it in the next cycle.
+                        return result;
+                    }
+                    lineBuffer.write (b);
+                }
+
+                // Fill read buffer
+                readBuffer.clear ();
+                readBufferBase = channel.position ();
+                int count = channel.read (readBuffer);
+                if (count <= 0)  // EOF
+                {
+                    readBuffer.limit (0);  // Ensure that buffer appears empty the next time readLine() is called. This should produce a return value of null.
+                    return result;  // Could be null, if file did not end with a CR/LF.
+                }
+                readBuffer.limit (count);
+                readBuffer.rewind ();
+            }
         }
     }
 }
