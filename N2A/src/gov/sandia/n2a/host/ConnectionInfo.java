@@ -120,8 +120,7 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
     {
         if (messages.contains (message)) return;
         messages.add (message);
-        if (! connection.allowDialogs) return;
-        JOptionPane.showMessageDialog (MainFrame.instance, message, hostname, JOptionPane.INFORMATION_MESSAGE);
+        connection.messageReceived ();
     }
 
     public String[] promptKeyboardInteractive (String destination, String name, String instruction, String[] prompt, boolean[] echo)

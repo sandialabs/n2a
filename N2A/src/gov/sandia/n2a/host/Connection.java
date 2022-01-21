@@ -35,15 +35,16 @@ import gov.sandia.n2a.host.Host.AnyProcessBuilder;
 
 public class Connection implements Closeable
 {
-    protected MNode          config;
-    protected List<Session>  sessions = new ArrayList<Session> ();
-    protected Session        session;      // The main session. Final entry in "sessions".
-    protected FileSystem     sshfs;
-    protected String         hostname;
-    protected String         username;
-    protected int            timeout;
-    protected String         home;         // Path of user's home directory on remote system. Includes leading slash.
-    protected boolean        allowDialogs; // Initially false. Dialogs must be specifically enabled by the user.
+    protected MNode           config;
+    protected List<Session>   sessions = new ArrayList<Session> ();
+    protected Session         session;      // The main session. Final entry in "sessions".
+    protected FileSystem      sshfs;
+    protected String          hostname;
+    protected String          username;
+    protected int             timeout;
+    protected String          home;         // Path of user's home directory on remote system. Includes leading slash.
+    protected boolean         allowDialogs; // Initially false. Dialogs must be specifically enabled by the user.
+    protected MessageListener messageListener;
 
     public static JSch jsch = new JSch ();  // shared between remote execution system and git wrapper
     static
@@ -85,6 +86,11 @@ public class Connection implements Closeable
             }
         }
         catch (Exception e) {}
+    }
+
+    public interface MessageListener
+    {
+        public void messageReceived ();
     }
 
     public Connection (MNode config)
@@ -187,6 +193,40 @@ public class Connection implements Closeable
     public synchronized boolean isConnected ()
     {
         return  session != null  &&  session.isConnected ();
+    }
+
+    /**
+        Used by ConnectionInfo to notify us that a new message has been received.
+    **/
+    protected void messageReceived ()
+    {
+        if (messageListener != null) messageListener.messageReceived ();
+    }
+
+    /**
+        Constructs a compendium of unique messages from all the sessions.
+    **/
+    public String getMessages ()
+    {
+        if (sessions.isEmpty ()) return "";
+
+        StringBuilder result = new StringBuilder ();
+        boolean firstSession = true;
+        for (Session s : sessions)
+        {
+            if (! firstSession) result.append ("\n" + s.getHost () + "\n");
+            firstSession = false;
+
+            ConnectionInfo ci = (ConnectionInfo) s.getUserInfo ();
+            boolean firstMessage = true;
+            for (String m : ci.messages)
+            {
+                if (! firstMessage) result.append ("\n------------------------\n");
+                firstMessage = false;
+                result.append (m);
+            }
+        }
+        return result.toString ();
     }
 
     /**

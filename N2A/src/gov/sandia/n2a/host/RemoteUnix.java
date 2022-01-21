@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.host;
 
 import java.awt.EventQueue;
+import java.awt.Font;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -19,12 +20,15 @@ import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JTextArea;
+import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.host.Connection.MessageListener;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MPasswordField;
 import gov.sandia.n2a.ui.MTextField;
@@ -70,7 +74,7 @@ public class RemoteUnix extends Unix implements Remote
     }
 
     @SuppressWarnings("serial")
-    public class EditorPanel extends JPanel implements NameChangeListener
+    public class EditorPanel extends JPanel implements NameChangeListener, MessageListener
     {
         public MTextField     fieldAddress   = new MTextField (config, "address", name);
         public MTextField     fieldUsername  = new MTextField (config, "username", System.getProperty ("user.name"));
@@ -82,6 +86,7 @@ public class RemoteUnix extends Unix implements Remote
         public JButton        buttonConnect  = new JButton ("Reset Connection");
         public JButton        buttonRestart  = new JButton ("Restart Monitor Thread");
         public JButton        buttonZombie   = new JButton ("Scan for Zombie Jobs");
+        public JTextArea      textMessages;
 
         public void arrange ()
         {
@@ -93,7 +98,9 @@ public class RemoteUnix extends Unix implements Remote
                     Lay.FL (labelWarning),
                     Lay.FL (new JLabel ("Home Directory"), fieldHome),
                     Lay.FL (panelRelays),
-                    Lay.FL (buttonConnect, buttonRestart, buttonZombie)
+                    Lay.FL (buttonConnect, buttonRestart, buttonZombie),
+                    Lay.FL (new JLabel ("Messages:")),
+                    Lay.FL (textMessages)
                 )
             );
         }
@@ -204,6 +211,24 @@ public class RemoteUnix extends Unix implements Remote
                     thread.start ();
                 }
             });
+
+            String messages = "";
+            if (connection != null)
+            {
+                connection.messageListener = this;
+                messages = connection.getMessages ();
+            }
+            textMessages = new JTextArea (messages)
+            {
+                public void updateUI ()
+                {
+                    super.updateUI ();
+
+                    Font f = UIManager.getFont ("TextArea.font");
+                    if (f == null) return;
+                    setFont (new Font (Font.MONOSPACED, Font.PLAIN, f.getSize ()));
+                }
+            };
         }
 
         /**
@@ -283,11 +308,20 @@ public class RemoteUnix extends Unix implements Remote
         {
             fieldAddress.setDefault (name);
         }
+
+        public void messageReceived ()
+        {
+            textMessages.setText (connection.getMessages ());
+        }
     }
 
     public synchronized void connect () throws Exception
     {
-        if (connection == null) connection = new Connection (config);
+        if (connection == null)
+        {
+            connection = new Connection (config);
+            connection.messageListener = panel;
+        }
         connection.connect ();
     }
 
@@ -300,7 +334,11 @@ public class RemoteUnix extends Unix implements Remote
     @Override
     public synchronized void enable ()
     {
-        if (connection == null) connection = new Connection (config);
+        if (connection == null)
+        {
+            connection = new Connection (config);
+            connection.messageListener = panel;
+        }
         connection.allowDialogs = true;
 
         // This function is called on the EDT, but connection.connect() could take a long time,

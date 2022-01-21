@@ -70,7 +70,9 @@ public class RemoteSlurm extends RemoteUnix
                     Lay.FL (new JLabel ("Home Directory"), fieldHome),
                     Lay.FL (new JLabel ("Slurm Account"), fieldAccount),
                     Lay.FL (panelRelays),
-                    Lay.FL (buttonConnect, buttonRestart, buttonZombie)
+                    Lay.FL (buttonConnect, buttonRestart, buttonZombie),
+                    Lay.FL (new JLabel ("Messages:")),
+                    Lay.FL (textMessages)
                 )
             );
         }
