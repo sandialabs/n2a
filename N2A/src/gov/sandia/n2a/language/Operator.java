@@ -15,6 +15,7 @@ import gov.sandia.n2a.language.function.Ceil;
 import gov.sandia.n2a.language.function.Columns;
 import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Delay;
+import gov.sandia.n2a.language.function.DrawBlock;
 import gov.sandia.n2a.language.function.DrawDisc;
 import gov.sandia.n2a.language.function.DrawSegment;
 import gov.sandia.n2a.language.function.Event;
@@ -440,6 +441,7 @@ public class Operator implements Cloneable
         register (Columns          .factory ());
         register (Cosine           .factory ());
         register (Delay            .factory ());
+        register (DrawBlock        .factory ());
         register (DrawDisc         .factory ());
         register (DrawSegment      .factory ());
         register (Event            .factory ());

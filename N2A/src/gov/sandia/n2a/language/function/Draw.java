@@ -11,6 +11,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
+import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -78,12 +79,13 @@ public class Draw extends Function
         public Color   clearColor = Color.BLACK;
 
         // TODO: handle video streams. Probably use FFMPEG JNI wrapper.
-        public double           t;
-        public int              frameCount; // Number of frames actually written so far.
-        public BufferedImage    image;      // Current image being built. Null if nothing has been drawn since last write to disk.
-        public Graphics2D       graphics;   // for drawing on current image
-        public Line2D.Double    line;       // Re-usable Shape object
-        public Ellipse2D.Double disc;       // ditto
+        public double             t;
+        public int                frameCount; // Number of frames actually written so far.
+        public BufferedImage      image;      // Current image being built. Null if nothing has been drawn since last write to disk.
+        public Graphics2D         graphics;   // for drawing on current image
+        public Line2D.Double      line;       // Re-usable Shape object
+        public Ellipse2D.Double   disc;       // ditto
+        public Rectangle2D.Double rect;       // ditto
 
         public Holder (Simulator simulator, String filename)
         {
@@ -138,6 +140,27 @@ public class Draw extends Function
 
             graphics.setColor (new Color (color));
             graphics.fill (disc);
+        }
+
+        public void drawBlock (double now, double x, double y, double w, double h, int color)
+        {
+            next (now);
+
+            if (! raw)
+            {
+                x *= width;
+                y *= width;
+                w *= width;
+                h *= width;
+            }
+            if (w < 0.5) w = 0.5;  // 1px
+            if (h < 0.5) h = 0.5;
+
+            if (rect == null) rect = new Rectangle2D.Double (x - w/2, y - h/2, w, h);
+            else              rect.setFrame                 (x - w/2, y - h/2, w, h);
+
+            graphics.setColor (new Color (color));
+            graphics.fill (rect);
         }
 
         public void drawSegment (double now, double x, double y, double x2, double y2, double thickness, int color)
