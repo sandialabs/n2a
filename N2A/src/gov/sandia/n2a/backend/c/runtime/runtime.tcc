@@ -42,7 +42,7 @@ T
 uniform (T lo, T hi, T step)
 {
     int steps = floor ((hi - lo) / step + 1);
-    return lo + step * floor (uniform (steps));
+    return lo + step * (rand () % steps);
 }
 
 // Box-Muller method (polar variant) for Gaussian random numbers.
@@ -203,7 +203,7 @@ uniform (int lo, int hi, int step)
 {
     // lo, hi and step all have same exponent
     int steps = (hi - lo) / step + 1;
-    return lo + step * uniform (steps);
+    return lo + step * (rand () % steps);
 }
 
 // Box-Muller method (polar variant) for Gaussian random numbers.

@@ -171,7 +171,7 @@ public class JobC extends Thread
             seed = -1;
             if (digestedModel.usesRandom ())  // only record seed if actually used
             {
-                seed = model.getOrDefault (System.currentTimeMillis (), "$metadata", "seed");
+                seed = model.getOrDefault (System.currentTimeMillis () & 0xFFFFFFFFL, "$metadata", "seed");
                 job.set (seed, "seed");
             }
 
@@ -1280,7 +1280,9 @@ public class JobC extends Thread
         }
         for (EventSource es : bed.eventSources)
         {
-            result.append ("  std::vector<Part<" + T + "> *> " + "eventMonitor_" + prefix (es.target.container) + ";\n");
+            String eventMonitor = "eventMonitor_" + prefix (es.target.container);
+            if (es.monitorIndex > 0) eventMonitor += "_" + es.monitorIndex;
+            result.append ("  std::vector<Part<" + T + "> *> " + eventMonitor + ";\n");
         }
         for (EventTarget et : bed.eventTargets)
         {
@@ -2373,7 +2375,9 @@ public class JobC extends Thread
                     {
                         String part = "";
                         if (es.reference != null) part = resolveContainer (es.reference, context, "");
-                        result.append ("  removeMonitor (" + part + "eventMonitor_" + prefix (s) + ", this);\n");
+                        String eventMonitor = "eventMonitor_" + prefix (s);
+                        if (es.monitorIndex > 0) eventMonitor += "_" + es.monitorIndex;
+                        result.append ("  removeMonitor (" + part + eventMonitor + ", this);\n");
                     }
                 }
             }
@@ -2522,7 +2526,9 @@ public class JobC extends Thread
                 {
                     String part = "";
                     if (es.reference != null) part = resolveContainer (es.reference, context, "");
-                    result.append ("  " + part + "eventMonitor_" + prefix (s) + ".push_back (this);\n");
+                    String eventMonitor = "eventMonitor_" + prefix (s);
+                    if (es.monitorIndex > 0) eventMonitor += "_" + es.monitorIndex;
+                    result.append ("  " + part + eventMonitor + ".push_back (this);\n");
                 }
             }
 
@@ -2684,6 +2690,7 @@ public class JobC extends Thread
             {
                 EventTarget et = es.target;
                 String eventMonitor = "eventMonitor_" + prefix (et.container);
+                if (es.monitorIndex > 0) eventMonitor += "_" + es.monitorIndex;
 
                 if (es.testEach)
                 {

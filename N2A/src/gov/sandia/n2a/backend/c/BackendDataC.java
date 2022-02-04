@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -147,6 +147,13 @@ public class BackendDataC
             for (EventSource es : et.sources)
             {
                 BackendDataC sourceBed = (BackendDataC) es.container.backendData;
+                // Disambiguate multiple event sources that share same target equation set.
+                // This can happen, for example, with an STDP synapse from a population to itself.
+                // Each event source gets its own instance collection.
+                // Ideally there would be a single instance collection for each target equation set.
+                // However, these could potentially have different trigger conditions, which would require more careful processing.
+                // Rather than resolve whether they can share the same trigger, we simply make multiple collections.
+                for (EventSource es2 : sourceBed.eventSources) if (es2.target.container == s) es.monitorIndex++;
                 sourceBed.eventSources.add (es);
             }
 

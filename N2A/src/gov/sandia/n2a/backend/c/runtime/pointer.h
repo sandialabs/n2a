@@ -223,8 +223,8 @@ namespace fl
 	  memory = (RefCount *) malloc (sizeof (RefCount) + size);
 	  if (memory)
 	  {
+        new (memory) RefCount ();  // in case atomic_uint needs construction
 		memory = & memory[1];
-		new (memory - 1) RefCount ();  // in case atomic_uint needs construction
 		memory[-1] = 1;
 		metaData = -size;
 	  }

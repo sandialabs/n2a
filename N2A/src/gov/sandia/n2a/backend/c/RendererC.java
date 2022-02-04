@@ -492,9 +492,10 @@ public class RendererC extends Renderer
         {
             Uniform u = (Uniform) op;
             result.append ("uniform<" + job.T + "> (");
-            if (u.operands.length > 0)
+            for (int i = 0; i < u.operands.length; i++)
             {
-                u.operands[0].render (this);
+                if (i > 0) result.append (", ");
+                u.operands[i].render (this);
             }
             result.append (")");
             return true;
