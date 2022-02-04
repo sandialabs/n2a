@@ -43,6 +43,7 @@ template<> inline int modFloor (int a, int b)
 
 template<class T> T                         uniform ();
 template<class T> T                         uniform (T sigma);
+template<class T> T                         uniform (T lo, T hi, T step = (T) 1);
 template<class T, int R> MatrixFixed<T,R,1> uniform (const MatrixFixed<T,R,1> & sigma)
 {
     MatrixFixed<T,R,1> result;
@@ -78,6 +79,34 @@ template<class T, int R, int C> MatrixFixed<T,R,1> gaussian (const MatrixFixed<T
     T * t   = temp.base ();
     T * end = t + C;
     while (t < end) *t++ = gaussian<T> ();
+    return sigma * temp;
+}
+
+template<class T, int R> MatrixFixed<T,R,1> sphere (const MatrixFixed<T,R,1> & sigma)
+{
+    MatrixFixed<T,R,1> result;
+    T * r   = result.base ();
+    T * end = r + R;
+    while (r < end) *r++ = gaussian<T> ();
+
+    T scale = pow (uniform<T> (), (T) 1 / R) / norm (result, (T) 2);
+    r = result.base ();
+    const T * s = sigma.base ();
+    while (r < end) *r++ *= scale * *s++;
+
+    return result;
+}
+template<class T, int R, int C> MatrixFixed<T,R,1> sphere (const MatrixFixed<T,R,C> & sigma)
+{
+    MatrixFixed<T,C,1> temp;
+    T * t   = temp.base ();
+    T * end = t + C;
+    while (t < end) *t++ = gaussian<T> ();
+
+    T scale = pow (uniform<T> (), (T) 1 / C) / norm (temp, (T) 2);
+    t = temp.base ();
+    while (t < end) *t++ *= scale;
+
     return sigma * temp;
 }
 

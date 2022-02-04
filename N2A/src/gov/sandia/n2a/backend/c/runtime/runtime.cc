@@ -21,6 +21,7 @@ template class MatrixFixed<n2a_T,3,1>;
 
 template n2a_T uniform ();
 template n2a_T uniform (n2a_T sigma);
+template n2a_T uniform (n2a_T lo, n2a_T hi, n2a_T step);
 template n2a_T gaussian ();
 template n2a_T gaussian (n2a_T sigma);
 

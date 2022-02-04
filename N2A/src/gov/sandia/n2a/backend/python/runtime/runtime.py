@@ -22,12 +22,12 @@ def uniform(sigma=1):
         if len(sigma.shape) > 1: cols = sigma.shape[1]
         if cols == 1:
             result = numpy.zeros(rows)
-            for r in range(rows): result[r] = sigma[r,0] * random.uniform()
+            for r in range(rows): result[r] = sigma[r,0] * random.random()  # Guarantee a semi-open interval, so don't use uniform().
             return result
         result = numpy.zeros(cols)
-        for i in range(cols): result[i] = random.uniform()
+        for i in range(cols): result[i] = random.random()
         return sigma * result
-    return random.uniform() * sigma
+    return random.random() * sigma
 
 def grid(i, nx, ny, nz):
     sx = ny * nz  # stride x

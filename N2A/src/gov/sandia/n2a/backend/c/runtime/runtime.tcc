@@ -27,14 +27,22 @@ template<class T>
 T
 uniform ()
 {
-    return (T) rand () / RAND_MAX;
+    return rand () / (RAND_MAX + (T) 1);
 }
 
 template<class T>
 T
 uniform (T sigma)
 {
-    return sigma * rand () / RAND_MAX;
+    return sigma * rand () / (RAND_MAX + (T) 1);
+}
+
+template<class T>
+T
+uniform (T lo, T hi, T step)
+{
+    int steps = floor ((hi - lo) / step + 1);
+    return lo + step * floor (uniform (steps));
 }
 
 // Box-Muller method (polar variant) for Gaussian random numbers.
@@ -172,8 +180,9 @@ template<>
 int
 uniform ()
 {
+    // exponent=-1; We promise the semi-open interval [0,1), so must never actaully reach 1.
 #if RAND_MAX == 0x7FFFFFFF
-    return rand ();  // exponent=-1; This version can never actually reach 1, only [0,1). However, this shouldn't make any algorithmic difference to callers.
+    return rand ();
 #elif RAND_MAX == 0x7FFF
     return rand () << 16;
 #else
@@ -186,6 +195,15 @@ int
 uniform (int sigma)
 {
     return (int64_t) uniform<int> () * sigma >> 31;  // shift = -1 - MSB
+}
+
+template<>
+int
+uniform (int lo, int hi, int step)
+{
+    // lo, hi and step all have same exponent
+    int steps = (hi - lo) / step + 1;
+    return lo + step * uniform (steps);
 }
 
 // Box-Muller method (polar variant) for Gaussian random numbers.
