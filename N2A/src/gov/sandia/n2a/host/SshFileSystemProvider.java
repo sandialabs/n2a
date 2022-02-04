@@ -162,38 +162,7 @@ public class SshFileSystemProvider extends FileSystemProvider
             }
         }
 
-        SshPath A = (SshPath) path;
-        try
-        {
-            AnyProcess proc = A.fileSystem.connection.build ("cat", A.quote ()).start ();
-            InputStream stream = proc.getInputStream ();
-            return new InputStream ()  // Wrap the stream, so that when it is closed the channel is closed as well.
-            {
-                public void close () throws IOException
-                {
-                    proc.close ();
-                }
-
-                public int read () throws IOException
-                {
-                    return stream.read ();
-                }
-
-                public int read (byte b[], int off, int len) throws IOException
-                {
-                    return stream.read (b, off, len);
-                }
-
-                public int available () throws IOException
-                {
-                    return stream.available ();
-                }
-            };
-        }
-        catch (JSchException e)
-        {
-            throw new IOException (e);
-        }
+        return new InitialSkipStream ((SshPath) path);
     }
 
     public OutputStream newOutputStream (Path path, OpenOption... options) throws IOException
@@ -566,6 +535,76 @@ public class SshFileSystemProvider extends FileSystemProvider
         }
     }
 
+    public class InitialSkipStream extends InputStream
+    {
+        protected SshPath     path;
+        protected long        position;  // Where to start reading
+        protected AnyProcess  proc;
+        protected InputStream stream;
+
+        public InitialSkipStream (SshPath path)
+        {
+            this.path = path;
+        }
+
+        protected void start () throws IOException
+        {
+            if (proc != null) return;
+            try
+            {
+                List<String> command = new ArrayList<String> ();
+                if (position == 0)
+                {
+                    command.add ("cat");
+                    command.add (path.quote ());
+                }
+                else
+                {
+                    command.add ("dd");
+                    command.add ("bs=1");
+                    command.add ("skip=" + position);
+                    command.add ("if=" + path.quote ());
+                }
+                proc = path.fileSystem.connection.build (command).start ();
+                stream = proc.getInputStream ();
+            }
+            catch (JSchException e)
+            {
+                throw new IOException (e);
+            }
+        }
+
+        public void close () throws IOException
+        {
+            if (proc != null) proc.close ();
+        }
+
+        public int read () throws IOException
+        {
+            start ();
+            return stream.read ();
+        }
+
+        public int read (byte b[], int off, int len) throws IOException
+        {
+            start ();
+            return stream.read (b, off, len);
+        }
+
+        public long skip (long n) throws IOException
+        {
+            if (proc != null) return super.skip (n);
+            position += n;
+            return n;  // Somewhat of a lie, since we don't know if this exceeds EOF.
+        }
+
+        public int available () throws IOException
+        {
+            start ();
+            return stream.available ();
+        }
+    }
+
     public class SshSeekableByteChannel implements SeekableByteChannel
     {
         protected SshPath path;
@@ -713,7 +752,7 @@ public class SshFileSystemProvider extends FileSystemProvider
     {
         protected SshPath                     parent;
         protected Filter<? super Path>        filter;
-        protected Vector<ChannelSftp.LsEntry> entries;  // LsEntry also stat information. Sadly, we won't use it here.
+        protected Vector<ChannelSftp.LsEntry> entries;  // also contains stat information
 
         public SshDirectoryStream (SshPath parent, Filter<? super Path> filter) throws IOException
         {
@@ -746,9 +785,11 @@ public class SshFileSystemProvider extends FileSystemProvider
                 {
                     while (it.hasNext ())
                     {
-                        String name = it.next ().getFilename ();
+                        ChannelSftp.LsEntry lsEntry = it.next ();
+                        String name = lsEntry.getFilename ();
                         if (name.equals (".")  ||  name.equals ("..")) continue;  // These cause trouble during directory walking, and generally the user doesn't want them anyway.
-                        Path result = parent.resolve (name);
+                        SshPath result = (SshPath) parent.resolve (name);
+                        result.lsEntry = lsEntry;
                         try
                         {
                             if (filter == null  ||  filter.accept (result)) return result;
@@ -919,6 +960,20 @@ public class SshFileSystemProvider extends FileSystemProvider
 
         public PosixFileAttributes readAttributes () throws IOException
         {
+            // Early-out if we already have the information stashed.
+            if (path.lsEntry != null)
+            {
+                SftpATTRS attrs = path.lsEntry.getAttrs ();
+                if (! followLinks  ||  ! attrs.isLink ())  // Assumes that sftp ls gets info about link itself rather than dereferencing it.
+                {
+                    SshFileAttributes result = new SshFileAttributes ();
+                    result.attributes  = attrs;
+                    result.path        = path;
+                    result.followLinks = followLinks;
+                    return result;
+                }
+            }
+
             String name = path.toAbsolutePath ().toString ();
             try
             {

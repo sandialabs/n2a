@@ -653,9 +653,30 @@ public class PanelRun extends JPanel
                                 int last = ((SshDirectoryStream) stream).count () - 1;
                                 for (Path rp : stream)
                                 {
-                                    // TODO: Handle files that were only partially written when we last tried to copy them
                                     Path lp = localPath.resolve (rp.getFileName ().toString ());
-                                    if (! Files.exists (lp))
+                                    if (Files.exists (lp))
+                                    {
+                                        // Handle files that were only partially written when we last tried to copy them
+                                        try
+                                        {
+                                            BasicFileAttributes ra = Files.readAttributes (rp, BasicFileAttributes.class);
+                                            BasicFileAttributes la = Files.readAttributes (lp, BasicFileAttributes.class);
+                                            long position = la.size ();
+                                            long count    = ra.size () - position;
+                                            if (count > 0)
+                                            {
+                                                newData = true;
+                                                try (InputStream remoteStream = Files.newInputStream (rp);
+                                                     OutputStream localStream = Files.newOutputStream (lp, StandardOpenOption.WRITE, StandardOpenOption.APPEND);)
+                                                {
+                                                    remoteStream.skipNBytes (position);
+                                                    Host.copy (remoteStream, localStream, count, null);
+                                                }
+                                            }
+                                        }
+                                        catch (IOException e) {}
+                                    }
+                                    else
                                     {
                                         newData = true;
                                         try {Files.copy (rp, lp);}
@@ -714,7 +735,7 @@ public class PanelRun extends JPanel
                                 try (InputStream remoteStream = Files.newInputStream (remotePath);
                                      OutputStream localStream = Files.newOutputStream (localPath, StandardOpenOption.WRITE, StandardOpenOption.APPEND);)
                                 {
-                                    remoteStream.skip (position);
+                                    remoteStream.skipNBytes (position);
                                     Host.copy (remoteStream, localStream, count, progress);
                                 }
                             }

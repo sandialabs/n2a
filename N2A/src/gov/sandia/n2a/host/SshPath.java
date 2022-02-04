@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.ChannelSftp.LsEntry;
 import com.jcraft.jsch.SftpException;
 
 import gov.sandia.n2a.host.SshFileSystem.WrapperSftp;
@@ -34,6 +35,7 @@ public class SshPath implements Path
     protected SshFileSystem fileSystem;
     protected boolean       absolute;  // indicates that the first path element is relative to root
     protected String[]      path;
+    protected LsEntry       lsEntry;  // Stashed if this path was produced by a directory stream. Used to reduce communication if file info is subsequently retrieved.
 
     /**
         Analyzes the given list of strings to decompose them into proper path elements and
