@@ -325,6 +325,8 @@ public class EquationSet implements Comparable<EquationSet>
                         MNode watch = p.child (e.key (), "$metadata", "watch");
                         if (watch != null)
                         {
+                            boolean spike = watch.get ().equals ("spike");
+
                             // Determine dummy variable name
                             String dummy = "x0";
                             int suffix = 1;
@@ -352,7 +354,9 @@ public class EquationSet implements Comparable<EquationSet>
                             String interval = root.metadata.get ("watch", "interval");
 
                             // Create output expression
-                            String expression = dummy + "=output(\"\"," + v.nameString ();
+                            String expression = dummy + "=output(\"\",";
+                            if (spike) expression += "1";
+                            else       expression += v.nameString ();
                             if (! timeScale.isEmpty ())
                             {
                                 expression += ",\"\",\"timeScale=" + timeScale;
@@ -360,7 +364,8 @@ public class EquationSet implements Comparable<EquationSet>
                                 expression += "\"";
                             }
                             expression += ")";
-                            if (! interval.isEmpty ()) expression += "@$t%" + interval + "<$t'/2";
+                            if (spike) expression += "@" + v.nameString ();
+                            else if (! interval.isEmpty ()) expression += "@$t%" + interval + "<$t'/2";
                             override (expression);
                         }
                     }
