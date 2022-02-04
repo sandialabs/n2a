@@ -81,7 +81,7 @@ public class Device
     {
         eqSet = s;
 
-        String deviceName = s.metadata.get ("backend", "xyce", "device");
+        String deviceName = s.metadata.get ("backend", "xyce", "part");
         if (! deviceName.isEmpty ()) device = XyceDevice.createFor (deviceName);
         if (device == null)
         {
@@ -248,7 +248,7 @@ public class Device
 
     public static boolean isXyceDevice (EquationSet s)
     {
-        return s.metadata.child ("backend", "xyce", "device") != null;
+        return s.metadata.child ("backend", "xyce", "part") != null;
     }
 
     public static boolean ignoreEquation (EquationEntry eq)
