@@ -1276,7 +1276,7 @@ public class InternalBackendData
         }
         boolean dtCanChange =  dt != null  &&  dt.equations.size () > 0  &&  ! dt.hasAttribute ("initOnly");
         // Note: dt can also change if we use a variable-step integrator. At present, Internal doesn't do that,
-        // and it is unlikely to ever do so.
+        // and is unlikely to ever do so.
 
         if (hasIntegrated  &&  (eventTargets.size () > 0  ||  dtCanChange))
         {
