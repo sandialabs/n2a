@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -171,7 +171,7 @@ public class JobC extends Thread
             seed = -1;
             if (digestedModel.usesRandom ())  // only record seed if actually used
             {
-                seed = model.getOrDefault (System.currentTimeMillis () & 0xFFFFFFFFL, "$metadata", "seed");
+                seed = model.getOrDefault (System.currentTimeMillis () & 0x7FFFFFFF, "$metadata", "seed");
                 job.set (seed, "seed");
             }
 
