@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,18 +11,13 @@ import java.lang.ref.SoftReference;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map.Entry;
 
 import gov.sandia.n2a.host.Host;
 
 import java.util.NavigableMap;
-import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -32,16 +27,11 @@ import java.util.TreeMap;
     This allows the direct children of this directory to be subdirectories, and each document
     file may be a specifically-named entry in a subdirectory.
 **/
-public class MDir extends MNode
+public class MDir extends MDocGroup
 {
-    protected String  name;    // MDirs could be held in a collection, so this provides a way to reference them.
     protected Path    root;    // The directory containing the files or subdirs that constitute the children of this node
     protected String  suffix;  // Relative path to document file, or null if documents are directly under root
     protected boolean loaded;  // Indicates that an initial read of the dir has been done. After that, it is not necessary to monitor the dir, only keep track of documents internally.
-
-    protected NavigableMap<String,SoftReference<MDoc>> children   = new TreeMap<String,SoftReference<MDoc>> ();
-    protected Set<MDoc>                                writeQueue = new HashSet<MDoc> ();  // By storing strong references to docs that need to be saved, we prevent them from being garbage collected until that is done.
-    protected List<MNodeListener>                      listeners  = new ArrayList<MNodeListener> ();
 
     public MDir (Path root)
     {
@@ -60,7 +50,7 @@ public class MDir extends MNode
 
     public MDir (String name, Path root, String suffix)
     {
-        this.name = name;
+        super (name);
         this.root = root;
         if (suffix != null  &&  suffix.isEmpty ()) suffix = null;
         this.suffix = suffix;
@@ -80,24 +70,16 @@ public class MDir extends MNode
         return root.toAbsolutePath ().toString ();
     }
 
-    public Path pathForChild (String key)
+    public Path pathForDoc (String key)
     {
         Path result = root.resolve (key);
         if (suffix != null) result = result.resolve (suffix);
         return result;
     }
 
-    public static String validFilenameFrom (String name)
+    public Path pathForFile (String key)
     {
-        String[] forbiddenChars = new String[] {"\\", "/", ":", "*", "\"", "<", ">", "|"};
-        for (String c : forbiddenChars) name = name.replace (c, "-");
-
-        // For Windows, certain file names are forbidden due to its archaic roots in DOS.
-        String upperName = name.toUpperCase ();
-        HashSet<String> forbidden = new HashSet<String> (Arrays.asList ("CON", "PRN", "AUX", "NUL"));
-        if (forbidden.contains (upperName)  ||  upperName.matches ("(LPT|COM)\\d")) name += "_";
-
-        return name;
+        return root.resolve (key);
     }
 
     protected synchronized MNode getChild (String key)
@@ -109,7 +91,7 @@ public class MDir extends MNode
         if (reference != null) result = reference.get ();
         if (result == null)  // We have never loaded this document, or it has been garbage collected.
         {
-            Path childPath = pathForChild (key);
+            Path childPath = pathForDoc (key);
             if (! Files.isReadable (childPath))
             {
                 if (suffix == null) return null;
@@ -134,19 +116,6 @@ public class MDir extends MNode
         Path path = root.toAbsolutePath ();
         Host.get (path).deleteTree (path);  // It's OK to delete this directory, since it will be re-created by the next MDoc that gets saved.
         fireChanged ();
-    }
-
-    /**
-        When suffix is defined, the entire subdirectory that contains the document will be deleted,
-        including any auxiliary files.
-    **/
-    protected synchronized void clearChild (String key)
-    {
-        SoftReference<MDoc> ref = children.remove (key);
-        if (ref != null) writeQueue.remove (ref.get ());
-        Path path = root.resolve (key).toAbsolutePath ();
-        Host.get (path).deleteTree (path);
-        fireChildDeleted (key);
     }
 
     public synchronized int size ()
@@ -189,47 +158,6 @@ public class MDir extends MNode
     }
 
     /**
-        Renames an MDoc on disk.
-        If you already hold a reference to the MDoc named by fromKey, then that reference remains valid
-        after the move.
-    **/
-    public synchronized void move (String fromKey, String toKey)
-    {
-        if (toKey.equals (fromKey)) return;
-        save ();  // If this turns out to be too much work, then scan the write queue for fromKey and save it directly.
-
-        // This operation is independent of bookkeeping in "children" collection.
-        Path fromPath = root.resolve (fromKey).toAbsolutePath ();
-        Path toPath   = root.resolve (toKey  ).toAbsolutePath ();
-        try
-        {
-            if (Files.exists (toPath)) Host.get (toPath).deleteTree (toPath);
-            Files.move (fromPath, toPath, StandardCopyOption.REPLACE_EXISTING);
-        }
-        catch (IOException e)
-        {
-            // This can happen if a new doc has not yet been flushed to disk.
-        }
-
-        SoftReference<MDoc> fromReference = children.get (fromKey);
-        boolean fromExists = children.containsKey (fromKey);
-        boolean toExists   = children.containsKey (toKey);
-        children.remove (fromKey);
-        children.remove (toKey);
-        if (fromExists)
-        {
-            MDoc from = fromReference.get ();
-            if (from != null) from.name = toKey;
-            children.put (toKey, fromReference);
-            fireChildChanged (fromKey, toKey);
-        }
-        else  // from does not exist
-        {
-            if (toExists) fireChildDeleted (toKey);  // Because we overwrote an existing node with a non-existing node, causing the destination to cease to exist.
-        }
-    }
-
-    /**
         Transfer document from another MDir.
         The document is completely removed from the source.
         This function is used only by the repo transfer menu, so it does not do rigorous notification to listeners.
@@ -245,8 +173,8 @@ public class MDir extends MNode
         {
             // Move on disk
             source.save ();  // Flush write queue, so we can safely move file.
-            Path fromPath = source.pathForChild (key);
-            Path toPath   =        pathForChild (key);
+            Path fromPath = source.pathForDoc (key);
+            Path toPath   =        pathForDoc (key);
             try
             {
                 Files.move (fromPath, toPath);
@@ -302,7 +230,7 @@ public class MDir extends MNode
     {
         // Check if it exists on disk. If not, then this is a delete.
         if (key.isEmpty ()) return;
-        Path childPath = pathForChild (key);
+        Path childPath = pathForDoc (key);
         if (! Files.isReadable (childPath))
         {
             children.remove (key);
@@ -391,11 +319,5 @@ public class MDir extends MNode
         children = newChildren;
 
         loaded = true;
-    }
-
-    public synchronized void save ()
-    {
-        for (MDoc doc: writeQueue) doc.save ();
-        writeQueue.clear ();  // This releases the strong references, so these docs can be garbage collected if needed.
     }
 }

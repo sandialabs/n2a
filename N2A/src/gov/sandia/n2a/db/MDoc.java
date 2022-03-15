@@ -36,7 +36,7 @@ public class MDoc extends MPersistent
         In this case, the key contains the file name in the dir, and the full path is constructed
         when needed using information from the parent.
     **/
-    public MDoc (MDir parent, String key)
+    protected MDoc (MDir parent, String key)
     {
         this (parent, key, null);
     }
@@ -59,7 +59,7 @@ public class MDoc extends MPersistent
         this (null, key, path.toAbsolutePath ().toString ());
     }
 
-    protected MDoc (MDir parent, String name, String path)
+    protected MDoc (MDocGroup parent, String name, String path)
     {
         super (parent, name, path);
     }
@@ -73,25 +73,24 @@ public class MDoc extends MPersistent
     **/
     public synchronized String getOrDefault (String defaultValue)
     {
-        if (parent instanceof MDir) return ((MDir) parent).pathForChild (name).toAbsolutePath ().toString ();
+        if (parent instanceof MDocGroup) return ((MDocGroup) parent).pathForDoc (name).toAbsolutePath ().toString ();
         if (value == null) return defaultValue;
         return value.toString ();
     }
 
     public synchronized void markChanged ()
     {
-        if (! needsWrite)
+        if (needsWrite) return;
+
+        // If this is a new document, then treat it as if it were already loaded.
+        // If there is content on disk, it will be blown away.
+        if (children == null) children = new TreeMap<String,MNode> (comparator);
+        needsWrite = true;
+        if (parent instanceof MDocGroup)
         {
-            // If this is a new document, then treat it as if it were already loaded.
-            // If there is content on disk, it will be blown away.
-            if (children == null) children = new TreeMap<String,MNode> (comparator);
-            needsWrite = true;
-            if (parent instanceof MDir)
+            synchronized (parent)
             {
-                synchronized (parent)
-                {
-                    ((MDir) parent).writeQueue.add (this);
-                }
+                ((MDocGroup) parent).writeQueue.add (this);
             }
         }
     }
@@ -174,8 +173,8 @@ public class MDoc extends MPersistent
 
     public synchronized Path path ()
     {
-        if (parent instanceof MDir) return ((MDir) parent).pathForChild (name);
-        return Paths.get (value.toString ());
+        if (parent instanceof MDocGroup) return ((MDocGroup) parent).pathForDoc (name);
+        return Paths.get (value.toString ());  // for stand-alone document
     }
 
 	/**

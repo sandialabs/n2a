@@ -19,6 +19,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Export;
 import gov.sandia.n2a.plugins.extpoints.Import;
 import gov.sandia.n2a.plugins.extpoints.Settings;
+import gov.sandia.n2a.plugins.extpoints.ShutdownHook;
 import gov.sandia.n2a.plugins.extpoints.Activity;
 import gov.sandia.n2a.transfer.ExportNative;
 import gov.sandia.n2a.transfer.ImportNative;
@@ -134,7 +135,8 @@ public class N2APlugin extends Plugin
             Host.Factory.class,
             Import.class,
             Operator.Factory.class,
-            Settings.class
+            Settings.class,
+            ShutdownHook.class
         };
     }
 
