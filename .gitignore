@@ -1,7 +1,10 @@
-Replete
-**/lib
-**/bin
-.metadata
-/.recommenders/
-**/gov/sandia/n2a/language/parse
-**/gov/sandia/n2a/db/models
+.metadata/
+.recommenders/
+.settings/
+bin/
+lib/
+target/
+N2A/src/gov/sandia/n2a/backend/neuroml/*.xsd
+N2A/src/gov/sandia/n2a/db/initialDB.zip
+N2A/src/gov/sandia/n2a/language/parse/*.java
+N2A/src/gov/sandia/n2a/language/parse/*.jj
