@@ -102,7 +102,7 @@ public class Raster extends OutputParser implements XYDataset
             if (timeFound  &&  c == time) continue;
 
             int count = c.values.size ();
-            int i = startRow - c.startRow;  // Destination index for next converted value.
+            int i = Math.max (0, startRow - c.startRow);  // Destination index for next converted value.
             for (int r = i; r < count; r++)
             {
                 if (c.values.get (r) == 0) continue;
