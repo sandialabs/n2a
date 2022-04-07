@@ -54,7 +54,7 @@ public class MVolatile extends MNode
     /**
         @return The most distant ancestor that is still an MVolatile.
     **/
-    public MNode getRoot ()
+    public MNode rootVolatile ()
     {
         MVolatile result = this;
         while (result.parent instanceof MVolatile) result = (MVolatile) result.parent;

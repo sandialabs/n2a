@@ -9,8 +9,10 @@ package gov.sandia.n2a.db;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 /**
     A hierarchical key-value storage system, with subclasses that provide persistence.
@@ -64,7 +66,16 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public String keyPathString ()
     {
-        String[] keyPath = keyPath ();
+        return keyPathString (null);
+    }
+
+    /**
+        Utility function for printing node's key path relative to given root node.
+    **/
+    public String keyPathString (MNode root)
+    {
+        String[] keyPath = keyPath (root);
+        if (keyPath.length == 0) return "";
         String result = "";
         for (String s : keyPath) result += s + ".";
         return result.substring (0, result.length () - 1);  // Get rid of final dot.
@@ -98,6 +109,32 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
             result = parent;
         }
         return result;
+    }
+
+    /**
+        Find the last common ancestor between this node and the given node.
+        If the nodes do not share a common ancestor, the result is null.
+    **/
+    public MNode lca (MNode that)
+    {
+        // Strategy: Place the ancestry of one node in a set. Then walk up the ancestry
+        // of the other node. The first ancestor found in the set is the LCA.
+
+        Set<MNode> thisAncestors = new HashSet<MNode> ();
+        MNode A = this;
+        while (A != null)
+        {
+            thisAncestors.add (A);
+            A = A.parent ();
+        }
+
+        MNode B = that;
+        while (B != null)
+        {
+            if (thisAncestors.contains (B)) return B;
+            B = B.parent ();
+        }
+        return null;
     }
 
     /**
@@ -164,6 +201,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return result;
     }
 
+    public MNode childOrEmpty (Object... keys)
+    {
+        return childOrEmpty (toStrings (keys));
+    }
+
     /**
         Convenience method for retrieving node at an ordinal position without knowing the specific key.
         Children are traversed in the usual key order.
@@ -224,6 +266,11 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     public int size ()
     {
         return 0;
+    }
+
+    public boolean isEmpty ()
+    {
+        return size () == 0;
     }
 
     /**
@@ -693,8 +740,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
 
         /**
-            If a document is deleted while the iterator is running, this could return null.
-            If a document is added, it will not be included.
+            If a child is deleted while the iterator is running, this could return null.
+            If a child is added, it will not be included.
+            Implicitly, if the current child is moved (renamed), then it won't appear again in the iteration.
+            In general, the caller is free to modify the returned value without any harm to the iteration.
+            There will not be a concurrent modification exception, and the iteration order won't be impacted.
+            Derived MNode classes should use IteratorWrapper or equivalent to maintain these guarantees to the caller.
         **/
         public MNode next ()
         {
