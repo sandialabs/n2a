@@ -51,7 +51,7 @@ public class SettingsLookAndFeel extends JPanel implements Settings
     protected Laf              currentLaf;
     protected float            fontScale = 1;
     protected JTextField       fieldFontScale;
-    protected Set<Object>      overriddenKeys;
+    protected Set<Object>      overriddenKeys = new TreeSet<Object> ();
 
     public class Laf
     {
@@ -63,15 +63,12 @@ public class SettingsLookAndFeel extends JPanel implements Settings
         {
             try
             {
-                if (overriddenKeys != null)
+                UIDefaults defaults = UIManager.getDefaults ();
+                for (Object key : overriddenKeys)
                 {
-                    UIDefaults defaults = UIManager.getDefaults ();
-                    for (Object key : overriddenKeys)
-                    {
-                        defaults.put (key, null);
-                    }
-                    overriddenKeys = null;
+                    defaults.put (key, null);
                 }
+                overriddenKeys = new TreeSet<Object> ();
 
                 if (theme != null) MetalLookAndFeel.setCurrentTheme (theme);
                 UIManager.setLookAndFeel (info.getClassName ());
@@ -83,12 +80,10 @@ public class SettingsLookAndFeel extends JPanel implements Settings
                 int dpi = Toolkit.getDefaultToolkit ().getScreenResolution ();
                 float uiScale = dpi / 96f;
                 float applyScale = fontScale * uiScale;
-                UIDefaults defaults = UIManager.getDefaults ();
 
                 //   Set scaled fonts.
                 if (applyScale != 1)
                 {
-                    overriddenKeys = new TreeSet<Object> ();
                     for (Entry<Object,Object> e : defaults.entrySet ())
                     {
                         Object key   = e.getKey ();
@@ -107,7 +102,8 @@ public class SettingsLookAndFeel extends JPanel implements Settings
                 {
                     for (String key : new String[] {"ScrollBar.width", "SplitPane.dividerSize"})
                     {
-                        int value = (Integer) defaults.get (key);
+                        int value = defaults.getInt (key);
+                        if (value == 0) continue;
                         defaults.put (key, (int) Math.floor (value * uiScale));
                         overriddenKeys.add (key);
                     }
