@@ -124,6 +124,8 @@ public class RemoteLSF extends RemoteUnix
         String inherit = job.get ("$inherit");
         String project = config.get ("project");
         int    nodes   = job.getOrDefault (1, "host", "nodes");
+        int    cores   = job.getOrDefault (1, "host", "cores");
+        int    gpus    = job.getOrDefault (0, "host", "gpus");
         String out     = quote (jobDir.resolve ("out"));
         String err     = quote (jobDir.resolve ("err"));
 
@@ -139,8 +141,8 @@ public class RemoteLSF extends RemoteUnix
             writer.write ("\n");
             for (List<String> command : commands)
             {
-                // TODO: add proper jsrun parameters
-                writer.write ("jsrun " + combine (command) + "\n");
+                // TODO: need a way to determine ranks per resource set. Right now it's just one per core.
+                writer.write ("jsrun -n " + nodes + " -a " + cores + " -c " + cores + " -g " + gpus + " " + combine (command) + "\n");
             }
         }
 
