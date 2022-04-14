@@ -163,9 +163,29 @@ public class ConnectionInfo implements UserInfo, UIKeyboardInteractive
             gbc.gridy++;
         }
 
+        if (prompt.length > 0)
+        {
+            texts[0].addAncestorListener (new AncestorListener ()
+            {
+                public void ancestorAdded (AncestorEvent event)
+                {
+                }
+
+                public void ancestorRemoved (AncestorEvent event)
+                {
+                }
+
+                public void ancestorMoved (AncestorEvent event)
+                {
+                    texts[0].requestFocusInWindow ();
+                }
+            });
+        }
+
         int result = JOptionPane.showConfirmDialog
         (
-            MainFrame.instance, panel,
+            MainFrame.instance,
+            panel,
             destination + ": " + name,
             JOptionPane.OK_CANCEL_OPTION,
             JOptionPane.QUESTION_MESSAGE
