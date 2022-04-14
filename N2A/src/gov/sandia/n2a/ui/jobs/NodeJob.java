@@ -452,7 +452,6 @@ public class NodeJob extends NodeBase
         {
             try
             {
-                ((Remote) env).enable ();  // To get here, the use had to expand the node. This implies permission to prompt for login.
                 Path remoteJobDir = Host.getJobDir (env.getResourceDir (), source);
                 try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (remoteJobDir))
                 {
