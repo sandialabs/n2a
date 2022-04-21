@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -45,11 +45,4 @@ Holder::Holder (const String & fileName)
 
 Holder::~Holder ()
 {
-}
-
-void
-outputClose ()
-{
-    for (auto it : outputMap) delete it;
-    // No need to clear collection, because this function is only called during shutdown.
 }

@@ -1304,6 +1304,7 @@ Simulator<T>::~Simulator ()
 {
     for (auto event : periods) delete event;
     if (integrator) delete integrator;
+    for (auto it : holders) delete it;
 }
 
 template<class T>
@@ -1429,6 +1430,31 @@ void
 Simulator<T>::clearNew (Population<T> * population)
 {
     queueClearNew.push_back (population);
+}
+
+template<class T>
+Holder *
+Simulator<T>::getHolder (const String & fileName, Holder * oldHandle)
+{
+    std::vector<Holder *>::iterator it;
+    if (oldHandle)
+    {
+        if (oldHandle->fileName == fileName) return oldHandle;
+        for (it = holders.begin (); it != holders.end (); it++)
+        {
+            if (*it == oldHandle)
+            {
+                holders.erase (it);
+                delete *it;
+                break;
+            }
+        }
+    }
+    for (it = holders.begin (); it != holders.end (); it++)
+    {
+        if ((*it)->fileName == fileName) return *it;
+    }
+    return 0;
 }
 
 

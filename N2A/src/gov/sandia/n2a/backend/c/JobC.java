@@ -736,7 +736,6 @@ public class JobC extends Thread
         {
             result.append ("  params.parse (argc, argv);\n");
         }
-        generateMainInitializers (context);
         if (T.equals ("int"))
         {
             Variable dt = digestedModel.find (new Variable ("$t", 1));
@@ -749,6 +748,7 @@ public class JobC extends Thread
         result.append ("  Simulator<" + T + ">::instance = new Simulator<" + T + ">;\n");
         result.append ("  Simulator<" + T + ">::instance->integrator = new " + integrator + "<" + T + ">;\n");
         result.append ("  Simulator<" + T + ">::instance->after = " + after + ";\n");
+        generateMainInitializers (context);
         result.append ("  Wrapper wrapper;\n");
         result.append ("  Simulator<" + T + ">::instance->init (wrapper);\n");
         result.append ("}\n");
@@ -757,7 +757,6 @@ public class JobC extends Thread
         // Finish, for both main and library modes
         result.append ("void finish ()\n");
         result.append ("{\n");
-        result.append ("  outputClose ();\n");  // TODO: store I/O handles inside Simulator, and call outputClose() as part of dtor
         result.append ("  delete Simulator<" + T + ">::instance;\n");
         if (kokkos)
         {

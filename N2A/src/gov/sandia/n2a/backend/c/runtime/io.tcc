@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -218,8 +218,6 @@ convert (String input, int exponent)
 
 #endif
 
-std::vector<Holder *> matrixMap;
-
 template<class T>
 MatrixInput<T> *
 #ifdef n2a_FP
@@ -228,11 +226,11 @@ matrixHelper (const String & fileName, int exponent, MatrixInput<T> * oldHandle)
 matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle)
 #endif
 {
-    MatrixInput<T> * handle = (MatrixInput<T> *) holderHelper (matrixMap, fileName, oldHandle);
+    MatrixInput<T> * handle = (MatrixInput<T> *) Simulator<T>::instance->getHolder (fileName, oldHandle);
     if (! handle)
     {
         handle = new MatrixInput<T> (fileName);
-        matrixMap.push_back (handle);
+        Simulator<T>::instance->holders.push_back (handle);
 
         std::ifstream ifs (fileName.c_str ());
         if (! ifs.good ()) std::cerr << "Failed to open matrix file: " << fileName << std::endl;
@@ -804,8 +802,6 @@ InputHolder<T>::get (T row)
     return *A;
 }
 
-std::vector<Holder *> inputMap;
-
 template<class T>
 InputHolder<T> *
 #ifdef n2a_FP
@@ -814,11 +810,11 @@ inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle)
 inputHelper (const String & fileName,               InputHolder<T> * oldHandle)
 #endif
 {
-    InputHolder<T> * handle = (InputHolder<T> *) holderHelper (inputMap, fileName, oldHandle);
+    InputHolder<T> * handle = (InputHolder<T> *) Simulator<T>::instance->getHolder (fileName, oldHandle);
     if (! handle)
     {
         handle = new InputHolder<T> (fileName);
-        inputMap.push_back (handle);
+        Simulator<T>::instance->holders.push_back (handle);
 #       ifdef n2a_FP
         handle->exponent = exponent;
 #       endif
@@ -1129,17 +1125,15 @@ OutputHolder<T>::writeModes ()
     // mo should automatically flush and close here
 }
 
-std::vector<Holder *> outputMap;
-
 template<class T>
 OutputHolder<T> *
 outputHelper (const String & fileName, OutputHolder<T> * oldHandle)
 {
-    OutputHolder<T> * handle = (OutputHolder<T> *) holderHelper (outputMap, fileName, oldHandle);
+    OutputHolder<T> * handle = (OutputHolder<T> *) Simulator<T>::instance->getHolder (fileName, oldHandle);
     if (! handle)
     {
         handle = new OutputHolder<T> (fileName);
-        outputMap.push_back (handle);
+        Simulator<T>::instance->holders.push_back (handle);
     }
     return handle;
 }

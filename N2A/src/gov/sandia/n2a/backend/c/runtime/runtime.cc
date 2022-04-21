@@ -49,33 +49,6 @@ void signalHandler (int number)
 #endif
 
 
-// I/O -----------------------------------------------------------------------
-
-Holder *
-holderHelper (vector<Holder *> & holders, const String & fileName, Holder * oldHandle)
-{
-    vector<Holder *>::iterator it;
-    if (oldHandle)
-    {
-        if (oldHandle->fileName == fileName) return oldHandle;
-        for (it = holders.begin (); it != holders.end (); it++)
-        {
-            if (*it == oldHandle)
-            {
-                holders.erase (it);
-                delete *it;
-                break;
-            }
-        }
-    }
-    for (it = holders.begin (); it != holders.end (); it++)
-    {
-        if ((*it)->fileName == fileName) return *it;
-    }
-    return 0;
-}
-
-
 // classes -------------------------------------------------------------------
 
 template class Parameters<n2a_T>;

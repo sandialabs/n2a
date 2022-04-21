@@ -480,6 +480,7 @@ public:
     bool                                         stop;
     Event<T> *                                   currentEvent;
     bool                                         after;         ///< When true, and timesteps match, sort spike events after step events. Otherwise sort them before.
+    std::vector<Holder *>                        holders;
 
     static thread_local Simulator<T> * instance;  ///< Singleton
 
@@ -497,6 +498,8 @@ public:
     void resize   (Population<T> * population, int n); ///< Schedule population to be resized at end of current cycle.
     void connect  (Population<T> * population);        ///< Schedule connections to be evaluated at end of current cycle, after all resizing is done.
     void clearNew (Population<T> * population);        ///< Schedule population to have its newborn index reset after all new connections are evaluated.
+
+    Holder * getHolder (const String & fileName, Holder * oldHandle);
 };
 
 template<class T>

@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -36,8 +36,6 @@ public:
     String get   (const String & name, const String & defaultValue = "") const;
 };
 
-// Holder and its utility functions are declared in each platform's io.h, but only defined once in runtime.cc
-// The alternative would be a "io_common.h", but this seems like overkill for so few items.
 class Holder
 {
 public:
@@ -45,7 +43,6 @@ public:
     Holder (const String & fileName);
     virtual ~Holder ();
 };
-extern Holder * holderHelper (std::vector<Holder *> & holders, const String & fileName, Holder * oldHandle);
 
 template<class T>
 class IteratorNonzero
@@ -174,7 +171,6 @@ public:
     void writeModes ();
 };
 template<class T> extern OutputHolder<T> * outputHelper (const String & fileName, OutputHolder<T> * oldHandle = 0);
-extern void outputClose ();  ///< Close all OutputHolders
 
 
 #endif
