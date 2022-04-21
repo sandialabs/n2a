@@ -725,7 +725,17 @@ public class JobC extends Thread
         result.append ("\n");
         generateDefinitions (context, digestedModel);
 
-        // Init, for both main and library modes
+        // Init TLS
+        // This function is used both during initial startup and also when launching worker threads.
+        // In the latter case, the call to the getHolder() should simply fill in an existing handle.
+        // The initializers may do some redundant work in that case, but shouldn't do any harm.
+        result.append ("void initIO ()\n");
+        result.append ("{\n");
+        generateMainInitializers (context);
+        result.append ("}\n");
+        result.append ("\n");
+
+        // Init
         result.append ("void init (int argc, char * argv[])\n");
         result.append ("{\n");
         if (kokkos)
@@ -748,13 +758,13 @@ public class JobC extends Thread
         result.append ("  Simulator<" + T + ">::instance = new Simulator<" + T + ">;\n");
         result.append ("  Simulator<" + T + ">::instance->integrator = new " + integrator + "<" + T + ">;\n");
         result.append ("  Simulator<" + T + ">::instance->after = " + after + ";\n");
-        generateMainInitializers (context);
+        result.append ("  initIO ();\n");
         result.append ("  Wrapper wrapper;\n");
         result.append ("  Simulator<" + T + ">::instance->init (wrapper);\n");
         result.append ("}\n");
         result.append ("\n");
 
-        // Finish, for both main and library modes
+        // Finish
         result.append ("void finish ()\n");
         result.append ("{\n");
         result.append ("  delete Simulator<" + T + ">::instance;\n");
@@ -900,7 +910,7 @@ public class JobC extends Thread
                                         r.name = "Matrix" + matrixNames.size ();
                                         matrixNames.put (fileName, r.name);
                                         mainMatrix.add (r);
-                                        result.append ("MatrixInput<" + T + "> * " + r.name + ";\n");
+                                        result.append ("thread_local MatrixInput<" + T + "> * " + r.name + ";\n");
                                     }
                                 }
                                 else if (f instanceof Input)
@@ -912,7 +922,7 @@ public class JobC extends Thread
                                         i.name = "Input" + inputNames.size ();
                                         inputNames.put (fileName, i.name);
                                         mainInput.add (i);
-                                        result.append ("InputHolder<" + T + "> * " + i.name + ";\n");
+                                        result.append ("thread_local InputHolder<" + T + "> * " + i.name + ";\n");
                                     }
                                 }
                                 else if (f instanceof Output)
@@ -924,7 +934,7 @@ public class JobC extends Thread
                                         o.name = "Output" + outputNames.size ();
                                         outputNames.put (fileName, o.name);
                                         mainOutput.add (o);
-                                        result.append ("OutputHolder<" + T + "> * " + o.name + ";\n");
+                                        result.append ("thread_local OutputHolder<" + T + "> * " + o.name + ";\n");
                                     }
                                 }
                             }
