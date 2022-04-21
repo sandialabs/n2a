@@ -486,7 +486,8 @@ public:
     Simulator ();
     ~Simulator ();
 
-    void run (WrapperBase<T> & wrapper); ///< Main entry point for simulation. Do all work.
+    void init (WrapperBase<T> & wrapper); ///< init phase and event queue set up
+    void run (T until = (T) INFINITY);    ///< Run until given time. This function can be called multiple times to step through simulation. Default value runs until queue is empty.
     void updatePopulations ();
 
     void enqueue      (Part<T> * part, T dt); ///< Places part on event with period dt. If the event already exists, then the actual time till the part next executes may be less than dt, but thereafter will be exactly dt. Caller is responsible to call dequeue() or enterSimulation().

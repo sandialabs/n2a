@@ -84,6 +84,7 @@ public class JobC extends Thread
     protected boolean kokkos;  // profiling method
     public    boolean gprof;   // profiling method
     protected boolean cli;     // command-line interface
+    protected boolean lib;     // library mode, suitable for Python wrapper or other external integration
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
     
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
@@ -139,6 +140,7 @@ public class JobC extends Thread
             kokkos = model.getFlag ("$metadata", "backend", "c", "kokkos");
             gprof  = model.getFlag ("$metadata", "backend", "c", "gprof");
             cli    = model.getFlag ("$metadata", "backend", "c", "cli");
+            lib    = model.getFlag ("$metadata", "backend", "c", "lib");
 
             String e = model.get ("$metadata", "backend", "all", "event");
             switch (e)
@@ -723,55 +725,71 @@ public class JobC extends Thread
         result.append ("\n");
         generateDefinitions (context, digestedModel);
 
-        // Main
-        result.append ("int main (int argc, char * argv[])\n");
+        // Init, for both main and library modes
+        result.append ("void init (int argc, char * argv[])\n");
         result.append ("{\n");
-        result.append ("  signal (SIGFPE,  signalHandler);\n");
-        result.append ("  signal (SIGINT,  signalHandler);\n");
-        result.append ("  signal (SIGTERM, signalHandler);\n");
-        result.append ("\n");
-        result.append ("  try\n");
-        result.append ("  {\n");
         if (kokkos)
         {
-            result.append ("    get_callbacks ();\n");
+            result.append ("  get_callbacks ();\n");
         }
         if (cli)
         {
-            result.append ("    params.parse (argc, argv);\n");
+            result.append ("  params.parse (argc, argv);\n");
         }
         generateMainInitializers (context);
-        result.append ("\n");
-        if (seed >= 0)
-        {
-            result.append ("    srand (" + seed + ");\n");
-        }
         if (T.equals ("int"))
         {
             Variable dt = digestedModel.find (new Variable ("$t", 1));
-            result.append ("    Event<int>::exponent = " + dt.exponent + ";\n");
+            result.append ("  Event<int>::exponent = " + dt.exponent + ";\n");
         }
         String integrator = digestedModel.metadata.getOrDefault ("Euler", "backend", "all", "integrator");
         if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
         else                                            integrator = "Euler";
-        result.append ("    Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
-        result.append ("    Simulator<" + T + ">::instance.after = " + after + ";\n");
-        result.append ("    Wrapper wrapper;\n");
-        result.append ("    Simulator<" + T + ">::instance.run (wrapper);\n");
+        result.append ("  Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
+        result.append ("  Simulator<" + T + ">::instance.after = " + after + ";\n");
+        result.append ("  Wrapper wrapper;\n");
+        result.append ("  Simulator<" + T + ">::instance.init (wrapper);\n");
+        result.append ("}\n");
         result.append ("\n");
-        result.append ("    outputClose ();\n");
+
+        // Finish, for both main and library modes
+        result.append ("void finish ()\n");
+        result.append ("{\n");
+        result.append ("  outputClose ();\n");
         if (kokkos)
         {
-            result.append ("    finalize_profiling ();\n");
+            result.append ("  finalize_profiling ();\n");
         }
-        result.append ("  }\n");
-        result.append ("  catch (const char * message)\n");
-        result.append ("  {\n");
-        result.append ("    cerr << \"Exception: \" << message << endl;\n");
-        result.append ("    return 1;\n");
-        result.append ("  }\n");
-        result.append ("  return 0;\n");
         result.append ("}\n");
+        result.append ("\n");
+
+        // Main
+        if (! lib)
+        {
+            result.append ("int main (int argc, char * argv[])\n");
+            result.append ("{\n");
+            result.append ("  signal (SIGFPE,  signalHandler);\n");
+            result.append ("  signal (SIGINT,  signalHandler);\n");
+            result.append ("  signal (SIGTERM, signalHandler);\n");
+            result.append ("\n");
+            if (seed >= 0)
+            {
+                result.append ("  srand (" + seed + ");\n");
+            }
+            result.append ("  try\n");
+            result.append ("  {\n");
+            result.append ("    init (argc, argv);\n");
+            result.append ("    Simulator<" + T + ">::instance.run ();\n");
+            result.append ("    finish ();\n");
+            result.append ("  }\n");
+            result.append ("  catch (const char * message)\n");
+            result.append ("  {\n");
+            result.append ("    cerr << \"Exception: \" << message << endl;\n");
+            result.append ("    return 1;\n");
+            result.append ("  }\n");
+            result.append ("  return 0;\n");
+            result.append ("}\n");
+        }
 
         Files.copy (new ByteArrayInputStream (result.toString ().getBytes ("UTF-8")), source);
     }
@@ -962,25 +980,25 @@ public class JobC extends Thread
         for (ProvideOperator po : extensions) po.generateMainInitializers (context);
         for (ReadMatrix r : mainMatrix)
         {
-            result.append ("    " + r.name + " = matrixHelper<" + T + "> (\"" + r.operands[0].getString () + "\"");
+            result.append ("  " + r.name + " = matrixHelper<" + T + "> (\"" + r.operands[0].getString () + "\"");
             if (T.equals ("int")) result.append (", " + r.exponent);
             result.append (");\n");
         }
         for (Input i : mainInput)
         {
-            result.append ("    " + i.name + " = inputHelper<" + T + "> (\"" + i.operands[0].getString () + "\"");
+            result.append ("  " + i.name + " = inputHelper<" + T + "> (\"" + i.operands[0].getString () + "\"");
             if (T.equals ("int")) result.append (", " + i.exponent);
             result.append (");\n");
 
             String mode = i.getMode ();
             boolean smooth =             mode.contains ("smooth");
             boolean time   = smooth  ||  mode.contains ("time");
-            if (time)   result.append ("    " + i.name + "->time = true;\n");
-            if (smooth) result.append ("    " + i.name + "->smooth = true;\n");
+            if (time)   result.append ("  " + i.name + "->time = true;\n");
+            if (smooth) result.append ("  " + i.name + "->smooth = true;\n");
         }
         for (Output o : mainOutput)
         {
-            result.append ("    " + o.name + " = outputHelper<" + T + "> (\"" + o.operands[0].getString () + "\");\n");
+            result.append ("  " + o.name + " = outputHelper<" + T + "> (\"" + o.operands[0].getString () + "\");\n");
         }
     }
 

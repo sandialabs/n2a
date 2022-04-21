@@ -1308,7 +1308,7 @@ Simulator<T>::~Simulator ()
 
 template<class T>
 void
-Simulator<T>::run (WrapperBase<T> & wrapper)
+Simulator<T>::init (WrapperBase<T> & wrapper)
 {
     // Init cycle
     EventStep<T> * event = (EventStep<T> *) currentEvent;
@@ -1316,7 +1316,12 @@ Simulator<T>::run (WrapperBase<T> & wrapper)
     wrapper.init ();
     updatePopulations ();
     event->requeue ();  // Only reinserts self if not empty.
+}
 
+template<class T>
+void
+Simulator<T>::run (T until)
+{
 #   ifdef _WIN32
     // Handle graceful shutdown on Windows.
     int64_t lastCheck = 0;  // Wasting extra bits so we will be ready for the end of Unix time in 2038. By then N2A will have taken over the world, but will Windows still be around?
@@ -1326,6 +1331,7 @@ Simulator<T>::run (WrapperBase<T> & wrapper)
     while (! queueEvent.empty ()  &&  ! stop)
     {
         currentEvent = queueEvent.top ();
+        if (currentEvent->t >= until) return;  // Event remains in queue, so a subsequent call to run() will resume seamlessly.
         queueEvent.pop ();
         currentEvent->run ();
 
