@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -452,8 +452,8 @@ public:
         bool stepA = a->isStep ();
         bool stepB = b->isStep ();
         if (stepA  &&  stepB) return true;  // Both are step events. New entries will get sorted after existing entries at the same point in time.
-        if (stepA) return ! Simulator<T>::instance.after;
-        if (stepB) return   Simulator<T>::instance.after;
+        if (stepA) return ! Simulator<T>::instance->after;
+        if (stepB) return   Simulator<T>::instance->after;
         return true;  // Both are spike events.
     }
 };
@@ -481,7 +481,7 @@ public:
     Event<T> *                                   currentEvent;
     bool                                         after;         ///< When true, and timesteps match, sort spike events after step events. Otherwise sort them before.
 
-    static Simulator<T> instance;  ///< Singleton
+    static thread_local Simulator<T> * instance;  ///< Singleton
 
     Simulator ();
     ~Simulator ();

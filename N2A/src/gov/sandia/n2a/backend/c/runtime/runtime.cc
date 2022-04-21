@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -40,7 +40,7 @@ void signalHandler (int number)
     {
         case SIGINT:
         case SIGTERM:
-            Simulator<n2a_T>::instance.stop = true;
+            Simulator<n2a_T>::instance->stop = true;
             break;
         default:
             exit (number);
@@ -81,7 +81,7 @@ holderHelper (vector<Holder *> & holders, const String & fileName, Holder * oldH
 template class Parameters<n2a_T>;
 template class Simulatable<n2a_T>;
 template class Part<n2a_T>;
-template void removeMonitor (std::vector<Part<n2a_T> *> & partList, Part<n2a_T> * part);
+template void  removeMonitor (std::vector<Part<n2a_T> *> & partList, Part<n2a_T> * part);
 template class PartTime<n2a_T>;
 template class WrapperBase<n2a_T>;
 template class ConnectIterator<n2a_T>;

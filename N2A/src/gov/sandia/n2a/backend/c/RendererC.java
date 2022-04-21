@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -193,7 +193,7 @@ public class RendererC extends Renderer
                 result.append (")");
                 return true;
             }
-            result.append ("delay" + d.index + ".step (Simulator<" + job.T + ">::instance.currentEvent->t, ");
+            result.append ("delay" + d.index + ".step (Simulator<" + job.T + ">::instance->currentEvent->t, ");
             d.operands[1].render (this);
             result.append (", ");
             d.operands[0].render (this);
@@ -359,7 +359,7 @@ public class RendererC extends Renderer
         if (op instanceof Output)
         {
             Output o = (Output) op;
-            result.append (o.name + "->trace (Simulator<" + job.T + ">::instance.currentEvent->t, ");
+            result.append (o.name + "->trace (Simulator<" + job.T + ">::instance->currentEvent->t, ");
 
             if (o.hasColumnName)  // column name is explicit
             {

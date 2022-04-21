@@ -745,17 +745,20 @@ public class JobC extends Thread
         String integrator = digestedModel.metadata.getOrDefault ("Euler", "backend", "all", "integrator");
         if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
         else                                            integrator = "Euler";
-        result.append ("  Simulator<" + T + ">::instance.integrator = new " + integrator + "<" + T + ">;\n");
-        result.append ("  Simulator<" + T + ">::instance.after = " + after + ";\n");
+        result.append ("  if (Simulator<" + T + ">::instance) delete Simulator<" + T + ">::instance;\n");
+        result.append ("  Simulator<" + T + ">::instance = new Simulator<" + T + ">;\n");
+        result.append ("  Simulator<" + T + ">::instance->integrator = new " + integrator + "<" + T + ">;\n");
+        result.append ("  Simulator<" + T + ">::instance->after = " + after + ";\n");
         result.append ("  Wrapper wrapper;\n");
-        result.append ("  Simulator<" + T + ">::instance.init (wrapper);\n");
+        result.append ("  Simulator<" + T + ">::instance->init (wrapper);\n");
         result.append ("}\n");
         result.append ("\n");
 
         // Finish, for both main and library modes
         result.append ("void finish ()\n");
         result.append ("{\n");
-        result.append ("  outputClose ();\n");
+        result.append ("  outputClose ();\n");  // TODO: store I/O handles inside Simulator, and call outputClose() as part of dtor
+        result.append ("  delete Simulator<" + T + ">::instance;\n");
         if (kokkos)
         {
             result.append ("  finalize_profiling ();\n");
@@ -779,7 +782,7 @@ public class JobC extends Thread
             result.append ("  try\n");
             result.append ("  {\n");
             result.append ("    init (argc, argv);\n");
-            result.append ("    Simulator<" + T + ">::instance.run ();\n");
+            result.append ("    Simulator<" + T + ">::instance->run ();\n");
             result.append ("    finish ();\n");
             result.append ("  }\n");
             result.append ("  catch (const char * message)\n");
@@ -1637,7 +1640,7 @@ public class JobC extends Thread
             //   make connections
             if (s.connectionBindings != null)
             {
-                result.append ("  Simulator<" + T + ">::instance.connect (this);\n");  // queue to evaluate our connections
+                result.append ("  Simulator<" + T + ">::instance->connect (this);\n");  // queue to evaluate our connections
             }
             s.setInit (0);
             result.append ("}\n");
@@ -1728,10 +1731,10 @@ public class JobC extends Thread
             if (bed.canResize  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate with them
             {
                 // $n may be assigned during the regular update cycle, so we need to monitor it.
-                result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") Simulator<" + T + ">::instance.resize (this, max (0, " + mangle ("next_", "$n"));
+                result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") Simulator<" + T + ">::instance->resize (this, max (0, " + mangle ("next_", "$n"));
                 if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
                 result.append ("));\n");
-                result.append ("  else Simulator<" + T + ">::instance.resize (this, -1);\n");
+                result.append ("  else Simulator<" + T + ">::instance->resize (this, -1);\n");
             }
 
             for (Variable v : bed.globalBufferedExternal)
@@ -1757,7 +1760,7 @@ public class JobC extends Thread
                             result.append ("  if (n == 0) return false;\n");
                             returnN = false;
                         }
-                        result.append ("  Simulator<" + T + ">::instance.resize (this, max (0, " + mangle ("$n"));
+                        result.append ("  Simulator<" + T + ">::instance->resize (this, max (0, " + mangle ("$n"));
                         if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
                         result.append ("));\n");
                     }
@@ -1773,7 +1776,7 @@ public class JobC extends Thread
                     if (context.useExponent) result.append (mangle ("$n") + context.printShift (bed.n.exponent - Operator.MSB));
                     else                     result.append ("(int) " + mangle ("$n"));
                     result.append (");\n");
-                    result.append ("  if (n != floorN) Simulator<" + T + ">::instance.resize (this, floorN);\n");
+                    result.append ("  if (n != floorN) Simulator<" + T + ">::instance->resize (this, floorN);\n");
                 }
             }
 
@@ -2368,7 +2371,7 @@ public class JobC extends Thread
 
             if (s.metadata.getFlag ("backend", "all", "fastExit"))
             {
-                result.append ("  Simulator<" + T + ">::instance.stop = true;\n");
+                result.append ("  Simulator<" + T + ">::instance->stop = true;\n");
             }
             else
             {
@@ -2504,7 +2507,7 @@ public class JobC extends Thread
             // Compute variables
             if (bed.lastT)
             {
-                result.append ("  lastT = Simulator<" + T + ">::instance.currentEvent->t;\n");
+                result.append ("  lastT = Simulator<" + T + ">::instance->currentEvent->t;\n");
             }
             s.simplify ("$init", bed.localInit);
             if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.localInit);
@@ -2579,7 +2582,7 @@ public class JobC extends Thread
             {
                 if (bed.lastT)
                 {
-                    result.append ("  " + T + " dt = Simulator<" + T + ">::instance.currentEvent->t - lastT;\n");
+                    result.append ("  " + T + " dt = Simulator<" + T + ">::instance->currentEvent->t - lastT;\n");
                 }
                 else
                 {
@@ -2745,7 +2748,7 @@ public class JobC extends Thread
             // Finalize variables
             if (bed.lastT)
             {
-                result.append ("  lastT = Simulator<" + T + ">::instance.currentEvent->t;\n");
+                result.append ("  lastT = Simulator<" + T + ">::instance->currentEvent->t;\n");
             }
             for (Variable v : bed.localBufferedExternal)
             {
@@ -3419,11 +3422,11 @@ public class JobC extends Thread
                             result.append ("      if (after == 0) return false;\n");
                             if (T.equals ("int"))
                             {
-                                result.append ("      " + T + " moduloTime = Simulator<" + T + ">::instance.currentEvent->t;\n");  // No need for modulo arithmetic. Rather, int time should be wrapped elsewhere.
+                                result.append ("      " + T + " moduloTime = Simulator<" + T + ">::instance->currentEvent->t;\n");  // No need for modulo arithmetic. Rather, int time should be wrapped elsewhere.
                             }
                             else  // float, double
                             {
-                                result.append ("      " + T + " moduloTime = (" + T + ") fmod (Simulator<" + T + ">::instance.currentEvent->t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
+                                result.append ("      " + T + " moduloTime = (" + T + ") fmod (Simulator<" + T + ">::instance->currentEvent->t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
                             }
                             result.append ("      if (eventTime" + et.timeIndex + " == moduloTime) return false;\n");
                             result.append ("      eventTime" + et.timeIndex + " = moduloTime;\n");
@@ -3689,12 +3692,12 @@ public class JobC extends Thread
             if (et.delay < 0)  // timing is no-care
             {
                 result.append (pad + eventSpike + " * spike = new " + eventSpikeLatch + ";\n");
-                result.append (pad + "spike->t = Simulator<" + T + ">::instance.currentEvent->t;\n");  // queue immediately after current cycle, so latches get set for next full cycle
+                result.append (pad + "spike->t = Simulator<" + T + ">::instance->currentEvent->t;\n");  // queue immediately after current cycle, so latches get set for next full cycle
             }
             else if (et.delay == 0)  // process as close to current cycle as possible
             {
                 result.append (pad + eventSpike + " * spike = new " + eventSpike + ";\n");  // fully execute the event (not latch it)
-                result.append (pad + "spike->t = Simulator<" + T + ">::instance.currentEvent->t;\n");  // queue immediately
+                result.append (pad + "spike->t = Simulator<" + T + ">::instance->currentEvent->t;\n");  // queue immediately
             }
             else
             {
@@ -3710,7 +3713,7 @@ public class JobC extends Thread
                     {
                         double delay = step * quantum;
                         result.append (pad + eventSpike + " * spike = new " + (during ? eventSpikeLatch : eventSpike) + ";\n");
-                        result.append (pad + "spike->t = Simulator<" + T + ">::instance.currentEvent->t + " + context.print (delay, dt.exponent) + ";\n");
+                        result.append (pad + "spike->t = Simulator<" + T + ">::instance->currentEvent->t + " + context.print (delay, dt.exponent) + ";\n");
                     }
                 }
 
@@ -3730,12 +3733,12 @@ public class JobC extends Thread
             result.append (pad + "if (delay < 0)\n");
             result.append (pad + "{\n");
             result.append (pad + "  " + eventSpike + " * spike = new " + eventSpikeLatch + ";\n");
-            result.append (pad + "  spike->t = Simulator<" + T + ">::instance.currentEvent->t;\n");
+            result.append (pad + "  spike->t = Simulator<" + T + ">::instance->currentEvent->t;\n");
             result.append (pad + "}\n");
             result.append (pad + "else if (delay == 0)\n");
             result.append (pad + "{\n");
             result.append (pad + "  " + eventSpike + " * spike = new " + eventSpike + ";\n");
-            result.append (pad + "  spike->t = Simulator<" + T + ">::instance.currentEvent->t;\n");
+            result.append (pad + "  spike->t = Simulator<" + T + ">::instance->currentEvent->t;\n");
             result.append (pad + "}\n");
             result.append (pad + "else\n");
             result.append (pad + "{\n");
@@ -3746,7 +3749,7 @@ public class JobC extends Thread
         result.append (pad + "spike->latch = " + et.valueIndex + ";\n");
         if (multi) result.append (pad + "spike->targets = &eventMonitor_" + prefix (et.container) + ";\n");
         else       result.append (pad + "spike->target = p;\n");
-        result.append (pad + "Simulator<" + T + ">::instance.queueEvent.push (spike);\n");
+        result.append (pad + "Simulator<" + T + ">::instance->queueEvent.push (spike);\n");
     }
 
     public void eventGenerate (String pad, EventTarget et, RendererC context, String eventSpike, String eventSpikeLatch)
@@ -3788,7 +3791,7 @@ public class JobC extends Thread
         result.append (pad + "{\n");
         result.append (pad + "  spike = new " + eventSpike + ";\n");
         result.append (pad + "}\n");
-        result.append (pad + "spike->t = Simulator<" + T + ">::instance.currentEvent->t + delay;\n");
+        result.append (pad + "spike->t = Simulator<" + T + ">::instance->currentEvent->t + delay;\n");
     }
 
     /**
@@ -4398,7 +4401,7 @@ public class JobC extends Thread
                 {
                     if (! lvalue)
                     {
-                        if      (vorder == 0) name = "Simulator<" + T + ">::instance.currentEvent->t";
+                        if      (vorder == 0) name = "Simulator<" + T + ">::instance->currentEvent->t";
                         else if (vorder == 1)
                         {
                             if (context.hasEvent) name = "event->dt";
@@ -4640,7 +4643,7 @@ public class JobC extends Thread
         pointer = stripDereference (pointer);
         if (pointer.isEmpty ()) pointer = "this";
         else                    pointer = "& " + pointer;
-        result.append (prefix + "  Simulator<" + T + ">::instance.clearNew (" + pointer + ");\n");
+        result.append (prefix + "  Simulator<" + T + ">::instance->clearNew (" + pointer + ");\n");
         result.append (prefix + "}\n");
     }
 }
