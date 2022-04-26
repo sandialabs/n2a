@@ -78,13 +78,16 @@ public class JobC extends Thread
     public    Path gcc;        // local or remote
 
     public    String  T;
+    protected String  SIMULATOR;
     protected long    seed;
     protected boolean during;
     protected boolean after;
     protected boolean kokkos;  // profiling method
     public    boolean gprof;   // profiling method
+    protected boolean debug;   // compile with debug symbols; applies to current model as well as any runtime components that happen to get rebuilt
     protected boolean cli;     // command-line interface
     protected boolean lib;     // library mode, suitable for Python wrapper or other external integration
+    protected boolean tls;     // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
     
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
@@ -139,8 +142,10 @@ public class JobC extends Thread
 
             kokkos = model.getFlag ("$metadata", "backend", "c", "kokkos");
             gprof  = model.getFlag ("$metadata", "backend", "c", "gprof");
+            debug  = model.getFlag ("$metadata", "backend", "c", "debug");
             cli    = model.getFlag ("$metadata", "backend", "c", "cli");
             lib    = model.getFlag ("$metadata", "backend", "c", "lib");
+            tls    = model.getFlag ("$metadata", "backend", "c", "tls");
 
             String e = model.get ("$metadata", "backend", "all", "event");
             switch (e)
@@ -249,9 +254,8 @@ public class JobC extends Thread
         if (T.equals ("int")) sources.put ("fixedpoint", true);
         for (String stem : sources.keySet ())
         {
-            String objectName = stem;
-            if (sources.get (stem)) objectName += "_" + T;
-            objectName += ".o";
+            boolean typeSpecific = sources.get (stem);
+            String objectName = typeSpecific ? objectName (stem) : stem + ".o";
 
             Path object = runtimeDir.resolve (objectName);
             if (Files.exists (object)) continue;
@@ -260,7 +264,8 @@ public class JobC extends Thread
             List<String> command = new ArrayList<String> ();
             command.add (gcc.toString ());
             command.add ("-c");
-            command.add ("-O3");
+            if (debug) command.add ("-g");
+            else       command.add ("-O3");
             if (gprof) command.add ("-pg");
             command.add ("-std=c++11");
             command.add ("-ffunction-sections");
@@ -268,6 +273,7 @@ public class JobC extends Thread
             command.add ("-I" + env.quote (runtimeDir));
             command.add ("-Dn2a_T=" + T);
             if (T.equals ("int")) command.add ("-Dn2a_FP");
+            if (tls) command.add ("-Dn2a_TLS");
             command.add ("-o");  // goes with next line ...
             command.add (env.quote (object));
             command.add (env.quote (source));
@@ -316,6 +322,22 @@ public class JobC extends Thread
         return changed;
     }
 
+    /**
+        Runtime object code files will be named source_type_featureA_featureB...
+        in a standard order established by this function. 
+    **/
+    public String objectName (String stem)
+    {
+        StringBuilder result = new StringBuilder ();
+        result.append (stem);
+        result.append ("_" + T);
+        if (gprof) result.append ("_gprof");
+        if (debug) result.append ("_debug");
+        if (tls  ) result.append ("_tls");
+        result.append (".o");
+        return result.toString ();
+    }
+
     public Path build (Path source) throws Exception
     {
         String stem = source.getFileName ().toString ().split ("\\.", 2)[0];
@@ -323,7 +345,8 @@ public class JobC extends Thread
 
         List<String> command = new ArrayList<String> ();
         command.add (gcc.toString ());
-        command.add ("-O3");
+        if (debug) command.add ("-g");
+        else       command.add ("-O3");
         if (gprof) command.add ("-pg");
         command.add ("-std=c++11");
         command.add ("-ffunction-sections");
@@ -338,12 +361,13 @@ public class JobC extends Thread
         }
         command.add ("-Dn2a_T=" + T);
         if (T.equals ("int")) command.add ("-Dn2a_FP");
+        if (tls) command.add ("-Dn2a_TLS");
         command.add ("-o");  // goes with next line ...
         command.add (env.quote (binary));
         command.add (env.quote (source));
-        command.add (                      env.quote (runtimeDir.resolve ("runtime_"    + T + ".o")));
-        command.add (                      env.quote (runtimeDir.resolve ("io_"         + T + ".o")));
-        if (T.equals ("int")) command.add (env.quote (runtimeDir.resolve ("fixedpoint_" + T + ".o")));
+        command.add (                      env.quote (runtimeDir.resolve (objectName ("runtime"))));
+        command.add (                      env.quote (runtimeDir.resolve (objectName ("io"))));
+        if (T.equals ("int")) command.add (env.quote (runtimeDir.resolve (objectName ("fixedpoint"))));
         List<String> envProvidedObjects = providedObjects.get (env);
         if (envProvidedObjects != null) for (String po : envProvidedObjects) command.add (po);  // These have already been quoted.
         if (kokkos)
@@ -675,6 +699,9 @@ public class JobC extends Thread
         if (T.equals ("int")) context = new RendererCfp (this, result);
         else                  context = new RendererC   (this, result);
 
+        if (tls) SIMULATOR = "Simulator<" + T + ">::instance->";
+        else     SIMULATOR = "Simulator<" + T + ">::instance.";
+
         result.append ("#include \"runtime.h\"\n");
         if (kokkos)
         {
@@ -701,6 +728,11 @@ public class JobC extends Thread
         result.append ("using namespace std;\n");
         result.append ("using namespace fl;\n");
         result.append ("\n");
+        if (tls)
+        {
+            // Hack to make GCC 11.x happy. Should do no harm. Should also not be necessary.
+            result.append ("template<class T> thread_local Simulator<T> * Simulator<T>::instance = 0;\n");
+        }
         if (cli)
         {
             result.append ("Parameters<" + T + "> params;\n");
@@ -725,9 +757,9 @@ public class JobC extends Thread
         result.append ("\n");
         generateDefinitions (context, digestedModel);
 
-        // Init TLS
+        // Init IO
         // This function is used both during initial startup and also when launching worker threads.
-        // In the latter case, the call to the getHolder() should simply fill in an existing handle.
+        // In the latter case, calls to getHolder() should simply fill in an existing handle.
         // The initializers may do some redundant work in that case, but shouldn't do any harm.
         result.append ("void initIO ()\n");
         result.append ("{\n");
@@ -754,20 +786,30 @@ public class JobC extends Thread
         String integrator = digestedModel.metadata.getOrDefault ("Euler", "backend", "all", "integrator");
         if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
         else                                            integrator = "Euler";
-        result.append ("  if (Simulator<" + T + ">::instance) delete Simulator<" + T + ">::instance;\n");
-        result.append ("  Simulator<" + T + ">::instance = new Simulator<" + T + ">;\n");
-        result.append ("  Simulator<" + T + ">::instance->integrator = new " + integrator + "<" + T + ">;\n");
-        result.append ("  Simulator<" + T + ">::instance->after = " + after + ";\n");
+        if (tls)
+        {
+            result.append ("  if (Simulator<" + T + ">::instance) delete Simulator<" + T + ">::instance;\n");
+            result.append ("  Simulator<" + T + ">::instance = new Simulator<" + T + ">;\n");
+        }
+        result.append ("  " + SIMULATOR + "integrator = new " + integrator + "<" + T + ">;\n");
+        result.append ("  " + SIMULATOR + "after = " + after + ";\n");
         result.append ("  initIO ();\n");
         result.append ("  Wrapper wrapper;\n");
-        result.append ("  Simulator<" + T + ">::instance->init (wrapper);\n");
+        result.append ("  " + SIMULATOR + "init (wrapper);\n");
         result.append ("}\n");
         result.append ("\n");
 
         // Finish
         result.append ("void finish ()\n");
         result.append ("{\n");
-        result.append ("  delete Simulator<" + T + ">::instance;\n");
+        if (tls)
+        {
+            result.append ("  delete Simulator<" + T + ">::instance;\n");
+        }
+        else
+        {
+            result.append ("  " + SIMULATOR + "clear ();\n");
+        }
         if (kokkos)
         {
             result.append ("  finalize_profiling ();\n");
@@ -776,7 +818,32 @@ public class JobC extends Thread
         result.append ("\n");
 
         // Main
-        if (! lib)
+        if (lib)
+        {
+            result.append ("void run (" + T + " until)\n");
+            result.append ("{\n");
+            result.append ("  " + SIMULATOR + "run (until);\n");
+            result.append ("}\n");
+
+            // Generate a companion header file
+            String name = source.getFileName ().toString ();
+            int pos = name.lastIndexOf ('.');
+            String stem = pos > 0 ? name.substring (0, pos) : name;
+
+            Path headerPath = source.getParent ().resolve (name + ".h");
+            try (BufferedWriter writer = Files.newBufferedWriter (headerPath))
+            {
+                writer.append ("#ifndef " + stem + "_h\n");
+                writer.append ("#define " + stem + "_h\n");
+                writer.append ("#include <vector>\n");
+                writer.append ("void init (int argc, char ** argv);\n");
+                writer.append ("void run (" + T + " until);\n");
+                writer.append ("void finish ();\n");
+                writer.append ("std::vector<" + T + "> & getVector (char * name);\n");  // TODO: this should be controlled by whether vector IO feature was used
+                writer.append ("#endif\n");
+            }
+        }
+        else
         {
             result.append ("int main (int argc, char * argv[])\n");
             result.append ("{\n");
@@ -791,7 +858,7 @@ public class JobC extends Thread
             result.append ("  try\n");
             result.append ("  {\n");
             result.append ("    init (argc, argv);\n");
-            result.append ("    Simulator<" + T + ">::instance->run ();\n");
+            result.append ("    " + SIMULATOR + "run ();\n");
             result.append ("    finish ();\n");
             result.append ("  }\n");
             result.append ("  catch (const char * message)\n");
@@ -820,6 +887,7 @@ public class JobC extends Thread
         context.setPart (s);
         BackendDataC  bed    = context.bed;
         StringBuilder result = context.result;
+        String thread_local = tls ? "thread_local " : "";
 
         class CheckStatic implements Visitor
         {
@@ -910,7 +978,7 @@ public class JobC extends Thread
                                         r.name = "Matrix" + matrixNames.size ();
                                         matrixNames.put (fileName, r.name);
                                         mainMatrix.add (r);
-                                        result.append ("thread_local MatrixInput<" + T + "> * " + r.name + ";\n");
+                                        result.append (thread_local + "MatrixInput<" + T + "> * " + r.name + ";\n");
                                     }
                                 }
                                 else if (f instanceof Input)
@@ -922,7 +990,7 @@ public class JobC extends Thread
                                         i.name = "Input" + inputNames.size ();
                                         inputNames.put (fileName, i.name);
                                         mainInput.add (i);
-                                        result.append ("thread_local InputHolder<" + T + "> * " + i.name + ";\n");
+                                        result.append (thread_local + "InputHolder<" + T + "> * " + i.name + ";\n");
                                     }
                                 }
                                 else if (f instanceof Output)
@@ -934,7 +1002,7 @@ public class JobC extends Thread
                                         o.name = "Output" + outputNames.size ();
                                         outputNames.put (fileName, o.name);
                                         mainOutput.add (o);
-                                        result.append ("thread_local OutputHolder<" + T + "> * " + o.name + ";\n");
+                                        result.append (thread_local + "OutputHolder<" + T + "> * " + o.name + ";\n");
                                     }
                                 }
                             }
@@ -1649,7 +1717,7 @@ public class JobC extends Thread
             //   make connections
             if (s.connectionBindings != null)
             {
-                result.append ("  Simulator<" + T + ">::instance->connect (this);\n");  // queue to evaluate our connections
+                result.append ("  " + SIMULATOR + "connect (this);\n");  // queue to evaluate our connections
             }
             s.setInit (0);
             result.append ("}\n");
@@ -1740,10 +1808,10 @@ public class JobC extends Thread
             if (bed.canResize  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate with them
             {
                 // $n may be assigned during the regular update cycle, so we need to monitor it.
-                result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") Simulator<" + T + ">::instance->resize (this, max (0, " + mangle ("next_", "$n"));
+                result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") " + SIMULATOR + "resize (this, max (0, " + mangle ("next_", "$n"));
                 if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
                 result.append ("));\n");
-                result.append ("  else Simulator<" + T + ">::instance->resize (this, -1);\n");
+                result.append ("  else " + SIMULATOR + "resize (this, -1);\n");
             }
 
             for (Variable v : bed.globalBufferedExternal)
@@ -1769,7 +1837,7 @@ public class JobC extends Thread
                             result.append ("  if (n == 0) return false;\n");
                             returnN = false;
                         }
-                        result.append ("  Simulator<" + T + ">::instance->resize (this, max (0, " + mangle ("$n"));
+                        result.append ("  " + SIMULATOR + "resize (this, max (0, " + mangle ("$n"));
                         if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
                         result.append ("));\n");
                     }
@@ -1785,7 +1853,7 @@ public class JobC extends Thread
                     if (context.useExponent) result.append (mangle ("$n") + context.printShift (bed.n.exponent - Operator.MSB));
                     else                     result.append ("(int) " + mangle ("$n"));
                     result.append (");\n");
-                    result.append ("  if (n != floorN) Simulator<" + T + ">::instance->resize (this, floorN);\n");
+                    result.append ("  if (n != floorN) " + SIMULATOR + "resize (this, floorN);\n");
                 }
             }
 
@@ -2380,7 +2448,7 @@ public class JobC extends Thread
 
             if (s.metadata.getFlag ("backend", "all", "fastExit"))
             {
-                result.append ("  Simulator<" + T + ">::instance->stop = true;\n");
+                result.append ("  " + SIMULATOR + "stop = true;\n");
             }
             else
             {
@@ -2516,7 +2584,7 @@ public class JobC extends Thread
             // Compute variables
             if (bed.lastT)
             {
-                result.append ("  lastT = Simulator<" + T + ">::instance->currentEvent->t;\n");
+                result.append ("  lastT = " + SIMULATOR + "currentEvent->t;\n");
             }
             s.simplify ("$init", bed.localInit);
             if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.localInit);
@@ -2591,7 +2659,7 @@ public class JobC extends Thread
             {
                 if (bed.lastT)
                 {
-                    result.append ("  " + T + " dt = Simulator<" + T + ">::instance->currentEvent->t - lastT;\n");
+                    result.append ("  " + T + " dt = " + SIMULATOR + "currentEvent->t - lastT;\n");
                 }
                 else
                 {
@@ -2757,7 +2825,7 @@ public class JobC extends Thread
             // Finalize variables
             if (bed.lastT)
             {
-                result.append ("  lastT = Simulator<" + T + ">::instance->currentEvent->t;\n");
+                result.append ("  lastT = " + SIMULATOR + "currentEvent->t;\n");
             }
             for (Variable v : bed.localBufferedExternal)
             {
@@ -3431,11 +3499,11 @@ public class JobC extends Thread
                             result.append ("      if (after == 0) return false;\n");
                             if (T.equals ("int"))
                             {
-                                result.append ("      " + T + " moduloTime = Simulator<" + T + ">::instance->currentEvent->t;\n");  // No need for modulo arithmetic. Rather, int time should be wrapped elsewhere.
+                                result.append ("      " + T + " moduloTime = " + SIMULATOR + "currentEvent->t;\n");  // No need for modulo arithmetic. Rather, int time should be wrapped elsewhere.
                             }
                             else  // float, double
                             {
-                                result.append ("      " + T + " moduloTime = (" + T + ") fmod (Simulator<" + T + ">::instance->currentEvent->t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
+                                result.append ("      " + T + " moduloTime = (" + T + ") fmod (" + SIMULATOR + "currentEvent->t, 1);\n");  // Wrap time at 1 second, to fit in float precision.
                             }
                             result.append ("      if (eventTime" + et.timeIndex + " == moduloTime) return false;\n");
                             result.append ("      eventTime" + et.timeIndex + " = moduloTime;\n");
@@ -3701,12 +3769,12 @@ public class JobC extends Thread
             if (et.delay < 0)  // timing is no-care
             {
                 result.append (pad + eventSpike + " * spike = new " + eventSpikeLatch + ";\n");
-                result.append (pad + "spike->t = Simulator<" + T + ">::instance->currentEvent->t;\n");  // queue immediately after current cycle, so latches get set for next full cycle
+                result.append (pad + "spike->t = " + SIMULATOR + "currentEvent->t;\n");  // queue immediately after current cycle, so latches get set for next full cycle
             }
             else if (et.delay == 0)  // process as close to current cycle as possible
             {
                 result.append (pad + eventSpike + " * spike = new " + eventSpike + ";\n");  // fully execute the event (not latch it)
-                result.append (pad + "spike->t = Simulator<" + T + ">::instance->currentEvent->t;\n");  // queue immediately
+                result.append (pad + "spike->t = " + SIMULATOR + "currentEvent->t;\n");  // queue immediately
             }
             else
             {
@@ -3722,7 +3790,7 @@ public class JobC extends Thread
                     {
                         double delay = step * quantum;
                         result.append (pad + eventSpike + " * spike = new " + (during ? eventSpikeLatch : eventSpike) + ";\n");
-                        result.append (pad + "spike->t = Simulator<" + T + ">::instance->currentEvent->t + " + context.print (delay, dt.exponent) + ";\n");
+                        result.append (pad + "spike->t = " + SIMULATOR + "currentEvent->t + " + context.print (delay, dt.exponent) + ";\n");
                     }
                 }
 
@@ -3742,12 +3810,12 @@ public class JobC extends Thread
             result.append (pad + "if (delay < 0)\n");
             result.append (pad + "{\n");
             result.append (pad + "  " + eventSpike + " * spike = new " + eventSpikeLatch + ";\n");
-            result.append (pad + "  spike->t = Simulator<" + T + ">::instance->currentEvent->t;\n");
+            result.append (pad + "  spike->t = " + SIMULATOR + "currentEvent->t;\n");
             result.append (pad + "}\n");
             result.append (pad + "else if (delay == 0)\n");
             result.append (pad + "{\n");
             result.append (pad + "  " + eventSpike + " * spike = new " + eventSpike + ";\n");
-            result.append (pad + "  spike->t = Simulator<" + T + ">::instance->currentEvent->t;\n");
+            result.append (pad + "  spike->t = " + SIMULATOR + "currentEvent->t;\n");
             result.append (pad + "}\n");
             result.append (pad + "else\n");
             result.append (pad + "{\n");
@@ -3758,7 +3826,7 @@ public class JobC extends Thread
         result.append (pad + "spike->latch = " + et.valueIndex + ";\n");
         if (multi) result.append (pad + "spike->targets = &eventMonitor_" + prefix (et.container) + ";\n");
         else       result.append (pad + "spike->target = p;\n");
-        result.append (pad + "Simulator<" + T + ">::instance->queueEvent.push (spike);\n");
+        result.append (pad + "" + SIMULATOR + "queueEvent.push (spike);\n");
     }
 
     public void eventGenerate (String pad, EventTarget et, RendererC context, String eventSpike, String eventSpikeLatch)
@@ -3800,7 +3868,7 @@ public class JobC extends Thread
         result.append (pad + "{\n");
         result.append (pad + "  spike = new " + eventSpike + ";\n");
         result.append (pad + "}\n");
-        result.append (pad + "spike->t = Simulator<" + T + ">::instance->currentEvent->t + delay;\n");
+        result.append (pad + "spike->t = " + SIMULATOR + "currentEvent->t + delay;\n");
     }
 
     /**
@@ -4410,7 +4478,7 @@ public class JobC extends Thread
                 {
                     if (! lvalue)
                     {
-                        if      (vorder == 0) name = "Simulator<" + T + ">::instance->currentEvent->t";
+                        if      (vorder == 0) name = SIMULATOR + "currentEvent->t";
                         else if (vorder == 1)
                         {
                             if (context.hasEvent) name = "event->dt";
@@ -4652,7 +4720,7 @@ public class JobC extends Thread
         pointer = stripDereference (pointer);
         if (pointer.isEmpty ()) pointer = "this";
         else                    pointer = "& " + pointer;
-        result.append (prefix + "  Simulator<" + T + ">::instance->clearNew (" + pointer + ");\n");
+        result.append (prefix + "  " + SIMULATOR + "clearNew (" + pointer + ");\n");
         result.append (prefix + "}\n");
     }
 }

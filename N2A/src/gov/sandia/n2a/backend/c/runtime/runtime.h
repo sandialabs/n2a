@@ -19,6 +19,12 @@ the U.S. Government retains certain rights in this software.
 #include <vector>
 #include <map>
 
+#ifdef n2a_TLS
+# define SIMULATOR Simulator<T>::instance->
+#else
+# define SIMULATOR Simulator<T>::instance.
+#endif
+
 
 // General functions ---------------------------------------------------------
 // See the N2A language reference for details.
@@ -452,8 +458,8 @@ public:
         bool stepA = a->isStep ();
         bool stepB = b->isStep ();
         if (stepA  &&  stepB) return true;  // Both are step events. New entries will get sorted after existing entries at the same point in time.
-        if (stepA) return ! Simulator<T>::instance->after;
-        if (stepB) return   Simulator<T>::instance->after;
+        if (stepA) return ! SIMULATOR after;
+        if (stepB) return   SIMULATOR after;
         return true;  // Both are spike events.
     }
 };
@@ -482,10 +488,15 @@ public:
     bool                                         after;         ///< When true, and timesteps match, sort spike events after step events. Otherwise sort them before.
     std::vector<Holder *>                        holders;
 
+#   ifdef n2a_TLS
     static thread_local Simulator<T> * instance;  ///< Singleton
+#   else
+    static Simulator<T> instance;  ///< Singleton
+#   endif
 
     Simulator ();
     ~Simulator ();
+    void clear ();
 
     void init (WrapperBase<T> & wrapper); ///< init phase and event queue set up
     void run (T until = (T) INFINITY);    ///< Run until given time. This function can be called multiple times to step through simulation. Default value runs until queue is empty.

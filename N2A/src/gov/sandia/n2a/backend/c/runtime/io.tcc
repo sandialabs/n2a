@@ -226,11 +226,11 @@ matrixHelper (const String & fileName, int exponent, MatrixInput<T> * oldHandle)
 matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle)
 #endif
 {
-    MatrixInput<T> * handle = (MatrixInput<T> *) Simulator<T>::instance->getHolder (fileName, oldHandle);
+    MatrixInput<T> * handle = (MatrixInput<T> *) SIMULATOR getHolder (fileName, oldHandle);
     if (! handle)
     {
         handle = new MatrixInput<T> (fileName);
-        Simulator<T>::instance->holders.push_back (handle);
+        SIMULATOR holders.push_back (handle);
 
         std::ifstream ifs (fileName.c_str ());
         if (! ifs.good ()) std::cerr << "Failed to open matrix file: " << fileName << std::endl;
@@ -810,11 +810,11 @@ inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle)
 inputHelper (const String & fileName,               InputHolder<T> * oldHandle)
 #endif
 {
-    InputHolder<T> * handle = (InputHolder<T> *) Simulator<T>::instance->getHolder (fileName, oldHandle);
+    InputHolder<T> * handle = (InputHolder<T> *) SIMULATOR getHolder (fileName, oldHandle);
     if (! handle)
     {
         handle = new InputHolder<T> (fileName);
-        Simulator<T>::instance->holders.push_back (handle);
+        SIMULATOR holders.push_back (handle);
 #       ifdef n2a_FP
         handle->exponent = exponent;
 #       endif
@@ -1129,11 +1129,11 @@ template<class T>
 OutputHolder<T> *
 outputHelper (const String & fileName, OutputHolder<T> * oldHandle)
 {
-    OutputHolder<T> * handle = (OutputHolder<T> *) Simulator<T>::instance->getHolder (fileName, oldHandle);
+    OutputHolder<T> * handle = (OutputHolder<T> *) SIMULATOR getHolder (fileName, oldHandle);
     if (! handle)
     {
         handle = new OutputHolder<T> (fileName);
-        Simulator<T>::instance->holders.push_back (handle);
+        SIMULATOR holders.push_back (handle);
     }
     return handle;
 }

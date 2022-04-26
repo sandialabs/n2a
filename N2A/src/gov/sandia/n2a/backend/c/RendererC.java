@@ -193,7 +193,7 @@ public class RendererC extends Renderer
                 result.append (")");
                 return true;
             }
-            result.append ("delay" + d.index + ".step (Simulator<" + job.T + ">::instance->currentEvent->t, ");
+            result.append ("delay" + d.index + ".step (" + job.SIMULATOR + "currentEvent->t, ");
             d.operands[1].render (this);
             result.append (", ");
             d.operands[0].render (this);
@@ -359,7 +359,7 @@ public class RendererC extends Renderer
         if (op instanceof Output)
         {
             Output o = (Output) op;
-            result.append (o.name + "->trace (Simulator<" + job.T + ">::instance->currentEvent->t, ");
+            result.append (o.name + "->trace (" + job.SIMULATOR + "currentEvent->t, ");
 
             if (o.hasColumnName)  // column name is explicit
             {

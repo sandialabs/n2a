@@ -452,7 +452,7 @@ template<class T>
 EventStep<T> *
 Part<T>::getEvent ()
 {
-    return (EventStep<T> *) Simulator<T>::instance->currentEvent;
+    return (EventStep<T> *) SIMULATOR currentEvent;
 }
 
 template<class T>
@@ -613,7 +613,7 @@ void
 PartTime<T>::dequeue ()
 {
     // TODO: Need mutex on visitor when modifying its queue, even if it is not part of currentEvent.
-    if (Simulator<T>::instance->currentEvent == visitor->event)
+    if (SIMULATOR currentEvent == visitor->event)
     {
         // Avoid damaging iterator in visitor
         if (visitor->previous == this) visitor->previous = this->next;
@@ -627,7 +627,7 @@ void
 PartTime<T>::setPeriod (T dt)
 {
     dequeue ();
-    Simulator<T>::instance->enqueue (this, dt);
+    SIMULATOR enqueue (this, dt);
 }
 
 
@@ -1282,7 +1282,11 @@ Population<T>::getIterator (int i)
 
 // class Simulator -----------------------------------------------------------
 
+#ifdef n2a_TLS
 template<class T> thread_local Simulator<T> * Simulator<T>::instance = 0;
+#else
+template<class T> Simulator<T> Simulator<T>::instance;
+#endif
 
 template<class T>
 Simulator<T>::Simulator ()
@@ -1302,9 +1306,19 @@ Simulator<T>::Simulator ()
 template<class T>
 Simulator<T>::~Simulator ()
 {
+    clear ();
+}
+
+template<class T>
+void
+Simulator<T>::clear ()
+{
     for (auto event : periods) delete event;
+    periods.clear ();
     if (integrator) delete integrator;
+    integrator = 0;
     for (auto it : holders) delete it;
+    holders.clear ();
 }
 
 template<class T>
@@ -1657,7 +1671,7 @@ void
 EventStep<T>::run ()
 {
     // Update parts
-    Simulator<T>::instance->integrator->run (*this);
+    SIMULATOR integrator->run (*this);
     visit ([](Visitor<T> * visitor)
     {
         visitor->part->update ();
@@ -1673,9 +1687,9 @@ EventStep<T>::run ()
             p->leaveSimulation ();
         }
     });
-    if (Simulator<T>::instance->stop) return;
+    if (SIMULATOR stop) return;
 
-    Simulator<T>::instance->updatePopulations ();
+    SIMULATOR updatePopulations ();
     requeue ();
 }
 
@@ -1693,11 +1707,11 @@ EventStep<T>::requeue ()
     if (visitors[0]->queue.next)  // still have instances, so re-queue event
     {
         this->t += dt;
-        Simulator<T>::instance->queueEvent.push (this);
+        SIMULATOR queueEvent.push (this);
     }
     else  // our list of instances is empty, so die
     {
-        Simulator<T>::instance->removePeriod (this);
+        SIMULATOR removePeriod (this);
     }
 }
 
@@ -1717,7 +1731,7 @@ EventSpikeSingle<T>::run ()
 {
     target->setLatch (this->latch);
 
-    Simulator<T>::instance->integrator->run (*this);
+    SIMULATOR integrator->run (*this);
     visit ([](Visitor<T> * visitor)
     {
         visitor->part->update ();
@@ -1756,7 +1770,7 @@ EventSpikeMulti<T>::run ()
 {
     setLatch ();
 
-    Simulator<T>::instance->integrator->run (*this);
+    SIMULATOR integrator->run (*this);
     visit ([](Visitor<T> * visitor)
     {
         visitor->part->update ();

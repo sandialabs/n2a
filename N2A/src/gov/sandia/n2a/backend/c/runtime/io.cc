@@ -13,6 +13,11 @@ the U.S. Government retains certain rights in this software.
 using namespace std;
 
 
+#ifdef n2a_TLS
+// Hack to work around GCC 11.x. Should do no harm. Should also not be necessary.
+template<class T> thread_local Simulator<T> * Simulator<T>::instance = 0;
+#endif
+
 template class MatrixAbstract<n2a_T>;
 template class Matrix<n2a_T>;
 template class MatrixSparse<n2a_T>;

@@ -40,7 +40,11 @@ void signalHandler (int number)
     {
         case SIGINT:
         case SIGTERM:
+#           ifdef n2a_TLS
             Simulator<n2a_T>::instance->stop = true;
+#           else
+            Simulator<n2a_T>::instance.stop = true;
+#           endif
             break;
         default:
             exit (number);
