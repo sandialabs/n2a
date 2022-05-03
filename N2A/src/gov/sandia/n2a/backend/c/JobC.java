@@ -65,14 +65,13 @@ import java.util.TreeSet;
 public class JobC extends Thread
 {
     protected static Set<Host>            runtimeBuilt    = new HashSet<Host> ();            // collection of Hosts for which runtime has already been checked/built during this session.
-    public    static Set<Host>            compilerChanged = new HashSet<Host> ();            // collection of Hosts for which the path to compiler has changed. Forces a rebuild of all runtime code. This field is set by SettingsC.
     protected static Map<Host,List<Path>> providedObjects = new HashMap<Host,List<Path>> (); // object code or archives provided by extensions. The string is suitable for constructing compiler command line.
 
     public    MNode       job;
     protected EquationSet digestedModel;
 
     public    Host env;
-    protected Path localJobDir;
+    public    Path localJobDir;
     protected Path jobDir;     // local or remote
     public    Path runtimeDir; // local or remote
     public    Path gcc;        // local or remote
@@ -216,7 +215,7 @@ public class JobC extends Thread
     {
         // Update runtime source files, if necessary
         boolean changed = false;
-        if (compilerChanged.contains (env))
+        if (env.config.getFlag ("backend", "c", "compilerChanged"))
         {
             changed = true;
             runtimeBuilt.remove (env);
@@ -239,7 +238,7 @@ public class JobC extends Thread
             }
             runtimeBuilt.add (env);  // Stop checking files for this session.
         }
-        compilerChanged.remove (env);
+        env.config.clear ("backend", "c", "compilerChanged");
 
         if (changed)  // Delete existing object files
         {

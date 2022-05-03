@@ -32,7 +32,7 @@ public class SettingsC extends SettingsBackend
             {
                 Host h = (Host) list.getSelectedValue ();
                 h.objects.remove ("cxx");
-                JobC.compilerChanged.add (h);
+                h.config.set ("", "backend", "c", "compilerChanged");
             }
         });
     }
