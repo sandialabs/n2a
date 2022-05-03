@@ -99,11 +99,11 @@ public class SettingsAbout extends JPanel implements Settings
         addLicense (licenses, "Units of Measurement", content.toString ());
 
         addLicense     (licenses, "JFreeChart",    loadResource ("jfreechart"));
-        addLicense     (licenses, "JSch",          loadResource ("jsch"));
-        addLicense     (licenses, "JZlib",         loadResource ("jzlib"));
         addLicense     (licenses, "JGit",          loadResource ("jgit"));
+        addLicense     (licenses, "Apache SSHD",   loadResource ("apache-sshd"));
         addLicense     (licenses, "JavaEWAH",      loadResource ("JavaEWAH"));
         addLicense     (licenses, "SLF4J",         loadResource ("slf4j"));
+        addLicense     (licenses, "EdDSA",         loadResource ("eddsa"));
         addLicenseHTML (licenses, "Eclipse",       loadResource ("eclipse"));
 
         Lay.BLtg (this,
