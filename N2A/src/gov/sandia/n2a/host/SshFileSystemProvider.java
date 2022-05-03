@@ -188,48 +188,41 @@ public class SshFileSystemProvider extends FileSystemProvider
             checkAccess (A.getParent ());
         }
 
-        try
-        {
-            // cat performs as well or better than sftp put on files up to 1M.
-            // For small files cat is even better, because it has almost no protocol setup.
+        // cat performs as well or better than sftp put on files up to 1M.
+        // For small files cat is even better, because it has almost no protocol setup.
 
-            List<String> args = new ArrayList<String> ();
-            args.add ("cat");
-            if (append  &&  ! truncate) args.add (">>");
-            else                        args.add (">");
-            args.add (A.quote ());
-            AnyProcess proc = A.fileSystem.connection.build (args).start ();
-            OutputStream stream = proc.getOutputStream ();
-            return new OutputStream ()  // Wrap the stream, so that when it is closed the channel is closed as well.
+        List<String> args = new ArrayList<String> ();
+        args.add ("cat");
+        if (append  &&  ! truncate) args.add (">>");
+        else                        args.add (">");
+        args.add (A.quote ());
+        AnyProcess proc = A.fileSystem.connection.build (args).start ();
+        OutputStream stream = proc.getOutputStream ();
+        return new OutputStream ()  // Wrap the stream, so that when it is closed the channel is closed as well.
+        {
+            public void close () throws IOException
             {
-                public void close () throws IOException
-                {
-                    stream.close ();  // Causes cat command to exit.
-                    try {proc.waitFor (1, TimeUnit.SECONDS);}
-                    catch (InterruptedException e) {}
-                    proc.close ();
-                }
+                stream.close ();  // Causes cat command to exit.
+                try {proc.waitFor (1, TimeUnit.SECONDS);}
+                catch (InterruptedException e) {}
+                proc.close ();
+            }
 
-                public void write (int b) throws IOException
-                {
-                    stream.write (b);
-                }
+            public void write (int b) throws IOException
+            {
+                stream.write (b);
+            }
 
-                public void write (byte b[], int off, int len) throws IOException
-                {
-                    stream.write (b, off, len);
-                }
+            public void write (byte b[], int off, int len) throws IOException
+            {
+                stream.write (b, off, len);
+            }
 
-                public void flush () throws IOException
-                {
-                    stream.flush ();
-                }
-            };
-        }
-        catch (Exception e)
-        {
-            throw new IOException (e);
-        }
+            public void flush () throws IOException
+            {
+                stream.flush ();
+            }
+        };
     }
 
     public SeekableByteChannel newByteChannel (Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException
@@ -257,8 +250,9 @@ public class SshFileSystemProvider extends FileSystemProvider
             // SSH_FX_FAILURE is returned when dir already exists.
             // Not sure what other conditions it might be returned under,
             // so the following conclusion might not be accurate ...
-            if (e.getStatus () == SftpConstants.SSH_FX_FAILURE) throw new FileAlreadyExistsException (name);
-            throw new IOException (e);
+            int status = e.getStatus ();
+            if (status == SftpConstants.SSH_FX_FAILURE  ||  status == SftpConstants.SSH_FX_FILE_ALREADY_EXISTS) throw new FileAlreadyExistsException (name);
+            throw e;
         }
     }
 
@@ -321,7 +315,7 @@ public class SshFileSystemProvider extends FileSystemProvider
         catch (SftpException e)
         {
             if (e.getStatus () == SftpConstants.SSH_FX_NO_SUCH_FILE) throw new NoSuchFileException (name);
-            throw new IOException (e);
+            throw e;
         }
     }
 
@@ -426,7 +420,7 @@ public class SshFileSystemProvider extends FileSystemProvider
         catch (SftpException e)
         {
             if (e.getStatus () == SftpConstants.SSH_FX_NO_SUCH_FILE) throw new NoSuchFileException (name);
-            throw new IOException (e);
+            throw e;
         }
     }
 
@@ -664,14 +658,6 @@ public class SshFileSystemProvider extends FileSystemProvider
                 int received;
                 while (buffer.hasRemaining ()  &&  (received = channel.read (buffer)) > 0) result += received;
             }
-            catch (IOException e)
-            {
-                throw e;
-            }
-            catch (Exception e)
-            {
-                throw new IOException (e);
-            }
 
             if (result == 0  &&  position >= size) return -1;
             position += result;
@@ -714,11 +700,7 @@ public class SshFileSystemProvider extends FileSystemProvider
                 channel.close ();  // Closes "out", which causes dd command to exit.
                 proc.waitFor (1, TimeUnit.SECONDS);  // Ensure that all bytes are written before this thread moves on.
             }
-            catch (IOException e)
-            {
-                throw e;
-            }
-            catch (Exception e)
+            catch (InterruptedException e)
             {
                 throw new IOException (e);
             }
@@ -964,7 +946,7 @@ public class SshFileSystemProvider extends FileSystemProvider
             catch (SftpException e)
             {
                 if (e.getStatus () == SftpConstants.SSH_FX_NO_SUCH_FILE) throw new NoSuchFileException (name);
-                throw new IOException (e);
+                throw e;
             }
         }
 

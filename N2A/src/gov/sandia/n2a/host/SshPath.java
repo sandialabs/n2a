@@ -343,7 +343,7 @@ public class SshPath implements Path
         catch (SftpException e)
         {
             if (e.getStatus () == SftpConstants.SSH_FX_NO_SUCH_FILE) return false;
-            throw new IOException (e);
+            throw e;
         }
     }
 

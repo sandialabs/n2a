@@ -37,7 +37,9 @@ import org.apache.sshd.sftp.common.SftpException;
 
 import gov.sandia.n2a.host.Host.AnyProcess;
 
-// TODO: apache sshd SftpFileSystem is a proper proper nio.FileSystem. Consider using it instead of this code.
+// Note that Apache sshd SftpFileSystem is a proper proper NIO FileSystem.
+// We don't use it because this code predates the switch to Apache sshd,
+// and because our implementation has to support serial access when needed.
 public class SshFileSystem extends FileSystem
 {
     protected URI          uri;            // For convenience in answering Path.getURI() call.
@@ -262,10 +264,6 @@ public class SshFileSystem extends FileSystem
                 String[] pieces = line.split ("\\s+");
                 return extractSize (pieces[1]);
             }
-            catch (Exception e)
-            {
-                throw new IOException (e);
-            }
         }
 
         // Sometimes less than unallocated space, due to such things a the 5% margin on unix file systems
@@ -282,10 +280,6 @@ public class SshFileSystem extends FileSystem
                 String[] pieces = line.split ("\\s+");
                 return extractSize (pieces[3]);
             }
-            catch (Exception e)
-            {
-                throw new IOException (e);
-            }
         }
 
         public long getUnallocatedSpace () throws IOException
@@ -301,10 +295,6 @@ public class SshFileSystem extends FileSystem
                 long total = extractSize (pieces[1]);
                 long used  = extractSize (pieces[2]);
                 return total - used;
-            }
-            catch (Exception e)
-            {
-                throw new IOException (e);
             }
         }
 
@@ -352,7 +342,7 @@ public class SshFileSystem extends FileSystem
     /**
         Make sftp safe to use.
         If any protocol-level error occurs, we need to detect it and make a new sftp connection.
-        SftpConstants does not appear to be thread-safe, so all methods of this class are synchronized.
+        SftpClient methods do not appear to be thread-safe, so all methods of this class are synchronized.
     **/
     public class WrapperSftp implements Closeable
     {
@@ -383,7 +373,8 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)  // May be failure of connection, or simply a problem with the given path.
             {
-                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
+                int status = e.getStatus ();
+                if (status >= SftpConstants.SSH_FX_BAD_MESSAGE  &&  status <= SftpConstants.SSH_FX_CONNECTION_LOST) close ();
                 throw e;
             }
         }
@@ -397,7 +388,8 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)
             {
-                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
+                int status = e.getStatus ();
+                if (status >= SftpConstants.SSH_FX_BAD_MESSAGE  &&  status <= SftpConstants.SSH_FX_CONNECTION_LOST) close ();
                 throw e;
             }
         }
@@ -412,7 +404,8 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)
             {
-                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
+                int status = e.getStatus ();
+                if (status >= SftpConstants.SSH_FX_BAD_MESSAGE  &&  status <= SftpConstants.SSH_FX_CONNECTION_LOST) close ();
                 throw e;
             }
         }
@@ -426,7 +419,8 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)
             {
-                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
+                int status = e.getStatus ();
+                if (status >= SftpConstants.SSH_FX_BAD_MESSAGE  &&  status <= SftpConstants.SSH_FX_CONNECTION_LOST) close ();
                 throw e;
             }
         }
@@ -440,7 +434,8 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)
             {
-                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
+                int status = e.getStatus ();
+                if (status >= SftpConstants.SSH_FX_BAD_MESSAGE  &&  status <= SftpConstants.SSH_FX_CONNECTION_LOST) close ();
                 throw e;
             }
         }
@@ -454,7 +449,8 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)
             {
-                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
+                int status = e.getStatus ();
+                if (status >= SftpConstants.SSH_FX_BAD_MESSAGE  &&  status <= SftpConstants.SSH_FX_CONNECTION_LOST) close ();
                 throw e;
             }
         }
@@ -468,7 +464,8 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)
             {
-                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
+                int status = e.getStatus ();
+                if (status >= SftpConstants.SSH_FX_BAD_MESSAGE  &&  status <= SftpConstants.SSH_FX_CONNECTION_LOST) close ();
                 throw e;
             }
         }

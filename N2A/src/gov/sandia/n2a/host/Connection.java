@@ -186,7 +186,7 @@ public class Connection implements Closeable, UserInteraction
         }
         catch (FileSystemAlreadyExistsException e)
         {
-            // It is possible for two host to share the exact same filesystem.
+            // It is possible for two hosts to share the exact same filesystem.
             // The host could be an alias with an alternate configuration.
             sshfs = FileSystems.getFileSystem (uri);
         }
