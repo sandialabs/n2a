@@ -18,6 +18,8 @@ the U.S. Government retains certain rights in this software.
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
 # include <time.h>
+# undef min
+# undef max
 #endif
 
 
@@ -1323,12 +1325,12 @@ Simulator<T>::clear ()
 
 template<class T>
 void
-Simulator<T>::init (WrapperBase<T> & wrapper)
+Simulator<T>::init (WrapperBase<T> * wrapper)
 {
     // Init cycle
     EventStep<T> * event = (EventStep<T> *) currentEvent;
-    event->enqueue (&wrapper);  // no need for wrapper->enterSimulation()
-    wrapper.init ();
+    event->enqueue (wrapper);  // no need for wrapper->enterSimulation()
+    wrapper->init ();
     updatePopulations ();
     event->requeue ();  // Only reinserts self if not empty.
 }

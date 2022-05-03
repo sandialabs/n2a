@@ -73,10 +73,11 @@ import com.jcraft.jsch.JSchException;
 **/
 public abstract class Host
 {
-    public    String             name;                                 // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the address key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
-    public    MNode              config;                               // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
-    protected ArrayList<NodeJob> running = new ArrayList<NodeJob> ();  // Jobs that we are actively monitoring because they may still be running.
+    public    String             name;                                    // Identifies host internally. Also acts as the default value of network address, but this can be overridden by the address key. This allows the use of a friendly name for display combined with, say, a raw IP for address.
+    public    MNode              config;                                  // Collection of attributes that describe the target, including login information, directory structure and command forms. This should be a direct reference to node in app state, so any changes are recorded.
+    protected ArrayList<NodeJob> running = new ArrayList<NodeJob> ();     // Jobs that we are actively monitoring because they may still be running.
     protected MonitorThread      monitorThread;
+    public    Map<String,Object> objects = new HashMap<String,Object> (); // For other code to attach resources to a given host. Host itself does not use this collection.
 
     protected static Map<String,Host>     hosts     = new HashMap<String,Host> ();
     protected static List<ChangeListener> listeners = new ArrayList<ChangeListener> ();

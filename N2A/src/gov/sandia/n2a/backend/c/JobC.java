@@ -13,8 +13,6 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.Conversion;
 import gov.sandia.n2a.host.Host;
-import gov.sandia.n2a.host.Host.AnyProcess;
-import gov.sandia.n2a.host.Host.AnyProcessBuilder;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionMatrix;
 import gov.sandia.n2a.eqset.Variable;
@@ -53,6 +51,7 @@ import java.net.URL;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -65,8 +64,9 @@ import java.util.TreeSet;
 
 public class JobC extends Thread
 {
-    protected static Set<Host>              runtimeBuilt    = new HashSet<Host> ();              // collection of Hosts for which runtime has already been checked/built during this session.
-    protected static Map<Host,List<String>> providedObjects = new HashMap<Host,List<String>> (); // object code or archives provided by extensions. The string is suitable for constructing compiler command line.
+    protected static Set<Host>            runtimeBuilt    = new HashSet<Host> ();            // collection of Hosts for which runtime has already been checked/built during this session.
+    public    static Set<Host>            compilerChanged = new HashSet<Host> ();            // collection of Hosts for which the path to compiler has changed. Forces a rebuild of all runtime code. This field is set by SettingsC.
+    protected static Map<Host,List<Path>> providedObjects = new HashMap<Host,List<Path>> (); // object code or archives provided by extensions. The string is suitable for constructing compiler command line.
 
     public    MNode       job;
     protected EquationSet digestedModel;
@@ -84,10 +84,10 @@ public class JobC extends Thread
     protected boolean after;
     protected boolean kokkos;  // profiling method
     public    boolean gprof;   // profiling method
-    protected boolean debug;   // compile with debug symbols; applies to current model as well as any runtime components that happen to get rebuilt
+    public    boolean debug;   // compile with debug symbols; applies to current model as well as any runtime components that happen to get rebuilt
     protected boolean cli;     // command-line interface
     protected boolean lib;     // library mode, suitable for Python wrapper or other external integration
-    protected boolean tls;     // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
+    public    boolean tls;     // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
     
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
@@ -216,23 +216,30 @@ public class JobC extends Thread
     {
         // Update runtime source files, if necessary
         boolean changed = false;
+        if (compilerChanged.contains (env))
+        {
+            changed = true;
+            runtimeBuilt.remove (env);
+            providedObjects.remove (env);
+        }
         if (! runtimeBuilt.contains (env))
         {
-            changed = unpackRuntime ();
+            if (unpackRuntime ()) changed = true;
             for (ProvideOperator pf : extensions)
             {
-                String po = pf.rebuildRuntime (this);
+                Path po = pf.rebuildRuntime (this);
                 if (po == null) continue;
-                List<String> envProvidedObjects = providedObjects.get (env);
+                List<Path> envProvidedObjects = providedObjects.get (env);
                 if (envProvidedObjects == null)
                 {
-                    envProvidedObjects = new ArrayList<String> ();
+                    envProvidedObjects = new ArrayList<Path> ();
                     providedObjects.put (env, envProvidedObjects);
                 }
                 envProvidedObjects.add (po);
             }
             runtimeBuilt.add (env);  // Stop checking files for this session.
         }
+        compilerChanged.remove (env);
 
         if (changed)  // Delete existing object files
         {
@@ -247,6 +254,7 @@ public class JobC extends Thread
         }
 
         // Compile runtime
+        Compiler.Factory factory = BackendC.getFactory (env);
         Map<String,Boolean> sources = new HashMap<String,Boolean> ();  // List of source names, associated with flag indicating that a type-specific object should be built.
         sources.put ("runtime",   true);
         sources.put ("io",        true);
@@ -259,26 +267,18 @@ public class JobC extends Thread
 
             Path object = runtimeDir.resolve (objectName);
             if (Files.exists (object)) continue;
-            Path source = runtimeDir.resolve (stem + ".cc");
 
-            List<String> command = new ArrayList<String> ();
-            command.add (gcc.toString ());
-            command.add ("-c");
-            if (debug) command.add ("-g");
-            else       command.add ("-O3");
-            if (gprof) command.add ("-pg");
-            command.add ("-std=c++11");
-            command.add ("-ffunction-sections");
-            command.add ("-fdata-sections");
-            command.add ("-I" + env.quote (runtimeDir));
-            command.add ("-Dn2a_T=" + T);
-            if (T.equals ("int")) command.add ("-Dn2a_FP");
-            if (tls) command.add ("-Dn2a_TLS");
-            command.add ("-o");  // goes with next line ...
-            command.add (env.quote (object));
-            command.add (env.quote (source));
+            Compiler c = factory.make (localJobDir);
+            if (gprof) c.setProfiling ();
+            if (debug) c.setDebug ();
+            c.addInclude (runtimeDir);
+            c.addDefine ("n2a_T", T);
+            if (T.equals ("int")) c.addDefine ("n2a_FP");
+            if (tls) c.addDefine ("n2a_TLS");
+            c.addSource (runtimeDir.resolve (stem + ".cc"));
+            c.setOutput (object);
 
-            Path out = runCommand (command.toArray (new String[command.size ()]));
+            Path out = c.compile ();
             Files.delete (out);
         }
     }
@@ -343,89 +343,37 @@ public class JobC extends Thread
         String stem = source.getFileName ().toString ().split ("\\.", 2)[0];
         Path binary = source.getParent ().resolve (stem + ".bin");
 
-        List<String> command = new ArrayList<String> ();
-        command.add (gcc.toString ());
-        if (debug) command.add ("-g");
-        else       command.add ("-O3");
-        if (gprof) command.add ("-pg");
-        command.add ("-std=c++11");
-        command.add ("-ffunction-sections");
-        command.add ("-fdata-sections");
-        command.add ("-Wl,--gc-sections");
-        command.add ("-I" + env.quote (runtimeDir));
+        Compiler.Factory factory = BackendC.getFactory (env);
+        Compiler c = factory.make (localJobDir);
+        if (gprof) c.setProfiling ();
+        if (debug) c.setDebug ();
+        c.addInclude (runtimeDir);
         for (ProvideOperator po : extensions)
         {
             Path include = po.include (this);
             if (include == null) continue;
-            command.add ("-I" + env.quote (include.getParent ()));
+            c.addInclude (include.getParent ());
         }
-        command.add ("-Dn2a_T=" + T);
-        if (T.equals ("int")) command.add ("-Dn2a_FP");
-        if (tls) command.add ("-Dn2a_TLS");
-        command.add ("-o");  // goes with next line ...
-        command.add (env.quote (binary));
-        command.add (env.quote (source));
-        command.add (                      env.quote (runtimeDir.resolve (objectName ("runtime"))));
-        command.add (                      env.quote (runtimeDir.resolve (objectName ("io"))));
-        if (T.equals ("int")) command.add (env.quote (runtimeDir.resolve (objectName ("fixedpoint"))));
-        List<String> envProvidedObjects = providedObjects.get (env);
-        if (envProvidedObjects != null) for (String po : envProvidedObjects) command.add (po);  // These have already been quoted.
+        c.addDefine ("n2a_T", T);
+        if (T.equals ("int")) c.addDefine ("n2a_FP");
+        if (tls) c.addDefine ("n2a_TLS");
+        c.setOutput (binary);
+        c.addSource (source);
+        c.addObject (runtimeDir.resolve (objectName ("runtime")));
+        c.addObject (runtimeDir.resolve (objectName ("io")));
+        if (T.equals ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
+        List<Path> envProvidedObjects = providedObjects.get (env);
+        if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
         if (kokkos)
         {
-            command.add (env.quote (runtimeDir.resolve ("profiling.o")));
-            command.add ("-ldl");
+            c.addObject (runtimeDir.resolve ("profiling.o"));
+            c.addLibrary (Paths.get ("dl"));  // TODO: should this be made on the host file system?
         }
 
-        Path out = runCommand (command.toArray (new String[command.size ()]));
+        Path out = c.compileLink ();
         Files.delete (out);
 
         return binary;
-    }
-
-    public Path runCommand (String... command) throws Exception
-    {
-        // Useful for debugging. The dumped command can be used directly in a terminal to diagnose stalled builds.
-        for (String s : command) System.out.print (s + " ");
-        System.out.println ();
-
-        // Remove empty strings from command. This is a convenience to the caller,
-        // allowing arguments to be conditionally omitted with the ternary operator.
-        int count = 0;
-        for (String s : command) if (! s.isEmpty ()) count++;
-        String[] cleanedCommand = new String[count];
-        int i = 0;
-        for (String s : command) if (! s.isEmpty ()) cleanedCommand[i++] = s;
-
-        Path out = localJobDir.resolve ("compile.out");
-        Path err = localJobDir.resolve ("compile.err");
-
-        AnyProcessBuilder b = env.build (cleanedCommand);
-        b.redirectOutput (out);  // Should truncate existing files.
-        b.redirectError  (err);
-        try (AnyProcess p = b.start ())
-        {
-            p.waitFor ();
-
-            if (p.exitValue () != 0)
-            {
-                PrintStream ps = Backend.err.get ();
-                ps.println ("Failed to compile:");
-                ps.print (Host.streamToString (Files.newInputStream (err)));
-                Files.delete (out);
-                Files.delete (err);
-                throw new Backend.AbortRun ();
-            }
-
-            String errString = Host.streamToString (Files.newInputStream (err));
-            if (! errString.isEmpty ())
-            {
-                PrintStream ps = Backend.err.get ();
-                ps.println ("Compiler says:");
-                ps.println (errString);
-            }
-            Files.delete (err);
-        }
-        return out;
     }
 
     public void digestModel () throws Exception
@@ -754,6 +702,7 @@ public class JobC extends Thread
         result.append ("    " + mangle (digestedModel.name) + ".container = this;\n");
         result.append ("  }\n");
         result.append ("};\n");
+        result.append ("Wrapper * wrapper;\n");
         result.append ("\n");
         generateDefinitions (context, digestedModel);
 
@@ -794,7 +743,7 @@ public class JobC extends Thread
         result.append ("  " + SIMULATOR + "integrator = new " + integrator + "<" + T + ">;\n");
         result.append ("  " + SIMULATOR + "after = " + after + ";\n");
         result.append ("  initIO ();\n");
-        result.append ("  Wrapper wrapper;\n");
+        result.append ("  wrapper = new Wrapper;\n");
         result.append ("  " + SIMULATOR + "init (wrapper);\n");
         result.append ("}\n");
         result.append ("\n");
@@ -802,6 +751,7 @@ public class JobC extends Thread
         // Finish
         result.append ("void finish ()\n");
         result.append ("{\n");
+        result.append ("  delete wrapper;\n");
         if (tls)
         {
             result.append ("  delete Simulator<" + T + ">::instance;\n");

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -41,7 +41,7 @@ public interface ProvideOperator extends ExtensionPoint
         is in use, the provided object will be incorporated into the runtime's main
         library. OK to return null.
     **/
-    public String rebuildRuntime (JobC job) throws Exception;
+    public Path rebuildRuntime (JobC job) throws Exception;
 
     /**
         @return Full path to header file that should be included in the model source code.

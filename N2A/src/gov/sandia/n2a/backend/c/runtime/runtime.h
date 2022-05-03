@@ -498,7 +498,7 @@ public:
     ~Simulator ();
     void clear ();
 
-    void init (WrapperBase<T> & wrapper); ///< init phase and event queue set up
+    void init (WrapperBase<T> * wrapper); ///< init phase and event queue set up
     void run (T until = (T) INFINITY);    ///< Run until given time. This function can be called multiple times to step through simulation. Default value runs until queue is empty.
     void updatePopulations ();
 

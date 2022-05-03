@@ -7,12 +7,15 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.c;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MTextField;
 import gov.sandia.n2a.ui.settings.SettingsBackend;
 
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 public class SettingsC extends SettingsBackend
 {
@@ -22,6 +25,16 @@ public class SettingsC extends SettingsBackend
     {
         key          = "c";
         iconFileName = "c-16.png";
+
+        fieldCpp.addChangeListener (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                Host h = (Host) list.getSelectedValue ();
+                h.objects.remove ("cxx");
+                JobC.compilerChanged.add (h);
+            }
+        });
     }
 
     @Override
