@@ -134,15 +134,9 @@ public class MatrixSparse extends Matrix
             rows = new HashMap<Integer,Double> ();
             data.set (column, rows);
         }
-        if (a == emptyValue)
-        {
-            rows.remove (row);
-        }
-        else
-        {
-            rows.put (row, a);
-            rowCount = Math.max (rowCount, row + 1);
-        }
+        if (a == emptyValue) rows.remove (row);
+        else                 rows.put    (row, a);
+        rowCount = Math.max (rowCount, row + 1);  // Any set() will stretch matrix, even if emptyValue. 
     }
 
     public MatrixSparse clear (double initialValue)

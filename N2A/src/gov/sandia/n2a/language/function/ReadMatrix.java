@@ -62,7 +62,7 @@ public class ReadMatrix extends Function
 
     public void determineExponentNext ()
     {
-        exponent = exponentNext;
+        exponent = exponentNext;  // Conversion done while reading.
         // All our operands are strings, so no point in passing the exponent down.
     }
 
