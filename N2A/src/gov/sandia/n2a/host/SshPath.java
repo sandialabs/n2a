@@ -24,9 +24,9 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
-import com.jcraft.jsch.ChannelSftp;
-import com.jcraft.jsch.ChannelSftp.LsEntry;
-import com.jcraft.jsch.SftpException;
+import org.apache.sshd.sftp.client.SftpClient.DirEntry;
+import org.apache.sshd.sftp.common.SftpConstants;
+import org.apache.sshd.sftp.common.SftpException;
 
 import gov.sandia.n2a.host.SshFileSystem.WrapperSftp;
 
@@ -35,7 +35,7 @@ public class SshPath implements Path
     protected SshFileSystem fileSystem;
     protected boolean       absolute;  // indicates that the first path element is relative to root
     protected String[]      path;
-    protected LsEntry       lsEntry;  // Stashed if this path was produced by a directory stream. Used to reduce communication if file info is subsequently retrieved.
+    protected DirEntry      dirEntry;  // Stashed if this path was produced by a directory stream. Used to reduce communication if file info is subsequently retrieved.
 
     /**
         Analyzes the given list of strings to decompose them into proper path elements and
@@ -342,7 +342,7 @@ public class SshPath implements Path
         }
         catch (SftpException e)
         {
-            if (e.id == ChannelSftp.SSH_FX_NO_SUCH_FILE) return false;
+            if (e.getStatus () == SftpConstants.SSH_FX_NO_SUCH_FILE) return false;
             throw new IOException (e);
         }
     }

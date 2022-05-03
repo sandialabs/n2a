@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,21 +21,23 @@ import java.nio.file.attribute.FileStoreAttributeView;
 import java.nio.file.attribute.UserPrincipalLookupService;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.Vector;
 import java.util.regex.Pattern;
 
-import com.jcraft.jsch.ChannelSftp;
-import com.jcraft.jsch.ChannelSftp.LsEntry;
+import org.apache.sshd.sftp.client.SftpClient;
+import org.apache.sshd.sftp.client.SftpClient.Attributes;
+import org.apache.sshd.sftp.client.SftpClient.DirEntry;
+import org.apache.sshd.sftp.client.SftpClientFactory;
+import org.apache.sshd.sftp.client.SftpVersionSelector;
+import org.apache.sshd.sftp.common.SftpConstants;
+import org.apache.sshd.sftp.common.SftpException;
 
 import gov.sandia.n2a.host.Host.AnyProcess;
 
-import com.jcraft.jsch.JSchException;
-import com.jcraft.jsch.SftpATTRS;
-import com.jcraft.jsch.SftpException;
-
+// TODO: apache sshd SftpFileSystem is a proper proper nio.FileSystem. Consider using it instead of this code.
 public class SshFileSystem extends FileSystem
 {
     protected URI          uri;            // For convenience in answering Path.getURI() call.
@@ -250,14 +252,7 @@ public class SshFileSystem extends FileSystem
 
         public long getTotalSpace () throws IOException
         {
-            try
-            {
-                connection.connect ();
-            }
-            catch (JSchException e)
-            {
-                throw new IOException (e);
-            }
+            connection.connect ();
 
             try (AnyProcess proc = connection.build ("df", "-h", defaultDir.toString ()).start ();
                  BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
@@ -277,14 +272,7 @@ public class SshFileSystem extends FileSystem
         // which only root can access.
         public long getUsableSpace () throws IOException
         {
-            try
-            {
-                connection.connect ();
-            }
-            catch (JSchException e)
-            {
-                throw new IOException (e);
-            }
+            connection.connect ();
 
             try (AnyProcess proc = connection.build ("df", "-h", defaultDir.toString ()).start ();
                  BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
@@ -302,14 +290,7 @@ public class SshFileSystem extends FileSystem
 
         public long getUnallocatedSpace () throws IOException
         {
-            try
-            {
-                connection.connect ();
-            }
-            catch (JSchException e)
-            {
-                throw new IOException (e);
-            }
+            connection.connect ();
 
             try (AnyProcess proc = connection.build ("df", "-h", defaultDir.toString ()).start ();
                  BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
@@ -371,53 +352,43 @@ public class SshFileSystem extends FileSystem
     /**
         Make sftp safe to use.
         If any protocol-level error occurs, we need to detect it and make a new sftp connection.
-        ChannelSftp does not appear to be thread-safe, so all methods of this class are synchronized.
+        SftpConstants does not appear to be thread-safe, so all methods of this class are synchronized.
     **/
     public class WrapperSftp implements Closeable
     {
-        public ChannelSftp sftp;
+        public SftpClient sftp;
 
         public synchronized void connect () throws IOException
         {
-            if (sftp != null  &&  sftp.isConnected ())
-            {
-                if (! sftp.isClosed ()  &&  ! sftp.isEOF ()) return;  // channel is still good
-                close ();
-            }
+            if (sftp != null  &&  sftp.isOpen ()) return;
 
-            try
-            {
-                connection.connect ();
-                sftp = (ChannelSftp) connection.session.openChannel ("sftp");  // Best I can tell, openChannel() is thread-safe.
-                sftp.connect (connection.timeout);
-            }
-            catch (JSchException e)
-            {
-                throw new IOException (e);
-            }
+            connection.connect ();
+            sftp = SftpClientFactory.instance ().createSftpClient (connection.session, SftpVersionSelector.CURRENT);  // no error handler
         }
 
         public synchronized void close ()
         {
-            if (sftp != null) sftp.disconnect ();
+            if (sftp == null) return;
+            try {sftp.close ();}
+            catch (IOException e) {}
             sftp = null;
         }
 
-        public synchronized SftpATTRS stat (String path) throws IOException, SftpException
+        public synchronized Attributes stat (String path) throws IOException
         {
             try
             {
                 connect ();
                 return sftp.stat (path);
             }
-            catch (SftpException e)
+            catch (SftpException e)  // May be failure of connection, or simply a problem with the given path.
             {
-                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
                 throw e;
             }
         }
 
-        public synchronized SftpATTRS lstat (String path) throws IOException, SftpException
+        public synchronized Attributes lstat (String path) throws IOException
         {
             try
             {
@@ -426,27 +397,27 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)
             {
-                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
                 throw e;
             }
         }
 
-        @SuppressWarnings("unchecked")  // ChannelSftp.ls() does not specify the exact type of the return vector, but we do.
-        public synchronized Vector<LsEntry> ls (String path) throws IOException, SftpException
+        public synchronized Collection<DirEntry> ls (String path) throws IOException
         {
             try
             {
                 connect ();
-                return sftp.ls (path);
+                Collection<DirEntry> result = sftp.readEntries (path);
+                return result;
             }
             catch (SftpException e)
             {
-                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
                 throw e;
             }
         }
 
-        public synchronized void setStat (String path, SftpATTRS attr) throws IOException, SftpException
+        public synchronized void setStat (String path, Attributes attr) throws IOException
         {
             try
             {
@@ -455,68 +426,26 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)
             {
-                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
                 throw e;
             }
         }
 
-        public synchronized void chmod (int permissions, String path) throws IOException, SftpException
+        public synchronized void rm (String path) throws IOException
         {
             try
             {
                 connect ();
-                sftp.chmod (permissions, path);
+                sftp.remove (path);
             }
             catch (SftpException e)
             {
-                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
                 throw e;
             }
         }
 
-        public synchronized void chown (int uid, String path) throws IOException, SftpException
-        {
-            try
-            {
-                connect ();
-                sftp.chown (uid, path);
-            }
-            catch (SftpException e)
-            {
-                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
-                throw e;
-            }
-        }
-
-        public synchronized void chgrp (int gid, String path) throws IOException, SftpException
-        {
-            try
-            {
-                connect ();
-                sftp.chgrp (gid, path);
-            }
-            catch (SftpException e)
-            {
-                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
-                throw e;
-            }
-        }
-
-        public synchronized void rm (String path) throws IOException, SftpException
-        {
-            try
-            {
-                connect ();
-                sftp.rm (path);
-            }
-            catch (SftpException e)
-            {
-                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
-                throw e;
-            }
-        }
-
-        public synchronized void mkdir (String path) throws IOException, SftpException
+        public synchronized void mkdir (String path) throws IOException
         {
             try
             {
@@ -525,12 +454,12 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)
             {
-                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
                 throw e;
             }
         }
 
-        public synchronized void rmdir (String path) throws IOException, SftpException
+        public synchronized void rmdir (String path) throws IOException
         {
             try
             {
@@ -539,7 +468,7 @@ public class SshFileSystem extends FileSystem
             }
             catch (SftpException e)
             {
-                if (e.id >= ChannelSftp.SSH_FX_BAD_MESSAGE) close ();
+                if (e.getStatus () >= SftpConstants.SSH_FX_BAD_MESSAGE) close ();
                 throw e;
             }
         }

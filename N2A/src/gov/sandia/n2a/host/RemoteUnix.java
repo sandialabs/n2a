@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -213,11 +213,7 @@ public class RemoteUnix extends Unix implements Remote
             });
 
             String messages = "";
-            if (connection != null)
-            {
-                connection.messageListener = this;
-                messages = connection.getMessages ();
-            }
+            if (connection != null) messages = connection.getMessages ();
             textMessages = new JTextArea (messages)
             {
                 public void updateUI ()
@@ -315,14 +311,30 @@ public class RemoteUnix extends Unix implements Remote
         }
     }
 
-    public synchronized void connect () throws Exception
+    public synchronized void connect (boolean enableDialogs) throws Exception
     {
-        if (connection == null)
+        if (connection == null) connection = new Connection (this);
+        if (enableDialogs) connection.allowDialogs = true;
+
+        // connection.connect() could take a long time, so don't run on EDT.
+        // This should only be on EDT when the call comes through enable(),
+        // but enable() may also be called outside of EDT.
+        if (! EventQueue.isDispatchThread ())  // Not on EDT, so run directly.
         {
-            connection = new Connection (config);
-            connection.messageListener = panel;
+            connection.connect ();
+            return;
         }
-        connection.connect ();
+        // On EDT, so spawn a new thread for connection.connect().
+        Thread thread = new Thread ()
+        {
+            public void run ()
+            {
+                try {connection.connect ();}
+                catch (Exception e) {}
+            }
+        };
+        thread.setDaemon (true);
+        thread.start ();
     }
 
     public synchronized void close ()
@@ -334,25 +346,8 @@ public class RemoteUnix extends Unix implements Remote
     @Override
     public synchronized void enable ()
     {
-        if (connection == null)
-        {
-            connection = new Connection (config);
-            connection.messageListener = panel;
-        }
-        connection.allowDialogs = true;
-
-        // This function is called on the EDT, but connection.connect() could take a long time,
-        // so spawn a thread for it.
-        Thread thread = new Thread ()
-        {
-            public void run ()
-            {
-                try {connection.connect ();}
-                catch (Exception e) {}
-            }
-        };
-        thread.setDaemon (true);
-        thread.start ();
+        try {connect (true);}
+        catch (Exception e) {}
     }
 
     @Override
@@ -370,14 +365,14 @@ public class RemoteUnix extends Unix implements Remote
     @Override
     public AnyProcessBuilder build (String... command) throws Exception
     {
-        connect ();
+        connect (false);
         return connection.build (command);
     }
 
     @Override
     public Path getResourceDir () throws Exception
     {
-        connect ();
+        connect (false);
         return connection.getFileSystem ().getPath ("/").getRoot ().resolve (connection.home).resolve ("n2a");
     }
 

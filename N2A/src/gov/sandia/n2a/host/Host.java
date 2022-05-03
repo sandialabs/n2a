@@ -55,8 +55,6 @@ import javax.swing.JPanel;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import com.jcraft.jsch.JSchException;
-
 /**
     Encapsulates access to a computer system, whether it is a workstation, a supercomputer or a "cloud" service.
     Services include:
@@ -262,6 +260,7 @@ public abstract class Host
                         catch (IOException e) {}
                     }
                 }
+                Connection.client.stop ();
             }
         };
         shutdownThread.setDaemon (true);
@@ -388,6 +387,7 @@ public abstract class Host
                             }
                         }
                         catch (Exception e) {}
+                        continue;
                     }
 
                     Host chosenHost = null;
@@ -415,6 +415,7 @@ public abstract class Host
                         }
 
                         if (stop) return;
+                        hostTime.put (h, System.currentTimeMillis ());  // Don't poll a host more than one per second, regardless of whether or not a job is started.
                         if (backend.canRunNow (h, source))
                         {
                             chosenHost = h;
@@ -424,16 +425,16 @@ public abstract class Host
                     if (chosenHost == null)  // No host ready, so move on to next job.
                     {
                         i++;
+                        continue;
                     }
-                    else  // Host is ready, so start job and move to host's monitor list.
-                    {
-                        if (stop) return;
-                        source.set (chosenHost.name, "host");
-                        backend.start (source);
-                        hostTime.put (chosenHost, System.currentTimeMillis ());  // Remember when the most recent job was started on the chosen host.
-                        synchronized (waitingForHost) {waitingForHost.remove (i);}
-                        synchronized (chosenHost.running) {chosenHost.running.add (job);}
-                    }
+
+                    // Host is ready, so start job and move to host's monitor list.
+                    if (stop) return;
+                    source.set (chosenHost.name, "host");
+                    backend.start (source);
+                    hostTime.put (chosenHost, System.currentTimeMillis ());  // Remember when the most recent job was started on the chosen host.
+                    synchronized (waitingForHost) {waitingForHost.remove (i);}
+                    synchronized (chosenHost.running) {chosenHost.running.add (job);}
                 }
             }
         }
@@ -582,15 +583,15 @@ public abstract class Host
     **/
     public static interface AnyProcessBuilder
     {
-        public AnyProcessBuilder  redirectInput  (Path file);
-        public AnyProcessBuilder  redirectOutput (Path file);
-        public AnyProcessBuilder  redirectError  (Path file);
+        public AnyProcessBuilder  redirectInput  (Path file);  // will pipe file to the process stdin
+        public AnyProcessBuilder  redirectOutput (Path file);  // will pipe process stdout to the file
+        public AnyProcessBuilder  redirectError  (Path file);  // will pipe process stderr to the file
         public Map<String,String> environment ();
         /**
             Construct and start the process.
             This is the only function that needs to be inside the try-with-resources.
         **/
-        public AnyProcess start () throws Exception;
+        public AnyProcess start () throws IOException;
     }
 
     /**
@@ -600,9 +601,9 @@ public abstract class Host
     **/
     public static interface AnyProcess extends Closeable
     {
-        public OutputStream getOutputStream ();
-        public InputStream  getInputStream  ();
-        public InputStream  getErrorStream  ();
+        public OutputStream getOutputStream ();  // pipes to the process stdin
+        public InputStream  getInputStream  ();  // pipes from the process stdout
+        public InputStream  getErrorStream  ();  // pipes from the process stderr
         public int          waitFor         ()                            throws InterruptedException;
         public boolean      waitFor         (long timeout, TimeUnit unit) throws InterruptedException;
         public int          exitValue       ()                            throws IllegalThreadStateException;
@@ -646,7 +647,7 @@ public abstract class Host
             return builder.environment ();
         }
 
-        public AnyProcess start () throws IOException, JSchException
+        public AnyProcess start () throws IOException
         {
             return new LocalProcess (builder.start ());
         }

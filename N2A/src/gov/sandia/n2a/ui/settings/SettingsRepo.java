@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,7 +13,6 @@ import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
-import gov.sandia.n2a.host.Connection;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
@@ -127,21 +126,17 @@ import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.transport.ChainingCredentialsProvider;
 import org.eclipse.jgit.transport.CredentialItem;
 import org.eclipse.jgit.transport.CredentialsProvider;
-import org.eclipse.jgit.transport.ssh.jsch.JschConfigSessionFactory;
 import org.eclipse.jgit.transport.NetRCCredentialsProvider;
-import org.eclipse.jgit.transport.ssh.jsch.OpenSshConfig.Host;
 import org.eclipse.jgit.transport.RemoteConfig;
 import org.eclipse.jgit.transport.SshSessionFactory;
 import org.eclipse.jgit.transport.SshTransport;
 import org.eclipse.jgit.transport.Transport;
 import org.eclipse.jgit.transport.URIish;
+import org.eclipse.jgit.transport.sshd.DefaultProxyDataFactory;
+import org.eclipse.jgit.transport.sshd.JGitKeyCache;
+import org.eclipse.jgit.transport.sshd.SshdSessionFactory;
 import org.eclipse.jgit.treewalk.FileTreeIterator;
 import org.eclipse.jgit.treewalk.TreeWalk;
-import org.eclipse.jgit.util.FS;
-
-import com.jcraft.jsch.JSch;
-import com.jcraft.jsch.JSchException;
-import com.jcraft.jsch.Session;
 
 @SuppressWarnings("serial")
 public class SettingsRepo extends JScrollPane implements Settings
@@ -605,18 +600,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         // JGit configuration
         CredentialsProvider.setDefault (new ChainingCredentialsProvider (new NetRCCredentialsProvider (), new CredentialCache (), new CredentialDialog ()));
-        sessionFactory = new JschConfigSessionFactory ()
-        {
-            protected JSch createDefaultJSch (FS fs) throws JSchException
-            {
-                return Connection.jsch;  // shared with remote execution system
-            }
-
-            protected void configure (Host h, Session s)
-            {
-                s.setConfig ("StrictHostKeyChecking", "no");
-            }
-        };
+        sessionFactory = new SshdSessionFactory (new JGitKeyCache (), new DefaultProxyDataFactory ());
         transportConfig = new TransportConfigCallback ()
         {
             public void configure (Transport t)

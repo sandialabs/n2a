@@ -412,7 +412,7 @@ public class NodeJob extends NodeBase
 
     /**
         Construct the list of resources under this job node.
-        This only called if this job node is actively monitored and open in the tree,
+        This is only called if this job node is actively monitored and open in the tree,
         or if this job node is about to be opened regardless of monitoring.
 
         This function may make blocking remote calls, so should not run on the EDT.
@@ -452,6 +452,11 @@ public class NodeJob extends NodeBase
         {
             try
             {
+                if (! old)
+                {
+                    old = true;
+                    ((Remote) env).enable ();  // To get here, the use had to expand the node. This implies permission to prompt for login.
+                }
                 Path remoteJobDir = Host.getJobDir (env.getResourceDir (), source);
                 try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (remoteJobDir))
                 {
