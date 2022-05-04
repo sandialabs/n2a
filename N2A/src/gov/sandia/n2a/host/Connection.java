@@ -19,12 +19,14 @@ import java.nio.file.FileSystemAlreadyExistsException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
 import java.util.Map.Entry;
 
 import javax.swing.JLabel;
@@ -37,6 +39,7 @@ import javax.swing.event.AncestorListener;
 
 import gov.sandia.n2a.host.Host.AnyProcess;
 import gov.sandia.n2a.host.Host.AnyProcessBuilder;
+import gov.sandia.n2a.host.SshFileSystem.WrapperSftp;
 import gov.sandia.n2a.ui.MainFrame;
 
 import org.apache.sshd.client.SshClient;
@@ -47,12 +50,16 @@ import org.apache.sshd.client.config.hosts.HostConfigEntry;
 import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.client.session.ClientSession.ClientSessionEvent;
 import org.apache.sshd.common.SshConstants;
+import org.apache.sshd.common.channel.exception.SshChannelOpenException;
+import org.apache.sshd.common.session.SessionHeartbeatController.HeartbeatType;
 import org.apache.sshd.common.util.buffer.Buffer;
 
 public class Connection implements Closeable, UserInteraction
 {
     protected Host          host;
     protected ClientSession session;
+    protected Semaphore     channels;
+    protected int           channelRetries = 3; // If open fails when only one channel is available, keep trying this many times.
     protected FileSystem    sshfs;
     protected String        hostname;
     protected String        username;
@@ -108,10 +115,18 @@ public class Connection implements Closeable, UserInteraction
             int port = host.config.getOrDefault (22, "port");
             session = client.connect (username, hostname, port).verify (timeout).getSession ();
             session.setUserInteraction (this);
+            if (session.getSessionHeartbeatType () == HeartbeatType.NONE)  // Does client get keepalive information from config file?
+            {
+                int keepalive = host.config.getOrDefault (60, "keepalive");
+                if (keepalive > 0) session.setSessionHeartbeat (HeartbeatType.IGNORE, Duration.ofSeconds (keepalive));
+            }
             if (! password.isEmpty ()) session.addPasswordIdentity (password);  // This assumes that you never use an empty password. Thus, empty indicates to ask for password.
             if (allowDialogs) failedAuth = true;  // This will get immediately reversed if we succeed ...
             session.auth ().verify (120000);  // Two minutes.
             failedAuth = false;
+
+            int maxChannels = host.config.getOrDefault (10, "maxChannels");
+            channels = new Semaphore (maxChannels);
         }
         catch (IOException e)
         {
@@ -134,6 +149,7 @@ public class Connection implements Closeable, UserInteraction
             session.close ();  // TODO: try graceful close here?
         }
         catch (IOException e) {}
+        channels = null;
         session = null;
     }
 
@@ -242,31 +258,74 @@ public class Connection implements Closeable, UserInteraction
 
         public RemoteProcess start () throws IOException
         {
-            RemoteProcess process = new RemoteProcess (command);
+            if (channels.availablePermits () < 1  &&  sshfs instanceof SshFileSystem)
+            {
+                WrapperSftp sftp = ((SshFileSystem) sshfs).sftp;
+                if (sftp != null) sftp.close ();  // Because all methods are synchronized, this won't interrupt an ongoing operation.
+            }
+            try
+            {
+                channels.acquire ();
+            }
+            catch (InterruptedException e)
+            {
+                // Failed to acquire
+                throw new IOException (e);
+            }
 
-            // Streams must be configured before connect.
             // A redirected stream is of the opposite type from what we would read directly.
             // IE: stdout (from the perspective of the remote process) must feed into something
             // on our side. We either read it directly, in which case it is an input stream,
             // or we redirect it to file, in which case it is an output stream.
             // Can this get any more confusing?
-            if (fileIn  != null) process.channel.setIn  (Files.newInputStream  (fileIn));
-            if (fileOut != null) process.channel.setOut (Files.newOutputStream (fileOut));
-            if (fileErr != null) process.channel.setErr (Files.newOutputStream (fileErr));
+            InputStream  stdin  =  fileIn  == null ? null : Files.newInputStream  (fileIn);
+            OutputStream stdout =  fileOut == null ? null : Files.newOutputStream (fileOut);
+            OutputStream stderr =  fileErr == null ? null : Files.newOutputStream (fileErr);
 
-            if (environment != null)
+            int tries = 0;
+            while (true)
             {
-                for (Entry<String,String> e : environment.entrySet ())
+                try
                 {
-                    process.channel.setEnv (e.getKey (), e.getValue ());
-                }
-            }
+                    RemoteProcess process = new RemoteProcess (command);
 
-            process.channel.open ().verify (timeout);  // This actually starts the remote process.
-            if (fileIn  == null) process.stdin  = process.channel.getInvertedIn  ();
-            if (fileOut == null) process.stdout = process.channel.getInvertedOut ();
-            if (fileErr == null) process.stderr = process.channel.getInvertedErr ();
-            return process;
+                    // Streams must be configured before connect.
+                    if (stdin  != null) process.channel.setIn  (stdin);
+                    if (stdout != null) process.channel.setOut (stdout);
+                    if (stderr != null) process.channel.setErr (stderr);
+
+                    if (environment != null)
+                    {
+                        for (Entry<String,String> e : environment.entrySet ())
+                        {
+                            process.channel.setEnv (e.getKey (), e.getValue ());
+                        }
+                    }
+
+                    process.channel.open ().verify (timeout);  // This actually starts the remote process.
+
+                    if (stdin  == null) process.stdin  = process.channel.getInvertedIn  ();
+                    if (stdout == null) process.stdout = process.channel.getInvertedOut ();
+                    if (stderr == null) process.stderr = process.channel.getInvertedErr ();
+                    return process;
+                }
+                catch (IOException e)
+                {
+                    if (   ! (e.getCause () instanceof SshChannelOpenException)
+                        || channels.availablePermits () > 0
+                        || tries >= channelRetries)
+                    {
+                        // Presumably, if channel failed to open, then it does not count against the channel limit.
+                        // Also, if we throw an exception here, then try-with-resources won't call close() on process.
+                        channels.release ();
+                        if (stdin  != null) stdin .close ();
+                        if (stdout != null) stdout.close ();
+                        if (stderr != null) stderr.close ();
+                        throw e;
+                    }
+                }
+                tries++;
+            }
         }
     }
 
@@ -294,11 +353,9 @@ public class Connection implements Closeable, UserInteraction
         public void close ()
         {
             if (channel == null) return;
-            try
-            {
-                channel.close (false).await (timeout);
-            }
-            catch (IOException e) {}  // TODO: failure to close the exec channel may prevent future exec channels from opening
+            try {channel.close (false).await (timeout);}
+            catch (IOException e) {}  // Even if there is an exception, we still release our internal channel count ...
+            channels.release ();
         }
 
         public OutputStream getOutputStream ()

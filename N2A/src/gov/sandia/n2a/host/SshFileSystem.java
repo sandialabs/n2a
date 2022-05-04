@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.apache.sshd.client.channel.ClientChannel;
+import org.apache.sshd.common.channel.exception.SshChannelOpenException;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClient.Attributes;
 import org.apache.sshd.sftp.client.SftpClient.DirEntry;
@@ -353,14 +355,44 @@ public class SshFileSystem extends FileSystem
             if (sftp != null  &&  sftp.isOpen ()) return;
 
             connection.connect ();
-            sftp = SftpClientFactory.instance ().createSftpClient (connection.session, SftpVersionSelector.CURRENT);  // no error handler
+            try
+            {
+                connection.channels.acquire ();
+            }
+            catch (InterruptedException e)
+            {
+                throw new IOException (e);
+            }
+
+            int tries = 0;
+            while (true)
+            {
+                try
+                {
+                    sftp = SftpClientFactory.instance ().createSftpClient (connection.session, SftpVersionSelector.CURRENT);  // no error handler
+                    return;
+                }
+                catch (IOException e)
+                {
+                    if (   ! (e.getCause () instanceof SshChannelOpenException)
+                        || connection.channels.availablePermits () > 0
+                        || tries >= connection.channelRetries)
+                    {
+                        connection.channels.release ();
+                        throw e;
+                    }
+                }
+                tries++;
+            }
         }
 
         public synchronized void close ()
         {
             if (sftp == null) return;
-            try {sftp.close ();}
-            catch (IOException e) {}
+            ClientChannel channel = sftp.getClientChannel ();
+            try {channel.close (false).await (connection.timeout);}
+            catch (IOException e) {}  // Even if there is an exception, we still release our internal channel count ...
+            connection.channels.release ();
             sftp = null;
         }
 

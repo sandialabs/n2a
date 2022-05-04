@@ -76,16 +76,17 @@ public class RemoteUnix extends Unix implements Remote
     @SuppressWarnings("serial")
     public class EditorPanel extends JPanel implements NameChangeListener, MessageListener
     {
-        public MTextField     fieldAddress   = new MTextField (config, "address", name);
-        public MTextField     fieldUsername  = new MTextField (config, "username", System.getProperty ("user.name"));
-        public MPasswordField fieldPassword  = new MPasswordField (config, "password");
-        public JLabel         labelWarning   = new JLabel ("<html>WARNING: Passoword is stored in plain text.<br>For more security, you can leave the field blank.<br>You will be prompted for a password once per session.<br>That password will be held only in volatile memory.</html>");
-        public MTextField     fieldHome      = new MTextField (config, "home", "/home/" + config.getOrDefault (System.getProperty ("user.name"), "username"));
-        public JPanel         panelRelays    = new JPanel ();
-        public List<JLabel>   labelsRelay    = new ArrayList<JLabel> ();
-        public JButton        buttonConnect  = new JButton ("Reset Connection");
-        public JButton        buttonRestart  = new JButton ("Restart Monitor Thread");
-        public JButton        buttonZombie   = new JButton ("Scan for Zombie Jobs");
+        public MTextField     fieldAddress     = new MTextField (config, "address", name);
+        public MTextField     fieldUsername    = new MTextField (config, "username", System.getProperty ("user.name"));
+        public MPasswordField fieldPassword    = new MPasswordField (config, "password");
+        public JLabel         labelWarning     = new JLabel ("<html>WARNING: Passoword is stored in plain text.<br>For more security, you can leave the field blank.<br>You will be prompted for a password once per session.<br>That password will be held only in volatile memory.</html>");
+        public MTextField     fieldHome        = new MTextField (config, "home", "/home/" + config.getOrDefault (System.getProperty ("user.name"), "username"));
+        public MTextField     fieldMaxChannels = new MTextField (config, "maxChannels", "10");
+        public JPanel         panelRelays      = new JPanel ();
+        public List<JLabel>   labelsRelay      = new ArrayList<JLabel> ();
+        public JButton        buttonConnect    = new JButton ("Reset Connection");
+        public JButton        buttonRestart    = new JButton ("Restart Monitor Thread");
+        public JButton        buttonZombie     = new JButton ("Scan for Zombie Jobs");
         public JTextArea      textMessages;
 
         public void arrange ()
@@ -97,6 +98,7 @@ public class RemoteUnix extends Unix implements Remote
                     Lay.FL (new JLabel ("Password"), fieldPassword),
                     Lay.FL (labelWarning),
                     Lay.FL (new JLabel ("Home Directory"), fieldHome),
+                    Lay.FL (new JLabel ("Max Channels"), fieldMaxChannels),
                     Lay.FL (panelRelays),
                     Lay.FL (buttonConnect, buttonRestart, buttonZombie),
                     Lay.FL (new JLabel ("Messages:")),
