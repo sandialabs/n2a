@@ -96,13 +96,17 @@ public class Unix extends Host
     @Override
     public void submitJob (MNode job, boolean out2err, List<List<String>> commands) throws Exception
     {
+        // In order to fully detach the simulation process from the Java VM, we
+        // need to use an extra shell script. Executing the command directly
+        // does not detach it. "nohup" might also work, but this approach is cleaner
+        // because it does not leave extra files in dir.
         Path resourceDir = getResourceDir ();
-        Path binDir      = resourceDir.resolve ("bin");
-        Path background  = binDir.resolve ("background");
+        Path backendDir  = resourceDir.resolve ("backend");
+        Path background  = backendDir.resolve ("background");
         if (writeBackgroundScript)
         {
             writeBackgroundScript = false;
-            Files.createDirectories (binDir);
+            Files.createDirectories (backendDir);
             try (BufferedWriter writer = Files.newBufferedWriter (background))
             {
                 writer.append ("#!/bin/bash\n");
