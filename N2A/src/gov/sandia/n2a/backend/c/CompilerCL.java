@@ -220,6 +220,7 @@ public class CompilerCL extends Compiler
         {
             command.add (source.toString ());
         }
+        command.add ("/Fo" + output.getParent () + "\\");  // Set directory for intermediate object file(s). Path only works on Windows, but that should always be true of CL.
 
         // All remaining items are passed to linker
         command.add ("/link");
