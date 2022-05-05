@@ -28,14 +28,12 @@ import java.io.PrintStream;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.reflect.Method;
-import java.nio.channels.FileChannel;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributeView;
 import java.nio.file.attribute.PosixFileAttributeView;
@@ -869,29 +867,6 @@ public abstract class Host
         }
     }
 
-    public static void downloadFile (Path remotePath, Path localPath) throws Exception
-    {
-        Files.copy (remotePath, localPath, StandardCopyOption.REPLACE_EXISTING);
-    }
-
-    /**
-        Reads all bytes from the given input stream and writes them to the given output stream.
-        This is the same as Files.copy(InputStream,OutputStream). Unfortunately the JDK
-        developers, in their infinite wisdom, chose to make such a simple and useful function private.
-    **/
-    public static long copy (InputStream in, OutputStream out) throws IOException
-    {
-        long total = 0;
-        byte[] buffer = new byte[8192];  // 8kiB
-        int n;
-        while ((n = in.read (buffer)) > 0)
-        {
-            out.write (buffer, 0, n);
-            total += n;
-        }
-        return total;
-    }
-
     /**
         Reads a limited number of bytes from the given input stream and writes them to the given output stream.
     **/
@@ -938,7 +913,7 @@ public abstract class Host
         public void update (float percent);
     }
 
-    public static void stringToFile (Path path, String value) throws IOException
+    public static void stringToFile (String value, Path path) throws IOException
     {
         // Writes string as UTF-8
         try (BufferedWriter writer = Files.newBufferedWriter (path))
@@ -977,7 +952,7 @@ public abstract class Host
         {
             return Files.getLastModifiedTime (path).toMillis ();
         }
-        catch (IOException e1)
+        catch (IOException e)
         {
             return 0;
         }
@@ -987,9 +962,9 @@ public abstract class Host
     {
         try
         {
-            return FileChannel.open (path).size ();
+            return Files.size (path);
         }
-        catch (IOException e1)
+        catch (IOException e)
         {
             return 0;
         }
