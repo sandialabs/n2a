@@ -86,6 +86,7 @@ public class JobC extends Thread
     public    boolean debug;   // compile with debug symbols; applies to current model as well as any runtime components that happen to get rebuilt
     protected boolean cli;     // command-line interface
     protected boolean lib;     // library mode, suitable for Python wrapper or other external integration
+    protected boolean shared;  // make shared rather than static library; only meaningful when lib is true
     public    boolean tls;     // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
     
@@ -143,7 +144,6 @@ public class JobC extends Thread
             gprof  = model.getFlag ("$metadata", "backend", "c", "gprof");
             debug  = model.getFlag ("$metadata", "backend", "c", "debug");
             cli    = model.getFlag ("$metadata", "backend", "c", "cli");
-            lib    = model.getFlag ("$metadata", "backend", "c", "lib");
             tls    = model.getFlag ("$metadata", "backend", "c", "tls");
 
             String e = model.get ("$metadata", "backend", "all", "event");
@@ -185,24 +185,32 @@ public class JobC extends Thread
 
             Path source = jobDir.resolve ("model.cc");
             generateCode (source);
-            String command = env.quote (build (source));
 
-            // The C program could append to the same error file, so we need to close the file before submitting.
-            PrintStream ps = Backend.err.get ();
-            if (ps != System.err)
+            if (lib)
             {
-                ps.close ();
-                Backend.err.remove ();
-                job.set (Host.size (errPath), "errSize");
+                makeLibrary (source);
             }
+            else
+            {
+                String command = env.quote (build (source));
 
-            env.submitJob (job, false, command);
+                // The C program could append to the same error file, so we need to close the file before submitting.
+                PrintStream ps = Backend.err.get ();
+                if (ps != System.err)
+                {
+                    ps.close ();
+                    Backend.err.remove ();
+                    job.set (Host.size (errPath), "errSize");
+                }
+
+                env.submitJob (job, false, command);
+            }
         }
         catch (Exception e)
         {
             if (! (e instanceof AbortRun)) e.printStackTrace (Backend.err.get ());
 
-            try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), localJobDir.resolve ("finished"));}
+            try {Host.stringToFile ("failure", localJobDir.resolve ("finished"));}
             catch (Exception f) {}
         }
 
@@ -339,10 +347,12 @@ public class JobC extends Thread
 
     public Path build (Path source) throws Exception
     {
-        String stem = source.getFileName ().toString ().split ("\\.", 2)[0];
-        Path binary = source.getParent ().resolve (stem + ".bin");
-
         Compiler.Factory factory = BackendC.getFactory (env);
+        String name   = source.getFileName ().toString ();
+        int    pos    = name.lastIndexOf ('.');
+        String stem   = pos > 0 ? name.substring (0, pos) : name;
+        Path   binary = source.getParent ().resolve (stem + factory.suffixBinary ());
+
         Compiler c = factory.make (localJobDir);
         if (gprof) c.setProfiling ();
         if (debug) c.setDebug ();
@@ -373,6 +383,54 @@ public class JobC extends Thread
         Files.delete (out);
 
         return binary;
+    }
+
+    public void makeLibrary (Path source) throws Exception
+    {
+        // In order to make a library, we must compile in two steps:
+        // first generate an object file, then link as library.
+        Compiler.Factory factory = BackendC.getFactory (env);
+        String name    = source.getFileName ().toString ();
+        int    pos     = name.lastIndexOf ('.');
+        String stem    = pos > 0 ? name.substring (0, pos) : name;
+        Path   parent  = source.getParent ();
+        Path   object  = parent.resolve (stem + ".o");
+        Path   library = parent.resolve (stem + factory.suffixLibraryStatic ());
+
+        // 1) Generate object file
+        Compiler c = factory.make (localJobDir);
+        if (gprof) c.setProfiling ();
+        if (debug) c.setDebug ();
+        c.addInclude (runtimeDir);
+        for (ProvideOperator po : extensions)
+        {
+            Path include = po.include (this);
+            if (include == null) continue;
+            c.addInclude (include.getParent ());
+        }
+        c.addDefine ("n2a_T", T);
+        if (T.equals ("int")) c.addDefine ("n2a_FP");
+        if (tls) c.addDefine ("n2a_TLS");
+        c.setOutput (object);
+        c.addSource (source);
+        Path out = c.compile ();
+        Files.delete (out);
+
+        // 2) Link library
+        c.setOutput (library);
+        c.addObject (object);
+        c.addObject (runtimeDir.resolve (objectName ("runtime")));
+        c.addObject (runtimeDir.resolve (objectName ("io")));
+        if (T.equals ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
+        List<Path> envProvidedObjects = providedObjects.get (env);
+        if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
+        if (kokkos)
+        {
+            c.addObject (runtimeDir.resolve ("profiling.o"));
+            c.addLibrary (Paths.get ("dl"));
+        }
+        out = c.linkLibrary (false);
+        Files.delete (out);
     }
 
     public void digestModel () throws Exception
@@ -779,7 +837,7 @@ public class JobC extends Thread
             int pos = name.lastIndexOf ('.');
             String stem = pos > 0 ? name.substring (0, pos) : name;
 
-            Path headerPath = source.getParent ().resolve (name + ".h");
+            Path headerPath = source.getParent ().resolve (stem + ".h");
             try (BufferedWriter writer = Files.newBufferedWriter (headerPath))
             {
                 writer.append ("#ifndef " + stem + "_h\n");

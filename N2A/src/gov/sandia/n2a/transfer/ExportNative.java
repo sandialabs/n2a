@@ -24,19 +24,13 @@ public class ExportNative implements ExportModel
     }
 
     @Override
-    public void export (MNode source, Path destination)
+    public void export (MNode source, Path destination) throws IOException
     {
-        try
-        {
-            // Write a standard repository file. See MDoc.save()
-            BufferedWriter writer = Files.newBufferedWriter (destination);
-            Schema schema = Schema.latest ();
-            schema.write (writer);
-            for (MNode n : source) schema.write (n, writer, "");
-            writer.close ();
-        }
-        catch (IOException e)
-        {
-        }
+        // Write a standard repository file. See MDoc.save()
+        BufferedWriter writer = Files.newBufferedWriter (destination);
+        Schema schema = Schema.latest ();
+        schema.write (writer);
+        for (MNode n : source) schema.write (n, writer, "");
+        writer.close ();
     }
 }

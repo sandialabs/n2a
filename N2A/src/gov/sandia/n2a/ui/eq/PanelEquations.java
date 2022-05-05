@@ -1196,33 +1196,47 @@ public class PanelEquations extends JPanel
             if (result == JFileChooser.APPROVE_OPTION)
             {
                 Path path = fc.getSelectedFile ().toPath ();
-                ExporterFilter filter = (ExporterFilter) fc.getFileFilter ();
-                try
+                Export exporter = ((ExporterFilter) fc.getFileFilter ()).exporter;
+                Thread t = new Thread ()
                 {
-                    filter.exporter.export (record, path);
-                }
-                catch (Exception error)
-                {
-                    File crashdump = new File (AppData.properties.get ("resourceDir"), "crashdump");
-                    try
+                    public void run ()
                     {
-                        PrintStream err = new PrintStream (crashdump);
-                        error.printStackTrace (err);
-                        err.close ();
-                    }
-                    catch (FileNotFoundException fnfe) {}
+                        try
+                        {
+                            exporter.export (record, path);
+                        }
+                        catch (Exception error)
+                        {
+                            File crashdump = new File (AppData.properties.get ("resourceDir"), "crashdump");
+                            try
+                            {
+                                PrintStream err = new PrintStream (crashdump);
+                                error.printStackTrace (err);
+                                err.close ();
+                            }
+                            catch (FileNotFoundException fnfe) {}
 
-                    JOptionPane.showMessageDialog
-                    (
-                        MainFrame.instance,
-                        "<html><body><p style='width:300px'>"
-                        + error.getMessage () + " Exception has been recorded in "
-                        + crashdump.getAbsolutePath ()
-                        + "</p></body></html>",
-                        "Export Failed",
-                        JOptionPane.WARNING_MESSAGE
-                    );
-                }
+                            EventQueue.invokeLater (new Runnable ()
+                            {
+                                public void run ()
+                                {
+                                    JOptionPane.showMessageDialog
+                                    (
+                                        MainFrame.instance,
+                                        "<html><body><p style='width:300px'>"
+                                        + error.getMessage () + " Exception has been recorded in "
+                                        + crashdump.getAbsolutePath ()
+                                        + "</p></body></html>",
+                                        "Export Failed",
+                                        JOptionPane.WARNING_MESSAGE
+                                    );
+                                }
+                            });
+                        }
+                    }
+                };
+                t.setDaemon (true);
+                t.start ();
             }
         }
     };

@@ -30,6 +30,21 @@ public class CompilerGCC extends Compiler
         {
             return new CompilerGCC (host, localJobDir, gcc);
         }
+
+        public String suffixBinary ()
+        {
+            return ".bin";
+        }
+
+        public String suffixLibraryStatic ()
+        {
+            return ".a";
+        }
+
+        public String suffixLibraryShared ()
+        {
+            return ".so";
+        }
     }
 
     protected Path         gcc;
@@ -120,5 +135,26 @@ public class CompilerGCC extends Compiler
         command.add (host.quote (output));
 
         return runCommand (command);
+    }
+
+    public Path linkLibrary (boolean shared) throws Exception
+    {
+        String prefix = gcc.getFileName ().toString ();
+        prefix        = prefix.substring (0, prefix.length () - 3);  // strip off "g++" or "gcc"
+
+        if (shared)
+        {
+            throw new Exception ("Shared library not yet implemented");
+        }
+        else
+        {
+            Path ar = gcc.getParent ().resolve (prefix + "ar");
+            List<String> command = new ArrayList<String> ();
+            command.add (ar.toString ());
+            command.add ("rsc");  // operation=r (insert members, with replacement); modifier=s (create symbol table); modifier=c (expecting to create archive, so don't warn)
+            command.add (host.quote (output));
+            for (Path object : objects) command.add (host.quote (object));
+            return runCommand (command);
+        }
     }
 }

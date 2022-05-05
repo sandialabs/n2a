@@ -24,6 +24,9 @@ public abstract class Compiler
     public interface Factory
     {
         Compiler make (Path localJobDir);
+        String   suffixBinary ();
+        String   suffixLibraryStatic ();
+        String   suffixLibraryShared ();
     }
 
     protected Host               host;
@@ -94,8 +97,9 @@ public abstract class Compiler
         profiling = true;
     }
 
-    public abstract Path compile     () throws Exception;  // returns file that captured the compiler's stdout
-    public abstract Path compileLink () throws Exception;  // ditto
+    public abstract Path compile     ()               throws Exception;  // returns file that captured the compiler's stdout
+    public abstract Path compileLink ()               throws Exception;  // ditto
+    public abstract Path linkLibrary (boolean shared) throws Exception;  // ditto
 
     public Path runCommand (List<String> command) throws Exception
     {

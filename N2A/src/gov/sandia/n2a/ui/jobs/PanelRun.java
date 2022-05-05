@@ -1172,6 +1172,13 @@ public class PanelRun extends JPanel
         delete (tree.getSelectionPaths ());
     }
 
+    public void delete (NodeJob job)
+    {
+        TreePath[] paths = new TreePath[1];
+        paths[0] = new TreePath (job.getPath ());
+        delete (paths);
+    }
+
     public void delete (TreePath[] paths)
     {
         if (paths.length == 0) return;

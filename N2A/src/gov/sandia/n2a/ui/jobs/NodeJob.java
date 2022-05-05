@@ -596,9 +596,14 @@ public class NodeJob extends NodeBase
             if (fileName.equals     ("model"   )) return false;  // ditto (old style)
             if (fileName.equals     ("started" )) return false;
             if (fileName.equals     ("finished")) return false;
-            if (fileName.startsWith ("compile" )) return false;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
+            if (fileName.startsWith ("compile.")) return false;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
             if (fileName.endsWith   (".bin"    )) return false;  // Don't show generated binaries
+            if (fileName.endsWith   (".exe"    )) return false;
             if (fileName.endsWith   (".aplx"   )) return false;
+            if (fileName.endsWith   (".lib"    )) return false;
+            if (fileName.endsWith   (".dll"    )) return false;
+            if (fileName.endsWith   (".a"      )) return false;
+            if (fileName.endsWith   (".so"     )) return false;
             if (fileName.endsWith   (".columns")) return false;  // Hint for column names when simulator doesn't output them.
             if (fileName.endsWith   (".mod"    )) return false;  // NEURON files
 

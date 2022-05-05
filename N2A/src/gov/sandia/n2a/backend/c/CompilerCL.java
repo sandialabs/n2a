@@ -121,6 +121,21 @@ public class CompilerCL extends Compiler
         {
             return new CompilerCL (host, localJobDir, cl, MSVCroot, SDKroot, SDKversion, arch);
         }
+
+        public String suffixBinary ()
+        {
+            return ".exe";
+        }
+
+        public String suffixLibraryStatic ()
+        {
+            return ".lib";
+        }
+
+        public String suffixLibraryShared ()
+        {
+            return ".dll";
+        }
     }
 
     protected Path         cl;
@@ -224,5 +239,25 @@ public class CompilerCL extends Compiler
         command.add ("/out:" + output);
 
         return runCommand (command);
+    }
+
+    public Path linkLibrary (boolean shared) throws Exception
+    {
+        // Find link program
+        Path lib = cl.getParent ().resolve ("lib");
+
+        if (shared)
+        {
+            throw new Exception ("Shared library not yet implemented");
+        }
+        else
+        {
+            List<String> command = new ArrayList<String> ();
+            command.add (lib.toString ());
+            command.add ("/nologo");
+            for (Path object : objects) command.add (object.toString ());
+            command.add ("/out:" + output);
+            return runCommand (command);
+        }
     }
 }
