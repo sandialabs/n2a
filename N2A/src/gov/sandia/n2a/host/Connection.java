@@ -107,8 +107,8 @@ public class Connection implements Closeable, UserInteraction
     **/
     public synchronized void connect () throws IOException
     {
-        if (failedAuth  &&  ! allowDialogs) throw new IOException ("Avoiding silent login hammer");
         if (isConnected ()) return;
+        if (failedAuth  &&  ! allowDialogs) throw new IOException ("Avoiding silent login hammer");
         close ();
         try
         {
@@ -128,11 +128,12 @@ public class Connection implements Closeable, UserInteraction
             int maxChannels = host.config.getOrDefault (10, "maxChannels");
             channels = new Semaphore (maxChannels);
         }
-        catch (IOException e)
+        catch (Exception e)
         {
             if (session != null) session.close (true);
             session = null;
-            throw e;
+            if (e instanceof IOException) throw e;
+            throw new IOException (e);
         }
     }
 
@@ -156,15 +157,23 @@ public class Connection implements Closeable, UserInteraction
     /**
         @return true only if the connection is up and fully usable.
     **/
-    public synchronized boolean isConnected ()
+    public boolean isConnected ()
     {
-        if (session == null) return false;
-        if (! session.isOpen ()) return false;
-
-        // We could simply check isAuthenticated(), but the following also verifies no error condition is set.
-        Set<ClientSessionEvent> state = session.getSessionState ();
-        if (state.size () != 1) return false;
-        if (state.contains (ClientSessionEvent.AUTHED)) return true;
+        // This function is not synchronized, so calls from EDT will not stall.
+        // If this is called from connect(), then state of session will still be
+        // protected by the synchronization of that function.
+        // For calls from EDT, we need to handle mid-flight changes in session.
+        try
+        {
+            if (session == null) return false;  // This line isn't strictly necessary, since we trap NPE.
+            if (! session.isOpen ()) return false;
+        
+            // We could simply check isAuthenticated(), but the following also verifies no error condition is set.
+            Set<ClientSessionEvent> state = session.getSessionState ();
+            if (state.size () != 1) return false;
+            if (state.contains (ClientSessionEvent.AUTHED)) return true;
+        }
+        catch (Exception e) {}  // in particular, a NullPointerException
         return false;
     }
 

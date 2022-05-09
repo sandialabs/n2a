@@ -8,6 +8,7 @@ package gov.sandia.n2a;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.RemoteLSF;
 import gov.sandia.n2a.host.RemoteSlurm;
 import gov.sandia.n2a.host.RemoteUnix;
 import gov.sandia.n2a.host.Unix;
@@ -96,7 +97,8 @@ public class N2APlugin extends Plugin
             Unix.factory (),
             Windows.factory (),
             RemoteUnix.factory (),
-            RemoteSlurm.factory ()
+            RemoteSlurm.factory (),
+            RemoteLSF.factory ()
         );
         if (! AppData.properties.getBoolean ("headless"))
         {

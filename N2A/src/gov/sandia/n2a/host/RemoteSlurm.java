@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.Box;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
@@ -66,11 +67,11 @@ public class RemoteSlurm extends RemoteUnix
                     Lay.FL (new JLabel ("Address"), fieldAddress),
                     Lay.FL (new JLabel ("Username"), fieldUsername),
                     Lay.FL (new JLabel ("Password"), fieldPassword),
-                    Lay.FL (labelWarning),
+                    Lay.FL (Box.createHorizontalStrut (30), labelWarning),
                     Lay.FL (new JLabel ("Home Directory"), fieldHome),
                     Lay.FL (new JLabel ("Slurm Account"), fieldAccount),
+                    Lay.FL (new JLabel ("Timeout (seconds)"), fieldTimeout),
                     Lay.FL (new JLabel ("Max Channels"), fieldMaxChannels),
-                    Lay.FL (panelRelays),
                     Lay.FL (buttonConnect, buttonRestart, buttonZombie),
                     Lay.FL (new JLabel ("Messages:")),
                     Lay.FL (textMessages)

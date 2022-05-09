@@ -8,14 +8,11 @@ package gov.sandia.n2a.host;
 
 import java.awt.EventQueue;
 import java.awt.Font;
-import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -27,12 +24,10 @@ import javax.swing.event.ChangeListener;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
-import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Connection.MessageListener;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MPasswordField;
 import gov.sandia.n2a.ui.MTextField;
-import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.PanelRun;
 import gov.sandia.n2a.ui.settings.SettingsHost.NameChangeListener;
@@ -81,9 +76,8 @@ public class RemoteUnix extends Unix implements Remote
         public MPasswordField fieldPassword    = new MPasswordField (config, "password");
         public JLabel         labelWarning     = new JLabel ("<html>WARNING: Passoword is stored in plain text.<br>For more security, you can leave the field blank.<br>You will be prompted for a password once per session.<br>That password will be held only in volatile memory.</html>");
         public MTextField     fieldHome        = new MTextField (config, "home", "/home/" + config.getOrDefault (System.getProperty ("user.name"), "username"));
+        public MTextField     fieldTimeout     = new MTextField (config, "timeout", "20");
         public MTextField     fieldMaxChannels = new MTextField (config, "maxChannels", "10");
-        public JPanel         panelRelays      = new JPanel ();
-        public List<JLabel>   labelsRelay      = new ArrayList<JLabel> ();
         public JButton        buttonConnect    = new JButton ("Reset Connection");
         public JButton        buttonRestart    = new JButton ("Restart Monitor Thread");
         public JButton        buttonZombie     = new JButton ("Scan for Zombie Jobs");
@@ -96,10 +90,10 @@ public class RemoteUnix extends Unix implements Remote
                     Lay.FL (new JLabel ("Address"), fieldAddress),
                     Lay.FL (new JLabel ("Username"), fieldUsername),
                     Lay.FL (new JLabel ("Password"), fieldPassword),
-                    Lay.FL (labelWarning),
+                    Lay.FL (Box.createHorizontalStrut (30), labelWarning),
                     Lay.FL (new JLabel ("Home Directory"), fieldHome),
+                    Lay.FL (new JLabel ("Timeout (seconds)"), fieldTimeout),
                     Lay.FL (new JLabel ("Max Channels"), fieldMaxChannels),
-                    Lay.FL (panelRelays),
                     Lay.FL (buttonConnect, buttonRestart, buttonZombie),
                     Lay.FL (new JLabel ("Messages:")),
                     Lay.FL (textMessages)
@@ -116,26 +110,6 @@ public class RemoteUnix extends Unix implements Remote
                     fieldHome.setDefault ("/home/" + fieldUsername.getText ());
                 }
             });
-
-            JButton buttonRelayAdd = new JButton (ImageUtil.getImage ("add.gif"));
-            buttonRelayAdd.setMargin (new Insets (2, 2, 2, 2));
-            buttonRelayAdd.setFocusable (false);
-            buttonRelayAdd.addActionListener (new ActionListener ()
-            {
-                public void actionPerformed (ActionEvent e)
-                {
-                    MNode relays = config.childOrEmpty ("relay");
-                    addRelay (relays.size () + 1);
-                }
-            });
-
-            JLabel labelRelayAdd = new JLabel ("Add SSH Relay");
-            Lay.BxLtg (panelRelays, "V",
-                Lay.FL (buttonRelayAdd, labelRelayAdd)
-            );
-
-            MNode relays = config.childOrEmpty ("relay");
-            for (int i = 1; i <= relays.size (); i++) addRelay (i);
 
             buttonConnect.setToolTipText ("Updated settings will be used for next connection attempt.");
             buttonConnect.addActionListener (new ActionListener ()
@@ -227,78 +201,6 @@ public class RemoteUnix extends Unix implements Remote
                     setFont (new Font (Font.MONOSPACED, Font.PLAIN, f.getSize ()));
                 }
             };
-        }
-
-        /**
-            @param n The 1-based index of the relay. Relays are both displayed and stored
-            with a 1-based index.
-        **/
-        public void addRelay (int n)
-        {
-            JButton buttonRemove = new JButton (ImageUtil.getImage ("subtract.gif"));
-            buttonRemove.setMargin (new Insets (2, 2, 2, 2));
-            buttonRemove.setFocusable (false);
-            buttonRemove.setToolTipText ("Remove this SSH relay");
-
-            JLabel labelRelay = new JLabel ("Relay " + n);
-            labelsRelay.add (labelRelay);
-
-            MNode relay = config.childOrCreate ("relay", n);
-            MTextField     fieldRelayAddress  = new MTextField (relay, "address");
-            MTextField     fieldRelayUsername = new MTextField (relay, "username", fieldUsername.getText ());
-            MPasswordField fieldRelayPassword = new MPasswordField (relay, "password", fieldPassword.getText ());
-
-            ChangeListener changeUsername = new ChangeListener ()
-            {
-                public void stateChanged (ChangeEvent e)
-                {
-                    fieldRelayUsername.setDefault (fieldUsername.getText ());
-                }
-            };
-            fieldUsername.addChangeListener (changeUsername);
-
-            ChangeListener changePassword = new ChangeListener ()
-            {
-                public void stateChanged (ChangeEvent e)
-                {
-                    fieldRelayPassword.setDefault (fieldPassword.getText ());
-                }
-            };
-            fieldPassword.addChangeListener (changePassword);
-
-            buttonRemove.addActionListener (new ActionListener ()
-            {
-                public void actionPerformed (ActionEvent e)
-                {
-                    MNode relays = config.childOrEmpty ("relay");
-                    int count = relays.size ();
-                    for (int i = n; i <= count; i++) relays.move (String.valueOf (i + 1), String.valueOf (i));  // Moving a non-existent node over an existing one erases it, so last node will disappear.
-
-                    for (int i = n; i < count; i++) labelsRelay.get (i).setText ("Relay " + i);
-                    labelsRelay.remove (n - 1);
-
-                    fieldUsername.removeChangeListener (changeUsername);
-                    fieldPassword.removeChangeListener (changePassword);
-
-                    panelRelays.remove (n - 1);
-                    panelRelays.revalidate ();
-                }
-            });
-            
-            JPanel panelRelay = Lay.BxL ("V",
-                Lay.FL (buttonRemove, labelRelay),
-                Lay.FL (
-                    Box.createHorizontalStrut (30),
-                    Lay.BxL ("V",
-                        Lay.FL (new JLabel ("Address"), fieldRelayAddress),
-                        Lay.FL (new JLabel ("Username"), fieldRelayUsername),
-                        Lay.FL (new JLabel ("Password"), fieldRelayPassword)
-                    )
-                )
-            );
-
-            panelRelays.add (panelRelay, null, n - 1);
-            panelRelays.revalidate ();
         }
 
         @Override

@@ -16,13 +16,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
 public class Unix extends Host
 {
-    static boolean writeBackgroundScript = true;  // always write the script on first use in a given session
+    protected static Set<Host> backgroundScriptWritten = new HashSet<Host> ();  // collection of Hosts for which the background script has already been written during this session
 
     public static Factory factory ()
     {
@@ -103,9 +104,9 @@ public class Unix extends Host
         Path resourceDir = getResourceDir ();
         Path backendDir  = resourceDir.resolve ("backend");
         Path background  = backendDir.resolve ("background");
-        if (writeBackgroundScript)
+        if (! backgroundScriptWritten.contains (this))
         {
-            writeBackgroundScript = false;
+            backgroundScriptWritten.add (this);
             Files.createDirectories (backendDir);
             try (BufferedWriter writer = Files.newBufferedWriter (background))
             {
