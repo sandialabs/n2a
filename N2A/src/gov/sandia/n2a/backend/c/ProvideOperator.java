@@ -67,8 +67,9 @@ public interface ProvideOperator extends ExtensionPoint
         @return null if operator is not recognized. Otherwise, boolean value to
         return from visitor function (true to continue visiting; false to stop).
     **/
-    public Boolean generateStatic (RendererC renderer, Operator op);
+    public Boolean assignNames (RendererC renderer, Operator op);
 
+    public void generateStatic           (RendererC renderer);
     public void generateMainInitializers (RendererC renderer);
 
     /**

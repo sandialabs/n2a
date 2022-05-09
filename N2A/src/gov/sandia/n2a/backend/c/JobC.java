@@ -101,6 +101,7 @@ public class JobC extends Thread
     // Work around the initialization sequencing problem by delaying the call to holderHelper until main().
     // To do this, we need to stash variable names. This may seem redundant with the above maps,
     // but this is a more limited case.
+    protected List<Constant>   staticMatrix  = new ArrayList<Constant> ();  // constant matrices that should be statically initialized
     protected List<ReadMatrix> mainMatrix    = new ArrayList<ReadMatrix> ();
     protected List<Input>      mainInput     = new ArrayList<Input> ();
     protected List<Output>     mainOutput    = new ArrayList<Output> ();
@@ -730,23 +731,10 @@ public class JobC extends Thread
         result.append ("#include <cmath>\n");
         result.append ("#include <csignal>\n");
         result.append ("\n");
-        result.append ("using namespace std;\n");
-        result.append ("using namespace fl;\n");
-        result.append ("\n");
-        if (tls)
-        {
-            // Hack to make GCC 11.x happy. Should do no harm. Should also not be necessary.
-            result.append ("template<class T> thread_local Simulator<T> * Simulator<T>::instance = 0;\n");
-        }
-        if (cli)
-        {
-            result.append ("Parameters<" + T + "> params;\n");
-        }
-        generateStatic (context, digestedModel);
-        result.append ("\n");
         generateClassList (digestedModel, result);
         result.append ("class Wrapper;\n");
         result.append ("\n");
+        assignNames (context, digestedModel);
         generateDeclarations (digestedModel, result);
         result.append ("class Wrapper : public WrapperBase<" + T + ">\n");
         result.append ("{\n");
@@ -760,6 +748,48 @@ public class JobC extends Thread
         result.append ("  }\n");
         result.append ("};\n");
         result.append ("Wrapper * wrapper;\n");
+        result.append ("\n");
+
+        if (lib)
+        {
+            // Generate a companion header file
+            String name = source.getFileName ().toString ();
+            int pos = name.lastIndexOf ('.');
+            String stem = pos > 0 ? name.substring (0, pos) : name;
+
+            Path headerPath = source.getParent ().resolve (stem + ".h");
+            try (BufferedWriter writer = Files.newBufferedWriter (headerPath))
+            {
+                writer.append ("#ifndef " + stem + "_h\n");
+                writer.append ("#define " + stem + "_h\n");
+                writer.append ("\n");
+                writer.append (result.toString ());
+                writer.append ("void init (int argc, char ** argv);\n");
+                writer.append ("void run (" + T + " until);\n");
+                writer.append ("void finish ();\n");
+                //writer.append ("std::vector<" + T + "> & getVector (char * name);\n");  // TODO: this should be controlled by whether vector IO feature was used
+                writer.append ("\n");
+                writer.append ("#endif\n");
+            }
+
+            result.setLength (0);
+            result.append ("#include \"" + stem + ".h\"\n");
+            result.append ("\n");
+        }
+
+        result.append ("using namespace std;\n");
+        result.append ("using namespace fl;\n");
+        result.append ("\n");
+        if (tls)
+        {
+            // Hack to make GCC 11.x happy. Should do no harm. Should also not be necessary.
+            result.append ("template<class T> thread_local Simulator<T> * Simulator<T>::instance = 0;\n");
+        }
+        if (cli)
+        {
+            result.append ("Parameters<" + T + "> params;\n");
+        }
+        generateStatic (context);
         result.append ("\n");
         generateDefinitions (context, digestedModel);
 
@@ -808,7 +838,6 @@ public class JobC extends Thread
         // Finish
         result.append ("void finish ()\n");
         result.append ("{\n");
-        result.append ("  delete wrapper;\n");
         if (tls)
         {
             result.append ("  delete Simulator<" + T + ">::instance;\n");
@@ -817,6 +846,7 @@ public class JobC extends Thread
         {
             result.append ("  " + SIMULATOR + "clear ();\n");
         }
+        result.append ("  delete wrapper;\n");
         if (kokkos)
         {
             result.append ("  finalize_profiling ();\n");
@@ -831,24 +861,6 @@ public class JobC extends Thread
             result.append ("{\n");
             result.append ("  " + SIMULATOR + "run (until);\n");
             result.append ("}\n");
-
-            // Generate a companion header file
-            String name = source.getFileName ().toString ();
-            int pos = name.lastIndexOf ('.');
-            String stem = pos > 0 ? name.substring (0, pos) : name;
-
-            Path headerPath = source.getParent ().resolve (stem + ".h");
-            try (BufferedWriter writer = Files.newBufferedWriter (headerPath))
-            {
-                writer.append ("#ifndef " + stem + "_h\n");
-                writer.append ("#define " + stem + "_h\n");
-                writer.append ("#include <vector>\n");
-                writer.append ("void init (int argc, char ** argv);\n");
-                writer.append ("void run (" + T + " until);\n");
-                writer.append ("void finish ();\n");
-                writer.append ("std::vector<" + T + "> & getVector (char * name);\n");  // TODO: this should be controlled by whether vector IO feature was used
-                writer.append ("#endif\n");
-            }
         }
         else
         {
@@ -887,14 +899,12 @@ public class JobC extends Thread
         result.append ("class " + prefix (s) + "_Population;\n");
     }
 
-    public void generateStatic (RendererC context, EquationSet s)
+    public void assignNames (RendererC context, EquationSet s)
     {
-        for (EquationSet p : s.parts) generateStatic (context, p);
+        for (EquationSet p : s.parts) assignNames (context, p);
 
         context.setPart (s);
-        BackendDataC  bed    = context.bed;
-        StringBuilder result = context.result;
-        String thread_local = tls ? "thread_local " : "";
+        BackendDataC bed = context.bed;
 
         class CheckStatic implements Visitor
         {
@@ -903,7 +913,7 @@ public class JobC extends Thread
             {
                 for (ProvideOperator po : extensions)
                 {
-                    Boolean result = po.generateStatic (context, op);
+                    Boolean result = po.assignNames (context, op);
                     if (result != null) return result;
                 }
                 if (op instanceof BuildMatrix)
@@ -919,22 +929,9 @@ public class JobC extends Thread
                     Type m = constant.value;
                     if (m instanceof Matrix)
                     {
-                        Matrix A = (Matrix) m;
-                        int rows = A.rows ();
-                        int cols = A.columns ();
                         constant.name = "Matrix" + matrixNames.size ();
                         matrixNames.put (constant, constant.name);
-                        result.append ("MatrixFixed<" + T + "," + rows + "," + cols + "> " + constant.name + " = {");
-                        String initializer = "";
-                        for (int c = 0; c < cols; c++)
-                        {
-                            for (int r = 0; r < rows; r++)
-                            {
-                                initializer += context.print (A.get (r, c), constant.exponent) + ", ";
-                            }
-                        }
-                        if (initializer.length () > 2) initializer = initializer.substring (0, initializer.length () - 2);
-                        result.append (initializer + "};\n");
+                        staticMatrix.add (constant);
                     }
                     return false;  // Don't try to descend tree from here
                 }
@@ -985,7 +982,6 @@ public class JobC extends Thread
                                         r.name = "Matrix" + matrixNames.size ();
                                         matrixNames.put (fileName, r.name);
                                         mainMatrix.add (r);
-                                        result.append (thread_local + "MatrixInput<" + T + "> * " + r.name + ";\n");
                                     }
                                 }
                                 else if (f instanceof Input)
@@ -997,7 +993,6 @@ public class JobC extends Thread
                                         i.name = "Input" + inputNames.size ();
                                         inputNames.put (fileName, i.name);
                                         mainInput.add (i);
-                                        result.append (thread_local + "InputHolder<" + T + "> * " + i.name + ";\n");
                                     }
                                 }
                                 else if (f instanceof Output)
@@ -1009,7 +1004,6 @@ public class JobC extends Thread
                                         o.name = "Output" + outputNames.size ();
                                         outputNames.put (fileName, o.name);
                                         mainOutput.add (o);
-                                        result.append (thread_local + "OutputHolder<" + T + "> * " + o.name + ";\n");
                                     }
                                 }
                             }
@@ -1058,6 +1052,43 @@ public class JobC extends Thread
         {
             checkStatic.global = v.hasAttribute ("global");
             v.visit (checkStatic);
+        }
+    }
+
+    public void generateStatic (RendererC context)
+    {
+        StringBuilder result = context.result;
+        String thread_local = tls ? "thread_local " : "";
+
+        for (ProvideOperator po : extensions) po.generateStatic (context);
+        for (Constant m : staticMatrix)
+        {
+            Matrix A = (Matrix) m.value;
+            int rows = A.rows ();
+            int cols = A.columns ();
+            result.append ("MatrixFixed<" + T + "," + rows + "," + cols + "> " + m.name + " = {");
+            String initializer = "";
+            for (int c = 0; c < cols; c++)
+            {
+                for (int r = 0; r < rows; r++)
+                {
+                    initializer += context.print (A.get (r, c), m.exponent) + ", ";
+                }
+            }
+            if (initializer.length () > 2) initializer = initializer.substring (0, initializer.length () - 2);
+            result.append (initializer + "};\n");
+        }
+        for (ReadMatrix r : mainMatrix)
+        {
+            result.append (thread_local + "MatrixInput<" + T + "> * " + r.name + ";\n");
+        }
+        for (Input i : mainInput)
+        {
+            result.append (thread_local + "InputHolder<" + T + "> * " + i.name + ";\n");
+        }
+        for (Output o : mainOutput)
+        {
+            result.append (thread_local + "OutputHolder<" + T + "> * " + o.name + ";\n");
         }
     }
 
@@ -1161,7 +1192,7 @@ public class JobC extends Thread
             }
             if (bed.trackInstances)
             {
-                result.append ("  vector<" + prefix (s) + " *> instances;\n");
+                result.append ("  std::vector<" + prefix (s) + " *> instances;\n");
             }
             else if (bed.index != null)  // The instances vector can supply the next index, so only declare nextIndex if instances was not declared.
             {
