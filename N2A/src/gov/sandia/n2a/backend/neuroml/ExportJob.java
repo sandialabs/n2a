@@ -3715,8 +3715,8 @@ public class ExportJob extends XMLutility
                                     EquationSet container = u.container;
                                     while (container != null  &&  container != v.container)
                                     {
-                                        if (container.isSingleton (true)) select = container.name + "/"    + select;
-                                        else                              select = container.name + "[*]/" + select;
+                                        if (container.isSingleton ()) select = container.name + "/"    + select;
+                                        else                          select = container.name + "[*]/" + select;
                                         container = container.container;
                                     }
                                     break;

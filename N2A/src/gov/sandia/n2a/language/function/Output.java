@@ -493,7 +493,7 @@ public class Output extends Function
         while (container != null)
         {
             Variable index = container.find (new Variable ("$index"));
-            if (index != null  &&  ! container.isSingleton (false))
+            if (index != null  &&  ! container.isSingleton ())
             {
                 v.addDependencyOn (index);
             }

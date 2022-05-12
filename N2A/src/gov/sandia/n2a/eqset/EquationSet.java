@@ -650,10 +650,8 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Determines if this equation set has a fixed size of 1.
-        @param strict false indicates to make an exception for the top-level part, allowing
-        it to be a singleton even though it (most likely) uses $p to terminate simulation.
     **/
-    public boolean isSingleton (boolean strict)
+    public boolean isSingleton ()
     {
         // No connections
         // The population size of a connection depends on other objects, so can't be a singleton.
@@ -663,7 +661,7 @@ public class EquationSet implements Comparable<EquationSet>
         // These tests are good heuristics, but they're actually too strict. Some relaxations would be:
         // * If $p is constant 1, then part won't die. (But then, why write that?)
         // * If $type always has exactly one instance of original part, then part remains a singleton. (Again, why write that?)
-        if (find (new Variable ("$p", -1)) != null  &&  (strict  ||  container != null)) return false;
+        if (find (new Variable ("$p", -1)) != null  &&  container != null) return false;
         if (find (new Variable ("$type")) != null) return false;
         Variable n = new Variable ("$n");
         Variable nn = variables.higher (n);
@@ -702,7 +700,7 @@ public class EquationSet implements Comparable<EquationSet>
         EquationSet p = this;
         while (true)
         {
-            if (! isSingleton (true)) return false;
+            if (! isSingleton ()) return false;
             if (p == LCA) break;
             p = p.container;
         }
@@ -2034,7 +2032,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (s.metadata.child ("backend", backend) != null) continue;
 
             // Check if $n==1
-            if (! s.isSingleton (true)) continue;
+            if (! s.isSingleton ()) continue;
             s.variables.remove (new Variable ("$n"));  // We don't want to overwrite our own $n, so remove it from the sub-part. This won't change its singleton status.
 
             // Don't merge if there are any conflicting $variables.
@@ -2536,7 +2534,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         if (connectionBindings == null  ||  connected)  // Either a compartment, or a connection that also happens to be the endpoint of another connection.
         {
-            boolean singleton = isSingleton (true);
+            boolean singleton = isSingleton ();
 
             v = new Variable ("$index");
             if (add (v))
@@ -3050,13 +3048,13 @@ public class EquationSet implements Comparable<EquationSet>
 
             if (canDie ()  &&  live.hasUsers ())
             {
-                if (lethalN  ||  lethalP  ||  lethalType)
-                {
-                    live.addAttribute ("initOnly");  // Not exactly true. $live can change after init(), but only indirectly. This forces $live to be set during init().
-                }
-                else  // lethalConnection  ||  lethalContainer
+                if (lethalConnection  ||  lethalContainer)
                 {
                     live.addAttribute ("accessor");
+                }
+                else  // lethalN  ||  lethalP  ||  lethalType
+                {
+                    live.addAttribute ("initOnly");  // Not exactly true. $live can change after init(), but only indirectly. This forces $live to be set during init().
                 }
             }
             else
@@ -4179,7 +4177,7 @@ public class EquationSet implements Comparable<EquationSet>
                 else if (phases.contains (av.name)) result = new Constant (0);
                 else if (v.name.equals ("$index"))
                 {
-                    if (v.container.isSingleton (false)) result = new Constant (0);
+                    if (v.container.isSingleton ()) result = new Constant (0);
                 }
                 else if (v.name.equals ("$type"))
                 {

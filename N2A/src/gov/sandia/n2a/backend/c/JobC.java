@@ -39,6 +39,7 @@ import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
+import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 
 import java.io.BufferedWriter;
@@ -88,6 +89,7 @@ public class JobC extends Thread
     protected boolean lib;     // library mode, suitable for Python wrapper or other external integration
     protected boolean shared;  // make shared rather than static library; only meaningful when lib is true
     public    boolean tls;     // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
+    protected boolean IOvectorWritten;  // Indicates that the abstract class "IOvector" has been inserted already.
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
     
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
@@ -541,6 +543,11 @@ public class JobC extends Thread
             Variable dt = s.find (new Variable ("$t", 1));
             dt.addUser (s);
         }
+        if (s.isSingleton ())
+        {
+            Variable live = s.find (new Variable ("$live"));
+            live.addUser (s);
+        }
         addImplicitDependenciesRecursive (s);
     }
 
@@ -595,6 +602,23 @@ public class JobC extends Thread
             visitor.from = v;
             v.visit (visitor);
             if (v.derivative != null) v.addDependencyOn (dt);
+
+            if (lib  &&  v.getMetadata ().getFlag ("backend", "c", "vector"))
+            {
+                EquationSet p = s;
+                while (p != null)
+                {
+                    p.needInstanceTracking = true;  // So it's possible to specify the exact population for the IO vector.
+                    p = p.container;
+                }
+            }
+        }
+
+        // needInstanceTracking implies need $index
+        if (s.needInstanceTracking  &&  ! s.isSingleton ())
+        {
+            Variable index = s.find (new Variable ("$index"));
+            index.addUser (s);
         }
     }
 
@@ -704,6 +728,7 @@ public class JobC extends Thread
         RendererC context;
         if (T.equals ("int")) context = new RendererCfp (this, result);
         else                  context = new RendererC   (this, result);
+        BackendDataC bed = (BackendDataC) digestedModel.backendData;
 
         if (tls) SIMULATOR = "Simulator<" + T + ">::instance->";
         else     SIMULATOR = "Simulator<" + T + ">::instance.";
@@ -745,11 +770,16 @@ public class JobC extends Thread
         result.append ("  {\n");
         result.append ("    population = &" + mangle (digestedModel.name) + ";\n");
         result.append ("    " + mangle (digestedModel.name) + ".container = this;\n");
+        if (bed.singleton)
+        {
+            result.append ("    " + mangle (digestedModel.name) + ".instance.container = this;\n");
+        }
         result.append ("  }\n");
         result.append ("};\n");
         result.append ("Wrapper * wrapper;\n");
         result.append ("\n");
 
+        StringBuilder vectorDefinitions = new StringBuilder ();
         if (lib)
         {
             // Generate a companion header file
@@ -763,16 +793,14 @@ public class JobC extends Thread
                 writer.append ("#ifndef " + stem + "_h\n");
                 writer.append ("#define " + stem + "_h\n");
                 writer.append ("\n");
-                writer.append (result.toString ());
                 writer.append ("void init (int argc, char ** argv);\n");
                 writer.append ("void run (" + T + " until);\n");
                 writer.append ("void finish ();\n");
-                //writer.append ("std::vector<" + T + "> & getVector (char * name);\n");  // TODO: this should be controlled by whether vector IO feature was used
+                generateIOvector (digestedModel, writer, vectorDefinitions);
                 writer.append ("\n");
                 writer.append ("#endif\n");
             }
 
-            result.setLength (0);
             result.append ("#include \"" + stem + ".h\"\n");
             result.append ("\n");
         }
@@ -861,6 +889,11 @@ public class JobC extends Thread
             result.append ("{\n");
             result.append ("  " + SIMULATOR + "run (until);\n");
             result.append ("}\n");
+            if (! vectorDefinitions.isEmpty ())
+            {
+                result.append ("\n");
+                result.append (vectorDefinitions.toString ());
+            }
         }
         else
         {
@@ -1117,6 +1150,113 @@ public class JobC extends Thread
         for (Output o : mainOutput)
         {
             result.append ("  " + o.name + " = outputHelper<" + T + "> (\"" + o.operands[0].getString () + "\");\n");
+        }
+    }
+
+    public void generateIOvector (EquationSet s, Writer writer, StringBuilder vectorDefinitions) throws IOException
+    {
+        for (EquationSet p : s.parts) generateIOvector (p, writer, vectorDefinitions);
+
+        // Determine if any IO vectors are present
+        boolean found = false;
+        for (Variable v : s.ordered)
+        {
+            if (! v.getMetadata ().getFlag ("backend", "c", "vector")) continue;
+            found = true;
+            break;
+        }
+        if (! found) return;
+
+        // Determine name and any indices needed to identify part.
+        String pop  = "";
+        String args = "";
+        String f    = "";  // function body
+        EquationSet c = s;           // child
+        EquationSet p = s.container; // parent
+        int i = 1;  // For any level #, p# is the population of that part, and i# is the index into the population. Level 0 is the population of s.
+        while (p != null)
+        {
+            String cpop  = prefix (c) + "_Population";
+            String cname = mangle (c.name);
+
+            if (pop.isEmpty ()) pop = cname;
+            else                pop = cname + "_" + pop;
+            if (p.isSingleton ())
+            {
+                f = "  " + cpop + " & p" + (i-1) + " = p" + i + ".instance." + cname + ";\n" + f;
+            }
+            else  // Need to specify index into population
+            {
+                if (args.isEmpty ()) args = "int i" + i;
+                else                 args = "int i" + i + ", " + args;
+                f = "  " + cpop + " & p" + (i-1) + " = p" + i + ".instances[i" + i + "]->" + cname + ";\n" + f;
+            }
+
+            c = p;
+            p = p.container;
+            i++;
+        }
+        f = "  " + prefix (c) + "_Population & p" + (i-1) + " = wrapper->" + mangle (c.name) + ";\n" + f;
+
+        if (! IOvectorWritten)
+        {
+            IOvectorWritten = true;
+            writer.append ("\n");
+            writer.append ("class IOvector\n");
+            writer.append ("{\n");
+            writer.append ("public:\n");
+            writer.append ("  virtual int size () = 0;\n");
+            writer.append ("  virtual " + T + " get  (int i) = 0;\n");
+            writer.append ("  virtual void set (int i, " + T + " value) = 0;\n");
+            writer.append ("};\n");
+            writer.append ("\n");
+        }
+
+        for (Variable v : s.ordered)
+        {
+            if (! v.getMetadata ().getFlag ("backend", "c", "vector")) continue;
+
+            // Emit a class definition for this specific population and variable.
+            String var  = mangle (v.nameString ());
+            String name = pop + var;
+            String className = "IOvector" + name;
+            vectorDefinitions.append ("class " + className + ": public IOvector\n");
+            vectorDefinitions.append ("{\n");
+            vectorDefinitions.append ("public:\n");
+            vectorDefinitions.append ("  " + prefix (s) + "_Population * population;\n");
+            if (! s.isSingleton ())
+            {
+                vectorDefinitions.append ("  virtual int size ()\n");
+                vectorDefinitions.append ("  {\n");
+                vectorDefinitions.append ("    return population->instances.size ();\n");  // This assumes dense population. We won't try to guard against null entries.
+                vectorDefinitions.append ("  }\n");
+            }
+            vectorDefinitions.append ("  virtual " + T + " get (int i)\n");
+            vectorDefinitions.append ("  {\n");
+            vectorDefinitions.append ("    return population->instances.at (i)->" + var + ";\n");
+            vectorDefinitions.append ("  }\n");
+
+            vectorDefinitions.append ("  virtual void set (int i, " + T + " value)\n");
+            vectorDefinitions.append ("  {\n");
+            vectorDefinitions.append ("    population->instances.at (i)->" + var + " = value;\n");
+            vectorDefinitions.append ("  }\n");
+            vectorDefinitions.append ("};\n");
+            vectorDefinitions.append ("\n");
+
+            // A complete copy of the get() function, including code to locate population, will be emitted for each variable.
+            // Since it's unlikely there will be more than one variable, this isn't too redundant.
+            String prototype = "IOvector * get" + name + " (" + args + ")";
+            vectorDefinitions.append (prototype + "\n");
+            vectorDefinitions.append ("{\n");
+            vectorDefinitions.append (f);
+            vectorDefinitions.append ("\n");
+            vectorDefinitions.append ("  " + className + " * result = new " + className + ";\n");
+            vectorDefinitions.append ("  result->population = &p0;\n");
+            vectorDefinitions.append ("  return result;\n");
+            vectorDefinitions.append ("}\n");
+            vectorDefinitions.append ("\n");
+
+            writer.append (prototype + ";\n");
         }
     }
 
@@ -1392,7 +1532,7 @@ public class JobC extends Thread
         }
         if (bed.index != null)
         {
-            result.append ("  int __24index;\n");
+            result.append ("  int " + mangle ("$index") + ";\n");
         }
         if (bed.lastT)
         {
@@ -1666,24 +1806,24 @@ public class JobC extends Thread
             result.append ("  " + ps + " * p = (" + ps + " *) part;\n");
             if (bed.trackInstances)
             {
-                result.append ("  if (p->__24index < 0)\n");
+                result.append ("  if (p->" + mangle ("$index") + " < 0)\n");
                 result.append ("  {\n");
-                result.append ("    p->__24index = instances.size ();\n");
+                result.append ("    p->" + mangle ("$index") + " = instances.size ();\n");
                 result.append ("    instances.push_back (p);\n");
                 result.append ("  }\n");
                 result.append ("  else\n");
                 result.append ("  {\n");
-                result.append ("    instances[p->__24index] = p;\n");
+                result.append ("    instances[p->" + mangle ("$index") + "] = p;\n");
                 result.append ("  }\n");
                 if (bed.newborn >= 0)
                 {
                     result.append ("  p->flags = (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
-                    result.append ("  firstborn = min (firstborn, p->__24index);\n");
+                    result.append ("  firstborn = min (firstborn, p->" + mangle ("$index") + ");\n");
                 }
             }
             else
             {
-                result.append ("  if (p->__24index < 0) p->__24index = nextIndex++;\n");
+                result.append ("  if (p->" + mangle ("$index") + " < 0) p->" + mangle ("$index") + " = nextIndex++;\n");
             }
             result.append ("}\n");
             result.append ("\n");
@@ -1693,7 +1833,7 @@ public class JobC extends Thread
                 result.append ("void " + ns + "remove (Part<" + T + "> * part)\n");
                 result.append ("{\n");
                 result.append ("  " + ps + " * p = (" + ps + " *) part;\n");
-                result.append ("  instances[p->__24index] = 0;\n");
+                result.append ("  instances[p->" + mangle ("$index") + "] = 0;\n");
                 result.append ("  Population<" + T + ">::remove (part);\n");
                 result.append ("}\n");
                 result.append ("\n");
@@ -1861,7 +2001,7 @@ public class JobC extends Thread
                 result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
 
-            // Return value is generally ignored, except for top-level population.
+            // Return value is ignored except for top-level population.
             boolean returnN = bed.needGlobalFinalizeN;
             if (bed.canResize)  
             {
@@ -1897,7 +2037,13 @@ public class JobC extends Thread
 
             if (returnN)
             {
-                result.append ("  return n;\n");
+                // returnN can be true even if s is a singleton, because the top-level
+                // part can have lethal $p but only create one instance. In that (very common)
+                // case, $p controls lifespan of simulation. This also means we can't
+                // use $n to indicate that the population is dead. The alternative is
+                // to use $live.
+                if (bed.singleton) result.append ("  return " + resolve (bed.live.reference, context, false, "instance.", false) + ";\n");
+                else               result.append ("  return n;\n");
             }
             else
             {
@@ -2422,7 +2568,7 @@ public class JobC extends Thread
             }
             if (bed.index != null)
             {
-                result.append ("  __24index = -1;\n");  // -1 indicates that an index needs to be assigned. This should only be done once.
+                result.append ("  " + mangle ("$index") + " = -1;\n");  // -1 indicates that an index needs to be assigned. This should only be done once.
             }
             if (bed.localMembers.size () > 0)
             {
@@ -3678,13 +3824,13 @@ public class JobC extends Thread
                 }
                 if (bed.index != null)
                 {
-                    result.append ("  result += __24index;\n");
+                    result.append ("  result += " + mangle ("$index") + ";\n");
                 }
                 else if (s.connectionBindings != null)
                 {
                     ConnectionBinding c = s.connectionBindings.get (0);
                     BackendDataC cbed = (BackendDataC) c.endpoint.backendData;
-                    if (cbed.index != null) result.append ("  result += " + mangle (c.alias) + "->__24index;\n");
+                    if (cbed.index != null) result.append ("  result += " + mangle (c.alias) + "->" + mangle ("$index") + ";\n");
                 }
             }
             else  // binary or higher connection
@@ -4376,27 +4522,22 @@ public class JobC extends Thread
         return mangle ("_", input);
     }
 
+    /**
+        Converts identifiers into a form that can be compiled.
+        Legitimate identifiers in our language follow essentially the same
+        rules as Java or C++, with the addition of three characters:
+        space, period and single-quote. Here we assume that Java identifier
+        functions also satisfy C++ rules, and simply replace our additional
+        characters with underscores. There are some degenerate cases where
+        this won't produce a unique identifier. Examples:
+            A.B and A_B are both in the model
+            A' and A_ are both in the model
+        These are very unlikely in practice, and ignoring them will make more
+        readable code.
+    **/
     public static String mangle (String prefix, String input)
     {
-        StringBuilder result = new StringBuilder (prefix);
-        for (char c : input.toCharArray ())
-        {
-            // Even though underscore (_) is a legitimate character in a C identifier,
-            // we don't use it.  Instead they are used as an escape for unicode.
-            // We use variable length unicode values because there is no need to parse
-            // the identifiers back into wide characters.
-            if (   ('a' <= c && c <= 'z')
-                || ('A' <= c && c <= 'Z')
-                || ('0' <= c && c <= '9'))
-            {
-                result.append (c);
-            }
-            else
-            {
-                result.append ("_" + Integer.toHexString (c));
-            }
-        }
-        return result.toString ();
+        return prefix + NodePart.validIdentifierFrom (input);
     }
 
     public String type (Variable v)

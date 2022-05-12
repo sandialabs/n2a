@@ -837,7 +837,11 @@ public class Population extends Instance
     public void remove (Part p)
     {
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (bed.singleton) return;
+        if (bed.singleton)  // This should never happen except for top-level part.
+        {
+            n = 0;
+            return;
+        }
 
         n--;  // presuming that p is actually here
         if (bed.index != null)

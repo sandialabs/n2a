@@ -410,7 +410,7 @@ public class BackendDataC
 
         boolean canDie = s.canDie ();
         refcount       = s.referenced  &&  canDie;
-        singleton      = s.isSingleton (true);
+        singleton      = s.isSingleton ();
         canResize      = globalMembers.contains (n);  // Works correctly even if n is null.
         trackInstances = s.connected  ||  s.needInstanceTracking  ||  canResize;
         canGrowOrDie   = s.lethalP  ||  s.lethalType  ||  s.canGrow ();
@@ -536,7 +536,7 @@ public class BackendDataC
     public void setLocalNeedPath (EquationSet s)
     {
         EquationSet c = s.container;
-        if (c == null  &&  s.isSingleton (false)) return;  // Don't set flag, because we know that path() will return "".
+        if (c == null  &&  s.isSingleton ()) return;  // Don't set flag, because we know that path() will return "".
         needLocalPath = true;
         setParentNeedPath (s);
     }

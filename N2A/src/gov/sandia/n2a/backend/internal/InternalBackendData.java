@@ -896,7 +896,7 @@ public class InternalBackendData
         determineOrderInit ("$init", s, localInit);
         determineOrderInit ("$init", s, globalInit);
 
-        singleton = s.isSingleton (true);
+        singleton = s.isSingleton ();
         populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
         if (n != null  &&  ! singleton)
         {
@@ -944,7 +944,7 @@ public class InternalBackendData
             singleConnection = true;
             for (ConnectionBinding cb : s.connectionBindings)
             {
-                if (cb.endpoint.container != s.container  ||  ! cb.endpoint.isSingleton (true))
+                if (cb.endpoint.container != s.container  ||  ! cb.endpoint.isSingleton ())
                 {
                     singleConnection = false;
                     break;
