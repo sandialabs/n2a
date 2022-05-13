@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -125,7 +126,12 @@ public class Mmatrix extends Function
         public static String[] keyPath (Instance context, Operator[] operands)
         {
             List<String> keys = new ArrayList<String> ();
-            for (int i = 1; i < operands.length; i++) keys.add (operands[i].eval (context).toString ());
+            for (int i = 1; i < operands.length; i++)
+            {
+                String key = operands[i].eval (context).toString ();
+                String[] pieces = key.split ("/"); 
+                keys.addAll (Arrays.asList (pieces));
+            }
             return keys.toArray (new String[keys.size ()]);
         }
     }
