@@ -53,6 +53,8 @@ public class MVolatile extends MNode
 
     /**
         @return The most distant ancestor that is still an MVolatile.
+        Typically used to locate the top-level MDoc from one of its descendants,
+        since MDir (the typical container of an MDoc) is not an MVolatile.
     **/
     public MNode rootVolatile ()
     {

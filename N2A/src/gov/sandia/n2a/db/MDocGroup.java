@@ -26,7 +26,7 @@ import java.util.TreeMap;
 /**
     Holds a collection of MDocs and ensures that any changes get written out to disk.
     Assumes that the MDocs are at random places in the file system, and that the key contains the full path.
-    MDir makes the stronger assumption that all files share the same directory and that key only contains the file name.
+    MDir makes the stronger assumption that all files share the same directory, so the key only contains the file name.
 **/
 public class MDocGroup extends MNode
 {

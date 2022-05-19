@@ -18,7 +18,7 @@ the U.S. Government retains certain rights in this software.
 
 
 /**
-    A lightweight drop-in replacement for stl::string.
+    A lightweight drop-in replacement for std::string.
     Avoids STL bloat (locales, exceptions ...) and only deals with single-byte characters.
     This class only implements functions that are actually used by the runtime engine.
 **/
