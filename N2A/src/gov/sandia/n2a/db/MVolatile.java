@@ -165,11 +165,11 @@ public class MVolatile extends MNode
     {
         if (toKey.equals (fromKey)) return;
         if (children == null) return;  // Nothing to move
-        MNode source = children.get (fromKey);
         children.remove (toKey);
-        children.remove (fromKey);
+        MNode source = children.get (fromKey);
         if (source != null)
         {
+            children.remove (fromKey);
             ((MVolatile) source).name = toKey;  // If this cast ceases to be a safe assumption, then the M hierarchy needs re-design.
             children.put (toKey, source);
         }

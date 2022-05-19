@@ -29,6 +29,15 @@ the U.S. Government retains certain rights in this software.
 
 namespace n2a
 {
+    // MNode class ID constants
+    // This is a hack to avoid the cost of RTTI.
+    // (Everything is an MNode, so we don't have a specific bit for that.)
+    #define MVolatileID    0x01
+    #define MPersistentID  0x02
+    #define MDoc           0x04
+    #define MDocGroupID    0x08
+    #define MDirID         0x10
+
     class MNode;
     class MVolatile;
     class Schema;
@@ -53,9 +62,10 @@ namespace n2a
         // If memory or other resource utilization becomes an issue, this object could be made static.
         // That would force serial access even on independent data.
         std::recursive_mutex mutex;
-        static MNode none;  // For return values, indicating node does not exist.
+        static MNode none;  // For return values, indicating node does not exist. Iterating over none will produce no children.
 
         virtual ~MNode ();
+        virtual uint32_t classID () const;
 
         virtual std::string key () const;
 
@@ -97,23 +107,31 @@ namespace n2a
         **/
         MNode & lca (const MNode & that) const;
 
+    protected:  // Internal functions for manipulating children.
         /**
             Returns the child indicated by the given key, or none if it doesn't exist.
-            This function is separate from child(string...) for ease of implementing subclasses.
         **/
-        virtual MNode & child (const std::string & key) const;
+        virtual MNode & childGet (const std::string & key) const;
 
         /**
+            Retrieves the child indicated by the given key, or creates it if nonexistent.
+        **/
+        virtual MNode & childGetOrCreate (const std::string & key);
+
+        /**
+            Removes child with the given key, if it exists.
+        **/
+        virtual void childClear (const std::string & key);
+
+    public:
+        /**
             Returns a child node from arbitrary depth, or none if any part of the path doesn't exist.
-            Notice that the object "none" is a functional empty node, so it can be used for iteration.
         **/
         MNode & child (const std::vector<std::string> & keys) const;
 
         /**
             Retrieves a child node from arbitrary depth, or creates it if nonexistent.
             Like a combination of child() and set().
-            The benefit of getting back a node rather than a value is ease of access
-            to a list stored as children of the node.
         **/
         MNode & childOrCreate (const std::vector<std::string> & keys);
 
@@ -132,12 +150,6 @@ namespace n2a
         virtual void clear ();
 
         /**
-            Removes child with the given key, if it exists.
-            This function is separate from clear(string...) for ease of implementing subclasses.
-        **/
-        virtual void clear (const std::string & key);
-
-        /**
             Removes child with arbitrary depth.
             If no key is specified, then removes all children of this node.
         **/
@@ -148,7 +160,7 @@ namespace n2a
         **/
         virtual int size () const;
 
-        bool isEmpty () const;
+        bool empty () const;
 
         /**
             Indicates whether this node is defined.
@@ -187,7 +199,12 @@ namespace n2a
         /**
             Digs down tree as far as possible to retrieve value; returns given defaultValue if node does not exist or is set to "".
         **/
-        std::string getOrDefault (const std::string & defaultValue, const std::vector<std::string> & keys) const;
+        std::string getOrDefault (const char * defaultValue, const std::vector<std::string> & keys) const;
+
+        std::string getOrDefault (const std::string & defaultValue, const std::vector<std::string> & keys) const
+        {
+            return getOrDefault (defaultValue.c_str (), keys);
+        }
 
         bool getOrDefault (bool defaultValue, const std::vector<std::string> & keys) const;
 
@@ -267,14 +284,6 @@ namespace n2a
         }
 
         void set (const MNode & value);
-
-        /**
-            Sets value of child node specified by key, effectively with a call to child.set(char *).
-            Creates child node if it doesn't already exist.
-            Should be overridden by a subclass.
-            @return The child node on which the value was set.
-        **/
-        virtual MNode & set (const char * value, const std::string & key);
 
         /**
             Creates all children necessary to set value
@@ -401,12 +410,12 @@ namespace n2a
 
             reference operator* () const
             {
-                return container.child (key);
+                return container.childGet (key);
             }
 
             pointer operator-> ()
             {
-                return & container.child (key);
+                return & container.childGet (key);
             }
 
             Iterator & operator++ ()  // prefix increment
@@ -501,28 +510,35 @@ namespace n2a
     {
     public:
         std::string                            name;
-        char *                                 value;  ///< Our own local copy of string. We are responsible to free this memory. We use char * rather than std::string so this value can be null, not merely empty.
+        char *                                 value;     ///< Our own local copy of string. We are responsible to manage this memory. We use char * rather than std::string so this value can be null, not merely empty.
         MNode *                                container;
         std::map<const char *, MNode *, Order> children;  // Children are always a subclass of MVolatile. As long as a child exists, we can simply hold a pointer to its name.
 
         MVolatile (const char * value = 0, const char * name = 0, MNode * container = 0);
         virtual ~MVolatile ();  ///< frees memory used by children
+        virtual uint32_t classID () const;
 
-        virtual std::string key          () const;
-        virtual MNode &     parent       () const;
-        virtual MNode &     child        (const std::string & key) const;
-        virtual void        clear        ();
-        virtual void        clear        (const std::string & key);
-        virtual int         size         () const;
-        virtual bool        data         () const;
-        virtual std::string getOrDefault (const std::string & defaultValue) const;
-        virtual void        set          (const char * value);  ///< copies the memory, on assumption that the caller could delete it
-        virtual MNode &     set          (const char * value, const std::string & key);
-        virtual void        move         (const std::string & fromKey, const std::string & toKey);  ///< If you already hold a reference to the node named by fromKey, then that reference remains valid and its key is updated.
-        virtual Iterator    begin        () const;
-        virtual Iterator    end          () const;
+        virtual std::string key              () const;
+        virtual MNode &     parent           () const;
+    protected:
+        virtual MNode &     childGet         (const std::string & key) const;
+        virtual MNode &     childGetOrCreate (const std::string & key);
+        virtual void        childClear       (const std::string & key);
+    public:
+        virtual void        clear            ();
+        virtual int         size             () const;
+        virtual bool        data             () const;
+        virtual std::string getOrDefault     (const std::string & defaultValue) const;
+        virtual void        set              (const char * value);  ///< copies the memory, on assumption that the caller could delete it
+        virtual void        move             (const std::string & fromKey, const std::string & toKey);  ///< If you already hold a reference to the node named by fromKey, then that reference remains valid and its key is updated.
+        virtual Iterator    begin            () const;
+        virtual Iterator    end              () const;
 
         // C++ name resolution
+        using MNode::child;
+        using MNode::clear;
+        using MNode::data;
+        using MNode::getOrDefault;
         using MNode::set;
     };
 

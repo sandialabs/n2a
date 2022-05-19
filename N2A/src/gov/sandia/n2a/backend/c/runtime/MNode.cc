@@ -26,6 +26,12 @@ n2a::MNode::~MNode ()
 {
 }
 
+uint32_t
+n2a::MNode::classID () const
+{
+    return 0;
+}
+
 std::string
 n2a::MNode::key () const
 {
@@ -127,9 +133,20 @@ n2a::MNode::lca (const MNode & that) const
 }
 
 n2a::MNode &
-n2a::MNode::child (const std::string & key) const
+n2a::MNode::childGet (const std::string & key) const
 {
     return none;
+}
+
+n2a::MNode &
+n2a::MNode::childGetOrCreate (const std::string & key)
+{
+    throw "Attempt to create child on abstract MNode. Use MVolatile or another concrete class.";
+}
+
+void
+n2a::MNode::childClear (const std::string & key)
+{
 }
 
 n2a::MNode &
@@ -140,7 +157,7 @@ n2a::MNode::child (const std::vector<std::string> & keys) const
     std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
     for (int i = 0; i < count; i++)
     {
-        MNode * c = & result->child (keys[i]);
+        MNode * c = & result->childGet (keys[i]);
         if (c == &none) return none;
         result = c;
     }
@@ -155,11 +172,9 @@ n2a::MNode::childOrCreate (const std::vector<std::string> & keys)
     std::lock_guard<std::recursive_mutex> lock (mutex);
     for (int i = 0; i < count; i++)
     {
-        MNode * c = & result->child (keys[i]);
-        if (c == &none) c = & result->set (nullptr, keys[i]);
-        result = c;
+        result = & result->childGetOrCreate (keys[i]);
     }
-    return const_cast<MNode &> (*result);
+    return *result;
 }
 
 n2a::MNode &
@@ -174,12 +189,7 @@ void
 n2a::MNode::clear ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    for (auto & n : *this) clear (n.key ());
-}
-
-void
-n2a::MNode::clear (const std::string & key)
-{
+    for (auto & n : *this) childClear (n.key ());
 }
 
 void
@@ -196,10 +206,10 @@ n2a::MNode::clear (const std::vector<std::string> & keys)
     int last = keys.size () - 1;
     for (int i = 0; i < last; i++)
     {
-        c = & c->child (keys[i]);
+        c = & c->childGet (keys[i]);
         if (c == &none) return;  // Nothing to clear
     }
-    c->clear (keys[last]);
+    c->childClear (keys[last]);
 }
 
 int
@@ -209,7 +219,7 @@ n2a::MNode::size () const
 }
 
 bool
-n2a::MNode::isEmpty () const
+n2a::MNode::empty () const
 {
     return size () == 0;
 }
@@ -231,7 +241,7 @@ n2a::MNode::data (const std::vector<std::string> & keys) const
 bool
 n2a::MNode::containsKey (const std::string & key) const
 {
-    if (& child (key) != &none) return true;
+    if (& childGet (key) != &none) return true;
     for (auto & c : *this) if (c.containsKey (key)) return true;
     return false;
 }
@@ -257,7 +267,7 @@ n2a::MNode::getOrDefault (const std::string & defaultValue) const
 }
 
 std::string
-n2a::MNode::getOrDefault (const std::string & defaultValue, const std::vector<std::string> & keys) const
+n2a::MNode::getOrDefault (const char * defaultValue, const std::vector<std::string> & keys) const
 {
     std::string value = get (keys);
     if (value.empty ()) return defaultValue;
@@ -270,8 +280,8 @@ n2a::MNode::getOrDefault (bool defaultValue, const std::vector<std::string> & ke
     std::string value = get (keys);
     if (value.empty ()) return defaultValue;
     value = trim (value);
-    if (trim (value) == "1") return true;
-    if (strcasecmp (value.c_str (), "true")) return true;
+    if (value == "1") return true;
+    if (strcasecmp (value.c_str (), "true") == 0) return true;
     return false;
 }
 
@@ -358,12 +368,6 @@ n2a::MNode::set (const MNode & value)
 }
 
 n2a::MNode &
-n2a::MNode::set (const char * value, const std::string & key)
-{
-    return none;
-}
-
-n2a::MNode &
 n2a::MNode::set (const char * value, const std::vector<std::string> & keys)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
@@ -431,10 +435,7 @@ n2a::MNode::merge (const MNode & that)
     if (that.data ()) set (that.get ());
     for (auto & thatChild : that)
     {
-        std::string key = thatChild.key ();
-        MNode * c = & child (key);
-        if (c == &none) c = & set (nullptr, key);  // ensure a target child node exists
-        c->merge (thatChild);
+        childGetOrCreate (thatChild.key ()).merge (thatChild);
     }
 }
 
@@ -446,7 +447,7 @@ n2a::MNode::mergeUnder (const MNode & that)
     for (auto & thatChild : that)
     {
         std::string key = thatChild.key ();
-        MNode & c = child (key);
+        MNode & c = childGet (key);
         if (&c == &none) set (thatChild, {key});
         else             c.mergeUnder (thatChild);
     }
@@ -460,10 +461,10 @@ n2a::MNode::uniqueNodes (const MNode & that)
     for (auto & c : *this)
     {
         std::string key = c.key ();
-        MNode & d = that.child (key);
+        MNode & d = that.childGet (key);
         if (&d == &none) continue;
         c.uniqueNodes (d);
-        if (c.size () == 0  &&  ! c.data ()) clear (key);
+        if (c.size () == 0  &&  ! c.data ()) childClear (key);
     }
 }
 
@@ -475,10 +476,10 @@ n2a::MNode::uniqueValues (const MNode & that)
     for (auto & c : *this)
     {
         std::string key = c.key ();
-        MNode & d = that.child (key);
+        MNode & d = that.childGet (key);
         if (&d == &none) continue;
         c.uniqueValues (d);
-        if (c.size () == 0  &&  ! c.data ()) clear (key);
+        if (c.size () == 0  &&  ! c.data ()) childClear (key);
     }
 }
 
@@ -502,8 +503,8 @@ n2a::MNode::changes (const MNode & that)
     for (auto & c : *this)
     {
         std::string key = c.key ();
-        MNode & d = that.child (key);
-        if (&d == &none) clear (key);
+        MNode & d = that.childGet (key);
+        if (&d == &none) childClear (key);
         else             c.changes (d);
     }
 }
@@ -513,14 +514,11 @@ n2a::MNode::move (const std::string & fromKey, const std::string & toKey)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (toKey == fromKey) return;
-    clear (toKey);
-    MNode & source = child (fromKey);
-    if (&source != &none)
-    {
-        MNode & destination = set (nullptr, toKey);
-        destination.merge (source);
-        clear (fromKey);
-    }
+    childClear (toKey);
+    MNode & source = childGet (fromKey);
+    if (&source == &none) return;
+    childGetOrCreate (toKey).merge (source);
+    childClear (fromKey);
 }
 
 n2a::MNode::Iterator
@@ -609,7 +607,7 @@ n2a::MNode::equalsRecursive (MNode & that)
     if (size () != that.size ()) return false;
     for (auto & a : *this)
     {
-        MNode & b = that.child (a.key ());
+        MNode & b = that.childGet (a.key ());
         if (&b == &none) return false;
         if (! a.equalsRecursive (b)) return false;
     }
@@ -622,7 +620,7 @@ n2a::MNode::structureEquals (MNode & that)
     if (size () != that.size ()) return false;
     for (auto & a : *this)
     {
-        MNode & b = that.child (a.key ());
+        MNode & b = that.childGet (a.key ());
         if (&b == &none) return false;
         if (! a.structureEquals (b)) return false;
     }
@@ -655,6 +653,12 @@ n2a::MVolatile::~MVolatile ()
     if (value) free (value);
 }
 
+uint32_t
+n2a::MVolatile::classID () const
+{
+    return MVolatileID;
+}
+
 std::string
 n2a::MVolatile::key () const
 {
@@ -669,7 +673,7 @@ n2a::MVolatile::parent () const
 }
 
 n2a::MNode &
-n2a::MVolatile::child (const std::string & key) const
+n2a::MVolatile::childGet (const std::string & key) const
 {
     std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
     try
@@ -682,22 +686,38 @@ n2a::MVolatile::child (const std::string & key) const
     }
 }
 
-void
-n2a::MVolatile::clear ()
+n2a::MNode &
+n2a::MVolatile::childGetOrCreate (const std::string & key)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    for (auto c : children) delete c.second;
-    children.clear ();
+    try
+    {
+        return * children.at (key.c_str ());  // Throws out_of_range if key doesn't exist
+    }
+    catch (...)  // key was not found
+    {
+        MVolatile * result = new MVolatile (nullptr, key.c_str (), this);
+        children[result->name.c_str ()] = result;
+        return *result;
+    }
 }
 
 void
-n2a::MVolatile::clear (const std::string & key)
+n2a::MVolatile::childClear (const std::string & key)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     std::map<const char *, MNode *>::iterator it = children.find (key.c_str ());
     if (it == children.end ()) return;
     delete it->second;
     children.erase (it);
+}
+
+void
+n2a::MVolatile::clear ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    for (auto c : children) delete c.second;
+    children.clear ();
 }
 
 int
@@ -730,29 +750,22 @@ n2a::MVolatile::set (const char * value)
     else       this->value = nullptr;
 }
 
-n2a::MNode &
-n2a::MVolatile::set (const char * value, const std::string & key)
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    try
-    {
-        MNode * result = children.at (key.c_str ());
-        result->set (value);
-        return *result;
-    }
-    catch (...)
-    {
-        MVolatile * result = new MVolatile (value, key.c_str (), this);
-        children[result->name.c_str ()] = result;
-        return *result;
-    }
-}
-
 void
 n2a::MVolatile::move (const std::string & fromKey, const std::string & toKey)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (toKey == fromKey) return;
 
+    std::map<const char *, MNode *>::iterator it = children.find (toKey.c_str ());
+    delete it->second;
+    children.erase (it);
+
+    it = children.find (fromKey.c_str ());
+    if (it == children.end ()) return;
+    MVolatile * keep = (MVolatile *) it->second;  // It's not currently necessary to check classID here.
+    children.erase (it);
+    keep->name = toKey;
+    children[keep->name.c_str ()] = keep;
 }
 
 n2a::MNode::Iterator
@@ -951,7 +964,7 @@ n2a::Schema2::read (MNode & node, LineReader & reader, int whitespaces)
         {
             reader.getNextLine ();
         }
-        MNode & child = node.set (value.c_str (), key);  // Create a child with the given value
+        MNode & child = node.set (value.c_str (), {key});  // Create a child with the given value
         if (reader.whitespaces > whitespaces) read (child, reader, reader.whitespaces);  // Recursively populate child. When this call returns, reader.whitespaces <= whitespaces in this function, because that is what ends the recursion.
         if (reader.whitespaces < whitespaces) return;  // end recursion
     }
