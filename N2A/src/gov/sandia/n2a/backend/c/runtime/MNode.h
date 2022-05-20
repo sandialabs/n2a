@@ -128,12 +128,14 @@ namespace n2a
             Returns a child node from arbitrary depth, or none if any part of the path doesn't exist.
         **/
         MNode & child (const std::vector<std::string> & keys) const;
+        template<typename... Args> MNode & child (Args... keys) const {return child ({keys...});}
 
         /**
             Retrieves a child node from arbitrary depth, or creates it if nonexistent.
             Like a combination of child() and set().
         **/
         MNode & childOrCreate (const std::vector<std::string> & keys);
+        template<typename... Args> MNode & childOrCreate (Args... keys) {return childOrCreate ({keys...});}
 
         /**
             Convenience method for retrieving node at an ordinal position without knowing the specific key.
@@ -154,6 +156,7 @@ namespace n2a
             If no key is specified, then removes all children of this node.
         **/
         void clear (const std::vector<std::string> & keys);
+        template<typename... Args> void clear (Args... keys) {clear ({keys...});}
 
         /**
             @return The number of children we have.
@@ -173,6 +176,7 @@ namespace n2a
         virtual bool data () const;
 
         bool data (const std::vector<std::string> & keys) const;
+        template<typename... Args> bool data (Args... keys) const {return data ({keys...});}
 
         /**
             Determines if the given key exists anywhere in the hierarchy.
@@ -189,6 +193,7 @@ namespace n2a
             Digs down tree as far as possible to retrieve value; returns "" if node does not exist.
         **/
         std::string get (const std::vector<std::string> & keys) const;
+        template<typename... Args> std::string get (Args... keys) const {return get ({keys...});}
 
         /**
             Returns this node's value, or the given default if node is undefined or set to "".
@@ -200,19 +205,25 @@ namespace n2a
             Digs down tree as far as possible to retrieve value; returns given defaultValue if node does not exist or is set to "".
         **/
         std::string getOrDefault (const char * defaultValue, const std::vector<std::string> & keys) const;
+        template<typename... Args> std::string getOrDefault (const char * defaultValue, Args... keys) const {return getOrDefault (defaultValue, {keys...});}
 
         std::string getOrDefault (const std::string & defaultValue, const std::vector<std::string> & keys) const
         {
             return getOrDefault (defaultValue.c_str (), keys);
         }
+        template<typename... Args> std::string getOrDefault (const std::string & defaultValue, Args... keys) const {return getOrDefault (defaultValue, {keys...});}
 
         bool getOrDefault (bool defaultValue, const std::vector<std::string> & keys) const;
+        template<typename... Args> bool getOrDefault (bool defaultValue, Args... keys) const {return getOrDefault (defaultValue, {keys...});}
 
         int getOrDefault (int defaultValue, const std::vector<std::string> & keys) const;
+        template<typename... Args> int getOrDefault (int defaultValue, Args... keys) const {return getOrDefault (defaultValue, {keys...});}
 
         long getOrDefault (long defaultValue, const std::vector<std::string> & keys) const;
+        template<typename... Args> long getOrDefault (long defaultValue, Args... keys) const {return getOrDefault (defaultValue, {keys...});}
 
         double getOrDefault (double defaultValue, const std::vector<std::string> & keys) const;
+        template<typename... Args> double getOrDefault (double defaultValue, Args... keys) const {return getOrDefault (defaultValue, {keys...});}
 
         /**
             Interprets value as boolean:
@@ -225,6 +236,7 @@ namespace n2a
         {
             return getOrDefault (false, keys);
         }
+        template<typename... Args> bool getBool (Args... keys) const {return getBool ({keys...});}
 
         /**
             Interprets value as flag, which may contain extended information when set:
@@ -235,21 +247,25 @@ namespace n2a
             It also tolerates arbitrary content, so a flag can carry extra data and still be interpreted as true.
         **/
         bool getFlag (const std::vector<std::string> & keys) const;
+        template<typename... Args> bool getFlag (Args... keys) const {return getFlag ({keys...});}
 
         int getInt (const std::vector<std::string> & keys) const
         {
             return getOrDefault (0, keys);
         }
+        template<typename... Args> int getInt (Args... keys) const {return getInt ({keys...});}
 
         long getLong (const std::vector<std::string> & keys) const
         {
             return getOrDefault (0l, keys);
         }
+        template<typename... Args> long getLong (Args... keys) const {return getLong ({keys...});}
 
         double getDouble (const std::vector<std::string> & keys) const
         {
             return getOrDefault (0.0, keys);
         }
+        template<typename... Args> double getDouble (Args... keys) const {return getDouble ({keys...});}
 
         /**
             Sets this node's own value.
@@ -289,22 +305,29 @@ namespace n2a
             Creates all children necessary to set value
         **/
         MNode & set (const char * value, const std::vector<std::string> & keys);
+        template<typename... Args> MNode & set (const char * value, Args... keys) {return set (value, {keys...});}
 
         MNode & set (const std::string & value, const std::vector<std::string> & keys);
+        template<typename... Args> MNode & set (const std::string & value, Args... keys) {return set (value, {keys...});}
 
         MNode & set (bool value, const std::vector<std::string> & keys);
+        template<typename... Args> MNode & set (bool value, Args... keys) {return set (value, {keys...});}
 
         MNode & set (int value, const std::vector<std::string> & keys);
+        template<typename... Args> MNode & set (int value, Args... keys) {return set (value, {keys...});}
 
         MNode & set (long value, const std::vector<std::string> & keys);
+        template<typename... Args> MNode & set (long value, Args... keys) {return set (value, {keys...});}
 
         MNode & set (double value, const std::vector<std::string> & keys);
+        template<typename... Args> MNode & set (double value, Args... keys) {return set (value, {keys...});}
 
         /**
             Merges the given node at the given point in the tree.
             See merge()
         **/
         MNode & set (const MNode & value, const std::vector<std::string> & keys);
+        template<typename... Args> MNode & set (const MNode & value, Args... keys) {return set (value, {keys...});}
 
         /**
             Deep copies the source node into this node, while leaving any non-overlapping values in
