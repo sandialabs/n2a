@@ -651,6 +651,7 @@ n2a::MVolatile::MVolatile (const char * value, const char * name, MNode * contai
 n2a::MVolatile::~MVolatile ()
 {
     if (value) free (value);
+    for (auto c : children) delete c.second;
 }
 
 uint32_t
