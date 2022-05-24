@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,21 +12,9 @@ public class MPersistent extends MVolatile
 {
     protected boolean needsWrite; // indicates that this node is new or has changed since it was last read from disk (and therefore should be written out)
 
-    public MPersistent (MNode parent)
-	{
-        this.parent = parent;
-	}
-
-	public MPersistent (MNode parent, String value)
-	{
-	    super (value);
-	    this.parent = parent;
-	}
-
-    public MPersistent (MNode parent, String name, String value)
+    public MPersistent (MNode parent, String value, String name)
     {
-        super (value, name);
-        this.parent = parent;
+        super (value, name, parent);
     }
 
 	public synchronized void markChanged ()
@@ -86,7 +74,7 @@ public class MPersistent extends MVolatile
         if (result == null)
         {
             markChanged ();
-            result = new MPersistent (this, key, value);
+            result = new MPersistent (this, value, key);
             children.put (key, result);
             return result;
         }

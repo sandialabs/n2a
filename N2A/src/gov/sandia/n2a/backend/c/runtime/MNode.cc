@@ -640,12 +640,12 @@ n2a::MNode::toString ()
 
 // class MVolatile -----------------------------------------------------------
 
-n2a::MVolatile::MVolatile (const char * value, const char * name, MNode * container)
+n2a::MVolatile::MVolatile (const char * value, const char * key, MNode * container)
 :   container (container)
 {
     if (value) this->value = strdup (value);
     else       this->value = nullptr;
-    if (name) this->name = name;  // Otherwise, name is blank
+    if (key) name = key;  // Otherwise, name is blank
 }
 
 n2a::MVolatile::~MVolatile ()
@@ -757,16 +757,22 @@ n2a::MVolatile::move (const std::string & fromKey, const std::string & toKey)
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (toKey == fromKey) return;
 
+    std::map<const char *, MNode *>::iterator end = children.end ();
     std::map<const char *, MNode *>::iterator it = children.find (toKey.c_str ());
-    delete it->second;
-    children.erase (it);
+    if (it != end)
+    {
+        delete it->second;
+        children.erase (it);
+    }
 
     it = children.find (fromKey.c_str ());
-    if (it == children.end ()) return;
-    MVolatile * keep = (MVolatile *) it->second;  // It's not currently necessary to check classID here.
-    children.erase (it);
-    keep->name = toKey;
-    children[keep->name.c_str ()] = keep;
+    if (it != end)
+    {
+        MVolatile * keep = (MVolatile *) it->second;  // It's not currently necessary to check classID here.
+        children.erase (it);
+        keep->name = toKey;
+        children[keep->name.c_str ()] = keep;
+    }
 }
 
 n2a::MNode::Iterator
@@ -783,7 +789,638 @@ n2a::MNode::Iterator
 n2a::MVolatile::end () const
 {
     std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
-    return MNode::Iterator (*this, children.size ());
+    return Iterator (*this, children.size ());
+}
+
+
+// class MPersistent ---------------------------------------------------------
+
+n2a::MPersistent::MPersistent (n2a::MNode * container, const char * value, const char * key)
+:   MVolatile (value, key, container)
+{
+}
+
+uint32_t
+n2a::MPersistent::classID () const
+{
+    return MVolatileID | MPersistentID;
+}
+
+void
+n2a::MPersistent::markChanged ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (needsWrite) return;  // nothing to do
+    if (container  &&  container->classID () & MPersistentID) ((MPersistent *) container)->markChanged ();
+    needsWrite = true;
+}
+
+void
+n2a::MPersistent::clearChanged ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    needsWrite = false;
+    for (auto & i : *this) ((MPersistent &) i).clearChanged ();
+}
+
+void
+n2a::MPersistent::clear ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    MVolatile::clear ();
+    markChanged ();
+}
+
+n2a::MNode &
+n2a::MPersistent::childGetOrCreate (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    try
+    {
+        return * children.at (key.c_str ());  // Throws out_of_range if key doesn't exist
+    }
+    catch (...)  // key was not found
+    {
+        markChanged ();  // This is the only difference in this code compared to MVolatile::childGetOrCreate().
+        MVolatile * result = new MVolatile (nullptr, key.c_str (), this);
+        children[result->name.c_str ()] = result;
+        return *result;
+    }
+}
+
+void
+n2a::MPersistent::childClear (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    MVolatile::childClear (key);
+    markChanged ();
+}
+
+void
+n2a::MPersistent::set (const char * value)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (value)
+    {
+        if (! this->value  ||  strcmp (this->value, value) != 0)
+        {
+            MVolatile::set (value);
+            markChanged ();
+        }
+    }
+    else
+    {
+        if (this->value)
+        {
+            MVolatile::set (value);
+            markChanged ();
+        }
+    }
+}
+
+void
+n2a::MPersistent::move (const std::string & fromKey, const std::string & toKey)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (toKey == fromKey) return;
+
+    std::map<const char *, MNode *>::iterator end = children.end ();
+    std::map<const char *, MNode *>::iterator it = children.find (toKey.c_str ());
+    if (it != end)
+    {
+        delete it->second;
+        children.erase (it);
+        markChanged ();
+    }
+
+    it = children.find (fromKey.c_str ());
+    if (it != end)
+    {
+        MPersistent * keep = (MPersistent *) it->second;  // just assume all children are MPersistent
+        children.erase (it);
+        keep->name = toKey;
+        children[keep->name.c_str ()] = keep;
+        keep->markChanged ();
+        markChanged ();
+    }
+}
+
+
+// class MDoc ----------------------------------------------------------------
+
+n2a::MDoc::MDoc (const std::filesystem::path & path)
+:   MPersistent (nullptr, path.c_str (), nullptr)
+{
+    needsRead = true;
+}
+
+n2a::MDoc::MDoc (const std::filesystem::path & path, const std::string & key)
+:   MPersistent (nullptr, path.c_str (), key.c_str ())
+{
+    needsRead = true;
+}
+
+n2a::MDoc::MDoc (n2a::MDocGroup & container, const std::string & path, const std::string & key)
+:   MPersistent (&container, path.c_str (), key.c_str ())
+{
+    needsRead = true;
+}
+
+n2a::MDoc::MDoc (n2a::MDir & container, const std::string & key)
+:   MPersistent (&container, nullptr, key.c_str ())
+{
+    needsRead = true;
+}
+
+uint32_t
+n2a::MDoc::classID () const
+{
+    return MVolatileID | MPersistentID | MDocID;
+}
+
+void
+n2a::MDoc::markChanged ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (needsWrite) return;
+
+    // If this is a new document, then treat it as if it were already loaded.
+    // If there is content on disk, it will be blown away.
+    needsRead  = false;
+    needsWrite = true;
+    if (container  &&  container->classID () & MDocGroupID)
+    {
+        std::lock_guard<std::recursive_mutex> lock (container->mutex);
+        ((MDocGroup *) container)->writeQueue.insert (this);
+    }
+}
+
+int
+n2a::MDoc::size ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (needsRead) load ();  // redundant with the guard in load(), but should save time in the common case that file is already loaded
+    return MPersistent::size ();
+}
+
+bool
+n2a::MDoc::data ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (needsRead) load ();
+    return MPersistent::data ();
+}
+
+std::string
+n2a::MDoc::getOrDefault (const std::string & defaultValue)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (container  &&  container->classID () & MDocGroupID) return ((MDocGroup *) container)->pathForDoc (name);
+    if (value) return value;
+    return defaultValue;
+}
+
+void
+n2a::MDoc::set (const char * value)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (container) return;  // Not stand-alone, so ignore.
+    if (strcmp (this->value, value) == 0) return;  // Don't call file move if location on disk has not changed.
+    try
+    {
+        std::filesystem::rename (this->value, value);
+    }
+    catch (...)
+    {
+        std::cerr << "Failed to move file: " << this->value << " --> " << value << std::endl;
+    }
+}
+
+void
+n2a::MDoc::move (const std::string & fromKey, const std::string & toKey)
+{
+    if (fromKey == toKey) return;
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (needsRead) load ();
+    MPersistent::move (fromKey, toKey);
+}
+
+n2a::MNode::Iterator
+n2a::MDoc::begin ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (needsRead) load ();
+    return MPersistent::begin ();
+}
+
+n2a::MNode::Iterator
+n2a::MDoc::end ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (needsRead) load ();
+    return MPersistent::end ();
+}
+
+std::filesystem::path
+n2a::MDoc::path () const
+{
+    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    if (container  &&  container->classID () & MDocGroupID) return ((MDocGroup *) container)->pathForDoc (name);
+    return value;  // for stand-alone document
+}
+
+void
+n2a::MDoc::load ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (! needsRead) return;  // already loaded
+    needsRead  = false;
+    needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
+    std::filesystem::path file = path ();
+    try
+    {
+        std::ifstream ifs (file.c_str ());
+        Schema::readAll (*this, ifs);
+        ifs.close ();
+    }
+    catch (...) {}  // An exception is common for a newly created doc that has not yet been flushed to disk.
+    clearChanged ();  // After load(), clear the slate so we can detect any changes and save the document.
+}
+
+void
+n2a::MDoc::save ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (! needsWrite) return;
+    std::filesystem::path file = path ();
+    try
+    {
+        std::filesystem::create_directories (file.parent_path ());
+        std::ofstream ofs (file.c_str (), std::ofstream::trunc);
+        Schema * schema = Schema::latest ();
+        schema->writeAll (*this, ofs);
+        delete schema;
+        ofs.close ();
+        clearChanged ();
+    }
+    catch (...)
+    {
+        std::cerr << "Failed to write file: " << file << std::endl;
+    }
+}
+
+void
+n2a::MDoc::deleteFile () const
+{
+    if (container)
+    {
+        container->childClear (name);
+        return;
+    }
+
+    try
+    {
+        std::filesystem::remove (value);
+    }
+    catch (...)
+    {
+        std::cerr << "Failed to delete file: " << value << std::endl;
+    }
+}
+
+n2a::MNode &
+n2a::MDoc::childGet (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    if (needsRead) load ();
+    return MPersistent::childGet (key);
+
+}
+
+n2a::MNode &
+n2a::MDoc::childGetOrCreate (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (needsRead) load ();
+    return MPersistent::childGetOrCreate (key);
+}
+
+void
+n2a::MDoc::childClear (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (needsRead) load ();
+    MPersistent::childClear (key);
+}
+
+
+// class MDocGroup -----------------------------------------------------------
+
+n2a::MDocGroup::MDocGroup (const char * key)
+:   name (key)
+{
+}
+
+std::string
+n2a::MDocGroup::key () const
+{
+    return name;
+}
+
+std::string
+n2a::MDocGroup::getOrDefault (const std::string & defaultValue) const
+{
+    return defaultValue;
+}
+
+void
+n2a::MDocGroup::clear ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    for (auto c : children) delete c.second;
+    children.clear ();
+    writeQueue.clear ();
+}
+
+int
+n2a::MDocGroup::size () const
+{
+    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    return children.size ();
+}
+
+void
+n2a::MDocGroup::move (const std::string & fromKey, const std::string & toKey)
+{
+    if (toKey == fromKey) return;
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    save ();
+
+    // Adjust files on disk.
+    std::filesystem::path fromPath = pathForFile (fromKey);
+    std::filesystem::path toPath   = pathForFile (toKey);
+    try
+    {
+        std::filesystem::remove_all (toPath);
+        std::filesystem::rename (fromPath, toPath);
+    }
+    catch (...) {}  // This can happen if a new doc has not yet been flushed to disk.
+
+    // Bookkeeping in "children" collection
+    std::map<std::string, MDoc *>::iterator end = children.end ();
+    std::map<std::string, MDoc *>::iterator it  = children.find (toKey.c_str ());
+    if (it != end)
+    {
+        delete it->second;
+        children.erase (it);
+    }
+
+    it = children.find (fromKey.c_str ());
+    if (it != end)
+    {
+        MDoc * keep = (MDoc *) it->second;
+        children.erase (it);
+        keep->name = toKey;
+        children[toKey] = keep;
+    }
+}
+
+n2a::MNode::Iterator
+n2a::MDocGroup::begin () const
+{
+    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::vector<std::string> keys;
+    keys.reserve (children.size ());
+    for (auto c : children) keys.push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
+    return Iterator (*this, keys);
+}
+
+n2a::MNode::Iterator
+n2a::MDocGroup::end () const
+{
+    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    return Iterator (*this, children.size ());
+}
+
+std::filesystem::path
+n2a::MDocGroup::pathForDoc (const std::string & key) const
+{
+    return std::filesystem::path (key);
+}
+
+void
+n2a::MDocGroup::save ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    for (MDoc * doc: writeQueue) doc->save ();
+    writeQueue.clear ();
+}
+
+n2a::MNode &
+n2a::MDocGroup::childGet (const std::string & key)
+{
+    if (key.empty ()) throw "MDoc key must not be empty";
+    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::map<std::string, MDoc *>::iterator it = children.find (key);
+    if (it == children.end ()) return none;
+
+    MDoc * result = it->second;
+    if (! result)  // Doc is not currently loaded
+    {
+        std::filesystem::path path = pathForDoc (key);
+        if (! std::filesystem::is_regular_file (path)) return none;
+        result = new MDoc (*this, key, key);  // Assumes key==path.
+        children[key] = result;
+    }
+    return *result;
+}
+
+n2a::MNode &
+n2a::MDocGroup::childGetOrCreate (const std::string & key)
+{
+    if (key.empty ()) throw "MDoc key must not be empty";
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    MDoc * result;
+    std::map<std::string, MDoc *>::iterator it = children.find (key);
+    if (it == children.end ()) result = nullptr;
+    else                       result = it->second;
+
+    if (! result)
+    {
+        result = new MDoc (*this, key, key);  // Assumes key==path. This is overridden in MDir.
+        children[key] = result;
+        if (! std::filesystem::exists (pathForDoc (key))) result->markChanged ();  // Set the new document to save. Adds to writeQueue.
+    }
+    return *result;
+}
+
+void
+n2a::MDocGroup::childClear (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    std::map<std::string, MDoc *>::iterator it = children.find (key);
+    if (it == children.end ()) return;
+
+    MDoc * doc = it->second;
+    delete it->second;
+    children.erase (it);
+    writeQueue.erase (doc);
+    std::filesystem::remove_all (pathForFile (key));
+}
+
+void
+n2a::MDocGroup::unload (n2a::MDoc * doc)
+{
+    std::string key = doc->key ();
+    std::map<std::string, MDoc *>::iterator it = children.find (key);
+    if (it == children.end ()) return;
+    if (doc->needsWrite) doc->save ();
+    writeQueue.erase (doc);
+    delete doc;
+    children[key] = nullptr;
+}
+
+
+// class MDir ----------------------------------------------------------------
+
+n2a::MDir::MDir (const std::filesystem::path & root, const char * suffix)
+:   root (root)
+{
+    loaded = false;
+    if (suffix) this->suffix = suffix;
+}
+
+n2a::MDir::MDir (const std::string & name, const std::filesystem::path & root, const char * suffix)
+:   MDocGroup (name.c_str ()),
+    root (root)
+{
+    loaded = false;
+    if (suffix) this->suffix = suffix;
+}
+
+std::string
+n2a::MDir::key () const
+{
+    if (name.empty ()) return root;
+    return name;
+}
+
+std::string
+n2a::MDir::getOrDefault (const std::string & defaultValue) const
+{
+    return root;
+}
+
+void
+n2a::MDir::clear ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    MDocGroup::clear ();
+    std::filesystem::remove_all (root);  // It's OK to delete this directory, since it will be re-created by the next MDoc that gets saved.
+}
+
+int
+n2a::MDir::size ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    load ();
+    return children.size ();
+}
+
+bool
+n2a::MDir::data () const
+{
+    return true;
+}
+
+n2a::MNode::Iterator
+n2a::MDir::begin ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    load ();
+    return MDocGroup::begin ();
+}
+
+n2a::MNode::Iterator
+n2a::MDir::end ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    load ();
+    return MDocGroup::end ();
+}
+
+std::filesystem::path
+n2a::MDir::pathForDoc (const std::string & key) const
+{
+    if (suffix.empty ()) return root / key;
+    return                      root / key / suffix;
+}
+
+std::filesystem::path
+n2a::MDir::pathForFile (const std::string & key) const
+{
+    return root / key;
+}
+
+void
+n2a::MDir::load ()
+{
+    if (loaded) return;  // as a boolean, presumably "loaded" is sufficiently atomic to avoid taking a lock just to check
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    // Scan directory.
+    std::map<std::string, MDoc *, Order> newChildren;
+    std::map<std::string, MDoc *>::iterator end = children.end ();
+    for (auto const & entry : std::filesystem::directory_iterator (root))
+    {
+        const std::filesystem::path & path = entry.path ();
+        const std::string & key = path.stem ();
+        if (key[0] == '.') continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
+        if (! suffix.empty ()  &&  ! std::filesystem::is_directory (path)) continue;  // Only permit directories when suffix is defined.
+
+        // Add child to collection.
+        // Keep object identity of any active MDoc.
+        // Some MDocs could get lost if they aren't currently listed in the directory.
+        // This would only happen if another process is messing with the directory.
+        std::map<std::string, MDoc *>::iterator it = children.find (key);
+        if (it == end) newChildren[key] = nullptr;
+        else           newChildren[key] = it->second;
+    }
+
+    // Include newly-created docs that have never been flushed to disk.
+    for (MDoc * doc : writeQueue)
+    {
+        const std::string & key = doc->key ();
+        newChildren[key] = children[key];
+    }
+    children = newChildren;
+
+    loaded = true;
+}
+
+n2a::MNode &
+n2a::MDir::childGet (const std::string & key)
+{
+    if (key.empty ()) throw "MDoc key must not be empty";
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    std::map<std::string, MDoc *>::iterator it = children.find (key);
+    if (it == children.end ()) return none;
+
+    MDoc * result = it->second;
+    if (! result)  // Doc is not currently loaded
+    {
+        std::filesystem::path path = pathForDoc (key);
+        if (! std::filesystem::exists (path))
+        {
+            if (suffix.empty ()) return none;
+            // Allow the possibility that the dir exists but lacks its special file.
+            if (! std::filesystem::exists (path.parent_path ())) return none;
+        }
+        result = new MDoc (*this, key, key);  // Assumes key==path.
+        children[key] = result;
+    }
+    return *result;
 }
 
 

@@ -11,7 +11,6 @@ import java.lang.ref.SoftReference;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map.Entry;
 
@@ -289,7 +288,7 @@ public class MDir extends MDocGroup
     public synchronized Iterator<MNode> iterator ()
     {
         load ();
-        return new IteratorWrapper (new ArrayList<String> (children.keySet ()));  // Duplicate the keys, to avoid concurrent modification
+        return super.iterator ();
     }
 
     public synchronized void load ()

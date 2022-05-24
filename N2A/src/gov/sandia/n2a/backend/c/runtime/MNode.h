@@ -20,11 +20,14 @@ the U.S. Government retains certain rights in this software.
 #include <strings.h>
 #include <vector>
 #include <map>
+#include <set>
 #include <unordered_set>
 #include <mutex>
 #include <cmath>
 #include <sstream>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 
 
 namespace n2a
@@ -34,12 +37,16 @@ namespace n2a
     // (Everything is an MNode, so we don't have a specific bit for that.)
     #define MVolatileID    0x01
     #define MPersistentID  0x02
-    #define MDoc           0x04
+    #define MDocID         0x04
     #define MDocGroupID    0x08
     #define MDirID         0x10
 
     class MNode;
     class MVolatile;
+    class MPersistent;
+    class MDoc;
+    class MDocGroup;
+    class MDir;
     class Schema;
     class Schema2;
     class LineReader;
@@ -57,11 +64,6 @@ namespace n2a
     class MNode
     {
     public:
-        // Certain functions/data should only be access by one thread at a time.
-        // These are node-specific, so every node has a mutex.
-        // If memory or other resource utilization becomes an issue, this object could be made static.
-        // That would force serial access even on independent data.
-        std::recursive_mutex mutex;
         static MNode none;  // For return values, indicating node does not exist. Iterating over none will produce no children.
 
         virtual ~MNode ();
@@ -107,23 +109,6 @@ namespace n2a
         **/
         MNode & lca (const MNode & that) const;
 
-    protected:  // Internal functions for manipulating children.
-        /**
-            Returns the child indicated by the given key, or none if it doesn't exist.
-        **/
-        virtual MNode & childGet (const std::string & key) const;
-
-        /**
-            Retrieves the child indicated by the given key, or creates it if nonexistent.
-        **/
-        virtual MNode & childGetOrCreate (const std::string & key);
-
-        /**
-            Removes child with the given key, if it exists.
-        **/
-        virtual void childClear (const std::string & key);
-
-    public:
         /**
             Returns a child node from arbitrary depth, or none if any part of the path doesn't exist.
         **/
@@ -527,42 +512,310 @@ namespace n2a
         bool structureEquals (MNode & that);
 
         std::string toString ();
+
+        friend MDoc;
+
+    protected:
+        /**
+            Certain functions/data should only be access by one thread at a time.
+            These are node-specific, so every node has a mutex.
+            If memory or other resource utilization becomes an issue, this object could be made static.
+            That would force serial access even on independent data.
+        **/
+        std::recursive_mutex mutex;
+
+        // Internal functions for manipulating children ...
+
+        /**
+            Returns the child indicated by the given key, or none if it doesn't exist.
+        **/
+        virtual MNode & childGet (const std::string & key) const;
+
+        /**
+            Retrieves the child indicated by the given key, or creates it if nonexistent.
+        **/
+        virtual MNode & childGetOrCreate (const std::string & key);
+
+        /**
+            Removes child with the given key, if it exists.
+        **/
+        virtual void childClear (const std::string & key);
     };
 
     class MVolatile : public MNode
     {
     public:
+        MVolatile (const char * value = 0, const char * name = 0, MNode * container = 0);
+        virtual ~MVolatile ();  ///< frees memory used by children
+        virtual uint32_t classID () const;
+
+        virtual std::string key          () const;
+        virtual MNode &     parent       () const;
+        virtual void        clear        ();
+        virtual int         size         () const;
+        virtual bool        data         () const;
+        virtual std::string getOrDefault (const std::string & defaultValue) const;
+        virtual void        set          (const char * value);  ///< copies the memory, on assumption that the caller could delete it
+        virtual void        move         (const std::string & fromKey, const std::string & toKey);  ///< If you already hold a reference to the node named by fromKey, then that reference remains valid and its key is updated.
+        virtual Iterator    begin        () const;
+        virtual Iterator    end          () const;
+
+        // C++ name resolution
+        using MNode::clear;
+        using MNode::data;
+        using MNode::getOrDefault;
+        using MNode::set;
+
+        friend MPersistent;
+
+    protected:
         std::string                            name;
         char *                                 value;     ///< Our own local copy of string. We are responsible to manage this memory. We use char * rather than std::string so this value can be null, not merely empty.
         MNode *                                container;
         std::map<const char *, MNode *, Order> children;  // Children are always a subclass of MVolatile. As long as a child exists, we can simply hold a pointer to its name.
 
-        MVolatile (const char * value = 0, const char * name = 0, MNode * container = 0);
-        virtual ~MVolatile ();  ///< frees memory used by children
+        virtual MNode & childGet         (const std::string & key) const;
+        virtual MNode & childGetOrCreate (const std::string & key);
+        virtual void    childClear       (const std::string & key);
+    };
+
+    class MPersistent : public MVolatile
+    {
+    public:
+        MPersistent (MNode * container, const char * value = 0, const char * key = 0);
         virtual uint32_t classID () const;
 
-        virtual std::string key              () const;
-        virtual MNode &     parent           () const;
-    protected:
-        virtual MNode &     childGet         (const std::string & key) const;
-        virtual MNode &     childGetOrCreate (const std::string & key);
-        virtual void        childClear       (const std::string & key);
-    public:
-        virtual void        clear            ();
-        virtual int         size             () const;
-        virtual bool        data             () const;
-        virtual std::string getOrDefault     (const std::string & defaultValue) const;
-        virtual void        set              (const char * value);  ///< copies the memory, on assumption that the caller could delete it
-        virtual void        move             (const std::string & fromKey, const std::string & toKey);  ///< If you already hold a reference to the node named by fromKey, then that reference remains valid and its key is updated.
-        virtual Iterator    begin            () const;
-        virtual Iterator    end              () const;
+        virtual void markChanged  ();
+        virtual void clearChanged ();
+        virtual void clear        ();
+        virtual void set          (const char * value);
+        virtual void move         (const std::string & fromKey, const std::string & toKey);
 
-        // C++ name resolution
-        using MNode::child;
         using MNode::clear;
+        using MNode::set;
+
+    protected:
+        bool needsWrite; ///< indicates that this node is new or has changed since it was last read from disk (and therefore should be written out)
+
+        virtual MNode & childGetOrCreate (const std::string & key);
+        virtual void    childClear       (const std::string & key);
+    };
+
+    /**
+        Stores a document in memory and coordinates with its persistent form on disk.
+        We assume that only one instance of this class exists for a given disk document
+        at any given moment, and that no other process in the system modifies the file on disk.
+
+        We inherit the value field from MVolatile. Since we don't really have a direct value,
+        we store a copy of the file name there. This is used to implement several functions, such
+        as renaming. It also allows an instance to stand alone, without being a child of an MDir.
+
+        We inherit the children collection from MVolatile. This field is left null until we first
+        read in the associated file on disk. If the file is empty or non-existent, children becomes
+        non-null but empty. Thus, whether children is null or not safely indicates the need to load.
+    **/
+    class MDoc : public MPersistent
+    {
+    public:
+        /**
+            Constructs a stand-alone document with blank key.
+            In this case, the value contains the full path to the file on disk.
+        **/
+        MDoc (const std::filesystem::path & path);
+
+        /**
+            Constructs a stand-alone document with specified key.
+            In this case, the value contains the full path to the file on disk.
+        **/
+        MDoc (const std::filesystem::path & path, const std::string & key);
+
+        virtual uint32_t classID () const;
+        virtual void markChanged ();
+        virtual int size ();
+        virtual bool data ();
+
+        /**
+            The value of an MDoc is defined to be its full path on disk.
+            Note that the key for an MDoc depends on what kind of collection contains it.
+            In an MDir, the key is the primary file name (without path prefix and suffix).
+            For a stand-alone document the key is arbitrary, and the document may be stored
+            in another MNode with arbitrary other objects.
+        **/
+        virtual std::string getOrDefault (const std::string & defaultValue);
+
+        /**
+            If this is a stand-alone document, then move the file on disk.
+            Otherwise, do nothing. DeleteDoc.undo() relies on this class to do nothing for a regular doc,
+            because it uses merge() to restore the data, and merge() will touch the root value.
+        **/
+        virtual void set (const char * value);
+
+        virtual void move (const std::string & fromKey, const std::string & toKey);
+        virtual Iterator begin ();
+        virtual Iterator end ();
+        std::filesystem::path path () const;
+
+        /**
+            We only load once. We assume no other process is modifying the files, so once loaded, we know its exact state.
+        **/
+        void load ();
+
+        void save ();
+
+        /**
+            Removes this document from persistent storage, but retains its contents in memory.
+        **/
+        void deleteFile () const;
+
         using MNode::data;
         using MNode::getOrDefault;
         using MNode::set;
+
+        friend MDocGroup;
+        friend MDir;
+
+    protected:
+        bool needsRead;  ///< Indicates whether initial load has been done.
+
+        /**
+            Constructs a document as a child of an MDocGroup.
+            In this case, "path" is the full path to the file on disk.
+            The default implementation of MDocGroup also sets key to the full path.
+        **/
+        MDoc (MDocGroup & container, const std::string & path, const std::string & key);
+
+        /**
+            Constructs a document as a child of an MDir.
+            In this case, the key contains the file name in the dir, and the full path is constructed
+            when needed using information from the parent.
+        **/
+        MDoc (MDir & container, const std::string & key);
+
+        virtual MNode & childGet         (const std::string & key);
+        virtual MNode & childGetOrCreate (const std::string & key);
+        virtual void    childClear       (const std::string & key);
+    };
+
+    /**
+        Holds a collection of MDocs and ensures that any changes get written out to disk.
+        Assumes that the MDocs are at random places in the file system, and that the key contains the full path.
+        MDir makes the stronger assumption that all files share the same directory, so the key only contains the file name.
+
+        This node takes responsibility for the memory used by all MDocs it holds.
+        The original Java code uses soft references to allow MDocs to be garbage collected when
+        they're not in use, while assuring object identity while they are. To do something
+        equivalent in C++, you would have to use a weak_ptr for all node handling, which makes
+        for ugly code. Instead, there is a function for explicitly releasing an MDoc.
+        If you retrieve it again later, it will be recreated from file.
+    **/
+    class MDocGroup : public MNode
+    {
+    public:
+        MDocGroup (const char * key = 0);
+
+        virtual std::string key          () const;
+        virtual std::string getOrDefault (const std::string & defaultValue) const;
+
+        /**
+            Empty this group of all files.
+            Files themselves will not be deleted.
+            However, subclass MDir does delete the entire directory from disk.
+        **/
+        virtual void clear ();
+
+        virtual int size () const;
+
+        /**
+            Renames an MDoc on disk.
+            If you already hold a reference to the MDoc named by fromKey, then that reference remains valid
+            after the move.
+        **/
+        virtual void move (const std::string & fromKey, const std::string & toKey);
+
+        virtual Iterator begin () const;
+        virtual Iterator end () const;
+
+        /**
+            Generates a path for the MDoc, based only on the key.
+            This requires making restrictive assumptions about the mapping between key and path.
+            This base class assumes the key is literally the path, as a string.
+            MDir assumes that the key is a file or subdir name within a given directory.
+        **/
+        virtual std::filesystem::path pathForDoc (const std::string & key) const;
+
+        /**
+            Similar to pathForDoc(), but gives path to the file for the purposes of moving or deleting.
+            This is different from pathForDoc() in the specific case of an MDir that has non-null suffix.
+            In that case, the file is actually a subdirectory that contains both the MDoc and possibly
+            other files.
+        **/
+        virtual std::filesystem::path pathForFile (const std::string & key) const
+        {
+            return pathForDoc (key);
+        }
+
+        void save ();
+
+        /**
+            Release a document from memory, while retaining the file on disk and our knowledge of it.
+            If the document has unsaved changes, they will be written before the memory is freed.
+        **/
+        void unload (MDoc * doc);
+
+        using MNode::clear;
+        using MNode::getOrDefault;
+
+        friend MDoc;
+
+    protected:
+        std::string                          name;  // We could be held in an even higher-level node.
+        std::map<std::string, MDoc *, Order> children;
+        std::set<MDoc *>                     writeQueue;
+
+        virtual MNode & childGet         (const std::string & key);
+        virtual MNode & childGetOrCreate (const std::string & key);
+        virtual void    childClear       (const std::string & key);
+    };
+
+    /**
+        A top-level node which maps to a directory on the file system.
+        Each child node maps to a file under this directory. However, the document file need not
+        be a direct child of this directory. Instead, some additional pathing may be added.
+        This allows the direct children of this directory to be subdirectories, and each document
+        file may be a specifically-named entry in a subdirectory.
+    **/
+    class MDir : public MDocGroup
+    {
+        MDir (                          const std::filesystem::path & root, const char * suffix = 0);
+        MDir (const std::string & name, const std::filesystem::path & root, const char * suffix = 0);
+
+        virtual std::string key          () const;
+        virtual std::string getOrDefault (const std::string & defaultValue) const;
+
+        /**
+            Empty this directory of all files.
+            This is an extremely dangerous function! It destroys all data in the directory on disk and all data pending in memory.
+        **/
+        virtual void     clear ();
+
+        virtual int      size  ();
+        virtual bool     data  () const;
+        virtual Iterator begin ();
+        virtual Iterator end   ();
+        virtual std::filesystem::path pathForDoc  (const std::string & key) const;
+        virtual std::filesystem::path pathForFile (const std::string & key) const;
+        void load ();
+
+        using MNode::clear;
+        using MNode::data;
+        using MNode::getOrDefault;
+
+    protected:
+        std::filesystem::path root;   ///< The directory containing the files or subdirs that constitute the children of this node
+        std::string           suffix; ///< Relative path to document file, or null if documents are directly under root
+        bool                  loaded; ///< Indicates that an initial read of the dir has been done. After that, it is not necessary to monitor the dir, only keep track of documents internally.
+
+        virtual MNode & childGet (const std::string & key);
     };
 
     class Schema

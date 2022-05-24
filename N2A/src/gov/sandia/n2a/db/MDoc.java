@@ -38,7 +38,7 @@ public class MDoc extends MPersistent
     **/
     protected MDoc (MDir parent, String key)
     {
-        this (parent, key, null);
+        this (parent, null, key);
     }
 
     /**
@@ -47,7 +47,7 @@ public class MDoc extends MPersistent
     **/
     public MDoc (Path path)
     {
-        this (null, null, path.toAbsolutePath ().toString ());
+        this (null, path.toAbsolutePath ().toString (), null);
     }
 
     /**
@@ -56,12 +56,12 @@ public class MDoc extends MPersistent
     **/
     public MDoc (Path path, String key)
     {
-        this (null, key, path.toAbsolutePath ().toString ());
+        this (null, path.toAbsolutePath ().toString (), key);
     }
 
-    protected MDoc (MDocGroup parent, String name, String path)
+    protected MDoc (MDocGroup parent, String path, String name)
     {
-        super (parent, name, path);
+        super (parent, path, name);
     }
 
     /**
