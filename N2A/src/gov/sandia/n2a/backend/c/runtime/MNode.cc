@@ -96,26 +96,26 @@ n2a::MNode::parent () const
 }
 
 n2a::MNode &
-n2a::MNode::root () const
+n2a::MNode::root ()
 {
-    const MNode * result = this;
+    MNode * result = this;
     while (true)
     {
         MNode & parent = result->parent ();
         if (&parent == &none) break;
         result = &parent;
     }
-    return const_cast<MNode &> (*result);
+    return *result;
 }
 
 n2a::MNode &
-n2a::MNode::lca (const MNode & that) const
+n2a::MNode::lca (MNode & that)
 {
     // Strategy: Place the ancestry of one node in a set. Then walk up the ancestry
     // of the other node. The first ancestor found in the set is the LCA.
 
-    std::unordered_set<const MNode *> thisAncestors;
-    const MNode * A = this;
+    std::unordered_set<MNode *> thisAncestors;
+    MNode * A = this;
     while (A != &none)
     {
         thisAncestors.insert (A);
@@ -123,45 +123,28 @@ n2a::MNode::lca (const MNode & that) const
     }
 
     auto end = thisAncestors.end ();
-    const MNode * B = &that;
+    MNode * B = &that;
     while (B != &none)
     {
-        if (thisAncestors.find (B) != end) return const_cast<MNode &> (*B);  // C++20 has contains(), but no need to create dependency on newer standard
+        if (thisAncestors.find (B) != end) return *B;  // C++20 has contains(), but no need to create dependency on newer standard
         B = & B->parent ();
     }
     return none;
 }
 
 n2a::MNode &
-n2a::MNode::childGet (const std::string & key) const
+n2a::MNode::child (const std::vector<std::string> & keys)
 {
-    return none;
-}
-
-n2a::MNode &
-n2a::MNode::childGetOrCreate (const std::string & key)
-{
-    throw "Attempt to create child on abstract MNode. Use MVolatile or another concrete class.";
-}
-
-void
-n2a::MNode::childClear (const std::string & key)
-{
-}
-
-n2a::MNode &
-n2a::MNode::child (const std::vector<std::string> & keys) const
-{
-    const MNode * result = this;
+    MNode * result = this;
     int count = keys.size ();
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     for (int i = 0; i < count; i++)
     {
         MNode * c = & result->childGet (keys[i]);
         if (c == &none) return none;
         result = c;
     }
-    return const_cast<MNode &> (*result);  // If no keys are specified, we return this node.
+    return *result;  // If no keys are specified, we return this node.
 }
 
 n2a::MNode &
@@ -178,9 +161,9 @@ n2a::MNode::childOrCreate (const std::vector<std::string> & keys)
 }
 
 n2a::MNode &
-n2a::MNode::childAt (int index) const
+n2a::MNode::childAt (int index)
 {
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     for (auto & c : *this) if (index-- == 0) return c;
     return none;
 }
@@ -213,25 +196,25 @@ n2a::MNode::clear (const std::vector<std::string> & keys)
 }
 
 int
-n2a::MNode::size () const
+n2a::MNode::size ()
 {
     return 0;
 }
 
 bool
-n2a::MNode::empty () const
+n2a::MNode::empty ()
 {
     return size () == 0;
 }
 
 bool
-n2a::MNode::data () const
+n2a::MNode::data ()
 {
     return false;
 }
 
 bool
-n2a::MNode::data (const std::vector<std::string> & keys) const
+n2a::MNode::data (const std::vector<std::string> & keys)
 {
     MNode & c = child (keys);
     if (&c == &none) return false;
@@ -239,7 +222,7 @@ n2a::MNode::data (const std::vector<std::string> & keys) const
 }
 
 bool
-n2a::MNode::containsKey (const std::string & key) const
+n2a::MNode::containsKey (const std::string & key)
 {
     if (& childGet (key) != &none) return true;
     for (auto & c : *this) if (c.containsKey (key)) return true;
@@ -247,13 +230,13 @@ n2a::MNode::containsKey (const std::string & key) const
 }
 
 std::string
-n2a::MNode::get () const
+n2a::MNode::get ()
 {
     return getOrDefault (std::string (""));
 }
 
 std::string
-n2a::MNode::get (const std::vector<std::string> & keys) const
+n2a::MNode::get (const std::vector<std::string> & keys)
 {
     MNode & c = child (keys);
     if (&c == &none) return "";
@@ -261,13 +244,13 @@ n2a::MNode::get (const std::vector<std::string> & keys) const
 }
 
 std::string
-n2a::MNode::getOrDefault (const std::string & defaultValue) const
+n2a::MNode::getOrDefault (const std::string & defaultValue)
 {
     return defaultValue;
 }
 
 std::string
-n2a::MNode::getOrDefault (const char * defaultValue, const std::vector<std::string> & keys) const
+n2a::MNode::getOrDefault (const char * defaultValue, const std::vector<std::string> & keys)
 {
     std::string value = get (keys);
     if (value.empty ()) return defaultValue;
@@ -275,7 +258,7 @@ n2a::MNode::getOrDefault (const char * defaultValue, const std::vector<std::stri
 }
 
 bool
-n2a::MNode::getOrDefault (bool defaultValue, const std::vector<std::string> & keys) const
+n2a::MNode::getOrDefault (bool defaultValue, const std::vector<std::string> & keys)
 {
     std::string value = get (keys);
     if (value.empty ()) return defaultValue;
@@ -286,7 +269,7 @@ n2a::MNode::getOrDefault (bool defaultValue, const std::vector<std::string> & ke
 }
 
 int
-n2a::MNode::getOrDefault (int defaultValue, const std::vector<std::string> & keys) const
+n2a::MNode::getOrDefault (int defaultValue, const std::vector<std::string> & keys)
 {
     std::string value = get (keys);
     if (value.empty ()) return defaultValue;
@@ -309,7 +292,7 @@ n2a::MNode::getOrDefault (int defaultValue, const std::vector<std::string> & key
 }
 
 long
-n2a::MNode::getOrDefault (long defaultValue, const std::vector<std::string> & keys) const
+n2a::MNode::getOrDefault (long defaultValue, const std::vector<std::string> & keys)
 {
     std::string value = get (keys);
     if (value.empty ()) return defaultValue;
@@ -332,7 +315,7 @@ n2a::MNode::getOrDefault (long defaultValue, const std::vector<std::string> & ke
 }
 
 double
-n2a::MNode::getOrDefault (double defaultValue, const std::vector<std::string> & keys) const
+n2a::MNode::getOrDefault (double defaultValue, const std::vector<std::string> & keys)
 {
     std::string value = get (keys);
     if (value.empty ()) return defaultValue;
@@ -347,7 +330,7 @@ n2a::MNode::getOrDefault (double defaultValue, const std::vector<std::string> & 
 }
 
 bool
-n2a::MNode::getFlag (const std::vector<std::string> & keys) const
+n2a::MNode::getFlag (const std::vector<std::string> & keys)
 {
     MNode & c = child (keys);
     if (&c == &none  ||  c.get () == "0") return false;
@@ -360,7 +343,7 @@ n2a::MNode::set (const char * value)
 }
 
 void
-n2a::MNode::set (const MNode & value)
+n2a::MNode::set (MNode & value)
 {
     clear ();   // get rid of all children
     set (nullptr); // ensure that if value node is undefined, result node will also be undefined
@@ -420,7 +403,7 @@ n2a::MNode::set (double value, const std::vector<std::string> & keys)
 }
 
 n2a::MNode &
-n2a::MNode::set (const MNode & value, const std::vector<std::string> & keys)
+n2a::MNode::set (MNode & value, const std::vector<std::string> & keys)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     MNode & result = childOrCreate (keys);
@@ -429,7 +412,7 @@ n2a::MNode::set (const MNode & value, const std::vector<std::string> & keys)
 }
 
 void
-n2a::MNode::merge (const MNode & that)
+n2a::MNode::merge (MNode & that)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (that.data ()) set (that.get ());
@@ -440,7 +423,7 @@ n2a::MNode::merge (const MNode & that)
 }
 
 void
-n2a::MNode::mergeUnder (const MNode & that)
+n2a::MNode::mergeUnder (MNode & that)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (! data ()  &&  that.data ()) set (that.get ());
@@ -454,7 +437,7 @@ n2a::MNode::mergeUnder (const MNode & that)
 }
 
 void
-n2a::MNode::uniqueNodes (const MNode & that)
+n2a::MNode::uniqueNodes (MNode & that)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (that.data ()) set (nullptr);
@@ -469,7 +452,7 @@ n2a::MNode::uniqueNodes (const MNode & that)
 }
 
 void
-n2a::MNode::uniqueValues (const MNode & that)
+n2a::MNode::uniqueValues (MNode & that)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (data ()  &&  that.data ()  &&  get () == that.get ()) set (nullptr);
@@ -484,7 +467,7 @@ n2a::MNode::uniqueValues (const MNode & that)
 }
 
 void
-n2a::MNode::changes (const MNode & that)
+n2a::MNode::changes (MNode & that)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (data ())
@@ -522,7 +505,7 @@ n2a::MNode::move (const std::string & fromKey, const std::string & toKey)
 }
 
 n2a::MNode::Iterator
-n2a::MNode::begin () const
+n2a::MNode::begin ()
 {
     // Same value as end(), so the iterator is already done before it gets started.
     // Obviously, this needs to be overridden in derived classes.
@@ -531,7 +514,7 @@ n2a::MNode::begin () const
 }
 
 n2a::MNode::Iterator
-n2a::MNode::end () const
+n2a::MNode::end ()
 {
     return Iterator (*this, 0);
 }
@@ -637,6 +620,23 @@ n2a::MNode::toString ()
     return writer.str ();
 }
 
+n2a::MNode &
+n2a::MNode::childGet (const std::string & key)
+{
+    return none;
+}
+
+n2a::MNode &
+n2a::MNode::childGetOrCreate (const std::string & key)
+{
+    throw "Attempt to create child on abstract MNode. Use MVolatile or another concrete class.";
+}
+
+void
+n2a::MNode::childClear (const std::string & key)
+{
+}
+
 
 // class MVolatile -----------------------------------------------------------
 
@@ -673,46 +673,6 @@ n2a::MVolatile::parent () const
     return none;
 }
 
-n2a::MNode &
-n2a::MVolatile::childGet (const std::string & key) const
-{
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
-    try
-    {
-        return * children.at (key.c_str ());
-    }
-    catch (...)  // out_of_range
-    {
-        return none;
-    }
-}
-
-n2a::MNode &
-n2a::MVolatile::childGetOrCreate (const std::string & key)
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    try
-    {
-        return * children.at (key.c_str ());  // Throws out_of_range if key doesn't exist
-    }
-    catch (...)  // key was not found
-    {
-        MVolatile * result = new MVolatile (nullptr, key.c_str (), this);
-        children[result->name.c_str ()] = result;
-        return *result;
-    }
-}
-
-void
-n2a::MVolatile::childClear (const std::string & key)
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    std::map<const char *, MNode *>::iterator it = children.find (key.c_str ());
-    if (it == children.end ()) return;
-    delete it->second;
-    children.erase (it);
-}
-
 void
 n2a::MVolatile::clear ()
 {
@@ -722,22 +682,22 @@ n2a::MVolatile::clear ()
 }
 
 int
-n2a::MVolatile::size () const
+n2a::MVolatile::size ()
 {
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     return children.size ();
 }
 
 bool
-n2a::MVolatile::data () const
+n2a::MVolatile::data ()
 {
     return value;
 }
 
 std::string
-n2a::MVolatile::getOrDefault (const std::string & defaultValue) const
+n2a::MVolatile::getOrDefault (const std::string & defaultValue)
 {
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     if (value) return value;
     return defaultValue;
 }
@@ -776,9 +736,9 @@ n2a::MVolatile::move (const std::string & fromKey, const std::string & toKey)
 }
 
 n2a::MNode::Iterator
-n2a::MVolatile::begin () const
+n2a::MVolatile::begin ()
 {
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     std::vector<std::string> keys;
     keys.reserve (children.size ());
     for (auto c : children) keys.push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
@@ -786,10 +746,50 @@ n2a::MVolatile::begin () const
 }
 
 n2a::MNode::Iterator
-n2a::MVolatile::end () const
+n2a::MVolatile::end ()
 {
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     return Iterator (*this, children.size ());
+}
+
+n2a::MNode &
+n2a::MVolatile::childGet (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    try
+    {
+        return * children.at (key.c_str ());
+    }
+    catch (...)  // out_of_range
+    {
+        return none;
+    }
+}
+
+n2a::MNode &
+n2a::MVolatile::childGetOrCreate (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    try
+    {
+        return * children.at (key.c_str ());  // Throws out_of_range if key doesn't exist
+    }
+    catch (...)  // key was not found
+    {
+        MVolatile * result = new MVolatile (nullptr, key.c_str (), this);
+        children[result->name.c_str ()] = result;
+        return *result;
+    }
+}
+
+void
+n2a::MVolatile::childClear (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    std::map<const char *, MNode *>::iterator it = children.find (key.c_str ());
+    if (it == children.end ()) return;
+    delete it->second;
+    children.erase (it);
 }
 
 
@@ -798,6 +798,7 @@ n2a::MVolatile::end () const
 n2a::MPersistent::MPersistent (n2a::MNode * container, const char * value, const char * key)
 :   MVolatile (value, key, container)
 {
+    needsWrite = false;
 }
 
 uint32_t
@@ -828,31 +829,6 @@ n2a::MPersistent::clear ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     MVolatile::clear ();
-    markChanged ();
-}
-
-n2a::MNode &
-n2a::MPersistent::childGetOrCreate (const std::string & key)
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    try
-    {
-        return * children.at (key.c_str ());  // Throws out_of_range if key doesn't exist
-    }
-    catch (...)  // key was not found
-    {
-        markChanged ();  // This is the only difference in this code compared to MVolatile::childGetOrCreate().
-        MVolatile * result = new MVolatile (nullptr, key.c_str (), this);
-        children[result->name.c_str ()] = result;
-        return *result;
-    }
-}
-
-void
-n2a::MPersistent::childClear (const std::string & key)
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    MVolatile::childClear (key);
     markChanged ();
 }
 
@@ -903,6 +879,31 @@ n2a::MPersistent::move (const std::string & fromKey, const std::string & toKey)
         keep->markChanged ();
         markChanged ();
     }
+}
+
+n2a::MNode &
+n2a::MPersistent::childGetOrCreate (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    try
+    {
+        return * children.at (key.c_str ());  // Throws out_of_range if key doesn't exist
+    }
+    catch (...)  // key was not found
+    {
+        markChanged ();
+        MPersistent * result = new MPersistent (this, nullptr, key.c_str ());
+        children[result->name.c_str ()] = result;
+        return *result;
+    }
+}
+
+void
+n2a::MPersistent::childClear (const std::string & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    MVolatile::childClear (key);
+    markChanged ();
 }
 
 
@@ -1022,9 +1023,9 @@ n2a::MDoc::end ()
 }
 
 std::filesystem::path
-n2a::MDoc::path () const
+n2a::MDoc::path ()
 {
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     if (container  &&  container->classID () & MDocGroupID) return ((MDocGroup *) container)->pathForDoc (name);
     return value;  // for stand-alone document
 }
@@ -1034,7 +1035,7 @@ n2a::MDoc::load ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (! needsRead) return;  // already loaded
-    needsRead  = false;
+    needsRead  = false; // prevent re-entrant call when creating nodes
     needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
     std::filesystem::path file = path ();
     try
@@ -1072,26 +1073,30 @@ n2a::MDoc::save ()
 void
 n2a::MDoc::deleteFile () const
 {
-    if (container)
+    std::filesystem::path path;
+    if (container  &&  container->classID () & MDocGroupID)
     {
-        container->childClear (name);
-        return;
+        path = ((MDocGroup *) container)->pathForFile (name);
+    }
+    else
+    {
+        path = value;
     }
 
     try
     {
-        std::filesystem::remove (value);
+        std::filesystem::remove (path);
     }
     catch (...)
     {
-        std::cerr << "Failed to delete file: " << value << std::endl;
+        std::cerr << "Failed to delete file: " << path << std::endl;
     }
 }
 
 n2a::MNode &
 n2a::MDoc::childGet (const std::string & key)
 {
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     if (needsRead) load ();
     return MPersistent::childGet (key);
 
@@ -1117,8 +1122,14 @@ n2a::MDoc::childClear (const std::string & key)
 // class MDocGroup -----------------------------------------------------------
 
 n2a::MDocGroup::MDocGroup (const char * key)
-:   name (key)
 {
+    if (key) name = key;
+}
+
+n2a::MDocGroup::~MDocGroup ()
+{
+    for (MDoc * doc: writeQueue) doc->save ();
+    for (auto c : children) delete c.second;
 }
 
 std::string
@@ -1128,7 +1139,7 @@ n2a::MDocGroup::key () const
 }
 
 std::string
-n2a::MDocGroup::getOrDefault (const std::string & defaultValue) const
+n2a::MDocGroup::getOrDefault (const std::string & defaultValue)
 {
     return defaultValue;
 }
@@ -1143,9 +1154,9 @@ n2a::MDocGroup::clear ()
 }
 
 int
-n2a::MDocGroup::size () const
+n2a::MDocGroup::size ()
 {
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     return children.size ();
 }
 
@@ -1186,9 +1197,9 @@ n2a::MDocGroup::move (const std::string & fromKey, const std::string & toKey)
 }
 
 n2a::MNode::Iterator
-n2a::MDocGroup::begin () const
+n2a::MDocGroup::begin ()
 {
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     std::vector<std::string> keys;
     keys.reserve (children.size ());
     for (auto c : children) keys.push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
@@ -1196,9 +1207,9 @@ n2a::MDocGroup::begin () const
 }
 
 n2a::MNode::Iterator
-n2a::MDocGroup::end () const
+n2a::MDocGroup::end ()
 {
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     return Iterator (*this, children.size ());
 }
 
@@ -1220,7 +1231,7 @@ n2a::MNode &
 n2a::MDocGroup::childGet (const std::string & key)
 {
     if (key.empty ()) throw "MDoc key must not be empty";
-    std::lock_guard<std::recursive_mutex> lock (const_cast<std::recursive_mutex &> (mutex));
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     std::map<std::string, MDoc *>::iterator it = children.find (key);
     if (it == children.end ()) return none;
 
@@ -1284,19 +1295,12 @@ n2a::MDocGroup::unload (n2a::MDoc * doc)
 
 // class MDir ----------------------------------------------------------------
 
-n2a::MDir::MDir (const std::filesystem::path & root, const char * suffix)
-:   root (root)
-{
-    loaded = false;
-    if (suffix) this->suffix = suffix;
-}
-
-n2a::MDir::MDir (const std::string & name, const std::filesystem::path & root, const char * suffix)
-:   MDocGroup (name.c_str ()),
+n2a::MDir::MDir (const std::filesystem::path & root, const char * suffix, const char * key)
+:   MDocGroup (key),
     root (root)
 {
-    loaded = false;
     if (suffix) this->suffix = suffix;
+    loaded = false;
 }
 
 std::string
@@ -1307,7 +1311,7 @@ n2a::MDir::key () const
 }
 
 std::string
-n2a::MDir::getOrDefault (const std::string & defaultValue) const
+n2a::MDir::getOrDefault (const std::string & defaultValue)
 {
     return root;
 }
@@ -1329,7 +1333,7 @@ n2a::MDir::size ()
 }
 
 bool
-n2a::MDir::data () const
+n2a::MDir::data ()
 {
     return true;
 }
@@ -1469,7 +1473,7 @@ n2a::Schema::read (std::istream & reader)
 }
 
 void
-n2a::Schema::writeAll (const MNode & node, std::ostream & writer)
+n2a::Schema::writeAll (MNode & node, std::ostream & writer)
 {
     write (writer);
     for (auto & c : node) write (c, writer, "");
@@ -1484,7 +1488,7 @@ n2a::Schema::write (std::ostream & writer)
 }
 
 void
-n2a::Schema::write (const MNode & node, std::ostream & writer)
+n2a::Schema::write (MNode & node, std::ostream & writer)
 {
     write (node, writer, "");
 }
@@ -1504,12 +1508,16 @@ n2a::LineReader::getNextLine ()
     // Scan for non-empty line
     while (true)
     {
-        getline (reader, line);
+        std::getline (reader, line);  // default line ending is NL
         if (! reader.good ())
         {
             whitespaces = -1;
             return;
         }
+
+        int count = line.length ();
+        if (count == 0) continue;
+        if (line[count-1] == '\r') line.resize (count - 1);  // Get rid of CR. Should work for every platform except older MacOS.
         if (! line.empty ()) break;
     }
 
@@ -1548,6 +1556,7 @@ n2a::Schema2::read (MNode & node, LineReader & reader, int whitespaces)
         std::string line = trim (reader.line);
         std::string key;
         std::string value;
+        bool hasValue = false;
         bool escape =  line[0] == '"';
         int i = escape ? 1 : 0;
         int last = line.length () - 1;
@@ -1575,6 +1584,7 @@ n2a::Schema2::read (MNode & node, LineReader & reader, int whitespaces)
                 if (c == ':')
                 {
                     value = trim (line.substr (i+1));
+                    hasValue = true;
                     break;
                 }
             }
@@ -1602,17 +1612,17 @@ n2a::Schema2::read (MNode & node, LineReader & reader, int whitespaces)
         {
             reader.getNextLine ();
         }
-        MNode & child = node.set (value.c_str (), {key});  // Create a child with the given value
+        MNode & child = node.set (hasValue ? value.c_str () : nullptr, {key});  // Create a child with the given value
         if (reader.whitespaces > whitespaces) read (child, reader, reader.whitespaces);  // Recursively populate child. When this call returns, reader.whitespaces <= whitespaces in this function, because that is what ends the recursion.
         if (reader.whitespaces < whitespaces) return;  // end recursion
     }
 }
 
 void
-n2a::Schema2::write (const MNode & node, std::ostream & writer, const std::string & indent)
+n2a::Schema2::write (MNode & node, std::ostream & writer, const std::string & indent)
 {
     std::string key = node.key ();
-    if (key[0] == '\"'  ||  key.find_first_of (":") != std::string::npos)  // key contains forbidden characters
+    if (key[0] == '\"'  ||  key.find_first_of (':') != std::string::npos)  // key contains forbidden characters
     {
         // Quote the key. Any internal quote marks must be escaped.
         // We use quote as its own escape, avoiding the need to escape a second code (such as both quote and backslash).
@@ -1638,7 +1648,7 @@ n2a::Schema2::write (const MNode & node, std::ostream & writer, const std::strin
     {
         writer << indent << key << ":";
         const std::string & value = node.get ();
-        if (value.find_first_of ("\n") == std::string::npos)
+        if (value.find_first_of ('\n') == std::string::npos)
         {
             writer << value << std::endl;
         }
@@ -1649,7 +1659,7 @@ n2a::Schema2::write (const MNode & node, std::ostream & writer, const std::strin
             std::string::size_type current = 0;
             while (true)
             {
-                std::string::size_type next = value.find_first_of ("\n", current);
+                std::string::size_type next = value.find_first_of ('\n', current);
                 writer << indent << " ";
                 if (next == std::string::npos)
                 {
