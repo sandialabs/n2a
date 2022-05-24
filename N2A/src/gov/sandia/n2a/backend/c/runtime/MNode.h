@@ -527,14 +527,11 @@ namespace n2a
         // Internal functions for manipulating children ...
 
         /**
-            Returns the child indicated by the given key, or none if it doesn't exist.
+            Returns the child indicated by the given key.
+            @param create Changes behavior when key is not found. By default, this
+            method returns "none". If true, a new node will be created and returned.
         **/
-        virtual MNode & childGet (const std::string & key);
-
-        /**
-            Retrieves the child indicated by the given key, or creates it if nonexistent.
-        **/
-        virtual MNode & childGetOrCreate (const std::string & key);
+        virtual MNode & childGet (const std::string & key, bool create = false);
 
         /**
             Removes child with the given key, if it exists.
@@ -574,9 +571,8 @@ namespace n2a
         MNode *                                container;
         std::map<const char *, MNode *, Order> children;  // Children are always a subclass of MVolatile. As long as a child exists, we can simply hold a pointer to its name.
 
-        virtual MNode & childGet         (const std::string & key);
-        virtual MNode & childGetOrCreate (const std::string & key);
-        virtual void    childClear       (const std::string & key);
+        virtual MNode & childGet   (const std::string & key, bool create = false);
+        virtual void    childClear (const std::string & key);
     };
 
     class MPersistent : public MVolatile
@@ -597,8 +593,8 @@ namespace n2a
     protected:
         bool needsWrite; ///< indicates that this node is new or has changed since it was last read from disk (and therefore should be written out)
 
-        virtual MNode & childGetOrCreate (const std::string & key);
-        virtual void    childClear       (const std::string & key);
+        virtual MNode & childGet   (const std::string & key, bool create = false);
+        virtual void    childClear (const std::string & key);
     };
 
     /**
@@ -622,18 +618,16 @@ namespace n2a
             In this case, the value contains the full path to the file on disk.
         **/
         MDoc (const std::filesystem::path & path);
-
         /**
             Constructs a stand-alone document with specified key.
             In this case, the value contains the full path to the file on disk.
         **/
         MDoc (const std::filesystem::path & path, const std::string & key);
-
         virtual uint32_t classID () const;
-        virtual void markChanged ();
-        virtual int size ();
-        virtual bool data ();
 
+        virtual void markChanged ();
+        virtual int  size        ();
+        virtual bool data        ();
         /**
             The value of an MDoc is defined to be its full path on disk.
             Note that the key for an MDoc depends on what kind of collection contains it.
@@ -642,26 +636,22 @@ namespace n2a
             in another MNode with arbitrary other objects.
         **/
         virtual std::string getOrDefault (const std::string & defaultValue);
-
         /**
             If this is a stand-alone document, then move the file on disk.
             Otherwise, do nothing. DeleteDoc.undo() relies on this class to do nothing for a regular doc,
             because it uses merge() to restore the data, and merge() will touch the root value.
         **/
-        virtual void set (const char * value);
-
-        virtual void move (const std::string & fromKey, const std::string & toKey);
+        virtual void     set   (const char * value);
+        virtual void     move  (const std::string & fromKey, const std::string & toKey);
         virtual Iterator begin ();
-        virtual Iterator end ();
-        std::filesystem::path path ();  ///< subroutine of load() and save()
+        virtual Iterator end   ();
 
+        std::filesystem::path path ();  ///< subroutine of load() and save()
         /**
             We only load once. We assume no other process is modifying the files, so once loaded, we know its exact state.
         **/
         void load ();
-
         void save ();
-
         /**
             Removes this document from persistent storage, but retains its contents in memory.
         **/
@@ -691,9 +681,8 @@ namespace n2a
         **/
         MDoc (MDir & container, const std::string & key);
 
-        virtual MNode & childGet         (const std::string & key);
-        virtual MNode & childGetOrCreate (const std::string & key);
-        virtual void    childClear       (const std::string & key);
+        virtual MNode & childGet   (const std::string & key, bool create = false);
+        virtual void    childClear (const std::string & key);
     };
 
     /**
@@ -721,26 +710,22 @@ namespace n2a
 
         virtual std::string key          () const;
         virtual std::string getOrDefault (const std::string & defaultValue);
-
         /**
             Empty this group of all documents.
             In the base implementation, the files themselves will not be deleted.
             OTOH, MDir does delete the entire directory from disk.
             All pending changes will be lost.
         **/
-        virtual void clear ();
-
-        virtual int size ();
-
+        virtual void        clear ();
+        virtual int         size  ();
         /**
             Renames an MDoc on disk.
             If you already hold a reference to the MDoc named by fromKey, then that reference remains valid
             after the move.
         **/
-        virtual void move (const std::string & fromKey, const std::string & toKey);
-
-        virtual Iterator begin ();
-        virtual Iterator end ();
+        virtual void        move  (const std::string & fromKey, const std::string & toKey);
+        virtual Iterator    begin ();
+        virtual Iterator    end   ();
 
         /**
             Generates a path for the MDoc, based only on the key.
@@ -749,7 +734,6 @@ namespace n2a
             MDir assumes that the key is a file or subdir name within a given directory.
         **/
         virtual std::filesystem::path pathForDoc (const std::string & key) const;
-
         /**
             Similar to pathForDoc(), but gives path to the file for the purposes of moving or deleting.
             This is different from pathForDoc() in the specific case of an MDir that has non-null suffix.
@@ -760,12 +744,10 @@ namespace n2a
         {
             return pathForDoc (key);
         }
-
         /**
             Writes pending changes to disk.
         **/
         void save ();
-
         /**
             Release a document from memory, while retaining the file on disk and our knowledge of it.
             If the document has unsaved changes, they will be written before the memory is freed.
@@ -782,9 +764,8 @@ namespace n2a
         std::map<std::string, MDoc *, Order> children;
         std::set<MDoc *>                     writeQueue;
 
-        virtual MNode & childGet         (const std::string & key);
-        virtual MNode & childGetOrCreate (const std::string & key);
-        virtual void    childClear       (const std::string & key);
+        virtual MNode & childGet   (const std::string & key, bool create = false);
+        virtual void    childClear (const std::string & key);
     };
 
     /**
@@ -825,7 +806,7 @@ namespace n2a
         std::string           suffix; ///< Relative path to document file, or null if documents are directly under root
         bool                  loaded; ///< Indicates that an initial read of the dir has been done. After that, it is not necessary to monitor the dir, only keep track of documents internally.
 
-        virtual MNode & childGet (const std::string & key);
+        virtual MNode & childGet (const std::string & key, bool create = false);
     };
 
     class Schema

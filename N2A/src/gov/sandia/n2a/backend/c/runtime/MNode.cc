@@ -155,7 +155,7 @@ n2a::MNode::childOrCreate (const std::vector<std::string> & keys)
     std::lock_guard<std::recursive_mutex> lock (mutex);
     for (int i = 0; i < count; i++)
     {
-        result = & result->childGetOrCreate (keys[i]);
+        result = & result->childGet (keys[i], true);
     }
     return *result;
 }
@@ -418,7 +418,7 @@ n2a::MNode::merge (MNode & that)
     if (that.data ()) set (that.get ());
     for (auto & thatChild : that)
     {
-        childGetOrCreate (thatChild.key ()).merge (thatChild);
+        childGet (thatChild.key (), true).merge (thatChild);
     }
 }
 
@@ -500,7 +500,7 @@ n2a::MNode::move (const std::string & fromKey, const std::string & toKey)
     childClear (toKey);
     MNode & source = childGet (fromKey);
     if (&source == &none) return;
-    childGetOrCreate (toKey).merge (source);
+    childGet (toKey, true).merge (source);
     childClear (fromKey);
 }
 
@@ -621,15 +621,10 @@ n2a::MNode::toString ()
 }
 
 n2a::MNode &
-n2a::MNode::childGet (const std::string & key)
+n2a::MNode::childGet (const std::string & key, bool create)
 {
+    if (create) throw "Attempt to create child on abstract MNode. Use MVolatile or another concrete class.";
     return none;
-}
-
-n2a::MNode &
-n2a::MNode::childGetOrCreate (const std::string & key)
-{
-    throw "Attempt to create child on abstract MNode. Use MVolatile or another concrete class.";
 }
 
 void
@@ -753,21 +748,7 @@ n2a::MVolatile::end ()
 }
 
 n2a::MNode &
-n2a::MVolatile::childGet (const std::string & key)
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    try
-    {
-        return * children.at (key.c_str ());
-    }
-    catch (...)  // out_of_range
-    {
-        return none;
-    }
-}
-
-n2a::MNode &
-n2a::MVolatile::childGetOrCreate (const std::string & key)
+n2a::MVolatile::childGet (const std::string & key, bool create)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     try
@@ -776,6 +757,7 @@ n2a::MVolatile::childGetOrCreate (const std::string & key)
     }
     catch (...)  // key was not found
     {
+        if (! create) return none;
         MVolatile * result = new MVolatile (nullptr, key.c_str (), this);
         children[result->name.c_str ()] = result;
         return *result;
@@ -882,7 +864,7 @@ n2a::MPersistent::move (const std::string & fromKey, const std::string & toKey)
 }
 
 n2a::MNode &
-n2a::MPersistent::childGetOrCreate (const std::string & key)
+n2a::MPersistent::childGet (const std::string & key, bool create)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     try
@@ -891,6 +873,7 @@ n2a::MPersistent::childGetOrCreate (const std::string & key)
     }
     catch (...)  // key was not found
     {
+        if (! create) return none;
         markChanged ();
         MPersistent * result = new MPersistent (this, nullptr, key.c_str ());
         children[result->name.c_str ()] = result;
@@ -1094,20 +1077,12 @@ n2a::MDoc::deleteFile () const
 }
 
 n2a::MNode &
-n2a::MDoc::childGet (const std::string & key)
+n2a::MDoc::childGet (const std::string & key, bool create)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (needsRead) load ();
-    return MPersistent::childGet (key);
+    return MPersistent::childGet (key, create);
 
-}
-
-n2a::MNode &
-n2a::MDoc::childGetOrCreate (const std::string & key)
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    if (needsRead) load ();
-    return MPersistent::childGetOrCreate (key);
 }
 
 void
@@ -1228,40 +1203,28 @@ n2a::MDocGroup::save ()
 }
 
 n2a::MNode &
-n2a::MDocGroup::childGet (const std::string & key)
-{
-    if (key.empty ()) throw "MDoc key must not be empty";
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    std::map<std::string, MDoc *>::iterator it = children.find (key);
-    if (it == children.end ()) return none;
-
-    MDoc * result = it->second;
-    if (! result)  // Doc is not currently loaded
-    {
-        std::filesystem::path path = pathForDoc (key);
-        if (! std::filesystem::is_regular_file (path)) return none;
-        result = new MDoc (*this, key, key);  // Assumes key==path.
-        children[key] = result;
-    }
-    return *result;
-}
-
-n2a::MNode &
-n2a::MDocGroup::childGetOrCreate (const std::string & key)
+n2a::MDocGroup::childGet (const std::string & key, bool create)
 {
     if (key.empty ()) throw "MDoc key must not be empty";
     std::lock_guard<std::recursive_mutex> lock (mutex);
 
     MDoc * result;
     std::map<std::string, MDoc *>::iterator it = children.find (key);
-    if (it == children.end ()) result = nullptr;
-    else                       result = it->second;
+    if (it == children.end ())
+    {
+        if (! create) return none;
+        result = nullptr;
+    }
+    else
+    {
+        result = it->second;
+    }
 
     if (! result)
     {
         result = new MDoc (*this, key, key);  // Assumes key==path. This is overridden in MDir.
         children[key] = result;
-        if (! std::filesystem::exists (pathForDoc (key))) result->markChanged ();  // Set the new document to save. Adds to writeQueue.
+        if (create  &&  ! std::filesystem::exists (pathForDoc (key))) result->markChanged ();  // Set the new document to save. Adds to writeQueue.
     }
     return *result;
 }
@@ -1404,18 +1367,28 @@ n2a::MDir::load ()
 }
 
 n2a::MNode &
-n2a::MDir::childGet (const std::string & key)
+n2a::MDir::childGet (const std::string & key, bool create)
 {
     if (key.empty ()) throw "MDoc key must not be empty";
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    std::map<std::string, MDoc *>::iterator it = children.find (key);
-    if (it == children.end ()) return none;
 
-    MDoc * result = it->second;
+    MDoc * result;
+    std::map<std::string, MDoc *>::iterator it = children.find (key);
+    if (it == children.end ())
+    {
+        if (! create) return none;
+        result = nullptr;
+    }
+    else
+    {
+        result = it->second;
+    }
+
     if (! result)  // Doc is not currently loaded
     {
         std::filesystem::path path = pathForDoc (key);
-        if (! std::filesystem::exists (path))
+        bool exists = std::filesystem::exists (path);
+        if (! exists  &&  ! create)
         {
             if (suffix.empty ()) return none;
             // Allow the possibility that the dir exists but lacks its special file.
@@ -1423,6 +1396,7 @@ n2a::MDir::childGet (const std::string & key)
         }
         result = new MDoc (*this, key, key);  // Assumes key==path.
         children[key] = result;
+        if (create  &&  ! exists) result->markChanged ();  // Set the new document to save. Adds to writeQueue.
     }
     return *result;
 }
