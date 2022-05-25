@@ -17,7 +17,6 @@ the U.S. Government retains certain rights in this software.
 
 #include <string>  // We use the provided STL string class rather than our own minimalist String implementation.
 #include <cstring>
-#include <strings.h>
 #include <vector>
 #include <map>
 #include <set>
@@ -28,6 +27,12 @@ the U.S. Government retains certain rights in this software.
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+
+#ifdef _MSC_VER
+# define strcasecmp _stricmp
+#else
+# include <strings.h>
+#endif
 
 
 namespace n2a

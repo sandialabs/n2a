@@ -56,7 +56,7 @@ public class CompilerGCC extends Compiler
         super (host, localJobDir);
         this.gcc = gcc;
 
-        settings.add ("-std=c++11");
+        settings.add ("-std=c++17");
         settings.add ("-ffunction-sections");
         settings.add ("-fdata-sections");
     }

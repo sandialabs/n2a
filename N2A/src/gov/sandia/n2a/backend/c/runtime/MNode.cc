@@ -893,13 +893,13 @@ n2a::MPersistent::childClear (const std::string & key)
 // class MDoc ----------------------------------------------------------------
 
 n2a::MDoc::MDoc (const std::filesystem::path & path)
-:   MPersistent (nullptr, path.c_str (), nullptr)
+:   MPersistent (nullptr, path.string ().c_str (), nullptr)
 {
     needsRead = true;
 }
 
 n2a::MDoc::MDoc (const std::filesystem::path & path, const std::string & key)
-:   MPersistent (nullptr, path.c_str (), key.c_str ())
+:   MPersistent (nullptr, path.string ().c_str (), key.c_str ())
 {
     needsRead = true;
 }
@@ -959,7 +959,7 @@ std::string
 n2a::MDoc::getOrDefault (const std::string & defaultValue)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    if (container  &&  container->classID () & MDocGroupID) return ((MDocGroup *) container)->pathForDoc (name);
+    if (container  &&  container->classID () & MDocGroupID) return ((MDocGroup *) container)->pathForDoc (name).string ();
     if (value) return value;
     return defaultValue;
 }
@@ -1269,14 +1269,14 @@ n2a::MDir::MDir (const std::filesystem::path & root, const char * suffix, const 
 std::string
 n2a::MDir::key () const
 {
-    if (name.empty ()) return root;
+    if (name.empty ()) return root.string ();
     return name;
 }
 
 std::string
 n2a::MDir::getOrDefault (const std::string & defaultValue)
 {
-    return root;
+    return root.string ();
 }
 
 void
@@ -1342,7 +1342,7 @@ n2a::MDir::load ()
     for (auto const & entry : std::filesystem::directory_iterator (root))
     {
         const std::filesystem::path & path = entry.path ();
-        const std::string & key = path.stem ();
+        const std::string & key = path.stem ().string ();
         if (key[0] == '.') continue; // Filter out special files. This allows, for example, a git repo to share the models dir.
         if (! suffix.empty ()  &&  ! std::filesystem::is_directory (path)) continue;  // Only permit directories when suffix is defined.
 
