@@ -18,6 +18,29 @@ the U.S. Government retains certain rights in this software.
 #include "MNode.h"
 
 
+// Utility functions ---------------------------------------------------------
+
+std::string
+n2a::trim (const std::string & value)
+{
+    size_t start = value.find_first_not_of (" ");
+    if (start == std::string::npos) return "";  // all spaces
+    size_t finish = value.find_last_not_of (" ");
+    if (finish == std::string::npos) return value.substr (start);
+    return value.substr (start, finish - start + 1);
+}
+
+char *
+n2a::strdup (const char * from)
+{
+    int length = strlen (from);
+    char * result = (char *) malloc (length + 1);
+    // Don't bother checking for null result. In that case, we're already in trouble, so doesn't matter where the final explosion happens.
+    strcpy (result, from);
+    return result;
+}
+
+
 // class MNode ---------------------------------------------------------------
 
 n2a::MNode n2a::MNode::none;
