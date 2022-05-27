@@ -127,7 +127,7 @@ public abstract class Compiler
             if (p.exitValue () != 0)
             {
                 PrintStream ps = Backend.err.get ();
-                ps.println ("Failed to compile: exit code " + p.exitValue ());
+                ps.println ("Failed to compile:");
                 ps.print (Host.streamToString (Files.newInputStream (err)));
                 ps.print (Host.streamToString (Files.newInputStream (out)));
                 Files.delete (out);

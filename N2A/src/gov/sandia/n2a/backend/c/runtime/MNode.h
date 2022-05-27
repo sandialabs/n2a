@@ -15,18 +15,11 @@ the U.S. Government retains certain rights in this software.
 #ifndef n2a_mnode_h
 #define n2a_mnode_h
 
-#include <string>  // We use the provided STL string class rather than our own minimalist String implementation.
-#include <cstring>
+#include "StringLite.h"  // Use our own string class, to be compatible with rest of runtime. Unfortunately, this means you need to have one extra header file to use MNode standalone.
 #include <vector>
 #include <map>
 #include <set>
-#include <unordered_set>
 #include <mutex>
-#include <cmath>
-#include <sstream>
-#include <iostream>
-#include <fstream>
-#include <filesystem>
 
 #ifdef _MSC_VER
 # define strcasecmp _stricmp
@@ -74,13 +67,13 @@ namespace n2a
         virtual ~MNode ();
         virtual uint32_t classID () const;
 
-        virtual std::string key () const;
+        virtual String key () const;
 
         /**
             Returns an array of keys suitable for locating this node relative to its root node.
             Does not include the key of the root node itself.
         **/
-        std::vector<std::string> keyPath () const;
+        std::vector<String> keyPath () const;
 
         /**
             Returns an array of keys suitable for locating this node relative to the given root node.
@@ -88,17 +81,17 @@ namespace n2a
             If the given root node is not on the path to the actual root, then it is ignored and
             the full path to actual root is returned.
         **/
-        std::vector<std::string> keyPath (const MNode & root) const;
+        std::vector<String> keyPath (const MNode & root) const;
 
         /**
             Utility function for printing node's key path.
         **/
-        std::string keyPathString () const;
+        String keyPathString () const;
 
         /**
             Utility function for printing node's key path relative to given root node.
         **/
-        std::string keyPathString (const MNode & root) const;
+        String keyPathString (const MNode & root) const;
 
         int depth () const;
 
@@ -117,14 +110,14 @@ namespace n2a
         /**
             Returns a child node from arbitrary depth, or none if any part of the path doesn't exist.
         **/
-        MNode & child (const std::vector<std::string> & keys);
+        MNode & child (const std::vector<String> & keys);
         template<typename... Args> MNode & child (Args... keys) {return child ({keys...});}
 
         /**
             Retrieves a child node from arbitrary depth, or creates it if nonexistent.
             Like a combination of child() and set().
         **/
-        MNode & childOrCreate (const std::vector<std::string> & keys);
+        MNode & childOrCreate (const std::vector<String> & keys);
         template<typename... Args> MNode & childOrCreate (Args... keys) {return childOrCreate ({keys...});}
 
         /**
@@ -145,7 +138,7 @@ namespace n2a
             Removes child with arbitrary depth.
             If no key is specified, then removes all children of this node.
         **/
-        void clear (const std::vector<std::string> & keys);
+        void clear (const std::vector<String> & keys);
         template<typename... Args> void clear (Args... keys) {clear ({keys...});}
 
         /**
@@ -165,54 +158,54 @@ namespace n2a
         **/
         virtual bool data ();
 
-        bool data (const std::vector<std::string> & keys);
+        bool data (const std::vector<String> & keys);
         template<typename... Args> bool data (Args... keys) {return data ({keys...});}
 
         /**
             Determines if the given key exists anywhere in the hierarchy.
             This is a deep query. For a shallow (one-level) query, use child() instead.
         **/
-        bool containsKey (const std::string & key);
+        bool containsKey (const String & key);
 
         /**
             @return This node's value, with "" as default
         **/
-        std::string get ();
+        String get ();
 
         /**
             Digs down tree as far as possible to retrieve value; returns "" if node does not exist.
         **/
-        std::string get (const std::vector<std::string> & keys);
-        template<typename... Args> std::string get (Args... keys) {return get ({keys...});}
+        String get (const std::vector<String> & keys);
+        template<typename... Args> String get (Args... keys) {return get ({keys...});}
 
         /**
             Returns this node's value, or the given default if node is undefined or set to "".
             This is the only get function that needs to be overridden by subclasses.
         **/
-        virtual std::string getOrDefault (const std::string & defaultValue);
+        virtual String getOrDefault (const String & defaultValue);
 
         /**
             Digs down tree as far as possible to retrieve value; returns given defaultValue if node does not exist or is set to "".
         **/
-        std::string getOrDefault (const char * defaultValue, const std::vector<std::string> & keys);
-        template<typename... Args> std::string getOrDefault (const char * defaultValue, Args... keys) {return getOrDefault (defaultValue, {keys...});}
+        String getOrDefault (const char * defaultValue, const std::vector<String> & keys);
+        template<typename... Args> String getOrDefault (const char * defaultValue, Args... keys) {return getOrDefault (defaultValue, {keys...});}
 
-        std::string getOrDefault (const std::string & defaultValue, const std::vector<std::string> & keys)
+        String getOrDefault (const String & defaultValue, const std::vector<String> & keys)
         {
             return getOrDefault (defaultValue.c_str (), keys);
         }
-        template<typename... Args> std::string getOrDefault (const std::string & defaultValue, Args... keys) {return getOrDefault (defaultValue, {keys...});}
+        template<typename... Args> String getOrDefault (const String & defaultValue, Args... keys) {return getOrDefault (defaultValue, {keys...});}
 
-        bool getOrDefault (bool defaultValue, const std::vector<std::string> & keys);
+        bool getOrDefault (bool defaultValue, const std::vector<String> & keys);
         template<typename... Args> bool getOrDefault (bool defaultValue, Args... keys) {return getOrDefault (defaultValue, {keys...});}
 
-        int getOrDefault (int defaultValue, const std::vector<std::string> & keys);
+        int getOrDefault (int defaultValue, const std::vector<String> & keys);
         template<typename... Args> int getOrDefault (int defaultValue, Args... keys) {return getOrDefault (defaultValue, {keys...});}
 
-        long getOrDefault (long defaultValue, const std::vector<std::string> & keys);
+        long getOrDefault (long defaultValue, const std::vector<String> & keys);
         template<typename... Args> long getOrDefault (long defaultValue, Args... keys) {return getOrDefault (defaultValue, {keys...});}
 
-        double getOrDefault (double defaultValue, const std::vector<std::string> & keys);
+        double getOrDefault (double defaultValue, const std::vector<String> & keys);
         template<typename... Args> double getOrDefault (double defaultValue, Args... keys) {return getOrDefault (defaultValue, {keys...});}
 
         /**
@@ -222,7 +215,7 @@ namespace n2a
             See getFlag() for a different way to interpret booleans. The key difference is
             that a boolean defaults to false.
         **/
-        bool getBool (const std::vector<std::string> & keys)
+        bool getBool (const std::vector<String> & keys)
         {
             return getOrDefault (false, keys);
         }
@@ -236,22 +229,22 @@ namespace n2a
             that a flag defaults to true, so it can indicate something by merely existing, without a value.
             It also tolerates arbitrary content, so a flag can carry extra data and still be interpreted as true.
         **/
-        bool getFlag (const std::vector<std::string> & keys);
+        bool getFlag (const std::vector<String> & keys);
         template<typename... Args> bool getFlag (Args... keys) {return getFlag ({keys...});}
 
-        int getInt (const std::vector<std::string> & keys)
+        int getInt (const std::vector<String> & keys)
         {
             return getOrDefault (0, keys);
         }
         template<typename... Args> int getInt (Args... keys) {return getInt ({keys...});}
 
-        long getLong (const std::vector<std::string> & keys)
+        long getLong (const std::vector<String> & keys)
         {
             return getOrDefault (0l, keys);
         }
         template<typename... Args> long getLong (Args... keys) {return getLong ({keys...});}
 
-        double getDouble (const std::vector<std::string> & keys)
+        double getDouble (const std::vector<String> & keys)
         {
             return getOrDefault (0.0, keys);
         }
@@ -264,7 +257,7 @@ namespace n2a
         **/
         virtual void set (const char * value);
 
-        void set (const std::string & value)
+        void set (const String & value)
         {
             set (value.c_str ());
         }
@@ -276,17 +269,23 @@ namespace n2a
 
         void set (int value)
         {
-            set (std::to_string (value));
+            char buffer[16];
+            sprintf (buffer, "%i", value);
+            set (buffer);
         }
 
         void set (long value)
         {
-            set (std::to_string (value));
+            char buffer[32];
+            sprintf (buffer, "%li", value);
+            set (buffer);
         }
 
         void set (double value)
         {
-            set (std::to_string (value));
+            char buffer[32];
+            sprintf (buffer, "%g", value);
+            set (buffer);
         }
 
         void set (MNode & value);
@@ -294,29 +293,29 @@ namespace n2a
         /**
             Creates all children necessary to set value
         **/
-        MNode & set (const char * value, const std::vector<std::string> & keys);
+        MNode & set (const char * value, const std::vector<String> & keys);
         template<typename... Args> MNode & set (const char * value, Args... keys) {return set (value, {keys...});}
 
-        MNode & set (const std::string & value, const std::vector<std::string> & keys);
-        template<typename... Args> MNode & set (const std::string & value, Args... keys) {return set (value, {keys...});}
+        MNode & set (const String & value, const std::vector<String> & keys);
+        template<typename... Args> MNode & set (const String & value, Args... keys) {return set (value, {keys...});}
 
-        MNode & set (bool value, const std::vector<std::string> & keys);
+        MNode & set (bool value, const std::vector<String> & keys);
         template<typename... Args> MNode & set (bool value, Args... keys) {return set (value, {keys...});}
 
-        MNode & set (int value, const std::vector<std::string> & keys);
+        MNode & set (int value, const std::vector<String> & keys);
         template<typename... Args> MNode & set (int value, Args... keys) {return set (value, {keys...});}
 
-        MNode & set (long value, const std::vector<std::string> & keys);
+        MNode & set (long value, const std::vector<String> & keys);
         template<typename... Args> MNode & set (long value, Args... keys) {return set (value, {keys...});}
 
-        MNode & set (double value, const std::vector<std::string> & keys);
+        MNode & set (double value, const std::vector<String> & keys);
         template<typename... Args> MNode & set (double value, Args... keys) {return set (value, {keys...});}
 
         /**
             Merges the given node at the given point in the tree.
             See merge()
         **/
-        MNode & set (MNode & value, const std::vector<std::string> & keys);
+        MNode & set (MNode & value, const std::vector<String> & keys);
         template<typename... Args> MNode & set (const MNode & value, Args... keys) {return set (value, {keys...});}
 
         /**
@@ -383,7 +382,7 @@ namespace n2a
             Many subclasses guarantee object identity, but that is not a requirement.
             The safest approach is to call child(toKey) to get a reference to the renamed node.
         **/
-        virtual void move (const std::string & fromKey, const std::string & toKey);
+        virtual void move (const String & fromKey, const String & toKey);
 
         struct Iterator
         {
@@ -397,12 +396,12 @@ namespace n2a
             // We always pull a copy of the keys, rather than iterating directly on child nodes.
             // This allows the caller to delete nodes in the middle of iteration.
             // Dereferencing the iterator could return none.
-            std::vector<std::string> keys;
+            std::vector<String> keys;
             int                      count;  // number of keys; This a trade of space for time.
             int                      i;  // position in keys
-            std::string              key;
+            String              key;
 
-            Iterator (MNode & container, const std::vector<std::string> & keys)
+            Iterator (MNode & container, const std::vector<String> & keys)
             :   container (container),
                 keys (keys)
             {
@@ -487,7 +486,7 @@ namespace n2a
             Only the sign of nonzero return values is guaranteed, not the magnitude.
         **/
         static int compare (const char * A, const char * B);
-        static int compare (const std::string & A, const std::string & B)
+        static int compare (const String & A, const String & B)
         {
             return compare (A.c_str (), B.c_str ());
         }
@@ -498,7 +497,7 @@ namespace n2a
             {
                 return compare (a, b) < 0;
             }
-            bool operator() (const std::string & a, const std::string & b) const
+            bool operator() (const String & a, const String & b) const
             {
                 return compare (a, b) < 0;
             }
@@ -515,8 +514,6 @@ namespace n2a
             Compares only key structure, not values.
         **/
         bool structureEquals (MNode & that);
-
-        std::string toString ();
 
         friend MDoc;
 
@@ -536,12 +533,12 @@ namespace n2a
             @param create Changes behavior when key is not found. By default, this
             method returns "none". If true, a new node will be created and returned.
         **/
-        virtual MNode & childGet (const std::string & key, bool create = false);
+        virtual MNode & childGet (const String & key, bool create = false);
 
         /**
             Removes child with the given key, if it exists.
         **/
-        virtual void childClear (const std::string & key);
+        virtual void childClear (const String & key);
     };
 
     class MVolatile : public MNode
@@ -551,14 +548,14 @@ namespace n2a
         virtual ~MVolatile ();  ///< frees memory used by children
         virtual uint32_t classID () const;
 
-        virtual std::string key          () const;
+        virtual String key          () const;
         virtual MNode &     parent       () const;
         virtual void        clear        ();
         virtual int         size         ();
         virtual bool        data         ();
-        virtual std::string getOrDefault (const std::string & defaultValue);
+        virtual String getOrDefault (const String & defaultValue);
         virtual void        set          (const char * value);  ///< copies the memory, on assumption that the caller could delete it
-        virtual void        move         (const std::string & fromKey, const std::string & toKey);  ///< If you already hold a reference to the node named by fromKey, then that reference remains valid and its key is updated.
+        virtual void        move         (const String & fromKey, const String & toKey);  ///< If you already hold a reference to the node named by fromKey, then that reference remains valid and its key is updated.
         virtual Iterator    begin        ();
         virtual Iterator    end          ();
 
@@ -571,13 +568,13 @@ namespace n2a
         friend MPersistent;
 
     protected:
-        std::string                            name;
-        char *                                 value;     ///< Our own local copy of string. We are responsible to manage this memory. We use char * rather than std::string so this value can be null, not merely empty.
+        String                            name;
+        char *                                 value;     ///< Our own local copy of string. We are responsible to manage this memory. We use char * rather than String so this value can be null, not merely empty.
         MNode *                                container;
         std::map<const char *, MNode *, Order> children;  // Children are always a subclass of MVolatile. As long as a child exists, we can simply hold a pointer to its name.
 
-        virtual MNode & childGet   (const std::string & key, bool create = false);
-        virtual void    childClear (const std::string & key);
+        virtual MNode & childGet   (const String & key, bool create = false);
+        virtual void    childClear (const String & key);
     };
 
     class MPersistent : public MVolatile
@@ -590,7 +587,7 @@ namespace n2a
         virtual void clearChanged ();
         virtual void clear        ();
         virtual void set          (const char * value);
-        virtual void move         (const std::string & fromKey, const std::string & toKey);
+        virtual void move         (const String & fromKey, const String & toKey);
 
         using MNode::clear;
         using MNode::set;
@@ -598,8 +595,8 @@ namespace n2a
     protected:
         bool needsWrite; ///< indicates that this node is new or has changed since it was last read from disk (and therefore should be written out)
 
-        virtual MNode & childGet   (const std::string & key, bool create = false);
-        virtual void    childClear (const std::string & key);
+        virtual MNode & childGet   (const String & key, bool create = false);
+        virtual void    childClear (const String & key);
     };
 
     /**
@@ -614,6 +611,10 @@ namespace n2a
         We inherit the children collection from MVolatile. This field is left null until we first
         read in the associated file on disk. If the file is empty or non-existent, children becomes
         non-null but empty. Thus, whether children is null or not safely indicates the need to load.
+
+        MDoc.save() must be called explicitly to write data out to disk. If you destroy a standalone
+        MDoc with unsaved changes, they will be lost. However, if this MDoc is managed by an MDocGroup,
+        then the group object will automatically save all its documents when it is destroyed.
     **/
     class MDoc : public MPersistent
     {
@@ -621,13 +622,15 @@ namespace n2a
         /**
             Constructs a stand-alone document with blank key.
             In this case, the value contains the full path to the file on disk.
+            @param root Path separator must be forward slash (/), regardless of platform.
         **/
-        MDoc (const std::filesystem::path & path);
+        MDoc (const String & path);
         /**
             Constructs a stand-alone document with specified key.
             In this case, the value contains the full path to the file on disk.
+            @param root Path separator must be forward slash (/), regardless of platform.
         **/
-        MDoc (const std::filesystem::path & path, const std::string & key);
+        MDoc (const String & path, const String & key);
         virtual uint32_t classID () const;
 
         virtual void markChanged ();
@@ -640,18 +643,18 @@ namespace n2a
             For a stand-alone document the key is arbitrary, and the document may be stored
             in another MNode with arbitrary other objects.
         **/
-        virtual std::string getOrDefault (const std::string & defaultValue);
+        virtual String getOrDefault (const String & defaultValue);
         /**
             If this is a stand-alone document, then move the file on disk.
             Otherwise, do nothing. DeleteDoc.undo() relies on this class to do nothing for a regular doc,
             because it uses merge() to restore the data, and merge() will touch the root value.
         **/
         virtual void     set   (const char * value);
-        virtual void     move  (const std::string & fromKey, const std::string & toKey);
+        virtual void     move  (const String & fromKey, const String & toKey);
         virtual Iterator begin ();
         virtual Iterator end   ();
 
-        std::filesystem::path path ();  ///< subroutine of load() and save()
+        String path ();  ///< subroutine of load() and save()
         /**
             We only load once. We assume no other process is modifying the files, so once loaded, we know its exact state.
         **/
@@ -677,17 +680,17 @@ namespace n2a
             In this case, "path" is the full path to the file on disk.
             The default implementation of MDocGroup also sets key to the full path.
         **/
-        MDoc (MDocGroup & container, const std::string & path, const std::string & key);
+        MDoc (MDocGroup & container, const String & path, const String & key);
 
         /**
             Constructs a document as a child of an MDir.
             In this case, the key contains the file name in the dir, and the full path is constructed
             when needed using information from the parent.
         **/
-        MDoc (MDir & container, const std::string & key);
+        MDoc (MDir & container, const String & key);
 
-        virtual MNode & childGet   (const std::string & key, bool create = false);
-        virtual void    childClear (const std::string & key);
+        virtual MNode & childGet   (const String & key, bool create = false);
+        virtual void    childClear (const String & key);
     };
 
     /**
@@ -708,29 +711,30 @@ namespace n2a
         MDocGroup (const char * key = 0);
         /**
             Writes pending changes to disk, then frees memory in use by all managed documents.
-            This method is not thread safe. It goes without saying that if you are destroying
-            an object, all threads should be done using it.
+            This method will not wait on the mutex before processing writeQueue.
+            All other threads should be done with this object before it is destroyed.
         **/
         virtual ~MDocGroup ();
+        virtual uint32_t classID () const;
 
-        virtual std::string key          () const;
-        virtual std::string getOrDefault (const std::string & defaultValue);
+        virtual String   key          () const;
+        virtual String   getOrDefault (const String & defaultValue);
         /**
             Empty this group of all documents.
             In the base implementation, the files themselves will not be deleted.
             OTOH, MDir does delete the entire directory from disk.
             All pending changes will be lost.
         **/
-        virtual void        clear ();
-        virtual int         size  ();
+        virtual void     clear ();
+        virtual int      size  ();
         /**
             Renames an MDoc on disk.
             If you already hold a reference to the MDoc named by fromKey, then that reference remains valid
             after the move.
         **/
-        virtual void        move  (const std::string & fromKey, const std::string & toKey);
-        virtual Iterator    begin ();
-        virtual Iterator    end   ();
+        virtual void     move  (const String & fromKey, const String & toKey);
+        virtual Iterator begin ();
+        virtual Iterator end   ();
 
         /**
             Generates a path for the MDoc, based only on the key.
@@ -738,14 +742,14 @@ namespace n2a
             This base class assumes the key is literally the path, as a string.
             MDir assumes that the key is a file or subdir name within a given directory.
         **/
-        virtual std::filesystem::path pathForDoc (const std::string & key) const;
+        virtual String pathForDoc (const String & key) const;
         /**
             Similar to pathForDoc(), but gives path to the file for the purposes of moving or deleting.
             This is different from pathForDoc() in the specific case of an MDir that has non-null suffix.
             In that case, the file is actually a subdirectory that contains both the MDoc and possibly
             other files.
         **/
-        virtual std::filesystem::path pathForFile (const std::string & key) const
+        virtual String pathForFile (const String & key) const
         {
             return pathForDoc (key);
         }
@@ -765,12 +769,12 @@ namespace n2a
         friend MDoc;
 
     protected:
-        std::string                          name;  // We could be held in an even higher-level node.
-        std::map<std::string, MDoc *, Order> children;
-        std::set<MDoc *>                     writeQueue;
+        String                          name;  // We could be held in an even higher-level node.
+        std::map<String, MDoc *, Order> children;
+        std::set<MDoc *>                writeQueue;
 
-        virtual MNode & childGet   (const std::string & key, bool create = false);
-        virtual void    childClear (const std::string & key);
+        virtual MNode & childGet   (const String & key, bool create = false);
+        virtual void    childClear (const String & key);
     };
 
     /**
@@ -783,10 +787,14 @@ namespace n2a
     class MDir : public MDocGroup
     {
     public:
-        MDir (const std::filesystem::path & root, const char * suffix = 0, const char * key = 0);
+        /**
+            @param root Path separator must be forward slash (/), regardless of platform.
+        **/
+        MDir (const String & root, const char * suffix = 0, const char * key = 0);
+        virtual uint32_t classID () const;
 
-        virtual std::string key          () const;
-        virtual std::string getOrDefault (const std::string & defaultValue);
+        virtual String key          () const;
+        virtual String getOrDefault (const String & defaultValue);
 
         /**
             Empty this directory of all files.
@@ -798,8 +806,8 @@ namespace n2a
         virtual bool     data  ();
         virtual Iterator begin ();
         virtual Iterator end   ();
-        virtual std::filesystem::path pathForDoc  (const std::string & key) const;
-        virtual std::filesystem::path pathForFile (const std::string & key) const;
+        virtual String   pathForDoc  (const String & key) const;
+        virtual String   pathForFile (const String & key) const;
         void load ();
 
         using MNode::clear;
@@ -807,20 +815,20 @@ namespace n2a
         using MNode::getOrDefault;
 
     protected:
-        std::filesystem::path root;   ///< The directory containing the files or subdirs that constitute the children of this node
-        std::string           suffix; ///< Relative path to document file, or null if documents are directly under root
-        bool                  loaded; ///< Indicates that an initial read of the dir has been done. After that, it is not necessary to monitor the dir, only keep track of documents internally.
+        String root;   ///< The directory containing the files or subdirs that constitute the children of this node
+        String suffix; ///< Relative path to document file, or null if documents are directly under root
+        bool   loaded; ///< Indicates that an initial read of the dir has been done. After that, it is not necessary to monitor the dir, only keep track of documents internally.
 
-        virtual MNode & childGet (const std::string & key, bool create = false);
+        virtual MNode & childGet (const String & key, bool create = false);
     };
 
     class Schema
     {
     public:
         int         version;  ///< Version 0 means unknown. Version -1 means no-care. Otherwise, version is always positive and increments by 1 with each significant change.
-        std::string type;
+        String type;
 
-        Schema (int version, const std::string & type);
+        Schema (int version, const String & type);
 
         /**
             Returns an object suitable for writing out MNodes in the current format.
@@ -869,40 +877,37 @@ namespace n2a
         /**
             Low-level routine to write out node in the appropriate format.
         **/
-        virtual void write (MNode & node, std::ostream & writer, const std::string & indent) = 0;
+        virtual void write (MNode & node, std::ostream & writer, const String & indent) = 0;
     };
 
     class Schema2 : public Schema
     {
     public:
-        Schema2 (int version, const std::string & type);
+        Schema2 (int version, const String & type);
 
         virtual void read (MNode & node, std::istream & reader);
         void read (MNode & node, LineReader & reader, int whitespaces);  ///< Subroutine of read(MNode,istream)
-        virtual void write (MNode & node, std::ostream & writer, const std::string & indent);
+        virtual void write (MNode & node, std::ostream & writer, const String & indent);
     };
 
     class LineReader
     {
     public:
         std::istream & reader;
-        std::string    line;
+        String    line;
         int            whitespaces;
 
         LineReader (std::istream & reader);
         void getNextLine ();
     };
 
-    inline std::ostream & operator<< (std::ostream & out, MNode & value)
-    {
-        Schema * schema = Schema::latest ();
-        schema->write (value, out);
-        delete schema;
-        return out;
-    }
-
-    extern std::string trim (const std::string & value);
+    // Utility functions
+    extern std::ostream & operator<< (std::ostream & out, MNode & value);
     extern char * strdup (const char * from);  ///< This function is not always available (not standard C), so we just provide our own.
+    extern void create_directories (const String & path);  ///< Ensure all parents of path exist
+    extern void remove_all (const String & path);  ///< Recursively deletes directory or file.
+    extern bool exists (const String & path);
+    extern bool is_directory (const String & path);
 }
 
 namespace std
@@ -912,7 +917,7 @@ namespace std
     {
         size_t operator() (const n2a::MNode & value) const noexcept
         {
-            return hash<string> {} (value.key ());  // TODO: are curly braces in middle necessary?
+            return hash<String> {} (value.key ());  // TODO: are curly braces in middle necessary?
         }
     };
 

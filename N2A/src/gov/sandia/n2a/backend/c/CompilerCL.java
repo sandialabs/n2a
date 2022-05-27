@@ -159,7 +159,6 @@ public class CompilerCL extends Compiler
 
         settings.add ("/nologo");
         settings.add ("/utf-8");
-        settings.add ("/std:c++17");
         settings.add ("/EHa");   // enable SEH exception handling
         settings.add ("/GR-");   // no RTTI
         settings.add ("/GL");    // whole-program optimization

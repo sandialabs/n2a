@@ -12,6 +12,7 @@ the U.S. Government retains certain rights in this software.
 #include <stdio.h>
 #include <cstddef>
 #include <functional>
+#include <vector>
 #ifndef N2A_SPINNAKER
 # include <istream>
 #endif
@@ -25,12 +26,14 @@ the U.S. Government retains certain rights in this software.
 class String    // Note the initial capital letter. This name will not conflict with std::string.
 {
 public:
-    char * memory;
-    char * top;       // position of null terminator in memory block
-    size_t capacity_;  // size of currently-allocated memory block
+    using size_type = size_t;
 
-    static const size_t npos    = static_cast<size_t> (-1);
-    static const size_t maxSize = 0x1000000;  // 16Mb. This is suitable for most systems.
+    char *    memory;
+    char *    top;       // position of null terminator in memory block
+    size_type capacity_;  // size of currently-allocated memory block
+
+    static const size_type npos    = static_cast<size_type> (-1);
+    static const size_type maxSize = 0x1000000;  // 16Mb. This is suitable for most systems.
 
     String ()
     {
@@ -65,16 +68,30 @@ public:
         that.capacity_ = 0;
     }
 
+    /**
+        This constructor allows numbers to be passed as string arguments without extra conversion code.
+    **/
+    String (double value)
+    {
+        memory    = 0;
+        top       = 0;
+        capacity_ = 0;
+
+        char buffer[32];
+        sprintf (buffer, "%g", value);
+        assign (buffer, strlen (buffer));
+    }
+
     ~String ()
     {
         if (memory) free (memory);
     }
 
-    String & assign (const char * value, size_t n)
+    String & assign (const char * value, size_type n)
     {
         if (value  &&  n  &&  n <= maxSize)  // We should really throw an error if n > max_size, but this library supports bare metal so it does not throw exceptions.
         {
-            size_t requiredCapacity = n + 1;
+            size_type requiredCapacity = n + 1;
             if (requiredCapacity > capacity_)
             {
                 if (memory) free (memory);
@@ -119,7 +136,7 @@ public:
         top = memory;
     }
 
-    size_t size () const
+    size_type size () const
     {
         return top - memory;
     }
@@ -129,18 +146,18 @@ public:
         return top == memory;
     }
 
-    size_t max_size () const
+    size_type max_size () const
     {
         return maxSize;
     }
 
-    size_t capacity () const
+    size_type capacity () const
     {
         if (capacity_ <= 0) return 0;
         return capacity_ - 1;
     }
 
-    void reserve (size_t n = 0)
+    void reserve (size_type n = 0)
     {
         n++;  // Add one byte for null termination.
         if (n <= capacity_) return;
@@ -154,6 +171,16 @@ public:
         char * a = temp;
         while (a <= end) *m++ = *a++;  // Copies both string and null terminator.
         free (temp);
+    }
+
+    void resize (size_type n, char c = 0)
+    {
+        size_type length = top - memory;
+        reserve (n);
+        top = memory + n;
+        memory[n] = 0;
+        char * m = memory + length;
+        while (m < top) *m++ = c;
     }
 
     const char * c_str () const
@@ -219,7 +246,7 @@ public:
         return compare (that) >= 0;
     }
 
-    const char & operator[] (size_t pos) const
+    const char & operator[] (size_type pos) const
     {
         return memory[pos];
     }
@@ -262,6 +289,13 @@ public:
         return operator+ (buffer);
     }
 
+    String operator+ (long that) const
+    {
+        char buffer[32];
+        sprintf (buffer, "%li", that);
+        return operator+ (buffer);
+    }
+
     String operator+ (double that) const
     {
         char buffer[32];
@@ -269,11 +303,11 @@ public:
         return operator+ (buffer);
     }
 
-    String & append (const char * that, size_t n)
+    String & append (const char * that, size_type n)
     {
-        size_t length = (top - memory) + n;
+        size_type length = (top - memory) + n;
         if (! length) return *this;
-        size_t requiredCapacity = length + 1;
+        size_type requiredCapacity = length + 1;
         if (requiredCapacity > capacity_)
         {
             char * temp = memory;
@@ -323,6 +357,13 @@ public:
         return append (buffer, strlen (buffer));
     }
 
+    String & operator+= (long that)
+    {
+        char buffer[32];
+        sprintf (buffer, "%li", that);
+        return append (buffer, strlen (buffer));
+    }
+
     String & operator+= (double that)
     {
         char buffer[32];
@@ -330,7 +371,7 @@ public:
         return append (buffer, strlen (buffer));
     }
 
-    String substr (size_t pos, size_t length = npos) const noexcept
+    String substr (size_type pos, size_type length = npos) const noexcept
     {
         String result;
         int available = (top - memory) - pos;
@@ -340,7 +381,7 @@ public:
         return result;
     }
 
-    size_t find (const char * pattern, size_t pos, size_t n) const
+    size_type find (const char * pattern, size_type pos, size_type n) const
     {
         int available = top - memory;
         if (n == 0) return pos <= available ? pos : npos;  // The empty pattern will always match exactly where it's at, unless it's off the end of the target string.
@@ -358,12 +399,12 @@ public:
         return npos;
     }
 
-    size_t find (const String & pattern, size_t pos = 0) const noexcept
+    size_type find (const String & pattern, size_type pos = 0) const noexcept
     {
         return find (pattern.memory, pos, pattern.top - pattern.memory);
     }
 
-    size_t find_first_of (const char * pattern, size_t pos = 0) const
+    size_type find_first_of (const char * pattern, size_type pos = 0) const
     {
         if (memory == top  ||  ! pattern) return npos;
         char * c = memory + pos;
@@ -380,7 +421,7 @@ public:
         return npos;
     }
 
-    size_t find_first_of (char pattern, size_t pos = 0) const
+    size_type find_first_of (char pattern, size_type pos = 0) const
     {
         if (memory == top  ||  ! pattern) return npos;
         char * c = memory + pos;
@@ -392,7 +433,7 @@ public:
         return npos;
     }
 
-    size_t find_first_not_of (const char * pattern, size_t pos = 0) const
+    size_type find_first_not_of (const char * pattern, size_type pos = 0) const
     {
         if (memory == top  ||  ! pattern) return npos;
         char * c = memory + pos;
@@ -415,7 +456,7 @@ public:
         return npos;
     }
 
-    size_t find_first_not_of (char pattern, size_t pos = 0) const
+    size_type find_first_not_of (char pattern, size_type pos = 0) const
     {
         if (memory == top  ||  ! pattern) return npos;
         char * c = memory + pos;
@@ -601,6 +642,23 @@ inline void split (const String & source, const String & delimiter, String & fir
         first = temp.substr (0, index);
         second = temp.substr (index + delimiter.size ());
     }
+}
+
+inline String join (const String & delimiter, const std::vector<String> & elements)
+{
+    int count = elements.size ();
+    if (count == 0) return "";
+    int total = (count - 1) * delimiter.size ();
+    for (auto e : elements) total += e.size ();
+    String result;
+    result.reserve (total);
+    result = elements[0];
+    for (int i = 1; i < count; i++)
+    {
+        result += delimiter;
+        result += elements[i];
+    }
+    return result;
 }
 
 inline bool operator== (const char * A, const String & B)
