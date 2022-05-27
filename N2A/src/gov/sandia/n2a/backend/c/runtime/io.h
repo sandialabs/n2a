@@ -12,6 +12,7 @@ the U.S. Government retains certain rights in this software.
 #include "nosys.h"
 #include "StringLite.h"
 #include "matrix.h"
+#include "MNode.h"
 
 #include <vector>
 #include <unordered_map>
@@ -82,6 +83,8 @@ public:
     virtual bool next ();
 };
 
+extern int convert (String input, int exponent);
+
 template<class T>
 class MatrixInput : public Holder
 {
@@ -98,6 +101,27 @@ template<class T> extern MatrixInput<T> * matrixHelper (const String & fileName,
 #endif
 
 template<class T> extern IteratorNonzero<T> * getIterator (MatrixAbstract<T> * A);  // Returns an object that iterates over nonzero elements of A.
+
+template<class T>
+class Mfile : public Holder
+{
+public:
+    n2a::MDoc *                          doc;
+    std::map<String,MatrixAbstract<T> *> matrices;  // Could use unordered_map. Generally, there will be very few entries (like 1), so not sure which will cost the least.
+
+    Mfile (const String & fileName);
+    virtual ~Mfile ();
+
+#   ifdef n2a_FP
+    MatrixAbstract<T> * getMatrix (const std::vector<String> & path, int exponent);
+#   else
+    MatrixAbstract<T> * getMatrix (const std::vector<String> & path);
+#   endif
+};
+template<class T> extern Mfile<T> * MfileHelper (const String & fileName, Mfile<T> * oldHandle = 0);
+
+extern std::vector<String> keyPath (const std::vector<String> & path);  ///< Converts any path elements with delimiters (/) into separate elements.
+template<typename... Args> std::vector<String> keyPath (Args... keys) {return keyPath ({keys...});}
 
 template<class T>
 class InputHolder : public Holder

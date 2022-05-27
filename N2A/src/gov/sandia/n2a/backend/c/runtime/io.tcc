@@ -195,7 +195,7 @@ getIterator (MatrixAbstract<T> * A)
 
 #ifdef n2a_FP
 
-inline int
+int
 convert (String input, int exponent)
 {
     const double d = atof (input.c_str ());
@@ -384,6 +384,88 @@ matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle)
             handle->A = new Matrix<T> (1, 1);
             clear (*handle->A); // set to 0
         }
+    }
+    return handle;
+}
+
+
+// class Mfile ---------------------------------------------------------------
+
+template<class T>
+Mfile<T>::Mfile (const String & fileName)
+:   Holder (fileName)
+{
+    doc =  new n2a::MDoc (fileName.c_str ());
+}
+
+template<class T>
+Mfile<T>::~Mfile ()
+{
+    if (doc) delete doc;
+    for (auto m : matrices) if (m.second) delete m.second;
+}
+
+std::vector<String>
+keyPath (const std::vector<String> & path)
+{
+    std::vector<String> result;
+    result.reserve (path.size ());  // assuming there are no delimiters
+    for (auto & e : path)
+    {
+        size_t pos   = 0;
+        size_t count = e.size ();
+        while (pos < count)
+        {
+            size_t next = e.find_first_of ("/", pos);
+            if (next != pos) result.push_back (e.substr (pos, next).c_str ());
+            if (next == String::npos) break;  // Need this in case npos is max int. In that case, adding 1 will overflow.
+            pos = next + 1;
+        }
+    }
+    return result;
+}
+
+template<class T>
+MatrixAbstract<T> *
+#ifdef n2a_FP
+Mfile<T>::getMatrix (const std::vector<String> & path, int exponent)
+#else
+Mfile<T>::getMatrix (const std::vector<String> & path)
+#endif
+{
+    String key = join (".", path);
+    MatrixAbstract<T> * A = matrices[key];
+    if (A) return A;
+
+    MatrixSparse<T> * S = new MatrixSparse<T>;
+    n2a::MNode & m = doc->child (path);
+    for (auto & row : m)
+    {
+        int r = atoi (row.key ().c_str ());
+        for (auto & col : row)
+        {
+            int c = atoi (col.key ().c_str ());
+            String value = col.get ();
+#           ifdef n2a_FP
+            S->set (r, c, convert (value, exponent));
+#           else
+            S->set (r, c, (T) atof (value.c_str ()));
+#           endif
+        }
+    }
+    matrices[key] = S;
+    return S;
+}
+
+template<class T>
+Mfile<T> *
+MfileHelper (const String & fileName, Mfile<T> * oldHandle)
+{
+    Mfile<T> * handle = (Mfile<T> *) SIMULATOR getHolder (fileName, oldHandle);
+    if (! handle)
+    {
+        handle = new Mfile<T> (fileName);
+        SIMULATOR holders.push_back (handle);
     }
     return handle;
 }

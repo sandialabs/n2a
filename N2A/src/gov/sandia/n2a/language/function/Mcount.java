@@ -8,14 +8,13 @@ package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
-import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 
-public class Mcount extends Function
+public class Mcount extends Mfile
 {
     public static Factory factory ()
     {
@@ -31,16 +30,6 @@ public class Mcount extends Function
                 return new Mcount ();
             }
         };
-    }
-
-    public boolean canBeConstant ()
-    {
-        return false;
-    }
-
-    public boolean canBeInitOnly ()
-    {
-        return true;
     }
 
     public void determineExponent (ExponentContext context)
@@ -64,8 +53,8 @@ public class Mcount extends Function
         if (simulator == null) return getType ();  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
         String path = ((Text) operands[0].eval (context)).value;
-        Mmatrix.Holder H = Mmatrix.Holder.get (simulator, path);
-        String[] keyPath = Mmatrix.Holder.keyPath (context, operands);
+        Holder H = Holder.get (simulator, path);
+        String[] keyPath = Holder.keyPath (context, operands);
         return new Scalar (H.doc.childOrEmpty (keyPath).size ());
     }
 

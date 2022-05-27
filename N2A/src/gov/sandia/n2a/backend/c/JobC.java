@@ -29,6 +29,7 @@ import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Input;
+import gov.sandia.n2a.language.function.Mfile;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.operator.Add;
@@ -95,6 +96,7 @@ public class JobC extends Thread
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
     protected HashMap<Object,String> matrixNames    = new HashMap<Object,String> ();
+    protected HashMap<Object,String> mfileNames     = new HashMap<Object,String> ();
     protected HashMap<Object,String> inputNames     = new HashMap<Object,String> ();
     protected HashMap<Object,String> outputNames    = new HashMap<Object,String> ();
     public    HashMap<Object,String> stringNames    = new HashMap<Object,String> ();
@@ -105,6 +107,7 @@ public class JobC extends Thread
     // but this is a more limited case.
     protected List<Constant>   staticMatrix  = new ArrayList<Constant> ();  // constant matrices that should be statically initialized
     protected List<ReadMatrix> mainMatrix    = new ArrayList<ReadMatrix> ();
+    protected List<Mfile>      mainMfile     = new ArrayList<Mfile> ();
     protected List<Input>      mainInput     = new ArrayList<Input> ();
     protected List<Output>     mainOutput    = new ArrayList<Output> ();
     public    List<Operator>   mainExtension = new ArrayList<Operator> ();  // Shared by all extension-provided operators.
@@ -268,6 +271,7 @@ public class JobC extends Thread
         Map<String,Boolean> sources = new HashMap<String,Boolean> ();  // List of source names, associated with flag indicating that a type-specific object should be built.
         sources.put ("runtime",   true);
         sources.put ("io",        true);
+        sources.put ("MNode",     true);  // Doesn't really have any template on numeric type, but other variants are meaningful.
         sources.put ("profiling", false);
         if (T.equals ("int")) sources.put ("fixedpoint", true);
         for (String stem : sources.keySet ())
@@ -306,6 +310,7 @@ public class JobC extends Thread
             "io.cc", "io.h", "io.tcc",
             "KDTree.h", "StringLite.h",
             "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
+            "MNode.h", "MNode.cc",
             "nosys.h",
             "runtime.cc", "runtime.h", "runtime.tcc",
             "profiling.h", "profiling.cc",
@@ -373,6 +378,7 @@ public class JobC extends Thread
         c.addSource (source);
         c.addObject (runtimeDir.resolve (objectName ("runtime")));
         c.addObject (runtimeDir.resolve (objectName ("io")));
+        c.addObject (runtimeDir.resolve (objectName ("MNode")));
         if (T.equals ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
         List<Path> envProvidedObjects = providedObjects.get (env);
         if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
@@ -424,6 +430,7 @@ public class JobC extends Thread
         c.addObject (object);
         c.addObject (runtimeDir.resolve (objectName ("runtime")));
         c.addObject (runtimeDir.resolve (objectName ("io")));
+        c.addObject (runtimeDir.resolve (objectName ("MNode")));
         if (T.equals ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
         List<Path> envProvidedObjects = providedObjects.get (env);
         if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
@@ -1017,6 +1024,17 @@ public class JobC extends Thread
                                         mainMatrix.add (r);
                                     }
                                 }
+                                else if (f instanceof Mfile)
+                                {
+                                    Mfile m = (Mfile) f;
+                                    m.name = mfileNames.get (fileName);
+                                    if (m.name == null)
+                                    {
+                                        m.name = "Mfile" + mfileNames.size ();
+                                        mfileNames.put (fileName, m.name);
+                                        mainMfile.add (m);
+                                    }
+                                }
                                 else if (f instanceof Input)
                                 {
                                     Input i = (Input) f;
@@ -1050,6 +1068,14 @@ public class JobC extends Thread
                                 matrixNames.put (op,       r.name     = "Matrix"   + matrixNames.size ());
                                 stringNames.put (operand0, r.fileName = "fileName" + stringNames.size ());
                                 if (operand0 instanceof Add) ((Add) operand0).name = r.fileName;
+                                else error = true;
+                            }
+                            else if (f instanceof Mfile)
+                            {
+                                Mfile m = (Mfile) f;
+                                mfileNames .put (op,       m.name     = "Mfile"    + mfileNames .size ());
+                                stringNames.put (operand0, m.fileName = "fileName" + stringNames.size ());
+                                if (operand0 instanceof Add) ((Add) operand0).name = m.fileName;
                                 else error = true;
                             }
                             else if (f instanceof Input)
@@ -1115,6 +1141,10 @@ public class JobC extends Thread
         {
             result.append (thread_local + "MatrixInput<" + T + "> * " + r.name + ";\n");
         }
+        for (Mfile m : mainMfile)
+        {
+            result.append (thread_local + "Mfile<" + T + "> * " + m.name + ";\n");
+        }
         for (Input i : mainInput)
         {
             result.append (thread_local + "InputHolder<" + T + "> * " + i.name + ";\n");
@@ -1134,6 +1164,10 @@ public class JobC extends Thread
             result.append ("  " + r.name + " = matrixHelper<" + T + "> (\"" + r.operands[0].getString () + "\"");
             if (T.equals ("int")) result.append (", " + r.exponent);
             result.append (");\n");
+        }
+        for (Mfile m : mainMfile)
+        {
+            result.append ("  " + m.name + " = MfileHelper<" + T + "> (\"" + m.operands[0].getString () + "\");\n");
         }
         for (Input i : mainInput)
         {
@@ -4429,6 +4463,15 @@ public class JobC extends Thread
                         context.result.append (pad + "MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (" + r.fileName);
                         if (T.equals ("int")) context.result.append (", " + r.exponent);
                         context.result.append (");\n");
+                    }
+                    return false;
+                }
+                if (op instanceof Mfile)
+                {
+                    Mfile m = (Mfile) op;
+                    if (! (m.operands[0] instanceof Constant))
+                    {
+                        context.result.append (pad + "Mfile<" + T + "> * " + m.name + " = MfileHelper<" + T + "> (" + m.fileName + ");\n");
                     }
                     return false;
                 }

@@ -26,6 +26,11 @@ import gov.sandia.n2a.language.function.HyperbolicTangent;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.function.Max;
+import gov.sandia.n2a.language.function.Mcount;
+import gov.sandia.n2a.language.function.Mfile;
+import gov.sandia.n2a.language.function.Mmatrix;
+import gov.sandia.n2a.language.function.Mnumber;
+import gov.sandia.n2a.language.function.Mstring;
 import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
@@ -344,6 +349,52 @@ public class RendererC extends Renderer
             result.append (")");
             return true;
         }
+        if (op instanceof Mcount)
+        {
+            Mcount m = (Mcount) op;
+            result.append (m.name + "->doc->child (");
+            keyPath (m);
+            result.append (").size ()");
+            return true;
+        }
+        if (op instanceof Mmatrix)
+        {
+            Mmatrix m = (Mmatrix) op;
+            result.append ("*" + m.name + "->getMatrix (");
+            keyPath (m);
+            if (useExponent)
+            {
+                if (m.operands.length > 1) result.append (", ");
+                result.append (m.exponentNext);
+            }
+            result.append (")");
+            return true;
+        }
+        if (op instanceof Mnumber)
+        {
+            Mnumber m = (Mnumber) op;
+            if (useExponent)
+            {
+                result.append ("convert (");
+                result.append (m.name + "->doc->get (");
+            }
+            else
+            {
+                result.append ("(" + job.T + ") " + m.name + "->doc->getDouble (");
+            }
+            keyPath (m);
+            result.append (")");
+            if (useExponent) result.append (", " + m.exponentNext + ")");
+            return true;
+        }
+        if (op instanceof Mstring)
+        {
+            Mstring m = (Mstring) op;
+            result.append (m.name + "->doc->get (");
+            keyPath (m);
+            result.append (")");
+            return true;
+        }
         if (op instanceof Norm)
         {
             Norm n = (Norm) op;
@@ -570,6 +621,20 @@ public class RendererC extends Renderer
         // The general case
         result.append ("(" + job.T + ") (");
         a.render (this);
+        result.append (")");
+    }
+
+    public void keyPath (Mfile m)
+    {
+        if (m.operands.length <= 1) return;
+
+        result.append ("keyPath (");
+        m.operands[1].render (this);
+        for (int i = 2; i < m.operands.length; i++)
+        {
+            result.append (", ");
+            m.operands[i].render (this);
+        }
         result.append (")");
     }
 }
