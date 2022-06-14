@@ -96,20 +96,14 @@ public class RendererC extends Renderer
         {
             AccessElement ae = (AccessElement) op;
             ae.operands[0].render (this);
-            if (ae.operands.length == 2)
+            result.append (".get (");  // safe element access
+            ae.operands[1].render (this);
+            if (ae.operands.length == 3)
             {
-                result.append ("[");
-                ae.operands[1].render (this);
-                result.append ("]");
-            }
-            else if (ae.operands.length == 3)
-            {
-                result.append ("(");
-                ae.operands[1].render (this);
                 result.append (",");
                 ae.operands[2].render (this);
-                result.append (")");
             }
+            result.append (")");
             return true;
         }
         if (op instanceof AccessVariable)
