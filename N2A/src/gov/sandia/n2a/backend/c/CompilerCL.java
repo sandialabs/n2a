@@ -220,7 +220,8 @@ public class CompilerCL extends Compiler
         {
             command.add (source.toString ());
         }
-        command.add ("/Fo" + output.getParent () + "\\");  // Set directory for intermediate object file(s). Path only works on Windows, but that should always be true of CL.
+        Path parent = output.getParent ();
+        command.add ("/Fo" + parent + "\\");  // Set directory for intermediate object file(s). Path only works on Windows, but that should always be true of CL.
 
         // All remaining items are passed to linker
         command.add ("/link");
@@ -239,7 +240,15 @@ public class CompilerCL extends Compiler
         }
         command.add ("/out:" + output);
 
-        return runCommand (command);
+        Path out = runCommand (command);
+
+        // Try to clean up .obj file left by the compile step.
+        String stem = output.getFileName ().toString ();
+        int pos = stem.lastIndexOf (".");
+        if (pos > 0) stem = stem.substring (0, pos);
+        Files.deleteIfExists (parent.resolve (stem + ".obj"));
+
+        return out;
     }
 
     public Path linkLibrary (boolean shared) throws Exception
