@@ -1096,9 +1096,11 @@ n2a::MDoc::save ()
             pos = file.find_first_of ('/', pos);
             if (pos == String::npos) break;  // This should omit that last path element. We only want to process directories.
             String parent = file.substr (0, pos);
-#           ifdef _MSC_VER
+#           if  defined(_MSC_VER)  // MSVC
             int result = _mkdir (parent.c_str ());
-#           else
+#           elif  defined(_WIN32)  ||  defined(__WIN32__)  // mingw64, particularly under MSYS2
+            int result = mkdir (parent.c_str ());
+#           else  // POSIX standard
             int result = mkdir (parent.c_str (), 0777);  // Do this blindly. If dir already exists, an error is returned but no harm is done. If dir can't be created, file write will fail below.
 #           endif
             pos += 1;

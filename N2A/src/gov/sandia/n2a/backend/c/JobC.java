@@ -270,7 +270,7 @@ public class JobC extends Thread
         Compiler.Factory factory = BackendC.getFactory (env);
         Map<String,Boolean> sources = new HashMap<String,Boolean> ();  // List of source names, associated with flag indicating that a type-specific object should be built.
         sources.put ("runtime",   true);
-        sources.put ("io",        true);
+        sources.put ("holder",    true);
         sources.put ("MNode",     true);  // Doesn't really have any template on numeric type, but other variants are meaningful.
         sources.put ("profiling", false);
         if (T.equals ("int")) sources.put ("fixedpoint", true);
@@ -307,7 +307,7 @@ public class JobC extends Thread
         (
             JobC.class, runtimeDir, "runtime/",
             "fixedpoint.cc", "fixedpoint.h", "fixedpoint.tcc",
-            "io.cc", "io.h", "io.tcc",
+            "holder.cc", "holder.h", "holder.tcc",
             "KDTree.h", "StringLite.h",
             "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
             "MNode.h", "MNode.cc",
@@ -377,7 +377,7 @@ public class JobC extends Thread
         c.setOutput (binary);
         c.addSource (source);
         c.addObject (runtimeDir.resolve (objectName ("runtime")));
-        c.addObject (runtimeDir.resolve (objectName ("io")));
+        c.addObject (runtimeDir.resolve (objectName ("holder")));
         c.addObject (runtimeDir.resolve (objectName ("MNode")));
         if (T.equals ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
         List<Path> envProvidedObjects = providedObjects.get (env);
@@ -429,7 +429,7 @@ public class JobC extends Thread
         c.setOutput (library);
         c.addObject (object);
         c.addObject (runtimeDir.resolve (objectName ("runtime")));
-        c.addObject (runtimeDir.resolve (objectName ("io")));
+        c.addObject (runtimeDir.resolve (objectName ("holder")));
         c.addObject (runtimeDir.resolve (objectName ("MNode")));
         if (T.equals ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
         List<Path> envProvidedObjects = providedObjects.get (env);
