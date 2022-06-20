@@ -177,7 +177,7 @@ public class RemoteLSF extends RemoteUnix
 
         try (AnyProcess proc = build ("bkill", force ? "" : "-s SIGTERM", String.valueOf (pid)).start ())
         {
-            proc.wait ();  // To avoid killing the process by closing the channel.
+            proc.wait ();  // To avoid killing the bkill process by closing the channel.
         }
     }
 
