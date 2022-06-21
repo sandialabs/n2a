@@ -49,6 +49,11 @@ public class ReadMatrix extends Function
         return true;
     }
 
+    public boolean isMatrixInput ()
+    {
+        return true;
+    }
+
     public void determineExponent (ExponentContext context)
     {
         String mode = "";

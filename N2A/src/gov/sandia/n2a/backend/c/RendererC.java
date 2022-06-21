@@ -354,7 +354,8 @@ public class RendererC extends Renderer
         if (op instanceof Mmatrix)
         {
             Mmatrix m = (Mmatrix) op;
-            result.append ("*" + m.name + "->getMatrix (");
+            if (! (m.parent instanceof Variable)  ||  ! ((Variable) m.parent).hasAttribute ("MatrixPointer")) result.append ("*");  // Dereference the returned value, since variable is not a pointer.
+            result.append (m.name + "->getMatrix (");
             keyPath (m);
             if (useExponent)
             {
@@ -470,7 +471,8 @@ public class RendererC extends Renderer
             ReadMatrix r = (ReadMatrix) op;
             // Currently, ReadMatrix sets its exponent = exponentNext, so we will never do a shift here.
             // Any shifting should be handled by matrixHelper while loading and converting the matrix to integer.
-            result.append ("*" + r.name + "->A");  // matrices are held in pointers, so need to dereference
+            if (! (r.parent instanceof Variable)  ||  ! ((Variable) r.parent).hasAttribute ("MatrixPointer")) result.append ("*");  // matrices are held in pointers, so need to dereference
+            result.append (r.name + "->A");
             return true;
         }
         if (op instanceof Rows)

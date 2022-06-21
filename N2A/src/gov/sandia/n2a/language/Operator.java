@@ -187,6 +187,15 @@ public class Operator implements Cloneable
         return false;
     }
 
+    /**
+        Indicates that this is a function that reads a matrix from file and that the memory structure of the
+        matrix is unknown. Used mainly by C backend to allocate suitable storage for an abstract matrix.
+    **/
+    public boolean isMatrixInput ()
+    {
+        return false;
+    }
+
     public void visit (Visitor visitor)
     {
         visitor.visit (this);

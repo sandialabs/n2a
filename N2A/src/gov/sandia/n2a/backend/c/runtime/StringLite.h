@@ -71,6 +71,28 @@ public:
     /**
         This constructor allows numbers to be passed as string arguments without extra conversion code.
     **/
+    String (int value)
+    {
+        memory    = 0;
+        top       = 0;
+        capacity_ = 0;
+
+        char buffer[16];
+        sprintf (buffer, "%i", value);
+        assign (buffer, strlen (buffer));
+    }
+
+    String (long value)
+    {
+        memory    = 0;
+        top       = 0;
+        capacity_ = 0;
+
+        char buffer[32];
+        sprintf (buffer, "%li", value);
+        assign (buffer, strlen (buffer));
+    }
+
     String (double value)
     {
         memory    = 0;

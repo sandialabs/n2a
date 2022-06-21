@@ -32,6 +32,11 @@ public class Mmatrix extends Mfile
         };
     }
 
+    public boolean isMatrixInput ()
+    {
+        return true;
+    }
+
     public void determineExponent (ExponentContext context)
     {
         // By construction, we can't get an exponent hint.

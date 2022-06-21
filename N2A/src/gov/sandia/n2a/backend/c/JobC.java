@@ -493,11 +493,8 @@ public class JobC extends Thread
         findLiveReferences (digestedModel);
         digestedModel.determineTypes ();
         digestedModel.determineDuration ();
-        if (T.equals ("int"))
-        {
-            digestedModel.assignParents ();
-            digestedModel.determineExponents ();
-        }
+        digestedModel.assignParents ();
+        if (T.equals ("int")) digestedModel.determineExponents ();
         digestedModel.findConnectionMatrix ();
         analyzeEvents (digestedModel);
         analyze (digestedModel);
@@ -2508,9 +2505,9 @@ public class JobC extends Thread
                         }
                         else
                         {
-                            result.append ("& ");
+                            if (! v.hasAttribute ("MatrixPointer")) result.append ("& ");
                             context.global = false;
-                            result.append (resolve (av.reference, context, false, "dummy->", false));
+                            result.append (resolve (av.reference, context, true, "dummy->", false));  // Actually an rvalue, but we claim lvalue to finesse resolve() into not adding dereference for matrix pointer.
                             context.global = true;
                         }
                     }
@@ -2641,6 +2638,7 @@ public class JobC extends Thread
             result.append ("{\n");
             for (Variable v : bed.localMembers)
             {
+                if (v.hasAttribute ("MatrixPointer")) continue;
                 result.append ("  " + zero (mangle (v), v) + ";\n");
             }
             result.append ("}\n");
@@ -4587,6 +4585,7 @@ public class JobC extends Thread
     {
         if (v.type instanceof Matrix)
         {
+            if (v.hasAttribute ("MatrixPointer")) return "MatrixAbstract<" + T + "> *";
             Matrix m = (Matrix) v.type;
             int rows = m.rows ();
             int cols = m.columns ();
@@ -4599,27 +4598,21 @@ public class JobC extends Thread
 
     public static String zero (String name, Variable v) throws Exception
     {
-        if      (v.type instanceof Scalar) return name + " = 0";
-        else if (v.type instanceof Matrix) return "::clear (" + name + ")";
-        else if (v.type instanceof Text  ) return name + ".clear ()";
-        else
-        {
-            Backend.err.get ().println ("Unknown Type");
-            throw new Backend.AbortRun ();
-        }
+        if (v.type instanceof Scalar) return name + " = 0";
+        if (v.type instanceof Matrix) return "::clear (" + name + ")";  // Don't check for matrix pointer, because zero() should never be called for such variables.
+        if (v.type instanceof Text  ) return name + ".clear ()";
+        Backend.err.get ().println ("Unknown Type");
+        throw new Backend.AbortRun ();
     }
 
     public static String clear (String name, Variable v, double value, RendererC context) throws Exception
     {
         String p = context.print (value, v.exponent);
-        if      (v.type instanceof Scalar) return name + " = " + p;
-        else if (v.type instanceof Matrix) return "::clear (" + name + ", " + p + ")";
-        else if (v.type instanceof Text  ) return name + ".clear ()";
-        else
-        {
-            Backend.err.get ().println ("Unknown Type");
-            throw new Backend.AbortRun ();
-        }
+        if (v.type instanceof Scalar) return name + " = " + p;
+        if (v.type instanceof Matrix) return "::clear (" + name + ", " + p + ")";  // Don't check for matrix pointer, because clear() should never be called for such variables.
+        if (v.type instanceof Text  ) return name + ".clear ()";
+        Backend.err.get ().println ("Unknown Type");
+        throw new Backend.AbortRun ();
     }
 
     public static String clearAccumulator (String name, Variable v, RendererC context) throws Exception
@@ -4627,7 +4620,7 @@ public class JobC extends Thread
         switch (v.assignment)
         {
             case Variable.MULTIPLY:
-            case Variable.DIVIDE:   return clear (name, v, 1, context);
+            case Variable.DIVIDE:   return clear (name, v, 1,                        context);
             case Variable.MIN:      return clear (name, v, Double.POSITIVE_INFINITY, context);
             case Variable.MAX:      return clear (name, v, Double.NEGATIVE_INFINITY, context);
             case Variable.ADD:
@@ -4757,6 +4750,10 @@ public class JobC extends Thread
             {
                 name = mangle (r.variable);
             }
+        }
+        if (r.variable.hasAttribute ("MatrixPointer")  &&  ! lvalue)
+        {
+            return "(* " + containers + name + ")";  // Actually stored as a pointer
         }
         return containers + name;
     }

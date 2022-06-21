@@ -3183,11 +3183,17 @@ public class EquationSet implements Comparable<EquationSet>
         for (Variable v : variables)
         {
             // Set v as the parent of all its equations
+            int inputMatrices = 0;
             for (EquationEntry e : v.equations)
             {
-                if (e.expression != null) e.expression.parent = v;
+                if (e.expression != null)
+                {
+                    e.expression.parent = v;
+                    if (e.expression.isMatrixInput ()) inputMatrices++;
+                }
                 // e.condition.parent should always be null, because it is not actually assigned to the variable.
             }
+            if (inputMatrices > 0  &&  inputMatrices == v.equations.size ()  &&  v.assignment == Variable.REPLACE) v.addAttribute ("MatrixPointer");
         }
         for (EquationSet s : parts) s.assignParents ();
     }
