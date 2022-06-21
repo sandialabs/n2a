@@ -545,16 +545,16 @@ public class Operator implements Cloneable
         }
         else if (node instanceof ASTIdentifier)
         {
-            String value = node.jjtGetValue ().toString ();
-            if (value.endsWith ("()"))
-            {
-                Factory f = operators.get (value.substring (0, value.length () - 2));
-                if (f == null) result = new AccessElement ();  // It's either this or an undefined function. In the second case, variable access will fail.
-                else           result = f.createInstance ();
-            }
-            else
+            if (node.jjtGetNumChildren () == 0)  // ID without parentheses
             {
                 result = new AccessVariable ();
+            }
+            else  // ID() with parentheses
+            {
+                Identifier ID = (Identifier) node.jjtGetValue ();
+                Factory f = operators.get (ID.name);
+                if (f == null) result = new AccessElement ();  // It's either this or an undefined function. In the second case, variable access will fail.
+                else           result = f.createInstance ();
             }
         }
         else if (node instanceof ASTConstant) result = new Constant ();

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -30,8 +30,8 @@ public class AccessElement extends Function implements NonzeroIterable
         int count = l.jjtGetNumChildren ();
 
         operands = new Operator[count+1];
-        String value = node.jjtGetValue ().toString ();
-        operands[0] = new AccessVariable (value.substring (0, value.length () - 2));  // Remove "()" from the end of name.
+        Identifier ID = (Identifier) node.jjtGetValue ();
+        operands[0] = new AccessVariable (ID.name, ID.columnBegin, ID.columnEnd);
         operands[0].parent = this;
         for (int i = 0; i < count; i++)
         {

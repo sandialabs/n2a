@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -886,6 +886,7 @@ public class NodePart extends NodeContainer
 
     public static String validIdentifierFrom (String name)
     {
+        name = name.trim ();
         if (name.length () == 0) return "";
 
         StringBuilder result = new StringBuilder ();
@@ -895,8 +896,8 @@ public class NodePart extends NodeContainer
         for (int i = 1; i < name.length (); i++)
         {
             c = name.charAt (i);
-            if (Character.isJavaIdentifierPart (c)) result.append (c);
-            else                                    result.append ('_');
+            if (Character.isJavaIdentifierPart (c)  ||  c == ' ') result.append (c);
+            else                                                  result.append ('_');
         }
         return result.toString ();
     }
@@ -911,7 +912,7 @@ public class NodePart extends NodeContainer
         for (int i = 1; i < name.length (); i++)
         {
             c = name.charAt (i);
-            if (! Character.isJavaIdentifierPart (c)  &&  c != '.') return false;
+            if (! Character.isJavaIdentifierPart (c)  &&  c != '.'  &&  c != ' ') return false;
         }
 
         return true;

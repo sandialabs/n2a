@@ -9,13 +9,14 @@ options
 PARSER_BEGIN(ExpressionParser)
 
 /*
-Copyright 2013,2016 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.parse;
 
+import gov.sandia.n2a.language.Identifier;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.type.Text;
 
@@ -63,7 +64,7 @@ PARSER_END(ExpressionParser)
 TOKEN_MGR_DECLS:
 {
     int parenDepth;  // For counting parentheses nesting in PossibleUnit mode
-    int squareDepth;  // Ditto for square bracket.
+    int squareDepth; // Ditto for square bracket.
 }
 
 <*> SKIP:
@@ -97,7 +98,7 @@ TOKEN_MGR_DECLS:
     | <LRND:    "(" >
     | <RRND:    ")" >
 
-    | <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>|".")*("'")*>
+    | <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>|"."|" ")*("'")*>  // Notice that spaces are allowed inside an identifier
     | <#LETTER: ["$", "A"-"Z", "_", "a"-"z", "\u0080"-"\u221d", "\u221f"-"\uffff"]>  // Past lower-ASCII we don't care about character class, but skip infinity (\u221e).
     | <#DIGIT:  ["0"-"9"]>
 
@@ -353,12 +354,12 @@ void MatrixExpression() #Matrix : {}
 }
 
 // TODO: Make () an operation that applies to any expression, not just variables and functions.
-void Identifier() #Identifier : {Token t; Token p = null;}
+void Identifier() #Identifier : {Token t;}
 {
-    t = <IDENTIFIER> [p = <LRND> [CommaExpression()] <RRND>]
+    t = <IDENTIFIER> [<LRND> [CommaExpression()] <RRND>]
     {
-        if (p == null) jjtThis.jjtSetValue(t.image);
-        else           jjtThis.jjtSetValue(t.image + "()");
+        Identifier ID = new Identifier (t.image, t.beginColumn, t.endColumn);
+        jjtThis.jjtSetValue (ID);
     }
 }
 
@@ -373,7 +374,7 @@ void Constant() #Constant : {Token t; Token u; String unitName = "";}
       |
     t = <NUMBER> (u = <UNIT> {unitName += u.image;})*
     {
-        UnitValue result = new UnitValue ();  // Should really use Quantity, but not clear how to get a QuantityFactory from a Unit when type is unknown.
+        UnitValue result = new UnitValue ();
         try
         {
             String image = t.image.toLowerCase ();

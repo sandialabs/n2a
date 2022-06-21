@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,6 +21,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.Identifier;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.MainFrame;
@@ -471,7 +472,7 @@ public class NodeVariable extends NodeContainer
         for (; i < name.length (); i++)
         {
             c = name.charAt (i);
-            if (! Character.isJavaIdentifierPart (c)  &&  c != '.') break;
+            if (! Character.isJavaIdentifierPart (c)  &&  c != '.'  &&  c != ' ') break;
         }
         for (; i < name.length (); i++)
         {
@@ -517,7 +518,7 @@ public class NodeVariable extends NodeContainer
         }
 
         String[] parts = input.split ("=", 2);
-        String nameAfter = parts[0].trim ().replaceAll ("[ \\n\\t]", "");
+        String nameAfter = Identifier.canonical (parts[0].trim ().replaceAll ("[\\n\\t]", ""));
         String valueAfter;
         if (parts.length > 1)  // Explicit assignment
         {

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,19 +18,33 @@ public class AccessVariable extends Operator
     public String            name;      // of target variable as it appears in the AST node (which we throw away). May be modified by EquationSet.flatten(), but not by our own simplify().
     public VariableReference reference; // non-null when this node has been resolved in the context of an EquationSet
 
+    // For in-place renaming of variables by the UI.
+    public int columnBegin; // Position of first character in source line.
+    public int columnEnd;   // Position of last character in source line. Not necessarily same as columnBegin+name.lenght()-1, since original text might not be canonical.
+
     public AccessVariable ()
     {
     }
 
-    public AccessVariable (String name)
+    public AccessVariable (String name, int columnBegin, int columnEnd)
     {
-        this.name = name;
+        this.name        = name;
+        this.columnBegin = columnBegin;
+        this.columnEnd   = columnEnd;
     }
 
     public AccessVariable (VariableReference reference)
     {
         this.reference = reference;
         name = reference.variable.nameString ();
+    }
+
+    public void getOperandsFrom (SimpleNode node)
+    {
+        Identifier ID = (Identifier) node.jjtGetValue ();
+        name        = ID.name;
+        columnBegin = ID.columnBegin;
+        columnEnd   = ID.columnEnd;
     }
 
     public int getOrder ()
@@ -49,11 +63,6 @@ public class AccessVariable extends Operator
     {
         String[] pieces = name.split ("'", 2);
         return pieces[0];
-    }
-
-    public void getOperandsFrom (SimpleNode node)
-    {
-        name = node.jjtGetValue ().toString ();
     }
 
     public Operator simplify (Variable from, boolean evalOnly)

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,6 +13,7 @@ import java.util.List;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.language.Identifier;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
@@ -230,7 +231,7 @@ public class NodeAnnotation extends NodeContainer
         }
 
         String[] parts = input.split ("=", 2);
-        String name = parts[0].trim ().replaceAll ("[ \\n\\t]", "");
+        String name = Identifier.canonical (parts[0].trim ().replaceAll ("[\\n\\t]", ""));
         String value;
         if (parts.length > 1) value = parts[1].trim ();
         else                  value = "";

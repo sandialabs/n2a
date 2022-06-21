@@ -4578,7 +4578,7 @@ public class JobC extends Thread
     **/
     public static String mangle (String prefix, String input)
     {
-        return prefix + NodePart.validIdentifierFrom (input);
+        return prefix + NodePart.validIdentifierFrom (input).replaceAll (" ", "_");
     }
 
     public String type (Variable v)

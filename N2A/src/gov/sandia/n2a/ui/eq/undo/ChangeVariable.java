@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -412,7 +412,7 @@ public class ChangeVariable extends UndoableView
         }
 
         // The name of v can also change, since it might describe a path through a changed part or connection binding. See EquationSet.resolveLHS().
-        AccessVariable av = new AccessVariable (v.nameString ());
+        AccessVariable av = new AccessVariable (v.nameString (), 0, 0);
         av.reference = v.reference;
         return changeExpression (av, renamed, v.container);
     }
