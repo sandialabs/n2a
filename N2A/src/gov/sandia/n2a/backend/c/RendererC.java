@@ -453,7 +453,7 @@ public class RendererC extends Renderer
                 }
                 else  // Some keywords are calculated
                 {
-                    result.append ("String (\"" + mode + "\")");
+                    result.append ("(String (\"" + mode + "\")");
                     boolean commaNeeded = ! mode.isEmpty ();
                     for (Entry<String,Operator> k : o.keywords.entrySet ())
                     {
@@ -469,6 +469,7 @@ public class RendererC extends Renderer
                         // else badness -- This case should be flagged during pre-processing in JobC
                         // TODO: support calculated mode flags of types beyond string
                     }
+                    result.append (").c_str ()");
                 }
             }
             result.append (")");
