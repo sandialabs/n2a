@@ -67,6 +67,7 @@ import gov.sandia.n2a.language.operator.Subtract;
 import gov.sandia.n2a.language.operator.Transpose;
 import gov.sandia.n2a.language.parse.ASTConstant;
 import gov.sandia.n2a.language.parse.ASTIdentifier;
+import gov.sandia.n2a.language.parse.ASTKeyword;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.ASTMatrix;
 import gov.sandia.n2a.language.parse.SimpleNode;
@@ -254,34 +255,6 @@ public class Operator implements Cloneable
         if (exponentNew != exponent  ||  centerNew != center) context.from.changed = true;
         exponent = exponentNew;
         center   = centerNew;
-    }
-
-    /**
-        The hint is expected to be a median magnitude, that is, a center power.
-        A reasonable default is 0, which produces Q16.16 numbers.
-    **/
-    public int getExponentHint (String mode, int defaultValue)
-    {
-        for (String p : mode.split (","))
-        {
-            p = p.trim ();
-            if (p.startsWith ("median"))
-            {
-                String magnitude = "";
-                String[] pieces = p.split ("=", 2);
-                if (pieces.length > 1) magnitude = pieces[1].trim ();
-                if (magnitude.isEmpty ()) return 0;
-                try
-                {
-                    double value = parse (magnitude).getDouble ();
-                    if (value <= 0) return 0;
-                    return (int) Math.floor (Math.log (value) / Math.log (2));  // log base 2
-                }
-                catch (Exception e) {}
-                break;
-            }
-        }
-        return defaultValue;
     }
 
     public int centerPower ()
@@ -545,16 +518,16 @@ public class Operator implements Cloneable
         }
         else if (node instanceof ASTIdentifier)
         {
-            if (node.jjtGetNumChildren () == 0)  // ID without parentheses
+            Identifier ID = (Identifier) node.jjtGetValue ();
+            if (ID.hadParens)
             {
-                result = new AccessVariable ();
-            }
-            else  // ID() with parentheses
-            {
-                Identifier ID = (Identifier) node.jjtGetValue ();
                 Factory f = operators.get (ID.name);
                 if (f == null) result = new AccessElement ();  // It's either this or an undefined function. In the second case, variable access will fail.
                 else           result = f.createInstance ();
+            }
+            else
+            {
+                result = new AccessVariable ();
             }
         }
         else if (node instanceof ASTConstant) result = new Constant ();
@@ -564,6 +537,7 @@ public class Operator implements Cloneable
             if (node.jjtGetNumChildren () == 1) return getFrom ((SimpleNode) node.jjtGetChild (0));
             result = new Split ();  // Lists can exist elsewhere besides a $type split, but they should be processed out by getOperandsFrom(SimpleNode).
         }
+        else if (node instanceof ASTKeyword) throw new Error ("Keyword argument must appear inside a function call");
         else result = new Operator ();
         result.getOperandsFrom (node);
         return result;

@@ -11,9 +11,10 @@ package gov.sandia.n2a.language;
 **/
 public class Identifier
 {
-    public String name;
-    public int    columnBegin; // position of first character in source line
-    public int    columnEnd;   // position of last character in source line. Not necessarily same as columnBegin+name.length()-1, since original text might not be canonical.
+    public String  name;
+    public boolean hadParens;
+    public int     columnBegin; // position of first character in source line
+    public int     columnEnd;   // position of last character in source line. Not necessarily same as columnBegin+name.length()-1, since original text might not be canonical.
 
     /**
         Parses the given string, which must be properly-formatted number with optional unit specified at end.

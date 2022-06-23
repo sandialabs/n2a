@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,7 +14,6 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
-import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.linear.MatrixDense;
 import tech.units.indriya.AbstractUnit;
 
@@ -43,10 +42,7 @@ public class Grid extends Function
             operands[i].determineExponent (context);
         }
 
-        boolean raw = false;
-        int last = operands.length - 1;
-        if (last > 0) raw = operands[last].getString ().contains ("raw");
-
+        boolean raw = getKeywordFlag ("raw");
         if (raw) updateExponent (context, MSB, 0);       // integer
         else     updateExponent (context, -1,  MSB - 1); // Since output never quite reaches 1, all bits can be fractional.
     }
@@ -79,20 +75,14 @@ public class Grid extends Function
         int nx = 1;
         int ny = 1;
         int nz = 1;
-        boolean raw = false;
         if (operands.length >= 2) nx = (int) Math.floor (((Scalar) operands[1].eval (context)).value);
         if (operands.length >= 3) ny = (int) Math.floor (((Scalar) operands[2].eval (context)).value);
         if (operands.length >= 4) nz = (int) Math.floor (((Scalar) operands[3].eval (context)).value);
-        if (operands.length >= 5)
-        {
-            Type mode = operands[4].eval (context);
-            if (mode instanceof Text  &&  ((Text) mode).value.contains ("raw")) raw = true;
-        }
 
         // compute xyz in stride order
         Matrix result = new MatrixDense (3, 1);
         int sx = ny * nz;  // stride x
-        if (raw)
+        if (getKeywordFlag ("raw"))
         {
             result.set (0, i / sx);  // (i / sx) is an integer operation, so remainder is truncated.
             i %= sx;

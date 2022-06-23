@@ -578,8 +578,7 @@ public class JobC extends Thread
                 if (op instanceof Input)
                 {
                     Input i = (Input) op;
-                    String mode = i.getMode ();
-                    if ((mode.contains ("time")  ||  mode.contains ("smooth"))  &&  ! from.hasAttribute ("global")  &&  ! T.equals ("int"))
+                    if (i.usesTime ()  &&  ! from.hasAttribute ("global")  &&  ! T.equals ("int"))
                     {
                         from.addDependencyOn (dt);  // So that time epsilon can be determined from dt when initializing input.
                     }
@@ -993,11 +992,17 @@ public class JobC extends Thread
                                 bed.localColumns.add (o.columnName);
                             }
                         }
-                        if (o.operands.length > 3  &&  o.operands[3] instanceof Add)  // Mode is calculated
+                        if (o.keywords != null)
                         {
-                            Add a = (Add) o.operands[3];
-                            a.name = "columnMode" + stringNames.size ();
-                            stringNames.put (op, a.name);
+                            for (Operator kv : o.keywords.values ())
+                            {
+                                if (kv instanceof Add)  // Mode is calculated
+                                {
+                                    Add a = (Add) kv;
+                                    a.name = "columnMode" + stringNames.size ();
+                                    stringNames.put (op, a.name);
+                                }
+                            }
                         }
                     }
                     // Detect functions that need static handles
@@ -1172,9 +1177,8 @@ public class JobC extends Thread
             if (T.equals ("int")) result.append (", " + i.exponent);
             result.append (");\n");
 
-            String mode = i.getMode ();
-            boolean smooth =             mode.contains ("smooth");
-            boolean time   = smooth  ||  mode.contains ("time");
+            boolean smooth =             i.getKeywordFlag ("smooth");
+            boolean time   = smooth  ||  i.getKeywordFlag ("time");
             if (time)   result.append ("  " + i.name + "->time = true;\n");
             if (smooth) result.append ("  " + i.name + "->smooth = true;\n");
         }
@@ -4334,29 +4338,9 @@ public class JobC extends Thread
                             context.result.append (pad + o.columnName + " = \"" + o.variableName + "\";\n");
                         }
                     }
-                    if (o.operands[0] instanceof Constant  &&  o.operands.length > 3)  // Apply "raw" attribute now, if set.
+                    if (o.operands[0] instanceof Constant  &&  o.getKeywordFlag ("raw"))  // Apply "raw" attribute now, if set.
                     {
-                        if (o.operands[3] instanceof Constant)
-                        {
-                            if (o.operands[3].getString ().contains ("raw"))
-                            {
-                                context.result.append (pad + o.name + "->raw = true;\n");
-                            }
-                        }
-                        else if (o.operands[3] instanceof Add)  // calculated string
-                        {
-                            // Rather than actually calculate the string, just scan for any component which contains "raw".
-                            // Only a very pathological case would not have this. IE: "r" + "a" + "w"
-                            Add a = (Add) o.operands[3];
-                            for (Operator fa : flattenAdd (a))
-                            {
-                                if (fa.getString ().contains ("raw"))
-                                {
-                                    context.result.append (pad + o.name + "->raw = true;\n");
-                                    break;
-                                }
-                            }
-                        }
+                        context.result.append (pad + o.name + "->raw = true;\n");
                     }
                     return true;  // Continue to drill down, because I/O functions can be nested.
                 }
@@ -4365,8 +4349,7 @@ public class JobC extends Thread
                     Input i = (Input) op;
                     if (i.operands[0] instanceof Constant)
                     {
-                        String mode = i.getMode ();
-                        if ((mode.contains ("time")  ||  mode.contains ("smooth"))  &&  ! context.global  &&  ! T.equals ("int"))  // Note: In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
+                        if (i.usesTime ()  &&  ! context.global  &&  ! T.equals ("int"))  // Note: In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
                         {
                             // TODO: This is a bad way to set time epsilon, but not sure if there is a better one.
                             // The main problem is that several different instances may all do the same initialization,
@@ -4482,9 +4465,8 @@ public class JobC extends Thread
                         if (T.equals ("int")) context.result.append (", " + i.exponent);
                         context.result.append (");\n");
 
-                        String mode = i.getMode ();
-                        boolean smooth =             mode.contains ("smooth");
-                        boolean time   = smooth  ||  mode.contains ("time");
+                        boolean smooth =             i.getKeywordFlag ("smooth");
+                        boolean time   = smooth  ||  i.getKeywordFlag ("time");
                         if (time)
                         {
                             if (time)   context.result.append (pad + i.name + "->time = true;\n");
@@ -4506,28 +4488,9 @@ public class JobC extends Thread
                     if (! (o.operands[0] instanceof Constant))
                     {
                         context.result.append (pad + "OutputHolder<" + T + "> * " + o.name + " = outputHelper<" + T + "> (" + o.fileName + ");\n");
-                        if (o.operands.length > 3)
+                        if (o.getKeywordFlag ("raw"))
                         {
-                            if (o.operands[3] instanceof Constant)
-                            {
-                                if (o.operands[3].getString ().contains ("raw"))
-                                {
-                                    context.result.append (pad + o.name + "->raw = true;\n");
-                                }
-                            }
-                            else if (o.operands[3] instanceof Add)
-                            {
-                                // Even though we could check the assembled string in generated code, it's cleaner to check for a constant substring now.
-                                Add a = (Add) o.operands[3];
-                                for (Operator fa : flattenAdd (a))
-                                {
-                                    if (fa.getString ().contains ("raw"))
-                                    {
-                                        context.result.append (pad + o.name + "->raw = true;\n");
-                                        break;
-                                    }
-                                }
-                            }
+                            context.result.append (pad + o.name + "->raw = true;\n");
                         }
                     }
                     return true;

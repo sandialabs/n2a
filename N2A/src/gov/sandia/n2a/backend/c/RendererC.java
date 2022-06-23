@@ -6,6 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.c;
 
+import java.util.Map.Entry;
+
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessElement;
@@ -234,7 +236,7 @@ public class RendererC extends Renderer
         if (op instanceof Grid)
         {
             Grid g = (Grid) op;
-            boolean raw = g.operands.length >= 5  &&  g.operands[4].getString ().contains ("raw");
+            boolean raw = g.getKeywordFlag ("raw");
             int shift = g.exponent - g.exponentNext;
 
             if (useExponent  &&  shift != 0) result.append ("(");
@@ -269,8 +271,7 @@ public class RendererC extends Renderer
             result.append (i.name + "->get (");
             if (i.operands.length < 3  ||  i.operands[2].getDouble () < 0)  // return matrix
             {
-                boolean time = i.getMode ().contains ("time");
-                String defaultLine = time ? "-INFINITY" : "0";
+                String defaultLine = i.usesTime () ? "-INFINITY" : "0";
                 if (i.operands.length > 1)
                 {
                     Operator op1 = i.operands[1];
@@ -421,20 +422,55 @@ public class RendererC extends Renderer
             if (useExponent) result.append (", " + o.operands[1].exponentNext);
 
             result.append (", ");
-            if (o.operands.length < 4)  // No mode string
+            if (o.keywords == null)  // No mode string
             {
                 result.append ("0");  // null
             }
-            else if (o.operands[3] instanceof Constant)  // Mode string is constant
+            else  // Assemble mode string from keywords
             {
-                result.append ("\"" + o.operands[3] + "\"");
+                String mode = "";
+                boolean allConstant = true;
+                for (Entry<String,Operator> k : o.keywords.entrySet ())
+                {
+                    Operator kv = k.getValue ();
+                    if (kv instanceof Constant)
+                    {
+                        Constant c = (Constant) kv;
+                        mode += "," + k.getKey () + "=";
+                        Type t = c.value;
+                        if (t instanceof Scalar) mode += c.unitValue;
+                        else                     mode += t.toString ();
+                    }
+                    else
+                    {
+                        allConstant = false;
+                    }
+                }
+                if (mode.startsWith (",")) mode = mode.substring (1);
+                if (allConstant)
+                {
+                    result.append ("\"" + mode + "\"");
+                }
+                else  // Some keywords are calculated
+                {
+                    result.append ("String (\"" + mode + "\")");
+                    boolean commaNeeded = ! mode.isEmpty ();
+                    for (Entry<String,Operator> k : o.keywords.entrySet ())
+                    {
+                        Operator kv = k.getValue ();
+                        if (kv instanceof Add)
+                        {
+                            Add a = (Add) kv;
+                            result.append ("+\"");
+                            if (commaNeeded) result.append (",");
+                            result.append (k.getKey () + "=\"+" + a.name);
+                            commaNeeded = true;
+                        }
+                        // else badness -- This case should be flagged during pre-processing in JobC
+                        // TODO: support calculated mode flags of types beyond string
+                    }
+                }
             }
-            else if (o.operands[3] instanceof Add)  // Mode string is calculated
-            {
-                Add a = (Add) o.operands[3];
-                result.append (a.name);  // No need for cast or call c_str()
-            }
-            // else badness
             result.append (")");
 
             return true;

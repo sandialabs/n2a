@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -68,23 +68,27 @@ public class Input extends Function
 
     public void determineExponent (ExponentContext context)
     {
-        for (int i = 1; i < operands.length; i++) operands[i].determineExponent (context);
+        for (Operator op : operands) op.determineExponent (context);
 
         int centerNew   = MSB / 2;
-        int exponentNew = getExponentHint (getMode (), 0) + MSB - centerNew;
+        int exponentNew = getExponentHint (0) + MSB - centerNew;
         updateExponent (context, exponentNew, centerNew);
+    }
+
+    public boolean usesTime ()
+    {
+        if (getKeywordFlag ("time"  )) return true;
+        if (getKeywordFlag ("smooth")) return true;
+        return false;
     }
 
     public void determineExponentNext ()
     {
-        String mode = getMode ();
-        boolean time = mode.contains ("time")  ||  mode.contains ("smooth");
-
         if (operands.length > 1)
         {
             Operator op = operands[1];
-            if (time) op.exponentNext = exponentTime;
-            else      op.exponentNext = MSB;  // We expect an integer.
+            if (usesTime ()) op.exponentNext = exponentTime;
+            else             op.exponentNext = MSB;  // We expect an integer.
             op.determineExponentNext ();
         }
         if (operands.length > 2)
@@ -97,7 +101,7 @@ public class Input extends Function
 
     public void determineUnit (boolean fatal) throws Exception
     {
-        for (int i = 0; i < operands.length; i++) operands[i].determineUnit (fatal);
+        for (Operator op : operands) op.determineUnit (fatal);
         unit = AbstractUnit.ONE;
     }
 
@@ -300,9 +304,8 @@ public class Input extends Function
         Holder H = null;
         try
         {
-            String mode = getMode ();
-            boolean smooth =             mode.contains ("smooth");
-            boolean time   = smooth  ||  mode.contains ("time");
+            boolean smooth =             evalKeywordFlag (context, "smooth");
+            boolean time   = smooth  ||  evalKeywordFlag (context, "time");
 
             // get an input holder
             String path = ((Text) operands[0].eval (context)).value;
@@ -435,19 +438,6 @@ public class Input extends Function
                 return H.A;
             }
         }
-    }
-
-    /**
-        Attempt to retrieve mode flag, if it exists.
-        If not, the returned string may be empty or a parameter unrelated to mode.
-        In the latter case, it will generally not contain a meaingful mode, such
-        as "time" or "smooth".
-    **/
-    public String getMode ()
-    {
-        if (operands.length == 2) return operands[1].getString ();
-        if (operands.length >= 4) return operands[3].getString ();
-        return "";
     }
 
     public String toString ()

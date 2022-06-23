@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -41,9 +41,7 @@ public class Tangent extends Function
         op.determineExponent (context);
 
         int centerNew   = MSB / 2;
-        int exponentNew = 0;
-        if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
-        exponentNew += MSB - centerNew;
+        int exponentNew = getExponentHint (0) + MSB - centerNew;
         updateExponent (context, exponentNew, centerNew);
     }
 

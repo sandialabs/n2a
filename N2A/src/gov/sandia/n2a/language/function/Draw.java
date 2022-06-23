@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -43,14 +43,30 @@ public class Draw extends Function
 
     public void determineExponent (ExponentContext context)
     {
+        for (Operator op : operands)
+        {
+            op.determineExponent (context);
+        }
         updateExponent (context, MSB, 0);
+
+        if (keywords == null) return;
+        for (Operator op : keywords.values ())
+        {
+            op.determineExponent (context);
+        }
     }
 
     public void determineExponentNext ()
     {
-        for (int i = 0; i < operands.length; i++)
+        for (Operator op : operands)
         {
-            Operator op = operands[i];
+            op.exponentNext = op.exponent;
+            op.determineExponentNext ();
+        }
+
+        if (keywords == null) return;
+        for (Operator op : keywords.values ())
+        {
             op.exponentNext = op.exponent;
             op.determineExponentNext ();
         }
@@ -69,8 +85,8 @@ public class Draw extends Function
     public static class Holder implements AutoCloseable
     {
         public Path    path;
-        public boolean single;              // Store a single frame rather than an image sequence.
-        public String  format     = "png";  // name of format as recognized by supporting libraries
+        public boolean hold;            // Store a single frame rather than an image sequence.
+        public String  format = "png";  // name of format as recognized by supporting libraries
         public boolean dirCreated;
 
         public boolean raw;
@@ -189,7 +205,7 @@ public class Draw extends Function
             if (image == null) return;
 
             String filename;
-            if (single)
+            if (hold)
             {
                 filename = path.toString () + "." + format;
             }
@@ -206,7 +222,7 @@ public class Draw extends Function
             try {ImageIO.write (image, format, new File (filename).getAbsoluteFile ());}
             catch (IOException e) {e.printStackTrace ();}
 
-            if (! single) image = null;
+            if (! hold) image = null;
             frameCount++;
         }
     }
@@ -220,39 +236,36 @@ public class Draw extends Function
             Holder H = new Holder (simulator, path);
             simulator.holders.put (path, H);
 
-            if (operands.length > 3)
+            if (keywords != null)
             {
-                String mode = operands[operands.length-1].getString ();  // mode should not require eval, just retrieval
-                H.raw    = mode.contains ("raw");
-                H.single = mode.contains ("single");
-                String[] pieces = mode.split (",");
-                for (String p : pieces)
+                H.raw  = getKeywordFlag ("raw");
+                H.hold = getKeywordFlag ("hold");
+
+                String value = evalKeyword (context, "size", "");
+                if (! value.isBlank ())
                 {
-                    String[] pieces2 = p.split ("=");
-                    if (pieces2.length == 1) continue;
-                    switch (pieces2[0])
+                    String[] pieces = value.split ("x");
+                    try
                     {
-                        case "size":
-                            String[] pieces3 = pieces2[1].split ("x");
-                            try
-                            {
-                                H.width = Integer.valueOf (pieces3[0]);
-                                H.height = H.width;
-                            }
-                            catch (NumberFormatException e) {}
-                            if (pieces3.length > 1)
-                            {
-                                try {H.height = Integer.valueOf (pieces3[1]);}
-                                catch (NumberFormatException e) {}
-                            }
-                            break;
-                        case "clear":
-                            try {H.clearColor = Color.decode (pieces2[1]);}
-                            catch (NumberFormatException e) {}
-                            break;
+                        H.width = Integer.valueOf (pieces[0]);
+                        H.height = H.width;
+                    }
+                    catch (NumberFormatException e) {}
+                    if (pieces.length > 1)
+                    {
+                        try {H.height = Integer.valueOf (pieces[1]);}
+                        catch (NumberFormatException e) {}
                     }
                 }
+
+                value = evalKeyword (context, "clear", "");
+                if (! value.isBlank ())
+                {
+                    try {H.clearColor = Color.decode (value);}
+                    catch (NumberFormatException e) {}
+                }
             }
+
             return H;
         }
         if (! (o instanceof Holder))

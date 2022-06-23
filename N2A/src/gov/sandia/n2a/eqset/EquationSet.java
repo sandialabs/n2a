@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -3333,8 +3333,7 @@ public class EquationSet implements Comparable<EquationSet>
                     if (op instanceof Input)
                     {
                         Input i = (Input) op;
-                        String mode = i.getMode ();
-                        if (mode.contains ("time")  ||  mode.contains ("smooth"))
+                        if (i.usesTime ())
                         {
                             Object key = null;
                             Operator path = i.operands[0];
@@ -3482,10 +3481,10 @@ public class EquationSet implements Comparable<EquationSet>
                 else if (op instanceof Power)
                 {
                     Power p = (Power) op;
-                    if (! warningPow  &&  (p.hint == null  ||  ! p.hint.contains ("median")))
+                    if (! warningPow  &&  p.median == null)
                     {
-                        if (p.hint == null) ps.println ("\t\t  WARNING: operator^ is very sensitive. For best results, use pow() and provide a hint for median output value.");
-                        else                ps.println ("\t\t  WARNING: pow() is very sensitive. For best results, provide a hint for median output value.");
+                        if (p.isFunction) ps.println ("\t\t  WARNING: pow() is very sensitive. For best results, provide a hint for median output value.");
+                        else              ps.println ("\t\t  WARNING: operator^ is very sensitive. For best results, use pow() and provide a hint for median output value.");
                         warningPow = true;
                     }
                 }

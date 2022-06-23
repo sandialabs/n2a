@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -48,8 +48,7 @@ public class Exp extends Function
 
         // Currently, op is always signed. The best we can do is assume output is centered around 1.
         int centerNew   = MSB / 2;
-        int exponentNew = 0;
-        if (operands.length >= 2) exponentNew = getExponentHint (operands[1].getString (), exponentNew);
+        int exponentNew = getExponentHint (0);
         exponentNew += MSB - centerNew;
         updateExponent (context, exponentNew, centerNew);
     }

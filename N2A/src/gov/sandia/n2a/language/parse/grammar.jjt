@@ -78,6 +78,7 @@ TOKEN_MGR_DECLS:
     | <SEMI:    ";" >
     | <GT:      ">" >
     | <LT:      "<" >
+    | <ASSIGN:  "=" >
     | <EQ:      "==">
     | <LE:      "<=">
     | <GE:      ">=">
@@ -123,6 +124,7 @@ TOKEN_MGR_DECLS:
     | <USEMI:    ";"  > {matchedToken.kind = ExpressionParserConstants.SEMI;   }: DEFAULT
     | <UGT:      ">"  > {matchedToken.kind = ExpressionParserConstants.GT;     }: DEFAULT
     | <ULT:      "<"  > {matchedToken.kind = ExpressionParserConstants.LT;     }: DEFAULT
+    | <UASSIGN:  "="  > {matchedToken.kind = ExpressionParserConstants.ASSIGN; }: DEFAULT
     | <UEQ:      "==" > {matchedToken.kind = ExpressionParserConstants.EQ;     }: DEFAULT
     | <ULE:      "<=" > {matchedToken.kind = ExpressionParserConstants.LE;     }: DEFAULT
     | <UGE:      ">=" > {matchedToken.kind = ExpressionParserConstants.GE;     }: DEFAULT
@@ -167,10 +169,22 @@ ASTStart Start() #Start : {}
 
 void CommaExpression() #List : {}
 {
-    OrExpression() (<COMMA> OrExpression())*
+    KeywordExpression() (<COMMA> KeywordExpression())*
     {
     	jjtThis.jjtSetValue("LIST");
     }
+}
+
+void KeywordExpression() : {Token t;}
+{
+    LOOKAHEAD(2)
+    (t = <IDENTIFIER> <ASSIGN> OrExpression()
+        {
+            jjtThis.jjtSetValue (t.image);
+        }
+    ) #Keyword(1)
+      |
+    OrExpression()
 }
 
 void OrExpression() : {}
@@ -354,11 +368,12 @@ void MatrixExpression() #Matrix : {}
 }
 
 // TODO: Make () an operation that applies to any expression, not just variables and functions.
-void Identifier() #Identifier : {Token t;}
+void Identifier() #Identifier : {Token t; Token p = null;}
 {
-    t = <IDENTIFIER> [<LRND> [CommaExpression()] <RRND>]
+    t = <IDENTIFIER> [p = <LRND> [CommaExpression()] <RRND>]
     {
         Identifier ID = new Identifier (t.image, t.beginColumn, t.endColumn);
+        ID.hadParens =  p != null;
         jjtThis.jjtSetValue (ID);
     }
 }

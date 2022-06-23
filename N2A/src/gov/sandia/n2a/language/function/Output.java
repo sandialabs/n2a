@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -77,31 +77,45 @@ public class Output extends Function
     **/
     public void determineExponent (ExponentContext context)
     {
-        Operator op = operands[1];
-        op.determineExponent (context);
+        Operator op1 = operands[1];
+        op1.determineExponent (context);
         if (operands.length > 2) operands[2].determineExponent (context);  // In case column index is computed.
-        updateExponent (context, op.exponent, op.center);
+        updateExponent (context, op1.exponent, op1.center);
+
+        if (keywords == null) return;
+        for (Operator op : keywords.values ())
+        {
+            op.determineExponent (context);
+        }
     }
 
     public void determineExponentNext ()
     {
         // Value
-        Operator op = operands[1];
-        op.exponentNext = exponentNext;
-        op.determineExponentNext ();
+        Operator op1 = operands[1];
+        op1.exponentNext = exponentNext;
+        op1.determineExponentNext ();
 
         // Column identifier (name or index)
         if (operands.length >= 3)
         {
-            op = operands[2];
-            if (operands.length > 3  &&  operands[3].getString ().contains ("raw"))
+            Operator op2 = operands[2];
+            if (getKeywordFlag ("raw"))
             {
-                op.exponentNext = MSB;  // index, so pure integer
+                op2.exponentNext = MSB;  // index, so pure integer
             }
             else
             {
-                op.exponentNext = op.exponent;  // name; can be a string or a float
+                op2.exponentNext = op2.exponent;  // name; can be a string or a float
             }
+            op2.determineExponentNext ();
+        }
+
+        // Keywords
+        if (keywords == null) return;
+        for (Operator op : keywords.values ())
+        {
+            op.exponentNext = op.exponent;
             op.determineExponentNext ();
         }
     }
@@ -179,10 +193,10 @@ public class Output extends Function
 
         public void trace (double now, String column, float value)
         {
-            trace (now, column, value, null);
+            trace (now, column, value, null, null);
         }
 
-        public void trace (double now, String column, float value, String mode)
+        public void trace (double now, String column, float value, Map<String,Operator> mode, Instance context)
         {
             // Detect when time changes and dump any previously traced values.
             if (now > t)
@@ -225,17 +239,27 @@ public class Output extends Function
                 columnMode.set (column, index);  // Report all column names, regardless of whether they have any mode flags.
                 if (mode != null)
                 {
-                    String[] hints = mode.split (",");
-                    for (String h : hints)
+                    for (Entry<String,Operator> h : mode.entrySet ())
                     {
-                        h = h.trim ();
-                        if (h.isEmpty ()  ||  h.equals ("raw")) continue;
-                        String[] pieces = h.split ("=", 2);
-                        String key = pieces[0].trim ();
-                        String val = "";
-                        if (pieces.length > 1) val = pieces[1].trim ();
+                        String key = h.getKey ();
+                        String val;
+                        Operator op = h.getValue ();
+                        if (op instanceof Constant)
+                        {
+                            Constant c = (Constant) op;
+                            Type t = c.value;
+                            if (t instanceof Scalar) val = c.unitValue.toString ();  // So we render units.
+                            else                     val = t.toString ();
+                        }
+                        else
+                        {
+                            val = op.eval (context).toString ();
+                        }
+
                         switch (key)
                         {
+                            case "raw":
+                                break;
                             case "timeScale":
                                 columnMode.set (val, 0, "scale");  // Set on time column.
                                 break;
@@ -316,12 +340,9 @@ public class Output extends Function
         Simulator simulator = Simulator.instance.get ();
         if (simulator == null) return result;
 
-        String mode = null;
-        if (operands.length > 3) mode = operands[3].eval (context).toString ();
-
-        String path = ((Text) operands[0].eval (context)).value;
-        boolean raw =  mode != null  &&  mode.contains ("raw");
-        Holder H = Holder.get (simulator, path, raw);
+        String  path = ((Text) operands[0].eval (context)).value;
+        boolean raw  = getKeywordFlag ("raw");
+        Holder  H    = Holder.get (simulator, path, raw);
 
         String column = getColumnName (context);
 
@@ -336,11 +357,11 @@ public class Output extends Function
             int cols = A.columns ();
             if (rows == 1)
             {
-                for (int c = 0; c < cols; c++) H.trace (now, column + "(" + c + ")", (float) A.get (0, c), mode);
+                for (int c = 0; c < cols; c++) H.trace (now, column + "(" + c + ")", (float) A.get (0, c), keywords, context);
             }
             else if (cols == 1)
             {
-                for (int r = 0; r < rows; r++) H.trace (now, column + "(" + r + ")", (float) A.get (r, 0), mode);
+                for (int r = 0; r < rows; r++) H.trace (now, column + "(" + r + ")", (float) A.get (r, 0), keywords, context);
             }
             else
             {
@@ -348,14 +369,14 @@ public class Output extends Function
                 {
                     for (int c = 0; c < cols; c++)
                     {
-                        H.trace (now, column + "(" + r + "," + c + ")", (float) A.get (r, c), mode);
+                        H.trace (now, column + "(" + r + "," + c + ")", (float) A.get (r, c), keywords, context);
                     }
                 }
             }
         }
         else
         {
-            H.trace (now, column, (float) ((Scalar) result).value, mode);
+            H.trace (now, column, (float) ((Scalar) result).value, keywords, context);
         }
 
         return result;

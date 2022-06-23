@@ -22,7 +22,7 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 /**
-    Instance type. Represents a entire concrete object at simulation time.
+    Instance type. Represents an entire concrete object at simulation time.
 **/
 public class Instance extends Type
 {

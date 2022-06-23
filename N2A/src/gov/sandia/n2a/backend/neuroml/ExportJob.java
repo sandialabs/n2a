@@ -2797,20 +2797,17 @@ public class ExportJob extends XMLutility
             String scale     = "";
             String timeScale = "";
             String color     = "";
-            if (output.operands.length > 3)
+            if (output.keywords != null)
             {
-                String mode = output.operands[3].getString ();
-                String[] pieces = mode.split (",");
-                for (String s : pieces)
+                for (Entry<String,Operator> h : output.keywords.entrySet ())
                 {
-                    String[] nv = s.split ("=", 2);
-                    if (nv.length < 2) continue;
-                    String key = nv[0].trim ();
-                    if (key.equals ("raw")) continue;
-                    String value = nv[1].trim ();
-                    if (value.isEmpty ()) continue;
+                    String key   = h.getKey ();
+                    String value = ((Constant) h.getValue ()).unitValue.toString ();
                     switch (key)
                     {
+                        case "raw":
+                            break;
+
                         // Display
                         case "xmin":
                             display.xmin = value;

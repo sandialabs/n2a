@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,14 +15,15 @@ import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.function.Log;
-import gov.sandia.n2a.language.parse.ASTList;
+import gov.sandia.n2a.language.parse.ASTKeyword;
 import gov.sandia.n2a.language.parse.SimpleNode;
 import gov.sandia.n2a.language.type.Instance;
 import tech.units.indriya.AbstractUnit;
 
 public class Power extends OperatorBinary
 {
-    public String hint;
+    public boolean  isFunction;  // Indicates pow() rather than operator^
+    public Operator median;
 
     public static Factory factory ()
     {
@@ -44,36 +45,36 @@ public class Power extends OperatorBinary
     {
         if (node.jjtGetNumChildren () == 1)
         {
-            Object o = node.jjtGetChild (0);
-            if (! (o instanceof ASTList)) throw new Error ("AST for function has unexpected form");
-            node = (SimpleNode) o;
-            hint = "";  // This is in function form, so force all processing to be pow()
+            node = (SimpleNode) node.jjtGetChild (0);
+            isFunction = true;  // This is in function form, so force all processing to be pow()
         }
+
+        operand0 = Operator.getFrom ((SimpleNode) node.jjtGetChild (0));
+        operand1 = Operator.getFrom ((SimpleNode) node.jjtGetChild (1));
+        operand0.parent = this;
+        operand1.parent = this;
+
         int count = node.jjtGetNumChildren ();
-        if (count >= 2)
+        for (int i = 2; i < count; i++)
         {
-            operand0 = Operator.getFrom ((SimpleNode) node.jjtGetChild (0));
-            operand1 = Operator.getFrom ((SimpleNode) node.jjtGetChild (1));
-            if (count > 2)       hint = ((SimpleNode) node.jjtGetChild (2)).jjtGetValue ().toString ();
-            operand0.parent = this;
-            operand1.parent = this;
-        }
-        else
-        {
-            throw new Error ("AST for function has unexpected form");
+            SimpleNode n = (SimpleNode) node.jjtGetChild (i);
+            if (! n.jjtGetValue ().equals ("median")) continue;
+            if (! (n instanceof ASTKeyword)) continue;
+            median = Operator.getFrom ((SimpleNode) n.jjtGetChild (0));
+            break;
         }
     }
 
     public Associativity associativity ()
     {
-        if (hint == null) return Associativity.RIGHT_TO_LEFT;  // for ^
-        return Associativity.LEFT_TO_RIGHT;  // for pow()
+        if (isFunction) return Associativity.LEFT_TO_RIGHT;  // for pow()
+        return Associativity.RIGHT_TO_LEFT;  // for ^
     }
 
     public int precedence ()
     {
-        if (hint == null) return 2;  // for ^
-        return 1;  // for pow()
+        if (isFunction) return 1;  // for pow()
+        return 2;  // for ^
     }
 
     public Operator simplify (Variable from, boolean evalOnly)
@@ -119,27 +120,35 @@ public class Power extends OperatorBinary
 
         int centerNew   = MSB / 2;
         int exponentNew = UNKNOWN;
-        if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
+        if (median == null)
         {
-            double log2b = 0;
-            if (operand0 instanceof Constant)
+            if (operand0.exponent != UNKNOWN  &&  operand1.exponent != UNKNOWN)
             {
-                double b = operand0.getDouble ();
-                if (b != 0) log2b = Math.log (b) / Math.log (2);
-            }
-            else
-            {
-                log2b = operand0.centerPower ();
-            }
+                double log2b = 0;
+                if (operand0 instanceof Constant)
+                {
+                    double b = operand0.getDouble ();
+                    if (b != 0) log2b = Math.log (b) / Math.log (2);
+                }
+                else
+                {
+                    log2b = operand0.centerPower ();
+                }
 
-            double a;
-            if (operand1 instanceof Constant) a = operand1.getDouble ();
-            else                              a = Math.pow (2, operand1.centerPower ());
+                double a;
+                if (operand1 instanceof Constant) a = operand1.getDouble ();
+                else                              a = Math.pow (2, operand1.centerPower ());
 
-            exponentNew = 0;
-            if (log2b != 0  &&  a != 0) exponentNew = (int) Math.floor (a * log2b);
+                exponentNew = 0;
+                if (log2b != 0  &&  a != 0) exponentNew = (int) Math.floor (a * log2b);
+            }
         }
-        if (hint != null) exponentNew = getExponentHint (hint, exponentNew);
+        else
+        {
+            double value = median.getDouble ();
+            if (value <= 0) exponentNew = 0;
+            else            exponentNew = (int) Math.floor (Math.log (value) / Math.log (2));  // log base 2
+        }
         if (exponentNew != UNKNOWN)
         {
             exponentNew += MSB - centerNew;
@@ -172,19 +181,23 @@ public class Power extends OperatorBinary
 
     public void render (Renderer renderer)
     {
-        if (hint == null)  // render as ^
-        {
-            super.render (renderer);
-        }
-        else  // render as pow()
+        if (isFunction)  // render as pow()
         {
             if (renderer.render (this)) return;
             renderer.result.append ("pow(");
             operand0.render (renderer);
             renderer.result.append (", ");
             operand1.render (renderer);
-            if (! hint.isEmpty ()) renderer.result.append (", \"" + hint + "\"");
+            if (median != null)
+            {
+                renderer.result.append (", median=");
+                median.render (renderer);
+            }
             renderer.result.append (")");
+        }
+        else  // render as ^
+        {
+            super.render (renderer);
         }
     }
 
@@ -216,7 +229,7 @@ public class Power extends OperatorBinary
 
     public String toString ()
     {
-        if (hint == null) return "^";
-        return "pow";
+        if (isFunction) return "pow";
+        return "^";
     }
 }
