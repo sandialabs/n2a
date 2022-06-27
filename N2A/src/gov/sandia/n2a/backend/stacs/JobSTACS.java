@@ -139,13 +139,24 @@ public class JobSTACS extends Thread
         }
         catch (Exception e)
         {
-            if (! (e instanceof AbortRun)) e.printStackTrace (Backend.err.get ());
+            PrintStream ps = Backend.err.get ();
+            if (ps == System.err)  // Need to reopen err stream.
+            {
+                try {Backend.err.set (ps = new PrintStream (new FileOutputStream (errPath.toFile (), true), false, "UTF-8"));}
+                catch (Exception e2) {}
+            }
+            if (e instanceof AbortRun)
+            {
+                String message = e.getMessage ();
+                if (message != null) ps.println (message);
+            }
+            else e.printStackTrace (ps);
 
             try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), localJobDir.resolve ("finished"));}
             catch (Exception f) {}
         }
 
-        // If an exception occurred, the error file will still be open.
+        // If an exception occurred, the err file will still be open.
         PrintStream ps = Backend.err.get ();
         if (ps != System.err) ps.close ();
     }

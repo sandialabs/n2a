@@ -24,6 +24,7 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Split;
+import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
@@ -78,6 +79,7 @@ public class JobC extends Thread
     public    Path runtimeDir; // local or remote
     public    Path gcc;        // local or remote
 
+    protected boolean supportsUnicodeIdentifiers;
     public    String  T;
     protected String  SIMULATOR;
     protected long    seed;
@@ -195,6 +197,7 @@ public class JobC extends Thread
             if (lib)
             {
                 makeLibrary (source);
+                job.clear ("backendStatus");
             }
             else
             {
@@ -209,18 +212,30 @@ public class JobC extends Thread
                     job.set (Host.size (errPath), "errSize");
                 }
 
-                env.submitJob (job, false, command);
+                job.clear ("backendStatus");
+                env.submitJob (job, env.clobbersOut (), command);
             }
         }
         catch (Exception e)
         {
-            if (! (e instanceof AbortRun)) e.printStackTrace (Backend.err.get ());
+            PrintStream ps = Backend.err.get ();
+            if (ps == System.err)  // Need to reopen err stream.
+            {
+                try {Backend.err.set (ps = new PrintStream (new FileOutputStream (errPath.toFile (), true), false, "UTF-8"));}
+                catch (Exception e2) {}
+            }
+            if (e instanceof AbortRun)
+            {
+                String message = e.getMessage ();
+                if (message != null) ps.println (message);
+            }
+            else e.printStackTrace (ps);
 
             try {Host.stringToFile ("failure", localJobDir.resolve ("finished"));}
             catch (Exception f) {}
         }
 
-        // If an exception occurred, the error file will still be open.
+        // If an exception occurred, the err file could still be open.
         PrintStream ps = Backend.err.get ();
         if (ps != System.err) ps.close ();
     }
@@ -260,7 +275,11 @@ public class JobC extends Thread
             {
                 for (Path file : list)
                 {
-                    if (file.getFileName ().toString ().endsWith (".o")) Files.delete (file);
+                    if (file.getFileName ().toString ().endsWith (".o"))
+                    {
+                        job.set ("", "backendStatus");
+                        Files.delete (file);
+                    }
                 }
             }
             catch (IOException e) {}
@@ -268,6 +287,7 @@ public class JobC extends Thread
 
         // Compile runtime
         Compiler.Factory factory = BackendC.getFactory (env);
+        supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
         Map<String,Boolean> sources = new HashMap<String,Boolean> ();  // List of source names, associated with flag indicating that a type-specific object should be built.
         sources.put ("runtime",   true);
         sources.put ("holder",    true);
@@ -281,6 +301,7 @@ public class JobC extends Thread
 
             Path object = runtimeDir.resolve (objectName);
             if (Files.exists (object)) continue;
+            job.set ("Compiling " + objectName, "backendStatus");
 
             Compiler c = factory.make (localJobDir);
             if (gprof) c.setProfiling ();
@@ -303,9 +324,11 @@ public class JobC extends Thread
     **/
     public boolean unpackRuntime () throws Exception
     {
+        job.set ("Unpacking runtime", "backendStatus");
+
         return unpackRuntime
         (
-            JobC.class, runtimeDir, "runtime/",
+            JobC.class, job, runtimeDir, "runtime/",
             "fixedpoint.cc", "fixedpoint.h", "fixedpoint.tcc",
             "holder.cc", "holder.h", "holder.tcc",
             "KDTree.h", "StringLite.h",
@@ -318,12 +341,14 @@ public class JobC extends Thread
         );
     }
 
-    public static boolean unpackRuntime (Class<?> from, Path runtimeDir, String prefix, String... names) throws Exception
+    public static boolean unpackRuntime (Class<?> from, MNode job, Path runtimeDir, String prefix, String... names) throws Exception
     {
         boolean changed = false;
         Files.createDirectories (runtimeDir);
         for (String s : names)
         {
+            if (job != null) job.set ("Unpacking " + s, "backendStatus");
+
             URL url = from.getResource (prefix + s);
             long resourceModified = url.openConnection ().getLastModified ();
             Path f = runtimeDir.resolve (s);
@@ -355,6 +380,8 @@ public class JobC extends Thread
 
     public Path build (Path source) throws Exception
     {
+        job.set ("Compiling model", "backendStatus");
+
         Compiler.Factory factory = BackendC.getFactory (env);
         String name   = source.getFileName ().toString ();
         int    pos    = name.lastIndexOf ('.');
@@ -445,6 +472,8 @@ public class JobC extends Thread
 
     public void digestModel () throws Exception
     {
+        job.set ("Analyzing model", "backendStatus");
+
         if (digestedModel.source.containsKey ("pin"))
         {
             digestedModel.collectPins ();
@@ -723,10 +752,30 @@ public class JobC extends Thread
         BackendDataC bed = (BackendDataC) s.backendData;
         bed.analyze (s);
         bed.analyzeLastT (s);
+
+        // Special case for host that clobber stdout
+        // Look for output("", ...) and replace first parameter with "out"
+        if (! env.clobbersOut ()) return;
+        Transformer t = new Transformer ()
+        {
+            public Operator transform (Operator op)
+            {
+                if (op instanceof Output)
+                {
+                    Output out = (Output) op;
+                    if (out.operands[0].toString ().isBlank ()) out.operands[0] = new Constant ("out");
+                    return out;  // Does not really replace output(), but does terminate descent.
+                }
+                return null;
+            }
+        };
+        for (Variable v : s.variables) v.transform (t);
     }
 
     public void generateCode (Path source) throws Exception
     {
+        job.set ("Generating C++ code", "backendStatus");
+
         StringBuilder result = new StringBuilder ();
         RendererC context;
         if (T.equals ("int")) context = new RendererCfp (this, result);
@@ -4539,9 +4588,34 @@ public class JobC extends Thread
         These are very unlikely in practice, and ignoring them will make more
         readable code.
     **/
-    public static String mangle (String prefix, String input)
+    public String mangle (String prefix, String input)
     {
-        return prefix + NodePart.validIdentifierFrom (input).replaceAll (" ", "_");
+        // Use filter from NodePart.
+        // NodePart allows spaces in names, so we have to do one extra step for C++.
+        if (supportsUnicodeIdentifiers) return prefix + NodePart.validIdentifierFrom (input).replaceAll (" ", "_");
+
+        // Old-school mangling
+        // Just like the above method, this is not guaranteed to create unique names,
+        // but the failure case are rather pathological.
+        StringBuilder result = new StringBuilder (prefix);
+        for (char c : input.toCharArray ())
+        {
+            // Even though underscore (_) is a legitimate character,
+            // we don't use it.  Instead it is used as an escape for unicode.
+            // We use variable length unicode values because there is no need to parse
+            // the identifiers back into wide characters.
+            if (   ('a' <= c && c <= 'z')
+                || ('A' <= c && c <= 'Z')
+                || ('0' <= c && c <= '9'))
+            {
+                result.append (c);
+            }
+            else
+            {
+                result.append ("_" + Integer.toHexString (c));
+            }
+        }
+        return result.toString ();
     }
 
     public String type (Variable v)

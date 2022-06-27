@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.host;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MTextField;
@@ -16,6 +17,7 @@ import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -59,6 +61,7 @@ public class RemoteSlurm extends RemoteUnix
     public class EditorPanel2 extends EditorPanel
     {
         public MTextField fieldAccount = new MTextField (config, "account");
+        public MTextField fieldMaxTime = new MTextField (config, "maxTime", "1d");
 
         public void arrange ()
         {
@@ -70,6 +73,7 @@ public class RemoteSlurm extends RemoteUnix
                     Lay.FL (Box.createHorizontalStrut (30), labelWarning),
                     Lay.FL (new JLabel ("Home Directory"), fieldHome),
                     Lay.FL (new JLabel ("Slurm Account"), fieldAccount),
+                    Lay.FL (new JLabel ("Max Job Time (as UCUM d, h or min)"), fieldMaxTime),
                     Lay.FL (new JLabel ("Timeout (seconds)"), fieldTimeout),
                     Lay.FL (new JLabel ("Max Channels"), fieldMaxChannels),
                     Lay.FL (buttonConnect, buttonRestart, buttonZombie),
@@ -85,15 +89,14 @@ public class RemoteSlurm extends RemoteUnix
     {
         long pid = job.getOrDefault (0l, "pid");
         if (pid == 0) return false;
-
-        try (AnyProcess proc = build ("squeue -O JobID --noheader -u " + connection.username).start ();
-             BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        for (ProcessInfo proc : getActiveProcs ())
         {
-            String line;
-            while ((line = reader.readLine ()) != null)
+            if (proc.pid == pid)
             {
-                long pidListed = Long.parseLong (line);
-                if (pidListed == pid) return true;
+                job.set (proc.state, "queue");
+                // TODO: add other states that indicate job is still live
+                if (("PENDING|RUNNING").contains (proc.state)) return true;
+                return false;
             }
         }
         return false;
@@ -124,45 +127,66 @@ public class RemoteSlurm extends RemoteUnix
     @Override
     public void submitJob (MNode job, boolean out2err, List<List<String>> commands) throws Exception
     {
-        if (commands.size () != 1) throw new Exception ("RemoteSlurm only supports jobs with a single command");  // TODO: handle multi-command job
-        List<String> command = commands.get (0);
-        submitJob (job, out2err, command.toArray (new String[command.size ()]));
-    }
+        int count = commands.size ();
+        if (count == 0) throw new Exception ("submitJob was called without any commands");
 
-    @Override
-    public void submitJob (MNode job, boolean out2err, String... command) throws Exception
-    {
         Path resourceDir = getResourceDir ();  // implies connect()
         Path jobsDir     = resourceDir.resolve ("jobs");
         Path jobDir      = jobsDir.resolve (job.key ());
+        Path scriptFile  = jobDir.resolve ("n2a_job");
 
-        int cores = job.getOrDefault (1, "host", "cores");
-        int nodes = job.getOrDefault (1, "host", "nodes");
+        String inherit = job.get ("$inherit");
+        String account = config.get ("account");
+        String maxTime = config.getOrDefault ("1d", "maxTime");
+        String time    = job.getOrDefault (maxTime, "host", "time");
+        int    nodes   = job.getOrDefault (1,       "host", "nodes");
+        int    cores   = job.getOrDefault (1,       "host", "cores");
+        String out     = quote (jobDir.resolve (out2err ? "err" : "out"));
+        String err     = quote (jobDir.resolve ("err"));
 
-        try (BufferedWriter writer = Files.newBufferedWriter (jobDir.resolve ("n2a_job")))
+        Duration duration = Duration.ofSeconds ((long) new UnitValue (time).get ());
+        long d = duration.toDays ();
+        int  h = duration.toHoursPart ();
+        int  m = duration.toMinutesPart ();
+        int  s = duration.toSecondsPart ();
+
+        try (BufferedWriter writer = Files.newBufferedWriter (scriptFile))
         {
-            writer.write ("#!/bin/bash\n");
-            writer.write ("mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + combine (command) + "\n");
+            writer.write ("#!/bin/bash -l\n");
+            // Note: There may be other sbatch parameters that are worth controlling here.
+            writer.write ("#SBATCH --nodes="     + nodes + "\n");
+            writer.write ("#SBATCH --time=" + d + "-" + h + ":" + m + ":" + s + "\n");
+            writer.write ("#SBATCH --account="   + account + "\n");
+            writer.write ("#SBATCH --job-name="  + inherit + "\n");
+            writer.write ("#SBATCH --output="    + out + "\n");
+            writer.write ("#SBATCH --error="     + err + "\n");
+            writer.write ("\n");
+
+            // TODO: Update command line with correct form for target HPC system.
+            writer.write ("mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + combine (commands.get (0)) + "\n");
+            for (int i = 1; i < count; i++)
+            {
+                // TODO: need a way to determine ranks per resource set. Right now it's just one per core.
+                writer.write ("[ $? -eq 0 ] && mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + combine (commands.get (i)) + "\n");
+            }
+            writer.write ("\n");
+
+            writer.append ("if [ $? -eq 0 ]; then\n");  // Wait for process to finish.
+            writer.append ("  echo success > finished\n");
+            writer.append ("else\n");
+            writer.append ("  echo failure > finished\n");
+            writer.append ("fi\n");
         }
 
-        // Note: There may be other sbatch parameters that are worth controlling here.
-        try (AnyProcess proc = build (
-                "sbatch",
-                "--nodes="   + nodes,
-                "--time=24:00:00",
-                "--account=" + config.get ("account"),  // TODO: add "account" to panel in getEditor().
-                "--job-name=N2A",  // TODO: use better job name here, one that is unique
-                "--output="  + quote (jobDir.resolve (out2err ? "err" : "out")),
-                "--error="   + quote (jobDir.resolve ("err")),
-                quote (jobDir.resolve ("n2a_job"))).start ();
+        try (AnyProcess proc = build ("sbatch", quote (scriptFile)).start ();
              BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             // Example output:
             //   Using wcid "FY139768"  found on CLI.
             //   Submitted batch job 10979768
-            while (reader.ready ())
+            String line;
+            while ((line = reader.readLine ()) != null)
             {
-                String line = reader.readLine ();
                 String[] parts = line.split ("job", 2);
                 if (parts.length == 2)
                 {
@@ -173,8 +197,7 @@ public class RemoteSlurm extends RemoteUnix
 
             // Failed to enqueue the job
             String stdErr = streamToString (proc.getErrorStream ());
-            Backend.err.get ().println ("Could not start process: " + stdErr);
-            throw new Backend.AbortRun ();
+            throw new Backend.AbortRun ("Could not start process:\n" + stdErr);
         }
     }
 

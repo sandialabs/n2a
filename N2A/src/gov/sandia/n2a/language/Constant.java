@@ -30,6 +30,11 @@ public class Constant extends Operator
         this.value = value;
     }
 
+    public Constant (String value)
+    {
+        this.value = new Text (value);
+    }
+
     public Constant (double value)
     {
         this.value = new Scalar (value);

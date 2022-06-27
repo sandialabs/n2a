@@ -27,6 +27,7 @@ public abstract class Compiler
         String   suffixBinary ();
         String   suffixLibraryStatic ();
         String   suffixLibraryShared ();
+        boolean  supportsUnicodeIdentifiers ();  // UFT-8 encoded characters can be inserted directly into identifiers
     }
 
     protected Host               host;

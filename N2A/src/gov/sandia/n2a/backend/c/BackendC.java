@@ -54,12 +54,11 @@ public class BackendC extends Backend
         String exeName       = exePath.getFileName ().toString ();
         int pos = exeName.lastIndexOf ('.');
         if (pos > 0) exeName = exeName.substring (0, pos);
+        exeName = exeName.toLowerCase ();
         Compiler.Factory f = null;
-        switch (exeName.toLowerCase ())
-        {
-            case "cl": f = new CompilerCL .FactoryCL  (host, exePath); break;
-            default:   f = new CompilerGCC.FactoryGCC (host, exePath); break;
-        }
+        if      (exeName.equals     ("cl"   )) f = new CompilerCL   .FactoryCL    (host, exePath);
+        else if (exeName.startsWith ("clang")) f = new CompilerClang.FactoryClang (host, exePath);
+        else                                   f = new CompilerGCC  .FactoryGCC   (host, exePath);
         host.objects.put ("cxx", f);
         return f;
     }

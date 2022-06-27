@@ -136,6 +136,11 @@ public class CompilerCL extends Compiler
         {
             return ".dll";
         }
+
+        public boolean supportsUnicodeIdentifiers ()
+        {
+            return true;
+        }
     }
 
     protected Path         cl;

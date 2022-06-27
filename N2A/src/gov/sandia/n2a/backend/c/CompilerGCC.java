@@ -6,24 +6,45 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.c;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 
 import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.Host.AnyProcess;
 
 public class CompilerGCC extends Compiler
 {
     public static class FactoryGCC implements Factory
     {
-        protected Host host;
-        protected Path gcc;
+        protected Host  host;
+        protected Path  gcc;
+        protected float version;  // major.minor without any sub-minor version
 
         public FactoryGCC (Host host, Path gcc)
         {
             this.host = host;
             this.gcc  = gcc;
+
+            // Determine version
+            try (AnyProcess proc = host.build (gcc.toString (), "--version").start ();
+                 BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+            {
+                // Very fragile, but works with current versions of GCC and Clang.
+                String line = reader.readLine ();
+                String[] pieces = line.split (" ");
+                for (String p : pieces)
+                {
+                    if (! Character.isDigit (p.charAt (0))) continue;
+                    pieces = p.split ("\\.");
+                    version = Float.valueOf (pieces[0] + "." + pieces[1]);
+                    break;
+                }
+            }
+            catch (Exception e) {e.printStackTrace ();}
         }
 
         public Compiler make (Path localJobDir)
@@ -44,6 +65,11 @@ public class CompilerGCC extends Compiler
         public String suffixLibraryShared ()
         {
             return ".so";
+        }
+
+        public boolean supportsUnicodeIdentifiers ()
+        {
+            return version >= 10;
         }
     }
 

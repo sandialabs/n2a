@@ -1,11 +1,12 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.neuroml;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -151,18 +152,29 @@ public class BackendNeuroML extends Backend
                     command.add ("-neuron");
                     command.add ("-run");
                 }
-                env.submitJob (job, false, command.toArray (new String[command.size ()]));
-            }
-            catch (AbortRun a)
-            {
+                env.submitJob (job, env.clobbersOut (), command.toArray (new String[command.size ()]));
             }
             catch (Exception e)
             {
-                e.printStackTrace (Backend.err.get ());
+                PrintStream ps = Backend.err.get ();
+                if (ps == System.err)  // Need to reopen err stream.
+                {
+                    try {Backend.err.set (ps = new PrintStream (new FileOutputStream (errPath.toFile (), true), false, "UTF-8"));}
+                    catch (Exception e2) {}
+                }
+                if (e instanceof AbortRun)
+                {
+                    String message = e.getMessage ();
+                    if (message != null) ps.println (message);
+                }
+                else e.printStackTrace (ps);
+
+                try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), localJobDir.resolve ("finished"));}
+                catch (Exception f) {}
             }
 
-            // If an exception occurred, the error file could still be open.
-            PrintStream ps = Backend.err.get ();
+            // If an exception occurred, the err file could still be open.
+            PrintStream ps = err.get ();
             if (ps != System.err) ps.close ();
         }
     }

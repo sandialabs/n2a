@@ -40,13 +40,29 @@ public abstract class Backend implements ExtensionPoint
     };
 
     /**
-        This exception indicates to stop the simulation, but don't add any more
-        text to the err PrintStream. Implicitly, the thrower has already printed
-        out a sufficient message, and a java stack trace would simply add clutter.
+        Stop the simulation but don't dump a stack trace.
+        This is thrown when the Java code is working correctly and it has detected
+        a user error or a condition outside the application that prevents the simulation
+        from proceeding.
     **/
     @SuppressWarnings("serial")
     public static class AbortRun extends RuntimeException
     {
+        /**
+            The thrower has already printed a sufficient message to the thread-local err stream.
+        **/
+        public AbortRun ()
+        {
+        }
+
+        /**
+            Additional information should be shown to the user, typically because this exception was
+            thrown when thread-local err stream is not set up.
+        **/
+        public AbortRun (String message)
+        {
+            super (message);
+        }
     }
 
     /**

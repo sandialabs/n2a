@@ -136,7 +136,12 @@ public class InternalBackend extends Backend
             catch (Exception e)
             {
                 stopTime = System.nanoTime ();
-                if (! (e instanceof AbortRun)) e.printStackTrace (err.get ());
+                if (e instanceof AbortRun)
+                {
+                    String message = e.getMessage ();
+                    if (message != null) err.get ().println (message);
+                }
+                else e.printStackTrace (err.get ());
 
                 try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), localJobDir.resolve ("finished"));}
                 catch (Exception f) {}

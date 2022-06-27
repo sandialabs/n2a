@@ -567,6 +567,17 @@ public abstract class Host
         submitJob (job, out2err, commands);
     }
 
+    /**
+        Indicates that the scheduling system on this host writes extra information to stdout.
+        This can interfere with output from the simulation itself, so the backend should take
+        measures to write a separate output file. It is also helpful to set out2err in the
+        submitJob() call, so that all diagnostic information ends up in err.
+    **/
+    public boolean clobbersOut ()
+    {
+        return false;
+    }
+
     public class ProcessInfo
     {
         public long   pid;

@@ -156,8 +156,8 @@ public class Windows extends Host
         proc.waitFor ();
         if (proc.exitValue () != 0)
         {
-            Backend.err.get ().println ("Failed to run job:\n" + streamToString (proc.getErrorStream ()));
-            throw new Backend.AbortRun ();
+            String stdErr = streamToString (proc.getErrorStream ());
+            throw new Backend.AbortRun ("Failed to run job:\n" + stdErr);
         }
 
         // Get PID of newly-started job

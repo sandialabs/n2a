@@ -54,6 +54,8 @@ import javax.swing.tree.TreePath;
 @SuppressWarnings("serial")
 public class NodeJob extends NodeBase
 {
+    public static final ImageIcon iconPreparing = ImageUtil.getImage ("preparing-16.png");
+    public static final ImageIcon iconQueue     = ImageUtil.getImage ("queue-16.png");
     public static final ImageIcon iconComplete  = ImageUtil.getImage ("complete.gif");
     public static final ImageIcon iconUnknown   = ImageUtil.getImage ("help.gif");
     public static final ImageIcon iconFailed    = ImageUtil.getImage ("remove.gif");
@@ -64,7 +66,7 @@ public class NodeJob extends NodeBase
 
     protected String  key;
     protected String  inherit         = "";
-    public    float   complete        = -1; // A number between 0 and 1, where 0 means just started, and 1 means done. -1 means unknown. 2 means failed. 3 means killed-lingering. 4 means killed-dead.
+    public    float   complete        = -1; // A number between 0 and 1, where 0 means just started (including preparation and waiting in HPC queue) and 1 means done. -1 means unknown or waiting for host. 2 means failed. 3 means killed-lingering. 4 means killed-dead.
     protected Date    dateStarted     = null;
     protected Date    dateFinished    = null;
     protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
@@ -94,6 +96,13 @@ public class NodeJob extends NodeBase
     @Override
     public Icon getIcon (boolean expanded)
     {
+        if (complete == 0)
+        {
+            MNode job = getSource ();
+            if (  job.get ("queue").startsWith ("PEND")) return iconQueue;
+            if (! job.get ("backendStatus").isBlank ())  return iconPreparing;
+            // else fall through ...
+        }
         if (complete >= 0  &&  complete < 1) return Utility.makeProgressIcon (complete);
         if (complete == 1) return iconComplete;
         if (complete == 2) return iconFailed;
@@ -317,6 +326,12 @@ public class NodeJob extends NodeBase
                 lastActive = dateStarted.getTime ();
             }
         }
+        boolean statusCouldChange = false;
+        if (complete == 0)
+        {
+            if (  source.get ("queue").startsWith ("PEND")) statusCouldChange = true;
+            if (! source.get ("backendStatus").isBlank ())  statusCouldChange = true;
+        }
         Backend simulator = Backend.getBackend (source.get ("backend"));
         if (complete >= 0  &&  complete < 1)
         {
@@ -368,7 +383,7 @@ public class NodeJob extends NodeBase
         PanelRun   panelRun   = PanelRun.instance;
         PanelStudy panelStudy = PanelStudy.instance;
         if (panelRun == null) return;  // Probably running headless, so skip all UI updates.
-        if (complete != oldComplete)
+        if (complete != oldComplete  ||  statusCouldChange)
         {
             EventQueue.invokeLater (new Runnable ()
             {

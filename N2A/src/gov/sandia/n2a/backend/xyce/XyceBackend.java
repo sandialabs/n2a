@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -27,6 +27,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -93,16 +94,28 @@ class XyceBackend extends Backend
                         job.set (Host.size (errPath), "errSize");
                     }
 
-                    env.submitJob (job, false, xyce, env.quote (cirFile), "-o",  env.quote (prnFile));
-                }
-                catch (AbortRun a)
-                {
+                    env.submitJob (job, env.clobbersOut (), xyce, env.quote (cirFile), "-o",  env.quote (prnFile));
                 }
                 catch (Exception e)
                 {
-                    e.printStackTrace (Backend.err.get ());
+                    PrintStream ps = Backend.err.get ();
+                    if (ps == System.err)  // Need to reopen err stream.
+                    {
+                        try {Backend.err.set (ps = new PrintStream (new FileOutputStream (errPath.toFile (), true), false, "UTF-8"));}
+                        catch (Exception e2) {}
+                    }
+                    if (e instanceof AbortRun)
+                    {
+                        String message = e.getMessage ();
+                        if (message != null) ps.println (message);
+                    }
+                    else e.printStackTrace (ps);
+
+                    try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), localJobDir.resolve ("finished"));}
+                    catch (Exception f) {}
                 }
 
+                // If an exception occurred, the err file could still be open.
                 PrintStream ps = err.get ();
                 if (ps != System.err) ps.close ();
             }

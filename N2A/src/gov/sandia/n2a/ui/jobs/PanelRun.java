@@ -1044,20 +1044,35 @@ public class PanelRun extends JPanel
         StringBuilder contents = new StringBuilder ();
         contents.append ("Status:");
         NodeJob jobNode = (NodeJob) displayNode;
-        if      (jobNode.complete < 0)                           contents.append (" Waiting");
-        else if (jobNode.complete == 0)                          contents.append (" Started");
-        else if (jobNode.complete > 0  &&  jobNode.complete < 1) contents.append (" " + Math.round (jobNode.complete * 100) + "%");
-        else if (jobNode.complete == 1)                          contents.append (" Success");
-        else if (jobNode.complete == 3)                          contents.append (" Killed (lingering)");
-        else if (jobNode.complete == 4)                          contents.append (" Killed");
-        else                                                     contents.append (" Failed");  // complete==2, or any value not specified above
-        contents.append ("\n");
+        MNode job = jobNode.getSource ();  // job can be null if it is deleted while we are preparing this status text.
+        String status = "Failed";  // For complete==2 and any unrecognized state.
+        if      (jobNode.complete <  0) status = "Waiting for host";
+        else if (jobNode.complete == 0)
+        {
+            status = "Started";
+            if (job != null)
+            {
+                if (job.get ("queue").startsWith ("PEND"))
+                {
+                    status = "Waiting in queue";
+                }
+                else
+                {
+                    String backendStatus = job.get ("backendStatus");
+                    if (! backendStatus.isBlank ()) status = backendStatus;
+                }
+            }
+        }
+        else if (jobNode.complete <  1) status = Math.round (jobNode.complete * 100) + "%";
+        else if (jobNode.complete == 1) status = "Success";
+        else if (jobNode.complete == 3) status = "Killed (lingering)";
+        else if (jobNode.complete == 4) status = "Killed";
+        contents.append (" " + status + "\n");
         if (jobNode.dateStarted  != null) contents.append ("  started:  " + jobNode.dateStarted  + "\n");
         if (jobNode.dateFinished != null) contents.append ("  finished: " + jobNode.dateFinished + "\n");
         contents.append ("\n");
 
-        MNode job = jobNode.getSource ();
-        if (job != null)  // job can be null if it is deleted while we are preparing this status text. 
+        if (job != null) 
         {
             appendMetadata (job, contents, "backend");
             appendMetadata (job, contents, "duration");
@@ -1332,6 +1347,7 @@ public class PanelRun extends JPanel
         {
             super ("Delete Jobs (" + env.name + ")");
             this.env = env;
+            if (env instanceof Remote) ((Remote) env).enable ();  // Since this thread is started by user action, we have permission to go interactive.
         }
 
         public void run ()
@@ -1355,7 +1371,6 @@ public class PanelRun extends JPanel
                 if (nodeBase instanceof NodeJob) nodeJob = (NodeJob) nodeBase;
                 else                             nodeJob = (NodeJob) nodeBase.getParent ();
                 MDoc job = (MDoc) nodeJob.getSource ();
-                Host env = Host.get (job);
                
                 try
                 {

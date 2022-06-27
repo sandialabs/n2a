@@ -132,7 +132,7 @@ public class Unix extends Host
             for (int i = 1; i < count; i++)
             {
                 combined = combine (commands.get (i));
-                writer.append ("test $? -eq 0 && " + combined + " >> " + out + " 2>> err\n");
+                writer.append ("[ $? -eq 0 ] && " + combined + " >> " + out + " 2>> err\n");
             }
 
             writer.append ("if [ $? -eq 0 ]; then\n");  // Wait for process to finish.
@@ -148,8 +148,8 @@ public class Unix extends Host
             proc.waitFor ();
             if (proc.exitValue () != 0)
             {
-                Backend.err.get ().println ("Failed to run job:\n" + streamToString (proc.getErrorStream ()));
-                throw new Backend.AbortRun ();
+                String stdErr = streamToString (proc.getErrorStream ());
+                throw new Backend.AbortRun ("Failed to run job:\n" + stdErr);
             }
         }
 
