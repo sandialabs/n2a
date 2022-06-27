@@ -25,15 +25,14 @@ public class Split extends Operator
 
     public void getOperandsFrom (SimpleNode node) throws ParseException
     {
-        if (! (node instanceof ASTList)) throw new Error ("AST for type list has unexpected form");
         ASTList l = (ASTList) node;
         int count = l.jjtGetNumChildren ();
         names = new String[count];
         for (int i = 0; i < count; i++)
         {
-            SimpleNode n = (SimpleNode) l.jjtGetChild (i);
-            if (! (n instanceof ASTIdentifier)) throw new ParseException ("Items in $type list must all be part names.");
-            names[i] = n.jjtGetValue ().toString ();
+            ASTIdentifier n = (ASTIdentifier) l.jjtGetChild (i);
+            Identifier ID = (Identifier) n.jjtGetValue ();
+            names[i] = ID.name;
         }
     }
 
