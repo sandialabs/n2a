@@ -3048,13 +3048,13 @@ public class EquationSet implements Comparable<EquationSet>
 
             if (canDie ()  &&  live.hasUsers ())
             {
-                if (lethalConnection  ||  lethalContainer)
-                {
-                    live.addAttribute ("accessor");
-                }
-                else  // lethalN  ||  lethalP  ||  lethalType
+                if (lethalN  ||  lethalP  ||  lethalType)
                 {
                     live.addAttribute ("initOnly");  // Not exactly true. $live can change after init(), but only indirectly. This forces $live to be set during init().
+                }
+                else  // lethalConnection  ||  lethalContainer
+                {
+                    live.addAttribute ("accessor");
                 }
             }
             else
