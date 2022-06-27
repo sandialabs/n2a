@@ -16,7 +16,6 @@ import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -135,23 +134,21 @@ public class RemoteLSF extends RemoteUnix
         Path jobDir      = jobsDir.resolve (job.key ());
         Path scriptFile  = jobDir.resolve ("n2a_job.lsf");
 
-        String inherit     = job.get ("$inherit").replaceAll (" ", "_");
-        String project     = config.get ("project");
-        String maxWalltime = config.getOrDefault ("1d", "maxTime");
-        String walltime    = job.getOrDefault (maxWalltime, "host", "time");
-        int    nodes       = job.getOrDefault (1,           "host", "nodes");
-        int    cores       = job.getOrDefault (1,           "host", "cores");
-        int    gpus        = job.getOrDefault (0,           "host", "gpus");
+        String inherit = job.get ("$inherit").replaceAll (" ", "_");
+        String project = config.get ("project");
+        String maxTime = config.getOrDefault ("1d", "maxTime");
+        String time    = job.getOrDefault (maxTime, "host", "time");
+        int    nodes   = job.getOrDefault (1,       "host", "nodes");
+        int    cores   = job.getOrDefault (1,       "host", "cores");
+        int    gpus    = job.getOrDefault (0,       "host", "gpus");
 
-        Duration d = Duration.ofSeconds ((long) new UnitValue (walltime).get ());
-        long h = d.toHours ();
-        int  m = d.toMinutesPart ();
+        double duration = new UnitValue (time).get ();
 
         try (BufferedWriter writer = Files.newBufferedWriter (scriptFile))
         {
             writer.write ("#!/bin/bash\n");
             writer.write ("#BSUB -P " + project + "\n");
-            writer.write ("#BSUB -W " + h + ":" + m + "\n");
+            if (duration >= 0) writer.write ("#BSUB -W " + (int) Math.ceil (duration / 60) + "\n");
             writer.write ("#BSUB -nnodes " + nodes + "\n");
             writer.write ("#BSUB -J " + inherit + "\n");
             writer.write ("#BSUB -o " + (out2err ? "err" : "out") + "\n");

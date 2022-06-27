@@ -17,7 +17,6 @@ import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -138,24 +137,20 @@ public class RemoteSlurm extends RemoteUnix
         String inherit = job.get ("$inherit");
         String account = config.get ("account");
         String maxTime = config.getOrDefault ("1d", "maxTime");
-        String time    = job.getOrDefault (maxTime, "host", "time");
+        String time    = job.getOrDefault (maxTime, "host", "time");  // time=0 indicates request infinite time; negative means don't specify time limit (use default for partition)
         int    nodes   = job.getOrDefault (1,       "host", "nodes");
         int    cores   = job.getOrDefault (1,       "host", "cores");
         String out     = quote (jobDir.resolve (out2err ? "err" : "out"));
         String err     = quote (jobDir.resolve ("err"));
 
-        Duration duration = Duration.ofSeconds ((long) new UnitValue (time).get ());
-        long d = duration.toDays ();
-        int  h = duration.toHoursPart ();
-        int  m = duration.toMinutesPart ();
-        int  s = duration.toSecondsPart ();
+        double duration = new UnitValue (time).get ();
 
         try (BufferedWriter writer = Files.newBufferedWriter (scriptFile))
         {
             writer.write ("#!/bin/bash -l\n");
             // Note: There may be other sbatch parameters that are worth controlling here.
             writer.write ("#SBATCH --nodes="     + nodes + "\n");
-            writer.write ("#SBATCH --time=" + d + "-" + h + ":" + m + ":" + s + "\n");
+            if (duration >= 0) writer.write ("#SBATCH --time=" + (int) Math.ceil (duration / 60) + "\n");  // minutes. Can be > 59.
             writer.write ("#SBATCH --account="   + account + "\n");
             writer.write ("#SBATCH --job-name="  + inherit + "\n");
             writer.write ("#SBATCH --output="    + out + "\n");
@@ -163,10 +158,10 @@ public class RemoteSlurm extends RemoteUnix
             writer.write ("\n");
 
             // TODO: Update command line with correct form for target HPC system.
+            // TODO: need a way to determine ranks per resource set. Right now it's just one per core.
             writer.write ("mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + combine (commands.get (0)) + "\n");
             for (int i = 1; i < count; i++)
             {
-                // TODO: need a way to determine ranks per resource set. Right now it's just one per core.
                 writer.write ("[ $? -eq 0 ] && mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + combine (commands.get (i)) + "\n");
             }
             writer.write ("\n");
