@@ -98,7 +98,12 @@ public class RemoteSlurm extends RemoteUnix
                 return false;
             }
         }
-        return false;
+        // If connected, then presumably we succeeded at checking for the process,
+        // so we know it is dead (return false). However, if not connected, we
+        // don't really know state of the process, so claim it is still active
+        // (return true). This prevents the job from going into dead state merely
+        // due to lack of communication.
+        return ! isConnected ();
     }
 
     @Override
