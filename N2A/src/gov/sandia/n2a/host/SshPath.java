@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -46,13 +46,6 @@ public class SshPath implements Path
         this.fileSystem = fileSystem;
         absolute        = path == null  ||  path.length == 0  ||  path[0].startsWith ("/");
 
-        // path parameter should never be null, but we defend against it anyway.
-        if (path == null)
-        {
-            this.path = new String[0];
-            return;
-        }
-
         List<String> elements = new ArrayList<String> ();
         for (String p : path) addElements (p, elements);
         int count = elements.size ();
@@ -97,19 +90,19 @@ public class SshPath implements Path
         return absolute;
     }
 
-    public Path getRoot ()
+    public SshPath getRoot ()
     {
         if (absolute) return fileSystem.rootDir;
         return null;
     }
 
-    public Path getFileName ()
+    public SshPath getFileName ()
     {
         if (path.length == 0) return null;
         return new SshPath (fileSystem, false, path[path.length-1]);
     }
 
-    public Path getParent ()
+    public SshPath getParent ()
     {
         if (path.length == 0) return null;
         if (path.length == 1)
@@ -125,12 +118,12 @@ public class SshPath implements Path
         return path.length;
     }
 
-    public Path getName (int index)
+    public SshPath getName (int index)
     {
         return new SshPath (fileSystem, false, path[index]);
     }
 
-    public Path subpath (int beginIndex, int endIndex)
+    public SshPath subpath (int beginIndex, int endIndex)
     {
         return new SshPath (fileSystem, false, Arrays.copyOfRange (path, beginIndex, endIndex));
     }
@@ -173,7 +166,7 @@ public class SshPath implements Path
         return endsWith (new SshPath (fileSystem, other));
     }
 
-    public Path normalize ()
+    public SshPath normalize ()
     {
         List<String> newPath = new ArrayList<String> ();
         for (String p : path)
@@ -210,28 +203,28 @@ public class SshPath implements Path
         return new SshPath (fileSystem, absolute, combined);
     }
 
-    public Path resolve (String other)
+    public SshPath resolve (String other)
     {
         return resolve (new SshPath (fileSystem, other));
     }
 
-    public Path resolveSibling (Path other)
+    public SshPath resolveSibling (Path other)
     {
         return getParent ().resolve (other);
     }
 
-    public Path resolveSibling (String other)
+    public SshPath resolveSibling (String other)
     {
         return resolveSibling (new SshPath (fileSystem, other));
     }
 
-    public Path relativize (Path other)
+    public SshPath relativize (Path other)
     {
         if (! (other instanceof SshPath)) throw new ProviderMismatchException ();
         SshPath B = (SshPath) other;
 
         if (absolute != B.absolute) throw new IllegalArgumentException ("Paths must agree on absolute or relative");
-        if (path.length == 0) return other;
+        if (path.length == 0) return B;
 
         int min = Math.min (path.length, B.path.length);
         int fda = 0;  // first divergent ancestor. Index of the first element where the paths disagree.
@@ -258,7 +251,7 @@ public class SshPath implements Path
         return fileSystem.defaultDir.resolve (this);
     }
 
-    public Path toRealPath (LinkOption... options) throws IOException
+    public SshPath toRealPath (LinkOption... options) throws IOException
     {
         // TODO
         return null;

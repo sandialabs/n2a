@@ -263,12 +263,24 @@ public class SshFileSystemProvider extends FileSystemProvider
         SshPath A = (SshPath) link;
         SshPath B = (SshPath) target;
         if (A.fileSystem != B.fileSystem) throw new IOException ("Can't link across file systems");
-        String Astring = A.toAbsolutePath ().toString ();
-        String Bstring = B.toAbsolutePath ().toString ();
+        A = A.toAbsolutePath ();
+        String Astring = A.toString ();
+        String Bstring;
+        boolean relative;  // Ask ln to construct relative link.
+        if (B.isAbsolute ())
+        {
+            Bstring = B.toString ();
+            relative =  A.getParent ().relativize (B).toString ().length () < Bstring.length ();
+        }
+        else
+        {
+            Bstring = A.getParent ().resolve (B).toString ();
+            relative = true;
+        }
 
         List<String> args = new ArrayList<String> ();
         args.add ("ln");
-        args.add ("-s");
+        args.add (relative ? "-sr" : "-s");
         args.add (Bstring);
         args.add (Astring);
         execute (A, args);
