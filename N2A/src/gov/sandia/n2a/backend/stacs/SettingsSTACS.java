@@ -17,7 +17,6 @@ import javax.swing.JPanel;
 public class SettingsSTACS extends SettingsBackend
 {
     protected MTextField fieldStacs = new MTextField (40);
-    protected MTextField fieldGenet = new MTextField (40);
 
     public SettingsSTACS ()
     {
@@ -35,15 +34,13 @@ public class SettingsSTACS extends SettingsBackend
     public void bind (MNode parent)
     {
         fieldStacs.bind (parent, "stacs", "stacs");
-        fieldGenet.bind (parent, "genet", "genet");
     }
 
     @Override
     public JPanel getEditor ()
     {
         return Lay.BxL (
-            Lay.FL (new JLabel ("STACS path"), fieldStacs),
-            Lay.FL (new JLabel ("Genet path"), fieldGenet)
+            Lay.FL (new JLabel ("STACS path"), fieldStacs)
         );
     }
 }

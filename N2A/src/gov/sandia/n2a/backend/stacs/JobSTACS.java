@@ -18,6 +18,7 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
+import gov.sandia.n2a.host.RemoteLSF;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
@@ -122,18 +123,20 @@ public class JobSTACS extends Thread
             List<List<String>> commands = new ArrayList<List<String>> ();
 
             List<String> charmrun = new ArrayList<String> ();
-            charmrun.add ("charmrun");
-            charmrun.add ("+p" + processes);
+            if (! (env instanceof RemoteLSF))
+            {
+                charmrun.add ("charmrun");
+                charmrun.add ("+p" + processes);
+            }
+            charmrun.add (env.config.getOrDefault ("stacs", "backend", "stacs", "stacs"));
+            charmrun.add ("config.yml");
 
             List<String> command = new ArrayList<String> (charmrun);
-            command.add (env.config.getOrDefault ("genet", "backend", "stacs", "genet"));
-            command.add ("config.yml");
+            command.add ("build");  // generate network
             commands.add (command);
 
             command = new ArrayList<String> (charmrun);
-            command.add (env.config.getOrDefault ("stacs", "backend", "stacs", "stacs"));
-            command.add ("config.yml");
-            commands.add (command);
+            commands.add (command);  // run network
 
             env.submitJob (job, true, commands);
         }
