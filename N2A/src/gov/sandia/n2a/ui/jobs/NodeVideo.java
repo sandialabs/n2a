@@ -49,9 +49,13 @@ public class NodeVideo extends NodeFile
         {
             public void run ()
             {
-                if (dt.stop) return;
-                PanelRun.instance.displayChart.buttonBar.setVisible (false);
-                PanelRun.instance.displayPane.setViewportView (v);
+                PanelRun pr = PanelRun.instance;
+                synchronized (pr.displayText)
+                {
+                    if (dt != pr.displayThread) return;
+                    pr.displayChart.buttonBar.setVisible (false);
+                    pr.displayPane.setViewportView (v);
+                }
                 v.play ();
             }
         });

@@ -12,6 +12,8 @@ import java.nio.file.Path;
 
 import javax.swing.JScrollPane;
 
+import org.jfree.chart.JFreeChart;
+
 import gov.sandia.n2a.ui.jobs.PanelRun.DisplayThread;
 
 @SuppressWarnings("serial")
@@ -40,8 +42,9 @@ public class NodeSTACS extends NodeFile
     @Override
     public boolean render (DisplayThread dt)
     {
-        JScrollPane displayPane  = PanelRun.instance.displayPane;
-        PanelChart  displayChart = PanelRun.instance.displayChart;
+        PanelRun pr = PanelRun.instance;
+        JScrollPane displayPane  = pr.displayPane;
+        PanelChart  displayChart = pr.displayChart;
         if (dt.refresh)
         {
             Component current = displayPane.getViewport ().getView ();
@@ -49,25 +52,26 @@ public class NodeSTACS extends NodeFile
             {
                 ((Raster) displayChart.source).updateChart (displayChart.chart);
                 displayChart.offscreen = true;
-                dt.stop = true;
+                return true;
             }
         }
-        if (! dt.stop)
-        {
-            RasterSTACS raster = new RasterSTACS (path);
-            displayChart.setChart (raster.createChart (), raster);
-            displayChart.offscreen = false;
 
-            EventQueue.invokeLater (new Runnable ()
+        RasterSTACS raster = new RasterSTACS (path);
+        JFreeChart  chart  = raster.createChart ();
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
             {
-                public void run ()
+                synchronized (pr.displayText)
                 {
-                    if (dt.stop) return;
+                    if (dt != pr.displayThread) return;
+                    displayChart.setChart (chart, raster);
+                    displayChart.offscreen = false;
                     displayChart.buttonBar.setVisible (true);
                     displayPane.setViewportView (displayChart);
                 }
-            });
-        }
+            }
+        });
         return true;
     }
 }

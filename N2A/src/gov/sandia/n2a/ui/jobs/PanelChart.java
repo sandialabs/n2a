@@ -129,7 +129,7 @@ public class PanelChart extends JPanel implements ChartChangeListener, Printable
     }
 
     /**
-        @param newChart If null, then releases current chart so it can be garbage collected. However, does not
+        @param newChart If null, then releases current chart so it can be garbage collected. However, null does not
         put this panel in a state where it can be displayed. When this panel is visible, it must always have a valid chart.
     **/
     public void setChart (JFreeChart newChart, OutputParser newSource)

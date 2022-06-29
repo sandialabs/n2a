@@ -582,11 +582,10 @@ public class PanelRun extends JPanel
 
     public class DisplayThread extends Thread
     {
-        public NodeFile      node;
-        public String        viz;         // The type of visualization to show, such as table, graph or raster
-        public boolean       refresh;
-        public boolean       stop;
-        public DisplayThread localThread; // The thread responsible for processing local files only. When null, "this" is the local thread.
+        public NodeFile      node;       // The target resource
+        public String        viz;        // The type of visualization to show, such as table, graph or raster
+        public boolean       refresh;    // Incremental update of existing display
+        public DisplayThread fastThread; // Responsible for quick display, either from local files or automatic refresh of remote files.
 
         public DisplayThread (NodeFile node, String viz, boolean refresh)
         {
@@ -594,6 +593,7 @@ public class PanelRun extends JPanel
             this.node    = node;
             this.viz     = viz;
             this.refresh = refresh;
+            fastThread   = this;
             setDaemon (true);
         }
 
@@ -617,11 +617,11 @@ public class PanelRun extends JPanel
                     Path   localPath   = localJobDir.resolve (fileName);
                     node.path = localPath;  // Force to use local copy, regardless of whether it was local or remote before.
 
-                    if (localThread == null  &&  ! refresh)
+                    if (this == fastThread  &&  ! refresh)  // Spawn a slow thread to check remote resource.
                     {
-                        DisplayThread temp = new DisplayThread (node, viz, true);
-                        temp.localThread = this;
-                        temp.start ();
+                        DisplayThread slowThread = new DisplayThread (node, viz, true);
+                        slowThread.fastThread = this;
+                        slowThread.start ();
                     }
                     else
                     {
@@ -632,12 +632,7 @@ public class PanelRun extends JPanel
                         BasicFileAttributes localAttributes  = null;
                         BasicFileAttributes remoteAttributes = null;
                         try {remoteAttributes = Files.readAttributes (remotePath, BasicFileAttributes.class);}
-                        catch (Exception e)
-                        {
-                            // Can't access remote file, so no point in continuing.
-                            signalDone ();  // Only needed when refresh is true.
-                            return;
-                        }
+                        catch (Exception e) {return;}  // Can't access remote file, so no point in continuing.
                         try {localAttributes  = Files.readAttributes (localPath,  BasicFileAttributes.class);}
                         catch (Exception e) {}
 
@@ -696,12 +691,7 @@ public class PanelRun extends JPanel
                                 }
                             }
                             Component p = vp.getView ();
-                            if (p instanceof Video)
-                            {
-                                // The video player will be installed by localThread so we shouldn't try to install another.
-                                signalDone ();
-                                return;
-                            }
+                            if (p instanceof Video) return;  // The video player will be installed by fastThread, so we shouldn't try to install another.
                         }
                         else  // remote is simple file
                         {
@@ -765,19 +755,15 @@ public class PanelRun extends JPanel
                                 }
                             }
                         }
-                        if (! newData)
-                        {
-                            signalDone ();
-                            return;
-                        }
+                        if (! newData) return;
 
-                        if (localThread != null)
+                        if (this != fastThread)
                         {
-                            localThread.join ();  // Wait till local display completes before starting the updated display process.
+                            fastThread.join ();  // Wait till fast thread completes before updating the display.
                             synchronized (displayText)
                             {
-                                if (displayThread != null) return;  // Another display process has already taken over.
-                                displayThread = this;
+                                if (displayThread != fastThread) return;  // Another display process has already taken over.
+                                displayThread = this;  // Slow thread takes the place of fast thread
                             }
                         }
                         // Fall through to create display ...
@@ -787,12 +773,9 @@ public class PanelRun extends JPanel
                 // Step 2 -- Render data
                 // The exact method depends on node type and the current display mode, selected by pushbuttons and stored in viz
 
-                if (node.render (this))
-                {
-                    signalDone ();
-                    return;
-                }
+                if (node.render (this)) return;
 
+                DisplayThread dt = this;
                 if (! viz.equals ("Text")  &&  node.isGraphable ())
                 {
                     Component panel   = null;
@@ -804,14 +787,11 @@ public class PanelRun extends JPanel
                             if (current instanceof Table.OutputTable)
                             {
                                 ((Table.OutputTable) current).refresh ();
-                                stop = true;
+                                return;
                             }
                         }
-                        if (! stop)
-                        {
-                            Table table = new Table (node.path, viz.endsWith ("Sorted"));
-                            if (table.hasData ()) panel = table.createVisualization ();
-                        }
+                        Table table = new Table (node.path, viz.endsWith ("Sorted"));
+                        if (table.hasData ()) panel = table.createVisualization ();
                     }
                     else if (viz.equals ("Raster"))
                     {
@@ -821,16 +801,13 @@ public class PanelRun extends JPanel
                             {
                                 ((Raster) displayChart.source).updateChart (displayChart.chart);
                                 displayChart.offscreen = true;
-                                stop = true;
+                                return;
                             }
                         }
-                        if (! stop)
-                        {
-                            Raster raster = new Raster (node.path);
-                            displayChart.setChart (raster.createChart (), raster);
-                            displayChart.offscreen = false;
-                            panel = displayChart;
-                        }
+                        Raster raster = new Raster (node.path);
+                        displayChart.setChart (raster.createChart (), raster);
+                        displayChart.offscreen = false;
+                        panel = displayChart;
                     }
                     else  // "Graph"
                     {
@@ -840,23 +817,15 @@ public class PanelRun extends JPanel
                             {
                                 ((Plot) displayChart.source).updateChart (displayChart.chart);
                                 displayChart.offscreen = true;
-                                stop = true;
+                                return;
                             }
                         }
-                        if (! stop)
-                        {
-                            Plot plot = new Plot (node.path);
-                            displayChart.setChart (plot.createChart (), plot);
-                            displayChart.offscreen = false;
-                            panel = displayChart;
-                        }
+                        Plot plot = new Plot (node.path);
+                        displayChart.setChart (plot.createChart (), plot);
+                        displayChart.offscreen = false;
+                        panel = displayChart;
                     }
 
-                    if (stop)
-                    {
-                        signalDone ();
-                        return;
-                    }
                     if (panel != null)
                     {
                         final Component p = panel;
@@ -864,13 +833,14 @@ public class PanelRun extends JPanel
                         {
                             public void run ()
                             {
-                                if (stop) return;
-                                displayChart.buttonBar.setVisible (p == displayChart);
-                                displayPane.setViewportView (p);
+                                synchronized (displayText)
+                                {
+                                    if (dt != displayThread) return;
+                                    displayChart.buttonBar.setVisible (p == displayChart);
+                                    displayPane.setViewportView (p);
+                                }
                             }
                         });
-
-                        signalDone ();
                         return;
                     }
                     // Otherwise, fall through ...
@@ -884,49 +854,52 @@ public class PanelRun extends JPanel
                     {
                         public void run ()
                         {
-                            if (stop) return;
-                            if (refresh)
+                            synchronized (displayText)
                             {
-                                Caret c = displayANSI.getCaret ();
-                                int dot = c.getDot ();
-                                if (dot != displayANSI.getDocument ().getLength ())  // Not tracking end of text, so keep stable view.
+                                if (dt != displayThread) return;
+                                if (refresh)
                                 {
-                                    int mark = c.getMark ();
-                                    Point magic = c.getMagicCaretPosition ();
-                                    if (magic == null) magic = new Point ();
-                                    Rectangle visible = displayPane.getViewport ().getViewRect ();
-                                    if (! visible.contains (magic))  // User has scrolled away from caret.
+                                    Caret c = displayANSI.getCaret ();
+                                    int dot = c.getDot ();
+                                    if (dot != displayANSI.getDocument ().getLength ())  // Not tracking end of text, so keep stable view.
                                     {
-                                        // Scroll takes precedence over caret, so move caret back into visible area.
-                                        Font f = displayANSI.getFont ();
-                                        FontMetrics fm = displayANSI.getFontMetrics (f);
-                                        int h = fm.getHeight ();
-                                        int w = fm.getMaxAdvance ();
-                                        if (w < 0) w = h / 2;
-                                        h += h / 2;
-                                        w += w / 2;
-                                        magic.x = Math.max (magic.x, visible.x == 0 ? 0 : visible.x + w);
-                                        magic.x = Math.min (magic.x, visible.x + visible.width - w);
-                                        magic.y = Math.max (magic.y, visible.y == 0 ? 0 : visible.y + h);
-                                        magic.y = Math.min (magic.y, visible.y + visible.height - h);
-                                        dot = mark = displayANSI.viewToModel2D (magic);
-                                    }
+                                        int mark = c.getMark ();
+                                        Point magic = c.getMagicCaretPosition ();
+                                        if (magic == null) magic = new Point ();
+                                        Rectangle visible = displayPane.getViewport ().getViewRect ();
+                                        if (! visible.contains (magic))  // User has scrolled away from caret.
+                                        {
+                                            // Scroll takes precedence over caret, so move caret back into visible area.
+                                            Font f = displayANSI.getFont ();
+                                            FontMetrics fm = displayANSI.getFontMetrics (f);
+                                            int h = fm.getHeight ();
+                                            int w = fm.getMaxAdvance ();
+                                            if (w < 0) w = h / 2;
+                                            h += h / 2;
+                                            w += w / 2;
+                                            magic.x = Math.max (magic.x, visible.x == 0 ? 0 : visible.x + w);
+                                            magic.x = Math.min (magic.x, visible.x + visible.width - w);
+                                            magic.y = Math.max (magic.y, visible.y == 0 ? 0 : visible.y + h);
+                                            magic.y = Math.min (magic.y, visible.y + visible.height - h);
+                                            dot = mark = displayANSI.viewToModel2D (magic);
+                                        }
 
-                                    displayANSI.setText (contents);
-                                    c.setDot (mark);
-                                    if (dot != mark) c.moveDot (dot);
+                                        displayANSI.setText (contents);
+                                        c.setDot (mark);
+                                        if (dot != mark) c.moveDot (dot);
+                                    }
+                                    else  // tracking end of text
+                                    {
+                                        displayANSI.setText (contents);
+                                    }
                                 }
-                                else  // tracking end of text
+                                else
                                 {
                                     displayANSI.setText (contents);
+                                    // Don't set caret. We want to track the end of output.
+                                    displayChart.buttonBar.setVisible (false);
+                                    displayPane.setViewportView (displayANSI);
                                 }
-                            }
-                            else
-                            {
-                                displayANSI.setText (contents);
-                                // Don't set caret. We want to track the end of output.
-                                displayChart.buttonBar.setVisible (false);
-                                displayPane.setViewportView (displayANSI);
                             }
                         }
                     });
@@ -940,7 +913,7 @@ public class PanelRun extends JPanel
                         {
                             synchronized (displayText)
                             {
-                                if (stop) return;
+                                if (dt != displayThread) return;
                                 if (refresh)
                                 {
                                     int oldLength = displayText.getText ().length ();
@@ -958,20 +931,8 @@ public class PanelRun extends JPanel
                     });
                 }
             }
-            catch (Exception e)
-            {
-            }
-
-            signalDone ();
+            catch (Exception e) {}
         };
-
-        public void signalDone ()
-        {
-            synchronized (displayText)
-            {
-                if (displayThread == this) displayThread = null;
-            }
-        }
     }
 
     /**
@@ -1011,18 +972,13 @@ public class PanelRun extends JPanel
     {
         synchronized (displayText)
         {
-            if (displayThread != null)
+            displayThread = null;
+            if (! refresh)
             {
-                displayThread.stop = true;
-                displayThread = null;
+                displayText.setText ("loading...");
+                Component view = displayPane.getViewport ().getView ();
+                if (view != displayText) displayPane.setViewportView (displayText);
             }
-            if (! refresh) displayText.setText ("loading...");
-        }
-
-        if (! refresh)
-        {
-            Component view = displayPane.getViewport ().getView ();
-            if (view != displayText) displayPane.setViewportView (displayText);
         }
 
         String viz = buttons.getSelection ().getActionCommand ();
@@ -1032,13 +988,9 @@ public class PanelRun extends JPanel
 
     public void viewJob (boolean refresh)
     {
-        if (displayThread != null)
+        synchronized (displayText)
         {
-            synchronized (displayText)
-            {
-                displayThread.stop = true;
-                displayThread = null;
-            }
+            displayThread = null;
         }
 
         StringBuilder contents = new StringBuilder ();
@@ -1136,6 +1088,7 @@ public class PanelRun extends JPanel
 
         synchronized (displayText)
         {
+            if (displayThread != null) return;
             if (refresh)
             {
                 Caret c = displayText.getCaret ();
@@ -1170,9 +1123,9 @@ public class PanelRun extends JPanel
                 displayText.setText (contents.toString ());
                 displayText.setCaretPosition (0);
             }
+            displayChart.buttonBar.setVisible (false);
+            if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
         }
-        displayChart.buttonBar.setVisible (false);
-        if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
         displayPane.repaint ();
     }
 
@@ -1244,16 +1197,12 @@ public class PanelRun extends JPanel
             // Shut down the display thread.
             synchronized (displayText)
             {
-                if (displayThread != null)
-                {
-                    displayThread.stop = true;
-                    displayThread = null;
-                }
-                displayNode = null;  // All access to this happens on EDT, so safe.
+                displayThread = null;
+                displayNode   = null;  // All access to this happens on EDT, so safe.
                 displayText.setText ("");
+                displayChart.buttonBar.setVisible (false);
+                if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
             }
-            displayChart.buttonBar.setVisible (false);
-            if (displayPane.getViewport ().getView () != displayText) displayPane.setViewportView (displayText);
         }
         else  // Set the new selection. This will not be touched by the delete process.
         {
