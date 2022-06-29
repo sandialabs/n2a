@@ -3048,6 +3048,10 @@ public class EquationSet implements Comparable<EquationSet>
 
             if (canDie ()  &&  live.hasUsers ())
             {
+                // "accessor" is the lightest-weight representation of $live, requiring no storage space.
+                // "initOnly" causes space to be allocated for $live.
+                // Processing of some lethal conditions require storage. These take precedence.
+                // Stored $live works for all lethal conditions.
                 if (lethalN  ||  lethalP  ||  lethalType)
                 {
                     live.addAttribute ("initOnly");  // Not exactly true. $live can change after init(), but only indirectly. This forces $live to be set during init().
