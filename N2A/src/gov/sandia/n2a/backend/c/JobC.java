@@ -547,7 +547,8 @@ public class JobC extends Thread
             if (v.equations.size () != 1) continue;
             EquationEntry e = v.equations.first ();
             if (e.condition != null) continue;
-            if (! (e.expression instanceof Constant)) continue;
+            // e must be a constant or init-only simple expression.
+            // If it varies outside of init, those values will be ignored.
             v.addAttribute ("initOnly");  // prevents v from being eliminated by simplify
             v.addAttribute ("cli");  // private tag to remind us to generate CLI code for this variable
 
@@ -840,17 +841,17 @@ public class JobC extends Thread
             String stem = pos > 0 ? name.substring (0, pos) : name;
 
             Path headerPath = source.getParent ().resolve (stem + ".h");
-            try (BufferedWriter writer = Files.newBufferedWriter (headerPath))
+            try (BufferedWriter header = Files.newBufferedWriter (headerPath))
             {
-                writer.append ("#ifndef " + stem + "_h\n");
-                writer.append ("#define " + stem + "_h\n");
-                writer.append ("\n");
-                writer.append ("void init (int argc, char ** argv);\n");
-                writer.append ("void run (" + T + " until);\n");
-                writer.append ("void finish ();\n");
-                generateIOvector (digestedModel, writer, vectorDefinitions);
-                writer.append ("\n");
-                writer.append ("#endif\n");
+                header.append ("#ifndef " + stem + "_h\n");
+                header.append ("#define " + stem + "_h\n");
+                header.append ("\n");
+                header.append ("void init (int argc, char ** argv);\n");
+                header.append ("void run (" + T + " until);\n");
+                header.append ("void finish ();\n");
+                generateIOvector (digestedModel, header, vectorDefinitions);
+                header.append ("\n");
+                header.append ("#endif\n");
             }
 
             result.append ("#include \"" + stem + ".h\"\n");
@@ -993,7 +994,6 @@ public class JobC extends Thread
 
         class CheckStatic implements Visitor
         {
-            public boolean global;
             public boolean visit (Operator op)
             {
                 for (ProvideOperator po : extensions)
@@ -1030,7 +1030,7 @@ public class JobC extends Thread
                         {
                             o.columnName = "columnName" + stringNames.size ();
                             stringNames.put (op, o.columnName);
-                            if (global)
+                            if (context.global)
                             {
                                 bed.setGlobalNeedPath (s);
                                 bed.globalColumns.add (o.columnName);
@@ -1110,45 +1110,86 @@ public class JobC extends Thread
                                 }
                             }
                         }
-                        else  // Dynamic file name (no static handle)
+                        else if (operand0 instanceof Add) // Dynamic file name (no static handle)
                         {
-                            boolean error = false;
+                            Add add = (Add) operand0;
                             if (f instanceof ReadMatrix)
                             {
                                 ReadMatrix r = (ReadMatrix) f;
                                 matrixNames.put (op,       r.name     = "Matrix"   + matrixNames.size ());
                                 stringNames.put (operand0, r.fileName = "fileName" + stringNames.size ());
-                                if (operand0 instanceof Add) ((Add) operand0).name = r.fileName;
-                                else error = true;
+                                add.name = r.fileName;
                             }
                             else if (f instanceof Mfile)
                             {
                                 Mfile m = (Mfile) f;
                                 mfileNames .put (op,       m.name     = "Mfile"    + mfileNames .size ());
                                 stringNames.put (operand0, m.fileName = "fileName" + stringNames.size ());
-                                if (operand0 instanceof Add) ((Add) operand0).name = m.fileName;
-                                else error = true;
+                                add.name = m.fileName;
                             }
                             else if (f instanceof Input)
                             {
                                 Input i = (Input) f;
                                 inputNames .put (op,       i.name     = "Input"    + inputNames .size ());
                                 stringNames.put (operand0, i.fileName = "fileName" + stringNames.size ());
-                                if (operand0 instanceof Add) ((Add) operand0).name = i.fileName;
-                                else error = true;
+                                add.name = i.fileName;
                             }
                             else if (f instanceof Output)
                             {
                                 Output o = (Output) f;
                                 outputNames.put (op,       o.name     = "Output"   + outputNames.size ());
                                 stringNames.put (operand0, o.fileName = "fileName" + stringNames.size ());
-                                if (operand0 instanceof Add) ((Add) operand0).name = o.fileName;
-                                else error = true;
+                                add.name = o.fileName;
                             }
-                            if (error)
+                        }
+                        else if (operand0 instanceof AccessVariable)  // Dynamic file name in proper variable. Could be "initOnly".
+                        {
+                            AccessVariable av = (AccessVariable) operand0;
+                            Variable v = av.reference.variable;
+                            String fileName = resolve (av.reference, context, false);
+                            if (f instanceof ReadMatrix)
                             {
-                                Backend.err.get ().println ("ERROR: File name must be a string expression.");
-                                throw new AbortRun ();
+                                ReadMatrix r = (ReadMatrix) f;
+                                r.name = matrixNames.get (v);
+                                if (r.name == null)
+                                {
+                                    r.name = "Matrix" + matrixNames.size ();
+                                    matrixNames.put (v, r.name);
+                                }
+                                r.fileName = fileName;
+                            }
+                            else if (f instanceof Mfile)
+                            {
+                                Mfile m = (Mfile) f;
+                                m.name = mfileNames.get (v);
+                                if (m.name == null)
+                                {
+                                    m.name = "Mfile" + mfileNames.size ();
+                                    mfileNames.put (v, m.name);
+                                }
+                                m.fileName = fileName;
+                            }
+                            else if (f instanceof Input)
+                            {
+                                Input i = (Input) f;
+                                i.name = inputNames.get (v);
+                                if (i.name == null)
+                                {
+                                    i.name = "Input" + inputNames.size ();
+                                    inputNames.put (v, i.name);
+                                }
+                                i.fileName = fileName;
+                            }
+                            else if (f instanceof Output)
+                            {
+                                Output o = (Output) f;
+                                o.name = outputNames.get (v);
+                                if (o.name == null)
+                                {
+                                    o.name = "Output" + outputNames.size ();
+                                    outputNames.put (v, o.name);
+                                }
+                                o.fileName = fileName;
                             }
                         }
                     }
@@ -1160,7 +1201,7 @@ public class JobC extends Thread
         CheckStatic checkStatic = new CheckStatic ();
         for (Variable v : s.ordered)
         {
-            checkStatic.global = v.hasAttribute ("global");
+            context.global = v.hasAttribute ("global");
             v.visit (checkStatic);
         }
     }
@@ -1237,9 +1278,9 @@ public class JobC extends Thread
         }
     }
 
-    public void generateIOvector (EquationSet s, Writer writer, StringBuilder vectorDefinitions) throws IOException
+    public void generateIOvector (EquationSet s, Writer header, StringBuilder vectorDefinitions) throws IOException
     {
-        for (EquationSet p : s.parts) generateIOvector (p, writer, vectorDefinitions);
+        for (EquationSet p : s.parts) generateIOvector (p, header, vectorDefinitions);
 
         // Determine if any IO vectors are present
         boolean found = false;
@@ -1285,15 +1326,15 @@ public class JobC extends Thread
         if (! IOvectorWritten)
         {
             IOvectorWritten = true;
-            writer.append ("\n");
-            writer.append ("class IOvector\n");
-            writer.append ("{\n");
-            writer.append ("public:\n");
-            writer.append ("  virtual int size () = 0;\n");
-            writer.append ("  virtual " + T + " get  (int i) = 0;\n");
-            writer.append ("  virtual void set (int i, " + T + " value) = 0;\n");
-            writer.append ("};\n");
-            writer.append ("\n");
+            header.append ("\n");
+            header.append ("class IOvector\n");
+            header.append ("{\n");
+            header.append ("public:\n");
+            header.append ("  virtual int size () = 0;\n");
+            header.append ("  virtual " + T + " get  (int i) = 0;\n");
+            header.append ("  virtual void set (int i, " + T + " value) = 0;\n");
+            header.append ("};\n");
+            header.append ("\n");
         }
 
         for (Variable v : s.ordered)
@@ -1340,7 +1381,7 @@ public class JobC extends Thread
             vectorDefinitions.append ("}\n");
             vectorDefinitions.append ("\n");
 
-            writer.append (prototype + ";\n");
+            header.append (prototype + ";\n");
         }
     }
 
@@ -1927,6 +1968,7 @@ public class JobC extends Thread
         // Population init
         if (bed.needGlobalInit)
         {
+            bed.defined.clear ();
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
             s.setInit (1);
@@ -2039,6 +2081,7 @@ public class JobC extends Thread
         // Population update
         if (bed.needGlobalUpdate)
         {
+            bed.defined.clear ();
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
             push_region (result, ns + "update()");
@@ -2175,6 +2218,7 @@ public class JobC extends Thread
         // Population updateDerivative
         if (bed.needGlobalUpdateDerivative)
         {
+            bed.defined.clear ();
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
             push_region (result, ns + "updateDerivative()");
@@ -2799,6 +2843,7 @@ public class JobC extends Thread
         // Unit init
         if (bed.needLocalInit)
         {
+            bed.defined.clear ();
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
             s.setInit (1);
@@ -2993,6 +3038,7 @@ public class JobC extends Thread
         // Unit update
         if (bed.needLocalUpdate)
         {
+            bed.defined.clear ();
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
             push_region (result, ns + "update()");
@@ -3026,6 +3072,7 @@ public class JobC extends Thread
         // Unit finalize
         if (bed.needLocalFinalize)
         {
+            bed.defined.clear ();
             result.append ("bool " + ns + "finalize ()\n");
             result.append ("{\n");
 
@@ -3256,6 +3303,7 @@ public class JobC extends Thread
         // Unit updateDerivative
         if (bed.needLocalUpdateDerivative)
         {
+            bed.defined.clear ();
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
             push_region (result, ns + "updateDerivative()");
@@ -3524,6 +3572,7 @@ public class JobC extends Thread
         // Unit getProject
         if (bed.hasProject)
         {
+            bed.defined.clear ();
             result.append ("void " + ns + "getProject (int i, MatrixFixed<" + T + ",3,1> & xyz)\n");
             result.append ("{\n");
 
@@ -3668,6 +3717,7 @@ public class JobC extends Thread
         // Unit getP
         if (bed.p != null  &&  s.connectionBindings != null)  // Only connections need to provide an accessor
         {
+            bed.defined.clear ();
             result.append (T + " " + ns + "getP ()\n");
             result.append ("{\n");
             s.setConnect (1);
@@ -3696,6 +3746,7 @@ public class JobC extends Thread
         // Unit getXYZ
         if (bed.xyz != null  &&  s.connected)  // Connection targets need to provide an accessor.
         {
+            bed.defined.clear ();
             result.append ("void " + ns + "getXYZ (MatrixFixed<" + T + ",3,1> & xyz)\n");
             result.append ("{\n");
             // $xyz is either stored, "temporary", or "constant"
@@ -3723,6 +3774,7 @@ public class JobC extends Thread
         // Unit events
         if (bed.eventTargets.size () > 0)
         {
+            bed.defined.clear ();
             result.append ("bool " + ns + "eventTest (int i)\n");
             result.append ("{\n");
             result.append ("  switch (i)\n");
@@ -3802,6 +3854,7 @@ public class JobC extends Thread
 
             if (bed.needLocalEventDelay)
             {
+                bed.defined.clear ();
                 result.append (T + " " + ns + "eventDelay (int i)\n");
                 result.append ("{\n");
                 result.append ("  switch (i)\n");
@@ -4485,31 +4538,57 @@ public class JobC extends Thread
         {
             public boolean visit (Operator op)
             {
+                Variable v = null;
+                if (op instanceof Function)
+                {
+                    Function f = (Function) op;
+                    if (f.operands.length > 0)
+                    {
+                        Operator operand0 = ((Function) op).operands[0];
+                        if (operand0 instanceof AccessVariable) v = ((AccessVariable) operand0).reference.variable;
+                    }
+                }
+
                 if (op instanceof ReadMatrix)
                 {
                     ReadMatrix r = (ReadMatrix) op;
                     if (! (r.operands[0] instanceof Constant))
                     {
+                        if (v != null)
+                        {
+                            if (bed.defined.contains (v)) return true;
+                            bed.defined.add (v);
+                        }
                         context.result.append (pad + "MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (" + r.fileName);
                         if (T.equals ("int")) context.result.append (", " + r.exponent);
                         context.result.append (");\n");
                     }
-                    return false;
+                    return true;
                 }
                 if (op instanceof Mfile)
                 {
                     Mfile m = (Mfile) op;
                     if (! (m.operands[0] instanceof Constant))
                     {
+                        if (v != null)
+                        {
+                            if (bed.defined.contains (v)) return true;
+                            bed.defined.add (v);
+                        }
                         context.result.append (pad + "Mfile<" + T + "> * " + m.name + " = MfileHelper<" + T + "> (" + m.fileName + ");\n");
                     }
-                    return false;
+                    return true;
                 }
                 if (op instanceof Input)
                 {
                     Input i = (Input) op;
                     if (! (i.operands[0] instanceof Constant))
                     {
+                        if (v != null)
+                        {
+                            if (bed.defined.contains (v)) return true;
+                            bed.defined.add (v);
+                        }
                         context.result.append (pad + "InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (" + i.fileName);
                         if (T.equals ("int")) context.result.append (", " + i.exponent);
                         context.result.append (");\n");
@@ -4529,13 +4608,18 @@ public class JobC extends Thread
                             }
                         }
                     }
-                    return true;  // I/O functions can be nested
+                    return true;
                 }
                 if (op instanceof Output)
                 {
                     Output o = (Output) op;
                     if (! (o.operands[0] instanceof Constant))
                     {
+                        if (v != null)
+                        {
+                            if (bed.defined.contains (v)) return true;
+                            bed.defined.add (v);
+                        }
                         context.result.append (pad + "OutputHolder<" + T + "> * " + o.name + " = outputHelper<" + T + "> (" + o.fileName + ");\n");
                         if (o.getKeywordFlag ("raw"))
                         {
@@ -4833,7 +4917,7 @@ public class JobC extends Thread
                 }
                 else  // ascend to our container
                 {
-                    containers = containerOf (current, i == 0  &&  context.global, containers);
+                    containers = containerOf (current, global, containers);
                     global = false;
                 }
                 current = s;
@@ -4850,7 +4934,7 @@ public class JobC extends Thread
         if (r.variable.hasAttribute ("global")  &&  ! global)
         {
             // Must ascend to our container and then descend to our population object.
-            containers = containerOf (current, false, containers);
+            containers = containerOf (current, global, containers);
             containers += mangle (current.name) + ".";
         }
 

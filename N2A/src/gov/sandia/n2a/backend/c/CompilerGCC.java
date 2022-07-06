@@ -9,6 +9,7 @@ package gov.sandia.n2a.backend.c;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
@@ -167,6 +168,7 @@ public class CompilerGCC extends Compiler
     {
         String prefix = gcc.getFileName ().toString ();
         prefix        = prefix.substring (0, prefix.length () - 3);  // strip off "g++" or "gcc"
+        Path   parent = gcc.getParent ();
 
         if (shared)
         {
@@ -174,7 +176,9 @@ public class CompilerGCC extends Compiler
         }
         else
         {
-            Path ar = gcc.getParent ().resolve (prefix + "ar");
+            Path ar;
+            if (parent == null) ar = Paths.get (prefix + "ar");       // The usual case, where g++ is specified alone.
+            else                ar = parent.resolve (prefix + "ar");  // g++ is prefixed by at least one path element. 
             List<String> command = new ArrayList<String> ();
             command.add (ar.toString ());
             command.add ("rsc");  // operation=r (insert members, with replacement); modifier=s (create symbol table); modifier=c (expecting to create archive, so don't warn)

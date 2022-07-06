@@ -671,7 +671,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (n == null) return true;  // We only do more work if $n exists. Non-existent $n is the same as $n==1
 
         // check contents of $n
-        if (n.hasAttribute ("externalWrite")) return false;
+        if (n.hasAny ("externalWrite", "cli")) return false;  // "cli" indicates the C backend will read $n from command-line. In that case, an equation with constant 1 is only the default. The final runtime value is unknown.
         if (n.uses != null  &&  n.uses.size () > 0) return false;  // If $n depends on other variables, we won't be able to evaluate it now.
         if (n.equations.size () != 1) return false;
         EquationEntry ne = n.equations.first ();

@@ -631,10 +631,12 @@ public class Variable implements Comparable<Variable>, Cloneable
 
             if (e.expression instanceof AccessVariable)
             {
-                if (((AccessVariable) e.expression).reference.variable == this)  // Vacuous assignment
+                Variable v = ((AccessVariable) e.expression).reference.variable;
+                if (v == this  &&  assignment == REPLACE)  // Vacuous assignment
                 {
-                    // Simulator always copies value to next cycle when no equation fires,
+                    // For REPLACE, simulator always copies value to next cycle when no equation fires,
                     // so there is never need for an explicit equation to do this.
+                    // OTOH, explicit self-assignment with a combiner is a special case the user may deploy on purpose.
                     changed = true;
                     e.expression.releaseDependencies (this);
                     if (e.condition == null) defaultEquation = null;

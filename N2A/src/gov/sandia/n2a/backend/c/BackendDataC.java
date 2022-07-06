@@ -8,7 +8,10 @@ package gov.sandia.n2a.backend.c;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+
 import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
@@ -105,6 +108,7 @@ public class BackendDataC
 
     public List<String> globalColumns = new ArrayList<String> ();
     public List<String> localColumns  = new ArrayList<String> ();
+    public Set<Object>  defined       = new HashSet<Object> ();  // Identifiers for IO objects that should be emitted only once in a given function. Cleared at the start of processing for each such function.
 
     public List<EventTarget> eventTargets    = new ArrayList<EventTarget> ();
     public List<EventSource> eventSources    = new ArrayList<EventSource> ();
