@@ -326,12 +326,6 @@ public class NodeJob extends NodeBase
                 lastActive = dateStarted.getTime ();
             }
         }
-        boolean statusCouldChange = false;
-        if (complete == 0)
-        {
-            if (  source.get ("queue").startsWith ("PEND")) statusCouldChange = true;
-            if (! source.get ("backendStatus").isBlank ())  statusCouldChange = true;
-        }
         Backend simulator = Backend.getBackend (source.get ("backend"));
         if (complete >= 0  &&  complete < 1)
         {
@@ -383,7 +377,7 @@ public class NodeJob extends NodeBase
         PanelRun   panelRun   = PanelRun.instance;
         PanelStudy panelStudy = PanelStudy.instance;
         if (panelRun == null) return;  // Probably running headless, so skip all UI updates.
-        if (complete != oldComplete  ||  statusCouldChange)
+        if (complete != oldComplete  ||  complete == 0)  // Only update UI if there is change. In the case of complete==0, there might be change due to backend preparation status reports, so always update.
         {
             EventQueue.invokeLater (new Runnable ()
             {
