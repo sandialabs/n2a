@@ -10,17 +10,24 @@ import gov.sandia.n2a.language.type.Matrix;
     For an m-by-n matrix A with m >= n, the QR decomposition is an m-by-n
     orthogonal matrix Q and an n-by-n upper triangular matrix R so that A = Q*R.
 
-    The QR decompostion always exists, even if the matrix does not have full
+    The QR decomposition always exists, even if the matrix does not have full
     rank, so the constructor will never fail. The primary use of the QR
-    decomposition is in the least squares solution of nonsquare systems of
+    decomposition is in the least squares solution of non-square systems of
     simultaneous linear equations. This will fail if isFullRank() returns false.
 **/
 public class FactorQR
 {
-    protected MatrixDense QR;
-    protected int         m;
-    protected int         n;
-    protected double[]    Rdiag;
+    // These members are public because it is expected that a caller may want to
+    // access them directly. The functions that return component matrices are there
+    // as a convenience to reconstruct the relevant pieces, but there is nothing
+    // about this data that needs to be hidden. There are even circumstances in
+    // which it makes sense to modify the data. For example, the Levenberg-Marquardt
+    // algorithm has a use for modifying Rdiag.
+    public MatrixDense QR;
+    public int         m;
+    public int         n;
+    public double[]    Rdiag;
+    public int[]       P;  // Permutation matrix, stored as a list. AP=QR. Matrix P(r,c)==1 iff list P[c]==r. That is, P[c] stores the original position of column c before it was permuted.
 
     public FactorQR (Matrix A)
     {
@@ -30,23 +37,72 @@ public class FactorQR
 
         QR    = new MatrixDense (A);
         Rdiag = new double[n];
+        P     = new int[n];
+        for (int c = 0; c < n; c++) P[c] = c;
 
         // Main loop.
         for (int k = 0; k < n; k++)
         {
-            // Compute 2-norm of k-th column without under/overflow.
-            double nrm = 0;
+            // Pivot remaining column with largest norm into column k.
+            if (k < n - 1)  // Only do this if there are at least two columns left to compare.
+            {
+                //   Find column with largest norm.
+                double bestNorm   = 0;
+                int    bestColumn = k;
+                for (int c = k; c < n; c++)
+                {
+                    double norm = 0;
+                    int i   = c * m;
+                    int end = i + m;
+                    while (i < end)
+                    {
+                        double e = QR.data[i++];
+                        norm += e * e;
+                    }
+                    if (norm > bestNorm)
+                    {
+                        bestNorm   = norm;
+                        bestColumn = c;
+                    }
+                }
+                //   Swap columns
+                if (bestColumn != k)
+                {
+                    int i   = k          * m;
+                    int j   = bestColumn * m;
+                    int end = i + m;
+                    while (i < end)
+                    {
+                        double temp = QR.data[i];
+                        QR.data[i] = QR.data[j];
+                        QR.data[j] = temp;
+                        i++;
+                        j++;
+                    }
+                    int temp      = P[k];
+                    P[k]          = P[bestColumn];
+                    P[bestColumn] = temp;
+                }
+            }
+
+            // Compute 2-norm of k-th column.
+            double norm = 0;
             int kk  = k * m + k;
             int i   = kk;
             int end = k * m + m;
-            while (i < end) nrm = hypot (nrm, QR.data[i++]);
+            while (i < end)
+            {
+                double e = QR.data[i++];
+                norm += e * e;
+            }
+            norm = Math.sqrt (norm);
 
-            if (nrm != 0.0)
+            if (norm != 0.0)
             {
                 // Form k-th Householder vector.
-                if (QR.data[kk] < 0) nrm = -nrm;
+                if (QR.data[kk] < 0) norm = -norm;
                 i = kk;
-                while (i < end) QR.data[i++] /= nrm;
+                while (i < end) QR.data[i++] /= norm;
                 QR.data[kk] += 1;
 
                 // Apply transformation to remaining columns.
@@ -63,11 +119,8 @@ public class FactorQR
                     while (i < end) QR.data[l++] += s * QR.data[i++];
                 }
             }
-            Rdiag[k] = -nrm;
+            Rdiag[k] = -norm;
         }
-        System.out.print ("Rdiag ");
-        for (int i = 0; i < Rdiag.length; i++) System.out.print (Rdiag[i] + " ");
-        System.out.println ();
     }
 
     /**
@@ -77,6 +130,17 @@ public class FactorQR
     {
         for (int j = 0; j < n; j++) if (Rdiag[j] == 0) return false;
         return true;
+    }
+
+    public int rank ()
+    {
+        return rank (Math.ulp (1.0));  // machine epsilon
+    }
+
+    public int rank (double cutoff)
+    {
+        for (int j = 0; j < n; j++) if (Math.abs (Rdiag[j]) < cutoff) return j;
+        return n;
     }
 
     /**
@@ -146,21 +210,33 @@ public class FactorQR
         return Q;
     }
 
-    /**
-        Least squares solution of A*X = B
-        @param B Matrix with exactly as many rows as A, along with any number of columns.
-        @return X that minimizes the two norm of Q*R*X-B.
-    **/
+    public MatrixDense getP ()
+    {
+        MatrixDense result = new MatrixDense (n, n);
+        for (int c = 0; c < n; c++) result.set (P[c], c, 1);
+        return result;
+    }
+
     public MatrixDense solve (Matrix B)
     {
+        return solve (B, true);
+    }
+
+    /**
+        Least squares solution of AX = B
+        @param B Matrix with exactly as many rows as A, along with any number of columns.
+        @param unpermute Indicates to return X rather than ~PX. This is slightly cheaper than multiplying answer with P to get X.
+        @return X that minimizes the two norm of QR~PX-B.
+    **/
+    public MatrixDense solve (Matrix B, boolean unpermute)
+    {
         if (B.rows () != m) throw new IllegalArgumentException ("Matrix row dimensions must agree.");
-        if (! isFullRank ()) throw new RuntimeException ("Matrix is rank deficient.");
 
         // Copy right hand side
         int nx = B.columns ();
         MatrixDense X = new MatrixDense (B);
 
-        // Compute Y = transpose(Q)*B
+        // Compute Y = ~QB
         for (int k = 0; k < n; k++)
         {
             int kk  = k * m + k;
@@ -177,7 +253,8 @@ public class FactorQR
                 while (a < end) X.data[x++] += s * QR.data[a++];
             }
         }
-        // Solve R*X = Y;
+
+        // Solve RX = Y;
         for (int k = n - 1; k >= 0; k--)
         {
             int j = k;  // iterate over row k
@@ -201,29 +278,22 @@ public class FactorQR
                 }
             }
         }
-        return X.getRegion (0, 0, n - 1, nx - 1);
-    }
 
-    /**
-       sqrt(a^2 + b^2) without under/overflow.
-    **/
-    public static double hypot (double a, double b)
-    {
-        double r;
-        if (Math.abs (a) > Math.abs (b))
+        if (! unpermute) return X.getRegion (0, 0, n - 1, nx - 1);
+
+        MatrixDense result = new MatrixDense (n, nx);
+        for (int f = 0; f < n; f++)  // from row
         {
-            r = b / a;
-            r = Math.abs (a) * Math.sqrt (1 + r * r);
+            int x = f;    // index into X, at start of source row
+            int r = P[f]; // index into result, at start of destination row
+            int end = x + m * nx;
+            while (x < end)
+            {
+                result.data[r] = X.data[x];
+                x += m;
+                r += n;
+            }
         }
-        else if (b != 0)
-        {
-            r = a / b;
-            r = Math.abs (b) * Math.sqrt (1 + r * r);
-        }
-        else
-        {
-            r = 0.0;
-        }
-        return r;
+        return result;
     }
 }
