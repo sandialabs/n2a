@@ -33,18 +33,18 @@ public class FactorQR
     {
         m = A.rows ();
         n = A.columns ();
-        if (m < n) throw new IllegalArgumentException ("There must be at least as many rows as columns.");
+        int d = Math.min (m, n);
 
         QR    = new MatrixDense (A);
-        Qdiag = new double[n];
+        Qdiag = new double[d];
         P     = new int[n];
         for (int c = 0; c < n; c++) P[c] = c;
 
         // Main loop.
-        for (int k = 0; k < n; k++)
+        for (int k = 0; k < d; k++)
         {
             // Pivot remaining column with largest norm into column k.
-            if (k < n - 1)  // Only do this if there are at least two columns left to compare.
+            if (k < d - 1)  // Only do this if there are at least two columns left to compare.
             {
                 //   Find column with largest norm.
                 double bestNorm   = 0;
@@ -129,19 +129,8 @@ public class FactorQR
     **/
     public boolean isFullRank ()
     {
-        for (int j = 0; j < n; j++) if (QR.data[j*m+j] == 0) return false;
+        for (int j = 0; j < Qdiag.length; j++) if (QR.data[j*m+j] == 0) return false;
         return true;
-    }
-
-    public int rank ()
-    {
-        return rank (Math.ulp (1.0));  // machine epsilon
-    }
-
-    public int rank (double cutoff)
-    {
-        for (int j = 0; j < n; j++) if (Math.abs (QR.data[j*m+j]) < cutoff) return j;
-        return n;
     }
 
     /**
@@ -150,8 +139,9 @@ public class FactorQR
     **/
     public MatrixDense getH ()
     {
-        MatrixDense H = new MatrixDense (m, n);
-        for (int j = 0; j < n; j++)
+        int d = Qdiag.length;
+        MatrixDense H = new MatrixDense (m, d);
+        for (int j = 0; j < d; j++)
         {
             int i   = j * m + j;
             int end = j * m + m;
@@ -166,16 +156,17 @@ public class FactorQR
     **/
     public MatrixDense getR ()
     {
-        MatrixDense R = new MatrixDense (n, n);
+        int d = Qdiag.length;
+        MatrixDense R = new MatrixDense (d, n);
         int end = R.data.length;
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < d; i++)
         {
-            int r = i * n + i;  // Index into R, initially at (i,i)
+            int r = i * d + i;  // Index into R, initially at (i,i)
             int j = i * m + i;  // Index into QR, initially at (i,i)
             while (r < end)
             {
                 R.data[r] = QR.data[j];
-                r += n;
+                r += d;
                 j += m;
             }
         }
@@ -187,15 +178,16 @@ public class FactorQR
     **/
     public MatrixDense getQ ()
     {
-        MatrixDense Q = new MatrixDense (m, n);
-        for (int k = n - 1; k >= 0; k--)
+        int d = Qdiag.length;
+        MatrixDense Q = new MatrixDense (m, d);
+        for (int k = d - 1; k >= 0; k--)
         {
             int kk  = k * m + k;
             int end = k * m + m;
             Q.data[kk] = 1;
             if (Qdiag[k] == 0) continue;
 
-            for (int j = k; j < n; j++)
+            for (int j = k; j < d; j++)
             {
                 int q = j * m + k;
                 double s = Qdiag[k] * Q.data[q++];
@@ -227,7 +219,7 @@ public class FactorQR
         Least squares solution of AX = B
         @param B Matrix with exactly as many rows as A, along with any number of columns.
         @param unpermute Indicates to return X rather than ~PX. This is slightly cheaper than multiplying the result with P to get X.
-        @return X that minimizes the two norm of QR~PX-B.
+        @return X that minimizes the two norm of QR~PX-B. If m < n, then the answer will be truncated to m rows.
     **/
     public MatrixDense solve (Matrix B, boolean unpermute)
     {
@@ -238,7 +230,8 @@ public class FactorQR
         MatrixDense X = new MatrixDense (B);
 
         // Compute Y = ~QB
-        for (int k = 0; k < n; k++)
+        int d = Qdiag.length;
+        for (int k = 0; k < d; k++)
         {
             int kk  = k * m + k;
             int end = k * m + m;
@@ -257,7 +250,7 @@ public class FactorQR
         }
 
         // Solve RX = Y;
-        for (int k = n - 1; k >= 0; k--)
+        for (int k = d-1; k >= 0; k--)
         {
             int j = k;  // iterate over row k
             while (j < X.data.length)
@@ -281,10 +274,10 @@ public class FactorQR
             }
         }
 
-        if (! unpermute) return X.getRegion (0, 0, n - 1, nx - 1);
+        if (! unpermute) return X.getRegion (0, 0, d-1, nx-1);
 
         MatrixDense result = new MatrixDense (n, nx);
-        for (int f = 0; f < n; f++)  // from row
+        for (int f = 0; f < d; f++)  // from row
         {
             int x = f;    // index into X, at start of source row
             int r = P[f]; // index into result, at start of destination row
@@ -301,13 +294,14 @@ public class FactorQR
 
     public double[] saveRdiag ()
     {
-        double[] result = new double[n];
-        for (int j = 0; j < n; j++) result[j] = QR.data[j*m+j];
+        int d = Qdiag.length;
+        double[] result = new double[d];
+        for (int j = 0; j < d; j++) result[j] = QR.data[j*m+j];
         return result;
     }
 
     public void restoreRdiag (double[] Rdiag)
     {
-        for (int j = 0; j < n; j++) QR.data[j*m+j] = Rdiag[j];
+        for (int j = 0; j < Qdiag.length; j++) QR.data[j*m+j] = Rdiag[j];
     }
 }
