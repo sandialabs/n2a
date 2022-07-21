@@ -9,12 +9,15 @@ package gov.sandia.n2a.ui.studies;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
+import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.NodeJob;
+import gov.sandia.n2a.ui.jobs.OutputParser;
+import gov.sandia.n2a.ui.jobs.OutputParser.Column;
 import gov.sandia.n2a.ui.jobs.PanelRun;
 import java.awt.Component;
 import java.awt.EventQueue;
@@ -29,6 +32,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.AbstractAction;
@@ -468,6 +472,7 @@ public class PanelStudy extends JPanel
         protected Study          currentStudy;
         protected List<String[]> variablePaths = new ArrayList<String[]> ();
         protected List<String[]> rowValues     = new ArrayList<String[]> ();
+        protected MNode          loss;
 
         public int getRowCount ()
         {
@@ -526,6 +531,8 @@ public class PanelStudy extends JPanel
                     if (value.isEmpty ()) blanks++;
                 }
 
+                if (loss != null) values[0] = "";  // Don't show literal content of variable. Instead we will compute loss value below.
+
                 // Only save if enough entries have non-empty values.
                 // Otherwise, leave the row null so we can try again. Very likely, the model is missing or incomplete.
                 // This can happen if we try to read it before it is written out or when it is only partially written.
@@ -534,6 +541,24 @@ public class PanelStudy extends JPanel
                 int threshold = (int) Math.floor (variableCount * 0.25);  // 75% non-blank
                 if (variableCount > 1) threshold = Math.max (threshold, 1);
                 if (blanks <= threshold) rowValues.set (index, values);
+            }
+            if (column == 1  &&  loss != null  &&  values[0].isBlank ())  // Update loss value
+            {
+                NodeJob node = currentStudy.getJob (index);
+                if (node != null  &&  node.complete >= 1)
+                {
+                    Path jobDir = node.getJobPath ().getParent ();
+                    OutputParser parser = new OutputParser ();
+                    parser.parse (jobDir.resolve ("study"));
+                    Column c = parser.getColumn ("loss");
+                    if (c != null)
+                    {
+                        // TODO: handle different methods for expressing loss. This version only handles squared error over time series.
+                        double error = 0;
+                        for (float e : c.values) error += e * e;
+                        values[0] = Scalar.print (Math.sqrt (error));
+                    }
+                }
             }
             return values[column-1];
         }
@@ -546,6 +571,7 @@ public class PanelStudy extends JPanel
 
                 variablePaths.clear ();
                 rowValues.clear ();
+                loss = null;
 
                 if (currentStudy != null)
                 {
@@ -555,10 +581,20 @@ public class PanelStudy extends JPanel
                         public boolean visit (MNode n)
                         {
                             if (! n.data ()) return true;  // The first non-null node along a branch is the study variable. Everything under that is extra metadata.
-                            variablePaths.add (n.keyPath (variables));
+                            MNode loss = n.child ("loss");
+                            if (loss == null) variablePaths.add (   n.keyPath (variables));
+                            else              variablePaths.add (0, n.keyPath (variables));
                             return false;
                         }
                     });
+                    // Eliminate multiple loss columns, if they exist.
+                    while (variablePaths.size () >= 2)
+                    {
+                        MNode temp = variables.child (variablePaths.get (1));
+                        if (temp.child ("loss") == null) break;
+                        variablePaths.remove (1);
+                    }
+                    loss = variables.child (variablePaths.get (0)).child ("loss");
                 }
             }
             if (currentStudy != null)

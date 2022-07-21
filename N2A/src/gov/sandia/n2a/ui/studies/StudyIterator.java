@@ -36,6 +36,11 @@ public abstract class StudyIterator
     public abstract void    save (MNode study);   // Store the state of this iterator. Also calls inner.save().
     public abstract void    load (MNode study);   // Retrieve the saved state of this iterator so it can resume exactly where it left off. Also calls inner.load().
 
+    /**
+        Moves the chain of iterators, including this one, forward by one step.
+        Handles all the bookkeeping of moving inner iterators as needed.
+        @return true if a new value is available to be assigned. false if no more items are available.
+    **/
     public boolean next ()
     {
         if (step ()) return true;

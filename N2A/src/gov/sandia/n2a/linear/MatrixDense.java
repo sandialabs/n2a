@@ -30,8 +30,8 @@ public class MatrixDense extends Matrix
     protected int      offset;
     protected int      rows;
     protected int      columns;
-    protected int      strideR;
-    protected int      strideC;
+    protected int      strideR;  // elements to skip to reach next row at current column
+    protected int      strideC;  // elements to skip to reach next column at current row
 
     public MatrixDense ()
     {
@@ -62,13 +62,29 @@ public class MatrixDense extends Matrix
         strideR = 1;
         strideC = rows;
 
-        // TODO: if A is a MatrixDense, then use direct access to A.data
         int i = 0;
-        for (int c = 0; c < columns; c++)
+        if (A instanceof MatrixDense)
         {
-            for (int r = 0; r < rows; r++)
+            MatrixDense D = (MatrixDense) A;
+            for (int c = 0; c < columns; c++)
             {
-                data[i++] = A.get (r, c);
+                int d   = c * D.strideC;
+                int end = d + rows * D.strideR;
+                while (d != end)
+                {
+                    data[i++] = D.data[d];
+                    d += D.strideR;
+                }
+            }
+        }
+        else
+        {
+            for (int c = 0; c < columns; c++)
+            {
+                for (int r = 0; r < rows; r++)
+                {
+                    data[i++] = A.get (r, c);
+                }
             }
         }
     }
@@ -198,7 +214,7 @@ public class MatrixDense extends Matrix
             {
                 rows    = tempC;
                 columns = tempR;
-                strideR = tempC;
+                strideR = tempR;
                 strideC = 1;
             }
             else
@@ -594,25 +610,29 @@ public class MatrixDense extends Matrix
         }
         if (that instanceof Scalar)
         {
-            double scalar = ((Scalar) that).value;
-            MatrixDense result = new MatrixDense (rows, columns);
-            int step = strideC - rows * strideR;
-            int i   = offset;
-            int r   = 0;
-            int end = rows * columns;
-            while (r < end)
-            {
-                int columnEnd = r + rows;
-                while (r < columnEnd)
-                {
-                    result.data[r++] = data[i] * scalar;
-                    i += strideR;
-                }
-                i += step;
-            }
-            return result;
+            return multiply (((Scalar) that).value);
         }
         throw new EvaluationException ("type mismatch");
+    }
+
+    public MatrixDense multiply (double scalar)
+    {
+        MatrixDense result = new MatrixDense (rows, columns);
+        int step = strideC - rows * strideR;
+        int i   = offset;
+        int r   = 0;
+        int end = rows * columns;
+        while (r < end)
+        {
+            int columnEnd = r + rows;
+            while (r < columnEnd)
+            {
+                result.data[r++] = data[i] * scalar;
+                i += strideR;
+            }
+            i += step;
+        }
+        return result;
     }
 
     public MatrixDense multiplyElementwise (Type that) throws EvaluationException
@@ -1193,6 +1213,71 @@ public class MatrixDense extends Matrix
             a += strideR;
         }
         return result;
+    }
+
+    /**
+        Solves AX=B via back substitution, where this matrix is A and assumed to be in triangular form.
+        If A is not square, any extra rows or columns are ignored. Both A and B remain unchanged.
+        @param lower If true, solve against the lower triangular portion. If false, solve against the upper
+        triangular portion. Values in the opposite triangle are ignored (have no effect on the computation).
+        @param B May have any number of columns. Each column is treated as a separate problem. Any rows
+        beyond the triangular portion of A are ignored.
+    **/
+    public MatrixDense backSubstitue (boolean lower, Matrix B)
+    {
+        int nx = B.columns ();
+        int mx = B.rows ();
+        int d = Math.min (mx, Math.min (rows, columns));  // length of diagonal
+        MatrixDense X = new MatrixDense (B);  // May contain excess elements, but hopefully that's a rare case.
+
+        if (lower)
+        {
+            // Iterate over the columns of X
+            for (int j = 0; j < nx; j++)
+            {
+                // Iterate over diagonal
+                for (int k = 0; k < d; k++)
+                {
+                    int kj = k * X.strideR + j * X.strideC;
+                    if (X.data[kj] == 0) continue;
+                    int a = k * (strideC + strideR);  // on diagonal
+                    double e = X.data[kj] /= data[a];  // solve for element ij
+                    // Apply effect of solved element to rest of column.
+                    a += strideR;
+                    int ij  = kj + X.strideR;
+                    int end = d * X.strideR + j * X.strideC;
+                    while (ij != end)
+                    {
+                        X.data[ij] -= e * data[a];
+                        a  +=   strideR;
+                        ij += X.strideR;
+                    }
+                }
+            }
+        }
+        else  // upper
+        {
+            for (int j = 0; j < nx; j++)
+            {
+                for (int k = d-1; k >= 0; k--)
+                {
+                    int kj = k * X.strideR + j * X.strideC;
+                    if (X.data[kj] == 0) continue;
+                    int a = k * (strideC + strideR);  // on diagonal
+                    double e = X.data[kj] /= data[a];
+                    a -= strideR;
+                    int ij  = kj - X.strideR;
+                    int end = j * X.strideC - X.strideR;
+                    while (ij != end)
+                    {
+                        X.data[ij] -= e * data[a];
+                        a  -=   strideR;
+                        ij -= X.strideR;
+                    }
+                }
+            }
+        }
+        return X.getRegion (0, 0, d-1, nx-1);
     }
 
     public int compareTo (Type that)

@@ -284,6 +284,7 @@ public class BuildMatrix extends Operator
         {
             for (Operator e : c)
             {
+                if (e == null) continue;
                 e.determineUnit (fatal);
                 if (e.unit != null)
                 {

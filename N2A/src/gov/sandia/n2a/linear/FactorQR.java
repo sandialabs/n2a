@@ -125,12 +125,13 @@ public class FactorQR
     }
 
     /**
-        @return true if R, and hence A, has full rank.
+        @return Zero-based index of first element in diagonal of R that falls below threshold.
+        If no such element exists, result points one past the last element.
     **/
-    public boolean isFullRank ()
+    public int rank (double threshold)
     {
-        for (int j = 0; j < Qdiag.length; j++) if (QR.data[j*m+j] == 0) return false;
-        return true;
+        for (int j = 0; j < Qdiag.length; j++) if (Math.abs (QR.data[j*m+j]) < threshold) return j;
+        return Qdiag.length;
     }
 
     /**
@@ -218,8 +219,8 @@ public class FactorQR
     /**
         Least squares solution of AX = B
         @param B Matrix with exactly as many rows as A, along with any number of columns.
-        @param unpermute Indicates to return X rather than ~PX. This is slightly cheaper than multiplying the result with P to get X.
-        @return X that minimizes the two norm of QR~PX-B. If m < n, then the answer will be truncated to m rows.
+        @param unpermute Indicates to return X rather than P'X. This is slightly cheaper than multiplying the result with P to get X.
+        @return X that minimizes the two norm of QRP'X-B. If m < n, then the answer will be truncated to m rows.
     **/
     public MatrixDense solve (Matrix B, boolean unpermute)
     {
@@ -229,7 +230,7 @@ public class FactorQR
         int nx = B.columns ();
         MatrixDense X = new MatrixDense (B);
 
-        // Compute Y = ~QB
+        // Compute Y = Q'B
         int d = Qdiag.length;
         for (int k = 0; k < d; k++)
         {

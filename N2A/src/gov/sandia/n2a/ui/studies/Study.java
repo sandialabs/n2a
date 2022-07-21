@@ -67,7 +67,7 @@ public class Study
         MNode variables = source.childOrEmpty ("variables");
         class VariableVisitor implements Visitor
         {
-            MNode goal;
+            MNode loss;
             List<MNode> optimize = new ArrayList<MNode> ();
 
             public boolean visit (MNode n)
@@ -81,9 +81,9 @@ public class Study
                 {
                     optimize.add (n);  // The optimizer may use value as a hint about range to work within.
                 }
-                else if (n.child ("goal") != null)  // Identifies the variable whose error value we wish to minimize.
+                else if (n.child ("loss") != null)  // Identifies the variable whose error value we wish to minimize.
                 {
-                    goal = n;
+                    loss = n;  // There can only be one goal, so only last-found goal is used.
                 }
                 else if (value.startsWith ("["))
                 {
@@ -102,6 +102,7 @@ public class Study
                 }
                 else return false;  // Ignore unrecognized study type. TODO: should we throw an error instead?
 
+                if (it == null) return false;
                 if (iterator != null)
                 {
                     iterator.next ();  // Move to first item in sequence. At least one must exist.
@@ -116,10 +117,19 @@ public class Study
 
         // Set up optimization iterator.
         // This must always be last, so that it forms the inner loop. Combinatorial iteration takes place around it.
-        if (visitor.goal == null) return;
-        StudyIterator it = new OptimizerLM (visitor.goal.keyPath (variables), visitor.optimize, this);
-        iterator.next ();
-        it.inner = it;
+        if (visitor.loss == null  ||  visitor.optimize.isEmpty ()) return;
+        StudyIterator it;
+        switch (source.getOrDefault ("lm", "config", "optimizer"))
+        {
+            case "lm":
+            default: it = new OptimizerLM (this, visitor.loss.keyPath (variables), visitor.optimize);
+        }
+        if (iterator != null)
+        {
+            iterator.next ();  // Move to first item in sequence. At least one must exist.
+            it.inner = iterator;
+        }
+        iterator = it;
     }
 
     public synchronized void togglePause ()
