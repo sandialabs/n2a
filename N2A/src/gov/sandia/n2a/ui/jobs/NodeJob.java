@@ -173,7 +173,7 @@ public class NodeJob extends NodeBase
     public synchronized void distribute ()
     {
         MNode source = getSource ();
-        if (source.size () == 0)  // TODO: remove this conversion by 3/17/2022 (one-year sunset date)
+        if (source.isEmpty ())  // TODO: remove this conversion after N2A release 1.2 has been available for at least 1 month
         {
             // Convert old-format job directories to new format, which has separate "job" and "model" files.
             System.err.println ("converting to new job format: " + source.key ());
@@ -214,8 +214,7 @@ public class NodeJob extends NodeBase
             // However, only try to start jobs that still have enough info to actually run.
             // Sometimes a directory might be lingering from an incomplete delete,
             // so don't try to start a job in that case.
-            Path model = localJobDir.resolve ("model");
-            if (Files.exists (model)) Host.waitForHost (this);
+            if (! source.isEmpty ()) Host.waitForHost (this);
         }
     }
 

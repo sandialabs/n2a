@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.studies;
 import java.nio.file.Path;
 import java.util.List;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.linear.FactorQR;
@@ -25,16 +26,18 @@ public class OptimizerLM extends StudyIterator
     public static final double epsilon = Math.sqrt (Math.ulp (1.0f));
 
     protected Study       study;
-    protected int         iteration = -1;
-    protected int         sample;       // This is always relative to one iteration of LM.
-    protected int         baseIndex;    // Overall position in study as of the start of the current iteration. baseIndex+sample should give the current job number.
-    protected int         maxSamples;   // This is only an estimate.
+    protected int         iteration  = -1;
+    protected int         sample;            // This is always relative to one iteration of LM.
+    protected int         baseIndex;         // Overall position in study as of the start of the current iteration. baseIndex+sample should give the current job number.
+    protected int         yindex     = -1;   // Index of the job that provided the current value of y. Used to restore iterator state.
+    protected int         maxSamples;        // This is only an estimate.
     protected int         maxIterations;
     protected List<MNode> variables;
     protected double      toleranceF;
     protected double      toleranceX;
-    protected double      toleranceG = 0;
+    protected double      toleranceG;
     protected double      perturbation;
+    protected boolean     skipCycle0 = true; // See comments in assign()
 
     protected MatrixDense x;       // current state vector
     protected MatrixDense y;       // current value of time series output by model.  y=f(x) where f() is one entire job run.
@@ -45,14 +48,11 @@ public class OptimizerLM extends StudyIterator
     protected MatrixDense Qy;
     protected MatrixDense p;
     protected MatrixDense xp;
-    protected MatrixDense H;       // actual perturbation value for each variable in x
     protected MatrixDense scales;  // sensitivity of each variable in x
-    protected MatrixDense Jnorms;  // norm of each column in J
     protected double      ratio;
     protected double      par;     // Levenberg-Marquardt parameter (mix between Gauss-Newton and gradient-descent)
     protected double      xnorm;
     protected double      ynorm;
-    protected double      gnorm;
     protected double      pnorm;
     protected double      delta;   // step bound
 
@@ -65,35 +65,53 @@ public class OptimizerLM extends StudyIterator
         maxIterations = study.source.getOrDefault (200,     "config", "maxIterations");
         toleranceF    = study.source.getOrDefault (epsilon, "config", "toleranceF");
         toleranceX    = study.source.getOrDefault (epsilon, "config", "toleranceX");
+        toleranceG    = study.source.getOrDefault (epsilon, "config", "toleranceG");
         perturbation  = study.source.getOrDefault (epsilon, "config", "perturbation");
         maxSamples    = maxIterations * (variables.size () + 1);
 
-        // Determine range limits for each variable
         int n = variables.size ();
-        x   = new MatrixDense (n, 1);
-        H   = new MatrixDense (n, 1);
-        min = new MatrixDense (n, 1);
-        max = new MatrixDense (n, 1);
-        for (int r = 0; r < n; r++)
+        x      = new MatrixDense (n, 1);
+        min    = new MatrixDense (n, 1);
+        max    = new MatrixDense (n, 1);
+        p      = new MatrixDense (n, 1);
+        scales = new MatrixDense (n, 1);
+
+        // Determine range limit and initial value for each variable
+        MNode root = study.source.child ("variables");
+        String inherit = study.source.get ("$inherit");
+        MNode model = AppData.models.childOrEmpty (inherit);
+        for (int c = 0; c < n; c++)
         {
-            MNode v = variables.get (r);
+            MNode v = variables.get (c);
 
             double vMin = Double.NEGATIVE_INFINITY;
             double vMax = Double.POSITIVE_INFINITY;
-            String value = v.get ();
-            if (value.startsWith ("["))
+            String range = v.get ();
+            if (range.startsWith ("["))
             {
-                value = value.substring (1);
-                value = value.split ("]", 2)[0];
-                String[] pieces = value.split (",");
+                range = range.substring (1);
+                range = range.split ("]", 2)[0];
+                String[] pieces = range.split (",");
                 vMin = new UnitValue (pieces[0]).get ();
                 vMax = new UnitValue (pieces[pieces.length - 1]).get ();
             }
 
             if (v.child ("min") != null) vMin = new UnitValue (v.get ("min")).get ();
             if (v.child ("max") != null) vMax = new UnitValue (v.get ("max")).get ();
-            min.set (r, vMin);
-            max.set (r, vMax);
+            min.set (c, vMin);
+            max.set (c, vMax);
+
+            double value = 0;
+            String initial = model.get (v.keyPath (root));
+            if (initial.isBlank ())
+            {
+                if (Double.isFinite (vMin)  &&  Double.isFinite (vMax)) value = (vMin + vMax) / 2;
+            }
+            else
+            {
+                value = new UnitValue (initial).get ();
+            }
+            x.set (c, value);
         }
     }
 
@@ -122,6 +140,7 @@ public class OptimizerLM extends StudyIterator
             iteration = 0;
             baseIndex = 1;
             sample    = -1;  // -1 is the base sample. 0 through n-1 are used to construct the Jacobian. sample >= n are for probing optimal step size.
+            yindex    = -1;
             return true;  // Causes one sample (job) to be collected with parameters at the start point. This is the base sample for the first iteration.
             // In subsequent iterations, the base sample will come from the last step of the inner loop.
         }
@@ -129,10 +148,12 @@ public class OptimizerLM extends StudyIterator
         if (iteration == 0  &&  sample == -1)
         {
             // Results of first sample are now available. This establishes number of rows in Jacobian.
-            OutputParser.Column series = getSeries (baseIndex + sample);
-            int m = series.startRow + series.values.size () - 1;  // TODO: -1 is just for testing
+            yindex = 0;
+            OutputParser.Column series = getSeries (yindex);
+            int offset = (skipCycle0  &&  series.startRow == 0) ? 1 : 0;
+            int m = series.startRow + series.values.size () - offset;
             y = new MatrixDense (m, 1);
-            for (int r = 0; r < m; r++) y.set (r, series.get (r+1));  // TODO: +1 is just for testing
+            for (int r = 0; r < m; r++) y.set (r, series.get (r+offset));
             ynorm = y.norm (2);
             if (ynorm == 0) return false;  // Exact convergence (unlikely).
         }
@@ -147,15 +168,17 @@ public class OptimizerLM extends StudyIterator
         if (sample == n)  // We now have exactly enough samples to compute Jacobian. Next sample we collect (n) will be the first check for step size.
         {
             J = new MatrixDense (m, n);
-            Jnorms = new MatrixDense (n, 1);
+            MatrixDense Jnorms = new MatrixDense (n, 1);  // norm of each column in J
             for (int c = 0; c < n; c++)
             {
                 OutputParser.Column series = getSeries (baseIndex + c);
-                double h = H.get (c);
+                int offset = (skipCycle0  &&  series.startRow == 0) ? 1 : 0;
+                double h = perturbation * Math.abs (x.get (c));
+                if (h == 0) h = perturbation;
                 double norm = 0;
                 for (int r = 0; r < m; r++)
                 {
-                    double value = (series.get (r+1) - y.get (r)) / h;  // TODO: +1 is just for testing
+                    double value = (series.get (r+offset) - y.get (r)) / h;
                     J.set (r, c, value);
                     norm += value * value;
                 }
@@ -165,7 +188,6 @@ public class OptimizerLM extends StudyIterator
             if (iteration == 0)
             {
                 // Scale according to the norms of the columns of the initial Jacobian.
-                scales = new MatrixDense (n, 1);
                 for (int j = 0; j < n; j++)
                 {
                     double scale = Jnorms.get (j);
@@ -173,7 +195,7 @@ public class OptimizerLM extends StudyIterator
                     scales.set (j, scale);
                 }
 
-                xnorm = ((MatrixDense) x.multiplyElementwise (scales)).norm (2);
+                xnorm = x.multiplyElementwise (scales).norm (2);
                 if (xnorm == 0) delta = 1;
                 else            delta = xnorm;
             }
@@ -195,7 +217,6 @@ public class OptimizerLM extends StudyIterator
                 gnorm = Math.max (gnorm, Math.abs (temp / (ynorm * jnorm)));  // infinity norm of g=J'y/|y| with some additional scaling
             }
             if (gnorm <= toleranceG) return false;  // Gradient has gotten too small to follow.
-            if (gnorm <= epsilon)    return false;  // failure 8
 
             // rescale if necessary
             for (int j = 0; j < n; j++) scales.set (j, Math.max (scales.get (j), Jnorms.get (j)));
@@ -209,16 +230,18 @@ public class OptimizerLM extends StudyIterator
         if (sample > n)  // Skip this the first time (when sample==n).
         {
             // Retrieve sample
-            OutputParser.Column series = getSeries (baseIndex + sample - 1);
+            int yindexNext = baseIndex + sample - 1;
+            OutputParser.Column series = getSeries (yindexNext);
+            int offset = (skipCycle0  &&  series.startRow == 0) ? 1 : 0;
             MatrixDense tempY = new MatrixDense (m, 1);
-            for (int r = 0; r < m; r++) tempY.set (r, series.get (r+1));  // TODO: +1 is only for testing
-            double ynorm1 = tempY.norm (2);
+            for (int r = 0; r < m; r++) tempY.set (r, series.get (r+offset));
+            double ynormNext = tempY.norm (2);
 
             // compute the scaled actual reduction
             double reductionActual = -1;
-            if (ynorm1 / 10 < ynorm)
+            if (ynormNext / 10 < ynorm)
             {
-                double temp = ynorm1 / ynorm;
+                double temp = ynormNext / ynorm;
                 reductionActual = 1 - temp * temp;
             }
 
@@ -235,8 +258,8 @@ public class OptimizerLM extends StudyIterator
             double dirder = -(temp1 * temp1 + temp2 * temp2);
 
             // compute the ratio of the actual to the predicted reduction
-            ratio = 0;
-            if (reductionPredicted != 0) ratio = reductionActual / reductionPredicted;
+            if (reductionPredicted == 0) ratio = 0;
+            else                         ratio = reductionActual / reductionPredicted;
 
             // update the step bound
             if (ratio <= 0.25)
@@ -244,7 +267,7 @@ public class OptimizerLM extends StudyIterator
                 double update;
                 if (reductionActual >= 0) update = 0.5;
                 else                      update = dirder / (2 * dirder + reductionActual);
-                if (ynorm1 / 10 >= ynorm  ||  update < 0.1) update = 0.1;
+                if (ynormNext / 10 >= ynorm  ||  update < 0.1) update = 0.1;
                 delta = update * Math.min (delta, pnorm * 10);
                 par /= update;
             }
@@ -257,10 +280,11 @@ public class OptimizerLM extends StudyIterator
             if (ratio >= 1e-4)  // successful iteration.
             {
                 // update x, y, and their norms
-                x     = xp;
-                y     = tempY;
-                xnorm = x.multiplyElementwise (scales).norm (2);
-                ynorm = ynorm1;
+                x      = xp;
+                y      = tempY;
+                yindex = yindexNext;
+                xnorm  = x.multiplyElementwise (scales).norm (2);
+                ynorm  = ynormNext;
             }
 
             // tests for convergence
@@ -296,7 +320,7 @@ public class OptimizerLM extends StudyIterator
         if (ratio < 1e-4)
         {
             // Determine the Levenberg-Marquardt parameter.
-            p = lmpar ();  // par is updated as a side-effect
+            lmpar (p);  // par is updated as a side-effect
 
             // Store the direction p and x+p. Calculate the norm of p.
             xp = x.subtract (p);  // p is actually negative
@@ -314,7 +338,7 @@ public class OptimizerLM extends StudyIterator
         // Bottom of loop
         iteration++;
         baseIndex += sample;
-        sample = 0;  // because y already contains result of last sample
+        sample = 0;  // Start collection of next Jacobian. y already contains result of last sample.
         return iteration < maxIterations;
     }
 
@@ -345,7 +369,7 @@ public class OptimizerLM extends StudyIterator
             solve for b in R'b = DDx / |Dx|  (that is, Sb = DDx / |Dx|)
             par += (|Dx| - delta) / (delta * |b|^2)
     **/
-    public MatrixDense lmpar ()
+    public void lmpar (MatrixDense x)
     {
         double minimum = Double.MIN_NORMAL;
         int n = J.columns ();
@@ -357,7 +381,6 @@ public class OptimizerLM extends StudyIterator
         for (int j = 0; j < nsing; j++) d.set (j, Qy.get (j));  // d is permuted, just like Qy. Elements beyond nsing are zero.
         //   Solve for x by back-substitution in Rx=Q'y (which comes from QRx=y, where J=QR).
         d = qr.QR.backSubstitue (false, d);
-        MatrixDense x = new MatrixDense (n, 1);
         for (int j = 0; j < n; j++) x.set (j, d.get (qr.P[j]));
 
         // Evaluate the function at the origin, and test
@@ -368,7 +391,7 @@ public class OptimizerLM extends StudyIterator
         if (fp <= 0.1 * delta)
         {
             par = 0;
-            return x;
+            return;
         }
 
         // If the Jacobian is not rank deficient, the Newton
@@ -428,7 +451,7 @@ public class OptimizerLM extends StudyIterator
                 || iteration >= 10)
             {
                 qr.restoreRdiag (jdiag);
-                return x;
+                return;
             }
 
             // Compute the Newton correction.
@@ -557,37 +580,86 @@ public class OptimizerLM extends StudyIterator
         return sample < 0  ||  sample >= variables.size () - 1;  // At this point, "sample" refers the one most recently started. We want to start blocking right after the last column of the Jacobian is issued.
     }
 
-    public void save (MNode studySource)
+    public void save (MNode study)
     {
-        if (inner != null) inner.save (studySource);
+        if (inner != null) inner.save (study);
+        MNode loss = node (study);  // by convention, we store optimizer state under the loss variable
 
-        studySource.set (iteration, "iteration");
-        studySource.set (sample,    "sample");
-        studySource.set (baseIndex, "baseIndex");
-        // TODO: when and where to update baseIndex?
+        loss.set (iteration, "iteration");
+        loss.set (sample,    "sample");
+        loss.set (baseIndex, "baseIndex");
+        loss.set (yindex,    "yindex");
+        loss.set (ratio,     "ratio");
+        loss.set (par,       "par");
+        loss.set (delta,     "delta");
 
-        int rows = variables.size ();
-        for (int r = 0; r < rows; r++)
+        int n = variables.size ();
+        for (int c = 0; c < n; c++)
         {
-            MNode v = variables.get (r);
-            v.set (x.get (r), "x");
+            MNode v = variables.get (c);
+            v.set (x     .get (c), "x");
+            v.set (scales.get (c), "scale");
+            v.set (p     .get (c), "p");
         }
+
+        // Remaining variables will be recreated from existing data.
     }
 
     public void load (MNode study)
     {
         if (inner != null) inner.load (study);
+        MNode loss = node (study);
 
-        iteration = study.getOrDefault (0,  "iteration");
-        sample    = study.getOrDefault (-1, "sample");
-        baseIndex = study.getOrDefault (1,  "baseIndex");
+        iteration = loss.getOrDefault (0,  "iteration");
+        sample    = loss.getOrDefault (-1, "sample");
+        baseIndex = loss.getOrDefault (1,  "baseIndex");
+        yindex    = loss.getOrDefault (-1, "yindex");
+        ratio     = loss.getOrDefault (0,  "ratio");
+        par       = loss.getOrDefault (0,  "par");
+        delta     = loss.getOrDefault (1,  "delta");
 
-        int rows = variables.size ();
-        for (int r = 0; r < rows; r++)
+        int n = variables.size ();
+        for (int c = 0; c < n; c++)
         {
-            MNode v = variables.get (r);
-            x.set (r, v.getOrDefault (0, "x"));
+            MNode v = variables.get (c);
+            x     .set (c, v.getOrDefault (0.0, "x"));
+            scales.set (c, v.getOrDefault (1.0, "scale"));
+            p     .set (c, v.getOrDefault (0.0, "p"));
         }
+
+        // Recreate other variables
+        xnorm = x.multiplyElementwise (scales).norm (2);
+        pnorm = p.multiplyElementwise (scales).norm (2);
+        xp    = x.subtract (p);
+
+        //   y -- Based on saved index
+        if (yindex < 0) return;
+        OutputParser.Column series = getSeries (yindex);
+        int offset = (skipCycle0  &&  series.startRow == 0) ? 1 : 0;
+        int m = series.startRow + series.values.size () - offset;
+        y = new MatrixDense (m, 1);
+        for (int r = 0; r < m; r++) y.set (r, series.get (r+offset));
+        ynorm = y.norm (2);
+
+        //   J, qr, Qy
+        //   Note that the first barrier after collecting J is when sample==n-1.
+        //   That is just before the cycle where J is computed, so no need to do it in that case.
+        //   The case here is for barriers that come later, probing to find step size.
+        if (sample < n) return;
+        J = new MatrixDense (m, n);
+        for (int c = 0; c < n; c++)
+        {
+            series = getSeries (baseIndex + c);
+            offset = (skipCycle0  &&  series.startRow == 0) ? 1 : 0;
+            double h = perturbation * Math.abs (x.get (c));
+            if (h == 0) h = perturbation;
+            for (int r = 0; r < m; r++)
+            {
+                J.set (r, c, (series.get (r+offset) - y.get (r)) / h);
+            }
+        }
+        qr = new FactorQR (J);
+        Qy = qr.getQ ().transpose ().multiply (y);
     }
 
     public void assign (MNode model)
@@ -599,8 +671,8 @@ public class OptimizerLM extends StudyIterator
         // Compare with EquationSet ctor code that builds output() for watch variables.
         // Output is always indirect, via a dummy expression. If "loss" is a state variable
         // (as opposed to temporary), then there will be a 1-cycle delay, and the first
-        // row will be useless. TODO: detect when first row is inert and ignore it in LM
-        // calculations.
+        // row will be useless.
+        // TODO: detect when first row is inert and ignore it in LM calculations. For now, we assume it is always inert.
         MNode g = model.child (keyPath);
         //   Determine dummy variable name
         MNode p = g.parent ();
@@ -611,33 +683,21 @@ public class OptimizerLM extends StudyIterator
         p.set ("output(\"study\"," + g.key () + ",\"loss\")", dummy);
         // TODO: sampling intervals (see EquationSet ctor)
 
-        if (sample < 0)  // Set starting point
+        // Set starting point
+        if (sample < 0)
         {
-            for (int r = 0; r < n; r++)
+            for (int c = 0; c < n; c++)
             {
-                double value = 0;
-                MNode v = variables.get (r);
+                MNode v = variables.get (c);
                 String[] keyPath = v.keyPath (root);
-                String text = model.get (keyPath);
-                if (text.isBlank ())
-                {
-                    double a = min.get (r);
-                    double b = max.get (r);
-                    if (Double.isFinite (a)  &&  Double.isFinite (b)) value = (a + b) / 2;
-                }
-                else
-                {
-                    value = new UnitValue (text).get ();
-                }
-                x.set (r, value);
-
-                // Because this comes after the initial save, we cheat by inserting an extra save here.
-                root.child (keyPath).set (value, "x");
+                double value = x.get (c);
+                model.set (value, keyPath);
             }
             return;
         }
 
-        if (sample < n)  // Finite-difference samples to create Jacobian
+        // Finite-difference samples to create Jacobian
+        if (sample < n)
         {
             // TODO: use structurally-orthogonal cover of Jacobian.
             // Requires either user-specified structure, or detect structure by observing zeroes in elements of J
@@ -655,7 +715,6 @@ public class OptimizerLM extends StudyIterator
                     double h = perturbation * Math.abs (value);
                     if (h == 0) h = perturbation;
                     value += h;
-                    H.set (c, h);
                 }
                 model.set (value, keyPath);
             }

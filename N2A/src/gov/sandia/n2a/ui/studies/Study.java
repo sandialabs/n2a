@@ -315,7 +315,7 @@ public class Study
             int retry = source.getOrDefault (3, "config", "retry");
             for (int retries = 0; ! stop  &&  retries <= retry; retries++)
             {
-                restoreIterators ();
+                restoreIterators ();  // Restores index as well.
                 // Inner loop does the entire study, breaking only when done or if jobs failed.
                 while (! stop)
                 {
