@@ -151,7 +151,7 @@ public class CompilerGCC extends Compiler
         }
         for (Path library : libraries)
         {
-            command.add ("-l" + host.quote (library));
+            command.add ("-l" + library);  // Don't quote, because that forces conversion to absolute path. If it's relative, we really only want the name.
         }
         for (Path libraryDir : libraryDirs)
         {
