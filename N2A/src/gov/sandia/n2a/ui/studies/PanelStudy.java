@@ -285,7 +285,13 @@ public class PanelStudy extends JPanel
                         synchronized (PanelRun.jobNodes) {jobNode = PanelRun.jobNodes.get (jobKey);}
                         if (jobNode != null) paths.add (new TreePath (jobNode.getPath ()));
                     }
-                    PanelRun.instance.delete (paths.toArray (new TreePath[paths.size ()]));
+                    EventQueue.invokeLater (new Runnable ()  // Because PanelRun.delete() expects to run on EDT.
+                    {
+                        public void run ()
+                        {
+                            PanelRun.instance.delete (paths.toArray (new TreePath[paths.size ()]));
+                        }
+                    });
                 }
             }
         };
