@@ -110,6 +110,11 @@ public class Study
                 {
                     it = new IteratorList (keys, value);
                 }
+                else if (value.isEmpty ()  &&  n.child ("count") != null)
+                {
+                    it = new IteratorIndexed (keys);
+                    ((IteratorIndexed) it).count = n.getInt ("count");
+                }
                 if (it == null) return false;
 
                 String groupName = n.get ("group");

@@ -11,7 +11,7 @@ import gov.sandia.n2a.db.MNode;
 /**
     An iterator that steps through a discrete set of items.
 **/
-public abstract class IteratorIndexed extends StudyIterator
+public class IteratorIndexed extends StudyIterator
 {
     protected int index = -1;
     protected int count;  // Must be set by concrete class constructor.
@@ -37,6 +37,16 @@ public abstract class IteratorIndexed extends StudyIterator
     {
         index++;
         return index < count;
+    }
+
+    @Override
+    public void assign (MNode model)
+    {
+        // Do nothing. We simply repeat the run "count" times with an unmodified value.
+        // If this is set on $metadata.seed, then we get Monte-Carlo runs.
+        // The seed is provided by the backend, which means it is not repeatable
+        // between studies. To get repeatable MC sampling, specify a random
+        // generator, eg: $metadata.seed.study=uniform(100000)
     }
 
     public void save (MNode study)
