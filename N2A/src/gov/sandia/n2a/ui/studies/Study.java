@@ -333,6 +333,7 @@ public class Study
                         else if (node.complete > 1)                   failed++;
                     }
 
+                    if (iterator instanceof OptimizerLM) count = iterator.count ();  // Allow count to change. Need better filter for which classes to do this.
                     showProgress ();
 
                     if (notStarted > 10)  // Throttle generation of new samples.

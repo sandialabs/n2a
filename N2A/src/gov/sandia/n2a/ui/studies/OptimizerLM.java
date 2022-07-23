@@ -17,6 +17,11 @@ import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
 
+/**
+    This version of Levenberg-Marquardt is an adaptation of MINPACK (https://netlib.org/minpack).
+    It has been rewritten once in C++ (via the FL library), then rewritten again in Java, then
+    heavily rearranged to work within the StudyIterator framework.
+**/
 public class OptimizerLM extends StudyIterator
 {
     // Machine epsilon, the difference between 1 and next larger representable value.
@@ -27,11 +32,11 @@ public class OptimizerLM extends StudyIterator
 
     protected Study       study;
     protected int         iteration  = -1;
-    protected int         sample;            // This is always relative to one iteration of LM.
-    protected int         baseIndex;         // Overall position in study as of the start of the current iteration. baseIndex+sample should give the current job number.
-    protected int         yindex     = -1;   // Index of the job that provided the current value of y. Used to restore iterator state.
-    protected int         maxSamples;        // This is only an estimate.
+    protected int         sample;             // This is always relative to one iteration of LM.
+    protected int         baseIndex;          // Overall position in study as of the start of the current iteration. baseIndex+sample should give the current job number.
+    protected int         yindex     = -1;    // Index of the job that provided the current value of y. Used to restore iterator state.
     protected int         maxIterations;
+    protected int         expectedIterations; // estimate updated after first sample
     protected List<MNode> variables;
     protected double      toleranceF;
     protected double      toleranceX;
@@ -68,7 +73,6 @@ public class OptimizerLM extends StudyIterator
         toleranceX    = study.source.getOrDefault (epsilon, "config", "toleranceX");
         toleranceG    = study.source.getOrDefault (epsilon, "config", "toleranceG");
         perturbation  = study.source.getOrDefault (epsilon, "config", "perturbation");
-        maxSamples    = maxIterations * (variables.size () + 1);
 
         int n = variables.size ();
         x      = new MatrixDense (n, 1);
@@ -129,11 +133,7 @@ public class OptimizerLM extends StudyIterator
 
     public int count ()
     {
-        // TODO: Since LM has quadratic convergence, we dispose of roughly half the number of bits
-        // of error in each iteration. To estimate remaining iterations, we need an estimate
-        // of remaining bits of error, then take log2(number of error bits).
-        // We also allow for there to always be at least one cycle left.
-        int result = maxSamples;
+        int result = (variables.size () + 1) * (expectedIterations == 0 ? maxIterations : expectedIterations);
         if (inner != null) result *= inner.count ();
         return result;
     }
@@ -150,7 +150,7 @@ public class OptimizerLM extends StudyIterator
         if (iteration == -1)
         {
             iteration = 0;
-            baseIndex = 1;
+            baseIndex++;     // Always relative to last position of base, especially when coming from a previous optimization run.
             sample    = -1;  // -1 is the base sample. 0 through n-1 are used to construct the Jacobian. sample >= n are for probing optimal step size.
             yindex    = -1;
             return true;  // Causes one sample (job) to be collected with parameters at the start point. This is the base sample for the first iteration.
@@ -167,6 +167,21 @@ public class OptimizerLM extends StudyIterator
             y = new MatrixDense (m, 1);
             for (int r = 0; r < m; r++) y.set (r, series.get (r+offset));
             ynorm = y.norm (2);
+
+            // Update estimated number of iterations, based on size of initial error.
+            // Since LM has quadratic convergence, we dispose of roughly half the number of bits
+            // of error in each iteration. Unfortunately, this theory applies to x, not y.
+            // Since we don't know the correct value of x, nor the slope of the error surface,
+            // we make the assumption that we dispose of 1 bit of error per iteration
+            // (error cut in half). We also assume the error will never get smaller than epsilon.
+            if (expectedIterations == 0)  // Only do this once for the entire study. TODO: keep a running average
+            {
+                long bitsY       = (Double.doubleToLongBits (ynorm  ) & 0x7FF0000000000000L) >> 52;
+                long bitsEpsilon = (Double.doubleToLongBits (epsilon) & 0x7FF0000000000000L) >> 52;
+                long bitsError   = bitsY - bitsEpsilon;
+                expectedIterations = (int) Math.max (1, bitsError);
+            }
+
             if (ynorm == 0) return false;  // Exact convergence (unlikely).
         }
 
