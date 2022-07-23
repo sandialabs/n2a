@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -116,14 +116,18 @@ public abstract class Backend implements ExtensionPoint
         {
             double cpuNeeded    = 0;
             long   memoryNeeded = 0;
-            List<ProcessInfo> procs = host.getActiveProcs ();
-            for (ProcessInfo info : procs)
+            int    processCount = 0;
+            if (host.config.getOrDefault (true, "useActiveProcs"))
             {
-                cpuNeeded    += info.cpu;
-                memoryNeeded += info.memory;
+                List<ProcessInfo> procs = host.getActiveProcs ();
+                for (ProcessInfo info : procs)
+                {
+                    cpuNeeded    += info.cpu;
+                    memoryNeeded += info.memory;
+                }
+                processCount = procs.size ();
             }
 
-            int processCount = procs.size ();
             if (processCount == 0)
             {
                 cpuNeeded    = 1;         // Must have at least 1 core available to launch process.

@@ -8,7 +8,8 @@ package gov.sandia.n2a.host;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-
+import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MCheckBox;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.InputStreamReader;
@@ -20,8 +21,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.swing.JPanel;
+
 public class Windows extends Host
 {
+    protected EditorPanel panel;
+
     public static Factory factory ()
     {
         return new Factory ()
@@ -36,6 +41,28 @@ public class Windows extends Host
                 return new Windows ();
             }
         };
+    }
+
+    @Override
+    public JPanel getEditor ()
+    {
+        if (panel == null) panel = new EditorPanel ();
+        return panel;
+    }
+
+    @SuppressWarnings("serial")
+    public class EditorPanel extends JPanel
+    {
+        public MCheckBox fieldUseActiveProcs = new MCheckBox (config, "useActiveProcs", "Use existing jobs to estimate cost of adding another job", true);
+
+        public EditorPanel ()
+        {
+            Lay.BLtg (this, "N",
+                Lay.BxL ("V",
+                    Lay.FL (fieldUseActiveProcs)
+                )
+            );
+        }
     }
 
     @Override

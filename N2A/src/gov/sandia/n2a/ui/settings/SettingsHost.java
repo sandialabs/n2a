@@ -7,9 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.host.Host;
-import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.host.Host.Factory;
-import gov.sandia.n2a.host.Host.FactoryRemote;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Settings;
@@ -76,7 +74,7 @@ public class SettingsHost implements Settings
         scrollPane = new JScrollPane (view);
         scrollPane.getVerticalScrollBar ().setUnitIncrement (15);  // About one line of text. Typically, one "click" of the wheel does 3 steps, so about 45px or 3 lines of text.
 
-        for (Host h : Host.getHosts ()) if (h instanceof Remote) model.addElement (h);
+        for (Host h : Host.getHosts ()) model.addElement (h);
 
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.setToolTipText ("Press Insert to create host. Press Delete to remove host.");
@@ -146,7 +144,7 @@ public class SettingsHost implements Settings
         for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Factory.class))
         {
             Factory f = (Factory) ext;
-            if (f instanceof FactoryRemote) comboClass.addItem (f.className ());
+            comboClass.addItem (f.className ());
         }
         comboClass.addActionListener (new ActionListener ()
         {
@@ -217,6 +215,9 @@ public class SettingsHost implements Settings
         }
         fieldName.bind (h.config.parent (), h.name);
         comboClass.setSelectedItem (h.getClassName ());
+        boolean localhost = h.name.equals ("localhost");
+        fieldName.setEditable (! localhost);
+        comboClass.setEnabled (! localhost);
 
         editor = h.getEditor ();
         editorHolder.add (editor, BorderLayout.CENTER);

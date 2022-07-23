@@ -19,7 +19,7 @@ import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 
 /**
-    Enhanced text field the supplies common behavior.
+    Enhanced text field that supplies common behavior.
     The added features are undo/redo, copy/paste, and a stub for the cancel action (escape key).
 **/
 @SuppressWarnings("serial")
