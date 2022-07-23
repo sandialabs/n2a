@@ -46,6 +46,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -79,6 +80,7 @@ public abstract class Host
     protected static List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
 
     protected static ArrayList<NodeJob> waitingForHost = new ArrayList<NodeJob> ();
+    protected static Semaphore          waitingAdded   = new Semaphore (0);  // Signals that something has been added to waitingForHost.
     protected static AssignmentThread   assignmentThread;
 
     protected static Set<PosixFilePermission> fullPermissions = new HashSet<PosixFilePermission> ();
@@ -284,7 +286,11 @@ public abstract class Host
 
     public static void waitForHost (NodeJob job)
     {
-        synchronized (waitingForHost) {waitingForHost.add (job);}
+        synchronized (waitingForHost)
+        {
+            waitingForHost.add (job);
+            waitingAdded.release ();
+        }
     }
 
     public static class AssignmentThread extends Thread
@@ -303,14 +309,20 @@ public abstract class Host
 
             while (! stop)
             {
+                // Sleep until we have something to work on.
                 boolean empty;
-                synchronized (waitingForHost) {empty = waitingForHost.isEmpty ();}
+                synchronized (waitingForHost)
+                {
+                    empty = waitingForHost.isEmpty ();
+                    waitingAdded.drainPermits ();
+                }
                 if (empty)
                 {
-                    try {sleep (1000);}
+                    try {waitingAdded.acquire ();}
                     catch (InterruptedException e) {}
                 }
 
+                // Work on it.
                 int i = 0;
                 while (! stop)
                 {
