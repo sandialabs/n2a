@@ -63,10 +63,9 @@ import javax.swing.event.ChangeListener;
     <li>Resource monitoring (memory, disk capacity, processor load)
     </ul>
 
-    Hosts are described using key-value pairs stored in app state. Names of backends are reserved
-    as top-level keys. Under these are specific configurations for the Backend X Host combination,
-    such as the path to the C++ compiler. Additional top-level keys include login information
-    and network address. All these should be documented in the online manual.
+    Hosts are described using key-value pairs stored in app state. Under each host is a list
+    of backends and their host-specific configuration, such as the path to the C++ compiler.
+    Additional keys include login information and network address.
 **/
 public abstract class Host
 {
