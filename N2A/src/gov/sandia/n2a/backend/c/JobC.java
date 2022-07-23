@@ -54,7 +54,6 @@ import java.net.URL;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -412,7 +411,7 @@ public class JobC extends Thread
         if (kokkos)
         {
             c.addObject (runtimeDir.resolve ("profiling.o"));
-            c.addLibrary (Paths.get ("dl"));  // TODO: should this be made on the host file system?
+            c.addLibrary (env.getResourceDir ().getFileSystem ().getPath ("dl"));
         }
 
         Path out = c.compileLink ();
@@ -464,7 +463,7 @@ public class JobC extends Thread
         if (kokkos)
         {
             c.addObject (runtimeDir.resolve ("profiling.o"));
-            c.addLibrary (Paths.get ("dl"));
+            c.addLibrary (env.getResourceDir ().getFileSystem ().getPath ("dl"));
         }
         out = c.linkLibrary (false);
         Files.delete (out);
@@ -2033,7 +2032,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
-            push_region (result, ns + "integrate()");
+            if (kokkos) result.append ("  push_region (\"" + ns + "integrate()\");\n");
             result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
             context.hasEvent = true;
             result.append ("  " + T + " dt = event->dt;\n");
@@ -2073,7 +2072,7 @@ public class JobC extends Thread
             }
             result.append ("  }\n");
             context.hasEvent = false;
-            pop_region (result);
+            if (kokkos) result.append ("  pop_region ();\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2084,7 +2083,7 @@ public class JobC extends Thread
             bed.defined.clear ();
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
-            push_region (result, ns + "update()");
+            if (kokkos) result.append ("  push_region (\"" + ns + "update()\");\n");
             for (Variable v : bed.globalBufferedInternalUpdate)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -2099,7 +2098,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
-            pop_region (result);
+            if (kokkos) result.append ("  pop_region ();\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2221,7 +2220,7 @@ public class JobC extends Thread
             bed.defined.clear ();
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
-            push_region (result, ns + "updateDerivative()");
+            if (kokkos) result.append ("  push_region (\"" + ns + "updateDerivative()\");\n");
             for (Variable v : bed.globalBufferedInternalDerivative)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -2236,7 +2235,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
-            pop_region (result);
+            if (kokkos) result.append ("  pop_region ();\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2968,7 +2967,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
-            push_region (result, ns + "integrate()");
+            if (kokkos) result.append ("  push_region (\"" + ns + "integrate()\");\n");
             if (bed.localIntegrated.size () > 0)
             {
                 if (bed.lastT)
@@ -3030,7 +3029,7 @@ public class JobC extends Thread
                 }
             }
             context.hasEvent = false;
-            pop_region (result);
+            if (kokkos) result.append ("  pop_region ();\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -3041,7 +3040,7 @@ public class JobC extends Thread
             bed.defined.clear ();
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
-            push_region (result, ns + "update()");
+            if (kokkos) result.append ("  push_region (\"" + ns + "update()\");\n");
             for (Variable v : bed.localBufferedInternalUpdate)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -3064,7 +3063,7 @@ public class JobC extends Thread
                     result.append ("  " + mangle (e.name) + ".update ();\n");
                 }
             }
-            pop_region (result);
+            if (kokkos) result.append ("  pop_region ();\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -3306,7 +3305,7 @@ public class JobC extends Thread
             bed.defined.clear ();
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
-            push_region (result, ns + "updateDerivative()");
+            if (kokkos) result.append ("  push_region (\"" + ns + "updateDerivative()\");\n");
             for (Variable v : bed.localBufferedInternalDerivative)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -3329,7 +3328,7 @@ public class JobC extends Thread
                     result.append ("  " + mangle (e.name) + ".updateDerivative ();\n");
                 }
             }
-            pop_region (result);
+            if (kokkos) result.append ("  pop_region ();\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -4065,16 +4064,6 @@ public class JobC extends Thread
             result.append ("}\n");
             result.append ("\n");
         }
-    }
-
-    public void push_region (StringBuilder result, String name)
-    {
-        if (kokkos) result.append ("push_region (\"" + name +"\");\n");
-    }
-
-    public void pop_region (StringBuilder result)
-    {
-        if (kokkos) result.append ("pop_region ();\n");
     }
 
     public void eventGenerate (String pad, EventTarget et, RendererC context, boolean multi)
