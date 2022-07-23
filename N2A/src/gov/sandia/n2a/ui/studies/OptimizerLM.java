@@ -37,7 +37,8 @@ public class OptimizerLM extends StudyIterator
     protected double      toleranceX;
     protected double      toleranceG;
     protected double      perturbation;
-    protected boolean     skipCycle0 = true; // See comments in assign()
+    protected boolean     skipCycle0;
+    protected String      dummy;
 
     protected MatrixDense x;       // current state vector
     protected MatrixDense y;       // current value of time series output by model.  y=f(x) where f() is one entire job run.
@@ -113,6 +114,17 @@ public class OptimizerLM extends StudyIterator
             }
             x.set (c, value);
         }
+
+        // Determine dummy variable for loss output() statement
+        // Compare with EquationSet ctor code that handles watch variables.
+        // If "loss" is a state variable (as opposed to temporary), then there will be
+        // a 1-cycle delay, and the first row will be useless.
+        skipCycle0 = true;  // TODO: detect when first row is inert and ignore it in LM calculations. For now, we assume it is always inert.
+        MNode g = model.child (keyPath);
+        MNode p = g.parent ();
+        dummy = "x0";
+        int suffix = 1;
+        while (p.child (dummy) != null) dummy = "x" + suffix++;
     }
 
     public int count ()
@@ -668,18 +680,8 @@ public class OptimizerLM extends StudyIterator
         MNode root = study.source.child ("variables");
 
         // Output "loss"
-        // Compare with EquationSet ctor code that builds output() for watch variables.
-        // Output is always indirect, via a dummy expression. If "loss" is a state variable
-        // (as opposed to temporary), then there will be a 1-cycle delay, and the first
-        // row will be useless.
-        // TODO: detect when first row is inert and ignore it in LM calculations. For now, we assume it is always inert.
         MNode g = model.child (keyPath);
-        //   Determine dummy variable name
         MNode p = g.parent ();
-        String dummy = "x0";
-        int suffix = 1;
-        while (p.child (dummy) != null) dummy = "x" + suffix++;
-        //   Create output expression
         p.set ("output(\"study\"," + g.key () + ",\"loss\")", dummy);
         // TODO: sampling intervals (see EquationSet ctor)
 
