@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -48,7 +48,6 @@ public class Study
     protected int                 index;        // Of next sample that should be created. Always 1 greater than last completed sample. When 0, study is about to start. When equal to count, study has completed.
     protected List<String>        incomplete;
     protected int                 lastComplete; // Used to throttle status messages when running headless.
-    protected boolean             usesRandom;   // At least one iterator in the chain generates random values. It will need an instance of the internal Simulator to create a convenient environment for generating values.
     protected Random              random;       // random number generator used by iterator
     protected long                startTime;    // Of main loop in thread. Used to estimate time remaining.
     protected Map<String,Integer> jobMap;
@@ -61,14 +60,26 @@ public class Study
         this.source = source;
     }
 
+    public void initRandom ()
+    {
+        if (random == null)
+        {
+            MNode seed = source.child ("config", "seed");
+            if (seed == null) seed = source.set (System.currentTimeMillis (), "config", "seed");  // For repeatability, we store the seed in the study record.
+            random = new Random (seed.getLong ());
+        }
+        if (Simulator.instance.get () == null) new Simulator (random);
+    }
+
     public void buildIterator ()
     {
         // Assumes iterator is null
         MNode variables = source.childOrEmpty ("variables");
         class VariableVisitor implements Visitor
         {
-            MNode loss;
-            List<MNode> optimize = new ArrayList<MNode> ();
+            MNode                     loss;
+            List<MNode>               optimize = new ArrayList<MNode> ();
+            Map<String,IteratorGroup> groups   = new HashMap<String,IteratorGroup> ();
 
             public boolean visit (MNode n)
             {
@@ -94,21 +105,41 @@ public class Study
                 else if (value.startsWith ("uniform")  ||  value.startsWith ("gaussian"))
                 {
                     it = new IteratorRandom (keys, value, n);
-                    usesRandom = true;
                 }
                 else if (value.contains (","))
                 {
                     it = new IteratorList (keys, value);
                 }
-                else return false;  // Ignore unrecognized study type. TODO: should we throw an error instead?
-
                 if (it == null) return false;
+
+                String groupName = n.get ("group");
+                if (! groupName.isBlank ()  &&  it instanceof IteratorIndexed)
+                {
+                    String groupType = source.get ("config", "group", groupName);
+                    if (groupType.equals ("latin")  ||  groupType.equals ("permute"))
+                    {
+                        it = new IteratorPermute ((IteratorIndexed) it);
+                    }
+
+                    IteratorGroup group = groups.get (groupName);
+                    if (group != null)
+                    {
+                        group.add ((IteratorIndexed) it);
+                        return false;
+                    }
+                    groups.put (groupName, group = new IteratorGroup (keys));
+                    group.add ((IteratorIndexed) it);
+                    it = group;
+                }
+
                 if (iterator != null)
                 {
+                    if (iterator.usesRandom ()) initRandom ();
                     iterator.next ();  // Move to first item in sequence. At least one must exist.
                     it.inner = iterator;
                 }
                 iterator = it;
+
                 return false;
             }
         }
@@ -126,7 +157,8 @@ public class Study
         }
         if (iterator != null)
         {
-            iterator.next ();  // Move to first item in sequence. At least one must exist.
+            if (iterator.usesRandom ()) initRandom ();
+            iterator.next ();
             it.inner = iterator;
         }
         iterator = it;
@@ -276,19 +308,12 @@ public class Study
                     thread = null;
                     return;
                 }
-
-                if (usesRandom)
-                {
-                    MNode seed = source.child ("config", "seed");
-                    if (seed == null) seed = source.set (System.currentTimeMillis (), "config", "seed");
-                    random = new Random (seed.getLong ());
-                }
-
+                if (iterator.usesRandom ()) initRandom ();
                 if (index == 0) saveIterators ();  // Snapshot initial state. This is like a barrier.
             }
             count = iterator.count ();
 
-            if (usesRandom) new Simulator (random);  // Since this is a new thread, we always have to instantiate a new thread-local object.
+            if (iterator.usesRandom ()) initRandom ();
 
             String inherit = source.get ("$inherit");
             MNode model = AppData.models.childOrEmpty (inherit);
@@ -442,7 +467,7 @@ public class Study
         source.set (index, "barrier");
         iterator.save (source);
 
-        if (! usesRandom) return;
+        if (! iterator.usesRandom ()) return;
         try
         {
             ByteArrayOutputStream baos = new ByteArrayOutputStream ();
@@ -459,7 +484,7 @@ public class Study
         index = source.getOrDefault (0, "barrier");
         iterator.load (source);
 
-        if (! usesRandom) return;
+        if (! iterator.usesRandom ()) return;
         try
         {
             String rng = source.get ("rng");  // Should always exist when restoreIterators() is called

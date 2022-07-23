@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -56,6 +56,12 @@ public abstract class StudyIterator
     // Indicates that the caller should wait until all previously-generated jobs finish before calling next again.
     public boolean barrier ()
     {
+        return false;
+    }
+
+    public boolean usesRandom ()
+    {
+        if (inner != null) return inner.usesRandom ();
         return false;
     }
 
