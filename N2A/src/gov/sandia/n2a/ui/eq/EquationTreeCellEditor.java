@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,8 +18,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -243,18 +241,43 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         multiLineEditor.setRows (6);
         multiLineEditor.setTabSize (4);
         multiLineEditor.setTransferHandler (xfer);
+        multiLineEditor.setFocusTraversalKeysEnabled (false);  // We take control of these for better user interaction.
 
         multiLineEditor.getDocument ().addUndoableEditListener (undoManager);
         inputMap = multiLineEditor.getInputMap ();
-        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "insert-break");
-        inputMap.put (KeyStroke.getKeyStroke ("control ENTER"),   "none");
-        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo"); 
+        inputMap.put (KeyStroke.getKeyStroke ("ENTER"),           "stopEditing");
+        inputMap.put (KeyStroke.getKeyStroke ("control ENTER"),   "insert-break");
+        inputMap.put (KeyStroke.getKeyStroke ("TAB"),             "transferFocus");
+        inputMap.put (KeyStroke.getKeyStroke ("shift TAB"),       "transferFocusBackward");
+        inputMap.put (KeyStroke.getKeyStroke ("control TAB"),     "insert-tab");
+        inputMap.put (KeyStroke.getKeyStroke ("control Z"),       "Undo");
         inputMap.put (KeyStroke.getKeyStroke ("meta Z"),          "Undo");
         inputMap.put (KeyStroke.getKeyStroke ("control Y"),       "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("meta Y"),          "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
         actionMap = multiLineEditor.getActionMap ();
+        actionMap.put ("stopEditing", new AbstractAction ("StopEditing")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                stopCellEditing ();
+            }
+        });
+        actionMap.put ("transferFocus", new AbstractAction ("TransferFocusForward")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                multiLineEditor.transferFocus ();
+            }
+        });
+        actionMap.put ("transferFocusBackward", new AbstractAction ("TransferFocusBackward")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                multiLineEditor.transferFocusBackward ();
+            }
+        });
         actionMap.put ("Undo", new AbstractAction ("Undo")
         {
             public void actionPerformed (ActionEvent evt)
@@ -290,14 +313,6 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             }
         };
         multiLineEditor.addFocusListener (focusListener);
-
-        multiLineEditor.addKeyListener (new KeyAdapter ()
-        {
-            public void keyPressed (KeyEvent e)
-            {
-                if (e.getKeyCode () == KeyEvent.VK_ENTER  &&  e.isControlDown ()) stopCellEditing ();
-            }
-        });
 
         multiLineEditor.addMouseListener (mouseListener);
 

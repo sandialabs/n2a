@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,6 +18,8 @@ import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.JTree;
 import javax.swing.LayoutFocusTraversalPolicy;
+import javax.swing.SwingUtilities;
+
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNodeListener;
@@ -49,12 +51,7 @@ public class PanelModel extends JPanel implements MNodeListener
     	public Component getComponentAfter (Container aContainer, Component aComponent)
         {
     	    Container ec = panelEquations.editor.editingContainer;
-    	    if (aComponent.getParent () == ec  &&  panelEquations.view != PanelEquations.NODE)
-    	    {
-    	        // Behave as if user tried to tab out of property tree itself. See below.
-    	        aComponent = panelEquations.panelEquationTree.tree;
-    	    }
-    	    else if (aComponent == ec)
+    	    if (aComponent == ec)
             {
                 if (panelEquations.editor.editingNode == null  &&  ! panelEquations.editor.editingTitle)
                 {
@@ -62,6 +59,11 @@ public class PanelModel extends JPanel implements MNodeListener
                 }
                 return super.getComponentAfter (aContainer, aComponent);  // Otherwise, do normal focus cycle without considering GraphNode. This is necessary to enter editor to begin with.
             }
+    	    else if (SwingUtilities.isDescendingFrom (aComponent, ec)  &&  panelEquations.view != PanelEquations.NODE)
+    	    {
+    	        // Behave as if user tried to tab out of property tree itself. See below.
+    	        aComponent = panelEquations.panelEquationTree.tree;
+    	    }
 
             if (aComponent == panelSearch.nameEditor.editor)
             {
@@ -150,7 +152,7 @@ public class PanelModel extends JPanel implements MNodeListener
         public Component getComponentBefore (Container aContainer, Component aComponent)
         {
             Container ec = panelEquations.editor.editingContainer;
-            if (aComponent.getParent () == ec  &&  panelEquations.view != PanelEquations.NODE)
+            if (aComponent != ec  &&  SwingUtilities.isDescendingFrom (aComponent, ec)  &&  panelEquations.view != PanelEquations.NODE)
             {
                 aComponent = panelEquations.panelEquationTree.tree;
             }
