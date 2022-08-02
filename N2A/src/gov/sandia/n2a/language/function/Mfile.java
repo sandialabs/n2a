@@ -69,7 +69,7 @@ public class Mfile extends Function
 
         public Matrix getMatrix (String... keyPath)
         {
-            String key = String.join (".", keyPath);
+            String key = String.join ("/", keyPath);
             Matrix A = matrices.get (key);
             if (A != null) return A;
 

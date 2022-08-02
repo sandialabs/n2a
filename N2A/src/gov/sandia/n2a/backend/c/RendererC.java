@@ -588,7 +588,7 @@ public class RendererC extends Renderer
         return super.render (op);
     }
 
-    public String printShift (int shift)
+    public static String printShift (int shift)
     {
         if (shift == 0) return "";
         if (shift > 0) return " << " +  shift;

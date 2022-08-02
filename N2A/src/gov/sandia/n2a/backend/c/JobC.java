@@ -31,6 +31,7 @@ import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Mfile;
+import gov.sandia.n2a.language.function.Mmatrix;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.operator.Add;
@@ -1941,7 +1942,7 @@ public class JobC extends Thread
                 result.append ("  }\n");
                 if (bed.newborn >= 0)
                 {
-                    result.append ("  p->flags = (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
+                    result.append ("  p->flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
                     result.append ("  firstborn = min (firstborn, p->" + mangle ("$index") + ");\n");
                 }
             }
@@ -2002,7 +2003,7 @@ public class JobC extends Thread
             {
                 if (bed.newborn >= 0)
                 {
-                    result.append ("  instance.flags = (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
+                    result.append ("  instance.flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
                 }
                 result.append ("  instance.enterSimulation ();\n");
                 result.append ("  container->getEvent ()->enqueue (&instance);\n");
@@ -2013,7 +2014,7 @@ public class JobC extends Thread
                 if (bed.n != null)  // and not singleton, so trackN is true
                 {
                     result.append ("  resize (" + resolve (bed.n.reference, context, bed.nInitOnly));
-                    if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
+                    if (context.useExponent) result.append (RendererC.printShift (bed.n.exponent - Operator.MSB));
                     result.append (");\n");
                 }
             }
@@ -2047,7 +2048,7 @@ public class JobC extends Thread
                 int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
                 if (shift != 0  &&  T.equals ("int"))
                 {
-                    result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (shift) + ");\n");
+                    result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
                 }
                 else
                 {
@@ -2063,7 +2064,7 @@ public class JobC extends Thread
                 int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
                 if (shift != 0  &&  T.equals ("int"))
                 {
-                    result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (shift) + ");\n");
+                    result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
                 }
                 else
                 {
@@ -2113,7 +2114,7 @@ public class JobC extends Thread
             {
                 // $n may be assigned during the regular update cycle, so we need to monitor it.
                 result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") " + SIMULATOR + "resize (this, max (0, " + mangle ("next_", "$n"));
-                if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
+                if (context.useExponent) result.append (RendererC.printShift (bed.n.exponent - Operator.MSB));
                 result.append ("));\n");
                 result.append ("  else " + SIMULATOR + "resize (this, -1);\n");
             }
@@ -2142,7 +2143,7 @@ public class JobC extends Thread
                             returnN = false;
                         }
                         result.append ("  " + SIMULATOR + "resize (this, max (0, " + mangle ("$n"));
-                        if (context.useExponent) result.append (context.printShift (bed.n.exponent - Operator.MSB));
+                        if (context.useExponent) result.append (RendererC.printShift (bed.n.exponent - Operator.MSB));
                         result.append ("));\n");
                     }
                 }
@@ -2154,7 +2155,7 @@ public class JobC extends Thread
                         returnN = false;
                     }
                     result.append ("  int floorN = max (0, ");
-                    if (context.useExponent) result.append (mangle ("$n") + context.printShift (bed.n.exponent - Operator.MSB));
+                    if (context.useExponent) result.append (mangle ("$n") + RendererC.printShift (bed.n.exponent - Operator.MSB));
                     else                     result.append ("(int) " + mangle ("$n"));
                     result.append (");\n");
                     result.append ("  if (n != floorN) " + SIMULATOR + "resize (this, floorN);\n");
@@ -2365,10 +2366,10 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "clearNew ()\n");
             result.append ("{\n");
-            result.append ("  flags &= ~((" + bed.globalFlagType + ") 0x1 << " + bed.clearNew + ");\n");  // Reset our clearNew flag
+            result.append ("  flags &= ~((" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.clearNew) + ");\n");  // Reset our clearNew flag
             if (bed.singleton)
             {
-                result.append ("  instance.flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.newborn + ");\n");
+                result.append ("  instance.flags &= ~((" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ");\n");
             }
             else
             {
@@ -2376,7 +2377,7 @@ public class JobC extends Thread
                 result.append ("  for (int i = firstborn; i < count; i++)\n");
                 result.append ("  {\n");
                 result.append ("    " + ps + " * p = instances[i];\n");
-                result.append ("    if (p) p->flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.newborn + ");\n");
+                result.append ("    if (p) p->flags &= ~((" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ");\n");
                 result.append ("  }\n");
                 result.append ("  firstborn = count;\n");
             }
@@ -2496,7 +2497,7 @@ public class JobC extends Thread
                         }
                     }
 
-                    assembleInstances (s, "", resolution, 0, "      ", result);
+                    assembleInstances (s, true, "", resolution, 0, "      ", result);
                     result.append ("      result->size = result->instances->size ();\n");
 
                     result.append ("      break;\n");
@@ -2594,10 +2595,28 @@ public class JobC extends Thread
                         Variable v = av.reference.variable;
                         if (v.hasAttribute ("temporary"))
                         {
-                            // Just assume that v is an alias for ReadMatrix.
+                            // Just assume that v is an alias for ReadMatrix or Mmatrix.
                             // Also, matrix must be a static object. Enforced by AccessElement.hasCorrectForm().
-                            ReadMatrix r = (ReadMatrix) v.equations.first ().expression;
-                            result.append (r.name + "->A");
+                            // The following are variants of code in RendererC, but without pointer dereference.
+                            Operator e = v.equations.first ().expression;
+                            if (e instanceof ReadMatrix)
+                            {
+                                ReadMatrix r = (ReadMatrix) e;
+                                result.append (r.name + "->A");
+                            }
+                            else if (e instanceof Mmatrix)
+                            {
+                                Mmatrix m = (Mmatrix) e;
+                                result.append (m.name + "->getMatrix (");
+                                context.keyPath (m);  // All the keys must be constant.
+                                if (context.useExponent)
+                                {
+                                    if (m.operands.length > 1) result.append (", ");
+                                    result.append (m.exponentNext);
+                                }
+                                result.append (")");
+                            }
+                            // TODO: else render with ProvideOperator
                         }
                         else
                         {
@@ -2767,7 +2786,7 @@ public class JobC extends Thread
                 // tag part as dead
                 if (bed.liveFlag >= 0)  // $live is stored in this part
                 {
-                    result.append ("  flags &= ~((" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ");\n");
+                    result.append ("  flags &= ~((" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ");\n");
                 }
 
                 // instance counting
@@ -2867,11 +2886,11 @@ public class JobC extends Thread
                 {
                     if (bed.newborn >= 0)
                     {
-                        result.append ("  flags |= (" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ";\n");
+                        result.append ("  flags |= (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ";\n");
                     }
                     else
                     {
-                        result.append ("  flags = (" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ";\n");
+                        result.append ("  flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ";\n");
                     }
                 }
                 else
@@ -2994,7 +3013,7 @@ public class JobC extends Thread
                         int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
                         if (shift != 0  &&  T.equals ("int"))
                         {
-                            result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (shift) + ");\n");
+                            result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
                         }
                         else
                         {
@@ -3011,7 +3030,7 @@ public class JobC extends Thread
                     int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
                     if (shift != 0  &&  T.equals ("int"))
                     {
-                        result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + context.printShift (shift) + ");\n");
+                        result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
                     }
                     else
                     {
@@ -3087,7 +3106,7 @@ public class JobC extends Thread
             // Early-out if we are already dead
             if (bed.liveFlag >= 0)  // $live is stored in this part
             {
-                result.append ("  if (! (flags & (" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ")) return false;\n");  // early-out if we are already dead, to avoid another call to die()
+                result.append ("  if (! (flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ")) return false;\n");  // early-out if we are already dead, to avoid another call to die()
             }
 
             // Preemptively fetch current event
@@ -3134,7 +3153,7 @@ public class JobC extends Thread
             int eventCount = bed.eventTargets.size ();
             if (eventCount > 0)
             {
-                result.append ("  flags &= ~(" + bed.localFlagType + ") 0 << " + eventCount + ";\n");
+                result.append ("  flags &= ~(" + bed.localFlagType + ") 0" + RendererC.printShift (eventCount) + ";\n");
             }
 
             // Finalize variables
@@ -3222,12 +3241,12 @@ public class JobC extends Thread
                         result.append ("  if (pow (" + resolve (bed.p.reference, context, false) + ", " + resolve (bed.dt.reference, context, false));
                         if (context.useExponent)
                         {
-                            result.append (context.printShift (bed.dt.exponent - 15));  // second operand must have exponent=15
+                            result.append (RendererC.printShift (bed.dt.exponent - 15));  // second operand must have exponent=15
                             result.append (", " + bed.p.exponent);  // exponentA
                             result.append (", " + bed.p.exponent);  // exponentResult
                         }
                         result.append (") < uniform<" + T + "> ()");
-                        if (context.useExponent) result.append (context.printShift (-1 - bed.p.exponent));  // -1 is hard-coded from the Uniform function.
+                        if (context.useExponent) result.append (RendererC.printShift (-1 - bed.p.exponent));  // -1 is hard-coded from the Uniform function.
                         result.append (")\n");
                     }
                 }
@@ -3250,12 +3269,12 @@ public class JobC extends Thread
                     result.append ("  if (" + mangle ("$p") + " <= 0  ||  " + mangle ("$p") + " < " + context.print (1, bed.p.exponent) + "  &&  pow (" + mangle ("$p") + ", " + resolve (bed.dt.reference, context, false));
                     if (context.useExponent)
                     {
-                        result.append (context.printShift (bed.dt.exponent - 15));
+                        result.append (RendererC.printShift (bed.dt.exponent - 15));
                         result.append (", " + bed.p.exponent);
                         result.append (", " + bed.p.exponent);
                     }
                     result.append (") < uniform<" + T + "> ()");
-                    if (context.useExponent) result.append (context.printShift (-1 - bed.p.exponent));
+                    if (context.useExponent) result.append (RendererC.printShift (-1 - bed.p.exponent));
                     result.append (")\n");
                 }
                 result.append ("  {\n");
@@ -3675,7 +3694,7 @@ public class JobC extends Thread
         {
             result.append ("bool " + ns + "getNewborn ()\n");
             result.append ("{\n");
-            result.append ("  return flags & (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
+            result.append ("  return flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -3912,7 +3931,7 @@ public class JobC extends Thread
                             int shift = v.exponent - Operator.MSB;
                             if (shift != 0  &&  T.equals ("int"))
                             {
-                                result.append (" = (int64_t) " + current + " * " + buffered + context.printShift (shift) + ";\n");
+                                result.append (" = (int64_t) " + current + " * " + buffered + RendererC.printShift (shift) + ";\n");
                             }
                             else
                             {
@@ -4367,8 +4386,8 @@ public class JobC extends Thread
                     shift = Operator.MSB - e.expression.exponentNext;
                     if (shift != 0  &&  T.equals ("int"))
                     {
-                        if (shift > 0) result.append (" = ((int64_t) " + LHS + context.printShift (shift) + ") / ");
-                        else           result.append (" = "            + LHS                              +  " / ");
+                        if (shift > 0) result.append (" = ((int64_t) " + LHS + RendererC.printShift (shift) + ") / ");
+                        else           result.append (" = "            + LHS                                +  " / ");
                     }
                     else
                     {
@@ -4394,7 +4413,7 @@ public class JobC extends Thread
             }
             if (shift != 0  &&  T.equals ("int"))
             {
-                result.append (context.printShift (shift));
+                result.append (RendererC.printShift (shift));
             }
         }
         result.append (";\n");
@@ -4835,8 +4854,8 @@ public class JobC extends Thread
             }
             else  // not "constant" or "accessor", so must be direct access
             {
-                if (logical) return "(" + containers + "flags & (" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ")";
-                else return "((" + containers + "flags & (" + bed.localFlagType + ") 0x1 << " + bed.liveFlag + ") ? 1 : 0)";
+                if (logical) return "(" + containers + "flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ")";
+                else return "((" + containers + "flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ") ? 1 : 0)";
             }
         }
         else if (r.variable.hasAttribute ("accessor"))
@@ -4968,7 +4987,7 @@ public class JobC extends Thread
         @param depth Position in the resolution array of our next step.
         @param prefix Spaces to insert in front of each line to maintain nice indenting.
     **/
-    public void assembleInstances (EquationSet current, String pointer, List<Object> resolution, int depth, String prefix, StringBuilder result)
+    public void assembleInstances (EquationSet current, boolean global, String pointer, List<Object> resolution, int depth, String prefix, StringBuilder result)
     {
         int last = resolution.size () - 1;
         for (int i = depth; i <= last; i++)
@@ -4979,11 +4998,13 @@ public class JobC extends Thread
                 EquationSet s = (EquationSet) r;
                 if (r == current.container)  // ascend to parent
                 {
-                    pointer = containerOf (current, i == 0, pointer);
+                    pointer = containerOf (current, global, pointer);
+                    global = false;
                 }
                 else  // descend to child
                 {
                     pointer += mangle (s.name) + ".";
+                    global = true;
                     if (i < last)  // Enumerate the instances of child population.
                     {
                         if (depth == 0)
@@ -4994,7 +5015,7 @@ public class JobC extends Thread
                         String it = "it" + i;
                         result.append (prefix + "for (auto " + it + " : " + pointer + "instances)\n");
                         result.append (prefix + "{\n");
-                        assembleInstances (s, it + "->", resolution, i+1, prefix + "  ", result);
+                        assembleInstances (s, false, it + "->", resolution, i+1, prefix + "  ", result);
                         result.append (prefix + "}\n");
                         return;
                     }
@@ -5005,51 +5026,66 @@ public class JobC extends Thread
             {
                 ConnectionBinding c = (ConnectionBinding) r;
                 pointer += mangle (c.alias) + "->";
+                global = false;
                 current = c.endpoint;
             }
             // else something is broken. This case should never occur.
         }
 
-        // "pointer" now references the target population.
-        // Collect its instances.
+        // "pointer" now references the target population or instance.
         BackendDataC bed = (BackendDataC) current.backendData;
-        if (bed.singleton)
+        if (global)
         {
-            result.append (prefix + "bool newborn = " + pointer + "instance.flags & (" + bed.localFlagType + ") 0x1 << " + bed.newborn + ";\n");
+            // Collect its instances.
+            if (bed.singleton)
+            {
+                if (depth == 0)
+                {
+                    result.append (prefix + "result->instances = new vector<Part<" + T + "> *>;\n");
+                    result.append (prefix + "result->deleteInstances = true;\n");
+                }
+                result.append (prefix + "bool newborn = " + pointer + "instance.flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
+                result.append (prefix + "if (result->firstborn == INT_MAX  &&  newborn) result->firstborn = result->instances->size ();\n");
+                result.append (prefix + "result->instances->push_back (& " + pointer + "instance);\n");
+            }
+            else
+            {
+                if (depth == 0)  // No enumerations occurred during the resolution, so no list was created.
+                {
+                    // Simply reference the existing list of instances.
+                    result.append (prefix + "result->firstborn = " + pointer + "firstborn;\n");
+                    result.append (prefix + "result->instances = (vector<Part<" + T + "> *> *) & " + pointer + "instances;\n");
+                }
+                else  // Enumerations occurred, so we are already accumulating a list.
+                {
+                    // Append instances to accumulating list.
+                    result.append (prefix + "if (result->firstborn == INT_MAX  &&  " + pointer + "firstborn < " + pointer + "instances.size ()) result->firstborn = result->instances->size () + " + pointer + "firstborn;\n");
+                    result.append (prefix + "result->instances->insert (result->instances->end (), " + pointer + "instances.begin (), " + pointer + "instances.end ());\n");
+                }
+            }
+
+            // Schedule the population to have its newborn flags cleared.
+            // We assume that any newborn flags along the path to this population are either unimportant
+            // or will get cleared elsewhere.
+            result.append (prefix + "if (! (" + pointer + "flags & (" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.clearNew) + "))\n");
+            result.append (prefix + "{\n");
+            result.append (prefix + "  " + pointer + "flags |= (" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.clearNew) + ";\n");
+            pointer = stripDereference (pointer);
+            if (pointer.isEmpty ()) pointer = "this";
+            else                    pointer = "& " + pointer;
+            result.append (prefix + "  " + SIMULATOR + "clearNew (" + pointer + ");\n");
+            result.append (prefix + "}\n");
+        }
+        else  // Resolution led to an explicit instance. This is similar to a singleton.
+        {
             if (depth == 0)
             {
                 result.append (prefix + "result->instances = new vector<Part<" + T + "> *>;\n");
                 result.append (prefix + "result->deleteInstances = true;\n");
             }
+            result.append (prefix + "bool newborn = " + pointer + "flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
             result.append (prefix + "if (result->firstborn == INT_MAX  &&  newborn) result->firstborn = result->instances->size ();\n");
-            result.append (prefix + "result->instances->push_back (& " + pointer + "instance);\n");
+            result.append (prefix + "result->instances->push_back (" + stripDereference (pointer) + ");\n");
         }
-        else
-        {
-            if (depth == 0)  // No enumerations occurred during the resolution, so no list was created.
-            {
-                // Simply reference the existing list of instances.
-                result.append (prefix + "result->firstborn = " + pointer + "firstborn;\n");
-                result.append (prefix + "result->instances = (vector<Part<" + T + "> *> *) & " + pointer + "instances;\n");
-            }
-            else  // Enumerations occurred, so we are already accumulating a list.
-            {
-                // Append instances to accumulating list.
-                result.append (prefix + "if (result->firstborn == INT_MAX  &&  " + pointer + "firstborn < " + pointer + "instances.size ()) result->firstborn = result->instances->size () + " + pointer + "firstborn;\n");
-                result.append (prefix + "result->instances->insert (result->instances->end (), " + pointer + "instances.begin (), " + pointer + "instances.end ());\n");
-            }
-        }
-
-        // Schedule the population to have its newborn flags cleared.
-        // We assume that any newborn flags along the path to this population are either unimportant
-        // or will get cleared elsewhere.
-        result.append (prefix + "if (! (" + pointer + "flags & (" + bed.globalFlagType + ") 0x1 << " + bed.clearNew + "))\n");
-        result.append (prefix + "{\n");
-        result.append (prefix + "  " + pointer + "flags |= (" + bed.globalFlagType + ") 0x1 << " + bed.clearNew + ";\n");
-        pointer = stripDereference (pointer);
-        if (pointer.isEmpty ()) pointer = "this";
-        else                    pointer = "& " + pointer;
-        result.append (prefix + "  " + SIMULATOR + "clearNew (" + pointer + ");\n");
-        result.append (prefix + "}\n");
     }
 }

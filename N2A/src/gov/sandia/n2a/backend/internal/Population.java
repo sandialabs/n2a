@@ -328,30 +328,39 @@ public class Population extends Instance
                 current = r.resolve (current);
             }
 
-            // "current" is now a population of the endpoint type, so pbed is the correct backend data
-            if (pbed.singleton)
+            // "current" is now a population or part of the endpoint type, so pbed is the correct backend data
+            if (current instanceof Part)  // This happens if last move was an $up or ConnectionBinding.
             {
-                Part instance = (Part) current.valuesObject[pbed.instances];
                 if (instances == null) instances = new ArrayList<Part> ();
-                if (firstborn == Integer.MAX_VALUE  &&  instance.valuesFloat[pbed.newborn] != 0) firstborn = instances.size ();
-                instances.add (instance);
+                if (firstborn == Integer.MAX_VALUE  &&  current.valuesFloat[pbed.newborn] != 0) firstborn = instances.size ();
+                instances.add ((Part) current);
             }
-            else
+            else  // population
             {
-                int             leafFirstborn = (int)             current.valuesFloat [pbed.firstborn];
-                ArrayList<Part> leafInstances = (ArrayList<Part>) current.valuesObject[pbed.instances];
-                if (instances == null)  // No enumerations occurred during the resolution, so simply reference the existing list of instances.
+                if (pbed.singleton)
                 {
-                    instances = leafInstances;
-                    firstborn = leafFirstborn;
+                    Part instance = (Part) current.valuesObject[pbed.instances];
+                    if (instances == null) instances = new ArrayList<Part> ();
+                    if (firstborn == Integer.MAX_VALUE  &&  instance.valuesFloat[pbed.newborn] != 0) firstborn = instances.size ();
+                    instances.add (instance);
                 }
-                else
+                else  // regular population
                 {
-                    if (firstborn == Integer.MAX_VALUE  &&  leafFirstborn < leafInstances.size ()) firstborn = instances.size () + leafFirstborn;
-                    instances.addAll (leafInstances);
+                    int             leafFirstborn = (int)             current.valuesFloat [pbed.firstborn];
+                    ArrayList<Part> leafInstances = (ArrayList<Part>) current.valuesObject[pbed.instances];
+                    if (instances == null)  // No enumerations occurred during the resolution, so simply reference the existing list of instances.
+                    {
+                        instances = leafInstances;
+                        firstborn = leafFirstborn;
+                    }
+                    else
+                    {
+                        if (firstborn == Integer.MAX_VALUE  &&  leafFirstborn < leafInstances.size ()) firstborn = instances.size () + leafFirstborn;
+                        instances.addAll (leafInstances);
+                    }
                 }
+                simulator.clearNew ((Population) current);  // Queue to clear after current cycle.
             }
-            simulator.clearNew ((Population) current);  // Queue to clear after current cycle.
         }
 
         public void prepareNN ()

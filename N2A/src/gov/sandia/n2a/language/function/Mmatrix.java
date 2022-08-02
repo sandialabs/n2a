@@ -63,7 +63,8 @@ public class Mmatrix extends Mfile
         if (simulator == null) return getType ();  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
         String path = ((Text) operands[0].eval (context)).value;
-        return Holder.get (simulator, path).getMatrix (Holder.keyPath (context, operands));
+        Holder H = Holder.get (simulator, path);
+        return H.getMatrix (Holder.keyPath (context, operands));
     }
 
     public String toString ()

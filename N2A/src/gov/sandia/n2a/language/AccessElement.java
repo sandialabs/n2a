@@ -10,6 +10,7 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.EquationSet.NonzeroIterable;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.function.Mmatrix;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.parse.ASTList;
 import gov.sandia.n2a.language.parse.SimpleNode;
@@ -212,13 +213,21 @@ public class AccessElement extends Function implements NonzeroIterable
         Variable v = av.reference.variable;
         if (v.hasAny ("constant", "initOnly")) return true;
 
-        // See if v is just an alias for ReadMatrix.
-        if (! v.hasAttribute ("temporary")) return false;
+        // See if v is just an alias for a matrix reader.
         if (v.equations.size () != 1) return false;
         EquationEntry e = v.equations.first ();
         if (e.condition != null) return false;
-        if (! (e.expression instanceof ReadMatrix)) return false;
-        ReadMatrix r = (ReadMatrix) e.expression;
-        return r.operands[0] instanceof Constant;
+        if (e.expression instanceof ReadMatrix)
+        {
+            ReadMatrix r = (ReadMatrix) e.expression;
+            return r.operands[0] instanceof Constant;  // File name must be constant.
+        }
+        if (e.expression instanceof Mmatrix)
+        {
+            Mmatrix m = (Mmatrix) e.expression;
+            for (Operator op : m.operands) if (! (op instanceof Constant)) return false;
+            return true;
+        }
+        return false;
     }
 }

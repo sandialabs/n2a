@@ -433,7 +433,7 @@ Mfile<T>::getMatrix (const std::vector<String> & path, int exponent)
 Mfile<T>::getMatrix (const std::vector<String> & path)
 #endif
 {
-    String key = join (".", path);
+    String key = join ("/", path);
     MatrixAbstract<T> * A = matrices[key];
     if (A) return A;
 
