@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -41,15 +41,14 @@ public class Part extends Instance
         this.container = container;
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         allocate (bed.countLocalFloat, bed.countLocalObject);
-        if (equations.parts.size () > 0)
+
+        int i = 0;
+        for (EquationSet s : equations.parts)
         {
-            int i = 0;
-            for (EquationSet s : equations.parts)
-            {
-                s.priority = i;  // For anti-indexing into valuesObject during init
-                valuesObject[i++] = new Population (s, this);
-            }
+            s.priority = i++;  // Should be exactly the same as s.backendData.populationIndex. This saves unpacking backendData of our children just to access them in valuesObject.
+            valuesObject[s.priority] = new Population (s, this);
         }
+
         for (EventSource es : bed.eventSources)
         {
             valuesObject[es.monitorIndex] = new ArrayList<Instance> ();
@@ -203,9 +202,8 @@ public class Part extends Instance
             }
         }
 
-        if (equations.parts.size () > 0)
+        if (equations.orderedParts != null)  // If there are parts at all, then orderedParts must be filled in correctly. Otherwise it may be null.
         {
-            // If there are parts at all, then orderedParts must be filled in correctly. Otherwise it may be null.
             for (EquationSet s : equations.orderedParts) ((Population) valuesObject[s.priority]).init (simulator);
         }
     }
@@ -238,7 +236,11 @@ public class Part extends Instance
             }
         }
 
-        for (int i = 0; i < populations; i++) ((Population) valuesObject[i]).integrate (simulator, dt);
+        for (int i = 0; i < populations; i++)
+        {
+            Population p = (Population) valuesObject[i];
+            if (p != null) p.integrate (simulator, dt);  // Null check is needed to skip over inactive populations.
+        }
     }
 
     public void update (Simulator simulator)
@@ -270,7 +272,11 @@ public class Part extends Instance
         }
 
         int populations = equations.parts.size ();
-        for (int i = 0; i < populations; i++) ((Population) valuesObject[i]).update (simulator);
+        for (int i = 0; i < populations; i++)
+        {
+            Population p = (Population) valuesObject[i];
+            if (p != null) p.update (simulator);
+        }
     }
 
     public boolean finish (Simulator simulator)
@@ -278,7 +284,11 @@ public class Part extends Instance
         InternalBackendData bed = (InternalBackendData) equations.backendData;
 
         int populations = equations.parts.size ();
-        for (int i = 0; i < populations; i++) ((Population) valuesObject[i]).finish (simulator);
+        for (int i = 0; i < populations; i++)
+        {
+            Population p = (Population) valuesObject[i];
+            if (p != null) p.finish (simulator);
+        }
 
         if (bed.liveStorage == InternalBackendData.LIVE_STORED)
         {
@@ -629,6 +639,22 @@ public class Part extends Instance
         Type result = bed.xyz.eval (temp);
         if (result == null) return new double[3];
         return ((MatrixDense) result).getData ();
+    }
+
+    public void checkInactive ()
+    {
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (! bed.connectionCanBeInactive) return;
+        int populations = equations.parts.size ();
+        for (int i = 0; i < populations; i++)
+        {
+            if (valuesObject[i] != null) return;
+        }
+        // All sub-populations of this connection instance are inactive, so this instance can be removed from simulation.
+        System.out.println ("connection inactive: " + equations.prefix ());
+        die ();  // This should not affect anything important besides decreasing population.
+        dequeue ();
+        ((Population) container.valuesObject[bed.populationIndex]).checkInactive ();
     }
 
     public String path ()

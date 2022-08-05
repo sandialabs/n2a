@@ -1,5 +1,5 @@
 /*
-Copyright 2015-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2015-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -115,6 +115,8 @@ public class InternalBackendData
     public boolean populationCanGrowOrDie;  // by structural dynamics other than $n
     public boolean populationCanResize;     // by manipulating $n
     public int     populationIndex;         // in container.populations
+    public boolean populationCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive part. At runtime, direct instances and instances of all descendants must be empty for this population to qualify.
+    public boolean connectionCanBeInactive; // Indicates that connection instance satisfies all the compile-time conditions for inactive. At runtime, our contained populations must all be inactive for this connection instance to qualify.
 
     public double  poll = -1;               // For connections, how much time is allowed to check full set of latent connections. Zero means every cycle. Negative means don't poll.
     public int     pollDeadline;            // position in population valuesFloat of time by which current poll cycle must complete. Only valid if poll>=0.
@@ -712,7 +714,7 @@ public class InternalBackendData
     public void analyze (final EquationSet s)
     {
         boolean headless = AppData.properties.getBoolean ("headless");
-        if (! headless) System.out.println (s.name);
+        if (! headless) System.out.println (s.container == null ? s.name : s.prefix ());
 
         if (s.connectionBindings != null)
         {
@@ -754,9 +756,14 @@ public class InternalBackendData
             boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
             if (v.hasAttribute ("externalWrite")) v.externalWrite = true;
 
+            populationCanBeInactive = true;
+            connectionCanBeInactive =  s.connectionBindings != null;
+            boolean hasNonchildReferences = hasNonchildReferences (s, v);
+
             if (v.hasAttribute ("global"))
             {
                 v.global = true;
+                if (hasNonchildReferences) populationCanBeInactive = false;
                 v.visit (new Visitor ()
                 {
                     public boolean visit (Operator op)
@@ -813,6 +820,7 @@ public class InternalBackendData
             }
             else  // local
             {
+                if (hasNonchildReferences) connectionCanBeInactive = false;
                 v.visit (new Visitor ()
                 {
                     public boolean visit (Operator op)
@@ -900,7 +908,7 @@ public class InternalBackendData
         populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
         if (n != null  &&  ! singleton)
         {
-            populationCanResize = globalMembers.contains (n);
+            populationCanResize = globalMembers.contains (n)  &&  ! n.hasAttribute ("initOnly");  // TODO: don't store initOnly $n in members
 
             // TODO: correctly detect whether $n is constant before running analyze()
             // The problem is that we need information about lethality to know if $n is constant.
@@ -915,6 +923,7 @@ public class InternalBackendData
                 Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
             }
         }
+        if (! globalUpdate.isEmpty ()  ||  ! globalIntegrated.isEmpty ()  ||  populationCanGrowOrDie  ||  populationCanResize) populationCanBeInactive = false;
 
         if (index != null  &&  ! singleton)
         {
@@ -936,24 +945,10 @@ public class InternalBackendData
             }
         }
 
-        // Special case for generating name paths: if all endpoints of a connection are
-        // immediate peers and singletons, then no need to include their names.
-        // Just give name of connection part itself.
-        if (s.connectionBindings != null)
-        {
-            singleConnection = true;
-            for (ConnectionBinding cb : s.connectionBindings)
-            {
-                if (cb.endpoint.container != s.container  ||  ! cb.endpoint.isSingleton ())
-                {
-                    singleConnection = false;
-                    break;
-                }
-            }
-        }
-
         if (p != null)
         {
+            connectionCanBeInactive = false;
+
             Pdependencies     = new ArrayList<Variable> ();
             PdependenciesTemp = new ArrayList<Variable> ();
             for (Variable t : s.ordered)
@@ -1084,6 +1079,37 @@ public class InternalBackendData
 
                 c.resolution = translateResolution (c.resolution, s);
             }
+
+            // Special case for generating name paths: if all endpoints of a connection are
+            // immediate peers and singletons, then no need to include their names.
+            // Just give name of connection part itself.
+            singleConnection = true;
+            for (ConnectionBinding cb : s.connectionBindings)
+            {
+                if (cb.endpoint.container != s.container  ||  ! cb.endpoint.isSingleton ())
+                {
+                    singleConnection = false;
+                    break;
+                }
+            }
+
+            // Checks if connection instance can be inactive
+            //   Must not have dynamics
+            if (! localUpdate.isEmpty ()  ||  ! localIntegrated.isEmpty ()) connectionCanBeInactive = false;
+            //   Target populations must not change
+            //   References to aliases must only come from descendants
+            if (connectionCanBeInactive)
+            {
+                for (ConnectionBinding cb : s.connectionBindings)
+                {
+                    InternalBackendData bed = (InternalBackendData) cb.endpoint.backendData;
+                    if (bed.populationCanGrowOrDie  ||  bed.populationCanResize  ||  hasNonchildReferences (s, cb.variable))
+                    {
+                        connectionCanBeInactive = false;
+                        break;
+                    }
+                }
+            }
         }
 
         
@@ -1199,6 +1225,19 @@ public class InternalBackendData
 
         for (VariableReference r : localReference ) r.resolution = translateResolution (r.resolution, s);
         for (VariableReference r : globalReference) r.resolution = translateResolution (r.resolution, s);
+    }
+
+    public static boolean hasNonchildReferences (EquationSet s, Variable v)
+    {
+        if (v.usedBy == null) return false;
+        for (Object o : v.usedBy)
+        {
+            EquationSet c = null;
+            if (o instanceof EquationSet) c = (EquationSet) o;
+            else if (o instanceof Variable) c = ((Variable) o).container;
+            if (c != null  &&  ! c.isChildOf (s)  &&  c != s) return true;  // a reference from somewhere besides a descendant
+        }
+        return false;
     }
 
     public void analyzeConversions (EquationSet s)
@@ -1517,6 +1556,10 @@ public class InternalBackendData
 
         System.out.println ("  eventReferences:");
         for (Variable v : eventReferences) System.out.println ("    " + v.nameString () + " in " + v.container.name);
+
+        System.out.println ("  poll=" + poll);
+        System.out.println ("  populationCanBeInactive=" + populationCanBeInactive);
+        System.out.println ("  connectionCanBeInactive=" + connectionCanBeInactive);
     }
 
     public void dumpVariableList (String name, List<Variable> list)

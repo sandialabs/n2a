@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -88,15 +88,15 @@ public class Population extends Instance
             // indexAvailable is initially null
         }
 
-        // Note: A connection is forbidden from setting its own population size.
-        // Even if a connection is the target of another connection, and thus functions as a compartment,
-        // it still cannot set its own population size.
         if (bed.singleton)
         {
             instance.init (simulator);
         }
         else
         {
+            // Note: A connection is forbidden from setting its own population size.
+            // Even if a connection is the target of another connection, and thus functions as a compartment,
+            // it still cannot set its own population size.
             if (equations.connectionBindings == null)
             {
                 int requestedN = 1;
@@ -777,6 +777,19 @@ public class Population extends Instance
             c = new Part (equations, (Part) container);
             outer.setProbe (c);
         }
+
+        checkInactive ();
+    }
+
+    public void checkInactive ()
+    {
+        InternalBackendData bed = (InternalBackendData) equations.backendData;
+        if (! bed.populationCanBeInactive) return;
+        if (n != 0) return;
+        // Now we have an inactive population, so clear it from its parent part.
+        System.out.println ("population inactive: " + equations.prefix ());
+        container.valuesObject[bed.populationIndex] = null;
+        ((Part) container).checkInactive ();
     }
 
     @SuppressWarnings("unchecked")

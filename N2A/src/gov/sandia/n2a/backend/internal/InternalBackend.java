@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -215,13 +215,13 @@ public class InternalBackend extends Backend
         e.findConstants ();
         e.determineTraceVariableName ();
         e.collectSplits ();
-        e.findDeath ();
         e.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         e.findAccountableConnections ();
         e.findTemporary ();
         e.determineOrder ();
         e.findDerivative ();
         e.findInitOnly ();
+        e.findDeath ();
         e.determinePoll ();
         e.purgeInitOnlyTemporary ();
         e.setAttributesLive ();
@@ -288,7 +288,7 @@ public class InternalBackend extends Backend
 
     public void dumpBackendData (EquationSet s)
     {
-        System.out.println ("Backend data for: " + s.name);
+        System.out.println ("Backend data for: " + (s.container == null ? s.name : s.prefix ()));
         ((InternalBackendData) s.backendData).dump ();
         for (EquationSet p : s.parts) dumpBackendData (p);
     }

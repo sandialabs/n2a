@@ -2877,7 +2877,7 @@ public class EquationSet implements Comparable<EquationSet>
         </ul>
         Each of these may call for different processing in the simulator, so various
         flags are set to indicate the causes.
-        Depends on results of: addSpecials(), fillIntegratedVariables(), findConstants(), collectSplits()
+        Depends on results of: addSpecials(), fillIntegratedVariables(), findConstants(), collectSplits(), findInitOnly()
     **/
     public void findDeath ()
     {
@@ -2922,6 +2922,7 @@ public class EquationSet implements Comparable<EquationSet>
             for (EquationEntry e : p.equations)
             {
                 if (e.expression.isScalar ()  &&  e.expression.getDouble () >= 1) continue;
+                if (e.expression instanceof OperatorLogical  &&  p.hasAttribute ("initOnly")) continue;
 
                 // Now we have an equation that evaluates to something other than 1.
                 // If this occurs anywhere but connect, then $p is lethal.
@@ -3017,11 +3018,6 @@ public class EquationSet implements Comparable<EquationSet>
         // Are we the target of a $type split in another part which produces at least one offspring of this type?
         int count = splitSources.size ();
         return  count > 1  ||  count == 1  &&  ! splitSources.contains (this);
-    }
-
-    public boolean canGrow (EquationSet target)
-    {
-        return false;
     }
 
     /**
