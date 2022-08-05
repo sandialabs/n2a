@@ -2568,6 +2568,12 @@ public class JobC extends Thread
                 ConnectionMatrix cm = s.connectionMatrix;
                 result.append ("  ConnectPopulation<" + T + "> * rows = getIterator (" + cm.rows.index + ");\n");
                 result.append ("  ConnectPopulation<" + T + "> * cols = getIterator (" + cm.cols.index + ");\n");
+                result.append ("  if (rows->size == 0  ||  cols->size == 0)\n");
+                result.append ("  {\n");
+                result.append ("    delete rows;\n");
+                result.append ("    delete cols;\n");
+                result.append ("    return 0;\n");
+                result.append ("  }\n");
                 result.append ("  " + ps + " * dummy = (" + ps + " *) create ();\n");  // Will be deleted when ConnectMatrix is deleted.
                 result.append ("  dummy->setPart (" + cm.rows.index + ", (*rows->instances)[0]);\n");
                 result.append ("  dummy->setPart (" + cm.cols.index + ", (*cols->instances)[0]);\n");
@@ -2963,7 +2969,7 @@ public class JobC extends Thread
             }
 
             // contained populations
-            if (s.parts.size () > 0)
+            if (s.orderedParts != null)
             {
                 // If there are parts at all, then orderedParts must be filled in correctly. Otherwise it may be null.
                 for (EquationSet e : s.orderedParts)
