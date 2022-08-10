@@ -408,7 +408,7 @@ public:
     virtual void      remove   (Part<T> * part); ///< Move part to dead list, and update any other accounting for the part.
     virtual Part<T> * allocate ();               ///< If a dead part is available, re-use it. Otherwise, create and add a new part.
     virtual void      resize   (int n);          ///< Add or kill instances until $n matches given n.
-    virtual int       getN     ();
+    virtual int       getN     ();               ///< Subroutine for resize(). Returns current number of live instances (true n). Not exactly the same as an accessor for $n, because it does not give the requested size, only actual size.
 
     // Connections
     virtual void                   connect            (); ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).

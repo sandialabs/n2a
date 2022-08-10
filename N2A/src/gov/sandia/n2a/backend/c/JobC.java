@@ -506,7 +506,7 @@ public class JobC extends Thread
         digestedModel.findConstants ();
         digestedModel.determineTraceVariableName ();
         digestedModel.collectSplits ();
-        digestedModel.findDeath ();
+        digestedModel.findDeath ();  // Required by addImplicitDependencies(). When run before findInitOnly(), some parts may be marked lethalP when they don't need to be. One solution would be to run findDeath() again after findInitOnly().
         addImplicitDependencies (digestedModel);
         digestedModel.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         createBackendData (digestedModel);
@@ -1451,7 +1451,7 @@ public class JobC extends Thread
         }
         else
         {
-            if (bed.n != null)
+            if (bed.trackN)
             {
                 result.append ("  int n;\n");
             }
@@ -1536,7 +1536,7 @@ public class JobC extends Thread
         {
             result.append ("  virtual void resize (int n);\n");
         }
-        if (bed.n != null  &&  ! bed.singleton)
+        if (bed.n != null  &&  ! bed.singleton)  // Slightly narrower condition than trackN.
         {
             result.append ("  virtual int getN ();\n");
         }
@@ -1559,6 +1559,10 @@ public class JobC extends Thread
             result.append ("  virtual void multiplyAddToStack (" + T + " scalar);\n");
             result.append ("  virtual void multiply (" + T + " scalar);\n");
             result.append ("  virtual void addToMembers ();\n");
+        }
+        if (bed.populationCanBeInactive)
+        {
+            result.append ("  virtual void connect ();\n");
         }
         if (bed.newborn >= 0)
         {
@@ -1774,6 +1778,10 @@ public class JobC extends Thread
             result.append ("  virtual void multiply (" + T + " scalar);\n");
             result.append ("  virtual void addToMembers ();\n");
         }
+        if (bed.connectionCanBeInactive)
+        {
+            result.append ("  void checkInactive ();\n");
+        }
         if (bed.live != null  &&  ! bed.live.hasAttribute ("constant"))
         {
             result.append ("  virtual " + T + " getLive ();\n");
@@ -1864,7 +1872,7 @@ public class JobC extends Thread
             result.append ("{\n");
             if (! bed.singleton)
             {
-                if (bed.n != null)  // and not singleton, so trackN is true
+                if (bed.trackN)
                 {
                     result.append ("  n = 0;\n");
                 }
@@ -2206,7 +2214,7 @@ public class JobC extends Thread
         }
 
         // Population getN
-        if (bed.trackN)
+        if (bed.n != null  &&  ! bed.singleton)
         {
             result.append ("int " + ns + "getN ()\n");
             result.append ("{\n");
@@ -2357,6 +2365,21 @@ public class JobC extends Thread
             result.append ("  Derivative * temp = stackDerivative;\n");
             result.append ("  stackDerivative = stackDerivative->next;\n");
             result.append ("  delete temp;\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
+        // Population connect (override for inactive)
+        if (bed.populationCanBeInactive)
+        {
+            result.append ("void " + ns + "connect ()\n");
+            result.append ("{\n");
+            result.append ("  Population::connect ();\n");
+            result.append ("  if (n == 0)\n");
+            result.append ("  {\n");
+            result.append ("    flags |= (" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.inactive) + ";\n");
+            result.append ("    ((" + prefix (s.container) + " *) container)->checkInactive ();\n");
+            result.append ("  }\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2796,7 +2819,7 @@ public class JobC extends Thread
                 }
 
                 // instance counting
-                if (bed.n != null  &&  ! bed.singleton) result.append ("  container->" + mangle (s.name) + ".n--;\n");
+                if (bed.trackN) result.append ("  container->" + mangle (s.name) + ".n--;\n");
 
                 for (String alias : bed.accountableEndpoints)
                 {
@@ -3701,6 +3724,34 @@ public class JobC extends Thread
             result.append ("bool " + ns + "getNewborn ()\n");
             result.append ("{\n");
             result.append ("  return flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
+        // Unit checkInactive
+        if (bed.connectionCanBeInactive)
+        {
+            result.append ("void " + ns + "checkInactive ()\n");
+            result.append ("{\n");
+            // Check each sub-population
+            for (EquationSet e : s.parts)
+            {
+                BackendDataC ebed = (BackendDataC) e.backendData;
+                result.append ("  if (! (" + mangle (e.name) + ".flags & (" + ebed.globalFlagType + ") 0x1" + RendererC.printShift (ebed.inactive) + ")) return;\n");
+            }
+            // Remove inactive instance.
+            result.append ("  die ();\n");
+            result.append ("  dequeue ();\n");
+            result.append ("  leaveSimulation ();\n");
+
+            if (bed.populationCanBeInactive)
+            {
+                result.append ("  if (container->" + mangle (s.name) + ".n == 0)\n");
+                result.append ("  {\n");
+                result.append ("    container->" + mangle (s.name) + ".flags |= (" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.inactive) + ";\n");
+                result.append ("    container->checkInactive ();\n");
+                result.append ("  }\n");
+            }
             result.append ("}\n");
             result.append ("\n");
         }
@@ -4736,8 +4787,7 @@ public class JobC extends Thread
         if (v.type instanceof Scalar) return name + " = 0";
         if (v.type instanceof Matrix) return "::clear (" + name + ")";  // Don't check for matrix pointer, because zero() should never be called for such variables.
         if (v.type instanceof Text  ) return name + ".clear ()";
-        Backend.err.get ().println ("Unknown Type");
-        throw new Backend.AbortRun ();
+        throw new RuntimeException ("Variable was not assigned a type.");  // This indicates an error in the compiler or backend code.
     }
 
     public static String clear (String name, Variable v, double value, RendererC context) throws Exception
@@ -4746,8 +4796,7 @@ public class JobC extends Thread
         if (v.type instanceof Scalar) return name + " = " + p;
         if (v.type instanceof Matrix) return "::clear (" + name + ", " + p + ")";  // Don't check for matrix pointer, because clear() should never be called for such variables.
         if (v.type instanceof Text  ) return name + ".clear ()";
-        Backend.err.get ().println ("Unknown Type");
-        throw new Backend.AbortRun ();
+        throw new RuntimeException ("Variable was not assigned a type.");
     }
 
     public static String clearAccumulator (String name, Variable v, RendererC context) throws Exception

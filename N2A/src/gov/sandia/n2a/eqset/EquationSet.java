@@ -4270,6 +4270,7 @@ public class EquationSet implements Comparable<EquationSet>
             fillIntegratedVariables() to get lower-order derivatives
             resolveRHS() to establish dependencies
             findTeporary() to identify temporaries
+            removeUnused() to possibly avoid tagging some temporaries as dependencies
             All of these are optional.
     **/
     public void findDerivative ()
@@ -4314,7 +4315,7 @@ public class EquationSet implements Comparable<EquationSet>
                 Why only one equation? Multiple equations imply the value could change via conditional selection.
             </ul>
         </ul>
-        Depends on results of: findConstants(), makeConstantDtInitOnly()
+        Depends on results of: findConstants()
     **/
     public void findInitOnly ()
     {
@@ -4566,7 +4567,7 @@ public class EquationSet implements Comparable<EquationSet>
         Tag variables that must be set via a function call.
         We add either the "cycle" or "externalRead" attribute, to force the value into
         temporary storage.
-        Depends on results of: findConstants(), makeConstantDtInitOnly()
+        Depends on results of: findConstants()
     **/
     public void forceTemporaryStorageForSpecials ()
     {

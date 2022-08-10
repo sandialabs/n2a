@@ -98,13 +98,15 @@ public class BackendDataC
     public String pathToContainer;
     public List<String> accountableEndpoints = new ArrayList<String> ();
     public boolean refcount;
-    public boolean trackInstances;  // keep a list of instances
+    public boolean trackInstances;          // keep a list of instances
     public boolean hasProject;
-    public boolean canGrowOrDie;    // via $p or $type
-    public boolean canResize;       // via $n
-    public boolean nInitOnly;       // $n is "initOnly"; Can only be true when $n exists.
-    public boolean singleton;       // $n=1
-    public boolean trackN;          // keep a count of current instances; different than trackInstances
+    public boolean canGrowOrDie;            // via $p or $type
+    public boolean canResize;               // via $n
+    public boolean nInitOnly;               // $n is "initOnly"; Can only be true when $n exists.
+    public boolean singleton;               // $n=1
+    public boolean trackN;                  // keep a count of current instances; different than trackInstances
+    public boolean populationCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive part. At runtime, direct instances and instances of all descendants must be empty for this population to qualify.
+    public boolean connectionCanBeInactive; // Indicates that connection instance satisfies all the compile-time conditions for inactive. At runtime, our contained populations must all be inactive for this connection instance to qualify.
 
     public List<String> globalColumns = new ArrayList<String> ();
     public List<String> localColumns  = new ArrayList<String> ();
@@ -115,11 +117,13 @@ public class BackendDataC
     public List<Variable>    eventReferences = new ArrayList<Variable> ();
     public List<Delay>       delays          = new ArrayList<Delay> ();
 
-    public String localFlagType = "";  // empty string indicates that flags are not required
-    public int    liveFlag = -1;  // -1 means $live is not stored
+    public String localFlagType = ""; // empty string indicates that flags are not required
+    public int    liveFlag = -1;      // -1 means $live is not stored
     public int    newborn  = -1;
+
     public String globalFlagType = "";
-    public int    clearNew = -1;
+    public int    clearNew = -1;      // guard so that only add population to clearNew queue once
+    public int    inactive = -1;      // indicates that population was explicitly tested and found to be inactive
 
     public void analyzeEvents (final EquationSet s)
     {
@@ -168,7 +172,11 @@ public class BackendDataC
     public void analyze (final EquationSet s)
     {
         boolean headless = AppData.properties.getBoolean ("headless");
-        if (! headless) System.out.println (s.name);
+        if (! headless) System.out.println (s.container == null ? s.name : s.prefix ());
+
+        populationCanBeInactive =  s.container != null  &&  s.container.connectionBindings != null;
+        connectionCanBeInactive =  s.connectionBindings != null;
+
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
             if (! headless)
@@ -219,9 +227,11 @@ public class BackendDataC
             boolean temporary              = v.hasAttribute ("temporary");
             boolean unusedTemporary        = temporary  &&  ! v.hasUsers ();
             boolean derivativeOrDependency = v.hasAttribute ("derivativeOrDependency");
+            boolean hasNonchildReferences  = InternalBackendData.hasNonchildReferences (s, v);
 
             if (v.hasAttribute ("global"))
             {
+                if (hasNonchildReferences) populationCanBeInactive = false;
                 if (updates  &&  ! unusedTemporary) globalUpdate.add (v);
                 if (derivativeOrDependency) globalDerivativeUpdate.add (v);
                 if (! unusedTemporary  &&  ! emptyCombiner) globalInit.add (v);
@@ -289,6 +299,7 @@ public class BackendDataC
             }
             else  // local
             {
+                if (hasNonchildReferences) connectionCanBeInactive = false;
                 if (updates  &&  ! unusedTemporary) localUpdate.add (v);
                 if (derivativeOrDependency) localDerivativeUpdate.add (v);
                 if (! unusedTemporary  &&  ! emptyCombiner  &&  v != type) localInit.add (v);
@@ -398,6 +409,66 @@ public class BackendDataC
 
                 if (s.find (new Variable (c.alias + ".$project")) != null) hasProject = true;
             }
+
+            // Checks if connection instance can be inactive
+            //   Must not have dynamics
+            //   Should not specify $p -- It is only useful to optimize away an inactive connection when it is unconditional.
+            if (! localUpdate.isEmpty ()  ||  ! localIntegrated.isEmpty ()  ||  p != null) connectionCanBeInactive = false;
+            //   Target populations must not change.
+            //   References to aliases must only come from descendants.
+            if (connectionCanBeInactive)
+            {
+                for (ConnectionBinding cb : s.connectionBindings)
+                {
+                    BackendDataC bed = (BackendDataC) cb.endpoint.backendData;
+                    if (bed.canGrowOrDie  ||  bed.canResize  ||  InternalBackendData.hasNonchildReferences (s, cb.variable))
+                    {
+                        connectionCanBeInactive = false;
+                        break;
+                    }
+                }
+            }
+            //   All sub-populations must capable of being inactive.
+            if (connectionCanBeInactive)
+            {
+                for (EquationSet p : s.parts)
+                {
+                    BackendDataC bed = (BackendDataC) p.backendData;
+                    if (! bed.populationCanBeInactive)
+                    {
+                        connectionCanBeInactive = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (connectionCanBeInactive)
+        {
+            // Retroactively activate instance counting in child populations.
+            for (EquationSet p : s.parts)
+            {
+                BackendDataC bed = (BackendDataC) p.backendData;
+                // If trackN is already true, the following will already be true.
+                // TODO: What if p is a singleton? Can that even happen?
+                bed.trackN                        = true;
+                bed.needGlobalCtor                = true;
+                if (p.canDie ()) bed.needLocalDie = true;
+                bed.needLocalInit                 = true;
+            }
+        }
+        else
+        {
+            // We can't remove inactive populations because they are directly embedded in their container class.
+            // We can only remove inactive connection instances. Thus, there is no point in even checking a
+            // population unless the container is a connection that can be inactive. We go back and set
+            // the population flag false once we determine that the container won't ever be an inactive connection.
+            // Then code generation only needs to look at flags in the current part.
+            for (EquationSet p : s.parts)
+            {
+                BackendDataC bed = (BackendDataC) p.backendData;
+                bed.populationCanBeInactive = false;
+            }
         }
 
         if (eventTargets.size () > 0)
@@ -415,10 +486,10 @@ public class BackendDataC
         boolean canDie = s.canDie ();
         refcount       = s.referenced  &&  canDie;
         singleton      = s.isSingleton ();
-        canResize      = globalMembers.contains (n);  // Works correctly even if n is null.
+        canResize      = globalMembers.contains (n);  // This search works even if n is null.
+        trackN         = n != null  &&  ! singleton;  // Should always be true when canResize is true.
         trackInstances = s.connected  ||  s.needInstanceTracking  ||  canResize;
         canGrowOrDie   = s.lethalP  ||  s.lethalType  ||  s.canGrow ();
-        trackN         = n != null  &&  ! singleton;
         boolean Euler  = s.getRoot ().metadata.getOrDefault ("Euler", "backend", "all", "integrator").equals ("Euler");
 
         if (! canResize  &&  canGrowOrDie  &&  n != null  &&  n.hasUsers ())
@@ -427,6 +498,7 @@ public class BackendDataC
             // See note in InternalBackendData for details.
             Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
         }
+        if (! globalUpdate.isEmpty ()  ||  ! globalIntegrated.isEmpty ()  ||  singleton  ||  canGrowOrDie  ||  canResize  &&  ! nInitOnly) populationCanBeInactive = false;
 
         int flagCount = eventTargets.size ();
         if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"})) liveFlag = flagCount++;
@@ -444,6 +516,7 @@ public class BackendDataC
 
         flagCount = 0;
         if (trackInstances  &&  s.connected) clearNew = flagCount++;
+        if (populationCanBeInactive)         inactive = flagCount++;  // This may end up not being used.
         if      (flagCount == 0 ) globalFlagType = "";
         else if (flagCount <= 8 ) globalFlagType = "uint8_t";
         else if (flagCount <= 16) globalFlagType = "uint16_t";
@@ -468,7 +541,7 @@ public class BackendDataC
                                        || s.connectionBindings != null;
         needGlobalUpdate             = globalUpdate.size () > 0;
         needGlobalFinalizeN          = s.container == null  &&  (canResize  ||  canGrowOrDie);
-        needGlobalFinalize           = globalBufferedExternal.size () > 0  ||  needGlobalFinalizeN  ||  (canResize  &&  (canGrowOrDie  ||  ! n.hasAttribute ("initOnly")));
+        needGlobalFinalize           = globalBufferedExternal.size () > 0  ||  needGlobalFinalizeN  ||  (canResize  &&  (canGrowOrDie  ||  ! nInitOnly));
         needGlobalUpdateDerivative   = ! Euler  &&  globalDerivativeUpdate.size () > 0;
         needGlobalFinalizeDerivative = ! Euler  &&  globalBufferedExternalDerivative.size () > 0;
 
