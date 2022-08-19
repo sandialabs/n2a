@@ -157,7 +157,7 @@ public class Windows extends Host
     {
         Path jobDir = Paths.get (job.get ()).getParent ();
         Path script = jobDir.resolve ("n2a_job.bat");
-        String out = out2err ? "err" : "out";
+        String out = out2err ? "err1" : "out";  // Windows cmd is too stupid to append two streams to the same file, so we have to use something different than "err" here.
         try (BufferedWriter writer = Files.newBufferedWriter (script))
         {
             writer.append ("cd " + jobDir + "\r\n");
