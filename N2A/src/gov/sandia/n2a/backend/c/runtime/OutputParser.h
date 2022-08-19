@@ -11,7 +11,7 @@ the U.S. Government retains certain rights in this software.
 #ifndef output_parser_h
 #define output_parser_h
 
-#include <string>  // We use the provided STL string class rather than our own minimalist String implementation.
+#include <string>  // Because OutputParser is not used by the C runtime, we use the STL-provided string class rather than our own minimalist implementation.
 #include <vector>
 #include <limits>
 #include <fstream>

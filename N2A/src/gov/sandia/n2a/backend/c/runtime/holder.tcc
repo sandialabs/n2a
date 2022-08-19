@@ -395,7 +395,7 @@ template<class T>
 Mfile<T>::Mfile (const String & fileName)
 :   Holder (fileName)
 {
-    doc =  new n2a::MDoc (fileName.c_str ());
+    doc = new n2a::MDoc (fileName.c_str ());
 }
 
 template<class T>
