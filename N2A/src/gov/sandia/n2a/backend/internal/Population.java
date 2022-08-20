@@ -649,7 +649,7 @@ public class Population extends Instance
         {
             ConnectionBinding target = equations.connectionBindings.get (i);
             ConnectPopulation it = new ConnectPopulation (i, target, bed, simulator, poll);
-            if (it.instances == null  ||  it.instances.size () == 0) return null;  // Nothing to connect. This should never happen.
+            if (it.instances == null  ||  it.instances.size () == 0) return null;  // Nothing to connect. This can happen if $n is not known until init and turns out to be zero.
             iterators.add (it);
             if (it.firstborn < it.size) nothingNew = false;
             if (it.k > 0  ||  it.radius > 0) spatialFiltering = true;
@@ -750,7 +750,11 @@ public class Population extends Instance
         // outer loop for each of the other populations, just for fulfilling $min.
 
         ConnectIterator outer = getIterators (simulator, poll);
-        if (outer == null) return;
+        if (outer == null)
+        {
+            checkInactive ();
+            return;
+        }
 
         HashSet<Part> pollSorted;
         if (poll) pollSorted = (HashSet<Part>) valuesObject[bed.pollSorted];
@@ -787,7 +791,6 @@ public class Population extends Instance
         if (! bed.populationCanBeInactive) return;
         if (n != 0) return;
         // Now we have an inactive population, so clear it from its parent part.
-        System.out.println ("population inactive: " + equations.prefix ());
         container.valuesObject[bed.populationIndex] = null;
         ((Part) container).checkInactive ();
     }

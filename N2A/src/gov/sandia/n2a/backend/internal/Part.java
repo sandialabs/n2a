@@ -651,7 +651,6 @@ public class Part extends Instance
             if (valuesObject[i] != null) return;
         }
         // All sub-populations of this connection instance are inactive, so this instance can be removed from simulation.
-        System.out.println ("connection inactive: " + equations.prefix ());
         die ();  // This should not affect anything important besides decreasing population.
         dequeue ();
         ((Population) container.valuesObject[bed.populationIndex]).checkInactive ();

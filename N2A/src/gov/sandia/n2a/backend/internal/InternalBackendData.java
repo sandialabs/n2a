@@ -724,6 +724,9 @@ public class InternalBackendData
 
         fastExit = s.metadata.getFlag ("backend", "all", "fastExit");
 
+        populationCanBeInactive = true;
+        connectionCanBeInactive =  s.connectionBindings != null;
+
         for (Variable v : s.ordered)  // we want the sub-lists to be ordered correctly
         {
             if (! headless)
@@ -755,9 +758,6 @@ public class InternalBackendData
             boolean temporary       = v.hasAttribute ("temporary");
             boolean unusedTemporary = temporary  &&  ! v.hasUsers ();
             if (v.hasAttribute ("externalWrite")) v.externalWrite = true;
-
-            populationCanBeInactive = true;
-            connectionCanBeInactive =  s.connectionBindings != null;
             boolean hasNonchildReferences = hasNonchildReferences (s, v);
 
             if (v.hasAttribute ("global"))
@@ -923,7 +923,7 @@ public class InternalBackendData
                 Backend.err.get ().println ("WARNING: $n can change (due to structural dynamics) but it was detected as a constant. Equations that depend on $n may give incorrect results.");
             }
         }
-        if (! globalUpdate.isEmpty ()  ||  ! globalIntegrated.isEmpty ()  ||  populationCanGrowOrDie  ||  populationCanResize) populationCanBeInactive = false;
+        if (! globalUpdate.isEmpty ()  ||  ! globalIntegrated.isEmpty ()  ||  singleton  ||  populationCanGrowOrDie  ||  populationCanResize) populationCanBeInactive = false;
 
         if (index != null  &&  ! singleton)
         {
@@ -1112,7 +1112,7 @@ public class InternalBackendData
             }
         }
 
-        
+
         // Set index on variables
         // Initially readIndex = writeIndex = -1, and readTemp = writeTemp = false
 
