@@ -247,9 +247,8 @@ public class Output extends Function
                         if (op instanceof Constant)
                         {
                             Constant c = (Constant) op;
-                            Type t = c.value;
-                            if (t instanceof Scalar) val = c.unitValue.toString ();  // So we render units.
-                            else                     val = t.toString ();
+                            if (c.unitValue == null) val = c.value.toString ();
+                            else                     val = c.unitValue.toString ();  // So we render units.
                         }
                         else
                         {

@@ -437,9 +437,8 @@ public class RendererC extends Renderer
                     {
                         Constant c = (Constant) kv;
                         mode += "," + k.getKey () + "=";
-                        Type t = c.value;
-                        if (t instanceof Scalar) mode += c.unitValue;
-                        else                     mode += t.toString ();
+                        if (c.unitValue == null) mode += c.value;
+                        else                     mode += c.unitValue;
                     }
                     else
                     {
