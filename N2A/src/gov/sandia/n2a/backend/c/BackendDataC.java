@@ -105,8 +105,10 @@ public class BackendDataC
     public boolean nInitOnly;               // $n is "initOnly"; Can only be true when $n exists.
     public boolean singleton;               // $n=1
     public boolean trackN;                  // keep a count of current instances; different than trackInstances
-    public boolean populationCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive part. At runtime, direct instances and instances of all descendants must be empty for this population to qualify.
-    public boolean connectionCanBeInactive; // Indicates that connection instance satisfies all the compile-time conditions for inactive. At runtime, our contained populations must all be inactive for this connection instance to qualify.
+
+    // See InternalBackendData for description of the "inactive" mechanism.
+    public boolean populationCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive population.
+    public boolean connectionCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive connection instance.
 
     public List<String> globalColumns = new ArrayList<String> ();
     public List<String> localColumns  = new ArrayList<String> ();

@@ -115,8 +115,23 @@ public class InternalBackendData
     public boolean populationCanGrowOrDie;  // by structural dynamics other than $n
     public boolean populationCanResize;     // by manipulating $n
     public int     populationIndex;         // in container.populations
-    public boolean populationCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive part. At runtime, direct instances and instances of all descendants must be empty for this population to qualify.
-    public boolean connectionCanBeInactive; // Indicates that connection instance satisfies all the compile-time conditions for inactive. At runtime, our contained populations must all be inactive for this connection instance to qualify.
+
+    // Inactive -- parts that can be eliminated because they won't do any further work in the simulation.
+    // An inactive population must satisfy all these conditions:
+    // * No global variable has dynamics.
+    // * No global variable is referenced by a part outside our own descendants.
+    // * The number of instances does not vary (no structural dynamics) after init.
+    // * If this is a connection population, then target populations do not vary after init.
+    // * The size of the population can go to zero. Implies not singleton. (Determined at compile time.)
+    // * The size of the population actually is zero. (Determined at run time.)
+    // An inactive connection instance (generally an outer connection) must satisfy all these conditions:
+    // * No local variable has dynamics.
+    // * No local variable is referenced by a part outside our own descendants.
+    // * Existence is unconditional (no $p defined). Mainly because the "inactive" feature is only needed in this case. A connection with $p can self-eliminate.
+    // * References to aliases only come from our descendents.
+    // * All sub-populations are inactive. (Determined at run time.)
+    public boolean populationCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive population.
+    public boolean connectionCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive connection instance.
 
     public double  poll = -1;               // For connections, how much time is allowed to check full set of latent connections. Zero means every cycle. Negative means don't poll.
     public int     pollDeadline;            // position in population valuesFloat of time by which current poll cycle must complete. Only valid if poll>=0.
