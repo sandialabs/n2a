@@ -980,6 +980,10 @@ public abstract class Host
         }
     }
 
+    /**
+        Same as Files.size() but doesn't throw an exception if file does not exist.
+        Instead, returns 0.
+    **/
     public static long size (Path path)
     {
         try
