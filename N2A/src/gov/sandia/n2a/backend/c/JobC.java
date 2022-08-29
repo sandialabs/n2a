@@ -829,6 +829,7 @@ public class JobC extends Thread
         }
         result.append ("  }\n");
         result.append ("};\n");
+        if (tls) result.append ("thread_local ");
         result.append ("Wrapper * wrapper;\n");
         result.append ("\n");
 
@@ -864,11 +865,12 @@ public class JobC extends Thread
         if (tls)
         {
             // Hack to make GCC 11.x happy. Should do no harm. Should also not be necessary.
-            result.append ("template<class T> thread_local Simulator<T> * Simulator<T>::instance = 0;\n");
+            result.append ("template<class T> thread_local Simulator<T> * Simulator<T>::instance;\n");
         }
         if (cli)
         {
-            result.append ("Parameters<" + T + "> params;\n");
+            if (tls) result.append ("thread_local ");
+            result.append ("Parameters<" + T + "> * params;\n");
         }
         generateStatic (context);
         result.append ("\n");
@@ -893,7 +895,8 @@ public class JobC extends Thread
         }
         if (cli)
         {
-            result.append ("  params.parse (argc, argv);\n");
+            result.append ("  params = new Parameters<" + T + ">;\n");
+            result.append ("  params->parse (argc, argv);\n");
         }
         if (T.equals ("int"))
         {
@@ -905,7 +908,6 @@ public class JobC extends Thread
         else                                            integrator = "Euler";
         if (tls)
         {
-            result.append ("  if (Simulator<" + T + ">::instance) delete Simulator<" + T + ">::instance;\n");
             result.append ("  Simulator<" + T + ">::instance = new Simulator<" + T + ">;\n");
         }
         result.append ("  " + SIMULATOR + "integrator = new " + integrator + "<" + T + ">;\n");
@@ -928,6 +930,10 @@ public class JobC extends Thread
             result.append ("  " + SIMULATOR + "clear ();\n");
         }
         result.append ("  delete wrapper;\n");
+        if (cli)
+        {
+            result.append ("  delete params;\n");
+        }
         if (kokkos)
         {
             result.append ("  finalize_profiling ();\n");
@@ -4459,7 +4465,7 @@ public class JobC extends Thread
             }
 
             boolean cli = e.variable.hasAttribute ("cli");
-            if (cli) result.append ("params.get (\"" + e.variable.fullName () + "\", ");
+            if (cli) result.append ("params->get (\"" + e.variable.fullName () + "\", ");
 
             e.expression.render (context);
 
