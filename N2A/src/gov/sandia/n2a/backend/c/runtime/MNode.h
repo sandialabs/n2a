@@ -21,10 +21,19 @@ the U.S. Government retains certain rights in this software.
 #include <set>
 #include <mutex>
 
+#undef SHARED
 #ifdef _MSC_VER
-# define strcasecmp _stricmp
+#  define strcasecmp _stricmp
+#  ifdef _USRDLL
+#    define SHARED __declspec(dllexport)
+#  elif defined n2a_DLL
+#    define SHARED __declspec(dllimport)
+#  else
+#    define SHARED
+#  endif
 #else
-# include <strings.h>
+#  include <strings.h>
+#  define SHARED
 #endif
 
 
@@ -39,14 +48,14 @@ namespace n2a
     #define MDocGroupID    0x08
     #define MDirID         0x10
 
-    class MNode;
-    class MVolatile;
-    class MPersistent;
-    class MDoc;
-    class MDocGroup;
-    class MDir;
-    class Schema;
-    class Schema2;
+    class SHARED MNode;
+    class SHARED MVolatile;
+    class SHARED MPersistent;
+    class SHARED MDoc;
+    class SHARED MDocGroup;
+    class SHARED MDir;
+    class SHARED Schema;
+    class SHARED Schema2;
     class LineReader;
 
     /**
@@ -59,7 +68,7 @@ namespace n2a
         needs to know about MNode. Avoid using knowledge about the details of concrete implementations unless
         it is absolutely necessary. For example, there is value in calling MDoc.save() to write to disk.
     **/
-    class MNode
+    class SHARED MNode
     {
     public:
         static MNode none;  // For return values, indicating node does not exist. Iterating over none will produce no children.
@@ -541,7 +550,7 @@ namespace n2a
         virtual void childClear (const String & key);
     };
 
-    class MVolatile : public MNode
+    class SHARED MVolatile : public MNode
     {
     public:
         MVolatile (const char * value = 0, const char * name = 0, MNode * container = 0);
@@ -577,7 +586,7 @@ namespace n2a
         virtual void    childClear (const String & key);
     };
 
-    class MPersistent : public MVolatile
+    class SHARED MPersistent : public MVolatile
     {
     public:
         MPersistent (MNode * container, const char * value = 0, const char * key = 0);
@@ -616,7 +625,7 @@ namespace n2a
         MDoc with unsaved changes, they will be lost. However, if this MDoc is managed by an MDocGroup,
         then the group object will automatically save all its documents when it is destroyed.
     **/
-    class MDoc : public MPersistent
+    class SHARED MDoc : public MPersistent
     {
     public:
         /**
@@ -705,7 +714,7 @@ namespace n2a
         for ugly code. Instead, there is a function for explicitly releasing an MDoc.
         If you retrieve it again later, it will be recreated from file.
     **/
-    class MDocGroup : public MNode
+    class SHARED MDocGroup : public MNode
     {
     public:
         MDocGroup (const char * key = 0);
@@ -784,7 +793,7 @@ namespace n2a
         This allows the direct children of this directory to be subdirectories, and each document
         file may be a specifically-named entry in a subdirectory.
     **/
-    class MDir : public MDocGroup
+    class SHARED MDir : public MDocGroup
     {
     public:
         /**
@@ -822,7 +831,7 @@ namespace n2a
         virtual MNode & childGet (const String & key, bool create = false);
     };
 
-    class Schema
+    class SHARED Schema
     {
     public:
         int         version;  ///< Version 0 means unknown. Version -1 means no-care. Otherwise, version is always positive and increments by 1 with each significant change.
@@ -880,7 +889,7 @@ namespace n2a
         virtual void write (MNode & node, std::ostream & writer, const String & indent) = 0;
     };
 
-    class Schema2 : public Schema
+    class SHARED Schema2 : public Schema
     {
     public:
         Schema2 (int version, const String & type);
@@ -894,7 +903,7 @@ namespace n2a
     {
     public:
         std::istream & reader;
-        String    line;
+        String         line;
         int            whitespaces;
 
         LineReader (std::istream & reader);
@@ -902,12 +911,12 @@ namespace n2a
     };
 
     // Utility functions
-    extern std::ostream & operator<< (std::ostream & out, MNode & value);
-    extern char * strdup (const char * from);  ///< This function is not always available (not standard C), so we just provide our own.
-    extern void create_directories (const String & path);  ///< Ensure all parents of path exist
-    extern void remove_all (const String & path);  ///< Recursively deletes directory or file.
-    extern bool exists (const String & path);
-    extern bool is_directory (const String & path);
+    SHARED std::ostream & operator<< (std::ostream & out, MNode & value);
+    SHARED char * strdup (const char * from);  ///< This function is not always available (not standard C), so we just provide our own.
+    SHARED void create_directories (const String & path);  ///< Ensure all parents of path exist
+    SHARED void remove_all (const String & path);  ///< Recursively deletes directory or file.
+    SHARED bool exists (const String & path);
+    SHARED bool is_directory (const String & path);
 }
 
 namespace std

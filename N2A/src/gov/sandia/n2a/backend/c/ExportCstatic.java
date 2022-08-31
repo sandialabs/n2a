@@ -47,27 +47,31 @@ public class ExportCstatic implements ExportModel
             job.save ();
             NodeJob.saveSnapshot (source, job);
 
+            String stem = destination.getFileName ().toString ();
+
             JobC t = new JobC (job);
-            t.lib    = true;  // library flag. Will build a library then return (model not executed).
-            t.shared = shared;
+            t.lib     = true;  // library flag. Will build a library then return (model not executed).
+            t.shared  = shared;
+            t.libStem = stem;
             t.run ();  // Process on current thread rather than starting a new one.
 
             // Move library resources to destination
-            Compiler.Factory factory = BackendC.getFactory (t.env);  // to get suffixes
-            String stem        = destination.getFileName ().toString ();
+            // Notice that even though the export may be built on a remote host
+            // (per host key in model), it will be copied to a local directory.
+            CompilerFactory factory = BackendC.getFactory (t.env);  // to get suffixes
             Path   parent      = destination.getParent ();
-            String suffix      = factory.suffixLibraryStatic ();
-            Path   libraryFrom = t.jobDir.resolve ("model" + suffix);  // hard-coded assumption that "model" is stem of source file
-            Path   libraryTo   = parent  .resolve (stem    + suffix);
-            Path   headerFrom  = t.jobDir.resolve ("model.h");
+            String suffix      = shared ? factory.suffixLibraryShared () : factory.suffixLibraryStatic ();
+            Path   libraryFrom = t.jobDir.resolve (stem + suffix);  // hard-coded assumption that "model" is stem of source file
+            Path   libraryTo   = parent  .resolve (stem + suffix);
+            Path   headerFrom  = t.jobDir.resolve (stem + ".h");
             Path   headerTo    = parent  .resolve (stem + ".h");
             Files.move (libraryFrom, libraryTo, StandardCopyOption.REPLACE_EXISTING);
             Files.move (headerFrom,  headerTo,  StandardCopyOption.REPLACE_EXISTING);
-            if (shared)
+            if (shared  &&  factory.hasStaticWrapper ())
             {
-                suffix      = factory.suffixLibraryShared ();
-                libraryFrom = t.jobDir.resolve ("model" + suffix);
-                libraryTo   = parent  .resolve (stem    + suffix);
+                suffix      = factory.suffixLibraryStatic ();
+                libraryFrom = t.jobDir.resolve (stem + suffix);
+                libraryTo   = parent  .resolve (stem + suffix);
                 Files.move (libraryFrom, libraryTo, StandardCopyOption.REPLACE_EXISTING);
             }
 

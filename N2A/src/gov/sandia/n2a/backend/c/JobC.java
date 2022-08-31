@@ -90,7 +90,8 @@ public class JobC extends Thread
     public    boolean debug;   // compile with debug symbols; applies to current model as well as any runtime components that happen to get rebuilt
     protected boolean cli;     // command-line interface
     protected boolean lib;     // library mode, suitable for Python wrapper or other external integration
-    protected boolean shared;  // make shared rather than static library; only meaningful when lib is true
+    public    String  libStem; // name of library; only meaningful when lib is true
+    public    boolean shared;  // make shared rather than static library; only meaningful when lib is true
     public    boolean tls;     // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
     protected boolean IOvectorWritten;  // Indicates that the abstract class "IOvector" has been inserted already.
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
@@ -286,26 +287,25 @@ public class JobC extends Thread
         }
 
         // Compile runtime
-        Compiler.Factory factory = BackendC.getFactory (env);
+        CompilerFactory factory = BackendC.getFactory (env);
         supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
-        Map<String,Boolean> sources = new HashMap<String,Boolean> ();  // List of source names, associated with flag indicating that a type-specific object should be built.
-        sources.put ("runtime",   true);
-        sources.put ("holder",    true);
-        sources.put ("MNode",     true);  // Doesn't really have any template on numeric type, but other variants are meaningful.
-        sources.put ("profiling", false);
-        if (T.equals ("int")) sources.put ("fixedpoint", true);
-        for (String stem : sources.keySet ())
+        List<String> sources = new ArrayList<String> ();  // List of source names
+        sources.add ("runtime");
+        sources.add ("holder");
+        sources.add ("MNode");
+        sources.add ("profiling");
+        if (T.equals ("int")) sources.add ("fixedpoint");
+        for (String stem : sources)
         {
-            boolean typeSpecific = sources.get (stem);
-            String objectName = typeSpecific ? objectName (stem) : stem + ".o";
-
+            String objectName = objectName (stem);
             Path object = runtimeDir.resolve (objectName);
             if (Files.exists (object)) continue;
             job.set ("Compiling " + objectName, "backendStatus");
 
             Compiler c = factory.make (localJobDir);
-            if (gprof) c.setProfiling ();
-            if (debug) c.setDebug ();
+            if (shared) c.setShared ();
+            if (debug ) c.setDebug ();
+            if (gprof ) c.setProfiling ();
             c.addInclude (runtimeDir);
             c.addDefine ("n2a_T", T);
             if (T.equals ("int")) c.addDefine ("n2a_FP");
@@ -371,9 +371,10 @@ public class JobC extends Thread
         StringBuilder result = new StringBuilder ();
         result.append (stem);
         result.append ("_" + T);
-        if (gprof) result.append ("_gprof");
-        if (debug) result.append ("_debug");
-        if (tls  ) result.append ("_tls");
+        if (shared) result.append ("_shared");
+        if (debug ) result.append ("_debug");
+        if (tls   ) result.append ("_tls");
+        if (gprof ) result.append ("_gprof");
         result.append (".o");
         return result.toString ();
     }
@@ -382,15 +383,16 @@ public class JobC extends Thread
     {
         job.set ("Compiling model", "backendStatus");
 
-        Compiler.Factory factory = BackendC.getFactory (env);
+        CompilerFactory factory = BackendC.getFactory (env);
         String name   = source.getFileName ().toString ();
         int    pos    = name.lastIndexOf ('.');
         String stem   = pos > 0 ? name.substring (0, pos) : name;
         Path   binary = source.getParent ().resolve (stem + factory.suffixBinary ());
 
         Compiler c = factory.make (localJobDir);
-        if (gprof) c.setProfiling ();
-        if (debug) c.setDebug ();
+        if (shared) c.setShared ();
+        if (debug ) c.setDebug ();
+        if (gprof ) c.setProfiling ();
         c.addInclude (runtimeDir);
         for (ProvideOperator po : extensions)
         {
@@ -411,8 +413,8 @@ public class JobC extends Thread
         if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
         if (kokkos)
         {
-            c.addObject (runtimeDir.resolve ("profiling.o"));
-            c.addLibrary (env.getResourceDir ().getFileSystem ().getPath ("dl"));
+            c.addObject (runtimeDir.resolve (objectName ("profiling")));
+            c.addLibrary (env.getResourceDir ().getFileSystem ().getPath ("dl"));  // kokkos should only be set on Linux systems.
         }
 
         Path out = c.compileLink ();
@@ -425,18 +427,16 @@ public class JobC extends Thread
     {
         // In order to make a library, we must compile in two steps:
         // first generate an object file, then link as library.
-        Compiler.Factory factory = BackendC.getFactory (env);
-        String name    = source.getFileName ().toString ();
-        int    pos     = name.lastIndexOf ('.');
-        String stem    = pos > 0 ? name.substring (0, pos) : name;
-        Path   parent  = source.getParent ();
-        Path   object  = parent.resolve (stem + ".o");
-        Path   library = parent.resolve (stem + factory.suffixLibraryStatic ());
+        CompilerFactory factory = BackendC.getFactory (env);
+        Path parent  = source.getParent ();
+        Path object  = parent.resolve (libStem + ".o");
+        Path library = parent.resolve (libStem + (shared ? factory.suffixLibraryShared () : factory.suffixLibraryStatic ()));
 
         // 1) Generate object file
         Compiler c = factory.make (localJobDir);
-        if (gprof) c.setProfiling ();
-        if (debug) c.setDebug ();
+        if (shared) c.setShared ();
+        if (debug ) c.setDebug ();
+        if (gprof ) c.setProfiling ();
         c.addInclude (runtimeDir);
         for (ProvideOperator po : extensions)
         {
@@ -463,10 +463,10 @@ public class JobC extends Thread
         if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
         if (kokkos)
         {
-            c.addObject (runtimeDir.resolve ("profiling.o"));
+            c.addObject (runtimeDir.resolve (objectName ("profiling")));
             c.addLibrary (env.getResourceDir ().getFileSystem ().getPath ("dl"));
         }
-        out = c.linkLibrary (false);
+        out = c.linkLibrary ();
         Files.delete (out);
     }
 
@@ -783,8 +783,7 @@ public class JobC extends Thread
         else                  context = new RendererC   (this, result);
         BackendDataC bed = (BackendDataC) digestedModel.backendData;
 
-        if (tls) SIMULATOR = "Simulator<" + T + ">::instance->";
-        else     SIMULATOR = "Simulator<" + T + ">::instance.";
+        SIMULATOR = "Simulator<" + T + ">::instance" + (tls ? "->" : ".");
 
         result.append ("#include \"runtime.h\"\n");
         if (kokkos)
@@ -834,28 +833,39 @@ public class JobC extends Thread
         result.append ("\n");
 
         StringBuilder vectorDefinitions = new StringBuilder ();
+        String SHARED = "";
         if (lib)
         {
             // Generate a companion header file
-            String name = source.getFileName ().toString ();
-            int pos = name.lastIndexOf ('.');
-            String stem = pos > 0 ? name.substring (0, pos) : name;
-
-            Path headerPath = source.getParent ().resolve (stem + ".h");
+            String include = libStem + ".h";
+            Path headerPath = source.getParent ().resolve (include);
             try (BufferedWriter header = Files.newBufferedWriter (headerPath))
             {
-                header.append ("#ifndef " + stem + "_h\n");
-                header.append ("#define " + stem + "_h\n");
+                String define = NodePart.validIdentifierFrom (libStem).replace (" ", "_") + "_h";
+                header.append ("#ifndef " + define + "\n");
+                header.append ("#define " + define + "\n");
                 header.append ("\n");
-                header.append ("void init (int argc, char ** argv);\n");
-                header.append ("void run (" + T + " until);\n");
-                header.append ("void finish ();\n");
-                generateIOvector (digestedModel, header, vectorDefinitions);
+                CompilerFactory factory = BackendC.getFactory (env);
+                if (shared  &&  factory instanceof CompilerCL.Factory)
+                {
+                    SHARED = "SHARED ";
+                    header.append ("#undef SHARED\n");
+                    header.append ("#ifdef _USRDLL\n");
+                    header.append ("#  define SHARED __declspec(dllexport)\n");
+                    header.append ("#else\n");
+                    header.append ("#  define SHARED __declspec(dllimport)\n");
+                    header.append ("#endif\n");
+                    header.append ("\n");
+                }
+                header.append (SHARED + "void init (int argc, char ** argv);\n");
+                header.append (SHARED + "void run (" + T + " until);\n");
+                header.append (SHARED + "void finish ();\n");
+                generateIOvector (digestedModel, SHARED, header, vectorDefinitions);
                 header.append ("\n");
                 header.append ("#endif\n");
             }
 
-            result.append ("#include \"" + stem + ".h\"\n");
+            result.append ("#include \"" + include + "\"\n");
             result.append ("\n");
         }
 
@@ -1284,9 +1294,9 @@ public class JobC extends Thread
         }
     }
 
-    public void generateIOvector (EquationSet s, Writer header, StringBuilder vectorDefinitions) throws IOException
+    public void generateIOvector (EquationSet s, String SHARED, Writer header, StringBuilder vectorDefinitions) throws IOException
     {
-        for (EquationSet p : s.parts) generateIOvector (p, header, vectorDefinitions);
+        for (EquationSet p : s.parts) generateIOvector (p, SHARED, header, vectorDefinitions);
 
         // Determine if any IO vectors are present
         boolean found = false;
@@ -1333,7 +1343,7 @@ public class JobC extends Thread
         {
             IOvectorWritten = true;
             header.append ("\n");
-            header.append ("class IOvector\n");
+            header.append ("class " + SHARED + "IOvector\n");
             header.append ("{\n");
             header.append ("public:\n");
             header.append ("  virtual int size () = 0;\n");
@@ -1387,7 +1397,7 @@ public class JobC extends Thread
             vectorDefinitions.append ("}\n");
             vectorDefinitions.append ("\n");
 
-            header.append (prototype + ";\n");
+            header.append (SHARED + prototype + ";\n");
         }
     }
 

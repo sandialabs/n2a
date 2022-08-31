@@ -21,15 +21,6 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public abstract class Compiler
 {
-    public interface Factory
-    {
-        Compiler make (Path localJobDir);
-        String   suffixBinary ();
-        String   suffixLibraryStatic ();
-        String   suffixLibraryShared ();
-        boolean  supportsUnicodeIdentifiers ();  // UFT-8 encoded characters can be inserted directly into identifiers
-    }
-
     protected Host               host;
     protected Path               localJobDir;
     protected Map<String,String> defines     = new HashMap<String,String> ();
@@ -41,6 +32,7 @@ public abstract class Compiler
     protected Path               output;
     protected boolean            debug;
     protected boolean            profiling;
+    protected boolean            shared;
 
     public Compiler (Host host, Path localJobDir)
     {
@@ -98,9 +90,14 @@ public abstract class Compiler
         profiling = true;
     }
 
-    public abstract Path compile     ()               throws Exception;  // returns file that captured the compiler's stdout
-    public abstract Path compileLink ()               throws Exception;  // ditto
-    public abstract Path linkLibrary (boolean shared) throws Exception;  // ditto
+    public void setShared ()
+    {
+        shared = true;
+    }
+
+    public abstract Path compile     () throws Exception;  // returns file that captured the compiler's stdout
+    public abstract Path compileLink () throws Exception;  // ditto
+    public abstract Path linkLibrary () throws Exception;  // ditto
 
     public Path runCommand (List<String> command) throws Exception
     {

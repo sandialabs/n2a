@@ -11,9 +11,9 @@ import gov.sandia.n2a.host.Host;
 
 public class CompilerClang extends CompilerGCC
 {
-    public static class FactoryClang extends FactoryGCC
+    public static class Factory extends CompilerGCC.Factory
     {
-        public FactoryClang (Host host, Path gcc)
+        public Factory (Host host, Path gcc)
         {
             super (host, gcc);
         }

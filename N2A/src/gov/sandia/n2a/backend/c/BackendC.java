@@ -43,10 +43,10 @@ public class BackendC extends Backend
         Presumably, this is called outside of EDT, so this function can take
         as much time as needed to set up the factory, including remote calls.
     **/
-    public static Compiler.Factory getFactory (Host host) throws Exception
+    public static CompilerFactory getFactory (Host host) throws Exception
     {
         Object o = host.objects.get ("cxx");
-        if (o instanceof Compiler.Factory) return (Compiler.Factory) o;
+        if (o instanceof CompilerFactory) return (CompilerFactory) o;
 
         // The most simple-minded approach is to guess compiler identity from the executable's name.
         String exePathString = host.config.getOrDefault ("g++", "backend", "c", "cxx");
@@ -55,10 +55,10 @@ public class BackendC extends Backend
         int pos = exeName.lastIndexOf ('.');
         if (pos > 0) exeName = exeName.substring (0, pos);
         exeName = exeName.toLowerCase ();
-        Compiler.Factory f = null;
-        if      (exeName.equals     ("cl"   )) f = new CompilerCL   .FactoryCL    (host, exePath);
-        else if (exeName.startsWith ("clang")) f = new CompilerClang.FactoryClang (host, exePath);
-        else                                   f = new CompilerGCC  .FactoryGCC   (host, exePath);
+        CompilerFactory f = null;
+        if      (exeName.equals     ("cl"   )) f = new CompilerCL   .Factory (host, exePath);
+        else if (exeName.startsWith ("clang")) f = new CompilerClang.Factory (host, exePath);
+        else                                   f = new CompilerGCC  .Factory (host, exePath);
         host.objects.put ("cxx", f);
         return f;
     }

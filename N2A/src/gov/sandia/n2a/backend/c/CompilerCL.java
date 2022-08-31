@@ -21,7 +21,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class CompilerCL extends Compiler
 {
-    public static class FactoryCL implements Factory
+    public static class Factory implements CompilerFactory
     {
         protected Host   host;
         protected Path   cl;
@@ -30,7 +30,7 @@ public class CompilerCL extends Compiler
         protected String SDKversion;
         protected String arch;
 
-        public FactoryCL (Host host, Path cl)
+        public Factory (Host host, Path cl)
         {
             this.host = host;
             this.cl   = cl;
@@ -137,6 +137,11 @@ public class CompilerCL extends Compiler
             return ".dll";
         }
 
+        public boolean hasStaticWrapper ()
+        {
+            return true;
+        }
+
         public boolean supportsUnicodeIdentifiers ()
         {
             return true;
@@ -181,6 +186,20 @@ public class CompilerCL extends Compiler
         else       command.add ("/O2");
         for (String setting : settings) command.add (setting);
 
+        String target = "/M";  // Always compile against multi-threaded runtime.
+        if (shared)
+        {
+            command.add ("/D_USRDLL");
+            command.add ("/D_WINDLL");
+            target += "D";  // dll
+        }
+        else
+        {
+            target += "T";  // static
+        }
+        if (debug) target += "d";
+        command.add (target);
+
         for (Entry<String,String> define : defines.entrySet ())
         {
             String key   = define.getKey ();
@@ -210,6 +229,20 @@ public class CompilerCL extends Compiler
         else       command.add ("/O2");
         for (String setting : settings) command.add (setting);
 
+        String target = "/M";  // Always compile against multi-threaded runtime.
+        if (shared)
+        {
+            command.add ("/D_USRDLL");
+            command.add ("/D_WINDLL");
+            target += "D";  // dll
+        }
+        else
+        {
+            target += "T";  // static
+        }
+        if (debug) target += "d";
+        command.add (target);
+
         for (Entry<String,String> define : defines.entrySet ())
         {
             String key   = define.getKey ();
@@ -230,6 +263,7 @@ public class CompilerCL extends Compiler
 
         // All remaining items are passed to linker
         command.add ("/link");
+        if (shared) command.add ("/dll");
         if (profiling) command.add ("/profile");
         for (Path object : objects)
         {
@@ -256,23 +290,35 @@ public class CompilerCL extends Compiler
         return out;
     }
 
-    public Path linkLibrary (boolean shared) throws Exception
+    public Path linkLibrary () throws Exception
     {
-        // Find link program
-        Path lib = cl.getParent ().resolve ("lib");
+        Path parent = cl.getParent ();
 
+        List<String> command = new ArrayList<String> ();
         if (shared)
         {
-            throw new Exception ("Shared library not yet implemented");
+            command.add (parent.resolve ("link").toString ());
+            command.add ("/dll");
+            if (profiling) command.add ("/profile");
+            for (Path libraryDir : libraryDirs)
+            {
+                command.add ("/libpath:" + libraryDir);
+            }
         }
         else
         {
-            List<String> command = new ArrayList<String> ();
-            command.add (lib.toString ());
-            command.add ("/nologo");
-            for (Path object : objects) command.add (object.toString ());
-            command.add ("/out:" + output);
-            return runCommand (command);
+            command.add (parent.resolve ("lib").toString ());
         }
+        command.add ("/nologo");
+        for (Path object : objects)
+        {
+            command.add (object.toString ());
+        }
+        for (Path library : libraries)
+        {
+            command.add (library.toString ());
+        }
+        command.add ("/out:" + output);
+        return runCommand (command);
     }
 }

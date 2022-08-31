@@ -19,13 +19,13 @@ import gov.sandia.n2a.host.Host.AnyProcess;
 
 public class CompilerGCC extends Compiler
 {
-    public static class FactoryGCC implements Factory
+    public static class Factory implements CompilerFactory
     {
         protected Host  host;
         protected Path  gcc;
         protected float version;  // major.minor without any sub-minor version
 
-        public FactoryGCC (Host host, Path gcc)
+        public Factory (Host host, Path gcc)
         {
             this.host = host;
             this.gcc  = gcc;
@@ -68,6 +68,11 @@ public class CompilerGCC extends Compiler
             return ".so";
         }
 
+        public boolean hasStaticWrapper ()
+        {
+            return false;
+        }
+
         public boolean supportsUnicodeIdentifiers ()
         {
             return version >= 10;
@@ -96,6 +101,7 @@ public class CompilerGCC extends Compiler
         if (debug) command.add ("-g");
         else       command.add (optimize);
         if (profiling) command.add ("-pg");
+        if (shared) command.add ("-fpic");  // Could use -fPIC, but that option is specifically to avoid size limitations in global offset table that don't apply to any processor we are interested in.
         for (String setting : settings) command.add (setting);
 
         for (Entry<String,String> define : defines.entrySet ())
@@ -127,6 +133,11 @@ public class CompilerGCC extends Compiler
         if (debug) command.add ("-g");
         else       command.add (optimize);
         if (profiling) command.add ("-pg");
+        if (shared)
+        {
+            command.add ("-fpic");
+            command.add ("-shared");
+        }
         for (String setting : settings) command.add (setting);
         command.add ("-Wl,--gc-sections");
 
@@ -164,27 +175,41 @@ public class CompilerGCC extends Compiler
         return runCommand (command);
     }
 
-    public Path linkLibrary (boolean shared) throws Exception
+    public Path linkLibrary () throws Exception
     {
-        String prefix = gcc.getFileName ().toString ();
-        prefix        = prefix.substring (0, prefix.length () - 3);  // strip off "g++" or "gcc"
-        Path   parent = gcc.getParent ();
-
+        List<String> command = new ArrayList<String> ();
         if (shared)
         {
-            throw new Exception ("Shared library not yet implemented");
+            command.add (gcc.toString ());
+            command.add ("-shared");
+            for (Path object : objects)
+            {
+                command.add (host.quote (object));
+            }
+            for (Path library : libraries)
+            {
+                command.add ("-l" + library);  // Don't quote, because that forces conversion to absolute path. If it's relative, we really only want the name.
+            }
+            for (Path libraryDir : libraryDirs)
+            {
+                command.add ("-L" + host.quote (libraryDir));
+            }
+            command.add ("-o");
+            command.add (host.quote (output));
         }
         else
         {
+            String prefix = gcc.getFileName ().toString ();
+            prefix        = prefix.substring (0, prefix.length () - 3);  // strip off "g++" or "gcc"
+            Path   parent = gcc.getParent ();
             Path ar;
             if (parent == null) ar = Paths.get (prefix + "ar");       // The usual case, where g++ is specified alone.
-            else                ar = parent.resolve (prefix + "ar");  // g++ is prefixed by at least one path element. 
-            List<String> command = new ArrayList<String> ();
+            else                ar = parent.resolve (prefix + "ar");  // g++ is prefixed by at least one path element.
             command.add (ar.toString ());
             command.add ("rsc");  // operation=r (insert members, with replacement); modifier=s (create symbol table); modifier=c (expecting to create archive, so don't warn)
             command.add (host.quote (output));
             for (Path object : objects) command.add (host.quote (object));
-            return runCommand (command);
         }
+        return runCommand (command);
     }
 }
