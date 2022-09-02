@@ -17,6 +17,15 @@ the U.S. Government retains certain rights in this software.
 # include <istream>
 #endif
 
+// In some cases, the compiler knows the exact size of a string during a call
+// to memchr(), due to inlining. However, in this source file we
+// can't know that information. We use maxSize to specify the scan limit for
+// memchr(), which is of course the logical thing to do. However, GCC barfs
+// up warnings when our scan limit exceeds the known (to it) size of the string.
+// We don't want to see this scary and useless warning.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overread"
+
 
 /**
     A lightweight drop-in replacement for std::string.
@@ -47,7 +56,9 @@ public:
         memory    = 0;
         top       = 0;
         capacity_ = 0;
-        if (value) assign (value, strlen (value));
+        if (! value) return;
+        const char * end = (const char *) memchr (value, 0, maxSize);
+        assign (value, end ? (size_type) (end - value) : maxSize);
     }
 
     String (const String & that)
@@ -78,8 +89,8 @@ public:
         capacity_ = 0;
 
         char buffer[16];
-        sprintf (buffer, "%i", value);
-        assign (buffer, strlen (buffer));
+        int n = sprintf (buffer, "%i", value);
+        assign (buffer, n);
     }
 
     String (long value)
@@ -89,8 +100,8 @@ public:
         capacity_ = 0;
 
         char buffer[32];
-        sprintf (buffer, "%li", value);
-        assign (buffer, strlen (buffer));
+        int n = sprintf (buffer, "%li", value);
+        assign (buffer, n);
     }
 
     String (double value)
@@ -100,8 +111,8 @@ public:
         capacity_ = 0;
 
         char buffer[32];
-        sprintf (buffer, "%g", value);
-        assign (buffer, strlen (buffer));
+        int n = sprintf (buffer, "%g", value);
+        assign (buffer, n);
     }
 
     ~String ()
@@ -111,8 +122,9 @@ public:
 
     String & assign (const char * value, size_type n)
     {
-        if (value  &&  n  &&  n <= maxSize)  // We should really throw an error if n > max_size, but this library supports bare metal so it does not throw exceptions.
+        if (value  &&  n)
         {
+            if (n > maxSize) n = maxSize;  // We should really throw an error, but this library supports bare metal so it does not throw exceptions.
             size_type requiredCapacity = n + 1;
             if (requiredCapacity > capacity_)
             {
@@ -181,6 +193,7 @@ public:
 
     void reserve (size_type n = 0)
     {
+        // We don't defend against n>maxSize here. The caller should exercise care.
         n++;  // Add one byte for null termination.
         if (n <= capacity_) return;
         char * temp = memory;
@@ -197,6 +210,7 @@ public:
 
     void resize (size_type n, char c = 0)
     {
+        // We don't defend against n>maxSize here. The caller should exercise care.
         size_type length = top - memory;
         reserve (n);
         top = memory + n;
@@ -296,7 +310,12 @@ public:
     {
         String result;
         int length = top - memory;
-        if (that) length += strlen (that);
+        if (that)
+        {
+            const char * end = (const char *) memchr (that, 0, maxSize);
+            length += end ? (size_type) (end - that) : maxSize;
+            if (length > maxSize) length = maxSize;
+        }
         result.capacity_ = length + 1;
         result.memory = (char *) malloc (result.capacity_);
         combine (memory, that, result.memory);
@@ -329,6 +348,7 @@ public:
     {
         size_type length = (top - memory) + n;
         if (! length) return *this;
+        if (length > maxSize) length = maxSize;
         size_type requiredCapacity = length + 1;
         if (requiredCapacity > capacity_)
         {
@@ -363,8 +383,9 @@ public:
 
     String & operator+= (const char * that)
     {
-        if (that) return append (that, strlen (that));
-        return *this;
+        if (! that) return *this;
+        const char * end = (const char *) memchr (that, 0, maxSize);
+        return append (that, end ? (size_type) (end - that) : maxSize);
     }
 
     String & operator+= (char that)
@@ -375,22 +396,22 @@ public:
     String & operator+= (int that)
     {
         char buffer[16];
-        sprintf (buffer, "%i", that);
-        return append (buffer, strlen (buffer));
+        int n = sprintf (buffer, "%i", that);
+        return append (buffer, n);
     }
 
     String & operator+= (long that)
     {
         char buffer[32];
-        sprintf (buffer, "%li", that);
-        return append (buffer, strlen (buffer));
+        int n = sprintf (buffer, "%li", that);
+        return append (buffer, n);
     }
 
     String & operator+= (double that)
     {
         char buffer[32];
-        sprintf (buffer, "%g", that);
-        return append (buffer, strlen (buffer));
+        int n = sprintf (buffer, "%g", that);
+        return append (buffer, n);
     }
 
     String substr (size_type pos, size_type length = npos) const noexcept
@@ -731,4 +752,5 @@ namespace std
     };
 }
 
+#pragma GCC diagnostic pop
 #endif
