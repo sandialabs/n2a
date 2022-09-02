@@ -211,9 +211,9 @@ public class NodeBase extends DefaultMutableTreeNode
     public static String getToolTipText (MNode node, FontMetrics fm)
     {
         String                notes = node.get ("$metadata", "notes");
-        if (notes.isEmpty ()) notes = node.get ("$metadata", "note");
-        if (notes.isEmpty ()) notes = node.get ("$metadata", "description");  // for NeuroML parts
-        if (notes.isEmpty ()) return null;
+        if (notes.isBlank ()) notes = node.get ("$metadata", "note");
+        if (notes.isBlank ()) notes = node.get ("$metadata", "description");  // for NeuroML parts
+        if (notes.isBlank ()) return null;
         return formatToolTipText (notes, fm);
     }
 

@@ -9,6 +9,7 @@ package gov.sandia.n2a.backend.c;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.plugins.extpoints.ExportModel;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.PanelRun;
@@ -74,6 +75,12 @@ public class ExportCstatic implements ExportModel
                 libraryTo   = parent  .resolve (stem + suffix);
                 Files.move (libraryFrom, libraryTo, StandardCopyOption.REPLACE_EXISTING);
             }
+            if (t.cli)
+            {
+                Path from = t.jobDir.resolve ("params");
+                Path to   = parent  .resolve ("params");
+                Files.move (from, to, StandardCopyOption.REPLACE_EXISTING);
+            }
 
             // Cleanup
             AppData.runs.clear (jobKey);
@@ -83,12 +90,18 @@ public class ExportCstatic implements ExportModel
             // Add job to UI so the user can diagnose C build problems.
             if (job != null)
             {
+                Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
+                try {Host.stringToFile ("failure", localJobDir.resolve ("finished"));}
+                catch (Exception f) {}
+
                 final MDoc finalJob = job;
                 EventQueue.invokeLater (new Runnable ()
                 {
                     public void run ()
                     {
-                        PanelRun.instance.addNewRun (finalJob, false);
+                        NodeJob node = PanelRun.instance.addNewRun (finalJob, false);
+                        node.complete = 2;
+                        node.old = true;
                     }
                 });
             }

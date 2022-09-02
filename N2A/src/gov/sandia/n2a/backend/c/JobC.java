@@ -88,12 +88,12 @@ public class JobC extends Thread
     protected boolean kokkos;  // profiling method
     public    boolean gprof;   // profiling method
     public    boolean debug;   // compile with debug symbols; applies to current model as well as any runtime components that happen to get rebuilt
-    protected boolean cli;     // command-line interface
+    public    boolean cli;     // command-line interface
     protected boolean lib;     // library mode, suitable for Python wrapper or other external integration
     public    String  libStem; // name of library; only meaningful when lib is true
     public    boolean shared;  // make shared rather than static library; only meaningful when lib is true
+    public    boolean csharp;  // Emit library code for use by C# (and other CLR languages). Only has an effect when lib is true.
     public    boolean tls;     // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
-    protected boolean IOvectorWritten;  // Indicates that the abstract class "IOvector" has been inserted already.
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
     
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
@@ -154,6 +154,7 @@ public class JobC extends Thread
             debug  = model.getFlag ("$metadata", "backend", "c", "debug");
             cli    = model.getFlag ("$metadata", "backend", "c", "cli");
             tls    = model.getFlag ("$metadata", "backend", "c", "tls");
+            csharp = model.getFlag ("$metadata", "backend", "c", "sharp");
 
             String e = model.get ("$metadata", "backend", "all", "event");
             switch (e)
@@ -556,10 +557,15 @@ public class JobC extends Thread
 
             // Determine parameter format/range hint
             String hint = v.metadata.get ("param");
-            if (hint.isEmpty ()) hint = v.metadata.get ("study");
+            if (hint.isBlank ()) hint = v.metadata.get ("study");
+
+            String                  comment = v.metadata.get ("notes");
+            if (comment.isBlank ()) comment = v.metadata.get ("note");
+            if (comment.isBlank ()) comment = v.metadata.get ("description");
 
             params.append (v.fullName () + "=" + defaultValue);
-            if (! hint.isEmpty ()) params.append (";" + hint);
+            if (! hint.isBlank ()) params.append (";" + hint);
+            if (! comment.isBlank ()) params.append ("#" + comment);
             params.append ("\n");
         }
 
@@ -845,6 +851,7 @@ public class JobC extends Thread
                 header.append ("#ifndef " + define + "\n");
                 header.append ("#define " + define + "\n");
                 header.append ("\n");
+
                 CompilerFactory factory = BackendC.getFactory (env);
                 if (shared  &&  factory instanceof CompilerCL.Factory)
                 {
@@ -857,11 +864,34 @@ public class JobC extends Thread
                     header.append ("#endif\n");
                     header.append ("\n");
                 }
-                header.append (SHARED + "void init (int argc, char ** argv);\n");
-                header.append (SHARED + "void run (" + T + " until);\n");
-                header.append (SHARED + "void finish ();\n");
-                generateIOvector (digestedModel, SHARED, header, vectorDefinitions);
+
+                header.append ("class " + SHARED + "IOvector\n");
+                header.append ("{\n");
+                header.append ("public:\n");
+                header.append ("  virtual int size () = 0;\n");
+                header.append ("  virtual " + T + " get  (int i) = 0;\n");
+                header.append ("  virtual void set (int i, " + T + " value) = 0;\n");
+                header.append ("};\n");
                 header.append ("\n");
+
+                header.append ("extern \"C\"\n");
+                header.append ("{\n");
+                header.append ("  " + SHARED + "void init (int argc, char ** argv);\n");
+                header.append ("  " + SHARED + "void run (" + T + " until);\n");
+                header.append ("  " + SHARED + "void finish ();\n");
+                header.append ("\n");
+                generateIOvector (digestedModel, SHARED, header, vectorDefinitions);
+                if (csharp  &&  ! vectorDefinitions.isEmpty ())
+                {
+                    header.append ("\n");
+                    header.append ("  " + SHARED + "void  IOvectorDelete (IOvector * self);\n");
+                    header.append ("  " + SHARED + "int   IOvectorSize   (IOvector * self);\n");
+                    header.append ("  " + SHARED + T + " IOvectorGet    (IOvector * self, int i);\n");
+                    header.append ("  " + SHARED + "void  IOvectorSet    (IOvector * self, int i, " + T + " value);\n");
+                }
+                header.append ("}\n");
+                header.append ("\n");
+
                 header.append ("#endif\n");
             }
 
@@ -962,6 +992,14 @@ public class JobC extends Thread
             {
                 result.append ("\n");
                 result.append (vectorDefinitions.toString ());
+
+                if (csharp)
+                {
+                    result.append ("void  IOvectorDelete (IOvector * self)                     {delete self;}\n");
+                    result.append ("int   IOvectorSize   (IOvector * self)                     {return self->size ();}\n");
+                    result.append (T + " IOvectorGet    (IOvector * self, int i)              {return self->get (i);}\n");
+                    result.append ("void  IOvectorSet    (IOvector * self, int i, " + T + " value) {self->set (i, value);}\n");
+                }
             }
         }
         else
@@ -1339,20 +1377,6 @@ public class JobC extends Thread
         }
         f = "  " + prefix (c) + "_Population & p" + (i-1) + " = wrapper->" + mangle (c.name) + ";\n" + f;
 
-        if (! IOvectorWritten)
-        {
-            IOvectorWritten = true;
-            header.append ("\n");
-            header.append ("class " + SHARED + "IOvector\n");
-            header.append ("{\n");
-            header.append ("public:\n");
-            header.append ("  virtual int size () = 0;\n");
-            header.append ("  virtual " + T + " get  (int i) = 0;\n");
-            header.append ("  virtual void set (int i, " + T + " value) = 0;\n");
-            header.append ("};\n");
-            header.append ("\n");
-        }
-
         for (Variable v : s.ordered)
         {
             if (! v.getMetadata ().getFlag ("backend", "c", "vector")) continue;
@@ -1397,7 +1421,7 @@ public class JobC extends Thread
             vectorDefinitions.append ("}\n");
             vectorDefinitions.append ("\n");
 
-            header.append (SHARED + prototype + ";\n");
+            header.append ("  " + SHARED + prototype + ";\n");
         }
     }
 
