@@ -40,7 +40,7 @@ Parameters<T>::parse (const String & line)
 
 template<class T>
 void
-Parameters<T>::parse (int argc, char * argv[])
+Parameters<T>::parse (int argc, const char * argv[])
 {
     for (int i = 1; i < argc; i++) parse (argv[i]);
 }

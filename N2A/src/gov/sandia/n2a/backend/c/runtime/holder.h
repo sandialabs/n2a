@@ -29,7 +29,7 @@ public:
     std::unordered_map<String,String> namedValues;
 
     void   parse (const String & line);
-    void   parse (int argc, char * argv[]);
+    void   parse (int argc, const char * argv[]);
     void   read  (const String & parmFileName);
     void   read  (std::istream & stream);
 

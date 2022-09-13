@@ -876,7 +876,7 @@ public class JobC extends Thread
 
                 header.append ("extern \"C\"\n");
                 header.append ("{\n");
-                header.append ("  " + SHARED + "void init (int argc, char ** argv);\n");
+                header.append ("  " + SHARED + "void init (int argc, const char * argv[]);\n");
                 header.append ("  " + SHARED + "void run (" + T + " until);\n");
                 header.append ("  " + SHARED + "void finish ();\n");
                 header.append ("\n");
@@ -890,6 +890,20 @@ public class JobC extends Thread
                     header.append ("  " + SHARED + "void  IOvectorSet    (IOvector * self, int i, " + T + " value);\n");
                 }
                 header.append ("}\n");
+                header.append ("\n");
+
+                // Convenience wrappers for init()
+                header.append ("#include <vector>\n");
+                header.append ("#include <string>\n");
+                header.append ("inline void initVector (const std::vector<std::string> & args)\n");
+                header.append ("{\n");
+                header.append ("  int argc = args.size () + 1;\n");
+                header.append ("  const char ** argv = (const char **) malloc (sizeof (char *) * argc);\n");
+                header.append ("  for (int i = 1; i < argc; i++) argv[i] = args[i-1].c_str ();\n");
+                header.append ("  init (argc, argv);\n");
+                header.append ("  free (argv);\n");
+                header.append ("}\n");
+                header.append ("template<typename... Args> void initVector (Args... keys) {initVector ({keys...});}\n");
                 header.append ("\n");
 
                 header.append ("#endif\n");
@@ -927,7 +941,7 @@ public class JobC extends Thread
         result.append ("\n");
 
         // Init
-        result.append ("void init (int argc, char * argv[])\n");
+        result.append ("void init (int argc, const char * argv[])\n");
         result.append ("{\n");
         if (kokkos)
         {
@@ -1004,7 +1018,7 @@ public class JobC extends Thread
         }
         else
         {
-            result.append ("int main (int argc, char * argv[])\n");
+            result.append ("int main (int argc, const char * argv[])\n");
             result.append ("{\n");
             result.append ("  signal (SIGFPE,  signalHandler);\n");
             result.append ("  signal (SIGINT,  signalHandler);\n");
