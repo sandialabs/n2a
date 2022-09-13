@@ -1,10 +1,10 @@
 /*
-A utility class for writing output files in the same format as the N2A C simulator.
+A utility class for writing output files in the same format as N2A simulators.
 This code is not used by the C runtime. Instead, it is a simplified version
 for use by those who wish to write C++ code compatible with OutputParser.
 This is a pure header implementation. No need to build/link extra libraries.
 
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,10 +14,12 @@ the U.S. Government retains certain rights in this software.
 #define output_holder_h
 
 
+#include <map>
+#include <unordered_map>
+#include <vector>
+#include <iostream>
 #include <fstream>
 #include <cmath>
-#include <stdlib.h>
-#include <time.h>
 
 
 inline void split (const std::string & source, const std::string & delimiter, std::string & first, std::string & second)

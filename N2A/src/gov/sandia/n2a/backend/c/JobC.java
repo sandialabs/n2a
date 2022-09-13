@@ -338,7 +338,7 @@ public class JobC extends Thread
             "nosys.h",
             "runtime.cc", "runtime.h", "runtime.tcc",
             "profiling.h", "profiling.cc",
-            "OutputParser.h"  // Not needed by runtime, but provided as a utility for users.
+            "OutputHolder.h", "OutputParser.h"  // Not needed by runtime, but provided as a utility for users.
         );
     }
 
