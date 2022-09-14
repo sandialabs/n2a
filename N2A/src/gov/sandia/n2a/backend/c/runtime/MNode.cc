@@ -941,6 +941,14 @@ n2a::MPersistent::childClear (const String & key)
 
 // class MDoc ----------------------------------------------------------------
 
+int n2a::MDoc::missingFileException = 0;
+
+void
+n2a::MDoc::setMissingFileException (int method)
+{
+    missingFileException = method;
+}
+
 n2a::MDoc::MDoc (const String & path)
 :   MPersistent (nullptr, path.c_str (), nullptr)
 {
@@ -1076,7 +1084,11 @@ n2a::MDoc::load ()
         Schema::readAll (*this, ifs);
         ifs.close ();
     }
-    catch (...) {}  // An exception is common for a newly created doc that has not yet been flushed to disk.
+    catch (...)  // An exception is common for a newly created doc that has not yet been flushed to disk.
+    {
+        if (missingFileException >= 1) std::cerr << "Failed to read " << file << std::endl;
+        if (missingFileException >= 2) throw "MDod::load() failed to read file";
+    }
     clearChanged ();  // After load(), clear the slate so we can detect any changes and save the document.
 }
 

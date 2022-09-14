@@ -629,6 +629,18 @@ namespace n2a
     {
     public:
         /**
+            Sets how load() should handle an exception.
+            An exception during load() is the normal consequence of a newly-created doc.
+            However, another use-case is loading existing data, and the caller may
+            want some feedback in case missing data crashes the program later.
+            The modes are:
+                0=do nothing (default),
+                1=print warning to stderr,
+                2=throw an exception
+        **/
+        static void setMissingFileException (int method);
+
+        /**
             Constructs a stand-alone document with blank key.
             In this case, the value contains the full path to the file on disk.
             @param root Path separator must be forward slash (/), regardless of platform.
@@ -683,6 +695,7 @@ namespace n2a
 
     protected:
         bool needsRead;  ///< Indicates whether initial load has been done.
+        static int missingFileException;
 
         /**
             Constructs a document as a child of an MDocGroup.
