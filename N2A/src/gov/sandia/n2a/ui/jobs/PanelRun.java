@@ -1392,6 +1392,10 @@ public class PanelRun extends JPanel
         node.inherit = run.getOrDefault (node.key, "$inherit").split (",", 2)[0].replace ("\"", "");
         node.setUserObject (node.inherit);
 
+        // In case node is inserted by background process, we need to preserve current view position.
+        JViewport vp = (JViewport) tree.getParent ();
+        Point p = vp.getViewPosition ();
+
         synchronized (jobNodes) {jobNodes.put (node.key, node);}
         model.insertNodeInto (node, root, 0);  // Since this always executes on event dispatch thread, it will not conflict with other code that accesses model.
         if (root.getChildCount () == 1) model.nodeStructureChanged (root);  // If the list was empty, we need to give the JTree a little extra kick to get started.
@@ -1400,6 +1404,11 @@ public class PanelRun extends JPanel
             tree.expandRow (0);
             tree.setSelectionRow (0);
             tree.scrollRowToVisible (0);
+        }
+        else  // Node is being inserted by a background process, so don't let tree scroll.
+        {
+            p.y += tree.getRowBounds (0).height;
+            vp.setViewPosition (p);
         }
 
         return node;
