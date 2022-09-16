@@ -193,6 +193,7 @@ public class PanelRun extends JPanel
             public void treeWillExpand (TreeExpansionEvent event) throws ExpandVetoException
             {
                 TreePath path = event.getPath ();
+                holdFocus (path);
                 Object o = path.getLastPathComponent ();
                 if (o instanceof NodeJob)
                 {
@@ -211,6 +212,30 @@ public class PanelRun extends JPanel
 
             public void treeWillCollapse (TreeExpansionEvent event) throws ExpandVetoException
             {
+                TreePath path = event.getPath ();
+                holdFocus (path);
+            }
+
+            /**
+                Keep focus from jumping away from node associated with handle.
+                If the current focus is not visible or does not exist, then
+                move focus to the row associated with the handle.
+            **/
+            public void holdFocus (TreePath path)
+            {
+                boolean moveFocus = false;
+                Rectangle visible = tree.getVisibleRect ();
+                int row = tree.getLeadSelectionRow ();
+                if (row < 0)
+                {
+                    moveFocus = true;
+                }
+                else
+                {
+                    Rectangle rowBounds = tree.getRowBounds (row);
+                    if (! rowBounds.intersects (visible)) moveFocus = true;
+                }
+                if (moveFocus) tree.setSelectionPath (path);
             }
         });
 
