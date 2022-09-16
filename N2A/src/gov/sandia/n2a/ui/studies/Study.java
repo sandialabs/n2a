@@ -555,7 +555,7 @@ public class Study
         });
     }
 
-    public String scaleTime (double t)
+    public static String scaleTime (double t)
     {
         if (t >  31536000) return formatTime (t / 31536000) + " years";
         if (t >   2592000) return formatTime (t /  2592000) + " months";
@@ -566,7 +566,7 @@ public class Study
         return                    formatTime (t           ) + " seconds";
     }
 
-    public String formatTime (double t)
+    public static String formatTime (double t)
     {
         return String.valueOf (Math.round (t * 10) / 10.0);
     }

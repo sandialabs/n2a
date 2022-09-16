@@ -58,7 +58,8 @@ class XyceBackend extends Backend
 
                 try
                 {
-                    Files.createFile (localJobDir.resolve ("started"));
+                    job.set ("Preparing", "status");
+                    job.set (System.currentTimeMillis (), "started");
                     MNode model = NodeJob.getModel (job);
 
                     // set up job info
@@ -95,6 +96,7 @@ class XyceBackend extends Backend
                     }
 
                     env.submitJob (job, env.clobbersOut (), xyce, env.quote (cirFile), "-o",  env.quote (prnFile));
+                    job.clear ("status");
                 }
                 catch (Exception e)
                 {

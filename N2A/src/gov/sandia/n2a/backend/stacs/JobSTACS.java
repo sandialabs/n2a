@@ -84,7 +84,8 @@ public class JobSTACS extends Thread
 
         try
         {
-            Files.createFile (localJobDir.resolve ("started"));
+            job.set ("Preparing", "status");
+            job.set (System.currentTimeMillis (), "started");
             MNode model = NodeJob.getModel (job);
 
             env              = Host.get (job);
@@ -139,6 +140,7 @@ public class JobSTACS extends Thread
             commands.add (command);  // run network
 
             env.submitJob (job, true, commands);
+            job.clear ("status");
         }
         catch (Exception e)
         {

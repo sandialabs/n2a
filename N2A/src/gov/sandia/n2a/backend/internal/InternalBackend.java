@@ -51,7 +51,7 @@ public class InternalBackend extends Backend
     }
 
     @Override
-    public boolean isActive (MNode job)
+    public boolean isAlive (MNode job)
     {
         SimulationThread s = getThread (job);
         return  s != null  &&  s.isAlive ();
@@ -89,7 +89,9 @@ public class InternalBackend extends Backend
             long stopTime  = 0;
             try
             {
-                Files.createFile (localJobDir.resolve ("started"));
+                job.set ("Preparing", "status");
+                job.set (System.currentTimeMillis (), "started");
+
                 MNode model = NodeJob.getModel (job);
                 EquationSet digestedModel = new EquationSet (model);
                 digestModel (digestedModel);
@@ -120,6 +122,7 @@ public class InternalBackend extends Backend
                         simulator.sortEvent = -1;  // Spike events come before step events, so that latches can be set before update() is called.
                 }
 
+                job.clear ("status");
                 startTime = System.nanoTime ();
                 simulator.init ();
                 simulator.run ();  // Does not return until simulation is finished.

@@ -566,7 +566,7 @@ public abstract class Host
         return new JPanel ();
     }
 
-    public abstract boolean           isActive       (MNode job)                                              throws Exception;  // check if the given job is active
+    public abstract boolean           isAlive        (MNode job)                                              throws Exception;  // Checks if the system process associated with the job still exists and (where possible) is not a zombie.
     public abstract List<ProcessInfo> getActiveProcs ()                                                       throws Exception;  // enumerate all of our active jobs
     public abstract void              submitJob      (MNode job, boolean out2err, List<List<String>> command) throws Exception;  // Job consists of a sequence of commands. Generally this will get converted to a shell script on the host, with the reserved name "script".
     public abstract void              killJob        (MNode job, boolean force)                               throws Exception;

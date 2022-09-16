@@ -21,6 +21,8 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.studies.Study;
+
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.Font;
@@ -1010,12 +1012,17 @@ public class PanelRun extends JPanel
                 }
                 else
                 {
-                    String backendStatus = job.get ("backendStatus");
+                    String backendStatus = job.get ("status");
                     if (! backendStatus.isBlank ()) status = backendStatus;
                 }
             }
         }
-        else if (jobNode.complete <  1) status = Math.round (jobNode.complete * 100) + "%";
+        else if (jobNode.complete <  1)
+        {
+            status = Math.round (jobNode.complete * 100) + "%";
+            double inactive = (System.currentTimeMillis () - jobNode.lastActive) / 1000.0;
+            if (inactive > 60) status += " (" + Study.scaleTime (inactive) + " ago)";
+        }
         else if (jobNode.complete == 1) status = "Success";
         else if (jobNode.complete == 3) status = "Killed (lingering)";
         else if (jobNode.complete == 4) status = "Killed";

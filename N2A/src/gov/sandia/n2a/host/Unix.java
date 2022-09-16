@@ -42,7 +42,7 @@ public class Unix extends Host
     }
 
     @Override
-    public boolean isActive (MNode job) throws Exception
+    public boolean isAlive (MNode job) throws Exception
     {
         long pid = job.getOrDefault (0l, "pid");
         if (pid == 0) return false;

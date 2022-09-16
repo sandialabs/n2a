@@ -66,7 +66,7 @@ public class Windows extends Host
     }
 
     @Override
-    public boolean isActive (MNode job) throws Exception
+    public boolean isAlive (MNode job) throws Exception
     {
         long pid = job.getOrDefault (0l, "pid");
         if (pid == 0) return false;
@@ -165,6 +165,18 @@ public class Windows extends Host
             String combined = combine (commands.get (0));
             writer.append (combined + " >> " + out + " 2>> err\n");
 
+            // Checking exit codes in a Windows batch file is somewhat futile,
+            // because sometimes the batch terminates immediately after the first
+            // substantial command is called, even if it apparently succeeds.
+            // Often the same batch will run to completion if called manually
+            // from a command shell. To make this even more confusing, the same
+            // program (say from the C backend) will sometimes interrupt the batch
+            // and sometimes not. A deliberately-induced segfault actually returns
+            // an exit code, so this isn't simply about the program crashing.
+            // NodeJob.monitorProgress() has some ability to handle this situation.
+            // If the job output indicates a complete run, it will be treated as
+            // successful.
+            // TODO: Solve this mystery and get more reliable job monitoring on Windows.
             int count = commands.size ();
             for (int i = 1; i < count; i++)
             {
@@ -179,6 +191,10 @@ public class Windows extends Host
             writer.append (")\r\n");
         }
 
+        // Start batch in a detached process. This very awkward to do from within Java.
+        // "start /b ..." will start an independent shell to run the batch.
+        // However, "start" is an internal command, so it can't be called directly.
+        // Instead, we need "cmd /c ..." to run start.
         Process proc = new ProcessBuilder ("cmd", "/c", "start", "/b", script.toString ()).start ();
         proc.waitFor ();
         if (proc.exitValue () != 0)

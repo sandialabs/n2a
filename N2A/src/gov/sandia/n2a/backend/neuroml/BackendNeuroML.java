@@ -59,7 +59,8 @@ public class BackendNeuroML extends Backend
 
             try
             {
-                Files.createFile (localJobDir.resolve ("started"));
+                job.set ("Preparing", "status");
+                job.set (System.currentTimeMillis (), "started");
 
                 // Export the model to NeuroML
                 String inherit = job.get ("$inherit").replace ("\"", "");
@@ -153,6 +154,7 @@ public class BackendNeuroML extends Backend
                     command.add ("-run");
                 }
                 env.submitJob (job, env.clobbersOut (), command.toArray (new String[command.size ()]));
+                job.clear ("status");
             }
             catch (Exception e)
             {

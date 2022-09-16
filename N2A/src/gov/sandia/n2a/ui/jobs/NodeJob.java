@@ -50,6 +50,24 @@ import javax.swing.tree.TreePath;
     Notice that even though this is an important part of the GUI, it is really just a data object.
     This class does a number of utility functions outside of the GUI, and serves to keep track of jobs
     even when running headless. 
+
+    Keys defined for "job" MDoc that resides in each job directory:
+    $inherit -- key of model in database
+    backend -- ID designating the backend
+    duration -- Expected amount of sim time for model.
+    errSize -- Number of bytes in err file after backend preparations were completed.
+               Any error output by the simulation itself should append to this.
+    host -- Name of system that will run the simulation. May contain a hierarchy of addtional keys.
+    lineLength -- How many bytes back from current end of output file to start scanning for timestamp.
+    pid -- OS identifier for the simulation process. Used to monitor or kill the job.
+    started -- Unix time when backend started working on the job.
+    status -- Human-readable description of preparation work the backend is doing now.
+              If missing or blank, then the job is actually executing.
+              The backend should set this to something (such as "Preparing")
+              before it sets the started key. When a system process is running,
+              this field should be cleared. That indicates to monitorProgress()
+              that a system process should be expected, and if one is missing then
+              the job is crashed.
 **/
 @SuppressWarnings("serial")
 public class NodeJob extends NodeBase
@@ -66,13 +84,15 @@ public class NodeJob extends NodeBase
 
     protected String  key;
     protected String  inherit         = "";
-    public    float   complete        = -1; // A number between 0 and 1, where 0 means just started (including preparation and waiting in HPC queue) and 1 means done. -1 means unknown or waiting for host. 2 means failed. 3 means killed-lingering. 4 means killed-dead.
+    public    double  complete        = -1; // A number between 0 and 1, where 0 means just started (including preparation and waiting in HPC queue) and 1 means done. -1 means unknown or waiting for host. 2 means failed. 3 means killed-lingering. 4 means killed-dead.
     protected Date    dateStarted     = null;
     protected Date    dateFinished    = null;
     protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
+    protected double  lastSimTime     = 0;  // Even if expectedSimTime is unknown, we can still compare this to check for progress.
     protected long    lastMonitored   = 0;
     protected long    lastActive      = 0;
     protected long    lastDisplay     = 0;
+    protected long    died            = 0;  // Marks time when process died. Enables us to wait a little bit for "finished" to be written.
     public    boolean deleted;
     public    boolean old;                  // Indicates that the associated job existed before the current invocation of this app started. Used to limit which hosts are automatically enabled.
     protected boolean tryToSelectOutput;
@@ -100,10 +120,10 @@ public class NodeJob extends NodeBase
         {
             MNode job = getSource ();
             if (  job.get ("queue").startsWith ("PEND")) return iconQueue;
-            if (! job.get ("backendStatus").isBlank ())  return iconPreparing;
+            if (! job.get ("status").isBlank ())         return iconPreparing;
             // else fall through ...
         }
-        if (complete >= 0  &&  complete < 1) return Utility.makeProgressIcon (complete);
+        if (complete >= 0  &&  complete < 1) return Utility.makeProgressIcon ((float) complete);
         if (complete == 1) return iconComplete;
         if (complete == 2) return iconFailed;
         if (complete == 3) return iconLingering;
@@ -202,10 +222,18 @@ public class NodeJob extends NodeBase
             }
         });
 
-        Path started = localJobDir.resolve ("started");
-        if (Files.exists (started))
+        // Convert old-style started file to key in job record.
+        // TODO: Remove this conversion after release of N2A 1.2
+        if (! source.data ("started"))
         {
-            dateStarted = new Date (Host.lastModified (started));
+            Path startedFile = localJobDir.resolve ("started");
+            if (Files.exists (startedFile)) source.set (Host.lastModified (startedFile), "started");
+        }
+
+        long started = source.getLong ("started");
+        if (started > 0)
+        {
+            dateStarted = new Date (started);
             Host env = Host.get (source);
             env.monitor (this);
         }
@@ -292,12 +320,11 @@ public class NodeJob extends NodeBase
         }
         lastMonitored = System.currentTimeMillis ();
 
-        float oldComplete = complete;
+        double oldComplete = complete;
         MNode source = getSource ();
         Host env = Host.get (source);
         Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
         // If job is remote, attempt to grab its state files.
-        // TODO: handle remote jobs waiting in queue. Plan is to update "started" file with queue status.
         Path finished = localJobDir.resolve ("finished");
         if (! Files.exists (finished)  &&  env instanceof Remote)
         {
@@ -317,20 +344,21 @@ public class NodeJob extends NodeBase
 
         if (complete == -1)
         {
-            Path started = localJobDir.resolve ("started");
-            if (Files.exists (started))
+            long started = source.getLong ("started");
+            if (started > 0)
             {
                 complete = 0;
-                dateStarted = new Date (Host.lastModified (started));
-                lastActive = dateStarted.getTime ();
+                dateStarted = new Date (started);
+                lastActive = started;
             }
         }
         Backend simulator = Backend.getBackend (source.get ("backend"));
         if (complete >= 0  &&  complete < 1)
         {
-            float percentDone = 0;
+            double currentSimTime = simulator.currentSimTime (source);
             if (expectedSimTime == 0) expectedSimTime = new UnitValue (source.get ("duration")).get ();
-            if (expectedSimTime > 0)  percentDone = (float) (simulator.currentSimTime (source) / expectedSimTime);
+            double percentDone = 0;
+            if (expectedSimTime > 0)  percentDone = currentSimTime / expectedSimTime;
 
             if (Files.exists (finished))
             {
@@ -338,39 +366,51 @@ public class NodeJob extends NodeBase
             }
             else
             {
-                try
+                long now = System.currentTimeMillis ();
+                boolean waiting =  complete == 0  &&  (source.get ("queue").startsWith ("PEND")  ||  ! source.get ("status").isBlank ());
+                if (simulator.isAlive (source)  ||  waiting)
                 {
-                    long currentTime = System.currentTimeMillis ();
-                    if (simulator.isActive (source))
+                    if (currentSimTime > lastSimTime)  // Making progress
                     {
-                        lastActive = currentTime;
-                    }
-                    else if (currentTime - lastActive > activeTimeout)
-                    {
-                        if (percentDone < 1)
-                        {
-                            // Give it up for dead.
-                            Files.copy (new ByteArrayInputStream ("dead".getBytes ("UTF-8")), finished);
-                            complete = 4;
-                        }
-                        else  // Job appears to be actually finished, even though "finished" hasn't been written yet.
-                        {
-                            // Fake the "finished" file. This might be overwritten later by the batch process.
-                            // Most likely, it will also report that we succeeded, so presume that things are fine.
-                            Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), finished);
-                            complete = 1;
-                        }
+                        lastActive  = now;
+                        lastSimTime = currentSimTime;
                     }
                 }
-                catch (Exception e) {}
+                else  // Process is dead.
+                {
+                    if (died == 0)
+                    {
+                        died = now;
+                    }
+                    else if (now - died > 10000)  // Wait 10 seconds for "finished" file to be written. Otherwise, we assume the job crashed.
+                    {
+                        try
+                        {
+                            if (percentDone < 1)  // Didn't quite make it.
+                            {
+                                complete = 4;
+                                dateFinished = new Date (died);
+                                Files.copy (new ByteArrayInputStream ("dead".getBytes ("UTF-8")), finished);
+                            }
+                            else  // Job appears to actually be finished.
+                            {
+                                complete = 1;
+                                dateFinished = new Date (died);
+                                Files.copy (new ByteArrayInputStream ("success".getBytes ("UTF-8")), finished);
+                            }
+                        }
+                        catch (IOException e) {}
+                    }
+                }
             }
 
-            if (complete >= 0  &&  complete < 1) complete = Math.min (0.99999f, percentDone);
+            // Update "complete", but don't let it go to exactly 1 until the job is actually done.
+            if (complete < 1) complete = Math.min (0.99999f, percentDone);
         }
         if (complete == 3)
         {
             // Check if process is still lingering
-            if (! simulator.isActive (source)) complete = 4;
+            if (! simulator.isAlive (source)) complete = 4;
         }
 
         PanelRun   panelRun   = PanelRun.instance;

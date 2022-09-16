@@ -83,7 +83,7 @@ public class RemoteLSF extends RemoteUnix
     }
 
     @Override
-    public boolean isActive (MNode job) throws Exception
+    public boolean isAlive (MNode job) throws Exception
     {
         long pid = job.getOrDefault (0l, "pid");
         if (pid == 0) return false;
@@ -100,7 +100,7 @@ public class RemoteLSF extends RemoteUnix
         }
         // If connected, then presumably we succeeded at checking for the process,
         // so we know it is dead (return false). However, if not connected, we
-        // don't really know state of the process, so claim it is still active
+        // don't really know state of the process, so claim it is still alive
         // (return true). This prevents the job from going into dead state merely
         // due to lack of communication.
         return ! isConnected ();

@@ -155,7 +155,7 @@ public abstract class Backend implements ExtensionPoint
     /**
         Simulate the model.
         Implementation is expected to start a new thread and do all work there.
-        Implementation should create the file "started" in the local job directory.
+        Implementation should set the key "started" with the current Unix time in milliseconds.
         All errors and warnings should be recorded in the file "err" in the job directory.
         Only bugs in the Java implementation itself may throw an error from this function.
     **/
@@ -163,10 +163,14 @@ public abstract class Backend implements ExtensionPoint
     {
     }
 
-    public boolean isActive (MNode job)
+    /**
+        Checks if system process associated with job still exists.
+        It also necessary to call currentSimTime() to see if the job is progressing.
+    **/
+    public boolean isAlive (MNode job)
     {
         Host env = Host.get (job);
-        try {return env.isActive (job);}
+        try {return env.isAlive (job);}
         catch (Exception e) {}
         return false;
     }

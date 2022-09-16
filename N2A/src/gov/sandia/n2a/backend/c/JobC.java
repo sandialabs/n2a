@@ -134,7 +134,8 @@ public class JobC extends Thread
 
         try
         {
-            Files.createFile (localJobDir.resolve ("started"));
+            job.set ("Preparing", "status");
+            job.set (System.currentTimeMillis (), "started");
             MNode model = NodeJob.getModel (job);
 
             T = model.getOrDefault ("float", "$metadata", "backend", "c", "type");
@@ -199,7 +200,7 @@ public class JobC extends Thread
             if (lib)
             {
                 makeLibrary (source);
-                job.clear ("backendStatus");
+                job.clear ("status");
             }
             else
             {
@@ -214,8 +215,8 @@ public class JobC extends Thread
                     job.set (Host.size (errPath), "errSize");
                 }
 
-                job.clear ("backendStatus");
                 env.submitJob (job, env.clobbersOut (), command);
+                job.clear ("status");
             }
         }
         catch (Exception e)
@@ -279,7 +280,7 @@ public class JobC extends Thread
                 {
                     if (file.getFileName ().toString ().endsWith (".o"))
                     {
-                        job.set ("", "backendStatus");
+                        job.set ("deleting " + file, "status");
                         Files.delete (file);
                     }
                 }
@@ -301,7 +302,7 @@ public class JobC extends Thread
             String objectName = objectName (stem);
             Path object = runtimeDir.resolve (objectName);
             if (Files.exists (object)) continue;
-            job.set ("Compiling " + objectName, "backendStatus");
+            job.set ("Compiling " + objectName, "status");
 
             Compiler c = factory.make (localJobDir);
             if (shared) c.setShared ();
@@ -325,7 +326,7 @@ public class JobC extends Thread
     **/
     public boolean unpackRuntime () throws Exception
     {
-        job.set ("Unpacking runtime", "backendStatus");
+        job.set ("Unpacking runtime", "status");
 
         return unpackRuntime
         (
@@ -348,7 +349,7 @@ public class JobC extends Thread
         Files.createDirectories (runtimeDir);
         for (String s : names)
         {
-            if (job != null) job.set ("Unpacking " + s, "backendStatus");
+            if (job != null) job.set ("Unpacking " + s, "status");
 
             URL url = from.getResource (prefix + s);
             long resourceModified = url.openConnection ().getLastModified ();
@@ -382,7 +383,7 @@ public class JobC extends Thread
 
     public Path build (Path source) throws Exception
     {
-        job.set ("Compiling model", "backendStatus");
+        job.set ("Compiling model", "status");
 
         CompilerFactory factory = BackendC.getFactory (env);
         String name   = source.getFileName ().toString ();
@@ -473,7 +474,7 @@ public class JobC extends Thread
 
     public void digestModel () throws Exception
     {
-        job.set ("Analyzing model", "backendStatus");
+        job.set ("Analyzing model", "status");
 
         if (digestedModel.source.containsKey ("pin"))
         {
@@ -781,7 +782,7 @@ public class JobC extends Thread
 
     public void generateCode (Path source) throws Exception
     {
-        job.set ("Generating C++ code", "backendStatus");
+        job.set ("Generating C++ code", "status");
 
         StringBuilder result = new StringBuilder ();
         RendererC context;
