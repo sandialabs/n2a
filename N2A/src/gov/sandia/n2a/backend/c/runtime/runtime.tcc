@@ -731,8 +731,9 @@ ConnectIterator<T>::~ConnectIterator ()
 // class ConnectPopulation ---------------------------------------------------
 
 template<class T>
-ConnectPopulation<T>::ConnectPopulation (int index)
-:   index (index)
+ConnectPopulation<T>::ConnectPopulation (int index, bool poll)
+:   index (index),
+    poll  (poll)
 {
     permute         = 0;
     contained       = false;
@@ -855,13 +856,13 @@ ConnectPopulation<T>::next ()
                 if (stop > 0) return false;  // We already reset once, so done.
                 // A unary connection should only iterate over new instances.
                 // The innermost (slowest) iterator of a multi-way connection should iterate over all instances.
-                reset (! contained);
+                reset (! contained  &&  ! poll);
             }
             else
             {
                 if (! permute->next ()) return false;
-                if (contained) reset (false);
-                else           reset (permute->old ());
+                if (contained  ||  poll) reset (false);
+                else                     reset (permute->old ());
             }
         }
 
@@ -924,8 +925,8 @@ ConnectPopulation<T>::next ()
 // class ConnectPopulationNN -------------------------------------------------
 
 template<class T>
-ConnectPopulationNN<T>::ConnectPopulationNN (int index)
-:   ConnectPopulation<T> (index)
+ConnectPopulationNN<T>::ConnectPopulationNN (int index, bool poll)
+:   ConnectPopulation<T> (index, poll)
 {
 }
 
@@ -1108,7 +1109,7 @@ template<class T>
 void
 Population<T>::connect ()
 {
-    ConnectIterator<T> * outer = getIterators ();
+    ConnectIterator<T> * outer = getIterators (false);  // If this version of connect() is called, then poll is known to be false.
     if (! outer) return;
 
     EventStep<T> * event = container->getEvent ();
@@ -1144,14 +1145,14 @@ Population<T>::clearNew ()
 
 template<class T>
 ConnectIterator<T> *
-Population<T>::getIterators ()
+Population<T>::getIterators (bool poll)
 {
     return 0;
 }
 
 template<class T>
 ConnectIterator<T> *
-Population<T>::getIteratorsSimple ()
+Population<T>::getIteratorsSimple (bool poll)
 {
     std::vector<ConnectPopulation<T> *> iterators;
     iterators.reserve (2);  // By far the most common case.
@@ -1159,26 +1160,29 @@ Population<T>::getIteratorsSimple ()
     int i = 0;
     while (true)
     {
-        ConnectPopulation<T> * it = getIterator (i++);  // Returns null if i is out of range for endpoints.
+        ConnectPopulation<T> * it = getIterator (i++, poll);  // Returns null if i is out of range for endpoints.
         if (! it) break;
         iterators.push_back (it);
         if (it->firstborn < it->size) nothingNew = false;
     }
-    if (nothingNew) return 0;
+    if (nothingNew  &&  ! poll) return 0;
 
     // Sort so that population with the most old entries is the outermost iterator.
     // That allows the most number of old entries to be skipped.
     // This is a simple in-place insertion sort ...
     int count = iterators.size ();
-    for (int i = 1; i < count; i++)
+    if (! poll)
     {
-        for (int j = i; j > 0; j--)
+        for (int i = 1; i < count; i++)
         {
-            ConnectPopulation<T> * A = iterators[j-1];
-            ConnectPopulation<T> * B = iterators[j  ];
-            if (A->firstborn >= B->firstborn) break;
-            iterators[j-1] = B;
-            iterators[j  ] = A;
+            for (int j = i; j > 0; j--)
+            {
+                ConnectPopulation<T> * A = iterators[j-1];
+                ConnectPopulation<T> * B = iterators[j  ];
+                if (A->firstborn >= B->firstborn) break;
+                iterators[j-1] = B;
+                iterators[j  ] = A;
+            }
         }
     }
 
@@ -1195,7 +1199,7 @@ Population<T>::getIteratorsSimple ()
 
 template<class T>
 ConnectIterator<T> *
-Population<T>::getIteratorsNN ()
+Population<T>::getIteratorsNN (bool poll)
 {
     std::vector<ConnectPopulation<T> *> iterators;
     iterators.reserve (3);  // This is the largest number of endpoints we will usually have in practice.
@@ -1204,27 +1208,30 @@ Population<T>::getIteratorsNN ()
     int i = 0;
     while (true)
     {
-        ConnectPopulation<T> * it = getIterator (i++);  // Returns null if i is out of range for endpoints.
+        ConnectPopulation<T> * it = getIterator (i++, poll);  // Returns null if i is out of range for endpoints.
         if (! it) break;
         iterators.push_back (it);
         if (it->firstborn < it->size) nothingNew = false;
         if (it->k > 0  ||  it->radius > 0) spatialFiltering = true;
     }
-    if (nothingNew) return 0;
+    if (nothingNew  &&  ! poll) return 0;
 
     // Sort so that population with the most old entries is the outermost iterator.
     // That allows the most number of old entries to be skipped.
     // This is a simple in-place insertion sort ...
     int count = iterators.size ();
-    for (int i = 1; i < count; i++)
+    if (! poll)
     {
-        for (int j = i; j > 0; j--)
+        for (int i = 1; i < count; i++)
         {
-            ConnectPopulation<T> * A = iterators[j-1];
-            ConnectPopulation<T> * B = iterators[j  ];
-            if (A->firstborn >= B->firstborn) break;
-            iterators[j-1] = B;
-            iterators[j  ] = A;
+            for (int j = i; j > 0; j--)
+            {
+                ConnectPopulation<T> * A = iterators[j-1];
+                ConnectPopulation<T> * B = iterators[j  ];
+                if (A->firstborn >= B->firstborn) break;
+                iterators[j-1] = B;
+                iterators[j  ] = A;
+            }
         }
     }
 
@@ -1276,7 +1283,7 @@ Population<T>::getIteratorsNN ()
 
 template<class T>
 ConnectPopulation<T> *
-Population<T>::getIterator (int i)
+Population<T>::getIterator (int i, bool poll)
 {
     return 0;
 }

@@ -320,6 +320,7 @@ public:
 
     // Iteration
     bool newOnly;
+    bool poll;
     int  count;  ///< Size of current subset of instances we are iterating through.
     int  offset;
     int  i;
@@ -338,7 +339,7 @@ public:
     KDTree<T> *                   NN;          ///< "nearest neighbor" search class
     typename KDTree<T>::Entry *   entries;     ///< A dynamically-allocated array
 
-    ConnectPopulation (int index);
+    ConnectPopulation (int index, bool poll);
     virtual ~ConnectPopulation ();
 
     void         prepareNN ();
@@ -357,7 +358,7 @@ template<class T>
 class ConnectPopulationNN : public ConnectPopulation<T>
 {
 public:
-    ConnectPopulationNN (int index);
+    ConnectPopulationNN (int index, bool poll);
     virtual ~ConnectPopulationNN ();
 
     virtual void reset (bool newOnly);
@@ -411,12 +412,12 @@ public:
     virtual int       getN     ();               ///< Subroutine for resize(). Returns current number of live instances (true n). Not exactly the same as an accessor for $n, because it does not give the requested size, only actual size.
 
     // Connections
-    virtual void                   connect            (); ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
-    virtual void                   clearNew           (); ///< Reset newborn index
-    virtual ConnectIterator<T> *   getIterators       (); ///< Assembles one or more nested iterators in an optimal manner and returns the outermost one.
-    ConnectIterator<T> *           getIteratorsSimple (); ///< Implementation of getIterators() without nearest-neighbor search.
-    ConnectIterator<T> *           getIteratorsNN     (); ///< Implementation of getIterators() which uses KDTree for nearest-neighbor search.
-    virtual ConnectPopulation<T> * getIterator        (int i);
+    virtual void                   connect            ();          ///< For a connection population, evaluate each possible connection (or some well-defined subset thereof).
+    virtual void                   clearNew           ();          ///< Reset newborn index
+    virtual ConnectIterator<T> *   getIterators       (bool poll); ///< Assembles one or more nested iterators in an optimal manner and returns the outermost one.
+    ConnectIterator<T> *           getIteratorsSimple (bool poll); ///< Implementation of getIterators() without nearest-neighbor search.
+    ConnectIterator<T> *           getIteratorsNN     (bool poll); ///< Implementation of getIterators() which uses KDTree for nearest-neighbor search.
+    virtual ConnectPopulation<T> * getIterator        (int i, bool poll);
 };
 
 template<class T>

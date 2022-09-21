@@ -977,15 +977,6 @@ public class InternalBackendData
             }
             determineOrderInit ("$connect", s, Pdependencies);
             // determineOrderInit() is not needed for PdepenciesTemp, because temps are already in the correct order.
-
-            String pollString = "-1";  // Default is no polling
-            if (p.metadata != null) pollString = p.metadata.getOrDefault (pollString, "poll");
-            poll = new UnitValue (pollString).get ();
-            if (poll >= 0)
-            {
-                pollDeadline = allocateGlobalFloat ("pollDeadline");
-                pollSorted   = allocateGlobalObject ("pollSorted");
-            }
         }
 
         if (type != null)
@@ -1093,6 +1084,18 @@ public class InternalBackendData
                 }
 
                 c.resolution = translateResolution (c.resolution, s);
+            }
+
+            // Polling
+            if (p != null  &&  p.metadata != null)
+            {
+                String pollString = p.metadata.getOrDefault ("-1", "poll");
+                poll = new UnitValue (pollString).get ();
+                if (poll >= 0)
+                {
+                    pollDeadline = allocateGlobalFloat ("pollDeadline");
+                    pollSorted   = allocateGlobalObject ("pollSorted");
+                }
             }
 
             // Special case for generating name paths: if all endpoints of a connection are

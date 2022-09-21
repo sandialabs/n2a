@@ -679,8 +679,8 @@ public class Part extends Instance
         if (this == o) return true;  // exact object identity
         if (! (o instanceof Part)) return false;
         Part that = (Part) o;
-        if (equations.connectionBindings == null  ||  that.equations.connectionBindings == null) return false;  // We are only interested in connection instances.
         if (equations != that.equations) return false;  // Object identity is necessary here.
+        if (equations.connectionBindings == null) return false;  // We are only interested in connection instances.
         InternalBackendData bed = (InternalBackendData) equations.backendData;
         int count = equations.connectionBindings.size ();
         for (int i = 0; i < count; i++) if (valuesObject[bed.endpoints+i] != that.valuesObject[bed.endpoints+i]) return false;  // Again, we use object identity. The endpoints must be exactly the same instance to match.

@@ -19,6 +19,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
@@ -100,11 +101,13 @@ public class BackendDataC
     public boolean refcount;
     public boolean trackInstances;          // keep a list of instances
     public boolean hasProject;
+    public boolean canGrow;                 // $type splits can increase the number of instances. This is the cached result of EquationSet.canGrow()
     public boolean canGrowOrDie;            // via $p or $type
     public boolean canResize;               // via $n
     public boolean nInitOnly;               // $n is "initOnly"; Can only be true when $n exists.
     public boolean singleton;               // $n=1
     public boolean trackN;                  // keep a count of current instances; different than trackInstances
+    public double  poll = -1;               // For connections, how much time is allowed to check full set of latent connections. Zero means every cycle. Negative means don't poll.
 
     // See InternalBackendData for description of the "inactive" mechanism.
     public boolean populationCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive population.
@@ -124,7 +127,7 @@ public class BackendDataC
     public int    newborn  = -1;
 
     public String globalFlagType = "";
-    public int    clearNew = -1;      // guard so that only add population to clearNew queue once
+    public int    clearNew = -1;      // guard so that we only add population to clearNew queue once
     public int    inactive = -1;      // indicates that population was explicitly tested and found to be inactive
 
     public void analyzeEvents (final EquationSet s)
@@ -412,6 +415,13 @@ public class BackendDataC
                 if (s.find (new Variable (c.alias + ".$project")) != null) hasProject = true;
             }
 
+            // Polling
+            if (p != null  &&  p.metadata != null)
+            {
+                String pollString = p.metadata.getOrDefault ("-1", "poll");  // Default is no polling
+                poll = new UnitValue (pollString).get ();
+            }
+
             // Checks if connection instance can be inactive
             //   Must not have dynamics
             //   Should not specify $p -- It is only useful to optimize away an inactive connection when it is unconditional.
@@ -491,7 +501,8 @@ public class BackendDataC
         canResize      = globalMembers.contains (n);  // This search works even if n is null.
         trackN         = n != null  &&  ! singleton;  // Should always be true when canResize is true.
         trackInstances = s.connected  ||  s.needInstanceTracking  ||  canResize;
-        canGrowOrDie   = s.lethalP  ||  s.lethalType  ||  s.canGrow ();
+        canGrow        = s.canGrow ();
+        canGrowOrDie   = s.lethalP  ||  s.lethalType  ||  canGrow;
         boolean Euler  = s.getRoot ().metadata.getOrDefault ("Euler", "backend", "all", "integrator").equals ("Euler");
 
         if (! canResize  &&  canGrowOrDie  &&  n != null  &&  n.hasUsers ())
@@ -543,7 +554,7 @@ public class BackendDataC
                                        || s.connectionBindings != null;
         needGlobalUpdate             = globalUpdate.size () > 0;
         needGlobalFinalizeN          = s.container == null  &&  (canResize  ||  canGrowOrDie);
-        needGlobalFinalize           = globalBufferedExternal.size () > 0  ||  needGlobalFinalizeN  ||  (canResize  &&  (canGrowOrDie  ||  ! nInitOnly));
+        needGlobalFinalize           = globalBufferedExternal.size () > 0  ||  needGlobalFinalizeN  ||  poll >= 0  ||  (canResize  &&  (canGrowOrDie  ||  ! nInitOnly));
         needGlobalUpdateDerivative   = ! Euler  &&  globalDerivativeUpdate.size () > 0;
         needGlobalFinalizeDerivative = ! Euler  &&  globalBufferedExternalDerivative.size () > 0;
 

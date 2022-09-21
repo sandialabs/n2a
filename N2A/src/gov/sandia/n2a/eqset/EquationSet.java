@@ -2914,6 +2914,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (find (new Variable ("$n", 1)) != null) lethalN = true;  // Conservatively, assume any order of derivative could decrease $n.
 
         // Determine if $p has an assignment less than 1
+        lethalP = false;  // Because there is a use-case for re-running this analysis, specifically for lethalP.
         Variable p = find (new Variable ("$p"));
         if (p != null)
         {
@@ -4620,7 +4621,7 @@ public class EquationSet implements Comparable<EquationSet>
         // Look up metadata to determine polling period.
         String pollString = p.metadata.getOrDefault ("0", "poll");  // Default is full poll every cycle. After determinePoll() finishes, the default will be no polling. This simplifies later processing.
         double pollValue  = new UnitValue (pollString).get ();
-        if (pollValue < 0)  // Don't do analysis if polling is suppressed in any case.
+        if (pollValue < 0)  // Don't do analysis if polling is explicitly suppressed.
         {
             p.metadata.clear ("poll");
             return;

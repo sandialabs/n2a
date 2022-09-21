@@ -198,6 +198,7 @@ public class Population extends Instance
 
             // Check for newly-created parts in endpoint populations.
             // To limit work, only do this for shallow structures that don't require enumerating sub-populations.
+            // TODO: More thorough evaluation of new instances. See C backend for example.
             if (! shouldConnect)
             {
                 for (ConnectionBinding target : equations.connectionBindings)

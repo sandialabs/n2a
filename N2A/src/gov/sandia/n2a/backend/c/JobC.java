@@ -139,12 +139,15 @@ public class JobC extends Thread
             MNode model = NodeJob.getModel (job);
 
             T = model.getOrDefault ("float", "$metadata", "backend", "c", "type");
-            if (T.startsWith ("int")  &&  T.length () > 3)
+            if (T.contains ("int"))
             {
-                T = "int";
-                Backend.err.get ().println ("WARNING: Only supported integer type is 'int', which is assumed to be signed 32-bit.");
+                if (T.length () > 3)
+                {
+                    T = "int";
+                    Backend.err.get ().println ("WARNING: For now, only supported integer type is 'int', which is assumed to be signed 32-bit.");
+                }
             }
-            if (! T.equals ("int")  &&  ! T.equals ("double")  &&  ! T.equals ("float"))
+            else if (! T.equals ("double")  &&  ! T.equals ("float"))
             {
                 T = "float";
                 Backend.err.get ().println ("WARNING: Unsupported numeric type. Defaulting to single-precision float.");
@@ -296,7 +299,7 @@ public class JobC extends Thread
         sources.add ("holder");
         sources.add ("MNode");
         sources.add ("profiling");
-        if (T.equals ("int")) sources.add ("fixedpoint");
+        if (T.contains ("int")) sources.add ("fixedpoint");
         for (String stem : sources)
         {
             String objectName = objectName (stem);
@@ -310,7 +313,7 @@ public class JobC extends Thread
             if (gprof ) c.setProfiling ();
             c.addInclude (runtimeDir);
             c.addDefine ("n2a_T", T);
-            if (T.equals ("int")) c.addDefine ("n2a_FP");
+            if (T.contains ("int")) c.addDefine ("n2a_FP");
             if (tls) c.addDefine ("n2a_TLS");
             c.addSource (runtimeDir.resolve (stem + ".cc"));
             c.setOutput (object);
@@ -403,14 +406,14 @@ public class JobC extends Thread
             c.addInclude (include.getParent ());
         }
         c.addDefine ("n2a_T", T);
-        if (T.equals ("int")) c.addDefine ("n2a_FP");
+        if (T.contains ("int")) c.addDefine ("n2a_FP");
         if (tls) c.addDefine ("n2a_TLS");
         c.setOutput (binary);
         c.addSource (source);
         c.addObject (runtimeDir.resolve (objectName ("runtime")));
         c.addObject (runtimeDir.resolve (objectName ("holder")));
         c.addObject (runtimeDir.resolve (objectName ("MNode")));
-        if (T.equals ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
+        if (T.contains ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
         List<Path> envProvidedObjects = providedObjects.get (env);
         if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
         if (kokkos)
@@ -447,7 +450,7 @@ public class JobC extends Thread
             c.addInclude (include.getParent ());
         }
         c.addDefine ("n2a_T", T);
-        if (T.equals ("int")) c.addDefine ("n2a_FP");
+        if (T.contains ("int")) c.addDefine ("n2a_FP");
         if (tls) c.addDefine ("n2a_TLS");
         c.setOutput (object);
         c.addSource (source);
@@ -460,7 +463,7 @@ public class JobC extends Thread
         c.addObject (runtimeDir.resolve (objectName ("runtime")));
         c.addObject (runtimeDir.resolve (objectName ("holder")));
         c.addObject (runtimeDir.resolve (objectName ("MNode")));
-        if (T.equals ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
+        if (T.contains ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
         List<Path> envProvidedObjects = providedObjects.get (env);
         if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
         if (kokkos)
@@ -518,6 +521,8 @@ public class JobC extends Thread
         digestedModel.determineOrder ();
         digestedModel.findDerivative ();
         digestedModel.findInitOnly ();  // propagate initOnly through ASTs
+        digestedModel.findDeath ();  // Re-run to ensure that lethalP is only set when necessary (see comment above).
+        digestedModel.determinePoll ();
         digestedModel.purgeInitOnlyTemporary ();
         digestedModel.setAttributesLive ();
         digestedModel.forceTemporaryStorageForSpecials ();
@@ -525,7 +530,7 @@ public class JobC extends Thread
         digestedModel.determineTypes ();
         digestedModel.determineDuration ();
         digestedModel.assignParents ();
-        if (T.equals ("int")) digestedModel.determineExponents ();
+        if (T.contains ("int")) digestedModel.determineExponents ();
         digestedModel.findConnectionMatrix ();
         analyzeEvents (digestedModel);
         analyze (digestedModel);
@@ -578,7 +583,7 @@ public class JobC extends Thread
     **/
     public void addImplicitDependencies (EquationSet s)
     {
-        if (T.equals ("int"))
+        if (T.contains ("int"))
         {
             // Force top-level model to keep $t', so it can retrieve time exponent.
             Variable dt = s.find (new Variable ("$t", 1));
@@ -599,12 +604,14 @@ public class JobC extends Thread
             addImplicitDependenciesRecursive (p);
         }
     
-        final Variable dt = s.find (new Variable ("$t", 1));
+        final Variable dt    = s.find (new Variable ("$t", 1));
+        Variable       index = s.find (new Variable ("$index"));
+        Variable       p     = s.find (new Variable ("$p"));
 
-        if (s.lethalP)
+        if (p != null)
         {
-            Variable p = s.find (new Variable ("$p"));  // Which should for sure exist, since lethalP implies it.
-            p.addDependencyOn (dt);
+            if (s.lethalP) p.addDependencyOn (dt);  // $p gets normalized by $t' during probability draw
+            if (p.metadata != null  &&  p.metadata.getDouble ("poll") > 0) p.addDependencyOn (index);  // polling uses $index for hash function
         }
 
         class VisitorDt implements Visitor
@@ -615,7 +622,7 @@ public class JobC extends Thread
                 if (op instanceof Input)
                 {
                     Input i = (Input) op;
-                    if (i.usesTime ()  &&  ! from.hasAttribute ("global")  &&  ! T.equals ("int"))
+                    if (i.usesTime ()  &&  ! from.hasAttribute ("global")  &&  ! T.contains ("int"))
                     {
                         from.addDependencyOn (dt);  // So that time epsilon can be determined from dt when initializing input.
                     }
@@ -645,11 +652,11 @@ public class JobC extends Thread
 
             if (lib  &&  v.getMetadata ().getFlag ("backend", "c", "vector"))
             {
-                EquationSet p = s;
-                while (p != null)
+                EquationSet parent = s;
+                while (parent != null)
                 {
-                    p.needInstanceTracking = true;  // So it's possible to specify the exact population for the IO vector.
-                    p = p.container;
+                    parent.needInstanceTracking = true;  // So it's possible to specify the exact population for the IO vector.
+                    parent = parent.container;
                 }
             }
         }
@@ -657,7 +664,6 @@ public class JobC extends Thread
         // needInstanceTracking implies need $index
         if (s.needInstanceTracking  &&  ! s.isSingleton ())
         {
-            Variable index = s.find (new Variable ("$index"));
             index.addUser (s);
         }
     }
@@ -786,8 +792,8 @@ public class JobC extends Thread
 
         StringBuilder result = new StringBuilder ();
         RendererC context;
-        if (T.equals ("int")) context = new RendererCfp (this, result);
-        else                  context = new RendererC   (this, result);
+        if (T.contains ("int")) context = new RendererCfp (this, result);
+        else                    context = new RendererC   (this, result);
         BackendDataC bed = (BackendDataC) digestedModel.backendData;
 
         SIMULATOR = "Simulator<" + T + ">::instance" + (tls ? "->" : ".");
@@ -799,7 +805,7 @@ public class JobC extends Thread
         }
         result.append ("#include \"Matrix.tcc\"\n");
         result.append ("#include \"MatrixFixed.tcc\"\n");
-        if (T.equals ("int"))
+        if (T.contains ("int"))
         {
             result.append ("#include \"fixedpoint.tcc\"\n");
         }
@@ -953,7 +959,7 @@ public class JobC extends Thread
             result.append ("  params = new Parameters<" + T + ">;\n");
             result.append ("  params->parse (argc, argv);\n");
         }
-        if (T.equals ("int"))
+        if (T.contains ("int"))
         {
             Variable dt = digestedModel.find (new Variable ("$t", 1));
             result.append ("  Event<int>::exponent = " + dt.exponent + ";\n");
@@ -1323,7 +1329,7 @@ public class JobC extends Thread
         for (ReadMatrix r : mainMatrix)
         {
             result.append ("  " + r.name + " = matrixHelper<" + T + "> (\"" + r.operands[0].getString () + "\"");
-            if (T.equals ("int")) result.append (", " + r.exponent);
+            if (T.contains ("int")) result.append (", " + r.exponent);
             result.append (");\n");
         }
         for (Mfile m : mainMfile)
@@ -1333,7 +1339,7 @@ public class JobC extends Thread
         for (Input i : mainInput)
         {
             result.append ("  " + i.name + " = inputHelper<" + T + "> (\"" + i.operands[0].getString () + "\"");
-            if (T.equals ("int")) result.append (", " + i.exponent);
+            if (T.contains ("int")) result.append (", " + i.exponent);
             result.append (");\n");
 
             boolean smooth =             i.getKeywordFlag ("smooth");
@@ -1458,9 +1464,54 @@ public class JobC extends Thread
     public void generateDeclarationsGlobal (EquationSet s, StringBuilder result)
     {
         BackendDataC bed = (BackendDataC) s.backendData;
+        String prefix = prefix (s);
+
+        // Templates for pollSorted
+        // The use of a hash set to prevent duplicates is not the most time efficient.
+        // A faster approach would keep a sorted list of existing connections,
+        // perhaps with each neuron, then iterate over them and only test latent
+        // connections when we find a gap in the sequence.
+        // Regardless of approach, we will end up paying for extra storage.
+        if (bed.poll >= 0)
+        {
+            // Since local declarations are emitted first, we should have full access
+            // to connection class members.
+
+            result.append ("template <> hash<" + prefix + " *>\n");
+            result.append ("{\n");
+            result.append ("  size_t operator() (const " + prefix + " * a) const\n");
+            result.append ("  {\n");
+            result.append ("    size_t result = 0;\n");
+            result.append ("    int shift = sizeof (size_t) * 8 / " + s.connectionBindings.size () + ";\n");
+            for (ConnectionBinding c : s.connectionBindings)
+            {
+                String alias = mangle (c.alias);
+                result.append ("    result = (result << shift) + a->" + alias + "->" + mangle ("$index") + ";\n");
+            }
+            result.append ("    return result;\n");
+            result.append ("  }\n");
+            result.append ("}\n");
+            result.append ("\n");
+
+            result.append ("template <> equal_to<" + prefix + " *>\n");
+            result.append ("{\n");
+            result.append ("  bool operator() (const " + prefix + " * a, const " + prefix + " * b) const\n");
+            result.append ("  {\n");
+            for (ConnectionBinding c : s.connectionBindings)
+            {
+                // Unlike the hash function, we don't bother looking up $index.
+                // The endpoints must be exactly the same object to match.
+                String alias = mangle (c.alias);
+                result.append ("    if (a->" + alias + " != b->" + alias + ") return false;\n");
+            }
+            result.append ("    return true;\n");
+            result.append ("  }\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
 
         // Population class header
-        result.append ("class " + prefix (s) + "_Population : public Population<" + T + ">\n");
+        result.append ("class " + prefix + "_Population : public Population<" + T + ">\n");
         result.append ("{\n");
         result.append ("public:\n");
 
@@ -1502,7 +1553,7 @@ public class JobC extends Thread
         // Population variables
         if (bed.singleton)
         {
-            result.append ("  " + prefix (s) + " instance;\n");
+            result.append ("  " + prefix + " instance;\n");
         }
         else
         {
@@ -1512,7 +1563,7 @@ public class JobC extends Thread
             }
             if (bed.trackInstances)
             {
-                result.append ("  std::vector<" + prefix (s) + " *> instances;\n");
+                result.append ("  std::vector<" + prefix + " *> instances;\n");
             }
             else if (bed.index != null)  // The instances vector can supply the next index, so only declare nextIndex if instances was not declared.
             {
@@ -1522,6 +1573,11 @@ public class JobC extends Thread
             {
                 result.append ("  int firstborn;\n");
             }
+        }
+        if (bed.poll >= 0)
+        {
+            result.append ("  " + T + " pollDeadline;\n");  // Same type as Event::t
+            result.append ("  std::unordered_set<" + prefix + " *> pollSorted;\n");
         }
         if (bed.needGlobalDerivative)
         {
@@ -1553,11 +1609,11 @@ public class JobC extends Thread
         // Population functions
         if (bed.needGlobalCtor)
         {
-            result.append ("  " + prefix (s) + "_Population ();\n");
+            result.append ("  " + prefix + "_Population ();\n");
         }
         if (bed.needGlobalDtor)
         {
-            result.append ("  virtual ~" + prefix (s) + "_Population ();\n");
+            result.append ("  virtual ~" + prefix + "_Population ();\n");
         }
         if (! bed.singleton)
         {
@@ -1625,8 +1681,8 @@ public class JobC extends Thread
         }
         if (s.connectionBindings != null)
         {
-            result.append ("  virtual ConnectIterator<" + T + "> * getIterators ();\n");
-            result.append ("  virtual ConnectPopulation<" + T + "> * getIterator (int i);\n");
+            result.append ("  virtual ConnectIterator<" + T + "> * getIterators (bool poll);\n");
+            result.append ("  virtual ConnectPopulation<" + T + "> * getIterator (int i, bool poll);\n");
         }
         if (bed.needGlobalPath)
         {
@@ -1931,7 +1987,7 @@ public class JobC extends Thread
                 {
                     result.append ("  n = 0;\n");
                 }
-                if (! bed.trackInstances  &&  bed.index != null)
+                if (bed.index != null  &&  ! bed.trackInstances)
                 {
                     result.append ("  nextIndex = 0;\n");
                 }
@@ -1987,7 +2043,7 @@ public class JobC extends Thread
         }
 
         // Population add / remove
-        if (bed.index != null  &&  ! bed.singleton)
+        if (bed.index != null  &&  ! bed.singleton  ||  bed.poll >= 0)
         {
             result.append ("void " + ns + "add (Part<" + T + "> * part)\n");
             result.append ("{\n");
@@ -2009,20 +2065,31 @@ public class JobC extends Thread
                     result.append ("  firstborn = min (firstborn, p->" + mangle ("$index") + ");\n");
                 }
             }
-            else
+            else if (bed.index != null  &&  ! bed.singleton)
             {
                 result.append ("  if (p->" + mangle ("$index") + " < 0) p->" + mangle ("$index") + " = nextIndex++;\n");
+            }
+            if (bed.poll >= 0)
+            {
+                result.append ("  pollSorted.insert (p);\n");
             }
             result.append ("}\n");
             result.append ("\n");
 
-            if (bed.trackInstances)
+            if (bed.trackInstances  ||  bed.poll >= 0)
             {
                 result.append ("void " + ns + "remove (Part<" + T + "> * part)\n");
                 result.append ("{\n");
                 result.append ("  " + ps + " * p = (" + ps + " *) part;\n");
-                result.append ("  instances[p->" + mangle ("$index") + "] = 0;\n");
-                result.append ("  Population<" + T + ">::remove (part);\n");
+                if (bed.trackInstances)
+                {
+                    result.append ("  instances[p->" + mangle ("$index") + "] = 0;\n");
+                    result.append ("  Population<" + T + ">::remove (part);\n");
+                }
+                if (bed.poll >= 0)
+                {
+                    result.append ("  pollSorted.erase (p);\n");
+                }
                 result.append ("}\n");
                 result.append ("\n");
             }
@@ -2055,7 +2122,7 @@ public class JobC extends Thread
                 result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
             }
             s.simplify ("$init", bed.globalInit);
-            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.globalInit);
+            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.globalInit);
             EquationSet.determineOrderInit (bed.globalInit);
             for (Variable v : bed.globalInit)
             {
@@ -2109,7 +2176,7 @@ public class JobC extends Thread
                 // raw result = exponentDerivative+exponentTime-MSB
                 // shift = raw-exponentVariable = exponentDerivative+exponentTime-MSB-exponentVariable
                 int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
-                if (shift != 0  &&  T.equals ("int"))
+                if (shift != 0  &&  T.contains ("int"))
                 {
                     result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
                 }
@@ -2125,7 +2192,7 @@ public class JobC extends Thread
             {
                 result.append ("    " + resolve (v.reference, context, false) + " += ");
                 int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
-                if (shift != 0  &&  T.equals ("int"))
+                if (shift != 0  &&  T.contains ("int"))
                 {
                     result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
                 }
@@ -2153,7 +2220,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.globalUpdate);
-            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.globalUpdate);
+            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.globalUpdate);
             for (Variable v : bed.globalUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -2189,6 +2256,37 @@ public class JobC extends Thread
             for (Variable v : bed.globalBufferedExternalWrite)
             {
                 result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
+            }
+
+            if (s.connectionBindings != null)
+            {
+                boolean needShouldConnect = bed.poll > 0;
+                for (ConnectionBinding target : s.connectionBindings)
+                {
+                    BackendDataC bedc = (BackendDataC) target.endpoint.backendData;
+                    if (bedc.canResize  ||  bedc.canGrow) needShouldConnect = true;
+                }
+
+                if (needShouldConnect)
+                {
+                    result.append ("  bool shouldConnect = false;\n");
+
+                    // Check poll deadline.
+                    if (bed.poll >= 0)
+                    {
+                        result.append ("  if (" + SIMULATOR + "currentEvent->t >= pollDeadline) shouldConnect = true;\n");
+                    }
+
+                    // Check for newly-created parts in endpoint populations.
+                    // To limit work, only do this for shallow structures that don't require enumerating sub-populations.
+                    for (ConnectionBinding target : s.connectionBindings)
+                    {
+                        BackendDataC bedc = (BackendDataC) target.endpoint.backendData;
+                        if (bedc.canResize  ||  bedc.canGrow) checkInstances (s, true, "", target.resolution, 0, "  ", result);
+                    }
+
+                    result.append ("  if (shouldConnect) " + SIMULATOR + "connect (this);\n");
+                }
             }
 
             // Return value is ignored except for top-level population.
@@ -2290,7 +2388,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.globalDerivativeUpdate);  // This is unlikely to make any difference. Just being thorough before call to multiconditional().
-            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.globalDerivativeUpdate);
+            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.globalDerivativeUpdate);
             for (Variable v : bed.globalDerivativeUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -2381,7 +2479,7 @@ public class JobC extends Thread
             for (Variable v : bed.globalDerivative)
             {
                 result.append ("  stackDerivative->" + mangle (v) + " += ");
-                if (T.equals ("int"))
+                if (T.contains ("int"))
                 {
                     result.append ("(int) ((int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ");\n");
                 }
@@ -2398,7 +2496,7 @@ public class JobC extends Thread
             result.append ("{\n");
             for (Variable v : bed.globalDerivative)
             {
-                if (T.equals ("int"))
+                if (T.contains ("int"))
                 {
                     result.append ("  " + mangle (v) + " = (int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ";\n");
                 }
@@ -2424,17 +2522,72 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
-        // Population connect (override for inactive)
-        if (bed.populationCanBeInactive)
+        // Population connect (override for polling or inactive testing)
+        if (bed.poll >= 0  ||  bed.populationCanBeInactive)
         {
             result.append ("void " + ns + "connect ()\n");
             result.append ("{\n");
-            result.append ("  Population::connect ();\n");
-            result.append ("  if (n == 0)\n");
-            result.append ("  {\n");
-            result.append ("    flags |= (" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.inactive) + ";\n");
-            result.append ("    ((" + prefix (s.container) + " *) container)->checkInactive ();\n");
-            result.append ("  }\n");
+            if (bed.poll < 0)
+            {
+                // Use default implementation of connect()
+                result.append ("  Population::connect ();\n");
+            }
+            else  // poll >= 0
+            {
+                // Emit poll-aware code
+
+                result.append ("  bool poll = false;\n");
+                result.append ("  if (" + SIMULATOR + "currentEvent->t >= pollDeadline)\n");
+                result.append ("  {\n");
+                result.append ("    poll = true;\n");
+                result.append ("    pollDeadline = " + SIMULATOR + "currentEvent->t + ");
+                if (T.contains ("int"))
+                {
+                    Variable dt = digestedModel.find (new Variable ("$t", 1));
+                    result.append (context.print (bed.poll, dt.exponent));
+                }
+                else
+                {
+                    result.append (bed.poll);
+                }
+                result.append (";\n");
+                result.append ("  }\n");
+                result.append ("\n");
+                result.append ("  ConnectIterator<" + T + "> * outer = getIterators (poll);\n");
+                result.append ("  if (outer)\n");
+                result.append ("  {\n");
+                result.append ("    EventStep<" + T + "> * event = container->getEvent ();\n");
+                result.append ("    Part<" + T + "> * c = create ();\n");
+                result.append ("    outer->setProbe (c);\n");
+                result.append ("    while (outer->next ())\n");
+                result.append ("    {\n");
+                result.append ("      " + T + " create = c->getP ();\n");
+                result.append ("      if (create <= 0) continue;\n");
+                result.append ("      if (create < 1  &&  create < uniform<" + T + "> ()");
+                if (T.contains ("int")) result.append (" >> 16");
+                result.append (") continue;\n");
+                result.append ("      if (poll  &&  pollSorted.count (c)) continue;\n");
+                result.append ("\n");
+                result.append ("      c->enterSimulation ();\n");
+                result.append ("      event->enqueue (c);\n");
+                result.append ("      c->init ();\n");
+                result.append ("\n");
+                result.append ("      c = this->create ();\n");
+                result.append ("      outer->setProbe (c);\n");
+                result.append ("    }\n");
+                result.append ("    delete c;\n");
+                result.append ("    delete outer;\n");
+                result.append ("  }\n");
+                if (bed.populationCanBeInactive) result.append ("\n");
+            }
+            if (bed.populationCanBeInactive)
+            {
+                result.append ("  if (n == 0)\n");
+                result.append ("  {\n");
+                result.append ("    flags |= (" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.inactive) + ";\n");
+                result.append ("    ((" + prefix (s.container) + " *) container)->checkInactive ();\n");
+                result.append ("  }\n");
+            }
             result.append ("}\n");
             result.append ("\n");
         }
@@ -2504,11 +2657,11 @@ public class JobC extends Thread
                     result.append ("    {\n");
                     if (k == null  &&  radius == null)
                     {
-                        result.append ("      result = new ConnectPopulation<" + T + "> (i);\n");
+                        result.append ("      result = new ConnectPopulation<" + T + "> (i, poll);\n");
                     }
                     else
                     {
-                        result.append ("      result = new ConnectPopulationNN<" + T + "> (i);\n");  // Pulls in KDTree dependencies, for full NN support.
+                        result.append ("      result = new ConnectPopulationNN<" + T + "> (i, poll);\n");  // Pulls in KDTree dependencies, for full NN support.
                     }
 
                     boolean testK      = false;
@@ -2628,17 +2781,17 @@ public class JobC extends Thread
             }
 
 
-            result.append ("ConnectIterator<" + T + "> * " + ns + "getIterators ()\n");
+            result.append ("ConnectIterator<" + T + "> * " + ns + "getIterators (bool poll)\n");
             result.append ("{\n");
             if (s.connectionMatrix == null)
             {
                 if (needNN)
                 {
-                    result.append ("  return getIteratorsNN ();\n");
+                    result.append ("  return getIteratorsNN (poll);\n");
                 }
                 else
                 {
-                    result.append ("  return getIteratorsSimple ();\n");
+                    result.append ("  return getIteratorsSimple (poll);\n");
                 }
             }
             else
@@ -2724,7 +2877,7 @@ public class JobC extends Thread
             result.append ("\n");
 
 
-            result.append ("ConnectPopulation<" + T + "> * " + ns + "getIterator (int i)\n");
+            result.append ("ConnectPopulation<" + T + "> * " + ns + "getIterator (int i, bool poll)\n");
             result.append ("{\n");
             result.append ("  ConnectPopulation<" + T + "> * result = 0;\n");
             result.append ("  switch (i)\n");
@@ -3003,7 +3156,7 @@ public class JobC extends Thread
                 result.append ("  lastT = " + SIMULATOR + "currentEvent->t;\n");
             }
             s.simplify ("$init", bed.localInit);
-            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.localInit);
+            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.localInit);
             EquationSet.determineOrderInit (bed.localInit);
             if (bed.localInit.contains (bed.dt))
             {
@@ -3095,7 +3248,7 @@ public class JobC extends Thread
                     {
                         result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + ");
                         int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
-                        if (shift != 0  &&  T.equals ("int"))
+                        if (shift != 0  &&  T.contains ("int"))
                         {
                             result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
                         }
@@ -3112,7 +3265,7 @@ public class JobC extends Thread
                 {
                     result.append (pad + "  " + resolve (v.reference, context, false) + " += ");
                     int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
-                    if (shift != 0  &&  T.equals ("int"))
+                    if (shift != 0  &&  T.contains ("int"))
                     {
                         result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
                     }
@@ -3149,7 +3302,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.localUpdate);
-            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.localUpdate);
+            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.localUpdate);
             for (Variable v : bed.localUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -3343,7 +3496,7 @@ public class JobC extends Thread
                         for (Variable t : s.ordered) if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null) list.add (t);
                         list.add (bed.p);
                         s.simplify ("$live", list, bed.p);
-                        if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);
+                        if (T.contains ("int")) EquationSet.determineExponentsSimplified (list);
                         for (Variable v : list)
                         {
                             multiconditional (v, context, "  ");
@@ -3414,7 +3567,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.localDerivativeUpdate);
-            if (T.equals ("int")) EquationSet.determineExponentsSimplified (bed.localDerivativeUpdate);
+            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.localDerivativeUpdate);
             for (Variable v : bed.localDerivativeUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -3551,7 +3704,7 @@ public class JobC extends Thread
             for (Variable v : bed.localDerivative)
             {
                 result.append ("  stackDerivative->" + mangle (v) + " += ");
-                if (T.equals ("int"))
+                if (T.contains ("int"))
                 {
                     result.append ("(int) ((int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ");\n");
                 }
@@ -3575,7 +3728,7 @@ public class JobC extends Thread
             result.append ("{\n");
             for (Variable v : bed.localDerivative)
             {
-                if (T.equals ("int"))
+                if (T.contains ("int"))
                 {
                     result.append ("  " + mangle (v) + " = (int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ";\n");
                 }
@@ -3721,7 +3874,7 @@ public class JobC extends Thread
                         }
                         list.add (project);
                         s.simplify ("$connect", list, project);
-                        if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);
+                        if (T.contains ("int")) EquationSet.determineExponentsSimplified (list);
                         for (Variable v : list)
                         {
                             multiconditional (v, context, "      ");
@@ -3861,7 +4014,7 @@ public class JobC extends Thread
                 }
                 list.add (bed.p);
                 s.simplify ("$connect", list, bed.p);
-                if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);
+                if (T.contains ("int")) EquationSet.determineExponentsSimplified (list);
                 for (Variable v : list)
                 {
                     multiconditional (v, context, "  ");
@@ -3890,7 +4043,7 @@ public class JobC extends Thread
                 for (Variable t : s.ordered) if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null) list.add (t);
                 list.add (bed.xyz);
                 s.simplify ("$live", list, bed.xyz);  // evaluate in $live phase, because endpoints already exist when connection is evaluated.
-                if (T.equals ("int")) EquationSet.determineExponentsSimplified (list);
+                if (T.contains ("int")) EquationSet.determineExponentsSimplified (list);
                 for (Variable v : list)
                 {
                     multiconditional (v, context, "    ");
@@ -3948,7 +4101,7 @@ public class JobC extends Thread
                             // Note that other trigger types don't need this because they set the auxiliary variable,
                             // so the next test in the same cycle will no longer see change.
                             result.append ("      if (after == 0) return false;\n");
-                            if (T.equals ("int"))
+                            if (T.contains ("int"))
                             {
                                 result.append ("      " + T + " moduloTime = " + SIMULATOR + "currentEvent->t;\n");  // No need for modulo arithmetic. Rather, int time should be wrapped elsewhere.
                             }
@@ -4041,7 +4194,7 @@ public class JobC extends Thread
                             // raw = exponentV + exponentV - MSB
                             // shift = raw - exponentV = exponentV - MSB
                             int shift = v.exponent - Operator.MSB;
-                            if (shift != 0  &&  T.equals ("int"))
+                            if (shift != 0  &&  T.contains ("int"))
                             {
                                 result.append (" = (int64_t) " + current + " * " + buffered + RendererC.printShift (shift) + ";\n");
                             }
@@ -4276,7 +4429,7 @@ public class JobC extends Thread
         StringBuilder result = context.result;
 
         // Is delay close enough to a time-quantum?
-        if (T.equals ("int"))
+        if (T.contains ("int"))
         {
             result.append (pad + "int step = (delay + event->dt / 2) / event->dt;\n");
             result.append (pad + "int quantizedTime = step * event->dt;\n");
@@ -4297,7 +4450,7 @@ public class JobC extends Thread
         {
             result.append (pad + "  spike = new " + eventSpike + ";\n");
         }
-        if (T.equals ("int"))
+        if (T.contains ("int"))
         {
             result.append (pad + "  delay = quantizedTime;\n");
         }
@@ -4482,7 +4635,7 @@ public class JobC extends Thread
                     // raw exponent = exponentV + exponentExpression - MSB
                     // shift = raw - exponentV = expnentExpression - MSB
                     shift = e.expression.exponentNext - Operator.MSB;
-                    if (shift != 0  &&  T.equals ("int"))
+                    if (shift != 0  &&  T.contains ("int"))
                     {
                         if (shift < 0) result.append (" = (int64_t) " + LHS + " * ");
                         else           result.append (" = "           + LHS + " * ");
@@ -4496,7 +4649,7 @@ public class JobC extends Thread
                     // raw = exponentV - exponentExpression + MSB
                     // shift = raw - exponentV = MSB - exponentExpression
                     shift = Operator.MSB - e.expression.exponentNext;
-                    if (shift != 0  &&  T.equals ("int"))
+                    if (shift != 0  &&  T.contains ("int"))
                     {
                         if (shift > 0) result.append (" = ((int64_t) " + LHS + RendererC.printShift (shift) + ") / ");
                         else           result.append (" = "            + LHS                                +  " / ");
@@ -4523,7 +4676,7 @@ public class JobC extends Thread
             {
                 result.append (")");
             }
-            if (shift != 0  &&  T.equals ("int"))
+            if (shift != 0  &&  T.contains ("int"))
             {
                 result.append (RendererC.printShift (shift));
             }
@@ -4571,7 +4724,7 @@ public class JobC extends Thread
                     Input i = (Input) op;
                     if (i.operands[0] instanceof Constant)
                     {
-                        if (i.usesTime ()  &&  ! context.global  &&  ! T.equals ("int"))  // Note: In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
+                        if (i.usesTime ()  &&  ! context.global  &&  ! T.contains ("int"))  // Note: In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
                         {
                             // TODO: This is a bad way to set time epsilon, but not sure if there is a better one.
                             // The main problem is that several different instances may all do the same initialization,
@@ -4680,7 +4833,7 @@ public class JobC extends Thread
                             bed.defined.add (v);
                         }
                         context.result.append (pad + "MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (" + r.fileName);
-                        if (T.equals ("int")) context.result.append (", " + r.exponent);
+                        if (T.contains ("int")) context.result.append (", " + r.exponent);
                         context.result.append (");\n");
                     }
                     return true;
@@ -4710,7 +4863,7 @@ public class JobC extends Thread
                             bed.defined.add (v);
                         }
                         context.result.append (pad + "InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (" + i.fileName);
-                        if (T.equals ("int")) context.result.append (", " + i.exponent);
+                        if (T.contains ("int")) context.result.append (", " + i.exponent);
                         context.result.append (");\n");
 
                         boolean smooth =             i.getKeywordFlag ("smooth");
@@ -4719,7 +4872,7 @@ public class JobC extends Thread
                         {
                             if (time)   context.result.append (pad + i.name + "->time = true;\n");
                             if (smooth) context.result.append (pad + i.name + "->smooth = true;\n");
-                            if (! context.global  &&  ! T.equals ("int"))
+                            if (! context.global  &&  ! T.contains ("int"))
                             {
                                 boolean lvalue = ! bed.dt.hasAttribute ("constant");
                                 context.result.append (pad + i.name + "->epsilon = " + resolve (bed.dt.reference, context, lvalue) + " / 1000.0");
@@ -5196,6 +5349,74 @@ public class JobC extends Thread
             result.append (prefix + "bool newborn = " + pointer + "flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
             result.append (prefix + "if (result->firstborn == INT_MAX  &&  newborn) result->firstborn = result->instances->size ();\n");
             result.append (prefix + "result->instances->push_back (" + stripDereference (pointer) + ");\n");
+        }
+    }
+
+    /**
+        Subroutine of generateDefinitionsGlobal() that determines if new instances have
+        appeared in a target population. This is similar to assembleInstances(), except
+        that different code is emitted. This code occurs within the population finalize()
+        function, and it's main job is to set "shouldConnect".
+    **/
+    public void checkInstances (EquationSet current, boolean global, String pointer, List<Object> resolution, int depth, String prefix, StringBuilder result)
+    {
+        int last = resolution.size () - 1;
+        for (int i = 0; i <= last; i++)
+        {
+            Object r = resolution.get (i);
+            if (r instanceof EquationSet)
+            {
+                EquationSet s = (EquationSet) r;
+                if (r == current.container)  // ascend to parent
+                {
+                    pointer = containerOf (current, global, pointer);
+                    global = false;
+                }
+                else  // descend to child
+                {
+                    // TODO: Should we drill down to inner populations?
+                    // The Internal backend stops at the first level of enumeration.
+                    // The approach here is more work, but also more correct.
+                    pointer += mangle (s.name) + ".";
+                    global = true;
+                    if (i < last)  // Enumerate the instances of child population.
+                    {
+                        String it = "it" + i;
+                        result.append (prefix + "for (auto " + it + " : " + pointer + "instances)\n");
+                        result.append (prefix + "{\n");
+                        result.append (prefix + "  if (shouldConnect) break;\n");
+                        checkInstances (s, false, it + "->", resolution, i+1, prefix + "  ", result);
+                        result.append (prefix + "}\n");
+                        return;
+                    }
+                }
+                current = s;
+            }
+            else if (r instanceof ConnectionBinding)
+            {
+                ConnectionBinding c = (ConnectionBinding) r;
+                pointer += mangle (c.alias) + "->";
+                global = false;
+                current = c.endpoint;
+            }
+        }
+
+        // "pointer" now references the target population or instance.
+        BackendDataC bed = (BackendDataC) current.backendData;
+        if (global)
+        {
+            if (bed.singleton)
+            {
+                result.append (prefix + "if (" + pointer + "instance.flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ") shouldConnect = true;\n");
+            }
+            else
+            {
+                result.append (prefix + "if (" + pointer + "firstborn < " + pointer + "instances.size ()) shouldConnect = true;\n");
+            }
+        }
+        else
+        {
+            result.append (prefix + "if (" + pointer + "flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ") shouldConnect = true;\n");
         }
     }
 }
