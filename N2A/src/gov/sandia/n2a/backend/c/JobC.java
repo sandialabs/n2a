@@ -291,6 +291,11 @@ public class JobC extends Thread
             catch (IOException e) {}
         }
 
+        // TODO: detect if external resources are available. Only compile if they are.
+        // ffmpeg
+        // freetype
+        //Path ffmpegDir = runtimeDir.resolve ("ffmpeg");
+
         // Compile runtime
         CompilerFactory factory = BackendC.getFactory (env);
         supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
@@ -300,6 +305,14 @@ public class JobC extends Thread
         sources.add ("MNode");
         sources.add ("profiling");
         if (T.contains ("int")) sources.add ("fixedpoint");
+        sources.add ("CanvasImage");
+        sources.add ("Image");
+        sources.add ("ImageFileFormat");
+        sources.add ("ImageFileFormatBMP");
+        sources.add ("PixelBuffer");
+        sources.add ("PixelFormat");
+        //sources.add ("Video");
+        //sources.add ("VideoFileFormatFFMPEG");
         for (String stem : sources)
         {
             String objectName = objectName (stem);
@@ -312,6 +325,7 @@ public class JobC extends Thread
             if (debug ) c.setDebug ();
             if (gprof ) c.setProfiling ();
             c.addInclude (runtimeDir);
+            //c.addInclude (ffmpegDir.resolve ("include"));;
             c.addDefine ("n2a_T", T);
             if (T.contains ("int")) c.addDefine ("n2a_FP");
             if (tls) c.addDefine ("n2a_TLS");
@@ -342,6 +356,9 @@ public class JobC extends Thread
             "nosys.h",
             "runtime.cc", "runtime.h", "runtime.tcc",
             "profiling.h", "profiling.cc",
+            "endian.h", "image.h", "Image.cc", "ImageFileFormat.cc", "ImageFileFormatBMP.cc", "PixelBuffer.cc", "PixelFormat.cc",
+            "canvas.h", "CanvasImage.cc",
+            "video.h", "Video.cc", "VideoFileFormatFFMPEG.cc",
             "OutputHolder.h", "OutputParser.h"  // Not needed by runtime, but provided as a utility for users.
         );
     }
@@ -384,6 +401,31 @@ public class JobC extends Thread
         return result.toString ();
     }
 
+    public void addRuntimeObjects (Compiler c) throws Exception
+    {
+        c.addObject (runtimeDir.resolve (objectName ("runtime")));
+        c.addObject (runtimeDir.resolve (objectName ("holder")));
+        c.addObject (runtimeDir.resolve (objectName ("MNode")));
+        if (T.contains ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
+        c.addObject (runtimeDir.resolve (objectName ("CanvasImage")));
+        c.addObject (runtimeDir.resolve (objectName ("Image")));
+        c.addObject (runtimeDir.resolve (objectName ("ImageFileFormat")));
+        c.addObject (runtimeDir.resolve (objectName ("ImageFileFormatBMP")));
+        c.addObject (runtimeDir.resolve (objectName ("PixelBuffer")));
+        c.addObject (runtimeDir.resolve (objectName ("PixelFormat")));
+        //c.addObject (runtimeDir.resolve (objectName ("Video")));
+        //c.addObject (runtimeDir.resolve (objectName ("VideoFileFormatFFMPEG")));
+
+        List<Path> envProvidedObjects = providedObjects.get (env);
+        if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
+
+        if (kokkos)
+        {
+            c.addObject (runtimeDir.resolve (objectName ("profiling")));
+            c.addLibrary (env.getResourceDir ().getFileSystem ().getPath ("dl"));  // kokkos should only be set on Linux systems.
+        }
+    }
+
     public Path build (Path source) throws Exception
     {
         job.set ("Compiling model", "status");
@@ -410,17 +452,7 @@ public class JobC extends Thread
         if (tls) c.addDefine ("n2a_TLS");
         c.setOutput (binary);
         c.addSource (source);
-        c.addObject (runtimeDir.resolve (objectName ("runtime")));
-        c.addObject (runtimeDir.resolve (objectName ("holder")));
-        c.addObject (runtimeDir.resolve (objectName ("MNode")));
-        if (T.contains ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
-        List<Path> envProvidedObjects = providedObjects.get (env);
-        if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
-        if (kokkos)
-        {
-            c.addObject (runtimeDir.resolve (objectName ("profiling")));
-            c.addLibrary (env.getResourceDir ().getFileSystem ().getPath ("dl"));  // kokkos should only be set on Linux systems.
-        }
+        addRuntimeObjects (c);
 
         Path out = c.compileLink ();
         Files.delete (out);
@@ -460,17 +492,7 @@ public class JobC extends Thread
         // 2) Link library
         c.setOutput (library);
         c.addObject (object);
-        c.addObject (runtimeDir.resolve (objectName ("runtime")));
-        c.addObject (runtimeDir.resolve (objectName ("holder")));
-        c.addObject (runtimeDir.resolve (objectName ("MNode")));
-        if (T.contains ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
-        List<Path> envProvidedObjects = providedObjects.get (env);
-        if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
-        if (kokkos)
-        {
-            c.addObject (runtimeDir.resolve (objectName ("profiling")));
-            c.addLibrary (env.getResourceDir ().getFileSystem ().getPath ("dl"));
-        }
+        addRuntimeObjects (c);
         out = c.linkLibrary ();
         Files.delete (out);
     }
@@ -920,8 +942,8 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
+        result.append ("using namespace n2a;\n");
         result.append ("using namespace std;\n");
-        result.append ("using namespace fl;\n");
         result.append ("\n");
         if (tls)
         {

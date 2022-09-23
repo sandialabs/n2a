@@ -128,7 +128,7 @@ template<class T>
 class Matrix : public MatrixStrided<T>
 {
 public:
-    fl::Pointer data;
+    n2a::Pointer data;
     int offset;
     int rows_;
     int columns_;
@@ -138,7 +138,7 @@ public:
     Matrix ();
     Matrix (const int rows, const int columns = 1);
     Matrix (const MatrixAbstract<T> & that);
-    Matrix (const fl::Pointer & that, const int offset, const int rows, const int columns, const int strideR, const int strideC);
+    Matrix (const n2a::Pointer & that, const int offset, const int rows, const int columns, const int strideR, const int strideC);
     virtual uint32_t classID () const;
 
     void resize (const int rows, const int columns = 1);  ///< Subroutine of constructors.
@@ -260,7 +260,7 @@ class MatrixSparse : public MatrixAbstract<T>
 {
 public:
     int rows_;
-    fl::PointerStruct< std::vector< std::map<int, T> > > data;
+    n2a::PointerStruct<std::vector<std::map<int,T>>> data;
 
     MatrixSparse ();
     MatrixSparse (const int rows, const int columns);

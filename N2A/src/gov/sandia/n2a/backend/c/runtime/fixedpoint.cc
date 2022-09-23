@@ -59,12 +59,12 @@ atan2 (int y, int x)
     if (x == 0)
     {
         if (y == 0) return 0;
-        if (y <  0) return -FP_PI / 2;
-        return              FP_PI / 2;
+        if (y <  0) return -M_PI / 2;
+        return              M_PI / 2;
     }
     else if (y == 0)
     {
-        if (x < 0) return FP_PI;
+        if (x < 0) return M_PI;
         return 0;
     }
 
@@ -78,11 +78,11 @@ atan2 (int y, int x)
         if (y < 0)
         {
             y *= -1;
-            result = -FP_PI;
+            result = -M_PI;
         }
         else  // y > 0
         {
-            result = -FP_PI;
+            result = -M_PI;
             negate = true;
         }
     }
@@ -134,12 +134,12 @@ atan2 (int y, int x)
 int
 cos (int a, int exponentA)
 {
-    // We want to add PI/2 to a. FP_PI exponent=1. To induce down-shift, claim it is 0.
+    // We want to add PI/2 to a. M_PI exponent=1. To induce down-shift, claim it is 0.
     // Thus, shift is exactly exponentA.
-    if (exponentA >= 0) return (a + (FP_PI >> exponentA), exponentA);
+    if (exponentA >= 0) return (a + (M_PI >> exponentA), exponentA);
     // If exponentA is negative, then a is too small to use as-is.
     if (exponentA < -FP_MSB) return 0x20000000;  // one, with exponent=1
-    return sin ((a >> -exponentA) + FP_PI, 0);
+    return sin ((a >> -exponentA) + M_PI, 0);
 }
 
 int
@@ -156,10 +156,10 @@ exp (int a, int exponentResult)
     const int one = 1 << FP_MSB - exponentA;
     if (a == one)
     {
-        int shift = 1 - exponentResult;  // FP_E exponent=1
-        if (shift < 0) return FP_E >> -shift;
-        if (shift > 0) return INFINITY;  // Up-shifting FP_E is nonsense, since it already uses all the bits.
-        return FP_E;
+        int shift = 1 - exponentResult;  // M_E exponent=1
+        if (shift < 0) return M_E >> -shift;
+        if (shift > 0) return INFINITY;  // Up-shifting M_E is nonsense, since it already uses all the bits.
+        return M_E;
     }
 
     // Algorithm:
@@ -245,7 +245,7 @@ log (int a, int exponentA, int exponentResult)
     // We use the simple identity log_e(a) = log_2(a) / log_2(e)
     // exponentRaw = exponentResult - 0 + MSB
     // shift = exponentRaw - exponentResult = MSB
-    return ((int64_t) log2 (a, exponentA, exponentResult) << FP_MSB) / FP_LOG2E;
+    return ((int64_t) log2 (a, exponentA, exponentResult) << FP_MSB) / M_LOG2E;
 }
 
 int
@@ -612,11 +612,11 @@ int
 sin (int a, int exponentA)
 {
     // Limit a to [0,pi/2)
-    // To create 2PI, we lie about the exponent of FP_PI, increasing it by 1.
-    a = modFloor (a, FP_PI, exponentA, 2);  // exponent = min (exponentA, 2)
+    // To create 2PI, we lie about the exponent of M_PI, increasing it by 1.
+    a = modFloor (a, M_PI, exponentA, 2);  // exponent = min (exponentA, 2)
     int shift = exponentA - 2;
     if (shift < 0) a >>= -shift;
-    const int PIat2 = FP_PI >> 1;  // FP_PI with exponent=2 rather than 1
+    const int PIat2 = M_PI >> 1;  // M_PI with exponent=2 rather than 1
     bool negate = false;
     if (a > PIat2)
     {
@@ -682,7 +682,7 @@ tanh (int a, int exponentA)
     int exponent = 0;
     if (exponentA >= -1)
     {
-        exponent = multiplyCeil (a, FP_LOG2E, exponentA + 1 - 2 * FP_MSB);
+        exponent = multiplyCeil (a, M_LOG2E, exponentA + 1 - 2 * FP_MSB);
         // If exponent gets too large, the result will always be 1 or -1
         if (exponent > FP_MSB) return negate ? -0x40000000 : 0x40000000;
     }

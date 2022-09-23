@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,12 +11,55 @@ the U.S. Government retains certain rights in this software.
 #ifndef n2a_FP
 
 
+#define _USE_MATH_DEFINES
 #include <cmath>
+
+#define TWOPI  6.283185307179586476925286766559
+#define TWOPIf 6.283185307179586476925286766559f
+
+namespace std
+{
+    /// Four-way max
+    template<class T>
+    inline const T &
+    max (const T & a, const T & b, const T & c, const T & d)
+    {
+        return max (max (a, b), max (c, d));
+    }
+
+    /// Four-way min
+    template<class T>
+    inline const T &
+    min (const T & a, const T & b, const T & c, const T & d)
+    {
+        return min (min (a, b), min (c, d));
+    }
+}
 
 namespace n2a
 {
     using std::isnan;
     using std::isinf;
+
+    /**
+        Same as round(), but when <code>|a - roundp(a)| = 0.5</code> the result will
+        be the more positive integer.
+    **/
+    inline float
+    roundp (float a)
+    {
+        return floorf (a + 0.5f);
+    }
+
+    /**
+        Same as round(), but when <code>|a - roundp(a)| = 0.5</code> the result will
+        be the more positive integer.
+    **/
+    inline double
+    roundp (double a)
+    {
+        return floor (a + 0.5);
+    }
 }
 
 
@@ -28,9 +71,9 @@ namespace n2a
 
 #define FP_MSB    30
 #define FP_MSB2   15
-#define FP_LOG2E  1549082004  // log_2(e) = 1.4426950408889634074; exponent=0
-#define FP_E      1459366444  // exponent=1
-#define FP_PI     1686629713  // exponent=1
+#define M_LOG2E   1549082004  // log_2(e) = 1.4426950408889634074; exponent=0
+#define M_E       1459366444  // exponent=1
+#define M_PI      1686629713  // exponent=1
 #undef NAN
 #undef INFINITY
 #define NAN       0x80000000

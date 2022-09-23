@@ -14,9 +14,11 @@ for details.
 */
 
 
-#ifndef pointer_h
-#define pointer_h
+#ifndef n2a_pointer_h
+#define n2a_pointer_h
 
+
+#include "nosys.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -31,7 +33,7 @@ for details.
 #endif
 
 
-namespace fl
+namespace n2a
 {
   /**
 	 Keeps track of a block of memory, which can be shared by multiple objects

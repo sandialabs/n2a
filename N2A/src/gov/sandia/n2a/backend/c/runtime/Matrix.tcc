@@ -1022,7 +1022,7 @@ Matrix<T>::Matrix (const MatrixAbstract<T> & that)
 }
 
 template<class T>
-Matrix<T>::Matrix (const fl::Pointer & that, const int offset, const int rows, const int columns, const int strideR, const int strideC)
+Matrix<T>::Matrix (const n2a::Pointer & that, const int offset, const int rows, const int columns, const int strideR, const int strideC)
 :   data     (that),
     offset   (offset),
     rows_    (rows),

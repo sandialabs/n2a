@@ -39,7 +39,7 @@ public:
 
     char *    memory;
     char *    top;       // position of null terminator in memory block
-    size_type capacity_;  // size of currently-allocated memory block
+    size_type capacity_; // size of currently-allocated memory block
 
     static const size_type npos    = static_cast<size_type> (-1);
     static const size_type maxSize = 0x1000000;  // 16Mb. This is suitable for most systems.
@@ -464,7 +464,7 @@ public:
         return npos;
     }
 
-    size_type find_first_of (char pattern, size_type pos = 0) const
+    size_type find_first_of (char pattern, size_type pos = 0) const noexcept
     {
         if (memory == top  ||  ! pattern) return npos;
         char * c = memory + pos;
@@ -499,7 +499,7 @@ public:
         return npos;
     }
 
-    size_type find_first_not_of (char pattern, size_type pos = 0) const
+    size_type find_first_not_of (char pattern, size_type pos = 0) const noexcept
     {
         if (memory == top  ||  ! pattern) return npos;
         char * c = memory + pos;
@@ -507,6 +507,19 @@ public:
         {
             if (*c != pattern) return c - memory;
             c++;
+        }
+        return npos;
+    }
+
+    size_type find_last_of (char pattern, size_type pos = npos) const
+    {
+        if (memory == top  ||  ! pattern) return npos;
+        char * c = memory + pos;
+        if (pos == npos  ||  c >= top) c = top - 1;  // Explicitly check for npos, because it might not be suitable for adding to a pointer.
+        while (c >= memory)
+        {
+            if (*c == pattern) return c - memory;
+            c--;
         }
         return npos;
     }
