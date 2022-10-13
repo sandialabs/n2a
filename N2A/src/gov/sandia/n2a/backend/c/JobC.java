@@ -62,7 +62,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
@@ -70,8 +69,7 @@ import java.util.Map.Entry;
 
 public class JobC extends Thread
 {
-    protected static Set<Host>            runtimeBuilt    = new HashSet<Host> ();            // collection of Hosts for which runtime has already been checked/built during this session.
-    protected static Map<Host,List<Path>> providedObjects = new HashMap<Host,List<Path>> (); // object code or archives provided by extensions. The string is suitable for constructing compiler command line.
+    protected static Set<Host> runtimeBuilt = new HashSet<Host> ();  // collection of Hosts for which runtime has already been checked/built during this session.
 
     public    MNode       job;
     protected EquationSet digestedModel;
@@ -260,25 +258,13 @@ public class JobC extends Thread
         {
             changed = true;
             runtimeBuilt.remove (env);
-            providedObjects.remove (env);
         }
         if (! runtimeBuilt.contains (env))
         {
             if (unpackRuntime ()) changed = true;
-            for (ProvideOperator pf : extensions)
-            {
-                Path po = pf.rebuildRuntime (this);
-                if (po == null) continue;
-                List<Path> envProvidedObjects = providedObjects.get (env);
-                if (envProvidedObjects == null)
-                {
-                    envProvidedObjects = new ArrayList<Path> ();
-                    providedObjects.put (env, envProvidedObjects);
-                }
-                envProvidedObjects.add (po);
-            }
             runtimeBuilt.add (env);  // Stop checking files for this session.
         }
+        for (ProvideOperator pf : extensions) pf.rebuildRuntime (this);
         env.config.clear ("backend", "c", "compilerChanged");
 
         if (changed)  // Delete existing object files
@@ -422,8 +408,11 @@ public class JobC extends Thread
         //c.addObject (runtimeDir.resolve (objectName ("Video")));
         //c.addObject (runtimeDir.resolve (objectName ("VideoFileFormatFFMPEG")));
 
-        List<Path> envProvidedObjects = providedObjects.get (env);
-        if (envProvidedObjects != null) for (Path po : envProvidedObjects) c.addObject (po);
+        for (ProvideOperator po : extensions)
+        {
+            Path path = po.library (this);
+            if (path != null) c.addObject (path);
+        }
 
         if (kokkos)
         {
@@ -450,8 +439,7 @@ public class JobC extends Thread
         for (ProvideOperator po : extensions)
         {
             Path include = po.include (this);
-            if (include == null) continue;
-            c.addInclude (include.getParent ());
+            if (include != null) c.addInclude (include.getParent ());
         }
         c.addDefine ("n2a_T", T);
         if (T.contains ("int")) c.addDefine ("n2a_FP");

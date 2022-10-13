@@ -25,23 +25,28 @@ public interface ProvideOperator extends ExtensionPoint
         Does all the tasks to prepare library support for the function(s)
         provided by this extension.
         This includes making a resource directory, unpacking resources and
-        compiling them. This function will be called only once per run of
-        the application. When it is called, the C runtime will already be
-        unpacked, but not necessarily compiled.
+        compiling them. When called, the C runtime will already be unpacked,
+        but not necessarily compiled. To allow for changes in configuration, this
+        function is called each time the C backend is run. The provider should
+        implement its own guard to limit number of compiles per application run.
+        See JobC.runtimeBuilt for an example.
         @param job The job associated with the model currently going into
         simulation. Important attributes include job.T, the name of numeric
         type in use ("float", "double", "int"). Several versions of the support
         code may be built. The provider should use a naming scheme that allows
-        many different builds to reside in the same directory.
-        @return Path to the object that should be linked into the C runtime,
-        in a form suitable for constructing a compiler command line. In particular,
-        it should already be quoted if the environment requires it.
-        Can be either a simple object file (.o) or an archive (.a).
+        many different builds to reside in the same directory, for example by
+        calling JobC.objectName().
+    **/
+    public void rebuildRuntime (JobC job) throws Exception;
+
+    /**
+        @return Path to the object that should be linked into the C runtime.
+        Can be either a simple object file (.o) or a static library (.a).
         Should not be a dynamic-link library. Instead, if dynamic linking
         is in use, the provided object will be incorporated into the runtime's main
         library. OK to return null.
     **/
-    public Path rebuildRuntime (JobC job) throws Exception;
+    public Path library (JobC job) throws Exception;
 
     /**
         @return Full path to header file that should be included in the model source code.
