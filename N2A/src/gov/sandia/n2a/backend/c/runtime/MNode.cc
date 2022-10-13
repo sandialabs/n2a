@@ -112,6 +112,27 @@ n2a::is_directory (const String & path)
     return buffer.st_mode & S_IFDIR;
 }
 
+void
+n2a::mkdirs (const String & file)
+{
+    String::size_type pos = 1;
+    String::size_type count = file.size ();
+    while (pos < count)
+    {
+        pos = file.find_first_of ('/', pos);
+        if (pos == String::npos) break;  // This should omit that last path element. We only want to process directories.
+        String parent = file.substr (0, pos);
+#           if  defined(_MSC_VER)  // MSVC
+        int result = _mkdir (parent.c_str ());
+#           elif  defined(_WIN32)  ||  defined(__WIN32__)  // mingw64, particularly under MSYS2
+        int result = mkdir (parent.c_str ());
+#           else  // POSIX standard
+        int result = mkdir (parent.c_str (), 0777);  // Do this blindly. If dir already exists, an error is returned but no harm is done. If dir can't be created, file write will fail below.
+#           endif
+        pos += 1;
+    }
+}
+
 
 // class MNode ---------------------------------------------------------------
 
@@ -1100,25 +1121,7 @@ n2a::MDoc::save ()
     String file = path ();
     try
     {
-        // Create all parent directories
-        String::size_type pos = 1;
-        String::size_type count = file.size ();
-        while (pos < count)
-        {
-            pos = file.find_first_of ('/', pos);
-            if (pos == String::npos) break;  // This should omit that last path element. We only want to process directories.
-            String parent = file.substr (0, pos);
-#           if  defined(_MSC_VER)  // MSVC
-            int result = _mkdir (parent.c_str ());
-#           elif  defined(_WIN32)  ||  defined(__WIN32__)  // mingw64, particularly under MSYS2
-            int result = mkdir (parent.c_str ());
-#           else  // POSIX standard
-            int result = mkdir (parent.c_str (), 0777);  // Do this blindly. If dir already exists, an error is returned but no harm is done. If dir can't be created, file write will fail below.
-#           endif
-            pos += 1;
-        }
-
-        // Write data
+        mkdirs (file);
         std::ofstream ofs (file.c_str (), std::ofstream::trunc);
         Schema * schema = Schema::latest ();
         schema->writeAll (*this, ofs);

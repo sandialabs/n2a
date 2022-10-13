@@ -221,14 +221,14 @@ public abstract class Matrix extends Type
         if (that instanceof Scalar)
         {
             double b = ((Scalar) that).value;
-            int w = columns ();
             int h = rows ();
+            int w = columns ();
             MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.set (r, c, (get (r, c) == b) ? 1 : 0);
+                    result.set (r, c, get (r, c) == b ? 1 : 0);
                 }
             }
             return result;
@@ -242,14 +242,14 @@ public abstract class Matrix extends Type
         if (that instanceof Scalar)
         {
             double b = ((Scalar) that).value;
-            int w = columns ();
             int h = rows ();
+            int w = columns ();
             MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.set (r, c, (get (r, c) != b) ? 1 : 0);
+                    result.set (r, c, get (r, c) != b ? 1 : 0);
                 }
             }
             return result;
@@ -259,8 +259,8 @@ public abstract class Matrix extends Type
 
     public Matrix GT (Type that) throws EvaluationException
     {
-        int w = columns ();
         int h = rows ();
+        int w = columns ();
         if (that instanceof Scalar)
         {
             double b = ((Scalar) that).value;
@@ -269,7 +269,7 @@ public abstract class Matrix extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.set (r, c, (get (r, c) > b) ? 1 : 0);
+                    result.set (r, c, get (r, c) > b ? 1 : 0);
                 }
             }
             return result;
@@ -277,15 +277,17 @@ public abstract class Matrix extends Type
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            w = Math.min (w, B.columns ());
-            h = Math.min (h, B.rows ());
+            int oh = Math.min (h, B.rows ());
+            int ow = Math.min (w, B.columns ());
             MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            for (int c = 0; c < ow; c++)
             {
-                for (int r = 0; r < h; r++)
-                {
-                    result.set (r, c, (get (r, c) > B.get (r, c)) ? 1 : 0);
-                }
+                for (int r = 0;  r < oh; r++) result.set (r, c, get (r, c) > B.get (r, c) ? 1 : 0);
+                for (int r = oh; r < h;  r++) result.set (r, c, get (r, c) > 0            ? 1 : 0);
+            }
+            for (int c = ow; c < w; c++)
+            {
+                for (int r = 0;  r < h;  r++) result.set (r, c, get (r, c) > 0            ? 1 : 0);
             }
             return result;
         }
@@ -294,8 +296,8 @@ public abstract class Matrix extends Type
 
     public Matrix GE (Type that) throws EvaluationException
     {
-        int w = columns ();
         int h = rows ();
+        int w = columns ();
         if (that instanceof Scalar)
         {
             double b = ((Scalar) that).value;
@@ -304,7 +306,7 @@ public abstract class Matrix extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.set (r, c, (get (r, c) >= b) ? 1 : 0);
+                    result.set (r, c, get (r, c) >= b ? 1 : 0);
                 }
             }
             return result;
@@ -312,15 +314,17 @@ public abstract class Matrix extends Type
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            w = Math.min (w, B.columns ());
-            h = Math.min (h, B.rows ());
+            int oh = Math.min (h, B.rows ());
+            int ow = Math.min (w, B.columns ());
             MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            for (int c = 0; c < ow; c++)
             {
-                for (int r = 0; r < h; r++)
-                {
-                    result.set (r, c, (get (r, c) >= B.get (r, c)) ? 1 : 0);
-                }
+                for (int r = 0;  r < oh; r++) result.set (r, c, get (r, c) >= B.get (r, c) ? 1 : 0);
+                for (int r = oh; r < h;  r++) result.set (r, c, get (r, c) >= 0            ? 1 : 0);
+            }
+            for (int c = ow; c < w; c++)
+            {
+                for (int r = 0;  r < h;  r++) result.set (r, c, get (r, c) >= 0            ? 1 : 0);
             }
             return result;
         }
@@ -329,8 +333,8 @@ public abstract class Matrix extends Type
 
     public Matrix LT (Type that) throws EvaluationException
     {
-        int w = columns ();
         int h = rows ();
+        int w = columns ();
         if (that instanceof Scalar)
         {
             double b = ((Scalar) that).value;
@@ -339,7 +343,7 @@ public abstract class Matrix extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.set (r, c, (get (r, c) < b) ? 1 : 0);
+                    result.set (r, c, get (r, c) < b ? 1 : 0);
                 }
             }
             return result;
@@ -347,15 +351,17 @@ public abstract class Matrix extends Type
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            w = Math.min (w, B.columns ());
-            h = Math.min (h, B.rows ());
+            int oh = Math.min (h, B.rows ());
+            int ow = Math.min (w, B.columns ());
             MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            for (int c = 0; c < ow; c++)
             {
-                for (int r = 0; r < h; r++)
-                {
-                    result.set (r, c, (get (r, c) < B.get (r, c)) ? 1 : 0);
-                }
+                for (int r = 0;  r < oh; r++) result.set (r, c, get (r, c) < B.get (r, c) ? 1 : 0);
+                for (int r = oh; r < h;  r++) result.set (r, c, get (r, c) < 0            ? 1 : 0);
+            }
+            for (int c = ow; c < w; c++)
+            {
+                for (int r = 0;  r < h;  r++) result.set (r, c, get (r, c) < 0            ? 1 : 0);
             }
             return result;
         }
@@ -364,8 +370,8 @@ public abstract class Matrix extends Type
 
     public Matrix LE (Type that) throws EvaluationException
     {
-        int w = columns ();
         int h = rows ();
+        int w = columns ();
         if (that instanceof Scalar)
         {
             double b = ((Scalar) that).value;
@@ -374,7 +380,7 @@ public abstract class Matrix extends Type
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.set (r, c, (get (r, c) <= b) ? 1 : 0);
+                    result.set (r, c, get (r, c) <= b ? 1 : 0);
                 }
             }
             return result;
@@ -382,15 +388,17 @@ public abstract class Matrix extends Type
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            w = Math.min (w, B.columns ());
-            h = Math.min (h, B.rows ());
+            int oh = Math.min (h, B.rows ());
+            int ow = Math.min (w, B.columns ());
             MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            for (int c = 0; c < ow; c++)
             {
-                for (int r = 0; r < h; r++)
-                {
-                    result.set (r, c, (get (r, c) <= B.get (r, c)) ? 1 : 0);
-                }
+                for (int r = 0;  r < oh; r++) result.set (r, c, get (r, c) <= B.get (r, c) ? 1 : 0);
+                for (int r = oh; r < h;  r++) result.set (r, c, get (r, c) <= 0            ? 1 : 0);
+            }
+            for (int c = ow; c < w; c++)
+            {
+                for (int r = 0;  r < h;  r++) result.set (r, c, get (r, c) <= 0            ? 1 : 0);
             }
             return result;
         }
@@ -399,17 +407,18 @@ public abstract class Matrix extends Type
 
     public Matrix AND (Type that) throws EvaluationException
     {
-        int w = columns ();
         int h = rows ();
+        int w = columns ();
         if (that instanceof Scalar)
         {
             double b = ((Scalar) that).value;
-            MatrixDense result = new MatrixDense (h, w);
+            MatrixDense result = new MatrixDense (h, w);  // Initialized to 0 (false).
+            if (b == 0) return result;  // Early out, because all elements will be false.
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.set (r, c, (get (r, c) * b != 0) ? 1 : 0);
+                    result.set (r, c, get (r, c) != 0 ? 1 : 0);  // b is true, so no need to check
                 }
             }
             return result;
@@ -417,15 +426,17 @@ public abstract class Matrix extends Type
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            w = Math.min (w, B.columns ());
-            h = Math.min (h, B.rows ());
+            int oh = Math.min (h, B.rows ());
+            int ow = Math.min (w, B.columns ());
             MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            for (int c = 0; c < ow; c++)
             {
-                for (int r = 0; r < h; r++)
-                {
-                    result.set (r, c, (get (r, c) * B.get (r, c) != 0) ? 1 : 0);
-                }
+                for (int r = 0;  r < oh; r++) result.set (r, c, get (r, c) != 0 && B.get (r, c) != 0 ? 1 : 0);
+                for (int r = oh; r < h;  r++) result.set (r, c, 0);
+            }
+            for (int c = ow; c < w; c++)
+            {
+                for (int r = 0;  r < h;  r++) result.set (r, c, 0);
             }
             return result;
         }
@@ -434,17 +445,18 @@ public abstract class Matrix extends Type
 
     public Matrix OR (Type that) throws EvaluationException
     {
-        int w = columns ();
         int h = rows ();
+        int w = columns ();
         if (that instanceof Scalar)
         {
-            double b = Math.abs (((Scalar) that).value);
+            double b = ((Scalar) that).value;
+            if (b != 0) return new MatrixDense (h, w, 1);
             MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
                 for (int r = 0; r < h; r++)
                 {
-                    result.set (r, c, (Math.abs (get (r, c)) + b != 0) ? 1 : 0);
+                    result.set (r, c, get (r, c) != 0 ? 1 : 0);
                 }
             }
             return result;
@@ -452,15 +464,17 @@ public abstract class Matrix extends Type
         if (that instanceof Matrix)
         {
             Matrix B = (Matrix) that;
-            w = Math.min (w, B.columns ());
-            h = Math.min (h, B.rows ());
+            int oh = Math.min (h, B.rows ());
+            int ow = Math.min (w, B.columns ());
             MatrixDense result = new MatrixDense (h, w);
-            for (int c = 0; c < w; c++)
+            for (int c = 0; c < ow; c++)
             {
-                for (int r = 0; r < h; r++)
-                {
-                    result.set (r, c, (Math.abs (get (r, c)) + Math.abs (B.get (r, c)) != 0) ? 1 : 0);
-                }
+                for (int r = 0;  r < oh; r++) result.set (r, c, get (r, c) != 0 || B.get (r, c) != 0 ? 1 : 0);
+                for (int r = oh; r < h;  r++) result.set (r, c, get (r, c) != 0                      ? 1 : 0);
+            }
+            for (int c = ow; c < w; c++)
+            {
+                for (int r = 0;  r < h;  r++) result.set (r, c, get (r, c) != 0                      ? 1 : 0);
             }
             return result;
         }

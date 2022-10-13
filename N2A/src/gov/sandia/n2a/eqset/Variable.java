@@ -644,7 +644,7 @@ public class Variable implements Comparable<Variable>, Cloneable
                     continue;
                 }
             }
-            else if (e.condition instanceof Constant)
+            if (e.condition instanceof Constant)
             {
                 if (e.condition.getDouble () == 0)  // Will never fire
                 {

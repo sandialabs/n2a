@@ -11,7 +11,8 @@ the U.S. Government retains certain rights in this software.
 
 #include "holder.h"
 #include "runtime.h"   // For Event::exponent
-#include "fixedpoint.h"
+#include "math.h"
+#include "image.h"
 
 #include <fstream>
 #include <stdlib.h>
@@ -389,6 +390,205 @@ matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle)
 }
 
 
+// class ImageInput ----------------------------------------------------------
+
+template<class T>
+ImageInput<T>::ImageInput (const String & fileName)
+:   Holder (fileName)
+{
+}
+
+template<class T>
+ImageInput<T> *
+imageInputHelper (const String & fileName, ImageInput<T> * oldHandle)
+{
+    ImageInput<T> * handle = (ImageInput<T> *) SIMULATOR getHolder (fileName, oldHandle);
+    if (! handle)
+    {
+        handle = new ImageInput<T> (fileName);
+        SIMULATOR holders.push_back (handle);
+    }
+    return handle;
+}
+
+
+// class ImageOutput ---------------------------------------------------------
+
+template<class T>
+ImageOutput<T>::ImageOutput (const String & fileName)
+:   Holder (fileName),
+    canvas (n2a::RGBAChar)
+{
+    width      = 1024;
+    height     = 1024;
+    clearColor = 0;  // black
+    haveData   = false;
+
+    // If suffix is specified, peel it off. Otherwise, assume default format.
+    int posDot   = fileName.find_last_of ('.');
+    int posSlash = fileName.find_last_of ("\\/");
+    if (posSlash == String::npos) posSlash = -1;
+    if (posDot != String::npos  &&  posDot > posSlash)
+    {
+        format = fileName.substr (posDot + 1).toLowerCase ();
+        path   = fileName.substr (0, posDot);
+    }
+    else
+    {
+        format = "bmp";
+        path   = fileName;
+    }
+    path += "/";  // Include slash in path, so we don't have to add it later. Forward slash works for all platforms.
+
+    // Register file formats.
+    // It does no harm to call the use() function mutliple times.
+    n2a::ImageFileFormatBMP::use ();
+}
+
+template<class T>
+ImageOutput<T>::~ImageOutput ()
+{
+    writeImage ();
+}
+
+template<class T>
+void
+ImageOutput<T>::next (T now)
+{
+    if (now > t)
+    {
+        writeImage ();
+        t = now;
+    }
+    if (! haveData)
+    {
+        canvas.resize (width, height);
+        canvas.clear (clearColor << 8 | 0xFF);
+        haveData = true;
+    }
+}
+
+template<class T>
+T
+ImageOutput<T>::drawDisc (T now, bool raw, const MatrixFixed<T,3,1> & center, T radius, uint32_t color)
+{
+    next (now);
+
+    uint32_t rgba = color << 8 | 0xFF;
+
+    if (raw)
+    {
+        if (radius < 0.5) radius = 0.5;  // 1px diameter; causes early-out in CanvasImage routine.
+        canvas.scanCircle (center, radius, rgba);
+        return 0;
+    }
+
+    n2a::Point cs = center * (T) width;
+    radius *= width;
+    if (radius < 0.5) radius = 0.5;
+    canvas.scanCircle (cs, radius, rgba);
+    return 0;
+}
+
+template<class T>
+T
+ImageOutput<T>::drawBlock (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h, uint32_t color)
+{
+    next (now);
+
+    n2a::Point corner0;
+    corner0[0] = center[0] - w / 2;
+    corner0[1] = center[1] - h / 2;
+    //corner0[2] = center[2];
+    n2a::Point corner1;
+    corner1[0] = center[0] + w / 2;
+    corner1[1] = center[1] + h / 2;
+    //corner1[2] = center[2];
+
+    uint32_t rgba = color << 8 | 0xFF;
+
+    if (! raw)
+    {
+        corner0 *= (double) width;
+        corner1 *= (double) width;
+    }
+
+    canvas.drawFilledRectangle (corner0, corner1, rgba);
+    return 0;
+}
+
+template<class T>
+T
+ImageOutput<T>::drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1, const MatrixFixed<T,3,1> & p2, T thickness, uint32_t color)
+{
+    next (now);
+
+    if (! raw) thickness *= width;
+    if (thickness < 1) thickness = 1;
+    canvas.setLineWidth (thickness);
+
+    uint32_t rgba = color << 8 | 0xFF;
+
+    if (raw)
+    {
+        canvas.drawSegment (p1, p2, rgba);
+        return 0;
+    }
+
+    n2a::Point ps1 = p1 * (T) width;
+    n2a::Point ps2 = p2 * (T) width;
+    canvas.drawSegment (ps1, ps2, rgba);
+    return 0;
+}
+
+template<class T>
+void
+ImageOutput<T>::writeImage  ()
+{
+    if (! haveData) return;
+
+    if (! dirCreated)
+    {
+        n2a::mkdirs (path);
+        dirCreated = true;
+    }
+
+    String filename = path;
+    filename += frameCount;
+    filename += ".";
+    filename += format;
+    try
+    {
+        canvas.write (filename);
+    }
+    catch (const char * message)  // Our own exception message, generally that file format was not found.
+    {
+        format = "bmp";  // Our best (and only) fallback.
+        filename = path;
+        filename += frameCount;
+        filename += ".";
+        filename += format;
+        canvas.write (filename);
+    }
+
+    haveData = hold;
+    frameCount++;
+}
+
+template<class T>
+ImageOutput<T> *
+imageOutputHelper (const String & fileName, ImageOutput<T> * oldHandle)
+{
+    ImageOutput<T> * handle = (ImageOutput<T> *) SIMULATOR getHolder (fileName, oldHandle);
+    if (! handle)
+    {
+        handle = new ImageOutput<T> (fileName);
+        SIMULATOR holders.push_back (handle);
+    }
+    return handle;
+}
+
+
 // class Mfile ---------------------------------------------------------------
 
 template<class T>
@@ -519,7 +719,7 @@ InputHolder<T>::getRow (T row)
     while (true)
     {
         // Read and process next line
-        if (n2a::isnan (nextLine)  &&  in->good ())
+        if (std::isnan (nextLine)  &&  in->good ())
         {
             String line;
             getline (*in, line);
@@ -724,7 +924,7 @@ InputHolder<T>::getRow (T row)
 
         // Determine if we have the requested data
         if (row <= currentLine) break;
-        if (n2a::isnan (nextLine)) break;  // Return the current line, because another is not (yet) available. In general, we don't stall the simulator to wait for data.
+        if (std::isnan (nextLine)) break;  // Return the current line, because another is not (yet) available. In general, we don't stall the simulator to wait for data.
         if (row < nextLine - epsilon) break;
 
         T * tempValues = currentValues;
@@ -1013,7 +1213,7 @@ OutputHolder<T>::addMode (const char * mode)
 }
 
 template<class T>
-void
+T
 #ifdef n2a_FP
 OutputHolder<T>::trace (T now, const String & column, T rawValue, int exponent, const char * mode)
 #else
@@ -1037,12 +1237,18 @@ OutputHolder<T>::trace (T now, const String & column, T value,                  
     {
         columnValues[result->second] = (float) value;
     }
+
+#   ifdef n2a_FP
+    return rawValue;
+#   else
+    return value;
+#   endif
 }
 
 #ifdef n2a_FP
 
 template<class T>
-void
+Matrix<T>
 OutputHolder<T>::trace (T now, const String & column, const Matrix<T> & A, int exponent, const char * mode)
 {
     int rows = A.rows ();
@@ -1065,12 +1271,14 @@ OutputHolder<T>::trace (T now, const String & column, const Matrix<T> & A, int e
             }
         }
     }
+
+    return A;
 }
 
 #else
 
 template<class T>
-void
+Matrix<T>
 OutputHolder<T>::trace (T now, const String & column, const Matrix<T> & A, const char * mode)
 {
     int rows = A.rows ();
@@ -1093,12 +1301,14 @@ OutputHolder<T>::trace (T now, const String & column, const Matrix<T> & A, const
             }
         }
     }
+
+    return A;
 }
 
 #endif
 
 template<class T>
-void
+T
 #ifdef n2a_FP
 OutputHolder<T>::trace (T now, T column, T rawValue, int exponent, const char * mode)
 #else
@@ -1140,6 +1350,12 @@ OutputHolder<T>::trace (T now, T column, T value,                  const char * 
     {
         columnValues[result->second] = (float) value;
     }
+
+#   ifdef n2a_FP
+    return rawValue;
+#   else
+    return value;
+#   endif
 }
 
 template<class T>

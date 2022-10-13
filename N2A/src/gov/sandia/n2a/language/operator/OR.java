@@ -36,7 +36,7 @@ public class OR extends OperatorBinary implements OperatorLogical
 
     public int precedence ()
     {
-        return 9;
+        return 10;  // See comment on AND.precedence()
     }
 
     public Operator simplify (Variable from, boolean evalOnly)

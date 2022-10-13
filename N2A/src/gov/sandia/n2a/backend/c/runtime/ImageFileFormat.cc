@@ -13,6 +13,7 @@ the U.S. Government retains certain rights in this software.
 
 
 #include "image.h"
+#include "math.h"
 
 #include <fstream>
 #include <stdio.h>

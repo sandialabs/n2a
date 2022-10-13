@@ -258,7 +258,6 @@ public class Population extends Instance
 
         public int size;   // Cached value of instances.size(). Does not change.
         public int count;  // Size of current subset of instances we are iterating through.
-        public int offset;
         public int i;
         public int stop;
 
@@ -456,6 +455,7 @@ public class Population extends Instance
                         if (ep.valuesFloat[pbed.newborn] == 0) continue;
                         filtered.add (ep);
                     }
+                    count = filtered.size ();
                 }
                 else
                 {
@@ -465,7 +465,7 @@ public class Population extends Instance
             }
             else
             {
-                if (newOnly) count = size - firstborn;
+                if (newOnly) count = Math.max (0, size - firstborn);
                 else         count = size;
                 if (count > 1) i = (int) Math.round (simulator.random.nextDouble () * (count - 1));
                 else           i = 0;
@@ -493,19 +493,21 @@ public class Population extends Instance
             {
                 if (i >= stop)  // Need to either reset or terminate, depending on whether we have something left to permute with.
                 {
-                    if (permute == null)
+                    if (permute == null)  // We are the innermost (slowest) iterator. If contained is false, then we are also the only iterator (unary connection).
                     {
                         if (stop > 0) return false;  // We already reset once, so done.
-                        // A unary connection (indicated by !contained) should only iterate over new instances, unless we're polling.
-                        // The innermost (slowest) iterator of a multi-way connection should iterate over all instances.
+                        // A unary connection should only iterate over new instances, unless we're polling.
+                        // The innermost iterator of a multi-way connection should iterate over all instances.
+                        // Polling should iterate over all instances.
                         reset (! contained  &&  ! poll);
                     }
-                    else
+                    else  // There is another iterator below us. If it has more items, then we should start iteration again.
                     {
                         if (! permute.next ()) return false;
                         if (contained  ||  poll) reset (false);
                         else                     reset (permute.old ());
                     }
+                    if (count == 0) return false;  // Nothing to iterate over, so done. This test comes here because we need an initial reset (above code) before count is set.
                 }
 
                 if (NN != null)

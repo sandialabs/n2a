@@ -24,6 +24,7 @@ import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.UnsupportedFunctionException;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
+import gov.sandia.n2a.language.function.Draw;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
@@ -2822,14 +2823,23 @@ public class EquationSet implements Comparable<EquationSet>
         }
     }
 
-    public class Conversion
+    public class Conversion implements Comparable<Conversion>
     {
         public EquationSet from;
         public EquationSet to;
+
         public Conversion (EquationSet from, EquationSet to)
         {
             this.from = from;
             this.to   = to;
+        }
+
+        @Override
+        public int compareTo (Conversion that)
+        {
+            int result = from.name.compareTo (that.from.name);
+            if (result != 0) return result;
+            return to.name.compareTo (that.to.name);
         }
     }
 
@@ -3960,6 +3970,60 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Makes each drawX() equation dependent on all generic draw() equations.
+        This forces generic draw() to execute before drawX(), allowing the user
+        to avoid setting canvas configurations on every single drawX() call.
+        This only works for simple dummy variables, but there is little reason
+        for the user to create complex expressions with drawX(). The dummy variable
+        can have multiple conditions. A self-dependency will not be created, so
+        we avoid creating unnecessary state variables.
+    **/
+    public void addDrawDependencies ()
+    {
+        for (EquationSet p : parts) p.addDrawDependencies ();
+
+        // First pass -- collect lists of draw() and drawX() variables.
+        class DrawVisitor implements Visitor
+        {
+            Variable v;
+            List<Variable> draw  = new ArrayList<Variable> ();
+            List<Variable> drawX = new ArrayList<Variable> ();
+
+            public boolean visit (Operator op)
+            {
+                if (op instanceof Draw.Shape)
+                {
+                    drawX.add (v);
+                    return false;
+                }
+                if (op instanceof Draw)
+                {
+                    draw.add (v);
+                    return false;
+                }
+                return true;
+            }
+        }
+        DrawVisitor visitor = new DrawVisitor ();
+
+        for (Variable v : variables)
+        {
+            visitor.v = v;
+            v.visit (visitor);
+        }
+
+        // Second pass -- create dependencies.
+        for (Variable dX : visitor.drawX)
+        {
+            for (Variable d : visitor.draw)
+            {
+                if (d == dX) continue;  // Eliminates direct self-cycle, but cannot eliminate longer cycles.
+                dX.addDependencyOn (d);
+            }
+        }
+    }
+
+    /**
         Populates the order field with the sequence of variable evaluations that minimizes
         the need for buffering. If there are no cyclic dependencies, then this problem can
         be solved exactly. If there are cycles, then this method uses a simple heuristic:
@@ -4187,12 +4251,10 @@ public class EquationSet implements Comparable<EquationSet>
                 }
                 else if (v.name.equals ("$type"))
                 {
-                    // $type is usually 0, except when a part is being constructed in response
-                    // to a type split. Even an external reference to $type is unknown during
-                    // init, because we may be referring to a parent parent that just split
-                    // and then triggered our own construction.
-                    if (init) return null;
-                    else result = new Constant (0);
+                    // $type is usually 0, except after a type split. We can't know
+                    // when that will happen. Also, $type can be nonzero during update
+                    // as well as init, so phase doesn't change the answer here.
+                    return null;
                 }
                 else if (init  &&  v.container == self.container  &&  priorityKnown  &&  v.priority >= self.priority)  // Reference to a variable that has not yet been assigned by init.
                 {

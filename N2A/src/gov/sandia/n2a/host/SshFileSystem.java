@@ -39,7 +39,7 @@ import org.apache.sshd.sftp.common.SftpException;
 
 import gov.sandia.n2a.host.Host.AnyProcess;
 
-// Note that Apache sshd SftpFileSystem is a proper proper NIO FileSystem.
+// Note that Apache sshd SftpFileSystem is a proper NIO FileSystem.
 // We don't use it because this code predates the switch to Apache sshd,
 // and because our implementation has to support serial access when needed.
 public class SshFileSystem extends FileSystem

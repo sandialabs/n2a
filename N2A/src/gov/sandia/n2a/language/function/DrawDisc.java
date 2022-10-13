@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,7 +13,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class DrawDisc extends Draw
+public class DrawDisc extends Draw implements Draw.Shape
 {
     public static Factory factory ()
     {
@@ -37,6 +37,7 @@ public class DrawDisc extends Draw
         if (simulator == null) return new Scalar (0);
 
         Holder H = getHolder (simulator, context);
+        boolean raw = applyKeywords (context, H);
 
         double now;
         if (simulator.currentEvent == null) now = 0;
@@ -52,7 +53,7 @@ public class DrawDisc extends Draw
         double color = 0xFFFFFF;  // white
         if (operands.length > 3) color = ((Scalar) operands[3].eval (context)).value;
 
-        H.drawDisc (now, x, y, radius, (int) color);
+        H.drawDisc (now, raw, x, y, radius, (int) color);
 
         return new Scalar (0);
     }

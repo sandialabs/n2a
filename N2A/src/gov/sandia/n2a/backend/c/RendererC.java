@@ -14,12 +14,16 @@ import gov.sandia.n2a.language.AccessElement;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
 import gov.sandia.n2a.language.Constant;
+import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.MatrixVisitable;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.function.Atan;
 import gov.sandia.n2a.language.function.Columns;
 import gov.sandia.n2a.language.function.Delay;
+import gov.sandia.n2a.language.function.Draw;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
@@ -74,15 +78,26 @@ public class RendererC extends Renderer
 
     public boolean render (Operator op)
     {
-        // TODO: for "3 letter" functions (sin, cos, pow, etc) on matrices, render as visitor which produces a matrix result
-        // TODO: implement min and max on matrices
-
         for (ProvideOperator po : job.extensions)
         {
             Boolean result = po.render (this, op);
             if (result != null) return result;
         }
 
+        if (op instanceof MatrixVisitable)  // For "3 letter" functions (sin, cos, etc) on matrices
+        {
+            Function f = (Function) op;  // MatrixVisitable should only be applied to Functions
+            Operator op0 = f.operands[0];
+            if (op0.getType () instanceof Matrix)
+            {
+                // TODO: handle fixed-point matrix visitor. In many cases, it will require an exponent parameter, possibly two.
+                result.append ("visit (");
+                op0.render (this);
+                result.append (", " + f + ")");
+                return true;
+            }
+            // Fall through to regular cases below.
+        }
         if (op instanceof Add)
         {
             Add a = (Add) op;
@@ -169,6 +184,21 @@ public class RendererC extends Renderer
             Type o = c.value;
             if (o instanceof Scalar)
             {
+                // Trap binary operators where one side is a matrix and the other is a scalar.
+                // In this case, it is necessary to force the numeric type of the scalar, since
+                // C++ won't promote an integer to match a template function.
+                // We trap the individual constant rather than the operator, because OperatorBinary.render()
+                // is rather complex, and we'd rather not recreate it here.
+                if (op.parent instanceof OperatorBinary)
+                {
+                    OperatorBinary b = (OperatorBinary) op.parent;
+                    if (c == b.operand0  &&  b.operand1.getType () instanceof Matrix  ||  c == b.operand1  &&  b.operand0.getType () instanceof Matrix)
+                    {
+                        renderType (op);
+                        return true;
+                    }
+                }
+
                 result.append (print (((Scalar) o).value, c.exponentNext));
                 return true;
             }
@@ -202,6 +232,35 @@ public class RendererC extends Renderer
             if (d.operands.length > 2) d.operands[2].render (this);
             else                       result.append ("0");
             result.append (")");
+            return true;
+        }
+        if (op instanceof Draw)
+        {
+            if (op instanceof Draw.Shape)
+            {
+                Draw d = (Draw) op;
+                int last = d.operands.length - 1;
+                result.append (d.name + "->" + op + " (" + job.SIMULATOR + "currentEvent->t, " + d.getKeywordFlag ("raw"));
+                for (int i = 1; i < last; i++)
+                {
+                    result.append (", ");
+                    d.operands[i].render (this);
+                }
+                if (useExponent) result.append (", " + d.operands[1].exponentNext);
+                result.append (", ");
+                d.operands[last].render (this);  // color
+                result.append (")");
+            }
+            else  // generic Draw
+            {
+                // All it does is set keyword args, so it is already handled by JobC.prepareDynamicObjects().
+
+                // Only return a value if we are not in a dummy equation, that is, if we are part of a proper expression.
+                if (! (op.parent instanceof Variable  &&  ((Variable) op.parent).hasAttribute ("dummy")))
+                {
+                    result.append ("0");
+                }
+            }
             return true;
         }
         if (op instanceof Event)
@@ -258,6 +317,8 @@ public class RendererC extends Renderer
         }
         if (op instanceof HyperbolicTangent)
         {
+            // This case should only be here if we render an exponent parameter. Currently, there is not one.
+            // TODO: create a fixed-point implementation of tanh().
             HyperbolicTangent t = (HyperbolicTangent) op;
             Operator a = t.operands[0];
             result.append ("tanh (");
@@ -398,7 +459,7 @@ public class RendererC extends Renderer
             result.append ("norm (");
             A.render (this);
             result.append (", ");
-            n.operands[1].render (this);
+            renderType (n.operands[1]);
             if (useExponent) result.append (", " + A.exponentNext + ", " + n.exponentNext);
             result.append (")");
             return true;
@@ -606,26 +667,28 @@ public class RendererC extends Renderer
     }
 
     /**
-        Add the float type indicator that print() omits, in order to overcome type matching
-        problems for certain functions, such as min() and max().
+        Change integer values to float in order to overcome type matching problems
+        for certain functions, such as min() and max(). This extends print() to add
+        some gratuitous endings, forcing the type.
     **/
     public void renderType (Operator a)
     {
         if (a.isScalar ())
         {
-            a.render (this);
             double d = a.getDouble ();
-            if ((int) d == d)
+            String s = print (d, a.exponentNext);  // Don't use a.render(), because it produces infinite recursion with the OperatorBinary case above.
+            if ((int) d == d)  // This is mutually-exclusive with the integer test in print() above.
             {
-                if      (job.T.equals ("float" )) result.append (".0f");
-                else if (job.T.equals ("double")) result.append (".0");
+                if      (job.T.equals ("float" )) s += ".0f";
+                else if (job.T.equals ("double")) s += ".0";
             }
+            result.append (s);
         }
         else
         {
             // It's ugly to put casts in front of everything. The way to do better is to determine
             // if the result of the expression is an integer. That's more analysis than it's worth.
-            if ("float|double".contains (job.T)) result.append ("(" + job.T + ") ");
+            if (! job.T.contains ("int")) result.append ("(" + job.T + ") ");
             a.render (this);
         }
     }

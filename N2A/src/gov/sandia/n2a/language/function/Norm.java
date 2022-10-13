@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
@@ -35,16 +36,26 @@ public class Norm extends Function
         };
     }
 
+    public Operator simplify (Variable from, boolean evalOnly)
+    {
+        if (operands.length == 1)
+        {
+            Operator[] nextOperands = new Operator[2];
+            nextOperands[0] = operands[0];
+            nextOperands[1] = new Constant (2);
+            operands = nextOperands;
+        }
+
+        return super.simplify (from, evalOnly);
+    }
+
     public void determineExponent (ExponentContext context)
     {
         Operator op0 = operands[0];  // A
         op0.determineExponent (context);
-        Operator op1 = null;  // n
-        if (operands.length > 1)
-        {
-            op1 = operands[1];
-            op1.determineExponent (context);
-        }
+
+        Operator op1 = operands[1];  // n
+        op1.determineExponent (context);
 
         Instance instance = new Instance ()
         {
@@ -92,12 +103,10 @@ public class Norm extends Function
         Operator op0 = operands[0];  // A
         op0.exponentNext = op0.exponent;
         op0.determineExponentNext ();
-        if (operands.length > 1)
-        {
-            Operator op1 = operands[1];  // n
-            op1.exponentNext = Operator.MSB / 2;
-            op1.determineExponentNext ();
-        }
+
+        Operator op1 = operands[1];  // n
+        op1.exponentNext = Operator.MSB / 2;  // required by fixedpoint in C backend
+        op1.determineExponentNext ();
     }
 
     public void determineUnit (boolean fatal) throws Exception

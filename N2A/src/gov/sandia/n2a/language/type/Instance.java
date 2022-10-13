@@ -270,7 +270,7 @@ public class Instance extends Type
 
     /**
         Prepare variables that require external buffering, but prepare their current value
-        rather than future value, so that the init process can correctly set direct values.
+        rather than buffered value, so that the init process can correctly set direct values.
     **/
     public void clearExternalWriteInit (List<Variable> list)
     {

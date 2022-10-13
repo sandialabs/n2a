@@ -17,22 +17,12 @@ the U.S. Government retains certain rights in this software.
 
 #include <assert.h>
 #include <fstream>
-#include <chrono>
 
 // Include for tracing
 //#include <iostream>
 
 using namespace n2a;
 using namespace std;
-
-
-// utility function -----------------------------------------------------------
-
-double
-getTimestamp ()
-{
-    return std::chrono::time_point_cast<std::chrono::duration<double>> (std::chrono::system_clock::now ()).time_since_epoch ().count ();
-}
 
 
 // class Image ----------------------------------------------------------------

@@ -11,8 +11,7 @@ the U.S. Government retains certain rights in this software.
 
 #include "runtime.h"
 #include "matrix.h"
-#include "fixedpoint.h"
-#include <limits.h>
+#include "math.h"
 
 #ifdef _WIN32
 # define WIN32_LEAN_AND_MEAN
@@ -803,10 +802,10 @@ ConnectPopulation<T>::setProbe (Part<T> * probe)
     bool result = false;
     if (p)
     {
-        c->setPart (index, p);
         // A new connection was just made, so counts (if they are used) have been updated.
         // Step to next endpoint instance if current instance is full.
         if (Max > 0  &&  c->getCount (index) >= Max) result = true;
+        else c->setPart (index, p);
     }
     if (permute  &&  permute->setProbe (c))
     {
@@ -821,7 +820,7 @@ void
 ConnectPopulation<T>::reset (bool newOnly)
 {
     this->newOnly = newOnly;
-    if (newOnly) count = size - firstborn;
+    if (newOnly) count = std::max (0, size - firstborn);
     else         count = size;
 #   ifdef n2a_FP
     // raw multiply = -1+MSB-MSB = -1
@@ -851,32 +850,31 @@ ConnectPopulation<T>::next ()
     {
         if (i >= stop)  // Need to either reset or terminate, depending on whether we have something left to permute with.
         {
-            if (! permute)
+            if (! permute)  // We are the innermost (slowest) iterator. If contained is false, then we are also the only iterator (unary connection).
             {
                 if (stop > 0) return false;  // We already reset once, so done.
-                // A unary connection should only iterate over new instances.
-                // The innermost (slowest) iterator of a multi-way connection should iterate over all instances.
+                // A unary connection should only iterate over new instances, unless we're polling.
+                // The innermost iterator of a multi-way connection should iterate over all instances.
+                // Polling should iterate over all instances.
                 reset (! contained  &&  ! poll);
             }
-            else
+            else  // There is another iterator below us. If it has more items, then we should start iteration again.
             {
                 if (! permute->next ()) return false;
                 if (contained  ||  poll) reset (false);
                 else                     reset (permute->old ());
             }
+            if (count == 0) return false;  // Nothing to iterate over, so done. This test comes here because we need an initial reset (above code) before count is set.
         }
 
         if (NN)
         {
             for (; i < stop; i++)
             {
-                p = filtered[i];
-                if (p->getNewborn ())
-                {
-                    if (Max == 0) break;
-                    c->setPart (index, p);
-                    if (c->getCount (index) < Max) break;
-                }
+                p = filtered[i];  // Contains only non-null instances that satisfy the newOnly constraint (when newOnly is true).
+                if (Max == 0) break;
+                c->setPart (index, p);
+                if (c->getCount (index) < Max) break;
             }
         }
         else if (newOnly)
@@ -940,29 +938,24 @@ template<class T>
 void
 ConnectPopulationNN<T>::reset (bool newOnly)
 {
+    assert (this->NN);
     this->newOnly = newOnly;
-    if (this->NN)
+    std::vector<typename KDTree<T>::Entry *> result;
+    this->NN->find (*this->xyz, result);
+    this->count = result.size ();
+    this->filtered.clear ();
+    this->filtered.reserve (this->count);
+    if (newOnly)
     {
-        std::vector<typename KDTree<T>::Entry *> result;
-        this->NN->find (*this->xyz, result);
-        this->count = result.size ();
-        this->filtered.resize (this->count);
-        int j = 0;
-        for (auto e : result) this->filtered[j++] = e->part;
-        this->i = 0;
+        for (auto e : result) if (e->part->getNewborn ()) this->filtered.push_back (e->part);
+        this->count = this->filtered.size ();
     }
     else
     {
-        if (newOnly) this->count = this->size - this->firstborn;
-        else         this->count = this->size;
-#       ifdef n2a_FP
-        if (this->count > 1) this->i = (int) round ((int64_t) uniform<T> () * (this->count - 1) >> FP_MSB + 1);
-#       else
-        if (this->count > 1) this->i = (int) round (uniform<T> () * (this->count - 1));
-#       endif
-        else                 this->i = 0;
+        for (auto e : result)                             this->filtered.push_back (e->part);
     }
-    this->stop = this->i + this->count;
+    this->i = 0;
+    this->stop = this->count;
 }
 
 
@@ -1922,7 +1915,7 @@ template<class T>
 T
 DelayBuffer<T>::step (T now, T delay, T futureValue, T initialValue)
 {
-    if (n2a::isnan (value)) value = initialValue;
+    if (std::isnan (value)) value = initialValue;
     buffer.emplace (now + delay, futureValue);
     while (true)
     {

@@ -39,6 +39,10 @@ the U.S. Government retains certain rights in this software.
 
 namespace n2a
 {
+    // Utility function
+    /// Create all parent directories of given file.
+    void mkdirs (const String & file);
+
     // MNode class ID constants
     // This is a hack to avoid the cost of RTTI.
     // (Everything is an MNode, so we don't have a specific bit for that.)

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,7 +13,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class DrawBlock extends Draw
+public class DrawBlock extends Draw implements Draw.Shape
 {
     public static Factory factory ()
     {
@@ -37,6 +37,7 @@ public class DrawBlock extends Draw
         if (simulator == null) return new Scalar (0);
 
         Holder H = getHolder (simulator, context);
+        boolean raw = applyKeywords (context, H);
 
         double now;
         if (simulator.currentEvent == null) now = 0;
@@ -55,7 +56,7 @@ public class DrawBlock extends Draw
         double color = 0xFFFFFF;  // white
         if (operands.length > 4) color = ((Scalar) operands[4].eval (context)).value;
 
-        H.drawBlock (now, x, y, w, h, (int) color);
+        H.drawBlock (now, raw, x, y, w, h, (int) color);
 
         return new Scalar (0);
     }

@@ -28,6 +28,7 @@ import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
+import gov.sandia.n2a.language.function.Draw;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Mfile;
@@ -35,6 +36,7 @@ import gov.sandia.n2a.language.function.Mmatrix;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.operator.Add;
+import gov.sandia.n2a.language.operator.MultiplyElementwise;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
@@ -64,6 +66,7 @@ import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.Map.Entry;
 
 public class JobC extends Thread
 {
@@ -94,26 +97,29 @@ public class JobC extends Thread
     public    boolean shared;  // make shared rather than static library; only meaningful when lib is true
     public    boolean csharp;  // Emit library code for use by C# (and other CLR languages). Only has an effect when lib is true.
     public    boolean tls;     // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
+    protected boolean usesPolling;
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
     
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
-    protected HashMap<Object,String> matrixNames    = new HashMap<Object,String> ();
-    protected HashMap<Object,String> mfileNames     = new HashMap<Object,String> ();
-    protected HashMap<Object,String> inputNames     = new HashMap<Object,String> ();
-    protected HashMap<Object,String> outputNames    = new HashMap<Object,String> ();
-    public    HashMap<Object,String> stringNames    = new HashMap<Object,String> ();
-    public    HashMap<Object,String> extensionNames = new HashMap<Object,String> ();  // Shared by all extension-provided operators.
+    protected HashMap<Object,String> matrixNames      = new HashMap<Object,String> ();
+    protected HashMap<Object,String> mfileNames       = new HashMap<Object,String> ();
+    protected HashMap<Object,String> inputNames       = new HashMap<Object,String> ();
+    protected HashMap<Object,String> outputNames      = new HashMap<Object,String> ();
+    protected HashMap<Object,String> imageOutputNames = new HashMap<Object,String> ();
+    public    HashMap<Object,String> stringNames      = new HashMap<Object,String> ();
+    public    HashMap<Object,String> extensionNames   = new HashMap<Object,String> ();  // Shared by all extension-provided operators.
 
     // Work around the initialization sequencing problem by delaying the call to holderHelper until main().
     // To do this, we need to stash variable names. This may seem redundant with the above maps,
     // but this is a more limited case.
-    protected List<Constant>   staticMatrix  = new ArrayList<Constant> ();  // constant matrices that should be statically initialized
-    protected List<ReadMatrix> mainMatrix    = new ArrayList<ReadMatrix> ();
-    protected List<Mfile>      mainMfile     = new ArrayList<Mfile> ();
-    protected List<Input>      mainInput     = new ArrayList<Input> ();
-    protected List<Output>     mainOutput    = new ArrayList<Output> ();
-    public    List<Operator>   mainExtension = new ArrayList<Operator> ();  // Shared by all extension-provided operators.
+    protected List<Constant>   staticMatrix    = new ArrayList<Constant> ();  // constant matrices that should be statically initialized
+    protected List<ReadMatrix> mainMatrix      = new ArrayList<ReadMatrix> ();
+    protected List<Mfile>      mainMfile       = new ArrayList<Mfile> ();
+    protected List<Input>      mainInput       = new ArrayList<Input> ();
+    protected List<Output>     mainOutput      = new ArrayList<Output> ();
+    protected List<Draw>       mainImageOutput = new ArrayList<Draw> ();
+    public    List<Operator>   mainExtension   = new ArrayList<Operator> ();  // Shared by all extension-provided operators.
 
     public JobC (MNode job)
     {
@@ -325,7 +331,7 @@ public class JobC extends Thread
             if (debug ) c.setDebug ();
             if (gprof ) c.setProfiling ();
             c.addInclude (runtimeDir);
-            //c.addInclude (ffmpegDir.resolve ("include"));;
+            //c.addInclude (ffmpegDir.resolve ("include"));
             c.addDefine ("n2a_T", T);
             if (T.contains ("int")) c.addDefine ("n2a_FP");
             if (tls) c.addDefine ("n2a_TLS");
@@ -348,7 +354,7 @@ public class JobC extends Thread
         return unpackRuntime
         (
             JobC.class, job, runtimeDir, "runtime/",
-            "fixedpoint.cc", "fixedpoint.h", "fixedpoint.tcc",
+            "math.h", "fixedpoint.cc",
             "holder.cc", "holder.h", "holder.tcc",
             "KDTree.h", "StringLite.h",
             "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
@@ -535,6 +541,7 @@ public class JobC extends Thread
         digestedModel.collectSplits ();
         digestedModel.findDeath ();  // Required by addImplicitDependencies(). When run before findInitOnly(), some parts may be marked lethalP when they don't need to be. One solution would be to run findDeath() again after findInitOnly().
         addImplicitDependencies (digestedModel);
+        digestedModel.addDrawDependencies ();
         digestedModel.removeUnused ();  // especially get rid of unneeded $variables created by addSpecials()
         createBackendData (digestedModel);
         findPathToContainer (digestedModel);
@@ -789,9 +796,6 @@ public class JobC extends Thread
         bed.analyze (s);
         bed.analyzeLastT (s);
 
-        // Special case for host that clobber stdout
-        // Look for output("", ...) and replace first parameter with "out"
-        if (! env.clobbersOut ()) return;
         Transformer t = new Transformer ()
         {
             public Operator transform (Operator op)
@@ -799,8 +803,18 @@ public class JobC extends Thread
                 if (op instanceof Output)
                 {
                     Output out = (Output) op;
-                    if (out.operands[0].toString ().isBlank ()) out.operands[0] = new Constant ("out");
-                    return out;  // Does not really replace output(), but does terminate descent.
+                    // Special case for hosts that clobber stdout
+                    // If first parameter is empty string, then replace with "out".
+                    if (env.clobbersOut ()  &&  out.operands[0].toString ().isBlank ())
+                    {
+                        out.operands[0] = new Constant ("out");
+                    }
+                    return null;  // op is modified in place. We continue descent because output() can contain another output() function (though that wouldn't be a normal thing to do).
+                }
+                if (op instanceof MultiplyElementwise)
+                {
+                    MultiplyElementwise m = (MultiplyElementwise) op;
+                    return new MultiplyElementwiseC (m);  // ctor does all the work of transferring operands to the new object.
                 }
                 return null;
             }
@@ -827,10 +841,6 @@ public class JobC extends Thread
         }
         result.append ("#include \"Matrix.tcc\"\n");
         result.append ("#include \"MatrixFixed.tcc\"\n");
-        if (T.contains ("int"))
-        {
-            result.append ("#include \"fixedpoint.tcc\"\n");
-        }
         for (ProvideOperator po : extensions)
         {
             Path include = po.include (this);
@@ -840,6 +850,7 @@ public class JobC extends Thread
         result.append ("\n");
         result.append ("#include <iostream>\n");
         result.append ("#include <vector>\n");
+        result.append ("#include <unordered_set>\n");  // only needed for polling
         result.append ("#include <cmath>\n");
         result.append ("#include <csignal>\n");
         result.append ("\n");
@@ -1111,6 +1122,16 @@ public class JobC extends Thread
                     Type m = constant.value;
                     if (m instanceof Matrix)
                     {
+                        // Determine if matrix constant already exists. Don't create duplicates.
+                        for (Constant c : staticMatrix)
+                        {
+                            Matrix A = (Matrix) c.value;
+                            if (A.compareTo (m) != 0) continue;
+                            constant.name = c.name;
+                            matrixNames.put (constant, constant.name);
+                            return false;
+                        }
+
                         constant.name = "Matrix" + matrixNames.size ();
                         matrixNames.put (constant, constant.name);
                         staticMatrix.add (constant);
@@ -1205,6 +1226,17 @@ public class JobC extends Thread
                                         mainOutput.add (o);
                                     }
                                 }
+                                else if (f instanceof Draw)
+                                {
+                                    Draw d = (Draw) f;
+                                    d.name = imageOutputNames.get (fileName);
+                                    if (d.name == null)
+                                    {
+                                        d.name = "Draw" + imageOutputNames.size ();
+                                        imageOutputNames.put (fileName, d.name);
+                                        mainImageOutput.add (d);
+                                    }
+                                }
                             }
                         }
                         else if (operand0 instanceof Add) // Dynamic file name (no static handle)
@@ -1237,6 +1269,13 @@ public class JobC extends Thread
                                 outputNames.put (op,       o.name     = "Output"   + outputNames.size ());
                                 stringNames.put (operand0, o.fileName = "fileName" + stringNames.size ());
                                 add.name = o.fileName;
+                            }
+                            else if (f instanceof Draw)
+                            {
+                                Draw d = (Draw) f;
+                                imageOutputNames.put (op,       d.name     = "Draw"     + imageOutputNames.size ());
+                                stringNames     .put (operand0, d.fileName = "fileName" + stringNames.size ());
+                                add.name = d.fileName;
                             }
                         }
                         else if (operand0 instanceof AccessVariable)  // Dynamic file name in proper variable. Could be "initOnly".
@@ -1287,6 +1326,17 @@ public class JobC extends Thread
                                     outputNames.put (v, o.name);
                                 }
                                 o.fileName = fileName;
+                            }
+                            else if (f instanceof Draw)
+                            {
+                                Draw d = (Draw) f;
+                                d.name = imageOutputNames.get (v);
+                                if (d.name == null)
+                                {
+                                    d.name = "Draw" + imageOutputNames.size ();
+                                    imageOutputNames.put (v, d.name);
+                                }
+                                d.fileName = fileName;
                             }
                         }
                     }
@@ -1342,6 +1392,10 @@ public class JobC extends Thread
         {
             result.append (thread_local + "OutputHolder<" + T + "> * " + o.name + ";\n");
         }
+        for (Draw d : mainImageOutput)
+        {
+            result.append (thread_local + "ImageOutput<" + T + "> * " + d.name + ";\n");
+        }
     }
 
     public void generateMainInitializers (RendererC context)
@@ -1372,6 +1426,19 @@ public class JobC extends Thread
         for (Output o : mainOutput)
         {
             result.append ("  " + o.name + " = outputHelper<" + T + "> (\"" + o.operands[0].getString () + "\");\n");
+        }
+        for (Draw d : mainImageOutput)
+        {
+            result.append ("  " + d.name + " = imageOutputHelper<" + T + "> (\"" + d.operands[0].getString () + "\");\n");
+            if (d.keywords == null) continue;
+            boolean allConstant = true;
+            for (Operator k : d.keywords.values ())
+            {
+                if (k instanceof Constant) continue;
+                allConstant = false;
+                break;
+            }
+            if (allConstant) prepareDrawKeywords (d, context, "  ");
         }
     }
 
@@ -1496,39 +1563,18 @@ public class JobC extends Thread
         // Regardless of approach, we will end up paying for extra storage.
         if (bed.poll >= 0)
         {
-            // Since local declarations are emitted first, we should have full access
-            // to connection class members.
-
-            result.append ("template <> hash<" + prefix + " *>\n");
+            result.append ("template <>\n");
+            result.append ("struct std::hash<" + prefix + " *>\n");
             result.append ("{\n");
-            result.append ("  size_t operator() (const " + prefix + " * a) const\n");
-            result.append ("  {\n");
-            result.append ("    size_t result = 0;\n");
-            result.append ("    int shift = sizeof (size_t) * 8 / " + s.connectionBindings.size () + ";\n");
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                String alias = mangle (c.alias);
-                result.append ("    result = (result << shift) + a->" + alias + "->" + mangle ("$index") + ";\n");
-            }
-            result.append ("    return result;\n");
-            result.append ("  }\n");
-            result.append ("}\n");
+            result.append ("  size_t operator() (const " + prefix + " * a) const;\n");
+            result.append ("};\n");
             result.append ("\n");
 
-            result.append ("template <> equal_to<" + prefix + " *>\n");
+            result.append ("template <>\n");
+            result.append ("struct std::equal_to<" + prefix + " *>\n");
             result.append ("{\n");
-            result.append ("  bool operator() (const " + prefix + " * a, const " + prefix + " * b) const\n");
-            result.append ("  {\n");
-            for (ConnectionBinding c : s.connectionBindings)
-            {
-                // Unlike the hash function, we don't bother looking up $index.
-                // The endpoints must be exactly the same object to match.
-                String alias = mangle (c.alias);
-                result.append ("    if (a->" + alias + " != b->" + alias + ") return false;\n");
-            }
-            result.append ("    return true;\n");
-            result.append ("  }\n");
-            result.append ("}\n");
+            result.append ("  bool operator() (const " + prefix + " * a, const " + prefix + " * b) const;\n");
+            result.append ("};\n");
             result.append ("\n");
         }
 
@@ -1640,10 +1686,10 @@ public class JobC extends Thread
         if (! bed.singleton)
         {
             result.append ("  virtual Part<" + T + "> * create ();\n");
-            if (bed.index != null)
+            if (bed.index != null  ||  bed.poll >= 0)
             {
                 result.append ("  virtual void add (Part<" + T + "> * part);\n");
-                if (bed.trackInstances)
+                if (bed.trackInstances  ||  bed.poll >= 0)
                 {
                     result.append ("  virtual void remove (Part<" + T + "> * part);\n");
                 }
@@ -1693,7 +1739,7 @@ public class JobC extends Thread
             result.append ("  virtual void multiply (" + T + " scalar);\n");
             result.append ("  virtual void addToMembers ();\n");
         }
-        if (bed.populationCanBeInactive)
+        if (bed.populationCanBeInactive  ||  bed.poll >= 0)
         {
             result.append ("  virtual void connect ();\n");
         }
@@ -1972,7 +2018,7 @@ public class JobC extends Thread
         {
             EquationSet source = pair.from;
             EquationSet dest   = pair.to;
-            result.append ("  void " + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, int " + mangle ("$type") + ");\n");
+            result.append ("  void Convert" + mangle (source.name) + mangle (dest.name) + " (" + prefix (source) + " * from, int " + mangle ("$type") + ");\n");
         }
 
         // Unit class trailer
@@ -1997,6 +2043,42 @@ public class JobC extends Thread
         context.global = true;
         String ps = prefix (s);
         String ns = ps + "_Population::";  // namespace for all functions associated with part s
+
+        // Functions for pollSorted
+        if (bed.poll >= 0)
+        {
+            result.append ("size_t\n");
+            result.append ("std::hash<" + ps + " *>::operator() (const " + ps + " * a) const\n");
+            result.append ("{\n");
+            int count = s.connectionBindings.size ();
+            if (count > 1)
+            {
+                result.append ("  const int shift = sizeof (size_t) * 8 / " + count + ";\n");
+            }
+            result.append     ("  size_t result =              a->" + mangle (s.connectionBindings.get (0).alias) + "->" + mangle ("$index") + ";\n");
+            for (int i = 1; i < count; i++)
+            {
+                ConnectionBinding c = s.connectionBindings.get (i);
+                result.append ("  result = (result << shift) + a->" + mangle (c.alias) + "->" + mangle ("$index") + ";\n");
+            }
+            result.append ("  return result;\n");
+            result.append ("}\n");
+            result.append ("\n");
+
+            result.append ("bool\n");
+            result.append ("std::equal_to<" + ps + " *>::operator() (const " + ps + " * a, const " + ps + " * b) const\n");
+            result.append ("{\n");
+            for (ConnectionBinding c : s.connectionBindings)
+            {
+                // Unlike the hash function, we don't bother looking up $index.
+                // The endpoints must be exactly the same object to match.
+                String alias = mangle (c.alias);
+                result.append ("  if (a->" + alias + " != b->" + alias + ") return false;\n");
+            }
+            result.append ("  return true;\n");
+            result.append ("}\n");
+            result.append ("\n");
+        }
 
         // Population ctor
         if (bed.needGlobalCtor)
@@ -2065,7 +2147,7 @@ public class JobC extends Thread
         }
 
         // Population add / remove
-        if (bed.index != null  &&  ! bed.singleton  ||  bed.poll >= 0)
+        if (! bed.singleton  &&  (bed.index != null  ||  bed.poll >= 0))
         {
             result.append ("void " + ns + "add (Part<" + T + "> * part)\n");
             result.append ("{\n");
@@ -2087,7 +2169,7 @@ public class JobC extends Thread
                     result.append ("  firstborn = min (firstborn, p->" + mangle ("$index") + ");\n");
                 }
             }
-            else if (bed.index != null  &&  ! bed.singleton)
+            else if (bed.index != null)
             {
                 result.append ("  if (p->" + mangle ("$index") + " < 0) p->" + mangle ("$index") + " = nextIndex++;\n");
             }
@@ -2301,8 +2383,15 @@ public class JobC extends Thread
 
                     // Check for newly-created parts in endpoint populations.
                     // To limit work, only do this for shallow structures that don't require enumerating sub-populations.
+                    Set<EquationSet> endpoints = new HashSet<EquationSet> ();
                     for (ConnectionBinding target : s.connectionBindings)
                     {
+                        // Prevent duplicate code for connections to the same endpoint.
+                        // Note that the check for new instances is only meaningful for distinct endpoints.
+                        // The path to the endpoint doesn't matter.
+                        if (endpoints.contains (target.endpoint)) continue;
+                        endpoints.add (target.endpoint);
+
                         BackendDataC bedc = (BackendDataC) target.endpoint.backendData;
                         if (bedc.canResize  ||  bedc.canGrow) checkInstances (s, true, "", target.resolution, 0, "  ", result);
                     }
@@ -2557,44 +2646,51 @@ public class JobC extends Thread
             else  // poll >= 0
             {
                 // Emit poll-aware code
-
-                result.append ("  bool poll = false;\n");
-                result.append ("  if (" + SIMULATOR + "currentEvent->t >= pollDeadline)\n");
-                result.append ("  {\n");
-                result.append ("    poll = true;\n");
-                result.append ("    pollDeadline = " + SIMULATOR + "currentEvent->t + ");
-                if (T.contains ("int"))
+                if (bed.poll > 0)
                 {
-                    Variable dt = digestedModel.find (new Variable ("$t", 1));
-                    result.append (context.print (bed.poll, dt.exponent));
+                    result.append ("  bool poll = false;\n");
+                    result.append ("  if (" + SIMULATOR + "currentEvent->t >= pollDeadline)\n");
+                    result.append ("  {\n");
+                    result.append ("    poll = true;\n");
+                    result.append ("    pollDeadline = " + SIMULATOR + "currentEvent->t + ");
+                    if (T.contains ("int"))
+                    {
+                        Variable dt = digestedModel.find (new Variable ("$t", 1));
+                        result.append (context.print (bed.poll, dt.exponent));
+                    }
+                    else
+                    {
+                        result.append (bed.poll);
+                    }
+                    result.append (";\n");
+                    result.append ("  }\n");
                 }
-                else
+                else  // poll == 0
                 {
-                    result.append (bed.poll);
+                    result.append ("  bool poll = true;\n");
                 }
-                result.append (";\n");
-                result.append ("  }\n");
                 result.append ("\n");
                 result.append ("  ConnectIterator<" + T + "> * outer = getIterators (poll);\n");
                 result.append ("  if (outer)\n");
                 result.append ("  {\n");
                 result.append ("    EventStep<" + T + "> * event = container->getEvent ();\n");
-                result.append ("    Part<" + T + "> * c = create ();\n");
+                result.append ("    " + ps + " * c = (" + ps + " *) create ();\n");
                 result.append ("    outer->setProbe (c);\n");
                 result.append ("    while (outer->next ())\n");
                 result.append ("    {\n");
-                result.append ("      " + T + " create = c->getP ();\n");
-                result.append ("      if (create <= 0) continue;\n");
-                result.append ("      if (create < 1  &&  create < uniform<" + T + "> ()");
+                result.append ("      " + T + " p = c->getP ();\n");
+                result.append ("      if (p <= 0) continue;\n");
+                result.append ("      if (p < 1  &&  p < uniform<" + T + "> ()");
                 if (T.contains ("int")) result.append (" >> 16");
                 result.append (") continue;\n");
                 result.append ("      if (poll  &&  pollSorted.count (c)) continue;\n");
                 result.append ("\n");
+                result.append ("      add (c);\n");  // We don't use allocate() for connections, so need to call add() explicitly. TODO: consider managing memory for connections.
                 result.append ("      c->enterSimulation ();\n");
                 result.append ("      event->enqueue (c);\n");
                 result.append ("      c->init ();\n");
                 result.append ("\n");
-                result.append ("      c = this->create ();\n");
+                result.append ("      c = (" + ps + " *) create ();\n");
                 result.append ("      outer->setProbe (c);\n");
                 result.append ("    }\n");
                 result.append ("    delete c;\n");
@@ -2819,8 +2915,8 @@ public class JobC extends Thread
             else
             {
                 ConnectionMatrix cm = s.connectionMatrix;
-                result.append ("  ConnectPopulation<" + T + "> * rows = getIterator (" + cm.rows.index + ");\n");
-                result.append ("  ConnectPopulation<" + T + "> * cols = getIterator (" + cm.cols.index + ");\n");
+                result.append ("  ConnectPopulation<" + T + "> * rows = getIterator (" + cm.rows.index + ", poll);\n");  // TODO: does it make sense to pass "poll" rather than "false" here?
+                result.append ("  ConnectPopulation<" + T + "> * cols = getIterator (" + cm.cols.index + ", poll);\n");
                 result.append ("  if (rows->size == 0  ||  cols->size == 0)\n");
                 result.append ("  {\n");
                 result.append ("    delete rows;\n");
@@ -3125,11 +3221,11 @@ public class JobC extends Thread
             result.append ("{\n");
             s.setInit (1);
 
-            for (Variable v : bed.localBufferedExternal)
+            for (Variable v : bed.localBufferedExternalWrite)
             {
-                // Clear both buffered and regular values, so we can use a proper combiner during init.
-                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
-                result.append ("  " + clearAccumulator (mangle (         v), v, context) + ";\n");
+                // Clear current values so we can use a proper combiner during init.
+                if (v.assignment == Variable.REPLACE) continue;
+                result.append ("  " + clearAccumulator (mangle (v), v, context) + ";\n");
             }
             for (EventTarget et : bed.eventTargets)
             {
@@ -3190,7 +3286,21 @@ public class JobC extends Thread
             {
                 multiconditional (v, context, "  ");
             }
-            // TODO: may need to deal with REPLACE for buffered variables. See internal.Part
+            if (bed.type != null)
+            {
+                result.append ("  " + mangle (bed.type) + " = 0;\n");
+            }
+            for (Variable v : bed.localBufferedExternalWrite)
+            {
+                if (v.assignment == Variable.REPLACE)
+                {
+                    result.append ("  " + mangle ("next_", v) + " = " + resolve (v.reference, context, false) + ";\n");
+                }
+                else
+                {
+                    result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
+                }
+            }
             if (bed.localInit.contains (bed.dt))
             {
                 result.append ("  if (" + mangle (bed.dt) + " != event->dt) setPeriod (" + mangle (bed.dt) + ");\n");
@@ -3438,7 +3548,7 @@ public class JobC extends Thread
 
             if (bed.type != null)
             {
-                result.append ("  switch (" + mangle ("$type") + ")\n");
+                result.append ("  switch ((int) " + mangle ("$type") + ")\n");
                 result.append ("  {\n");
                 // Each "split" is one particular set of new parts to transform into.
                 // Each combination requires a separate piece of code. Thus, the outer
@@ -3471,7 +3581,7 @@ public class JobC extends Thread
                         }
                         else
                         {
-                            result.append ("      " + containerOf (s, false, "") + mangle (s.name) + "_2_" + mangle (to.name) + " (this, " + (j + 1) + ");\n");
+                            result.append ("      " + containerOf (s, false, "") + "Convert" + mangle (s.name) + mangle (to.name) + " (this, " + (j + 1) + ");\n");
                         }
                     }
                     if (used)
@@ -4309,36 +4419,47 @@ public class JobC extends Thread
         for (Conversion pair : conversions)
         {
             EquationSet source = pair.from;
-            EquationSet dest   = pair.to;
+            EquationSet target = pair.to;
             boolean connectionSource = source.connectionBindings != null;
-            boolean connectionDest   = dest  .connectionBindings != null;
-            if (connectionSource != connectionDest)
+            boolean connectionTarget = target.connectionBindings != null;
+            if (connectionSource != connectionTarget)
             {
-                Backend.err.get ().println ("Can't change $type between connection and non-connection.");
+                // A connection *must* know the instances it connects, while a compartment
+                // cannot know those instances. Thus, one can never be converted to the other.
+                PrintStream err = Backend.err.get ();
+                if (target.connectionBindings == null) err.println ("Can't change $type from connection to compartment.");
+                else                                   err.println ("Can't change $type from compartment to connection.");
+                err.println ("\tsource part:\t"      + (source.container == null ? source.name : source.prefix ()));
+                err.println ("\tdestination part:\t" + (target.container == null ? target.name : target.prefix ()));
                 throw new Backend.AbortRun ();
-                // Why not? Because a connection *must* know the instances it connects, while
-                // a compartment cannot know those instances. Thus, one can never be converted
-                // to the other.
             }
 
-            // The "2" functions only have local meaning, so they are never virtual.
+            // The "Convert" functions only have local meaning, so they are never virtual.
             // Must do everything init() normally does, including increment $n.
             // Parameters:
             //   from -- the source part
-            //   visitor -- the one managing the source part
             //   $type -- The integer index, in the $type expression, of the current target part. The target part's $type field will be initialized with this number (and zeroed after one cycle).
-            result.append ("void " + ns + mangle (source.name) + "_2_" + mangle (dest.name) + " (" + mangle (source.name) + " * from, int " + mangle ("$type") + ")\n");
+            result.append ("void " + ns + "Convert" + mangle (source.name) + mangle (target.name) + " (" + prefix (source) + " * from, int " + mangle ("$type") + ")\n");
             result.append ("{\n");
-            result.append ("  " + mangle (dest.name) + " * to = " + mangle (dest.name) + ".allocate ();\n");  // if this is a recycled part, then clear() is called
-            if (connectionDest)
+            String pt = prefix (target);
+            result.append ("  " + pt + " * to = (" + pt + " *) " + mangle (target.name) + ".allocate ();\n");  // if this is a recycled part, then clear() is called
+            BackendDataC tbed = (BackendDataC) target.backendData;
+            if (tbed.pathToContainer == null)
+            {
+                result.append ("  to->container = this;\n");
+            }
+            if (connectionTarget)
             {
                 // Match connection bindings
-                for (ConnectionBinding c : dest.connectionBindings)
+                for (ConnectionBinding c : target.connectionBindings)
                 {
                     ConnectionBinding d = source.findConnection (c.alias);
                     if (d == null)
                     {
-                        Backend.err.get ().println ("Unfulfilled connection binding during $type change.");
+                        PrintStream err = Backend.err.get ();
+                        err.println ("Unfulfilled connection binding during $type change: " + c.alias);
+                        err.println ("\tsource part:\t"      + (source.container == null ? source.name : source.prefix ()));
+                        err.println ("\tdestination part:\t" + (target.container == null ? target.name : target.prefix ()));
                         throw new Backend.AbortRun ();
                     }
                     result.append ("  to->" + mangle (c.alias) + " = from->" + mangle (c.alias) + ";\n");
@@ -4349,21 +4470,19 @@ public class JobC extends Thread
             result.append ("  getEvent ()->enqueue (to);\n");
 
             // Match variables between the two sets.
-            // TODO: a match between variables should be marked as a dependency. This might change some "dummy" variables into stored values.
-            String [] forbiddenAttributes = new String [] {"global", "constant", "accessor", "reference", "temporary", "dummy", "preexistent"};
-            for (Variable v : dest.variables)
+            // TODO: a match between variables should be marked as a dependency. That should be done much earlier by the middle end.
+            for (Variable v : tbed.localMembers)
             {
                 if (v.name.equals ("$type"))
                 {
                     result.append ("  to->" + mangle (v) + " = " + mangle ("$type") + ";\n");  // initialize new part with its position in the $type split
                     continue;
                 }
-                if (v.hasAny (forbiddenAttributes)) continue;
+                if (v.name.equals ("$index")) continue;
+
                 Variable v2 = source.find (v);
-                if (v2 != null)
-                {
-                    result.append ("  to->" + mangle (v) + " = " + resolve (v2.reference, context, false, "from->", false) + ";\n");
-                }
+                if (v2 == null) continue;
+                result.append ("  to->" + mangle (v) + " = " + resolve (v2.reference, context, false, "from->", false) + ";\n");
             }
             result.append ("  to->init ();\n");  // Unless the user qualifies code with $type, the values just copied above will simply be overwritten.
 
@@ -4923,6 +5042,29 @@ public class JobC extends Thread
                     }
                     return true;
                 }
+                if (op instanceof Draw)
+                {
+                    Draw d = (Draw) op;
+                    boolean needKeywords = false;
+                    if (! (d.operands[0] instanceof Constant)  &&  (v == null  ||  ! bed.defined.contains (v)))
+                    {
+                        context.result.append (pad + "ImageOutput<" + T + "> * " + d.name + " = imageOutputHelper<" + T + "> (" + d.fileName + ");\n");
+                        needKeywords = true;
+                        if (v != null) bed.defined.add (v);
+                    }
+                    if (d.keywords != null)
+                    {
+                        // If any keyword is non-constant, we should output the whole set.
+                        for (Operator k : d.keywords.values ())
+                        {
+                            if (needKeywords) break;
+                            if (k instanceof Constant) continue;
+                            needKeywords = true;
+                        }
+                        if (needKeywords) prepareDrawKeywords (d, context, pad);
+                    }
+                    return true;
+                }
                 return true;
             }
         };
@@ -4937,6 +5079,32 @@ public class JobC extends Thread
         if (add.operand1 instanceof Add) result.addAll (flattenAdd ((Add) add.operand1));
         else                             result.add (add.operand1);
         return result;
+    }
+
+    public void prepareDrawKeywords (Draw d, RendererC context, String pad)
+    {
+        for (Entry<String,Operator> k : d.keywords.entrySet ())
+        {
+            context.result.append (pad + d.name + ".");
+            switch (k.getKey ())
+            {
+                case "width":
+                    context.result.append ("width");
+                    if (! d.keywords.containsKey ("height")) context.result.append (" = " + d.name + ".height");
+                    break;
+                case "height":
+                    context.result.append ("height");
+                    if (! d.keywords.containsKey ("width")) context.result.append (" = " + d.name + ".width");
+                    break;
+                case "color":
+                    context.result.append ("color");
+                    break;
+                // Silently ignore invalid keywords.
+            }
+            context.result.append (" = ");
+            k.getValue ().render (context);
+            context.result.append (";\n");
+        }
     }
 
     public String mangle (Variable v)
@@ -4964,14 +5132,26 @@ public class JobC extends Thread
         this won't produce a unique identifier. Examples:
             A.B and A_B are both in the model
             A' and A_ are both in the model
-        These are very unlikely in practice, and ignoring them will make more
-        readable code.
+        These are unlikely in practice, and ignoring them will produce more readable code.
     **/
     public String mangle (String prefix, String input)
     {
-        // Use filter from NodePart.
-        // NodePart allows spaces in names, so we have to do one extra step for C++.
-        if (supportsUnicodeIdentifiers) return prefix + NodePart.validIdentifierFrom (input).replaceAll (" ", "_");
+        // Compare with NodePart.validIdentifierFrom()
+        // Assuming a non-empty prefix, we don't worry about valid start character.
+        // We also change spaces to underscores.
+        if (supportsUnicodeIdentifiers)
+        {
+            input = input.trim ();
+
+            StringBuilder result = new StringBuilder ();
+            for (char c : input.toCharArray ())
+            {
+                if (Character.isJavaIdentifierPart (c)) result.append (c);
+                else                                    result.append ('_');
+            }
+
+            return prefix + result;
+        }
 
         // Old-school mangling
         // Just like the above method, this is not guaranteed to create unique names,

@@ -654,6 +654,7 @@ public class NodeJob extends NodeBase
             if (fileName.endsWith   (".so"     )) return false;
             if (fileName.endsWith   (".o"      )) return false;
             if (fileName.endsWith   (".obj"    )) return false;  // Hide intermediate object file left by CL
+            if (fileName.endsWith   (".pdb"    )) return false;
             if (fileName.endsWith   (".columns")) return false;  // Hint for column names when simulator doesn't output them.
             if (fileName.endsWith   (".mod"    )) return false;  // NEURON files
 

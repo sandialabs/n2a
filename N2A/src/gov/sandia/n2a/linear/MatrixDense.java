@@ -56,8 +56,8 @@ public class MatrixDense extends Matrix
 
     public MatrixDense (Matrix A)
     {
-        columns = A.columns ();
         rows    = A.rows ();
+        columns = A.columns ();
         data    = new double[rows * columns];
         strideR = 1;
         strideC = rows;

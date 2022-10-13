@@ -5,7 +5,7 @@ Copyright (c) 2001-2004 Dept. of Computer Science and Beckman Institute,
 Distributed under the UIUC/NCSA Open Source License.
 
 
-Copyright 2005-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -56,29 +56,76 @@ public:
 template<class T> class Matrix;
 
 template<class T> void      clear      (      MatrixAbstract<T> & A, const T scalar = (T) 0);    ///< Set all elements to given value.
-template<class T> T         norm       (const MatrixAbstract<T> & A, T n);                       ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
+template<class T> T         norm       (const MatrixAbstract<T> & A, T n = (T) 2);               ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
 template<class T> T         sumSquares (const MatrixAbstract<T> & A);                            ///< Equivalent to norm(A,2)^2, but without taking the square root.
 template<class T> Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T &)); ///< Apply function() to each element, and return the results in a new Matrix of equal size.
 template<class T> Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
 
+// Whole-matrix comparison
 template<class T> bool operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);  ///< Two matrices are equal if they have the same shape and the same elements.
 template<class T> bool operator != (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 {
     return ! (A == B);
 }
 
-template<class T> Matrix<T> operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Elementwise multiplication.  The prettiest name for this operator would be ".*", but that is not overloadable.
-template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Multiply matrices: this * B
-template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const T scalar);               ///< Multiply each element by scalar
-template<class T> Matrix<T> operator / (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Elementwise division.  Could mean this * !B, but such expressions are done other ways in linear algebra.
-template<class T> Matrix<T> operator / (const MatrixAbstract<T> & A, const T scalar);               ///< Divide each element by scalar
-template<class T> Matrix<T> operator + (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Elementwise sum.
-template<class T> Matrix<T> operator + (const MatrixAbstract<T> & A, const T scalar);               ///< Add scalar to each element
-template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A, const MatrixAbstract<T>  & B); ///< Elementwise difference.
-template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A, const T scalar);               ///< Subtract scalar from each element
+// Elementwise logical operators
+template<class T> Matrix<T> operator == (const MatrixAbstract<T> & A, const T scalar);
+template<class T> Matrix<T> operator == (const T scalar,              const MatrixAbstract<T> & A) {return A == scalar;}
+template<class T> Matrix<T> operator != (const MatrixAbstract<T> & A, const T scalar);
+template<class T> Matrix<T> operator != (const T scalar,              const MatrixAbstract<T> & A) {return A != scalar;}
+template<class T> Matrix<T> operator <  (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> Matrix<T> operator <  (const MatrixAbstract<T> & A, const T scalar);
+template<class T> Matrix<T> operator <  (const T scalar,              const MatrixAbstract<T> & A) {return A > scalar;}
+template<class T> Matrix<T> operator <= (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> Matrix<T> operator <= (const MatrixAbstract<T> & A, const T scalar);
+template<class T> Matrix<T> operator <= (const T scalar,              const MatrixAbstract<T> & A) {return A >= scalar;}
+template<class T> Matrix<T> operator >  (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> Matrix<T> operator >  (const MatrixAbstract<T> & A, const T scalar);
+template<class T> Matrix<T> operator >  (const T scalar,              const MatrixAbstract<T> & A) {return A < scalar;}
+template<class T> Matrix<T> operator >= (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> Matrix<T> operator >= (const MatrixAbstract<T> & A, const T scalar);
+template<class T> Matrix<T> operator >= (const T scalar,              const MatrixAbstract<T> & A) {return A <= scalar;}
+template<class T> Matrix<T> operator && (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> Matrix<T> operator && (const MatrixAbstract<T> & A, const T scalar);
+template<class T> Matrix<T> operator && (const T scalar,              const MatrixAbstract<T> & A) {return A && scalar;}
+template<class T> Matrix<T> operator || (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> Matrix<T> operator || (const MatrixAbstract<T> & A, const T scalar);
+template<class T> Matrix<T> operator || (const T scalar,              const MatrixAbstract<T> & A) {return A || scalar;}
+
+template<class T> Matrix<T> operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise multiplication. The prettiest name for this operator would be ".*", but that is not overloadable.
+template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Multiply matrices: this * B
+template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const T scalar);              ///< Multiply each element by scalar
+template<class T> Matrix<T> operator * (const T scalar,              const MatrixAbstract<T> & A) {return A * scalar;}
+template<class T> Matrix<T> operator / (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise division.  Could mean this * !B, but such expressions are done other ways in linear algebra.
+template<class T> Matrix<T> operator / (const MatrixAbstract<T> & A, const T scalar);              ///< Divide each element by scalar
+template<class T> Matrix<T> operator / (const T scalar,              const MatrixAbstract<T> & A);
+template<class T> Matrix<T> operator + (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise sum.
+template<class T> Matrix<T> operator + (const MatrixAbstract<T> & A, const T scalar);              ///< Add scalar to each element
+template<class T> Matrix<T> operator + (const T scalar,              const MatrixAbstract<T> & A) {return A + scalar;}
+template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise difference.
+template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A, const T scalar);              ///< Subtract scalar from each element
+template<class T> Matrix<T> operator - (const T scalar,              const MatrixAbstract<T> & A);
+template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A) {return A * (T) -1;}          ///< Unary minus, that is, negation
+
+template<class T> void operator *= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);  ///< As a hack to make C code generation simpler, this does elementwise multiply rather than whole-matrix multiply.
+template<class T> void operator *= (MatrixAbstract<T> & A, const T scalar);
+template<class T> void operator /= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> void operator += (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> void operator -= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+
+template<class T> Matrix<T> min (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> Matrix<T> min (const MatrixAbstract<T> & A, const T scalar);
+template<class T> Matrix<T> min (const T scalar,              const MatrixAbstract<T> & A) {return min (A, scalar);}
+template<class T> Matrix<T> max (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> Matrix<T> max (const MatrixAbstract<T> & A, const T scalar);
+template<class T> Matrix<T> max (const T scalar,              const MatrixAbstract<T> & A) {return max (A, scalar);}
 
 #ifndef N2A_SPINNAKER
 template<class T> std::ostream & operator << (std::ostream & stream, const MatrixAbstract<T> & A);  ///< Print human readable matrix to stream.
+#endif
+
+#ifdef n2a_FP
+Matrix<int> shift (const MatrixAbstract<int> & A, int shift);
 #endif
 
 
@@ -189,8 +236,23 @@ public:
 
     MatrixFixed ();
     MatrixFixed (std::initializer_list<T> elements);  ///< In column-major order
-    MatrixFixed (const MatrixAbstract<T> & that);
     virtual uint32_t classID () const;
+
+    template<class T2>
+    MatrixFixed (const MatrixAbstract<T2> & that)
+    {
+        int h = std::min (R, that.rows ());
+        int w = std::min (C, that.columns ());
+        for (int c = 0; c < w; c++)
+        {
+            for (int r = 0; r < h; r++) data[c][r] = (T) that(r,c);
+            for (int r = h; r < R; r++) data[c][r] = (T) 0;
+        }
+        for (int c = w; c < C; c++)
+        {
+            for (int r = 0; r < R; r++) data[c][r] = (T) 0;
+        }
+    }
 
     virtual T get (const int row, const int column) const
     {
@@ -247,6 +309,21 @@ template<class T, int R, int C>        MatrixFixed<T,R,C> operator + (const T sc
 template<class T, int R, int C>        MatrixFixed<T,R,C> operator - (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B);
 template<class T, int R, int C>        MatrixFixed<T,R,C> operator - (const MatrixFixed<T,R,C> & A, const T scalar);
 template<class T, int R, int C>        MatrixFixed<T,R,C> operator - (const T scalar,               const MatrixFixed<T,R,C> & A);
+
+template<class T, int R, int C> void operator *= (MatrixFixed<T,R,C> & A, const T scalar);
+
+// Extended operations on MatrixFixed<int,R,C>
+#ifdef n2a_FP
+template<int R, int C>        MatrixFixed<int,R,C> shift               (const MatrixFixed<int,R,C> & A,                                 int shift);
+
+template<int R, int C>        MatrixFixed<int,R,C> multiplyElementwise (const MatrixFixed<int,R,C> & A, const MatrixFixed<int,R,C> & B, int shift);
+template<int R, int C, int O> MatrixFixed<int,R,C> multiply            (const MatrixFixed<int,R,O> & A, const MatrixFixed<int,O,C> & B, int shift);
+template<int R, int C>        MatrixFixed<int,R,C> multiply            (const MatrixFixed<int,R,C> & A, int b,                          int shift);
+
+template<int R, int C>        MatrixFixed<int,R,C> divide              (const MatrixFixed<int,R,C> & A, const MatrixFixed<int,R,C> & B, int shift);
+template<int R, int C>        MatrixFixed<int,R,C> divide              (const MatrixFixed<int,R,C> & A, int b,                          int shift);
+template<int R, int C>        MatrixFixed<int,R,C> divide              (int a,                          const MatrixFixed<int,R,C> & B, int shift);
+#endif
 
 /**
     Stores only nonzero elements.  Assumes that every column has at least

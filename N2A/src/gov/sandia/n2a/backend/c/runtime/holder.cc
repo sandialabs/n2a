@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 
 #include "holder.tcc"
 #include "Matrix.tcc"
+#include "MatrixFixed.tcc"
 #include "MatrixSparse.tcc"
 
 
@@ -20,6 +21,7 @@ template<class T> thread_local Simulator<T> * Simulator<T>::instance = 0;
 
 template class MatrixAbstract<n2a_T>;
 template class Matrix<n2a_T>;
+template class MatrixFixed<n2a_T,3,1>;
 template class MatrixSparse<n2a_T>;
 template ostream & operator << (ostream & stream, const MatrixAbstract<n2a_T> & A);
 
@@ -29,18 +31,22 @@ template class IteratorSkip<n2a_T>;
 template class IteratorSparse<n2a_T>;
 template class MatrixInput<n2a_T>;
 template class Mfile<n2a_T>;
+template class ImageInput<n2a_T>;
+template class ImageOutput<n2a_T>;
 template class InputHolder<n2a_T>;
 template class OutputHolder<n2a_T>;
 template IteratorNonzero<n2a_T> * getIterator (MatrixAbstract<n2a_T> * A);
 #ifdef n2a_FP
-template MatrixInput<n2a_T> *  matrixHelper (const String & fileName, int exponent, MatrixInput<n2a_T> *  oldHandle);
-template InputHolder<n2a_T> *  inputHelper  (const String & fileName, int exponent, InputHolder<n2a_T> *  oldHandle);
+template MatrixInput <n2a_T> * matrixHelper     (const String & fileName, int exponent, MatrixInput <n2a_T> * oldHandle);
+template InputHolder <n2a_T> * inputHelper      (const String & fileName, int exponent, InputHolder <n2a_T> * oldHandle);
 #else
-template MatrixInput<n2a_T> *  matrixHelper (const String & fileName,               MatrixInput<n2a_T> *  oldHandle);
-template InputHolder<n2a_T> *  inputHelper  (const String & fileName,               InputHolder<n2a_T> *  oldHandle);
+template MatrixInput <n2a_T> * matrixHelper     (const String & fileName,               MatrixInput <n2a_T> * oldHandle);
+template InputHolder <n2a_T> * inputHelper      (const String & fileName,               InputHolder <n2a_T> * oldHandle);
 #endif
-template Mfile       <n2a_T> * MfileHelper  (const String & fileName,               Mfile       <n2a_T> * oldHandle);
-template OutputHolder<n2a_T> * outputHelper (const String & fileName,               OutputHolder<n2a_T> * oldHandle);
+template Mfile       <n2a_T> * MfileHelper      (const String & fileName,               Mfile       <n2a_T> * oldHandle);
+template OutputHolder<n2a_T> * outputHelper     (const String & fileName,               OutputHolder<n2a_T> * oldHandle);
+template ImageInput  <n2a_T> * imageInputHelper (const String & fileName,               ImageInput  <n2a_T> * oldHandle);
+template ImageOutput <n2a_T> * imageOutputHelper(const String & fileName,               ImageOutput <n2a_T> * oldHandle);
 
 
 // Non-templated functions ---------------------------------------------------

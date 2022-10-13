@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,8 +93,8 @@ public class Mfile extends Function
             for (int i = 1; i < operands.length; i++)
             {
                 String key = operands[i].eval (context).toString ();
-                String[] pieces = key.split ("/"); 
-                keys.addAll (Arrays.asList (pieces));
+                String[] pieces = key.split ("/");
+                for (String p : pieces) if (! p.isEmpty ()) keys.add (p);
             }
             return keys.toArray (new String[keys.size ()]);
         }

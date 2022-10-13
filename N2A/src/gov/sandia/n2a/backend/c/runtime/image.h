@@ -23,6 +23,7 @@ the U.S. Government retains certain rights in this software.
 #include <iostream>
 #include <vector>
 #include <assert.h>
+#include <chrono>
 
 #undef SHARED
 #ifdef _MSC_VER
@@ -39,6 +40,15 @@ the U.S. Government retains certain rights in this software.
 
 namespace n2a
 {
+    // utility function -----------------------------------------------------------
+
+    inline double
+    getTimestamp ()
+    {
+        return std::chrono::time_point_cast<std::chrono::duration<double>> (std::chrono::system_clock::now ()).time_since_epoch ().count ();
+    }
+
+
     // Forward declaration for use by Image
     class SHARED PixelBuffer;
     class SHARED PixelFormat;
@@ -321,7 +331,7 @@ namespace n2a
         format.  The "from*" methods implement an n^2 set of direct conversions
         between selected formats.  These conversions occur frequently when
         displaying images on an X windows system.
-        For the present, all formats exept for XYZ make sRGB assumptions (see
+        For the present, all formats except for XYZ make sRGB assumptions (see
         www.srgb.com).  In addition, all integer values are non-linear (with
         gamma = 2.2 as per sRGB spec), and all floating point values are linear.
         We can add parameters to the formats if we need to distinguish more color
@@ -1219,10 +1229,11 @@ namespace n2a
     alphaBlend (const float from[], float to[])
     {
         float fromA = from[3];
-        float toA = to[3] * (1 - fromA);
+        if (! fromA) return;  // If source alpha is 0, then no change to destination.
+        float toA  = to[3] * (1 - fromA);
         float newA = fromA + toA;
         fromA /= newA;
-        toA /= newA;
+        toA   /= newA;
         to[0] = fromA * from[0] + toA * to[0];
         to[1] = fromA * from[1] + toA * to[1];
         to[2] = fromA * from[2] + toA * to[2];
@@ -1235,14 +1246,15 @@ namespace n2a
         // Convert everything to fixed-point, with decimal at bit 15.
         // This has the advantage of keeping everything within a 32-bit word.
         uint32_t fromA = ((from & 0xFF) << 15) / 0xFF;
-        uint32_t toA = ((to & 0xFF) << 15) / 0xFF;
+        if (! fromA) return;
+        uint32_t toA   = ((to   & 0xFF) << 15) / 0xFF;
         toA = toA * (0x8000 - fromA) >> 15;
         uint32_t newA = fromA + toA;
         fromA = (fromA << 15) / newA;
-        toA = (toA << 15) / newA;
+        toA   = (toA   << 15) / newA;
         uint32_t r = ((from & 0xFF000000) >> 24) * fromA + ((to & 0xFF000000) >> 24) * toA + 0x4000;
-        uint32_t g = ((from & 0xFF0000) >> 16) * fromA + ((to & 0xFF0000) >> 16) * toA + 0x4000;
-        uint32_t b = ((from & 0xFF00) >> 8) * fromA + ((to & 0xFF00) >> 8) * toA + 0x4000;
+        uint32_t g = ((from &   0xFF0000) >> 16) * fromA + ((to &   0xFF0000) >> 16) * toA + 0x4000;
+        uint32_t b = ((from &     0xFF00) >>  8) * fromA + ((to &     0xFF00) >>  8) * toA + 0x4000;
         to = (r & 0x7F8000) << 9 | (g & 0x7F8000) << 1 | (b & 0x7F8000) >> 7 | newA * 0xFF >> 15;
     }
 }

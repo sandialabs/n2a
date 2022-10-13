@@ -511,11 +511,29 @@ public:
         return npos;
     }
 
-    size_type find_last_of (char pattern, size_type pos = npos) const
+    size_type find_last_of (const char * pattern, size_type pos = npos) const
     {
         if (memory == top  ||  ! pattern) return npos;
         char * c = memory + pos;
         if (pos == npos  ||  c >= top) c = top - 1;  // Explicitly check for npos, because it might not be suitable for adding to a pointer.
+        while (c >= memory)
+        {
+            const char * p = pattern;
+            while (*p)
+            {
+                if (*p == *c) return c - memory;
+                p++;
+            }
+            c--;
+        }
+        return npos;
+    }
+
+    size_type find_last_of (char pattern, size_type pos = npos) const
+    {
+        if (memory == top  ||  ! pattern) return npos;
+        char * c = memory + pos;
+        if (pos == npos  ||  c >= top) c = top - 1;
         while (c >= memory)
         {
             if (*c == pattern) return c - memory;

@@ -13,7 +13,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class DrawSegment extends Draw
+public class DrawSegment extends Draw implements Draw.Shape
 {
     public static Factory factory ()
     {
@@ -37,6 +37,7 @@ public class DrawSegment extends Draw
         if (simulator == null) return new Scalar (0);
 
         Holder H = getHolder (simulator, context);
+        boolean raw = applyKeywords (context, H);
 
         double now;
         if (simulator.currentEvent == null) now = 0;
@@ -56,7 +57,7 @@ public class DrawSegment extends Draw
         double color = 0xFFFFFF;  // white
         if (operands.length > 4) color = ((Scalar) operands[4].eval (context)).value;
 
-        H.drawSegment (now, x, y, x2, y2, width, (int) color);
+        H.drawSegment (now, raw, x, y, x2, y2, width, (int) color);
 
         return new Scalar (0);
     }

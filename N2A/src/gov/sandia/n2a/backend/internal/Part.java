@@ -177,7 +177,7 @@ public class Part extends Instance
             // sudden jump in the working value of the other part which is not properly associated
             // with its finish() step. It would be as if the part had an extra cycle inserted.
             if (v.reference.variable == v)               temp.applyResultInit (v, result);
-            else ((Instance) valuesObject[v.reference.index]).applyResultInit (v.reference.variable, result);
+            else ((Instance) valuesObject[v.reference.index]).applyResultInit (v.reference.variable, result);  // TODO: Currently, Internal is single-threaded, but in a multithreaded version this will probably a lock.
         }
         if (bed.liveStorage == InternalBackendData.LIVE_STORED) set (bed.live, new Scalar (1));
         if (bed.lastT != null) temp.setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));

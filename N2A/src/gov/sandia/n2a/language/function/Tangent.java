@@ -10,6 +10,7 @@ import gov.sandia.n2a.eqset.Equality;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.MatrixVisitable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
@@ -17,7 +18,7 @@ import gov.sandia.n2a.language.type.Scalar;
 import tech.units.indriya.AbstractUnit;
 import gov.sandia.n2a.language.type.Matrix;
 
-public class Tangent extends Function
+public class Tangent extends Function implements MatrixVisitable
 {
     public static Factory factory ()
     {

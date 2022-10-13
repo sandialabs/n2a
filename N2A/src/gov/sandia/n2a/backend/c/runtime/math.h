@@ -5,20 +5,37 @@ the U.S. Government retains certain rights in this software.
 */
 
 
-#ifndef n2a_fixedpoint_h
-#define n2a_fixedpoint_h
+#ifndef n2a_math_h
+#define n2a_math_h
 
 #ifndef n2a_FP
 
 
 #define _USE_MATH_DEFINES
 #include <cmath>
+#include <limits>
 
 #define TWOPI  6.283185307179586476925286766559
 #define TWOPIf 6.283185307179586476925286766559f
 
 namespace std
 {
+#   ifdef _MSC_VER
+
+    inline int
+    isnan (double a)
+    {
+        return _isnan (a);
+    }
+
+    inline int
+    isinf (double a)
+    {
+        return ! _finite (a);
+    }
+
+#   endif
+
     /// Four-way max
     template<class T>
     inline const T &
@@ -38,9 +55,6 @@ namespace std
 
 namespace n2a
 {
-    using std::isnan;
-    using std::isinf;
-
     /**
         Same as round(), but when <code>|a - roundp(a)| = 0.5</code> the result will
         be the more positive integer.
@@ -63,11 +77,10 @@ namespace n2a
 }
 
 
-#else
+#else  // n2a_FP defined
 
 
 #include "nosys.h"
-#include "matrix.h"
 
 #define FP_MSB    30
 #define FP_MSB2   15
@@ -79,7 +92,7 @@ namespace n2a
 #define NAN       0x80000000
 #define INFINITY  0x7FFFFFFF
 
-namespace n2a
+namespace std
 {
     inline bool isnan (int a)
     {
@@ -109,19 +122,5 @@ int tan      (int a,                               int exponentA,               
 int tanh     (int a,                               int exponentA);                                     // exponentResult=0
 
 
-// Extended operations on MatrixFixed<int,R,C> -------------------------------
-
-                              Matrix<int>          shift               (const MatrixAbstract<int>  & A,                                 int shift);
-template<int R, int C>        MatrixFixed<int,R,C> shift               (const MatrixFixed<int,R,C> & A,                                 int shift);
-
-template<int R, int C>        MatrixFixed<int,R,C> multiplyElementwise (const MatrixFixed<int,R,C> & A, const MatrixFixed<int,R,C> & B, int shift);
-template<int R, int C, int O> MatrixFixed<int,R,C> multiply            (const MatrixFixed<int,R,O> & A, const MatrixFixed<int,O,C> & B, int shift);
-template<int R, int C>        MatrixFixed<int,R,C> multiply            (const MatrixFixed<int,R,C> & A, int b,                          int shift);
-
-template<int R, int C>        MatrixFixed<int,R,C> divide              (const MatrixFixed<int,R,C> & A, const MatrixFixed<int,R,C> & B, int shift);
-template<int R, int C>        MatrixFixed<int,R,C> divide              (const MatrixFixed<int,R,C> & A, int b,                          int shift);
-template<int R, int C>        MatrixFixed<int,R,C> divide              (int a,                          const MatrixFixed<int,R,C> & B, int shift);
-
-
 #endif  // n2a_FP
-#endif  // n2a_fixedpoint_h
+#endif  // n2a_math_h

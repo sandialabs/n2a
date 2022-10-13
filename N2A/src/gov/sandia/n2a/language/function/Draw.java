@@ -27,10 +27,36 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import tech.units.indriya.AbstractUnit;
 
 public class Draw extends Function
 {
+    public String  name;     // For C backend, the name of the ImageOutput object.
+    public String  fileName; // For C backend, the name of the string variable holding the file name, if any.
+
+    public static Factory factory ()
+    {
+        return new Factory ()
+        {
+            public String name ()
+            {
+                return "draw";
+            }
+
+            public Operator createInstance ()
+            {
+                return new Draw ();
+            }
+        };
+    }
+
+    /**
+        Marks a drawX() that actually has output, as distinct from generic draw().
+        Simplifies analysis code in EquationSet.addDrawDependencies.
+    **/
+    public interface Shape {}
+
     public boolean isOutput ()
     {
         return true;
@@ -47,7 +73,7 @@ public class Draw extends Function
         {
             op.determineExponent (context);
         }
-        updateExponent (context, MSB, 0);
+        updateExponent (context, MSB, 0);  // Our output is always an integer (0).
 
         if (keywords == null) return;
         for (Operator op : keywords.values ())
@@ -58,16 +84,35 @@ public class Draw extends Function
 
     public void determineExponentNext ()
     {
-        for (Operator op : operands)
+        // First arg is fileName, so we don't care about it.
+        Operator op0 = operands[0];
+        op0.exponentNext = op0.exponent;
+        op0.determineExponentNext ();
+
+        // Last arg is color, which is always a raw integer.
+        int last = operands.length - 1;
+        Operator c = operands[last];
+        c.exponentNext = MSB;
+        c.determineExponentNext ();
+
+        // All pixel-valued operands must agree on exponent.
+        if (last > 1)
         {
-            op.exponentNext = op.exponent;
-            op.determineExponentNext ();
+            int avg = 0;
+            for (int i = 1; i < last; i++) avg += operands[i].exponent;
+            avg /= last - 1;
+            for (int i = 1; i < last; i++)
+            {
+                Operator op = operands[i];
+                op.exponentNext = avg;
+                op.determineExponentNext ();
+            }
         }
 
         if (keywords == null) return;
         for (Operator op : keywords.values ())
         {
-            op.exponentNext = op.exponent;
+            op.exponentNext = MSB;  // Currently, all keyword args have integer (or boolean) values.
             op.determineExponentNext ();
         }
     }
@@ -89,10 +134,9 @@ public class Draw extends Function
         public String  format = "png";  // name of format as recognized by supporting libraries
         public boolean dirCreated;
 
-        public boolean raw;
-        public int     width      = 1024;
-        public int     height     = 1024;
-        public Color   clearColor = Color.BLACK;
+        public int   width      = 1024;
+        public int   height     = 1024;
+        public Color clearColor = Color.BLACK;
 
         // TODO: handle video streams. Probably use FFMPEG JNI wrapper.
         public double             t;
@@ -138,7 +182,7 @@ public class Draw extends Function
             }
         }
 
-        public void drawDisc (double now, double x, double y, double radius, int color)
+        public void drawDisc (double now, boolean raw, double x, double y, double radius, int color)
         {
             next (now);
 
@@ -158,7 +202,7 @@ public class Draw extends Function
             graphics.fill (disc);
         }
 
-        public void drawBlock (double now, double x, double y, double w, double h, int color)
+        public void drawBlock (double now, boolean raw, double x, double y, double w, double h, int color)
         {
             next (now);
 
@@ -179,7 +223,7 @@ public class Draw extends Function
             graphics.fill (rect);
         }
 
-        public void drawSegment (double now, double x, double y, double x2, double y2, double thickness, int color)
+        public void drawSegment (double now, boolean raw, double x, double y, double x2, double y2, double thickness, int color)
         {
             next (now);
 
@@ -204,22 +248,24 @@ public class Draw extends Function
         {
             if (image == null) return;
 
-            String filename;
-            if (hold)
+            if (! dirCreated)
             {
-                filename = path.toString () + "." + format;
+                path.toFile ().getAbsoluteFile ().mkdirs ();
+                dirCreated = true;
             }
-            else
-            {
-                if (! dirCreated)
-                {
-                    path.toFile ().getAbsoluteFile ().mkdirs ();
-                    dirCreated = true;
-                }
-                filename = path.resolve (String.format ("%d.%s", frameCount, format)).toString ();
-            }
+            String filename = path.resolve (String.format ("%d.%s", frameCount, format)).toString ();
             // Path.toAbsolutePath() does not resolve against job directory the same way File.getAbsoluteFile() does.
-            try {ImageIO.write (image, format, new File (filename).getAbsoluteFile ());}
+            try
+            {
+                boolean success = ImageIO.write (image, format, new File (filename).getAbsoluteFile ());
+                if (! success)
+                {
+                    format = "png";  // This should always be available in JVM. Preferable over JPEG because it is lossless.
+                    filename = path.resolve (String.format ("%d.%s", frameCount, format)).toString ();
+                    success = ImageIO.write (image, format, new File (filename).getAbsoluteFile ());
+                    if (! success) throw new AbortRun ("Failed to write images because format was not available.");
+                }
+            }
             catch (IOException e) {e.printStackTrace ();}
 
             if (! hold) image = null;
@@ -235,37 +281,6 @@ public class Draw extends Function
         {
             Holder H = new Holder (simulator, path);
             simulator.holders.put (path, H);
-
-            if (keywords != null)
-            {
-                H.raw  = getKeywordFlag ("raw");
-                H.hold = getKeywordFlag ("hold");
-
-                String value = evalKeyword (context, "size", "");
-                if (! value.isBlank ())
-                {
-                    String[] pieces = value.split ("x");
-                    try
-                    {
-                        H.width = Integer.valueOf (pieces[0]);
-                        H.height = H.width;
-                    }
-                    catch (NumberFormatException e) {}
-                    if (pieces.length > 1)
-                    {
-                        try {H.height = Integer.valueOf (pieces[1]);}
-                        catch (NumberFormatException e) {}
-                    }
-                }
-
-                value = evalKeyword (context, "clear", "");
-                if (! value.isBlank ())
-                {
-                    try {H.clearColor = Color.decode (value);}
-                    catch (NumberFormatException e) {}
-                }
-            }
-
             return H;
         }
         if (! (o instanceof Holder))
@@ -274,5 +289,63 @@ public class Draw extends Function
             throw new Backend.AbortRun ();
         }
         return (Holder) o;
+    }
+
+    public boolean applyKeywords (Instance context, Holder H)
+    {
+        if (keywords == null) return false;
+
+        int width  = 0;
+        int height = 0;
+
+        H.hold = getKeywordFlag ("hold");
+
+        String value = evalKeyword (context, "width", "");
+        if (! value.isBlank ())
+        {
+            try {width = Integer.valueOf (value);}
+            catch (NumberFormatException e) {}
+        }
+
+        value = evalKeyword (context, "height", "");
+        if (! value.isBlank ())
+        {
+            try {height = Integer.valueOf (value);}
+            catch (NumberFormatException e) {}
+        }
+
+        value = evalKeyword (context, "clear", "");
+        if (! value.isBlank ())
+        {
+            try {H.clearColor = Color.decode (value);}
+            catch (NumberFormatException e) {}
+        }
+
+        if      (width <= 0  &&  height >  0) width  = height;
+        else if (width >  0  &&  height <= 0) height = width;
+        if (width  > 0) H.width  = width;
+        if (height > 0) H.height = height;
+
+        return getKeywordFlag ("raw");
+    }
+
+    public Type eval (Instance context)
+    {
+        Simulator simulator = Simulator.instance.get ();
+        if (simulator == null) return new Scalar (0);
+
+        Holder H = getHolder (simulator, context);
+        applyKeywords (context, H);
+
+        // We don't do any actual drawing, nor do we advance the clock.
+        // All this function does is stage canvas and camera configurations
+        // for the next time the clock advances by a drawX() that makes a mark.
+
+        return new Scalar (0);
+    }
+
+    public String toString ()
+    {
+        return "draw";
     }
 }

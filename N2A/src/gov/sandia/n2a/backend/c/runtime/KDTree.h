@@ -16,12 +16,12 @@ the U.S. Government retains certain rights in this software.
 
 
 #include "matrix.h"
+#include "math.h"
 
 #include <vector>
 #include <queue>
 #include <cmath>
 #include <limits.h>
-#include "fixedpoint.h"
 
 
 template<class T> class Part;

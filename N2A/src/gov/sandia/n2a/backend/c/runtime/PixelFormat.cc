@@ -13,7 +13,7 @@ the U.S. Government retains certain rights in this software.
 
 
 #include "image.h"
-#include "fixedpoint.h"
+#include "math.h"
 #include "endian.h"
 
 #include <algorithm>

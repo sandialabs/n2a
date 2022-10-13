@@ -5,7 +5,7 @@ Copyright (c) 2001-2004 Dept. of Computer Science and Beckman Institute,
 Distributed under the UIUC/NCSA Open Source License.
 
 
-Copyright 2005-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,6 +16,7 @@ the U.S. Government retains certain rights in this software.
 
 
 #include "matrix.h"
+#include "math.h"
 #include "StringLite.h"
 
 
@@ -163,6 +164,278 @@ operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
+operator == (const MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) =  A(r,c) == scalar;
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator != (const MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) =  A(r,c) != scalar;
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator < (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    Matrix<T> result (h, w);
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0;  r < oh; r++) result(r,c) =  A(r,c) < B(r,c);
+        for (int r = oh; r < h;  r++) result(r,c) =  A(r,c) < 0;
+    }
+    for (int c = ow; c < w; c++)
+    {
+        for (int r = 0;  r < h;  r++) result(r,c) =  A(r,c) < 0;
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator < (const MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) =  A(r,c) < scalar;
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator <= (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    Matrix<T> result (h, w);
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0;  r < oh; r++) result(r,c) =  A(r,c) <= B(r,c);
+        for (int r = oh; r < h;  r++) result(r,c) =  A(r,c) <= 0;
+    }
+    for (int c = ow; c < w; c++)
+    {
+        for (int r = 0;  r < h;  r++) result(r,c) =  A(r,c) <= 0;
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator <= (const MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) =  A(r,c) <= scalar;
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator > (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    Matrix<T> result (h, w);
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0;  r < oh; r++) result(r,c) =  A(r,c) > B(r,c);
+        for (int r = oh; r < h;  r++) result(r,c) =  A(r,c) > 0;
+    }
+    for (int c = ow; c < w; c++)
+    {
+        for (int r = 0;  r < h;  r++) result(r,c) =  A(r,c) > 0;
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator > (const MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) =  A(r,c) > scalar;
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator >= (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    Matrix<T> result (h, w);
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0;  r < oh; r++) result(r,c) =  A(r,c) >= B(r,c);
+        for (int r = oh; r < h;  r++) result(r,c) =  A(r,c) >= 0;
+    }
+    for (int c = ow; c < w; c++)
+    {
+        for (int r = 0;  r < h;  r++) result(r,c) =  A(r,c) >= 0;
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator >= (const MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) =  A(r,c) >= scalar;
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator && (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    Matrix<T> result (h, w);
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0;  r < oh; r++) result(r,c) =  A(r,c) && B(r,c);
+        for (int r = oh; r < h;  r++) result(r,c) = 0;
+    }
+    for (int c = ow; c < w; c++)
+    {
+        for (int r = 0;  r < h;  r++) result(r,c) = 0;
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator && (const MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    if (scalar == 0)  // Early-out, because all the elements will be false.
+    {
+        result.clear ();
+        return result;
+    }
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) =  A(r,c) != 0;
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator || (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    Matrix<T> result (h, w);
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0;  r < oh; r++) result(r,c) =  A(r,c) || B(r,c);
+        for (int r = oh; r < h;  r++) result(r,c) =  A(r,c) != 0;
+    }
+    for (int c = ow; c < w; c++)
+    {
+        for (int r = 0;  r < h;  r++) result(r,c) =  A(r,c) != 0;
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator || (const MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    if (scalar != 0)  // Early-out, because all the elements will be true.
+    {
+        result.clear (1);
+        return result;
+    }
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) =  A(r,c) != 0;
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
 operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 {
     int h = A.rows ();
@@ -177,7 +450,7 @@ operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
     }
     for (int c = ow; c < w; c++)
     {
-        for (int r = 0; r < h; r++)   result(r,c) = A(r,c);
+        for (int r = 0;  r < h;  r++) result(r,c) = A(r,c);
     }
     return result;
 }
@@ -215,7 +488,7 @@ operator / (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
     }
     for (int c = ow; c < w; c++)
     {
-        for (int r = 0; r < h; r++)   result(r,c) = A(r,c);
+        for (int r = 0;  r < h;  r++) result(r,c) = A(r,c);
     }
     return result;
 }
@@ -239,6 +512,23 @@ operator / (const MatrixAbstract<T> & A, const T scalar)
 
 template<class T>
 Matrix<T>
+operator / (const T scalar, const MatrixAbstract<T> & A)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) = scalar / A(r,c);
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
 operator + (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 {
     int h = A.rows ();
@@ -253,7 +543,7 @@ operator + (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
     }
     for (int c = ow; c < w; c++)
     {
-        for (int r = 0; r < h; r++)   result(r,c) = A(r,c);
+        for (int r = 0;  r < h;  r++) result(r,c) = A(r,c);
     }
     return result;
 }
@@ -291,7 +581,7 @@ operator - (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
     }
     for (int c = ow; c < w; c++)
     {
-        for (int r = 0; r < h; r++)   result(r,c) = A(r,c);
+        for (int r = 0;  r < h;  r++) result(r,c) = A(r,c);
     }
     return result;
 }
@@ -308,6 +598,183 @@ operator - (const MatrixAbstract<T> & A, const T scalar)
         for (int r = 0; r < h; r++)
         {
             result(r,c) = A(r,c) - scalar;
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+operator - (const T scalar, const MatrixAbstract<T> & A)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) = scalar - A(r,c);
+        }
+    }
+    return result;
+}
+
+template<class T>
+void
+operator *= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    // Because the multiplicative identity is 1, elements of A outside the overlap remain unchanged.
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0; r < oh; r++)
+        {
+            A(r,c) *= B(r,c);
+        }
+    }
+}
+
+template<class T>
+void
+operator *= (MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            A(r,c) *= scalar;
+        }
+    }
+}
+
+template<class T>
+void
+operator /= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0; r < oh; r++)
+        {
+            A(r,c) /= B(r,c);
+        }
+    }
+}
+
+template<class T>
+void
+operator += (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0; r < oh; r++)
+        {
+            A(r,c) += B(r,c);
+        }
+    }
+}
+
+template<class T>
+void
+operator -= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0; r < oh; r++)
+        {
+            A(r,c) -= B(r,c);
+        }
+    }
+}
+
+template<class T>
+Matrix<T>
+min (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    Matrix<T> result (h, w);
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0;  r < oh; r++) result(r,c) = std::min (A(r,c), B(r,c));
+        for (int r = oh; r < h;  r++) result(r,c) = std::min (A(r,c), (T) 0);
+    }
+    for (int c = ow; c < w; c++)
+    {
+        for (int r = 0;  r < h;  r++) result(r,c) = std::min (A(r,c), (T) 0);
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+min (const MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) = std::min (A(r,c), scalar);
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+max (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    Matrix<T> result (h, w);
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0;  r < oh; r++) result(r,c) = std::max (A(r,c), B(r,c));
+        for (int r = oh; r < h;  r++) result(r,c) = std::max (A(r,c), (T) 0);
+    }
+    for (int c = ow; c < w; c++)
+    {
+        for (int r = 0;  r < h;  r++) result(r,c) = std::max (A(r,c), (T) 0);
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+max (const MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    Matrix<T> result (h, w);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            result(r,c) = std::max (A(r,c), scalar);
         }
     }
     return result;

@@ -13,6 +13,7 @@ the U.S. Government retains certain rights in this software.
 #include "StringLite.h"
 #include "matrix.h"
 #include "MNode.h"
+#include "canvas.h"
 
 #include <vector>
 #include <unordered_map>
@@ -103,6 +104,51 @@ template<class T> extern MatrixInput<T> * matrixHelper (const String & fileName,
 template<class T> extern IteratorNonzero<T> * getIterator (MatrixAbstract<T> * A);  // Returns an object that iterates over nonzero elements of A.
 
 template<class T>
+class ImageInput : public Holder
+{
+public:
+    ImageInput (const String & fileName);
+};
+template<class T> extern ImageInput<T> * imageInputHelper (const String & fileName, ImageInput<T> * oldHandle = 0);
+
+template<class T>
+class ImageOutput : public Holder
+{
+public:
+    String path;    // prefix of fileName, not including suffix (format)
+    String format;  // name of format as recognized by supporting libraries
+    bool   hold;    // Store a single frame rather than an image sequence.
+    bool   dirCreated;
+
+    int      width;
+    int      height;
+    uint32_t clearColor;
+
+    // TODO: handle video streams using FFMPEG.
+    T                t;
+    int              frameCount; // Number of frames actually written so far.
+    n2a::CanvasImage canvas;     // Current image being built.
+    bool             haveData;   // indicates that something has been drawn since last write to disk
+
+    ImageOutput (const String & fileName);
+    virtual ~ImageOutput ();
+
+    void next        (T now);
+#   ifdef n2a_FP
+    // All pixel-valued arguments must agree on exponent. "now" is in time exponent.
+    T drawDisc    (T now, bool raw, const MatrixFixed<T,3,1> & center, T radius,                               int exponent, uint32_t color);
+    T drawBlock   (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h,                               int exponent, uint32_t color);
+    T drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1, const MatrixFixed<T,3,1> & p2, T thickness, int exponent, uint32_t color);
+#   else
+    T drawDisc    (T now, bool raw, const MatrixFixed<T,3,1> & center, T radius,                               uint32_t color);
+    T drawBlock   (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h,                               uint32_t color);
+    T drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1, const MatrixFixed<T,3,1> & p2, T thickness, uint32_t color);
+#   endif
+    void writeImage  ();
+};
+template<class T> extern ImageOutput<T> * imageOutputHelper (const String & fileName, ImageOutput<T> * oldHandle = 0);
+
+template<class T>
 class Mfile : public Holder
 {
 public:
@@ -183,13 +229,13 @@ public:
     void trace (T now);               ///< Subroutine for other trace() functions.
     void addMode (const char * mode); ///< Subroutine for other trace() functions.
 #   ifdef n2a_FP
-    void trace (T now, const String & column, T                 value, int exponent, const char * mode = 0);
-    void trace (T now, const String & column, const Matrix<T> & A,     int exponent, const char * mode = 0);
-    void trace (T now, T              column, T                 value, int exponent, const char * mode = 0);
+    T         trace (T now, const String & column, T                 value, int exponent, const char * mode = 0);
+    Matrix<T> trace (T now, const String & column, const Matrix<T> & A,     int exponent, const char * mode = 0);
+    T         trace (T now, T              column, T                 value, int exponent, const char * mode = 0);
 #   else
-    void trace (T now, const String & column, T                 value,               const char * mode = 0);
-    void trace (T now, const String & column, const Matrix<T> & A,                   const char * mode = 0);
-    void trace (T now, T              column, T                 value,               const char * mode = 0);
+    T         trace (T now, const String & column, T                 value,               const char * mode = 0);
+    Matrix<T> trace (T now, const String & column, const Matrix<T> & A,                   const char * mode = 0);
+    T         trace (T now, T              column, T                 value,               const char * mode = 0);
 #   endif
     void writeTrace ();
     void writeModes ();

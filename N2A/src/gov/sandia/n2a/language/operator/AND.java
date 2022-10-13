@@ -36,7 +36,7 @@ public class AND extends OperatorBinary implements OperatorLogical
 
     public int precedence ()
     {
-        return 8;
+        return 9;  // Even though this is 8 in our precedence table, we insert a gap to allow C backend to shift precedence of "&" to 8.
     }
 
     public Operator simplify (Variable from, boolean evalOnly)
