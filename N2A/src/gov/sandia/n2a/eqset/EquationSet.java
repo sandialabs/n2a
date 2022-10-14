@@ -1844,16 +1844,18 @@ public class EquationSet implements Comparable<EquationSet>
                             Variable type = part.find (query);
                             if (type == null)
                             {
+                                // $type is not in target part, so we add it merely to inform that target part of how it was created.
+                                // No need for buffering in this case. However, we need to explicitly clear $type at the end of init.
                                 type = query;
                                 part.add (type);
-                                type.addAttribute ("externalWrite");  // double-buffer it
                                 type.unit = AbstractUnit.ONE;
                                 type.equations = new TreeSet<EquationEntry> ();
                                 type.reference = new VariableReference ();
                                 type.reference.variable = type;
+                                type.addUser (part);  // Keep part.$type from being removed.
                             }
 
-                            if (type != from) type.addDependencyOn (from);
+                            if (type != from) type.addDependencyOn (from); // Because part.$type value can be changed by from.
                         }
                         else
                         {

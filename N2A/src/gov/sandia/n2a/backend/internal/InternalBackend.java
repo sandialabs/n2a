@@ -202,11 +202,11 @@ public class InternalBackend extends Backend
         e.resolveConnectionBindings ();
         e.addGlobalConstants ();
         e.addSpecials ();  // $connect, $index, $init, $n, $t, $t'
-        e.addAttribute ("global",        false, true,  "$max", "$min", "$k", "$radius");
-        e.addAttribute ("global",        false, false, "$n");
-        e.addAttribute ("preexistent",   true,  false, "$t'", "$t");  // variables that are not stored because Instance.get/set intercepts them
-        e.addAttribute ("readOnly",      true,  false, "$t");
-        e.addAttribute ("externalWrite", true,  false, "$type");  // force $type to be double-buffered, with reset to zero each cycle
+        e.addAttribute ("global",       false, true,  "$max", "$min", "$k", "$radius");
+        e.addAttribute ("global",       false, false, "$n");
+        e.addAttribute ("preexistent",  true,  false, "$t'", "$t");  // variables that are not stored because Instance.get/set intercepts them
+        e.addAttribute ("readOnly",     true,  false, "$t");
+        e.addAttribute ("externalRead", true,  false, "$type");  // Force $type to be double-buffered. Because this is combined with REPLACE, we need to explicitly zero $type in finish().
         e.resolveLHS ();
         e.fillIntegratedVariables ();
         e.findIntegrated ();

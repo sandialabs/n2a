@@ -445,12 +445,13 @@ public class Part extends Instance
             }
         }
 
-        // Other stuff
+        // Finalize values and prepare for next cycle.
         if (bed.lastT != null) setFinal (bed.lastT, new Scalar (simulator.currentEvent.t));
         for (Variable v : bed.localBufferedExternal) setFinal (v, getFinal (v));
         clearExternalWriteBuffers (bed.localBufferedExternalWrite);
         for (Integer i : bed.eventLatches) valuesFloat[i] = 0;
 
+        // $type split
         if (bed.type != null)
         {
             int type = (int) ((Scalar) get (bed.type)).value;
@@ -499,7 +500,14 @@ public class Part extends Instance
                         p.init (simulator);
                     }
                 }
-                if (! used)
+                if (used)
+                {
+                    // We want the current value of $type to be the position of this existing part in the split.
+                    // The next value of $type (applied during the next call to finish()) should default to 0.
+                    // This can change during update().
+                    set (bed.type, new Scalar (0));
+                }
+                else
                 {
                     die ();
                     return false;
@@ -507,6 +515,7 @@ public class Part extends Instance
             }
         }
 
+        // Ways to die (other than $type split)
         if (equations.lethalP)
         {
             double p;
@@ -534,7 +543,6 @@ public class Part extends Instance
                 return false;
             }
         }
-
         if (equations.lethalConnection)
         {
             int count = equations.connectionBindings.size ();
@@ -547,7 +555,6 @@ public class Part extends Instance
                 }
             }
         }
-
         if (equations.lethalContainer)
         {
             if (! ((Part) container).getLive ())
