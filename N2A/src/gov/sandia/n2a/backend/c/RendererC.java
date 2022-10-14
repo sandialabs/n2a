@@ -317,8 +317,6 @@ public class RendererC extends Renderer
         }
         if (op instanceof HyperbolicTangent)
         {
-            // This case should only be here if we render an exponent parameter. Currently, there is not one.
-            // TODO: create a fixed-point implementation of tanh().
             HyperbolicTangent t = (HyperbolicTangent) op;
             Operator a = t.operands[0];
             result.append ("tanh (");
