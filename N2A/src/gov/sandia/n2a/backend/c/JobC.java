@@ -3531,6 +3531,7 @@ public class JobC extends Thread
             }
             for (Variable v : bed.localBufferedExternalWrite)
             {
+                if (v.assignment == Variable.REPLACE) continue;
                 result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
 
