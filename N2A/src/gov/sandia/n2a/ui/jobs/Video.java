@@ -125,7 +125,9 @@ public class Video extends JPanel
         int nextIndex = index + 1;
         try
         {
-            image = ImageIO.read (dir.resolve (nextIndex + "." + suffix).toFile ());
+            BufferedImage temp = ImageIO.read (dir.resolve (nextIndex + "." + suffix).toFile ());
+            if (temp == null) return;  // Failed parse a proper image. This can happen if we read a partially-written image file.
+            image = temp;
             if (nextIndex > last)
             {
                 last = nextIndex;
@@ -144,7 +146,9 @@ public class Video extends JPanel
         if (nextIndex < 0) return;
         try
         {
-            image = ImageIO.read (dir.resolve (nextIndex + "." + suffix).toFile ());
+            BufferedImage temp = ImageIO.read (dir.resolve (nextIndex + "." + suffix).toFile ());
+            if (temp == null) return;
+            image = temp;
             index = nextIndex;
             scrollbar.setValue (index);
         }
@@ -157,7 +161,9 @@ public class Video extends JPanel
         int nextIndex = (int) Math.round (position * last);
         try
         {
-            image = ImageIO.read (dir.resolve (nextIndex + "." + suffix).toFile ());
+            BufferedImage temp = ImageIO.read (dir.resolve (nextIndex + "." + suffix).toFile ());
+            if (temp == null) return;
+            image = temp;
             index = nextIndex;
         }
         catch (IOException e) {}
