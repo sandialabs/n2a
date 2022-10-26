@@ -1282,11 +1282,10 @@ public class InternalBackendData
             {
                 if (forbiddenVariables.contains (v.name)) continue;
                 Variable v2 = s.find (v);  // find() does not consider container
-                if (v2 != null)
-                {
-                    conversion.to  .add (v);
-                    conversion.from.add (v2);
-                }
+                if (v2 == null) continue;
+                if (v2.assignment != Variable.REPLACE) continue; // No reductions allowed.
+                conversion.to  .add (v);
+                conversion.from.add (v2);
             }
 
             // Match connection bindings

@@ -3247,6 +3247,8 @@ public class JobC extends Thread
             }
             if (! bed.localFlagType.isEmpty ())
             {
+                // It's OK to set flags here, before the equations are executed, because
+                // $live will be factored out by EquationSet.simplify() below.
                 if (bed.liveFlag >= 0)
                 {
                     if (bed.newborn >= 0)
@@ -4507,6 +4509,7 @@ public class JobC extends Thread
 
                 Variable v2 = source.find (v);
                 if (v2 == null) continue;
+                if (v2.assignment != Variable.REPLACE) continue;
                 result.append ("  to->" + mangle (v) + " = " + resolve (v2.reference, context, false, "from->", false) + ";\n");
             }
             result.append ("  to->init ();\n");  // Unless the user qualifies code with $type, the values just copied above will simply be overwritten.
