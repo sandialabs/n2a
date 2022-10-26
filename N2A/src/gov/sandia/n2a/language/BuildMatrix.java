@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -176,7 +176,7 @@ public class BuildMatrix extends Operator
                                     tempCent = Math.min (tempCent, MSB);
                                 }
                                 cent += tempCent;
-                                pow  += Math.getExponent (v);
+                                if (Double.isFinite (v)) pow += Math.getExponent (v);
                                 count++;
                             }
                         }

@@ -25,7 +25,6 @@ import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
-import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Draw;
@@ -822,6 +821,7 @@ public class JobC extends Thread
 
         SIMULATOR = "Simulator<" + T + ">::instance" + (tls ? "->" : ".");
 
+        result.append ("#include \"math.h\"\n");  // math.h must always come first, because it messes with mode in which <cmath> is included.
         result.append ("#include \"runtime.h\"\n");
         if (kokkos)
         {
@@ -838,8 +838,7 @@ public class JobC extends Thread
         result.append ("\n");
         result.append ("#include <iostream>\n");
         result.append ("#include <vector>\n");
-        result.append ("#include <unordered_set>\n");  // only needed for polling
-        result.append ("#include <cmath>\n");
+        result.append ("#include <unordered_set>\n");  // Only needed for polling. We could walk the tree and check if any parts need polling before emitting this line, but it's probably not worth the effort.
         result.append ("#include <csignal>\n");
         result.append ("\n");
         generateClassList (digestedModel, result);
@@ -1107,14 +1106,37 @@ public class JobC extends Thread
                 if (op instanceof Constant)
                 {
                     Constant constant = (Constant) op;
-                    Type m = constant.value;
-                    if (m instanceof Matrix)
+                    if (constant.value instanceof Matrix)
                     {
                         // Determine if matrix constant already exists. Don't create duplicates.
                         for (Constant c : staticMatrix)
                         {
-                            Matrix A = (Matrix) c.value;
-                            if (A.compareTo (m) != 0) continue;
+                            Matrix A = (Matrix) constant.value;
+                            Matrix B = (Matrix) c.value;
+                            if (A.compareTo (B) != 0)
+                            {
+                                // Check for fixed-point matrices that produce the same int values.
+                                int rows = A.rows ();
+                                int cols = A.columns ();
+                                if (! context.useExponent  ||  rows != B.rows ()  ||  cols != B.columns ()) continue;
+                                boolean match = true;
+                                Matrix R = A.divide (B);  // ratio between elements
+                                double expectedRatio = Math.pow (2, constant.exponent - c.exponent);
+                                for (int j = 0; match && j < cols; j++)
+                                {
+                                    for (int i = 0; match && i < rows; i++)
+                                    {
+                                        double ratio = R.get (i, j);
+                                        if (Double.isNaN (ratio))  // probably due to divide by zero
+                                        {
+                                            if (A.get (i, j) != 0) match = false;
+                                            continue;
+                                        }
+                                        if (ratio != expectedRatio) match = false;
+                                    }
+                                }
+                                if (! match) continue;
+                            }
                             constant.name = c.name;
                             matrixNames.put (constant, constant.name);
                             return false;
@@ -3370,11 +3392,18 @@ public class JobC extends Thread
                         int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
                         if (shift != 0  &&  T.contains ("int"))
                         {
-                            result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
+                            if (v.type instanceof Matrix)
+                            {
+                                result.append ("::multiply (" + resolve (v.derivative.reference, context, false) + ", dt, " + -shift + ");\n");
+                            }
+                            else
+                            {
+                                result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
+                            }
                         }
                         else
                         {
-                            result.append (                      resolve (v.derivative.reference, context, false) + " * dt;\n");
+                            result.append (resolve (v.derivative.reference, context, false) + " * dt;\n");
                         }
                     }
                     result.append ("  }\n");
@@ -3387,11 +3416,18 @@ public class JobC extends Thread
                     int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
                     if (shift != 0  &&  T.contains ("int"))
                     {
-                        result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
+                        if (v.type instanceof Matrix)
+                        {
+                            result.append ("::multiply (" + resolve (v.derivative.reference, context, false) + ", dt, " + -shift + ");\n");
+                        }
+                        else
+                        {
+                            result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
+                        }
                     }
                     else
                     {
-                        result.append (                      resolve (v.derivative.reference, context, false) + " * dt;\n");
+                        result.append (resolve (v.derivative.reference, context, false) + " * dt;\n");
                     }
                 }
                 if (bed.needLocalPreserve) result.append ("  }\n");

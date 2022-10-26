@@ -90,7 +90,6 @@ public class RendererC extends Renderer
             Operator op0 = f.operands[0];
             if (op0.getType () instanceof Matrix)
             {
-                // TODO: handle fixed-point matrix visitor. In many cases, it will require an exponent parameter, possibly two.
                 result.append ("visit (");
                 op0.render (this);
                 result.append (", " + f + ")");

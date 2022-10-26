@@ -7,6 +7,8 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.backend.internal.Simulator;
+import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
@@ -31,6 +33,23 @@ public class DrawSegment extends Draw implements Draw.Shape
         };
     }
 
+    public Operator simplify (Variable from, boolean evalOnly)
+    {
+        super.simplify (from, evalOnly);  // We can't be a constant, so won't be replaced.
+        if (operands.length < 5)
+        {
+            Operator[] nextOperands = new Operator[4];
+            nextOperands[0] = operands[0];
+            nextOperands[1] = operands[1];
+            nextOperands[2] = operands[2];
+            if (operands.length > 3) nextOperands[3] = operands[3];
+            else                     nextOperands[3] = new Constant (0);  // width is 1px
+            nextOperands[4] = new Constant (0xFFFFFF);  // white
+            operands = nextOperands;
+        }
+        return this;
+    }
+
     public Type eval (Instance context)
     {
         Simulator simulator = Simulator.instance.get ();
@@ -51,11 +70,8 @@ public class DrawSegment extends Draw implements Draw.Shape
         double x2 = p.get (0);
         double y2 = p.get (1);
 
-        double width = 0;
-        if (operands.length > 3) width = ((Scalar) operands[3].eval (context)).value;
-
-        double color = 0xFFFFFF;  // white
-        if (operands.length > 4) color = ((Scalar) operands[4].eval (context)).value;
+        double width = ((Scalar) operands[3].eval (context)).value;
+        double color = ((Scalar) operands[4].eval (context)).value;
 
         H.drawSegment (now, raw, x, y, x2, y2, width, (int) color);
 

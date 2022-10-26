@@ -11,12 +11,16 @@ import java.util.HashSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.BuildMatrix;
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Function;
+import gov.sandia.n2a.language.MatrixVisitable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorArithmetic;
 import gov.sandia.n2a.language.OperatorBinary;
 import gov.sandia.n2a.language.OperatorLogical;
+import gov.sandia.n2a.language.OperatorLogicalInput;
 import gov.sandia.n2a.language.OperatorUnary;
+import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.function.Atan;
 import gov.sandia.n2a.language.function.Ceil;
 import gov.sandia.n2a.language.function.Cosine;
@@ -46,6 +50,7 @@ import gov.sandia.n2a.language.operator.Multiply;
 import gov.sandia.n2a.language.operator.MultiplyElementwise;
 import gov.sandia.n2a.language.operator.NOT;
 import gov.sandia.n2a.language.operator.Power;
+import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 
@@ -99,6 +104,39 @@ public class RendererCfp extends RendererC
             return super.render (op);
         }
 
+        if (op instanceof MatrixVisitable)  // For "3 letter" functions (sin, cos, etc) on matrices
+        {
+            Function f = (Function) op;
+            Operator op0 = f.operands[0];
+            if (op0.getType () instanceof Matrix)
+            {
+                MatrixVisitable mv = (MatrixVisitable) op;
+                boolean hasExponentA      = mv.hasExponentA ();
+                boolean hasExponentResult = mv.hasExponentResult ();
+                int shift = op.exponent - op.exponentNext;
+
+                if (shift != 0  &&  ! hasExponentResult)
+                {
+                    result.append ("shift (");
+                }
+
+                result.append ("visit (");
+                op0.render (this);
+                result.append (", " + f);
+                if (hasExponentA)      result.append (", " + op0.exponentNext);
+                if (hasExponentResult) result.append (", " + op.exponentNext);
+                result.append (")");
+
+                if (shift != 0  &&  ! hasExponentResult)
+                {
+                    result.append (", " + shift + ")");
+                }
+
+                return true;
+            }
+            // Fall through to regular cases below.
+        }
+
         // Operators that are explicitly forwarded to RendererC, because they simply add
         // one or more exponent parameters to the end of the usual function call.
         if (operatorsWithExponent.contains (op.getClass ())) return super.render (op);
@@ -109,7 +147,21 @@ public class RendererCfp extends RendererC
         {
             // Only convert boolean to a fixed-point value if it is being consumed by a numeric expression or a variable.
             // Return the boolean itself if being consumed by a condition or by another logical operator.
-            if (op.parent == null  ||  op.parent instanceof OperatorLogical) return super.render (op);
+            if (op.parent == null  ||  op.parent instanceof OperatorLogicalInput) return super.render (op);
+
+            if (op instanceof OperatorBinary)
+            {
+                OperatorBinary b = (OperatorBinary) op;
+                if (b.operand0.getType () instanceof Matrix  ||  b.operand1.getType () instanceof Matrix)
+                {
+                    int shift = op.exponent - op.exponentNext;
+                    if (shift == 0) return super.render (op);
+                    result.append ("shift (");
+                    escalate (op);
+                    result.append (", " + shift + ")");
+                    return true;
+                }
+            }
 
             result.append ("(");
             escalate (op);
@@ -152,7 +204,7 @@ public class RendererCfp extends RendererC
                     {
                         if (b instanceof Multiply  ||  b.operand0.isScalar ()  ||  b.operand1.isScalar ())
                         {
-                            result.append ("multiply (");
+                            result.append ("::multiply (");  // Need scope resolution because function name conflicts with Simulatable::multiply().
                         }
                         else  // MultiplyElementwise and both operands are matrices
                         {
@@ -202,7 +254,8 @@ public class RendererCfp extends RendererC
 
             // Explanation of shift -- In a division, the quotient is effectively down-shifted by
             // the number of bits in the denominator, and its exponent is the difference between
-            // the exponents of the numerator and denominator.
+            // the exponents of the numerator and denominator. In A/B, exponentA-exponentB will
+            // be the exponent at bit position 0. We want the exponent at bit position MSB.
             int exponentRaw = d.operand0.exponentNext - d.operand1.exponentNext + Operator.MSB;  // Exponent in MSB from a direct integer division.
             int shift = exponentRaw - d.exponentNext;
 
@@ -309,58 +362,70 @@ public class RendererCfp extends RendererC
         if (op instanceof AccessVariable)  // Actually just an operator, not a function
         {
             AccessVariable av = (AccessVariable) op;
+            Type type = av.getType ();
+            boolean isMatrix   = type instanceof Matrix;
+            boolean isInstance = type instanceof Instance;
             int shift = av.exponent - av.exponentNext;
-            if (shift != 0)
+            if (shift != 0  &&  ! isInstance)
             {
-                if (av.getType () instanceof Matrix) result.append ("shift ");
+                if (isMatrix) result.append ("shift ");
                 result.append ("(");
             }
             result.append (job.resolve (av.reference, this, false));
-            if (useExponent  &&  shift != 0)
+            if (useExponent  &&  shift != 0  &&  ! isInstance)
             {
-                if (av.getType () instanceof Matrix)
-                {
-                    result.append (", " + shift);
-                }
-                else
-                {
-                    result.append (printShift (shift));
-                }
+                if (isMatrix) result.append (", " + shift);
+                else          result.append (printShift (shift));
                 result.append (")");
             }
             return true;
         }
         if (op instanceof Ceil)
         {
-            Ceil f = (Ceil) op;
-            Operator a = f.operands[0];
-            // Ceil always sets operands[0].exponentNext to be same as f.exponentNext, so no shift is necessary.
-            if (f.exponentNext >= Operator.MSB)  // LSB is above decimal, so ceil() operation is impossible.
+            Ceil c = (Ceil) op;
+            Operator a = c.operands[0];
+            if (a.exponent >= Operator.MSB)  // LSB is above decimal, so ceil() operation is impossible. This test must be on a.exponent rather than a.exponentNext because ...
             {
+                // a.exponentNext has been set to f.exponentNext by Round.determineExponentNextStatic(),
+                // so no shift is necessary.
                 a.render (this);
             }
-            else if (f.exponentNext < 0)  // All bits are below decimal
-            {
-                result.append ("0");
-            }
-            else
+            else  // a.exponentNext is in [0, MSB), as enforced by Round.determineExponentNextStatic()
             {
                 // Create a mask for bits below the decimal point.
                 // When this mask is added to the number, it will add 1 to the first bit position
                 // above the decimal if any bit is set under the mask. Afterward, used AND to remove
                 // any residual bits below the decimal.
                 // This works for both positive and negative numbers.
-                int zeroes = Operator.MSB - f.exponentNext;
-                int wholeMask = 0xFFFFFFFF << zeroes;
+                int shift = a.exponentNext - c.exponentNext;
+                int decimalPlaces = Operator.MSB - a.exponentNext;
+                int wholeMask = 0xFFFFFFFF << decimalPlaces;
                 int decimalMask = ~wholeMask;
+
+                if (shift != 0) result.append ("(");
+                result.append ("(");  // Bitwise operators are low precedence, so we parenthesize them regardless.
                 boolean needParens = a.precedence () >= new Add ().precedence ();
-                result.append ("(");
                 if (needParens) result.append ("(");
                 a.render (this);
                 if (needParens) result.append (")");
-                result.append (" + " + decimalMask + " & " + wholeMask + ")");
+                result.append (" + " + decimalMask + " & " + wholeMask);
+                result.append (")");  // Close parens around bitwise operator
+                if (shift != 0) result.append (printShift (shift) + ")");
             }
             return true;
+        }
+        if (op instanceof Constant)
+        {
+            Constant c = (Constant) op;
+            if (c.value instanceof Matrix)
+            {
+                int shift = op.exponent - op.exponentNext;
+                if (shift != 0) result.append ("shift (");
+                result.append (c.name);
+                if (shift != 0) result.append (", " + shift + ")");
+                return true;
+            }
+            return super.render (op);
         }
         if (op instanceof Cosine)
         {
@@ -377,7 +442,7 @@ public class RendererCfp extends RendererC
         if (op instanceof Event)
         {
             // See comment on OperatorLogical above. Since event() returns a boolean, we follow the same behavior here.
-            if (op.parent == null  ||  op.parent instanceof OperatorLogical) return super.render (op);
+            if (op.parent == null  ||  op.parent instanceof OperatorLogicalInput) return super.render (op);
 
             Event e = (Event) op;
             int exponentRaw = Operator.MSB - e.eventType.valueIndex;
@@ -397,25 +462,26 @@ public class RendererCfp extends RendererC
             // See Ceil above for similar code.
             Floor f = (Floor) op;
             Operator a = f.operands[0];
-            if (f.exponentNext >= Operator.MSB)
+            if (a.exponent >= Operator.MSB)
             {
                 a.render (this);
-            }
-            else if (f.exponentNext < 0)
-            {
-                result.append ("0");
             }
             else
             {
                 // Mask off bits below the decimal point. This works for both positive and negative numbers.
-                int zeroes = Operator.MSB - f.exponentNext;
-                int wholeMask = 0xFFFFFFFF << zeroes;
-                boolean needParens = a.precedence () >= new AND ().precedence ();
+                int shift = a.exponentNext - f.exponentNext;
+                int decimalPlaces = Operator.MSB - a.exponentNext;
+                int wholeMask = 0xFFFFFFFF << decimalPlaces;
+
+                if (shift != 0) result.append ("(");
                 result.append ("(");
+                boolean needParens = a.precedence () >= new AND ().precedence ();
                 if (needParens) result.append ("(");
                 a.render (this);
                 if (needParens) result.append (")");
-                result.append (" & " + wholeMask + ")");
+                result.append (" & " + wholeMask);
+                result.append (")");
+                if (shift != 0) result.append (printShift (shift) + ")");
             }
             return true;
         }
@@ -433,23 +499,30 @@ public class RendererCfp extends RendererC
         }
         if (op instanceof Round)
         {
+            // See Ceil above for similar code.
             Round r = (Round) op;
             Operator a = r.operands[0];
-            int shift = a.exponentNext - r.exponentNext;
-            int decimalPlaces = Math.max (0, Operator.MSB - a.exponentNext);
-            int mask = 0xFFFFFFFF << decimalPlaces;
-            int half = 0;
-            if (decimalPlaces > 0) half = 0x1 << decimalPlaces - 1;
+            if (a.exponent >= Operator.MSB)
+            {
+                a.render (this);
+            }
+            else  // a.exponentNext in [0, MSB)
+            {
+                int shift = a.exponentNext - r.exponentNext;
+                int decimalPlaces = Operator.MSB - a.exponentNext;
+                int mask = 0xFFFFFFFF << decimalPlaces;
+                int half = 0x1 << decimalPlaces - 1;
 
-            if (shift != 0) result.append ("(");
-            result.append ("("); // Bitwise operators are low precedence, so we parenthesize them regardless.
-            boolean needParens = a.precedence () > new Add ().precedence ();
-            if (needParens) result.append ("(");
-            a.render (this);
-            if (needParens) result.append (")");
-            result.append (" + " + half + " & " + mask);
-            result.append (")"); // Close parens around bitwise operator
-            if (shift != 0) result.append (printShift (shift) + ")");
+                if (shift != 0) result.append ("(");
+                result.append ("(");
+                boolean needParens = a.precedence () > new Add ().precedence ();
+                if (needParens) result.append ("(");
+                a.render (this);
+                if (needParens) result.append (")");
+                result.append (" + " + half + " & " + mask);
+                result.append (")");
+                if (shift != 0) result.append (printShift (shift) + ")");
+            }
             return true;
         }
         if (op instanceof Signum)

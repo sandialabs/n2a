@@ -9,9 +9,9 @@ the U.S. Government retains certain rights in this software.
 #define n2a_runtime_tcc
 
 
+#include "math.h"
 #include "runtime.h"
 #include "matrix.h"
-#include "math.h"
 
 #ifdef _WIN32
 # define WIN32_LEAN_AND_MEAN
@@ -118,7 +118,11 @@ T
 pulse (T t, T width, T period, T rise, T fall)
 {
     if (t < 0) return 0;
+#   ifdef n2a_FP
+    if (period != 0) t = t % period;
+#   else
     if (period != 0) t = std::fmod (t, period);
+#   endif
     if (t < rise) return t / rise;
     t -= rise;
     if (t < width) return 1;
@@ -225,27 +229,27 @@ gaussian ()
     else
     {
         const int half  = 0x40000000; // 0.5, with exponent=-1
-        const int one   = 0x10000;    // exponent=14
+        const int big   = 0xFFFF;     // Too large for log(). exponent=14
         const int small = 0x8;        // Too small for the division that creates multiplier. exponent=14
         int v1, v2, s;
         do
         {
-            v1 = half - uniform<int> ();   // 0.5 - u; Then implicitly double by treating exponent as 0 rather than -1.
-            v2 = half - uniform<int> ();
-            // Squaring v puts exponent=0 at bit 60
-            // Down-shift puts exponent=14 at bit 30.
+            v1 = uniform<int> () - half;   // u-0.5; Then implicitly double by treating exponent as 0 rather than -1.
+            v2 = uniform<int> () - half;
+            // Squaring v puts exponent=0 at bit MSB*2
+            // Down-shift puts exponent=14 at bit MSB.
             // We could keep more bits, but this approach is better conditioned.
-            s = (int64_t) v1 * v1 + (int64_t) v2 * v2 >> 44;  // MSB + 14
+            s = (int64_t) v1 * v1 + (int64_t) v2 * v2 >> FP_MSB + 14;
         }
-        while (s >= one || s <= small);
+        while (s >= big  ||  s <= small);
         // log (s, 14, 14) / s -- Raw result of division has exponent=MSB
         // Median absolute value of result is near 1 (ln(0.5)/0.5~=-1.4), so we want center power of 0, for exponent=15.
-        // Ideal shift is 15(=MSB-15), to put exponent=15 at bit 30.
+        // Ideal shift is 15(=MSB-15), to put exponent=15 at MSB.
         // We also multiply by 2, so claim exponent=16.
-        int multiplier = sqrt (((int64_t) log (s, 14, 14) << 15) / -s, 16, 14);  // multiplier has exponent=14; v1 and v2 have exponent=0
-        nextGaussian = (int64_t) v2 * multiplier >> 18;  // MSB-12; product has exponent=14 at bit 60; shift so exponent=2 at bit 30
+        int multiplier = sqrt (((int64_t) log (s, 14, 14) << FP_MSB - 15) / -s, 16, 14);  // multiplier has exponent=14; v1 and v2 have exponent=0
+        nextGaussian = (int64_t) v2 * multiplier >> FP_MSB - 12;  // product has exponent=14 at bit MSB*2; shift so exponent=2 at MSB
         haveNextGaussian = true;
-        return         (int64_t) v1 * multiplier >> 18;
+        return         (int64_t) v1 * multiplier >> FP_MSB - 12;
     }
 }
 
@@ -825,7 +829,7 @@ ConnectPopulation<T>::reset (bool newOnly)
 #   ifdef n2a_FP
     // raw multiply = -1+MSB-MSB = -1
     // shift = -1 - MSB
-    if (count > 1) i = (int) round ((int64_t) uniform<T> () * (count - 1) >> FP_MSB + 1);
+    if (count > 1) i = (int) (((int64_t) uniform<T> () * (count - 1) >> FP_MSB) + 1 >> 1);  // Add 1 just below the decimal point to cause rounding. Total shift is -(MSB+1)
 #   else
     if (count > 1) i = (int) round (uniform<T> () * (count - 1));
 #   endif

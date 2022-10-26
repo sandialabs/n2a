@@ -13,4 +13,13 @@ package gov.sandia.n2a.language;
 **/
 public interface MatrixVisitable
 {
+    default public boolean hasExponentA ()
+    {
+        return false;
+    }
+
+    default public boolean hasExponentResult ()
+    {
+        return false;
+    }
 }

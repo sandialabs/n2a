@@ -7,6 +7,8 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.backend.internal.Simulator;
+import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
@@ -31,6 +33,24 @@ public class DrawBlock extends Draw implements Draw.Shape
         };
     }
 
+    public Operator simplify (Variable from, boolean evalOnly)
+    {
+        super.simplify (from, evalOnly);  // We can't be a constant, so won't be replaced.
+        if (operands.length < 5)
+        {
+            Operator[] nextOperands = new Operator[4];
+            nextOperands[0] = operands[0];
+            nextOperands[1] = operands[1];
+            if (operands.length > 2) nextOperands[2] = operands[2];
+            else                     nextOperands[2] = new Constant (0);  // w
+            if (operands.length > 3) nextOperands[3] = operands[2];
+            else                     nextOperands[3] = new Constant (0);  // h
+            nextOperands[4] = new Constant (0xFFFFFF);  // white
+            operands = nextOperands;
+        }
+        return this;
+    }
+
     public Type eval (Instance context)
     {
         Simulator simulator = Simulator.instance.get ();
@@ -47,14 +67,9 @@ public class DrawBlock extends Draw implements Draw.Shape
         double x = p.get (0);
         double y = p.get (1);
 
-        double w = 0;
-        if (operands.length > 2) w = ((Scalar) operands[2].eval (context)).value;
-
-        double h = 0;
-        if (operands.length > 3) h = ((Scalar) operands[3].eval (context)).value;
-
-        double color = 0xFFFFFF;  // white
-        if (operands.length > 4) color = ((Scalar) operands[4].eval (context)).value;
+        double w     = ((Scalar) operands[2].eval (context)).value;
+        double h     = ((Scalar) operands[3].eval (context)).value;
+        double color = ((Scalar) operands[4].eval (context)).value;
 
         H.drawBlock (now, raw, x, y, w, h, (int) color);
 

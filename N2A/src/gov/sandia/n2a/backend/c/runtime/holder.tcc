@@ -9,9 +9,9 @@ the U.S. Government retains certain rights in this software.
 #define n2a_holder_tcc
 
 
+#include "math.h"
 #include "holder.h"
 #include "runtime.h"   // For Event::exponent
-#include "math.h"
 #include "image.h"
 
 #include <fstream>
@@ -470,10 +470,20 @@ ImageOutput<T>::next (T now)
 
 template<class T>
 T
-ImageOutput<T>::drawDisc (T now, bool raw, const MatrixFixed<T,3,1> & center, T radius, uint32_t color)
+#ifdef n2a_FP
+ImageOutput<T>::drawDisc (T now, bool raw, const MatrixFixed<T,3,1> & centerFP, T radiusFP, int exponent, uint32_t color)
+#else
+ImageOutput<T>::drawDisc (T now, bool raw, const MatrixFixed<T,3,1> & center,   T radius,                 uint32_t color)
+#endif
 {
     next (now);
 
+#   ifdef n2a_FP
+    double conversion = pow (2.0f, FP_MSB - exponent);
+    MatrixFixed<double,3,1> center = centerFP;
+    center /= conversion;
+    double radius = radiusFP / conversion;
+#   endif
     uint32_t rgba = color << 8 | 0xFF;
 
     if (raw)
@@ -483,18 +493,35 @@ ImageOutput<T>::drawDisc (T now, bool raw, const MatrixFixed<T,3,1> & center, T 
         return 0;
     }
 
+#   ifdef n2a_FP
+    n2a::Point cs = center * (double) width;
+#   else
     n2a::Point cs = center * (T) width;
+#   endif
     radius *= width;
     if (radius < 0.5) radius = 0.5;
     canvas.scanCircle (cs, radius, rgba);
-    return 0;
+    return 1;
 }
 
 template<class T>
 T
-ImageOutput<T>::drawBlock (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h, uint32_t color)
+#ifdef n2a_FP
+ImageOutput<T>::drawBlock (T now, bool raw, const MatrixFixed<T,3,1> & centerFP, T wFP, T hFP, int exponent, uint32_t color)
+#else
+ImageOutput<T>::drawBlock (T now, bool raw, const MatrixFixed<T,3,1> & center,   T w,   T h,                 uint32_t color)
+#endif
 {
     next (now);
+
+#   ifdef n2a_FP
+    double conversion = pow (2.0f, FP_MSB - exponent);
+    n2a::Point center = centerFP;
+    center /= conversion;
+    double w = wFP / conversion;
+    double h = hFP / conversion;
+#   endif
+    uint32_t rgba = color << 8 | 0xFF;
 
     n2a::Point corner0;
     corner0[0] = center[0] - w / 2;
@@ -505,8 +532,6 @@ ImageOutput<T>::drawBlock (T now, bool raw, const MatrixFixed<T,3,1> & center, T
     corner1[1] = center[1] + h / 2;
     //corner1[2] = center[2];
 
-    uint32_t rgba = color << 8 | 0xFF;
-
     if (! raw)
     {
         corner0 *= (double) width;
@@ -514,31 +539,48 @@ ImageOutput<T>::drawBlock (T now, bool raw, const MatrixFixed<T,3,1> & center, T
     }
 
     canvas.drawFilledRectangle (corner0, corner1, rgba);
-    return 0;
+    return 1;
 }
 
 template<class T>
 T
-ImageOutput<T>::drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1, const MatrixFixed<T,3,1> & p2, T thickness, uint32_t color)
+#ifdef n2a_FP
+ImageOutput<T>::drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1FP, const MatrixFixed<T,3,1> & p2FP, T thicknessFP, int exponent, uint32_t color)
+#else
+ImageOutput<T>::drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1,   const MatrixFixed<T,3,1> & p2,   T thickness,                 uint32_t color)
+#endif
 {
     next (now);
+
+#   ifdef n2a_FP
+    double conversion = pow (2.0f, FP_MSB - exponent);
+    n2a::Point p1 = p1FP;
+    n2a::Point p2 = p2FP;
+    p1 /= conversion;
+    p2 /= conversion;
+    double thickness = thicknessFP / conversion;
+#   endif
+    uint32_t rgba = color << 8 | 0xFF;
 
     if (! raw) thickness *= width;
     if (thickness < 1) thickness = 1;
     canvas.setLineWidth (thickness);
 
-    uint32_t rgba = color << 8 | 0xFF;
-
     if (raw)
     {
         canvas.drawSegment (p1, p2, rgba);
-        return 0;
+        return 1;
     }
 
+#   ifdef n2a_FP
+    n2a::Point ps1 = p1 * (double) width;
+    n2a::Point ps2 = p2 * (double) width;
+#   else
     n2a::Point ps1 = p1 * (T) width;
     n2a::Point ps2 = p2 * (T) width;
+#   endif
     canvas.drawSegment (ps1, ps2, rgba);
-    return 0;
+    return 1;
 }
 
 template<class T>
@@ -1215,15 +1257,19 @@ OutputHolder<T>::addMode (const char * mode)
 template<class T>
 T
 #ifdef n2a_FP
-OutputHolder<T>::trace (T now, const String & column, T rawValue, int exponent, const char * mode)
+OutputHolder<T>::trace (T now, const String & column, T valueFP, int exponent, const char * mode)
 #else
-OutputHolder<T>::trace (T now, const String & column, T value,                  const char * mode)
+OutputHolder<T>::trace (T now, const String & column, T value,                 const char * mode)
 #endif
 {
     trace (now);
 
 #   ifdef n2a_FP
-    float value = (float) rawValue / pow (2.0f, FP_MSB - exponent);
+    float value;
+    if      (valueFP ==  NAN)      value =  std::numeric_limits<float>::quiet_NaN ();
+    else if (valueFP ==  INFINITY) value =  std::numeric_limits<float>::infinity ();
+    else if (valueFP == -INFINITY) value = -std::numeric_limits<float>::infinity ();
+    else                           value = (float) valueFP / pow (2.0f, FP_MSB - exponent);
 #   endif
 
     std::unordered_map<String, int>::iterator result = columnMap.find (column);
@@ -1239,7 +1285,7 @@ OutputHolder<T>::trace (T now, const String & column, T value,                  
     }
 
 #   ifdef n2a_FP
-    return rawValue;
+    return valueFP;
 #   else
     return value;
 #   endif
@@ -1310,29 +1356,26 @@ OutputHolder<T>::trace (T now, const String & column, const Matrix<T> & A, const
 template<class T>
 T
 #ifdef n2a_FP
-OutputHolder<T>::trace (T now, T column, T rawValue, int exponent, const char * mode)
+OutputHolder<T>::trace (T now, T columnFP, T valueFP, int exponent, const char * mode)
 #else
-OutputHolder<T>::trace (T now, T column, T value,                  const char * mode)
+OutputHolder<T>::trace (T now, T column,   T value,                 const char * mode)
 #endif
 {
     trace (now);
 
 #   ifdef n2a_FP
-    float value = (float) rawValue / pow (2.0f, FP_MSB - exponent);
+    float column = (float) columnFP / pow (2.0f, FP_MSB - 15);  // column has fixed exponent of 15
+    float value;
+    if      (valueFP ==  NAN)      value =  std::numeric_limits<float>::quiet_NaN ();
+    else if (valueFP ==  INFINITY) value =  std::numeric_limits<float>::infinity ();
+    else if (valueFP == -INFINITY) value = -std::numeric_limits<float>::infinity ();
+    else                           value = (float) valueFP / pow (2.0f, FP_MSB - exponent);
 #   endif
 
-    char buffer[32];
+    String columnName;
     int index;  // Only used for "raw" mode.
-    if (raw)
-    {
-        index = (int) round (column);
-        sprintf (buffer, "%i", index);
-    }
-    else
-    {
-        sprintf (buffer, "%g", column);
-    }
-    String columnName = buffer;
+    if (raw) columnName = index = (int) round (column);
+    else     columnName = column;
 
     std::unordered_map<String, int>::iterator result = columnMap.find (columnName);
     if (result == columnMap.end ())
@@ -1340,7 +1383,7 @@ OutputHolder<T>::trace (T now, T column, T value,                  const char * 
         if (raw)
         {
             index++;  // column index + offset for time column
-            columnValues.resize (index, NAN);  // add any missing columns before the one we are about to create
+            columnValues.resize (index, std::numeric_limits<float>::quiet_NaN ());  // add any missing columns before the one we are about to create
         }
         columnMap[columnName] = columnValues.size ();
         columnValues.push_back ((float) value);
@@ -1352,7 +1395,7 @@ OutputHolder<T>::trace (T now, T column, T value,                  const char * 
     }
 
 #   ifdef n2a_FP
-    return rawValue;
+    return valueFP;
 #   else
     return value;
 #   endif
@@ -1395,12 +1438,13 @@ OutputHolder<T>::writeTrace ()
     }
 
     // Write values
+    float NANf = std::numeric_limits<float>::quiet_NaN ();  // Necessary because "NAN" might be an integer.
     for (int i = 0; i <= last; i++)
     {
         float & c = columnValues[i];
         if (! std::isnan (c)) (*out) << c;
         if (i < last) (*out) << "\t";
-        c = NAN;
+        c = NANf;
     }
     (*out) << std::endl;
 

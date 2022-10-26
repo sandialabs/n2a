@@ -62,18 +62,30 @@ public class Round extends Function implements MatrixVisitable
 
     public void determineExponentNext ()
     {
-        determineExponentNextStatic (operands[0], exponentNext);
+        determineExponentNextStatic (this, exponentNext);
     }
 
     /**
         Shared by round(), ceil() and floor()
     **/
-    public static void determineExponentNextStatic (Operator op, int exponentNext)
+    public static void determineExponentNextStatic (Function f, int exponentNext)
     {
-        if (op.exponent < 0)        op.exponentNext = 0;  // Must have at least one bit above the decimal point in order to round.
+        Operator op = f.operands[0];
+        if      (op.exponent < 0)   op.exponentNext = 0;  // Must have at least one bit above the decimal point in order to round.
         else if (op.exponent < MSB) op.exponentNext = op.exponent;  // Decimal point is visible, so we can process this.
         else                        op.exponentNext = exponentNext; // Otherwise, just pass through.
         op.determineExponentNext ();
+        f.exponent = op.exponentNext;
+    }
+
+    public boolean hasExponentA ()
+    {
+        return true;
+    }
+
+    public boolean hasExponentResult ()
+    {
+        return true;
     }
 
     public Type eval (Instance context)

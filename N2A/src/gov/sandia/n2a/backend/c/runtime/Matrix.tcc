@@ -15,8 +15,8 @@ the U.S. Government retains certain rights in this software.
 #define n2a_matrix_tcc
 
 
-#include "matrix.h"
 #include "math.h"
+#include "matrix.h"
 #include "StringLite.h"
 
 
@@ -151,15 +151,19 @@ operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 {
     int h = A.rows ();
     int w = A.columns ();
-    if (B.rows () != h  ||  B.columns () != w) return false;
-    for (int c = 0; c < w; c++)
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    Matrix<T> result (h, w);
+    for (int c = 0; c < ow; c++)
     {
-        for (int r = 0; r < h; r++)
-        {
-            if (B(r,c) != A(r,c)) return false;
-        }
+        for (int r = 0;  r < oh; r++) result(r,c) =  A(r,c) == B(r,c);
+        for (int r = oh; r < h;  r++) result(r,c) =  A(r,c) == 0;
     }
-    return true;
+    for (int c = ow; c < w; c++)
+    {
+        for (int r = 0;  r < h;  r++) result(r,c) =  A(r,c) == 0;
+    }
+    return result;
 }
 
 template<class T>
@@ -175,6 +179,27 @@ operator == (const MatrixAbstract<T> & A, const T scalar)
         {
             result(r,c) =  A(r,c) == scalar;
         }
+    }
+    return result;
+}
+
+template<class T>
+bool
+operator != (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    int oh = std::min (h, B.rows ());
+    int ow = std::min (w, B.columns ());
+    Matrix<T> result (h, w);
+    for (int c = 0; c < ow; c++)
+    {
+        for (int r = 0;  r < oh; r++) result(r,c) =  A(r,c) != B(r,c);
+        for (int r = oh; r < h;  r++) result(r,c) =  A(r,c) != 0;
+    }
+    for (int c = ow; c < w; c++)
+    {
+        for (int r = 0;  r < h;  r++) result(r,c) =  A(r,c) != 0;
     }
     return result;
 }
@@ -672,6 +697,21 @@ operator /= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 void
+operator /= (MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            A(r,c) /= scalar;
+        }
+    }
+}
+
+template<class T>
+void
 operator += (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 {
     int h = A.rows ();
@@ -689,6 +729,21 @@ operator += (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 void
+operator += (MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            A(r,c) += scalar;
+        }
+    }
+}
+
+template<class T>
+void
 operator -= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 {
     int h = A.rows ();
@@ -700,6 +755,21 @@ operator -= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
         for (int r = 0; r < oh; r++)
         {
             A(r,c) -= B(r,c);
+        }
+    }
+}
+
+template<class T>
+void
+operator -= (MatrixAbstract<T> & A, const T scalar)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            A(r,c) -= scalar;
         }
     }
 }

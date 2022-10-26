@@ -53,6 +53,16 @@ public class Tangent extends Function implements MatrixVisitable
         op.determineExponentNext ();
     }
 
+    public boolean hasExponentA ()
+    {
+        return true;
+    }
+
+    public boolean hasExponentResult ()
+    {
+        return true;
+    }
+
     public void determineUnit (boolean fatal) throws Exception
     {
         operands[0].determineUnit (fatal);

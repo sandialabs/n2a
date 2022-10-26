@@ -97,17 +97,10 @@ public class Output extends Function
         op1.determineExponentNext ();
 
         // Column identifier (name or index)
-        if (operands.length >= 3)
+        if (operands.length > 2)
         {
             Operator op2 = operands[2];
-            if (getKeywordFlag ("raw"))
-            {
-                op2.exponentNext = MSB;  // index, so pure integer
-            }
-            else
-            {
-                op2.exponentNext = op2.exponent;  // name; can be a string or a float
-            }
+            op2.exponentNext = 15;  // To avoid passing extra exponent parameter, we use a general-purpose value.
             op2.determineExponentNext ();
         }
 

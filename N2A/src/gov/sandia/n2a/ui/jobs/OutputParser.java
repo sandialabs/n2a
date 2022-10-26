@@ -99,11 +99,25 @@ public class OutputParser
                     for (; p < parts.length; p++)
                     {
                         Column c = columns.get (p);
+                        String part = parts[p];
                         float value = defaultValue;
-                        if (! parts[p].isEmpty ())
+                        if (! part.isEmpty ())
                         {
-                            value = Float.parseFloat (parts[p]);
-                            c.textWidth = Math.max (c.textWidth, parts[p].length ());
+                            try
+                            {
+                                value = Float.parseFloat (part);
+                            }
+                            catch (NumberFormatException e)
+                            {
+                                // parseFloat() does not detect "inf" correctly
+                                part = part.toLowerCase ();
+                                if (part.endsWith ("inf"))
+                                {
+                                    if (part.startsWith ("-")) value = Float.NEGATIVE_INFINITY;
+                                    else                       value = Float.POSITIVE_INFINITY;
+                                }
+                            }
+                            c.textWidth = Math.max (c.textWidth, part.length ());
                         }
                         c.values.add (value);
                     }

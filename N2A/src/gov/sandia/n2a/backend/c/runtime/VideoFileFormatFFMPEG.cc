@@ -18,8 +18,8 @@ the U.S. Government retains certain rights in this software.
 #define __STDC_CONSTANT_MACROS
 #define __STDC_LIMIT_MACROS
 
-#include "video.h"
 #include "math.h"
+#include "video.h"
 
 extern "C"
 {

@@ -61,16 +61,11 @@ template<class T> T         sumSquares (const MatrixAbstract<T> & A);           
 template<class T> Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T &)); ///< Apply function() to each element, and return the results in a new Matrix of equal size.
 template<class T> Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
 
-// Whole-matrix comparison
-template<class T> bool operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);  ///< Two matrices are equal if they have the same shape and the same elements.
-template<class T> bool operator != (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
-{
-    return ! (A == B);
-}
-
 // Elementwise logical operators
+template<class T> Matrix<T> operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
 template<class T> Matrix<T> operator == (const MatrixAbstract<T> & A, const T scalar);
 template<class T> Matrix<T> operator == (const T scalar,              const MatrixAbstract<T> & A) {return A == scalar;}
+template<class T> Matrix<T> operator != (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
 template<class T> Matrix<T> operator != (const MatrixAbstract<T> & A, const T scalar);
 template<class T> Matrix<T> operator != (const T scalar,              const MatrixAbstract<T> & A) {return A != scalar;}
 template<class T> Matrix<T> operator <  (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
@@ -93,7 +88,7 @@ template<class T> Matrix<T> operator || (const MatrixAbstract<T> & A, const T sc
 template<class T> Matrix<T> operator || (const T scalar,              const MatrixAbstract<T> & A) {return A || scalar;}
 
 template<class T> Matrix<T> operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise multiplication. The prettiest name for this operator would be ".*", but that is not overloadable.
-template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Multiply matrices: this * B
+template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Multiply matrices
 template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const T scalar);              ///< Multiply each element by scalar
 template<class T> Matrix<T> operator * (const T scalar,              const MatrixAbstract<T> & A) {return A * scalar;}
 template<class T> Matrix<T> operator / (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise division.  Could mean this * !B, but such expressions are done other ways in linear algebra.
@@ -110,8 +105,11 @@ template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A) {return A *
 template<class T> void operator *= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);  ///< As a hack to make C code generation simpler, this does elementwise multiply rather than whole-matrix multiply.
 template<class T> void operator *= (MatrixAbstract<T> & A, const T scalar);
 template<class T> void operator /= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> void operator /= (MatrixAbstract<T> & A, const T scalar);
 template<class T> void operator += (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> void operator += (MatrixAbstract<T> & A, const T scalar);
 template<class T> void operator -= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> void operator -= (MatrixAbstract<T> & A, const T scalar);
 
 template<class T> Matrix<T> min (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
 template<class T> Matrix<T> min (const MatrixAbstract<T> & A, const T scalar);
@@ -170,6 +168,23 @@ template<class T> Matrix<T> operator + (const T scalar,             const Matrix
 template<class T> Matrix<T> operator - (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
 template<class T> Matrix<T> operator - (const MatrixStrided<T> & A, const T scalar);
 template<class T> Matrix<T> operator - (const T scalar,             const MatrixStrided<T> & A);
+
+// Fixed-point operations on MatrixStrided<int>
+// These are not templates. Their implementations may be found in fixedpoint.cc
+#ifdef n2a_FP
+int         norm                (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult);  // exponentN=15
+
+Matrix<int> visit               (const MatrixStrided<int> & A, int (*function) (int, int),      int exponent1);
+Matrix<int> visit               (const MatrixStrided<int> & A, int (*function) (int, int, int), int exponent1, int exponent2);
+
+Matrix<int> multiplyElementwise (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);  // Don't know the exponent of B, so missing elements in B produce a 0 in the result.
+Matrix<int> multiply            (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);
+Matrix<int> multiply            (const MatrixStrided<int> & A, int b,                        int shift);
+
+Matrix<int> divide              (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);  // Don't know the exponent of B, so missing elements in B produce a 0 in the result.
+Matrix<int> divide              (const MatrixStrided<int> & A, int b,                        int shift);
+Matrix<int> divide              (int a,                        const MatrixStrided<int> & B, int shift);
+#endif
 
 template<class T>
 class Matrix : public MatrixStrided<T>
@@ -312,7 +327,8 @@ template<class T, int R, int C>        MatrixFixed<T,R,C> operator - (const T sc
 
 template<class T, int R, int C> void operator *= (MatrixFixed<T,R,C> & A, const T scalar);
 
-// Extended operations on MatrixFixed<int,R,C>
+// Fixed-point operations on MatrixFixed<int,R,C>
+// Since these are templates, their implementations are in MatrixFixed.tcc
 #ifdef n2a_FP
 template<int R, int C>        MatrixFixed<int,R,C> shift               (const MatrixFixed<int,R,C> & A,                                 int shift);
 

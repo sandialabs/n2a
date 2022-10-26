@@ -3469,8 +3469,9 @@ public class EquationSet implements Comparable<EquationSet>
                 if (op instanceof AccessVariable) return sane;
 
                 String name = op.toString ();
-                if (op instanceof Function) name += "()";
-                else                        name  = "operator" + name;
+                if      (op instanceof Function) name += "()";
+                else if (op instanceof Constant) name  = "constant " + name;
+                else                             name  = "operator"  + name;
 
                 if (op.center < 0  ||  op.center > Operator.MSB)
                 {
@@ -3516,9 +3517,15 @@ public class EquationSet implements Comparable<EquationSet>
 
             // Convert center power to an approximate decimal value.
             int centerPower = v.exponent - Operator.MSB + v.center;
-            int base10 = (int) Math.floor (centerPower / b2d);
+            String base10 = Integer.toString ((int) Math.floor (centerPower / b2d));
+            String exponent = Integer.toString (v.exponent);
+            if (v.exponent == Operator.UNKNOWN)
+            {
+                base10 = "???";
+                exponent = "???";
+            }
 
-            ps.println ("  " + base10 + "\t" + v.exponent + "\t" + v.fullName ());
+            ps.println ("  " + base10 + "\t" + exponent + "\t" + v.fullName ());
 
             if (context.overflows.contains (v)) ps.println ("\t\t  WARNING: Magnitude did not converge. Add hint (median=median_absolute_value).");
 

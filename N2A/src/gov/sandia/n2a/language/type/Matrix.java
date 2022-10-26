@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -209,20 +209,13 @@ public abstract class Matrix extends Type
         return new MatrixDense (this).max (that);
     }
 
-    // EQ() and NE() are treated differently than other comparisons.
-    // The other comparisons generate boolean matrices containing the 
-    // results of comparing matching elements between two matrices.
-    // However, EQ() and NE() assume the user wants a simple boolean
-    // value indicating whether two matrices are an exact match.
-
     public Type EQ (Type that) throws EvaluationException
     {
-        if (that instanceof Matrix) return new Scalar (compareTo (that) == 0 ? 1 : 0);
+        int h = rows ();
+        int w = columns ();
         if (that instanceof Scalar)
         {
             double b = ((Scalar) that).value;
-            int h = rows ();
-            int w = columns ();
             MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
@@ -233,17 +226,33 @@ public abstract class Matrix extends Type
             }
             return result;
         }
+        if (that instanceof Matrix)
+        {
+            Matrix B = (Matrix) that;
+            int oh = Math.min (h, B.rows ());
+            int ow = Math.min (w, B.columns ());
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < ow; c++)
+            {
+                for (int r = 0;  r < oh; r++) result.set (r, c, get (r, c) == B.get (r, c) ? 1 : 0);
+                for (int r = oh; r < h;  r++) result.set (r, c, get (r, c) == 0            ? 1 : 0);
+            }
+            for (int c = ow; c < w; c++)
+            {
+                for (int r = 0;  r < h;  r++) result.set (r, c, get (r, c) == 0            ? 1 : 0);
+            }
+            return result;
+        }
         throw new EvaluationException ("type mismatch");
     }
 
     public Type NE (Type that) throws EvaluationException
     {
-        if (that instanceof Matrix) return new Scalar (compareTo (that) != 0 ? 1 : 0);
+        int h = rows ();
+        int w = columns ();
         if (that instanceof Scalar)
         {
             double b = ((Scalar) that).value;
-            int h = rows ();
-            int w = columns ();
             MatrixDense result = new MatrixDense (h, w);
             for (int c = 0; c < w; c++)
             {
@@ -251,6 +260,23 @@ public abstract class Matrix extends Type
                 {
                     result.set (r, c, get (r, c) != b ? 1 : 0);
                 }
+            }
+            return result;
+        }
+        if (that instanceof Matrix)
+        {
+            Matrix B = (Matrix) that;
+            int oh = Math.min (h, B.rows ());
+            int ow = Math.min (w, B.columns ());
+            MatrixDense result = new MatrixDense (h, w);
+            for (int c = 0; c < ow; c++)
+            {
+                for (int r = 0;  r < oh; r++) result.set (r, c, get (r, c) != B.get (r, c) ? 1 : 0);
+                for (int r = oh; r < h;  r++) result.set (r, c, get (r, c) != 0            ? 1 : 0);
+            }
+            for (int c = ow; c < w; c++)
+            {
+                for (int r = 0;  r < h;  r++) result.set (r, c, get (r, c) != 0            ? 1 : 0);
             }
             return result;
         }

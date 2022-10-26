@@ -73,7 +73,7 @@ public class Draw extends Function
         {
             op.determineExponent (context);
         }
-        updateExponent (context, MSB, 0);  // Our output is always an integer (0).
+        updateExponent (context, MSB, 0);  // Our output is always an integer (1).
 
         if (keywords == null) return;
         for (Operator op : keywords.values ())
@@ -341,7 +341,7 @@ public class Draw extends Function
         // All this function does is stage canvas and camera configurations
         // for the next time the clock advances by a drawX() that makes a mark.
 
-        return new Scalar (0);
+        return new Scalar (1);
     }
 
     public String toString ()

@@ -15,8 +15,6 @@
 #define n2a_canvas_h
 
 
-#undef n2a_FP
-#include "math.h"
 #include "matrix.h"
 #include "image.h"
 

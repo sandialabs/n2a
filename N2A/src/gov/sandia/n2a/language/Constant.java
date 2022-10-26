@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -66,7 +66,7 @@ public class Constant extends Operator
     }
 
     /**
-        Constants are constructed so that center points to the most-significant bit of the value.
+        Constants are constructed so that "center" points to the most-significant bit of the value.
 
         TODO: Determine significant digits for scalar constants that lack unitValue.
         This can happen, for example, if a constant is calculated from other values during
@@ -85,8 +85,9 @@ public class Constant extends Operator
                 centerNew = Math.max (centerNew, bits - 1);
                 centerNew = Math.min (centerNew, MSB);
             }
+
             int e = 0;
-            if (v != 0) e = Math.getExponent (v);
+            if (v != 0  &&  Double.isFinite (v)) e = Math.getExponent (v);
             int exponentNew = e + MSB - centerNew;
             updateExponent (context, exponentNew, centerNew);
         }
@@ -125,16 +126,10 @@ public class Constant extends Operator
     {
         if (! (value instanceof Scalar)) return 0;
         float v = (float) ((Scalar) value).value;
-        if (v == 0) return Integer.MAX_VALUE;  // entire mantissa is zeros, so shift as much as desired
+        if (v == 0) return 32;  // entire mantissa is zeros, so shift as much as desired
 
-        int result = 0;
-        int bits = Float.floatToRawIntBits (v) | 0x800000;  // Forced the implied first bit of mantissa to be 1, to stop iteration.
-        while ((bits & 0x1) == 0)
-        {
-            result++;
-            bits >>= 1;
-        }
-        return result;
+        int bits = Float.floatToRawIntBits (v) | 0x800000;  // Force the implied first bit of mantissa to be 1, to stop iteration.
+        return Integer.numberOfTrailingZeros (bits);
     }
 
     public void dumpExponents (String pad)

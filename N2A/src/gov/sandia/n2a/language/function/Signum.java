@@ -51,6 +51,11 @@ public class Signum extends Function implements MatrixVisitable
         op.determineExponentNext ();
     }
 
+    public boolean hasExponentResult ()
+    {
+        return true;
+    }
+
     public void determineUnit (boolean fatal) throws Exception
     {
         for (int i = 0; i < operands.length; i++) operands[i].determineUnit (fatal);

@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,6 +15,291 @@ shift (const MatrixAbstract<int> & A, int shift)
     if (shift > 0) return A * (0x1 << shift);
     if (shift < 0) return A / (0x1 << -shift);
     return A;
+}
+
+Matrix<int>
+visit (const MatrixStrided<int> & A, int (*function) (int, int), int exponent1)
+{
+    int h  = A.rows ();
+    int w  = A.columns ();
+    int sc = A.strideC ();
+    int sr = A.strideR ();
+
+    Matrix<int> result (h, w);
+    int step = sc - h * sr;
+    int * r    = result.base ();
+    int * a    = A.base ();
+    int * end  = a + sc * w;
+    while (a != end)
+    {
+        int * columnEnd = a + h * sr;
+        while (a != columnEnd)
+        {
+            *r++ = (*function) (*a, exponent1);
+            a += sr;
+        }
+        a += step;
+    }
+
+    return result;
+}
+
+Matrix<int>
+visit (const MatrixStrided<int> & A, int (*function) (int, int, int), int exponent1, int exponent2)
+{
+    int h  = A.rows ();
+    int w  = A.columns ();
+    int sc = A.strideC ();
+    int sr = A.strideR ();
+
+    Matrix<int> result (h, w);
+    int step = sc - h * sr;
+    int * r    = result.base ();
+    int * a    = A.base ();
+    int * end  = a + sc * w;
+    while (a != end)
+    {
+        int * columnEnd = a + h * sr;
+        while (a != columnEnd)
+        {
+            *r++ = (*function) (*a, exponent1, exponent2);
+            a += sr;
+        }
+        a += step;
+    }
+
+    return result;
+}
+
+Matrix<int>
+multiplyElementwise (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift)
+{
+    int h  = A.rows ();
+    int w  = A.columns ();
+    int sc = A.strideC ();
+    int sr = A.strideR ();
+
+    int bh  = B.rows ();
+    int bw  = B.columns ();
+    int bsc = B.strideC ();
+    int bsr = B.strideR ();
+
+    Matrix<int> result (h, w);
+    int oh = std::min (h, bh);
+    int ow = std::min (w, bw);
+    int stepA = sc  - h  * sr;
+    int stepB = bsc - oh * bsr;
+    int * a   = A.base ();
+    int * b   = B.base ();
+    int * r   = result.base ();
+    int * end = r + h * ow;
+    while (r < end)
+    {
+        int * overlapEnd = r + oh;
+        int * columnEnd  = r + h;
+        while (r < overlapEnd)
+        {
+            *r++ = (int64_t) *a * *b >> shift;
+            a += sr;
+            b += bsr;
+        }
+        while (r < columnEnd)
+        {
+            *r++ = 0;
+            a += sr;
+        }
+        a += stepA;
+        b += stepB;
+    }
+    end += h * (w - ow);
+    while (r < end)
+    {
+        int * columnEnd = r + h;
+        while (r < columnEnd)
+        {
+            *r++ = 0;
+            a += sr;
+        }
+        a += stepA;
+    }
+
+    return result;
+}
+
+Matrix<int>
+multiply (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift)
+{
+    int h  = A.rows ();
+    int w  = A.columns ();
+    int sc = A.strideC ();
+    int sr = A.strideR ();
+
+    int bh  = B.rows ();
+    int bw  = B.columns ();
+    int bsc = B.strideC ();
+    int bsr = B.strideR ();
+
+    Matrix<int> result (h, bw);
+    int ow = std::min (w, bh);
+    int * aa  = A.base ();
+    int * b   = B.base ();
+    int * c   = result.base ();
+    int * end = c + h * bw;
+    while (c < end)
+    {
+        int * a = aa;
+        int * columnEnd = c + h;
+        while (c < columnEnd)
+        {
+            register int64_t element = 0;
+            int * i = a;
+            int * j = b;
+            int * rowEnd = j + ow * bsr;
+            while (j != rowEnd)
+            {
+                element += (int64_t) *i * *j;
+                i += sc;
+                j += bsr;
+            }
+            *c++ = element >> shift;
+            a += sr;
+        }
+        b += bsc;
+    }
+    return result;
+}
+
+Matrix<int>
+multiply (const MatrixStrided<int> & A, int scalar, int shift)
+{
+    int h  = A.rows ();
+    int w  = A.columns ();
+    int sc = A.strideC ();
+    int sr = A.strideR ();
+
+    Matrix<int> result (h, w);
+    int stepC = sc - h * sr;
+    int * i   = A.base ();
+    int * r   = result.base ();
+    int * end = r + h * w;
+    while (r < end)
+    {
+        int * columnEnd = r + h;
+        while (r < columnEnd)
+        {
+            *r++ = (int64_t) scalar * *i >> shift;
+            i += sr;
+        }
+        i += stepC;
+    }
+    return result;
+}
+
+Matrix<int>
+divide (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift)
+{
+    int h  = A.rows ();
+    int w  = A.columns ();
+    int sc = A.strideC ();
+    int sr = A.strideR ();
+
+    int bh  = B.rows ();
+    int bw  = B.columns ();
+    int bsc = B.strideC ();
+    int bsr = B.strideR ();
+
+    Matrix<int> result (h, w);
+    int oh = std::min (h, bh);
+    int ow = std::min (w, bw);
+    int stepA = sc  - h  * sr;
+    int stepB = bsc - oh * bsr;
+    int * a   = A.base ();
+    int * b   = B.base ();
+    int * r   = result.base ();
+    int * end = r + h * ow;
+    while (r < end)
+    {
+        int * overlapEnd = r + oh;
+        int * columnEnd  = r + h;
+        while (r < overlapEnd)
+        {
+            *r++ = ((int64_t) *a << shift) / *b;
+            a += sr;
+            b += bsr;
+        }
+        while (r < columnEnd)
+        {
+            *r++ = 0;
+            a += sr;
+        }
+        a += stepA;
+        b += stepB;
+    }
+    end += h * (w - ow);
+    while (r < end)
+    {
+        int * columnEnd = r + h;
+        while (r < columnEnd)
+        {
+            *r++ = 0;
+            a += sr;
+        }
+        a += stepA;
+    }
+
+    return result;
+}
+
+Matrix<int>
+divide (const MatrixStrided<int> & A, int scalar, int shift)
+{
+    int h  = A.rows ();
+    int w  = A.columns ();
+    int sc = A.strideC ();
+    int sr = A.strideR ();
+
+    Matrix<int> result (h, w);
+    int * i   = A.base ();
+    int * r   = result.base ();
+    int * end = r + h * w;
+    int stepC = sc - h * sr;
+    while (r < end)
+    {
+        int * columnEnd = r + h;
+        while (r < columnEnd)
+        {
+            *r++ = ((int64_t) *i << shift) / scalar;
+            i += sr;
+        }
+        i += stepC;
+    }
+    return result;
+}
+
+Matrix<int>
+divide (int scalar, const MatrixStrided<int> & A, int shift)
+{
+    int h  = A.rows ();
+    int w  = A.columns ();
+    int sc = A.strideC ();
+    int sr = A.strideR ();
+
+    Matrix<int> result (h, w);
+    int * i   = A.base ();
+    int * r   = result.base ();
+    int * end = r + h * w;
+    int stepC = sc - h * sr;
+    while (r < end)
+    {
+        int * columnEnd = r + h;
+        while (r < columnEnd)
+        {
+            *r++ = ((int64_t) scalar << shift) / *i;
+            i += sr;
+        }
+        i += stepC;
+    }
+    return result;
 }
 
 /**
@@ -132,11 +417,33 @@ atan2 (int y, int x)
 }
 
 int
+ceil (int a, int exponentA, int exponentResult)
+{
+    int result;
+    if (exponentA >= 0  &&  exponentA < FP_MSB)
+    {
+        int decimalPlaces = FP_MSB - exponentA;
+        int wholeMask = 0xFFFFFFFF << decimalPlaces;
+        int decimalMask = ~wholeMask;
+        result = a + decimalMask & wholeMask;
+    }
+    else
+    {
+        result = a;
+    }
+
+    int shift = exponentA - exponentResult;
+    if (shift > 0) return result << shift;
+    if (shift < 0) return result >> -shift;
+    return result;
+}
+
+int
 cos (int a, int exponentA)
 {
     // We want to add PI/2 to a. M_PI exponent=1. To induce down-shift, claim it is 0.
     // Thus, shift is exactly exponentA.
-    if (exponentA >= 0) return (a + (M_PI >> exponentA), exponentA);
+    if (exponentA >= 0) return sin (a + (M_PI >> exponentA), exponentA);
     // If exponentA is negative, then a is too small to use as-is.
     if (exponentA < -FP_MSB) return 0x20000000;  // one, with exponent=1
     return sin ((a >> -exponentA) + M_PI, 0);
@@ -237,6 +544,27 @@ exp (int a, int exponentResult)
         }
         return result;
     }
+}
+
+int
+floor (int a, int exponentA, int exponentResult)
+{
+    int result;
+    if (exponentA >= 0  &&  exponentA < FP_MSB)
+    {
+        int decimalPlaces = FP_MSB - exponentA;
+        int wholeMask = 0xFFFFFFFF << decimalPlaces;
+        result = a & wholeMask;
+    }
+    else
+    {
+        result = a;
+    }
+
+    int shift = exponentA - exponentResult;
+    if (shift > 0) return result << shift;
+    if (shift < 0) return result >> -shift;
+    return result;
 }
 
 int
@@ -538,6 +866,37 @@ pow (int a, int b, int exponentA, int exponentResult)
     }
     int result = exp (blna, exponentResult);
     if (negate) return -result;
+    return result;
+}
+
+int
+round (int a, int exponentA, int exponentResult)
+{
+    int result;
+    if (exponentA >= 0  &&  exponentA < FP_MSB)
+    {
+        int decimalPlaces = FP_MSB - exponentA;
+        int mask = 0xFFFFFFFF << decimalPlaces;
+        int half = 0x1 << decimalPlaces - 1;
+        result = a + half & mask;
+    }
+    else
+    {
+        result = a;
+    }
+
+    int shift = exponentA - exponentResult;
+    if (shift > 0) return result << shift;
+    if (shift < 0) return result >> -shift;
+    return result;
+}
+
+int
+sgn (int a, int exponentResult)
+{
+    if (a == 0) return 0;
+    int result = 0x1 << FP_MSB - exponentResult;  // This breaks for exponentResult outside [0, MSB], but the calling code is already meaningless in that case.
+    if (a < 0) return -result;
     return result;
 }
 

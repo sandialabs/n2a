@@ -5,7 +5,7 @@ spaces common in neural systems.
 The implementation is based loosely on the paper "Algorithms for Fast Vector
 Quantization" by Sunil Arya and David Mount.
 
-Copyright 2010-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2010-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,13 +15,11 @@ the U.S. Government retains certain rights in this software.
 #define kdtree_h
 
 
-#include "matrix.h"
 #include "math.h"
+#include "matrix.h"
 
 #include <vector>
 #include <queue>
-#include <cmath>
-#include <limits.h>
 
 
 template<class T> class Part;

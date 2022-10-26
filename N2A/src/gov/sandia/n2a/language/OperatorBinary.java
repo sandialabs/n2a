@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -125,9 +125,7 @@ public class OperatorBinary extends Operator implements OperatorArithmetic
     public void render (Renderer renderer)
     {
         if (renderer.render (this)) return;
-        // As a matter of style, add space around logical operators. This is completely arbitrary.
-        if (this instanceof OperatorLogical) render (renderer, " " + toString () + " ");
-        else                                 render (renderer,       toString ());
+        render (renderer, toString ());
     }
 
     public void render (Renderer renderer, String middle)

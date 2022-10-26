@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,12 +11,13 @@ import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.OperatorBinary;
-import gov.sandia.n2a.language.OperatorLogical;
+import gov.sandia.n2a.language.OperatorLogicalInput;
+import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import tech.units.indriya.AbstractUnit;
 
-public class AND extends OperatorBinary implements OperatorLogical
+public class AND extends OperatorBinary implements OperatorLogicalInput
 {
     public static Factory factory ()
     {
@@ -75,9 +76,7 @@ public class AND extends OperatorBinary implements OperatorLogical
     {
         operand0.determineExponent (context);
         operand1.determineExponent (context);
-        int centerNew   = MSB / 2;
-        int exponentNew = MSB - centerNew;
-        updateExponent (context, exponentNew, centerNew);
+        updateExponent (context, MSB, 0);
     }
 
     public void determineUnit (boolean fatal) throws Exception
@@ -85,6 +84,13 @@ public class AND extends OperatorBinary implements OperatorLogical
         operand0.determineUnit (fatal);
         operand1.determineUnit (fatal);
         unit = AbstractUnit.ONE;
+    }
+
+    public void render (Renderer renderer)
+    {
+        if (renderer.render (this)) return;
+        // As a matter of style, add space around logical operators. This is completely arbitrary.
+        render (renderer, " " + toString () + " ");
     }
 
     public Type eval (Instance context)

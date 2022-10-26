@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -61,13 +61,7 @@ public class Gaussian extends Function
 
     public void determineExponent (ExponentContext context)
     {
-        if (operands.length > 0)
-        {
-            Operator op = operands[0];
-            op.determineExponent (context);
-            if (op.exponent != UNKNOWN) updateExponent (context, op.exponent, op.center);
-        }
-        else
+        if (operands.length == 0)
         {
             // The largest Gaussian PRNG output is determined by the bit precision of the underlying
             // uniform PRNG output. The Box-Muller implementation in the C Backend runtime will not
@@ -75,6 +69,12 @@ public class Gaussian extends Function
             // log2(7)~=2.81, so magnitude of msb is 2
             // Since about 68% of all results are less than 1 sigma, center can point to bit holding 2^-1.
             updateExponent (context, 2, MSB - 3);
+        }
+        else
+        {
+            Operator op = operands[0];
+            op.determineExponent (context);
+            if (op.exponent != UNKNOWN) updateExponent (context, op.exponent + 2, op.center - 2);  // Per argument above, we need to allow up to 7x the given sigma.
         }
     }
 

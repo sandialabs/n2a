@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -905,7 +905,7 @@ public class Variable implements Comparable<Variable>, Cloneable
             centerNew   = Operator.MSB - 1;  // Half the time, the msb won't be set. The other half, it will.
             exponentNew = context.exponentTime;
         }
-        else if (name.equals ("$index"))  // The only variable that is stored as a pure integer.
+        else if (name.equals ("$index")  ||  name.equals ("$type"))  // Variables stored as a pure integer.
         {
             centerNew   = 0;
             exponentNew = Operator.MSB;
@@ -957,15 +957,13 @@ public class Variable implements Comparable<Variable>, Cloneable
             // It does not account for entire populations, and certainly not dynamic populations.
             // Accounting for large populations could produce absurd results. Instead, we hope the user set
             // the power to 0, which would allow an unbounded number of multiplications to stay in range.
-            if (usedBy != null)
+            if (uses != null)
             {
                 boolean multiplicative = false;
-                for (Object o : usedBy)
+                for (Variable v : uses.keySet ())
                 {
-                    if (! (o instanceof Variable)) continue;
-                    Variable v = (Variable) o;
-                    if (v.reference == null  ||  v.reference.variable != this) continue;
-                    if (v.exponent == Operator.UNKNOWN) continue;
+                    if (v.reference == null  ||  v.reference.variable != this) continue;  // Must be an external reference to us.
+                    if (v.exponent == Operator.UNKNOWN) continue;  // Must have a known exponent. Otherwise, there is no point in processing it.
                     if (v.assignment == MULTIPLY)
                     {
                         cent += v.center;

@@ -57,6 +57,16 @@ public class SquareRoot extends Function implements MatrixVisitable
         op.determineExponentNext ();
     }
 
+    public boolean hasExponentA ()
+    {
+        return true;
+    }
+
+    public boolean hasExponentResult ()
+    {
+        return true;
+    }
+
     public void determineUnit (boolean fatal) throws Exception
     {
         Operator op = operands[0];

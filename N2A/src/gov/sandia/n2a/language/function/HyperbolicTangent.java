@@ -47,6 +47,11 @@ public class HyperbolicTangent extends Function implements MatrixVisitable
         op.determineExponentNext ();
     }
 
+    public boolean hasExponentA ()
+    {
+        return true;
+    }
+
     // Use Function.determineUnit()
     // Since tanh() is often used as a squashing function, it makes sense to treat its output
     // as having the same units as its input.

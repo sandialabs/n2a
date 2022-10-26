@@ -41,7 +41,17 @@ public class Ceil extends Function implements MatrixVisitable
 
     public void determineExponentNext ()
     {
-        Round.determineExponentNextStatic (operands[0], exponentNext);
+        Round.determineExponentNextStatic (this, exponentNext);
+    }
+
+    public boolean hasExponentA ()
+    {
+        return true;
+    }
+
+    public boolean hasExponentResult ()
+    {
+        return true;
     }
 
     public Type eval (Instance context)

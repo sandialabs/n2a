@@ -5,8 +5,8 @@ the U.S. Government retains certain rights in this software.
 */
 
 
-#include "image.h"
 #include "math.h"
+#include "image.h"
 
 using namespace n2a;
 using namespace std;

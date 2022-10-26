@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,6 +9,7 @@ package gov.sandia.n2a.language;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.parse.SimpleNode;
+import gov.sandia.n2a.language.type.Matrix;
 
 public class OperatorUnary extends Operator implements OperatorArithmetic
 {
@@ -62,8 +63,16 @@ public class OperatorUnary extends Operator implements OperatorArithmetic
         if (operand instanceof Constant)
         {
             from.changed = true;
-            Operator result = new Constant (eval (null));
+            Constant result = new Constant (eval (null));
             result.parent = parent;
+            if (result.value instanceof Matrix)
+            {
+                // Need to copy over the fixed-point settings, because they are
+                // stored in the operand from earlier processing.
+                // Also see NOT.simplify() for the same case under matrix inversion.
+                result.exponent = operand.exponent;
+                result.center   = operand.center;
+            }
             return result;
         }
         return this;

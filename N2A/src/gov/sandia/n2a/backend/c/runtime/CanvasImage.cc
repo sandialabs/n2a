@@ -11,6 +11,8 @@
  the U.S. Government retains certain rights in this software.
  */
 
+#undef n2a_FP  // Prevent fixed-point symbolic constants from replacing regular floating-point values.
+#include "math.h"
 #include "canvas.h"
 #include "Matrix.tcc"
 #include "MatrixFixed.tcc"

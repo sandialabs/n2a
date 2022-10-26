@@ -12,8 +12,8 @@ the U.S. Government retains certain rights in this software.
 */
 
 
-#include "image.h"
 #include "math.h"
+#include "image.h"
 #include "endian.h"
 
 #include <algorithm>
@@ -4491,7 +4491,7 @@ PixelFormatPackedYUV::PixelFormatPackedYUV (YUVindex * table)
 	YUVindex * j = this->table;
 	while (i->y >= 0)
 	{
-	  bytes = max (bytes, i->y, i->u, i->v);
+	  bytes = max (max (bytes, i->y), max (i->u, i->v));  // 4-way max, with "bytes" as one of the items
 	  Usamples.insert (i->u);
 	  Vsamples.insert (i->v);
 	  *j++ = *i++;
