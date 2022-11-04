@@ -27,7 +27,7 @@ public abstract class Compiler
     protected List<Path>         includes    = new ArrayList<Path> ();
     protected List<Path>         sources     = new ArrayList<Path> ();
     protected List<Path>         objects     = new ArrayList<Path> ();
-    protected List<Path>         libraries   = new ArrayList<Path> ();
+    protected List<String>       libraries   = new ArrayList<String> ();
     protected List<Path>         libraryDirs = new ArrayList<Path> ();
     protected Path               output;
     protected boolean            debug;
@@ -65,7 +65,13 @@ public abstract class Compiler
         objects.add (path);
     }
 
-    public void addLibrary (Path path)
+    /**
+        @param path The stem name of the library, undecorated by prefix or suffix.
+        The linker or this class is responsible to add sufficient decorations to
+        find the exact file name. If you need a specific path, specify the directory
+        that contains the library with a call to addLibraryDir().
+    **/
+    public void addLibrary (String path)
     {
         libraries.add (path);
     }

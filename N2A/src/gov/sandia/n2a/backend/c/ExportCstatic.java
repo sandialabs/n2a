@@ -62,17 +62,17 @@ public class ExportCstatic implements ExportModel
             CompilerFactory factory = BackendC.getFactory (t.env);  // to get suffixes
             Path   parent      = destination.getParent ();
             String suffix      = shared ? factory.suffixLibraryShared () : factory.suffixLibraryStatic ();
+            String wrapper     = factory.suffixLibrarySharedWrapper ();
             Path   libraryFrom = t.jobDir.resolve (stem + suffix);  // hard-coded assumption that "model" is stem of source file
             Path   libraryTo   = parent  .resolve (stem + suffix);
             Path   headerFrom  = t.jobDir.resolve (stem + ".h");
             Path   headerTo    = parent  .resolve (stem + ".h");
             Files.move (libraryFrom, libraryTo, StandardCopyOption.REPLACE_EXISTING);
             Files.move (headerFrom,  headerTo,  StandardCopyOption.REPLACE_EXISTING);
-            if (shared  &&  factory.hasStaticWrapper ())
+            if (shared  &&  wrapper != null)
             {
-                suffix      = factory.suffixLibraryStatic ();
-                libraryFrom = t.jobDir.resolve (stem + suffix);
-                libraryTo   = parent  .resolve (stem + suffix);
+                libraryFrom = t.jobDir.resolve (stem + wrapper);
+                libraryTo   = parent  .resolve (stem + wrapper);
                 Files.move (libraryFrom, libraryTo, StandardCopyOption.REPLACE_EXISTING);
             }
             if (t.cli)

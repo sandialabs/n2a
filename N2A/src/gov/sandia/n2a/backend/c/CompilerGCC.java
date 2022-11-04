@@ -16,6 +16,7 @@ import java.util.Map.Entry;
 
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Host.AnyProcess;
+import gov.sandia.n2a.host.Windows;
 
 public class CompilerGCC extends Compiler
 {
@@ -65,12 +66,19 @@ public class CompilerGCC extends Compiler
 
         public String suffixLibraryShared ()
         {
+            if (host instanceof Windows) return ".dll";
             return ".so";
         }
 
-        public boolean hasStaticWrapper ()
+        public String suffixLibrarySharedWrapper ()
         {
-            return false;
+            if (host instanceof Windows) return ".dll.a";
+            return null;
+        }
+
+        public String prefixLibrary ()
+        {
+            return "lib";
         }
 
         public boolean supportsUnicodeIdentifiers ()
@@ -160,9 +168,9 @@ public class CompilerGCC extends Compiler
         {
             command.add (host.quote (object));
         }
-        for (Path library : libraries)
+        for (String library : libraries)
         {
-            command.add ("-l" + library);  // Don't quote, because that forces conversion to absolute path. If it's relative, we really only want the name.
+            command.add ("-l" + library);
         }
         for (Path libraryDir : libraryDirs)
         {
@@ -182,13 +190,17 @@ public class CompilerGCC extends Compiler
         {
             command.add (gcc.toString ());
             command.add ("-shared");
+            if (host instanceof Windows)
+            {
+                command.add ("-Wl,--out-implib," + host.quote (output) + ".a");
+            }
             for (Path object : objects)
             {
                 command.add (host.quote (object));
             }
-            for (Path library : libraries)
+            for (String library : libraries)
             {
-                command.add ("-l" + library);  // Don't quote, because that forces conversion to absolute path. If it's relative, we really only want the name.
+                command.add ("-l" + library);
             }
             for (Path libraryDir : libraryDirs)
             {

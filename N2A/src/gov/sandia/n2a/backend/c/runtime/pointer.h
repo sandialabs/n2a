@@ -6,7 +6,7 @@ Distributed under the UIUC/NCSA Open Source License.  See the file LICENSE
 for details.
 
 
-Copyright 2005, 2009, 2010 Sandia Corporation.
+Copyright 2005-2022 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the GNU Lesser General Public License.  See the file LICENSE
@@ -240,8 +240,6 @@ namespace n2a
 	RefCount * memory;  ///< Pointer to block in heap. Must be offset and typecast to access managed data.
 
 	/**
-	   This field is partially redundant with Counts::size. It allows us
-	   to wrap blocks of memory owned by other code.
 	   metaData == 0 indicates either memory == 0 or we don't know how big the
 	   block is. Otherwise, the absolute value of metaData gives the actual
 	   size of the memory block, not including the prepended refcount.

@@ -139,7 +139,7 @@ public class JobSTACS extends Thread
             command = new ArrayList<String> (charmrun);
             commands.add (command);  // run network
 
-            env.submitJob (job, true, commands);
+            env.submitJob (job, true, commands, null);
             job.clear ("status");
         }
         catch (Exception e)

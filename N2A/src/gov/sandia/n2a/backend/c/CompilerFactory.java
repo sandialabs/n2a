@@ -14,6 +14,7 @@ public interface CompilerFactory
     String   suffixBinary ();
     String   suffixLibraryStatic ();
     String   suffixLibraryShared ();
-    boolean  hasStaticWrapper ();  // Indicates that a shared library must also have a separate static wrapper library.
+    String   suffixLibrarySharedWrapper ();  // If non-null, indicates that a shared library must also have a separate static wrapper library.
+    String   prefixLibrary ();
     boolean  supportsUnicodeIdentifiers ();  // UFT-8 encoded characters can be inserted directly into identifiers
 }

@@ -137,9 +137,14 @@ public class CompilerCL extends Compiler
             return ".dll";
         }
 
-        public boolean hasStaticWrapper ()
+        public String suffixLibrarySharedWrapper ()
         {
-            return true;
+            return ".lib";
+        }
+
+        public String prefixLibrary ()
+        {
+            return "";
         }
 
         public boolean supportsUnicodeIdentifiers ()
@@ -268,9 +273,10 @@ public class CompilerCL extends Compiler
         {
             command.add (object.toString ());
         }
-        for (Path library : libraries)
+        for (String library : libraries)
         {
-            command.add (library.toString ());
+            if (! library.contains (".")) library = library + ".lib";  // Both static and dynamic libraries should have a link library with this suffix.
+            command.add (library);
         }
         for (Path libraryDir : libraryDirs)
         {
@@ -299,10 +305,6 @@ public class CompilerCL extends Compiler
             command.add (parent.resolve ("link").toString ());
             command.add ("/dll");
             if (profiling) command.add ("/profile");
-            for (Path libraryDir : libraryDirs)
-            {
-                command.add ("/libpath:" + libraryDir);
-            }
         }
         else
         {
@@ -313,9 +315,14 @@ public class CompilerCL extends Compiler
         {
             command.add (object.toString ());
         }
-        for (Path library : libraries)
+        for (String library : libraries)
         {
-            command.add (library.toString ());
+            if (! library.contains (".")) library = library + ".lib";
+            command.add (library);
+        }
+        for (Path libraryDir : libraryDirs)
+        {
+            command.add ("/libpath:" + libraryDir);
         }
         command.add ("/out:" + output);
         return runCommand (command);

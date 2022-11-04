@@ -56,6 +56,7 @@ import java.net.URL;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -79,6 +80,10 @@ public class JobC extends Thread
     public    Path runtimeDir; // local or remote
     public    Path gcc;        // local or remote
 
+    protected Path ffmpegLibDir;  // Where link libraries are found.
+    protected Path ffmpegIncDir;
+    protected Path ffmpegBinDir;  // If non-null, then shared library dir should be added to path.
+
     protected boolean supportsUnicodeIdentifiers;
     public    String  T;
     protected String  SIMULATOR;
@@ -95,6 +100,7 @@ public class JobC extends Thread
     public    boolean csharp;  // Emit library code for use by C# (and other CLR languages). Only has an effect when lib is true.
     public    boolean tls;     // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
     protected boolean usesPolling;
+    protected boolean haveFreeType;
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
     
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
@@ -210,7 +216,7 @@ public class JobC extends Thread
             }
             else
             {
-                String command = env.quote (build (source));
+                Path commandPath = build (source);
 
                 // The C program could append to the same error file, so we need to close the file before submitting.
                 PrintStream ps = Backend.err.get ();
@@ -221,7 +227,19 @@ public class JobC extends Thread
                     job.set (Host.size (errPath), "errSize");
                 }
 
-                env.submitJob (job, env.clobbersOut (), command);
+                List<List<String>> commands = new ArrayList<List<String>> ();
+                List<String> command = new ArrayList<String> ();
+                command.add (env.quote (commandPath));
+                commands.add (command);
+
+                List<Path> addPath = null;
+                if (ffmpegBinDir != null)
+                {
+                    addPath = new ArrayList<Path> ();
+                    addPath.add (ffmpegBinDir);  // This could be redundant with existing system path.
+                }
+
+                env.submitJob (job, env.clobbersOut (), commands, addPath);
                 job.clear ("status");
             }
         }
@@ -282,13 +300,62 @@ public class JobC extends Thread
             catch (IOException e) {}
         }
 
-        // TODO: detect if external resources are available. Only compile if they are.
-        // ffmpeg
-        // freetype
-        //Path ffmpegDir = runtimeDir.resolve ("ffmpeg");
+        // Detect external resources.
+
+        // FFmpeg
+        // Plan: Detect the libraries, then estimate location of includes from that.
+        CompilerFactory factory = BackendC.getFactory (env);
+        String wrapper = factory.suffixLibrarySharedWrapper ();
+        String libName = factory.prefixLibrary () + "avcodec" + (wrapper == null ? factory.suffixLibraryShared () : wrapper);  // Always use FFmpeg as a shared library.
+        String ffmpeg = env.config.get ("ffmpeg");
+        if (ffmpeg.isBlank ())  // Search typical locations
+        {
+            ffmpegLibDir = runtimeDir.resolve ("ffmpeg/lib");  // Most likely location on Windows, a private copy in the c runtime dir
+            if (! Files.exists (ffmpegLibDir.resolve (libName)))  // Check typical locations on Unix-like systems (Linux, Mac).
+            {
+                ffmpegLibDir = null;
+                Path root = runtimeDir.getRoot ();
+                for (String path : new String[] {"/usr/lib64", "/usr/lib", "/usr/local/lib64", "/usr/local/lib"})
+                {
+                    Path libDir = root.resolve (path);
+                    if (Files.exists (libDir.resolve (libName)))
+                    {
+                        ffmpegLibDir = libDir;
+                        break;
+                    }
+                }
+            }
+        }
+        else  // User-specified
+        {
+            // Absolute path is resolved w.r.t. the root of the file system.
+            // Relative path is resolved w.r.t. the runtime dir. This make it easy to
+            // stash ffmpeg as a subdir of runtime.
+            Path temp = Paths.get (ffmpeg);
+            if (temp.isAbsolute ()) ffmpegLibDir = runtimeDir.getRoot ().resolve (temp);
+            else                    ffmpegLibDir = runtimeDir.resolve (temp);
+        }
+        if (ffmpegLibDir != null)
+        {
+            Path ffmpegDir = ffmpegLibDir.getParent ();
+            ffmpegIncDir = ffmpegDir.resolve ("include/ffmpeg");
+            Path temp = ffmpegIncDir.resolve ("libavcodec/avcodec.h");
+            if (! Files.exists (temp))
+            {
+                ffmpegIncDir = ffmpegDir.resolve ("include");
+                temp = ffmpegIncDir.resolve ("libavcodec/avcodec.h");
+                if (! Files.exists (temp)) ffmpegIncDir = null;
+            }
+
+            if (wrapper != null)  // TODO: it might also be possible that a .so is not on the LD_LIBRARY_PATH
+            {
+                ffmpegBinDir = ffmpegDir.resolve ("bin");
+            }
+        }
+
+        // TODO: freetype
 
         // Compile runtime
-        CompilerFactory factory = BackendC.getFactory (env);
         supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
         List<String> sources = new ArrayList<String> ();  // List of source names
         sources.add ("runtime");
@@ -302,8 +369,12 @@ public class JobC extends Thread
         sources.add ("ImageFileFormatBMP");
         sources.add ("PixelBuffer");
         sources.add ("PixelFormat");
-        //sources.add ("Video");
-        //sources.add ("VideoFileFormatFFMPEG");
+        if (ffmpegLibDir != null)
+        {
+            sources.add ("Video");
+            sources.add ("VideoFileFormatFFMPEG");
+        }
+
         for (String stem : sources)
         {
             String objectName = objectName (stem);
@@ -316,7 +387,11 @@ public class JobC extends Thread
             if (debug ) c.setDebug ();
             if (gprof ) c.setProfiling ();
             c.addInclude (runtimeDir);
-            //c.addInclude (ffmpegDir.resolve ("include"));
+            if (ffmpegIncDir != null)
+            {
+                c.addInclude (ffmpegIncDir);
+                c.addDefine ("HAVE_FFMPEG");
+            }
             c.addDefine ("n2a_T", T);
             if (T.contains ("int")) c.addDefine ("n2a_FP");
             if (tls) c.addDefine ("n2a_TLS");
@@ -404,8 +479,15 @@ public class JobC extends Thread
         c.addObject (runtimeDir.resolve (objectName ("ImageFileFormatBMP")));
         c.addObject (runtimeDir.resolve (objectName ("PixelBuffer")));
         c.addObject (runtimeDir.resolve (objectName ("PixelFormat")));
-        //c.addObject (runtimeDir.resolve (objectName ("Video")));
-        //c.addObject (runtimeDir.resolve (objectName ("VideoFileFormatFFMPEG")));
+        if (ffmpegLibDir != null)
+        {
+            c.addObject (runtimeDir.resolve (objectName ("Video")));
+            c.addObject (runtimeDir.resolve (objectName ("VideoFileFormatFFMPEG")));
+            c.addLibraryDir (ffmpegLibDir);
+            c.addLibrary ("avcodec");
+            c.addLibrary ("avformat");
+            c.addLibrary ("avutil");
+        }
 
         for (ProvideOperator po : extensions)
         {
@@ -416,7 +498,7 @@ public class JobC extends Thread
         if (kokkos)
         {
             c.addObject (runtimeDir.resolve (objectName ("profiling")));
-            c.addLibrary (env.getResourceDir ().getFileSystem ().getPath ("dl"));  // kokkos should only be set on Linux systems.
+            c.addLibrary ("dl");  // kokkos should only be set on Linux systems.
         }
     }
 

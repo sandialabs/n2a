@@ -95,7 +95,7 @@ public class Unix extends Host
     }
 
     @Override
-    public void submitJob (MNode job, boolean out2err, List<List<String>> commands) throws Exception
+    public void submitJob (MNode job, boolean out2err, List<List<String>> commands, List<Path> addPath) throws Exception
     {
         // In order to fully detach the simulation process from the Java VM, we
         // need to use an extra shell script. Executing the command directly
@@ -124,6 +124,15 @@ public class Unix extends Host
         {
             writer.append ("#!/bin/bash\n");
             writer.append ("cd " + quote (jobDir) + "\n");
+
+            if (addPath != null)
+            {
+                StringBuilder pathString = new StringBuilder ();
+                pathString.append ("export PATH=");
+                for (Path p : addPath) pathString.append (p + ":");  // Quoting is not necessary.
+                pathString.append ("$PATH");
+                writer.append (pathString + "\n");
+            }
 
             combined = combine (commands.get (0));
             writer.append (combined + " >> " + out + " 2>> err\n");

@@ -14,6 +14,9 @@ the U.S. Government retains certain rights in this software.
 #include "matrix.h"
 #include "MNode.h"
 #include "canvas.h"
+#ifdef HAVE_FFMPEG
+# include "video.h"
+#endif
 
 #include <vector>
 #include <unordered_map>
@@ -116,7 +119,7 @@ class ImageOutput : public Holder
 {
 public:
     String path;    // prefix of fileName, not including suffix (format)
-    String format;  // name of format as recognized by supporting libraries
+    String format;  // Name of format as recognized by supporting libraries. For video, can be set by keyword parameter. For image sequence, derived automatically from fileName suffix.
     bool   hold;    // Store a single frame rather than an image sequence.
     bool   dirCreated;
 
@@ -124,16 +127,22 @@ public:
     int      height;
     uint32_t clearColor;
 
-    // TODO: handle video streams using FFMPEG.
     T                t;
     int              frameCount; // Number of frames actually written so far.
-    n2a::CanvasImage canvas;     // Current image being built.
     bool             haveData;   // indicates that something has been drawn since last write to disk
+    n2a::CanvasImage canvas;     // Current image being built.
+    bool             opened;     // Indicates that video or image-sequence output has been configured. This is delayed until first write to disk, so user can set video parameters.
+#   ifdef HAVE_FFMPEG
+    n2a::VideoOut *  video;
+    String           codec;      // Optional specification of video encoder. Default is derived from container.
+    double           timeScale;  // Multiply simtime (t) by this value to get PTS. Zero means 24fps, regardless of simtime. Default is 33, or roughly 1ms of simtime per video frame at a typical playback speed of 30fps.
+#   endif
 
     ImageOutput (const String & fileName);
     virtual ~ImageOutput ();
+    void open ();  // Subroutine of writeImage()
 
-    void next        (T now);
+    void next (T now);
 #   ifdef n2a_FP
     // All pixel-valued arguments must agree on exponent. "now" is in time exponent.
     T drawDisc    (T now, bool raw, const MatrixFixed<T,3,1> & center, T radius,                               int exponent, uint32_t color);
@@ -144,7 +153,7 @@ public:
     T drawBlock   (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h,                               uint32_t color);
     T drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1, const MatrixFixed<T,3,1> & p2, T thickness, uint32_t color);
 #   endif
-    void writeImage  ();
+    void writeImage ();
 };
 template<class T> extern ImageOutput<T> * imageOutputHelper (const String & fileName, ImageOutput<T> * oldHandle = 0);
 

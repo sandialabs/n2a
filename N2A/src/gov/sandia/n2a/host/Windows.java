@@ -153,7 +153,7 @@ public class Windows extends Host
     }
 
     @Override
-    public void submitJob (MNode job, boolean out2err, List<List<String>> commands) throws Exception
+    public void submitJob (MNode job, boolean out2err, List<List<String>> commands, List<Path> addPath) throws Exception
     {
         Path jobDir = Paths.get (job.get ()).getParent ();
         Path script = jobDir.resolve ("n2a_job.bat");
@@ -161,6 +161,16 @@ public class Windows extends Host
         try (BufferedWriter writer = Files.newBufferedWriter (script))
         {
             writer.append ("cd " + jobDir + "\r\n");
+
+            if (addPath != null)
+            {
+                StringBuilder pathString = new StringBuilder ();
+                pathString.append ("set PATH=");
+                for (Path p : addPath) pathString.append (p + ";");  // Quoting is not necessary.
+                pathString.append ("%PATH%");
+                writer.append (pathString + "\n");
+                writer.write ("\n");
+            }
 
             String combined = combine (commands.get (0));
             writer.append (combined + " >> " + out + " 2>> err\n");

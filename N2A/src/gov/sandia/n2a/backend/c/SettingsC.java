@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -19,7 +19,8 @@ import javax.swing.event.ChangeListener;
 
 public class SettingsC extends SettingsBackend
 {
-    protected MTextField fieldCpp = new MTextField (40);
+    protected MTextField fieldCpp    = new MTextField (40);
+    protected MTextField fieldFFmpeg = new MTextField (40);
 
     public SettingsC ()
     {
@@ -46,14 +47,16 @@ public class SettingsC extends SettingsBackend
     @Override
     public void bind (MNode parent)
     {
-        fieldCpp.bind (parent, "cxx", "g++");
+        fieldCpp   .bind (parent, "cxx",    "g++");
+        fieldFFmpeg.bind (parent, "ffmpeg", "");
     }
 
     @Override
     public JPanel getEditor ()
     {
         return Lay.BxL (
-            Lay.FL (new JLabel ("Compiler path"), fieldCpp)
+            Lay.FL (new JLabel ("Compiler path"), fieldCpp),
+            Lay.FL (new JLabel ("Directory that contains FFmpeg libraries"), fieldFFmpeg)
         );
     }
 }

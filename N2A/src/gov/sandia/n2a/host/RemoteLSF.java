@@ -129,7 +129,7 @@ public class RemoteLSF extends RemoteUnix
     }
 
     @Override
-    public void submitJob (MNode job, boolean out2err, List<List<String>> commands) throws Exception
+    public void submitJob (MNode job, boolean out2err, List<List<String>> commands, List<Path> addPath) throws Exception
     {
         int count = commands.size ();
         if (count == 0) throw new Exception ("submitJob was called without any commands");
@@ -161,6 +161,16 @@ public class RemoteLSF extends RemoteUnix
             writer.write ("#BSUB -cwd " + quote (jobDir) + "\n");
             writer.write ("#BSUB -outdir " + quote (jobDir) + "\n");
             writer.write ("\n");
+
+            if (addPath != null)
+            {
+                StringBuilder pathString = new StringBuilder ();
+                pathString.append ("export PATH=");
+                for (Path p : addPath) pathString.append (p + ":");  // Quoting is not necessary.
+                pathString.append ("$PATH");
+                writer.append (pathString + "\n");
+                writer.write ("\n");
+            }
 
             writer.write ("jsrun -n " + nodes + " -a " + cores + " -c " + cores + " -g " + gpus + " " + combine (commands.get (0)) + "\n");
             for (int i = 1; i < count; i++)

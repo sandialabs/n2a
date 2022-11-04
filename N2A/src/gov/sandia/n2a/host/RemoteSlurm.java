@@ -129,7 +129,7 @@ public class RemoteSlurm extends RemoteUnix
     }
 
     @Override
-    public void submitJob (MNode job, boolean out2err, List<List<String>> commands) throws Exception
+    public void submitJob (MNode job, boolean out2err, List<List<String>> commands, List<Path> addPath) throws Exception
     {
         int count = commands.size ();
         if (count == 0) throw new Exception ("submitJob was called without any commands");
@@ -161,6 +161,16 @@ public class RemoteSlurm extends RemoteUnix
             writer.write ("#SBATCH --output="    + out + "\n");
             writer.write ("#SBATCH --error="     + err + "\n");
             writer.write ("\n");
+
+            if (addPath != null)
+            {
+                StringBuilder pathString = new StringBuilder ();
+                pathString.append ("export PATH=");
+                for (Path p : addPath) pathString.append (p + ":");  // Quoting is not necessary.
+                pathString.append ("$PATH");
+                writer.append (pathString + "\n");
+                writer.write ("\n");
+            }
 
             // TODO: Update command line with correct form for target HPC system.
             // TODO: need a way to determine ranks per resource set. Right now it's just one per core.

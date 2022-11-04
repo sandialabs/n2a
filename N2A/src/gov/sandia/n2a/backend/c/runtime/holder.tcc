@@ -419,10 +419,67 @@ ImageOutput<T>::ImageOutput (const String & fileName)
 :   Holder (fileName),
     canvas (n2a::RGBAChar)
 {
+    t          = (T) 0;
+    frameCount = 0;
+    haveData   = false;
+    hold       = false;
+    dirCreated = false;
+    opened     = false;
+
     width      = 1024;
     height     = 1024;
     clearColor = 0;  // black
-    haveData   = false;
+
+    // Register file formats.
+    // It does no harm to call use() mutliple times.
+    n2a::ImageFileFormatBMP::use ();
+#   ifdef HAVE_FFMPEG
+    n2a::VideoFileFormatFFMPEG::use ();
+    timeScale = 0;
+    video     = 0;
+#   endif
+}
+
+template<class T>
+ImageOutput<T>::~ImageOutput ()
+{
+    hold = false;
+    writeImage ();
+#   ifdef HAVE_FFMPEG
+    if (video) delete video;
+#   endif
+}
+
+template<class T>
+void
+ImageOutput<T>::open ()
+{
+    opened = true;
+
+#   ifdef HAVE_FFMPEG
+    // Check if this is an image sequence, in which case modify file name to go into subdir.
+    String videoFileName;
+    int posPercent = fileName.find_last_of ("%");
+    if (posPercent == String::npos)  // Single video file
+    {
+        videoFileName = fileName;
+        dirCreated = true;  // Do't create the dir when writing.
+    }
+    else  // Image sequence, so create a subdirectory. This is more user-friendly for Runs tab.
+    {
+        path        = fileName.substr (0, posPercent);
+        String temp = fileName.substr (posPercent);
+        if (path.empty ()) path = "frame/";
+        else if (! path.ends_with ("/")) path += "/";
+        videoFileName = path + temp;
+    }
+    video = new n2a::VideoOut (videoFileName, format, codec);
+    if (video->good ()) return;
+
+    // Fall through image sequence code below ...
+    delete video;
+    video = 0;
+#   endif
 
     // If suffix is specified, peel it off. Otherwise, assume default format.
     int posDot   = fileName.find_last_of ('.');
@@ -430,25 +487,15 @@ ImageOutput<T>::ImageOutput (const String & fileName)
     if (posSlash == String::npos) posSlash = -1;
     if (posDot != String::npos  &&  posDot > posSlash)
     {
-        format = fileName.substr (posDot + 1).toLowerCase ();
-        path   = fileName.substr (0, posDot);
+        if (format.empty ()) format = fileName.substr (posDot + 1).toLowerCase ();
+        path = fileName.substr (0, posDot);
     }
     else
     {
-        format = "bmp";
-        path   = fileName;
+        if (format.empty ()) format = "bmp";
+        path = fileName;
     }
     path += "/";  // Include slash in path, so we don't have to add it later. Forward slash works for all platforms.
-
-    // Register file formats.
-    // It does no harm to call the use() function mutliple times.
-    n2a::ImageFileFormatBMP::use ();
-}
-
-template<class T>
-ImageOutput<T>::~ImageOutput ()
-{
-    writeImage ();
 }
 
 template<class T>
@@ -588,12 +635,35 @@ void
 ImageOutput<T>::writeImage  ()
 {
     if (! haveData) return;
+    haveData = hold;
+    if (hold) return;  // Don't write every frame. hold is set false in dtor, so at least one frame will be written.
 
+    if (! opened) open ();
     if (! dirCreated)
     {
         n2a::mkdirs (path);
         dirCreated = true;
     }
+
+#   ifdef HAVE_FFMPEG
+    if (video)
+    {
+        if (timeScale)
+        {
+#           ifdef n2a_FP
+            canvas.timestamp = timeScale * t / pow (2.0, FP_MSB - Event<T>::exponent);
+#           else
+            canvas.timestamp = timeScale * t;
+#           endif
+        }
+        else
+        {
+            canvas.timestamp = 1e6;  // Exceeds 95443, the threshold at which VideoOut stops using the timestamp as PTS.
+        }
+        (*video) << canvas;
+        return;
+    }
+#   endif
 
     String filename = path;
     filename += frameCount;
@@ -612,8 +682,6 @@ ImageOutput<T>::writeImage  ()
         filename += format;
         canvas.write (filename);
     }
-
-    haveData = hold;
     frameCount++;
 }
 

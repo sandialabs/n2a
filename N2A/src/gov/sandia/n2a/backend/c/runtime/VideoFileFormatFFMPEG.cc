@@ -392,11 +392,9 @@ VideoInFileFFMPEG::readNext (Image * image)
             frame->pts = frame->best_effort_timestamp;  // Less accurate, but more available.
         }
 
-        if (frame->pkt_duration)
+        if (frame->duration)
         {
-            // Sometimes this exactly matches the next frame. Sometimes it is 1 less.
-            // TODO: "pkt_duration" is deprecated, but new builds of ffmpeg with "duration" are not yet broadly available.
-            nextPTS = frame->pts + frame->pkt_duration;
+            nextPTS = frame->pts + frame->duration;
         }
         else
         {
@@ -684,8 +682,9 @@ VideoOutFileFFMPEG::open (const String & fileName, const String & formatName, co
         if (state < 0) return;
     }
 
-    needHeader = true;
-    state = 0;
+    pixelFormat = 0;
+    needHeader  = true;
+    state       = 0;
 }
 
 void
@@ -722,13 +721,26 @@ struct PixelFormatMapping
 
 static PixelFormatMapping pixelFormatMap[] =
 {
-    {&YUV420,   AV_PIX_FMT_YUV420P},
-    {&YUV411,   AV_PIX_FMT_YUV411P},
-    {&YUYV,     AV_PIX_FMT_YUYV422},
-    {&UYVY,     AV_PIX_FMT_UYVY422},
-    {&RGBChar,  AV_PIX_FMT_RGB24},
-    {&BGRChar,  AV_PIX_FMT_BGR24},
-    {&GrayChar, AV_PIX_FMT_GRAY8},
+    // For efficiency, the first few entries in this list are the most likely formats.
+    // After that, the rest follow the order in image.h
+    {&YUV420,         AV_PIX_FMT_YUV420P},
+    {&YUV411,         AV_PIX_FMT_YUV411P},
+    {&YUYV,           AV_PIX_FMT_YUYV422},
+    {&UYVY,           AV_PIX_FMT_UYVY422},
+    {&RGBChar,        AV_PIX_FMT_RGB24},
+    {&BGRChar,        AV_PIX_FMT_BGR24},
+    {&GrayChar,       AV_PIX_FMT_GRAY8},
+    {&GrayShort,      AV_PIX_FMT_GRAY16LE},
+    {&GrayAlphaChar,  AV_PIX_FMT_YA8},
+    {&GrayAlphaShort, AV_PIX_FMT_YA16LE},
+    {&GrayFloat,      AV_PIX_FMT_GRAYF32LE},
+    {&RGBAChar,       AV_PIX_FMT_RGBA},
+    {&RGBAShort,      AV_PIX_FMT_RGBA64LE},
+    {&RGBShort,       AV_PIX_FMT_RGB48LE},
+    {&B5G5R5,         AV_PIX_FMT_BGR555LE},
+    {&BGRChar4,       AV_PIX_FMT_BGR0},
+    {&BGRAChar,       AV_PIX_FMT_BGRA},
+    {&UYYVYY,         AV_PIX_FMT_UYYVYY411},
     {0}
 };
 
@@ -746,7 +758,7 @@ VideoOutFileFFMPEG::writeNext (const Image & image)
         {
             best = codec->pix_fmts[0];
 
-            // Select AV_PIX_FMT associate with image.formt
+            // Select AV_PIX_FMT associate with image.format
             PixelFormatMapping * m = pixelFormatMap;
             while (m->fl)
             {
@@ -775,6 +787,7 @@ VideoOutFileFFMPEG::writeNext (const Image & image)
             }
         }
         cc->pix_fmt = best;
+        cc->color_range = AVCOL_RANGE_JPEG;
     }
 
     if (needHeader)
@@ -805,6 +818,7 @@ VideoOutFileFFMPEG::writeNext (const Image & image)
         }
         if (! m->fl) throw "Unsupported AV_PIX_FMT";
         pixelFormat = m->fl;
+        if (typeid (*pixelFormat) == typeid (PixelFormatPlanarYCbCr)) cc->color_range = AVCOL_RANGE_MPEG;
     }
 
     // Get image into a format that FFMPEG understands...
