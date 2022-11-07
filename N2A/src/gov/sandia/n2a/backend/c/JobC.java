@@ -62,6 +62,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
@@ -69,7 +70,7 @@ import java.util.Map.Entry;
 
 public class JobC extends Thread
 {
-    protected static Set<Host> runtimeBuilt = new HashSet<Host> ();  // collection of Hosts for which runtime has already been checked/built during this session.
+    protected static Map<Host,Set<String>> runtimeBuilt = new HashMap<Host,Set<String>> ();  // collection of Hosts for which runtime has already been checked/built during this session
 
     public    MNode       job;
     protected EquationSet digestedModel;
@@ -336,7 +337,6 @@ public class JobC extends Thread
         // TODO: freetype
     }
 
-    // TODO: store/check individual runtime identifiers under each host
     public void rebuildRuntime () throws Exception
     {
         // Update runtime source files, if necessary
@@ -346,16 +346,19 @@ public class JobC extends Thread
             changed = true;
             runtimeBuilt.remove (env);
         }
-        if (! runtimeBuilt.contains (env))
+        Set<String> runtimes = runtimeBuilt.get (env);
+        if (runtimes == null)
         {
             if (unpackRuntime ()) changed = true;
-            runtimeBuilt.add (env);  // Stop checking files for this session.
+            runtimes = new HashSet<String> ();
+            runtimeBuilt.put (env, runtimes);
         }
         for (ProvideOperator pf : extensions) pf.rebuildRuntime (this);
         env.config.clear ("backend", "c", "compilerChanged");
 
         if (changed)  // Delete all existing object files and runtime libs.
         {
+            runtimes.clear ();
             try (DirectoryStream<Path> list = Files.newDirectoryStream (runtimeDir))
             {
                 for (Path file : list)
@@ -370,6 +373,9 @@ public class JobC extends Thread
             }
             catch (IOException e) {}
         }
+
+        String runtimeName = runtimeName ();
+        if (runtimes.contains (runtimeName)) return;
 
         // Compile runtime
         CompilerFactory factory = BackendC.getFactory (env);
@@ -420,18 +426,24 @@ public class JobC extends Thread
         }
 
         // Link the runtime objects into a single shared library.
-        if (! shared) return;
-        Path runtimeLib = runtimeDir.resolve (factory.prefixLibrary () + runtimeName () + factory.suffixLibraryShared ());
-        if (Files.exists (runtimeLib)) return;
-        job.set ("Linking runtime library", "status");
-        Compiler c = factory.make (localJobDir);
-        c.setShared ();
-        if (debug) c.setDebug ();
-        if (gprof) c.setProfiling ();
-        c.setOutput (runtimeLib);
-        addRuntimeObjects (c);
-        Path out = c.linkLibrary ();
-        Files.delete (out);
+        if (shared)
+        {
+            Path runtimeLib = runtimeDir.resolve (factory.prefixLibrary () + runtimeName + factory.suffixLibraryShared ());
+            if (! Files.exists (runtimeLib))
+            {
+                job.set ("Linking runtime library", "status");
+                Compiler c = factory.make (localJobDir);
+                c.setShared ();
+                if (debug) c.setDebug ();
+                if (gprof) c.setProfiling ();
+                c.setOutput (runtimeLib);
+                addRuntimeObjects (c);
+                Path out = c.linkLibrary ();
+                Files.delete (out);
+            }
+        }
+
+        runtimes.add (runtimeName);
     }
 
     /**
