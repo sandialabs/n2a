@@ -26,7 +26,6 @@ template class MatrixSparse<n2a_T>;
 // These must be individually instantiated.
 
 template SHARED void          clear      (      MatrixAbstract<n2a_T> & A, const n2a_T scalar);
-template SHARED n2a_T         norm       (const MatrixAbstract<n2a_T> & A, n2a_T n);
 template SHARED n2a_T         sumSquares (const MatrixAbstract<n2a_T> & A);
 template SHARED Matrix<n2a_T> visit      (const MatrixAbstract<n2a_T> & A, n2a_T (*function) (const n2a_T &));
 template SHARED Matrix<n2a_T> visit      (const MatrixAbstract<n2a_T> & A, n2a_T (*function) (const n2a_T));
@@ -76,7 +75,6 @@ template SHARED Matrix<n2a_T> max (const MatrixAbstract<n2a_T> & A, const n2a_T 
 template SHARED ostream & operator << (ostream & stream, const MatrixAbstract<n2a_T> & A);
 
 template SHARED void          clear (      MatrixStrided<n2a_T> & A, const n2a_T scalar);
-template SHARED n2a_T         norm  (const MatrixStrided<n2a_T> & A, n2a_T n);
 template SHARED Matrix<n2a_T> visit (const MatrixStrided<n2a_T> & A, n2a_T (*function) (const n2a_T &));
 template SHARED Matrix<n2a_T> visit (const MatrixStrided<n2a_T> & A, n2a_T (*function) (const n2a_T));
 
@@ -93,6 +91,11 @@ template SHARED Matrix<n2a_T> operator - (const MatrixStrided<n2a_T> & A, const 
 template SHARED Matrix<n2a_T> operator - (const n2a_T scalar,             const MatrixStrided<n2a_T> & A);
 
 template SHARED Matrix<n2a_T> operator ~ (const Matrix<n2a_T> & A);
+
+#ifndef n2a_FP
+template SHARED n2a_T norm (const MatrixAbstract<n2a_T> & A, n2a_T n);
+template SHARED n2a_T norm (const MatrixStrided<n2a_T>  & A, n2a_T n);
+#endif
 
 
 // I/O library ---------------------------------------------------------------

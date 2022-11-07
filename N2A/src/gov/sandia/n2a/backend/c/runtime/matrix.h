@@ -69,7 +69,6 @@ public:
 template<class T> class Matrix;
 
 template<class T> SHARED void      clear      (      MatrixAbstract<T> & A, const T scalar = (T) 0);    ///< Set all elements to given value.
-template<class T> SHARED T         norm       (const MatrixAbstract<T> & A, T n = (T) 2);               ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
 template<class T> SHARED T         sumSquares (const MatrixAbstract<T> & A);                            ///< Equivalent to norm(A,2)^2, but without taking the square root.
 template<class T> SHARED Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T &)); ///< Apply function() to each element, and return the results in a new Matrix of equal size.
 template<class T> SHARED Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
@@ -135,7 +134,9 @@ template<class T>        Matrix<T> max (const T scalar,              const Matri
 template<class T> SHARED std::ostream & operator << (std::ostream & stream, const MatrixAbstract<T> & A);  ///< Print human readable matrix to stream.
 #endif
 
-#ifdef n2a_FP
+#ifndef n2a_FP
+template<class T> SHARED T norm (const MatrixAbstract<T> & A, T n = (T) 2);  ///< (sum_elements (element^n))^(1/n). Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm. n==0 is technically undefined, but we treat is as the count of non-zero elements.
+#else
 SHARED Matrix<int> shift (const MatrixAbstract<int> & A, int shift);  // Defined in fixedpoint.cc
 #endif
 
@@ -164,7 +165,6 @@ public:
 };
 
 template<class T> SHARED void      clear (      MatrixStrided<T> & A, const T scalar = (T) 0);
-template<class T> SHARED T         norm  (const MatrixStrided<T> & A, T n);
 template<class T> SHARED Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T &));
 template<class T> SHARED Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T));
 
@@ -182,9 +182,11 @@ template<class T> SHARED Matrix<T> operator - (const MatrixStrided<T> & A, const
 template<class T> SHARED Matrix<T> operator - (const MatrixStrided<T> & A, const T scalar);
 template<class T> SHARED Matrix<T> operator - (const T scalar,             const MatrixStrided<T> & A);
 
+#ifndef n2a_FP
+template<class T> SHARED T norm  (const MatrixStrided<T> & A, T n);
+#else
 // Fixed-point operations on MatrixStrided<int>
-// These are not templates. Their implementations may be found in fixedpoint.cc
-#ifdef n2a_FP
+// These are not templates. Their implementations are in fixedpoint.cc
 SHARED int         norm                (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult);  // exponentN=15
 
 SHARED Matrix<int> visit               (const MatrixStrided<int> & A, int (*function) (int, int),      int exponent1);
