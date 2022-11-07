@@ -21,13 +21,26 @@ the U.S. Government retains certain rights in this software.
 #include <vector>
 #include <unordered_map>
 
+#undef SHARED
+#ifdef _MSC_VER
+#  ifdef _USRDLL
+#    define SHARED __declspec(dllexport)
+#  elif defined n2a_DLL
+#    define SHARED __declspec(dllimport)
+#  else
+#    define SHARED
+#  endif
+#else
+#  define SHARED
+#endif
+
 
 /**
     Utility class for reading/accessing command-line parameters.
     These are primarily intended to override parameters within the model.
 **/
 template<class T>
-class Parameters
+class SHARED Parameters
 {
 public:
     std::unordered_map<String,String> namedValues;
@@ -41,7 +54,7 @@ public:
     String get   (const String & name, const String & defaultValue = "") const;
 };
 
-class Holder
+class SHARED Holder
 {
 public:
     String fileName;
@@ -50,7 +63,7 @@ public:
 };
 
 template<class T>
-class IteratorNonzero
+class SHARED IteratorNonzero
 {
 public:
     int row;
@@ -61,7 +74,7 @@ public:
 };
 
 template<class T>
-class IteratorSkip : public IteratorNonzero<T>
+class SHARED IteratorSkip : public IteratorNonzero<T>
 {
 public:
     Matrix<T> * A;
@@ -76,7 +89,7 @@ public:
 };
 
 template<class T>
-class IteratorSparse : public IteratorNonzero<T>
+class SHARED IteratorSparse : public IteratorNonzero<T>
 {
 public:
     MatrixSparse<T> *                  A;
@@ -87,10 +100,10 @@ public:
     virtual bool next ();
 };
 
-extern int convert (String input, int exponent);
+extern SHARED int convert (String input, int exponent);
 
 template<class T>
-class MatrixInput : public Holder
+class SHARED MatrixInput : public Holder
 {
 public:
     MatrixAbstract<T> * A;  // Will be either Matrix or MatrixSparse, determined by matrixHelper when reading the file.
@@ -99,23 +112,23 @@ public:
     virtual ~MatrixInput ();
 };
 #ifdef n2a_FP
-template<class T> extern MatrixInput<T> * matrixHelper (const String & fileName, int exponent, MatrixInput<T> * oldHandle = 0);
+template<class T> extern SHARED MatrixInput<T> * matrixHelper (const String & fileName, int exponent, MatrixInput<T> * oldHandle = 0);
 #else
-template<class T> extern MatrixInput<T> * matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle = 0);
+template<class T> extern SHARED MatrixInput<T> * matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle = 0);
 #endif
 
-template<class T> extern IteratorNonzero<T> * getIterator (MatrixAbstract<T> * A);  // Returns an object that iterates over nonzero elements of A.
+template<class T> extern SHARED IteratorNonzero<T> * getIterator (MatrixAbstract<T> * A);  // Returns an object that iterates over nonzero elements of A.
 
 template<class T>
-class ImageInput : public Holder
+class SHARED ImageInput : public Holder
 {
 public:
     ImageInput (const String & fileName);
 };
-template<class T> extern ImageInput<T> * imageInputHelper (const String & fileName, ImageInput<T> * oldHandle = 0);
+template<class T> extern SHARED ImageInput<T> * imageInputHelper (const String & fileName, ImageInput<T> * oldHandle = 0);
 
 template<class T>
-class ImageOutput : public Holder
+class SHARED ImageOutput : public Holder
 {
 public:
     String path;    // prefix of fileName, not including suffix (format)
@@ -155,10 +168,10 @@ public:
 #   endif
     void writeImage ();
 };
-template<class T> extern ImageOutput<T> * imageOutputHelper (const String & fileName, ImageOutput<T> * oldHandle = 0);
+template<class T> extern SHARED ImageOutput<T> * imageOutputHelper (const String & fileName, ImageOutput<T> * oldHandle = 0);
 
 template<class T>
-class Mfile : public Holder
+class SHARED Mfile : public Holder
 {
 public:
     n2a::MDoc *                          doc;
@@ -173,13 +186,13 @@ public:
     MatrixAbstract<T> * getMatrix (const std::vector<String> & path);
 #   endif
 };
-template<class T> extern Mfile<T> * MfileHelper (const String & fileName, Mfile<T> * oldHandle = 0);
+template<class T> extern SHARED Mfile<T> * MfileHelper (const String & fileName, Mfile<T> * oldHandle = 0);
 
-extern std::vector<String> keyPath (const std::vector<String> & path);  ///< Converts any path elements with delimiters (/) into separate elements.
+extern SHARED std::vector<String> keyPath (const std::vector<String> & path);  ///< Converts any path elements with delimiters (/) into separate elements.
 template<typename... Args> std::vector<String> keyPath (Args... keys) {return keyPath ({keys...});}
 
 template<class T>
-class InputHolder : public Holder
+class SHARED InputHolder : public Holder
 {
 public:
     std::istream *                 in;
@@ -213,13 +226,13 @@ public:
     Matrix<T> get    (T row);
 };
 #ifdef n2a_FP
-template<class T> extern InputHolder<T> * inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle = 0);
+template<class T> extern SHARED InputHolder<T> * inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle = 0);
 #else
-template<class T> extern InputHolder<T> * inputHelper (const String & fileName,               InputHolder<T> * oldHandle = 0);
+template<class T> extern SHARED InputHolder<T> * inputHelper (const String & fileName,               InputHolder<T> * oldHandle = 0);
 #endif
 
 template<class T>
-class OutputHolder : public Holder
+class SHARED OutputHolder : public Holder
 {
 public:
     bool                                   raw;             ///< Indicates that column is an exact index.
@@ -249,7 +262,7 @@ public:
     void writeTrace ();
     void writeModes ();
 };
-template<class T> extern OutputHolder<T> * outputHelper (const String & fileName, OutputHolder<T> * oldHandle = 0);
+template<class T> extern SHARED OutputHolder<T> * outputHelper (const String & fileName, OutputHolder<T> * oldHandle = 0);
 
 
 #endif

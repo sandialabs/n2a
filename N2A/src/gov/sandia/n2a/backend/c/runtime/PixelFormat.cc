@@ -14,7 +14,7 @@ the U.S. Government retains certain rights in this software.
 
 #include "math.h"
 #include "image.h"
-#include "endian.h"
+#include "myendian.h"
 
 #include <algorithm>
 #include <set>

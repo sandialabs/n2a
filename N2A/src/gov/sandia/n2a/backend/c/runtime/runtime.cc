@@ -17,20 +17,20 @@ using namespace std;
 
 // General functions ---------------------------------------------------------
 
-template class MatrixFixed<n2a_T,3,1>;
+template class SHARED MatrixFixed<n2a_T,3,1>;
 
-template n2a_T uniform ();
-template n2a_T uniform (n2a_T sigma);
-template n2a_T uniform (n2a_T lo, n2a_T hi, n2a_T step);
-template n2a_T gaussian ();
-template n2a_T gaussian (n2a_T sigma);
+template SHARED n2a_T uniform ();
+template SHARED n2a_T uniform (n2a_T sigma);
+template SHARED n2a_T uniform (n2a_T lo, n2a_T hi, n2a_T step);
+template SHARED n2a_T gaussian ();
+template SHARED n2a_T gaussian (n2a_T sigma);
 
-template MatrixFixed<n2a_T,3,1> grid    (int i, int nx, int ny, int nz);
-template MatrixFixed<n2a_T,3,1> gridRaw (int i, int nx, int ny, int nz);
+template SHARED MatrixFixed<n2a_T,3,1> grid    (int i, int nx, int ny, int nz);
+template SHARED MatrixFixed<n2a_T,3,1> gridRaw (int i, int nx, int ny, int nz);
 
-template n2a_T pulse (n2a_T t, n2a_T width, n2a_T period, n2a_T rise, n2a_T fall);
+template SHARED n2a_T pulse (n2a_T t, n2a_T width, n2a_T period, n2a_T rise, n2a_T fall);
 
-template n2a_T unitmap (const MatrixAbstract<n2a_T> & A, n2a_T row, n2a_T column);
+template SHARED n2a_T unitmap (const MatrixAbstract<n2a_T> & A, n2a_T row, n2a_T column);
 
 #ifndef N2A_SPINNAKER
 void signalHandler (int number)

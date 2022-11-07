@@ -568,7 +568,7 @@ public abstract class Host
 
     public abstract boolean           isAlive        (MNode job)                                                                  throws Exception;  // Checks if the system process associated with the job still exists and (where possible) is not a zombie.
     public abstract List<ProcessInfo> getActiveProcs ()                                                                           throws Exception;  // enumerate all of our active jobs
-    public abstract void              submitJob      (MNode job, boolean out2err, List<List<String>> command, List<Path> addPath) throws Exception;  // Job consists of a sequence of commands. Generally this will get converted to a shell script on the host, with the reserved name "script".
+    public abstract void              submitJob      (MNode job, boolean out2err, List<List<String>> command, List<Path> libPath) throws Exception;  // Job consists of a sequence of commands. Generally this will get converted to a shell script on the host, with the reserved name "script".
     public abstract void              killJob        (MNode job, boolean force)                                                   throws Exception;
 
     public void submitJob (MNode job, boolean out2err, String... command) throws Exception

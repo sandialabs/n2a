@@ -146,7 +146,7 @@ visit (const MatrixAbstract<T> & A, T (*function) (const T))
 }
 
 template<class T>
-bool
+Matrix<T>
 operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 {
     int h = A.rows ();
@@ -184,7 +184,7 @@ operator == (const MatrixAbstract<T> & A, const T scalar)
 }
 
 template<class T>
-bool
+Matrix<T>
 operator != (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 {
     int h = A.rows ();
@@ -403,7 +403,7 @@ operator && (const MatrixAbstract<T> & A, const T scalar)
     Matrix<T> result (h, w);
     if (scalar == 0)  // Early-out, because all the elements will be false.
     {
-        result.clear ();
+        clear (result);
         return result;
     }
     for (int c = 0; c < w; c++)
@@ -446,7 +446,7 @@ operator || (const MatrixAbstract<T> & A, const T scalar)
     Matrix<T> result (h, w);
     if (scalar != 0)  // Early-out, because all the elements will be true.
     {
-        result.clear (1);
+        clear (result, (T) 1);
         return result;
     }
     for (int c = 0; c < w; c++)

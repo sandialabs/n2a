@@ -13,6 +13,8 @@ the U.S. Government retains certain rights in this software.
 #include "runtime.h"
 #include "matrix.h"
 
+#include <climits>
+
 #ifdef _WIN32
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
@@ -1291,7 +1293,7 @@ Population<T>::getIterator (int i, bool poll)
 #ifdef n2a_TLS
 template<class T> thread_local Simulator<T> * Simulator<T>::instance = 0;
 #else
-template<class T> Simulator<T> Simulator<T>::instance;
+template<class T> SHARED Simulator<T> Simulator<T>::instance;
 #endif
 
 template<class T>

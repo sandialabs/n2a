@@ -147,6 +147,11 @@ public class CompilerCL extends Compiler
             return "";
         }
 
+        public boolean wrapperRequired ()
+        {
+            return true;
+        }
+
         public boolean supportsUnicodeIdentifiers ()
         {
             return true;

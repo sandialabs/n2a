@@ -19,6 +19,19 @@ the U.S. Government retains certain rights in this software.
 #include <vector>
 #include <map>
 
+#undef SHARED
+#ifdef _MSC_VER
+#  ifdef _USRDLL
+#    define SHARED __declspec(dllexport)
+#  elif defined n2a_DLL
+#    define SHARED __declspec(dllimport)
+#  else
+#    define SHARED
+#  endif
+#else
+#  define SHARED
+#endif
+
 #ifdef n2a_TLS
 # define SIMULATOR Simulator<T>::instance->
 #else
@@ -47,9 +60,9 @@ template<> inline int modFloor (int a, int b)
     return result;
 }
 
-template<class T> T                         uniform ();
-template<class T> T                         uniform (T sigma);
-template<class T> T                         uniform (T lo, T hi, T step = (T) 1);
+template<class T> SHARED T                  uniform ();
+template<class T> SHARED T                  uniform (T sigma);
+template<class T> SHARED T                  uniform (T lo, T hi, T step = (T) 1);
 template<class T, int R> MatrixFixed<T,R,1> uniform (const MatrixFixed<T,R,1> & sigma)
 {
     MatrixFixed<T,R,1> result;
@@ -72,8 +85,8 @@ template<class T, int R, int C> MatrixFixed<T,R,1> uniform (const MatrixFixed<T,
 #   endif
 }
 
-template<class T> T                         gaussian ();
-template<class T> T                         gaussian (T sigma);
+template<class T> SHARED T                  gaussian ();
+template<class T> SHARED T                  gaussian (T sigma);
 template<class T, int R> MatrixFixed<T,R,1> gaussian (const MatrixFixed<T,R,1> & sigma)
 {
     MatrixFixed<T,R,1> result;
@@ -142,18 +155,18 @@ template<class T, int R, int C> MatrixFixed<T,R,1> sphere (const MatrixFixed<T,R
 #   endif
 }
 
-template<class T> MatrixFixed<T,3,1> grid    (int i, int nx = 1, int ny = 1, int nz = 1);
-template<class T> MatrixFixed<T,3,1> gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);
+template<class T> SHARED MatrixFixed<T,3,1> grid    (int i, int nx = 1, int ny = 1, int nz = 1);
+template<class T> SHARED MatrixFixed<T,3,1> gridRaw (int i, int nx = 1, int ny = 1, int nz = 1);
 
-template<class T> T pulse (T t, T width = (T) INFINITY, T period = (T) 0, T rise = (T) 0, T fall = (T) 0);
+template<class T> SHARED T pulse (T t, T width = (T) INFINITY, T period = (T) 0, T rise = (T) 0, T fall = (T) 0);
 
-template<class T> T unitmap (const MatrixAbstract<T> & A, T row, T column = (T) 0.5);
+template<class T> SHARED T unitmap (const MatrixAbstract<T> & A, T row, T column = (T) 0.5);
 #ifdef n2a_FP
-template<int> int unitmap (const MatrixAbstract<int> & A, int row, int column = 0x1 << FP_MSB - 1);
+template<int> SHARED int unitmap (const MatrixAbstract<int> & A, int row, int column = 0x1 << FP_MSB - 1);
 #endif
 
 #ifndef N2A_SPINNAKER
-extern void signalHandler (int number);
+extern SHARED void signalHandler (int number);
 #endif
 
 
@@ -207,7 +220,7 @@ template<class T> class DelayBuffer;
     reference.
 **/
 template<class T>
-class Simulatable
+class SHARED Simulatable
 {
 public:
     virtual ~Simulatable ();
@@ -237,7 +250,7 @@ public:
 };
 
 template<class T>
-class Part : public Simulatable<T>
+class SHARED Part : public Simulatable<T>
 {
 public:
     Part<T> * next; ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
@@ -281,7 +294,7 @@ template<class T> void removeMonitor (std::vector<Part<T> *> & partList, Part<T>
     parts in the same queue, but only a doubly-linked part can dequeue outside of sim loop.
 **/
 template<class T>
-class PartTime : public Part<T>
+class SHARED PartTime : public Part<T>
 {
 public:
     Part<T> * previous;
@@ -295,7 +308,7 @@ public:
 };
 
 template<class T>
-class WrapperBase : public PartTime<T>
+class SHARED WrapperBase : public PartTime<T>
 {
 public:
     Population<T> * population;  // The top-level population can never be a connection, only a compartment.
@@ -316,7 +329,7 @@ public:
 };
 
 template<class T>
-class ConnectIterator
+class SHARED ConnectIterator
 {
 public:
     virtual ~ConnectIterator ();
@@ -330,7 +343,7 @@ public:
     When nested, this class is responsible for destructing its inner iterators.
 **/
 template<class T>
-class ConnectPopulation : public ConnectIterator<T>
+class SHARED ConnectPopulation : public ConnectIterator<T>
 {
 public:
     int                      index;      ///< of endpoint, for use with accessors
@@ -381,7 +394,7 @@ public:
     trigger linkage. Our dtor and reset() contain code that does trigger linkage.
 **/
 template<class T>
-class ConnectPopulationNN : public ConnectPopulation<T>
+class SHARED ConnectPopulationNN : public ConnectPopulation<T>
 {
 public:
     ConnectPopulationNN (int index, bool poll);
@@ -391,7 +404,7 @@ public:
 };
 
 template<class T>
-class ConnectMatrix : public ConnectIterator<T>
+class SHARED ConnectMatrix : public ConnectIterator<T>
 {
 public:
     ConnectPopulation<T> * rows;
@@ -420,7 +433,7 @@ public:
     all part instances it contains.
 **/
 template<class T>
-class Population : public Simulatable<T>
+class SHARED Population : public Simulatable<T>
 {
 public:
     Part<T> * container;
@@ -447,7 +460,7 @@ public:
 };
 
 template<class T>
-class Event
+class SHARED Event
 {
 public:
     T t;
@@ -501,7 +514,11 @@ class priorityQueue : public std::priority_queue<Event<T> *,std::vector<Event<T>
     parts. In general, a simulator will run until its queue is empty.
 **/
 template<class T>
-class Simulator
+#ifdef n2a_TLS
+class Simulator   // TLS is incompatible with shared runtime library. Can only be used within an exported (and fully self-contained) model DLL.
+#else
+class SHARED Simulator
+#endif
 {
 public:
     priorityQueue<T>                             queueEvent;    ///< Pending events in time order.
@@ -515,10 +532,11 @@ public:
     bool                                         after;         ///< When true, and timesteps match, sort spike events after step events. Otherwise sort them before.
     std::vector<Holder *>                        holders;
 
+    // Singleton
 #   ifdef n2a_TLS
-    static thread_local Simulator<T> * instance;  ///< Singleton
+    static thread_local Simulator<T> * instance;
 #   else
-    static Simulator<T> instance;  ///< Singleton
+    static Simulator<T> instance;
 #   endif
 
     Simulator ();
@@ -541,7 +559,7 @@ public:
 };
 
 template<class T>
-class Integrator
+class SHARED Integrator
 {
 public:
     // For now, we don't need a virtual dtor, because this class contains no data.
@@ -549,14 +567,14 @@ public:
 };
 
 template<class T>
-class Euler : public Integrator<T>
+class SHARED Euler : public Integrator<T>
 {
 public:
     virtual void run (Event<T> & event);
 };
 
 template<class T>
-class RungeKutta : public Integrator<T>
+class SHARED RungeKutta : public Integrator<T>
 {
 public:
     virtual void run (Event<T> & event);
@@ -570,7 +588,7 @@ public:
     to live for the entire length of the simulation and repeatedly insert itself into the event queue.
 **/
 template<class T>
-class EventStep : public Event<T>
+class SHARED EventStep : public Event<T>
 {
 public:
     T dt;
@@ -590,14 +608,14 @@ public:
     Lightweight class representing one-time events, of which there may be a large quantity.
 **/
 template<class T>
-class EventSpike : public Event<T>
+class SHARED EventSpike : public Event<T>
 {
 public:
     int latch;
 };
 
 template<class T>
-class EventSpikeSingle : public EventSpike<T>
+class SHARED EventSpikeSingle : public EventSpike<T>
 {
 public:
     Part<T> * target;
@@ -607,14 +625,14 @@ public:
 };
 
 template<class T>
-class EventSpikeSingleLatch : public EventSpikeSingle<T>
+class SHARED EventSpikeSingleLatch : public EventSpikeSingle<T>
 {
 public:
     virtual void run ();
 };
 
 template<class T>
-class EventSpikeMulti : public EventSpike<T>
+class SHARED EventSpikeMulti : public EventSpike<T>
 {
 public:
     std::vector<Part<T> *> * targets;
@@ -625,7 +643,7 @@ public:
 };
 
 template<class T>
-class EventSpikeMultiLatch : public EventSpikeMulti<T>
+class SHARED EventSpikeMultiLatch : public EventSpikeMulti<T>
 {
 public:
     virtual void run ();
@@ -637,7 +655,7 @@ public:
     only needed when actually iterating over parts.
 **/
 template<class T>
-class Visitor
+class SHARED Visitor
 {
 public:
     Event<T> * event;
@@ -652,7 +670,7 @@ public:
     Manages the subset of EventStep's load of instances assigned to a specific thread.
 **/
 template<class T>
-class VisitorStep : public Visitor<T>
+class SHARED VisitorStep : public Visitor<T>
 {
 public:
     Part<T>   queue;    ///< The head of a singly-linked list. queue itself never executes, rather, its "next" field points to the first active part.
@@ -665,7 +683,7 @@ public:
 };
 
 template<class T>
-class VisitorSpikeMulti : public Visitor<T>
+class SHARED VisitorSpikeMulti : public Visitor<T>
 {
 public:
     VisitorSpikeMulti (EventSpikeMulti<T> * event);
@@ -678,7 +696,7 @@ public:
 // Maybe we can have two implementations: one general and one efficient. The code generator
 // could choose between them based on whether the above conditions are met.
 template<class T>
-class DelayBuffer
+class SHARED DelayBuffer
 {
 public:
     T             value;

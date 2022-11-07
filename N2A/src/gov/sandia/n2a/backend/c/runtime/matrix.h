@@ -24,6 +24,19 @@ the U.S. Government retains certain rights in this software.
 # include <sstream>
 #endif
 
+#undef SHARED
+#ifdef _MSC_VER
+#  ifdef _USRDLL
+#    define SHARED __declspec(dllexport)
+#  elif defined n2a_DLL
+#    define SHARED __declspec(dllimport)
+#  else
+#    define SHARED
+#  endif
+#else
+#  define SHARED
+#endif
+
 
 // Matrix class ID constants
 // This is a hack to avoid the cost of RTTI.
@@ -41,7 +54,7 @@ the U.S. Government retains certain rights in this software.
     matrices are the most common case.
 **/
 template<class T>
-class MatrixAbstract
+class SHARED MatrixAbstract
 {
 public:
     virtual ~MatrixAbstract ();
@@ -55,75 +68,75 @@ public:
 
 template<class T> class Matrix;
 
-template<class T> void      clear      (      MatrixAbstract<T> & A, const T scalar = (T) 0);    ///< Set all elements to given value.
-template<class T> T         norm       (const MatrixAbstract<T> & A, T n = (T) 2);               ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
-template<class T> T         sumSquares (const MatrixAbstract<T> & A);                            ///< Equivalent to norm(A,2)^2, but without taking the square root.
-template<class T> Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T &)); ///< Apply function() to each element, and return the results in a new Matrix of equal size.
-template<class T> Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
+template<class T> SHARED void      clear      (      MatrixAbstract<T> & A, const T scalar = (T) 0);    ///< Set all elements to given value.
+template<class T> SHARED T         norm       (const MatrixAbstract<T> & A, T n = (T) 2);               ///< Generalized Frobenius norm: (sum_elements (element^n))^(1/n).  Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm.  n==0 is technically undefined, but we treat is as the count of non-zero elements.
+template<class T> SHARED T         sumSquares (const MatrixAbstract<T> & A);                            ///< Equivalent to norm(A,2)^2, but without taking the square root.
+template<class T> SHARED Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T &)); ///< Apply function() to each element, and return the results in a new Matrix of equal size.
+template<class T> SHARED Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
 
 // Elementwise logical operators
-template<class T> Matrix<T> operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator == (const MatrixAbstract<T> & A, const T scalar);
-template<class T> Matrix<T> operator == (const T scalar,              const MatrixAbstract<T> & A) {return A == scalar;}
-template<class T> Matrix<T> operator != (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator != (const MatrixAbstract<T> & A, const T scalar);
-template<class T> Matrix<T> operator != (const T scalar,              const MatrixAbstract<T> & A) {return A != scalar;}
-template<class T> Matrix<T> operator <  (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator <  (const MatrixAbstract<T> & A, const T scalar);
-template<class T> Matrix<T> operator <  (const T scalar,              const MatrixAbstract<T> & A) {return A > scalar;}
-template<class T> Matrix<T> operator <= (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator <= (const MatrixAbstract<T> & A, const T scalar);
-template<class T> Matrix<T> operator <= (const T scalar,              const MatrixAbstract<T> & A) {return A >= scalar;}
-template<class T> Matrix<T> operator >  (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator >  (const MatrixAbstract<T> & A, const T scalar);
-template<class T> Matrix<T> operator >  (const T scalar,              const MatrixAbstract<T> & A) {return A < scalar;}
-template<class T> Matrix<T> operator >= (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator >= (const MatrixAbstract<T> & A, const T scalar);
-template<class T> Matrix<T> operator >= (const T scalar,              const MatrixAbstract<T> & A) {return A <= scalar;}
-template<class T> Matrix<T> operator && (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator && (const MatrixAbstract<T> & A, const T scalar);
-template<class T> Matrix<T> operator && (const T scalar,              const MatrixAbstract<T> & A) {return A && scalar;}
-template<class T> Matrix<T> operator || (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator || (const MatrixAbstract<T> & A, const T scalar);
-template<class T> Matrix<T> operator || (const T scalar,              const MatrixAbstract<T> & A) {return A || scalar;}
+template<class T> SHARED Matrix<T> operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator == (const MatrixAbstract<T> & A, const T scalar);
+template<class T>        Matrix<T> operator == (const T scalar,              const MatrixAbstract<T> & A) {return A == scalar;}
+template<class T> SHARED Matrix<T> operator != (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator != (const MatrixAbstract<T> & A, const T scalar);
+template<class T>        Matrix<T> operator != (const T scalar,              const MatrixAbstract<T> & A) {return A != scalar;}
+template<class T> SHARED Matrix<T> operator <  (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator <  (const MatrixAbstract<T> & A, const T scalar);
+template<class T>        Matrix<T> operator <  (const T scalar,              const MatrixAbstract<T> & A) {return A > scalar;}
+template<class T> SHARED Matrix<T> operator <= (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator <= (const MatrixAbstract<T> & A, const T scalar);
+template<class T>        Matrix<T> operator <= (const T scalar,              const MatrixAbstract<T> & A) {return A >= scalar;}
+template<class T> SHARED Matrix<T> operator >  (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator >  (const MatrixAbstract<T> & A, const T scalar);
+template<class T>        Matrix<T> operator >  (const T scalar,              const MatrixAbstract<T> & A) {return A < scalar;}
+template<class T> SHARED Matrix<T> operator >= (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator >= (const MatrixAbstract<T> & A, const T scalar);
+template<class T>        Matrix<T> operator >= (const T scalar,              const MatrixAbstract<T> & A) {return A <= scalar;}
+template<class T> SHARED Matrix<T> operator && (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator && (const MatrixAbstract<T> & A, const T scalar);
+template<class T>        Matrix<T> operator && (const T scalar,              const MatrixAbstract<T> & A) {return A && scalar;}
+template<class T> SHARED Matrix<T> operator || (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator || (const MatrixAbstract<T> & A, const T scalar);
+template<class T>        Matrix<T> operator || (const T scalar,              const MatrixAbstract<T> & A) {return A || scalar;}
 
-template<class T> Matrix<T> operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise multiplication. The prettiest name for this operator would be ".*", but that is not overloadable.
-template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Multiply matrices
-template<class T> Matrix<T> operator * (const MatrixAbstract<T> & A, const T scalar);              ///< Multiply each element by scalar
-template<class T> Matrix<T> operator * (const T scalar,              const MatrixAbstract<T> & A) {return A * scalar;}
-template<class T> Matrix<T> operator / (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise division.  Could mean this * !B, but such expressions are done other ways in linear algebra.
-template<class T> Matrix<T> operator / (const MatrixAbstract<T> & A, const T scalar);              ///< Divide each element by scalar
-template<class T> Matrix<T> operator / (const T scalar,              const MatrixAbstract<T> & A);
-template<class T> Matrix<T> operator + (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise sum.
-template<class T> Matrix<T> operator + (const MatrixAbstract<T> & A, const T scalar);              ///< Add scalar to each element
-template<class T> Matrix<T> operator + (const T scalar,              const MatrixAbstract<T> & A) {return A + scalar;}
-template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise difference.
-template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A, const T scalar);              ///< Subtract scalar from each element
-template<class T> Matrix<T> operator - (const T scalar,              const MatrixAbstract<T> & A);
-template<class T> Matrix<T> operator - (const MatrixAbstract<T> & A) {return A * (T) -1;}          ///< Unary minus, that is, negation
+template<class T> SHARED Matrix<T> operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise multiplication. The prettiest name for this operator would be ".*", but that is not overloadable.
+template<class T>        Matrix<T> operator * (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B) {return Matrix<T> (A) * B;} ///< Multiply whole matrices
+template<class T> SHARED Matrix<T> operator * (const MatrixAbstract<T> & A, const T scalar);              ///< Multiply each element by scalar
+template<class T>        Matrix<T> operator * (const T scalar,              const MatrixAbstract<T> & A) {return A * scalar;}
+template<class T> SHARED Matrix<T> operator / (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise division.  Could mean this * !B, but such expressions are done other ways in linear algebra.
+template<class T> SHARED Matrix<T> operator / (const MatrixAbstract<T> & A, const T scalar);              ///< Divide each element by scalar
+template<class T> SHARED Matrix<T> operator / (const T scalar,              const MatrixAbstract<T> & A);
+template<class T> SHARED Matrix<T> operator + (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise sum.
+template<class T> SHARED Matrix<T> operator + (const MatrixAbstract<T> & A, const T scalar);              ///< Add scalar to each element
+template<class T>        Matrix<T> operator + (const T scalar,              const MatrixAbstract<T> & A) {return A + scalar;}
+template<class T> SHARED Matrix<T> operator - (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise difference.
+template<class T> SHARED Matrix<T> operator - (const MatrixAbstract<T> & A, const T scalar);              ///< Subtract scalar from each element
+template<class T> SHARED Matrix<T> operator - (const T scalar,              const MatrixAbstract<T> & A);
+template<class T>        Matrix<T> operator - (const MatrixAbstract<T> & A) {return A * (T) -1;}          ///< Unary minus, that is, negation
 
-template<class T> void operator *= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);  ///< As a hack to make C code generation simpler, this does elementwise multiply rather than whole-matrix multiply.
-template<class T> void operator *= (MatrixAbstract<T> & A, const T scalar);
-template<class T> void operator /= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> void operator /= (MatrixAbstract<T> & A, const T scalar);
-template<class T> void operator += (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> void operator += (MatrixAbstract<T> & A, const T scalar);
-template<class T> void operator -= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> void operator -= (MatrixAbstract<T> & A, const T scalar);
+template<class T> SHARED void operator *= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);  ///< As a hack to make C code generation simpler, this does elementwise multiply rather than whole-matrix multiply.
+template<class T> SHARED void operator *= (MatrixAbstract<T> & A, const T scalar);
+template<class T> SHARED void operator /= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED void operator /= (MatrixAbstract<T> & A, const T scalar);
+template<class T> SHARED void operator += (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED void operator += (MatrixAbstract<T> & A, const T scalar);
+template<class T> SHARED void operator -= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED void operator -= (MatrixAbstract<T> & A, const T scalar);
 
-template<class T> Matrix<T> min (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> min (const MatrixAbstract<T> & A, const T scalar);
-template<class T> Matrix<T> min (const T scalar,              const MatrixAbstract<T> & A) {return min (A, scalar);}
-template<class T> Matrix<T> max (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> max (const MatrixAbstract<T> & A, const T scalar);
-template<class T> Matrix<T> max (const T scalar,              const MatrixAbstract<T> & A) {return max (A, scalar);}
+template<class T> SHARED Matrix<T> min (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> min (const MatrixAbstract<T> & A, const T scalar);
+template<class T>        Matrix<T> min (const T scalar,              const MatrixAbstract<T> & A) {return min (A, scalar);}
+template<class T> SHARED Matrix<T> max (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> max (const MatrixAbstract<T> & A, const T scalar);
+template<class T>        Matrix<T> max (const T scalar,              const MatrixAbstract<T> & A) {return max (A, scalar);}
 
 #ifndef N2A_SPINNAKER
-template<class T> std::ostream & operator << (std::ostream & stream, const MatrixAbstract<T> & A);  ///< Print human readable matrix to stream.
+template<class T> SHARED std::ostream & operator << (std::ostream & stream, const MatrixAbstract<T> & A);  ///< Print human readable matrix to stream.
 #endif
 
 #ifdef n2a_FP
-Matrix<int> shift (const MatrixAbstract<int> & A, int shift);
+SHARED Matrix<int> shift (const MatrixAbstract<int> & A, int shift);  // Defined in fixedpoint.cc
 #endif
 
 
@@ -142,7 +155,7 @@ Matrix<int> shift (const MatrixAbstract<int> & A, int shift);
     will not allocate memory if they exceed the current storage size.
 **/
 template<class T>
-class MatrixStrided : public MatrixAbstract<T>
+class SHARED MatrixStrided : public MatrixAbstract<T>
 {
 public:
     virtual T * base    () const = 0; ///< Address of first element.
@@ -150,44 +163,44 @@ public:
     virtual int strideC () const = 0; ///< Number of elements between start of each column in memory. Equivalent to "leading dimension" in LAPACK parlance.
 };
 
-template<class T> void      clear (      MatrixStrided<T> & A, const T scalar = (T) 0);
-template<class T> T         norm  (const MatrixStrided<T> & A, T n);
-template<class T> Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T &));
-template<class T> Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T));
+template<class T> SHARED void      clear (      MatrixStrided<T> & A, const T scalar = (T) 0);
+template<class T> SHARED T         norm  (const MatrixStrided<T> & A, T n);
+template<class T> SHARED Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T &));
+template<class T> SHARED Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T));
 
-template<class T> Matrix<T> operator & (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator * (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator * (const MatrixStrided<T> & A, const T scalar);
-template<class T> Matrix<T> operator * (const T scalar,             const MatrixStrided<T> & A) {return A * scalar;}
-template<class T> Matrix<T> operator / (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator / (const MatrixStrided<T> & A, const T scalar);
-template<class T> Matrix<T> operator / (const T scalar,             const MatrixStrided<T> & A);
-template<class T> Matrix<T> operator + (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator + (const MatrixStrided<T> & A, const T scalar);
-template<class T> Matrix<T> operator + (const T scalar,             const MatrixStrided<T> & A) {return A + scalar;}
-template<class T> Matrix<T> operator - (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
-template<class T> Matrix<T> operator - (const MatrixStrided<T> & A, const T scalar);
-template<class T> Matrix<T> operator - (const T scalar,             const MatrixStrided<T> & A);
+template<class T> SHARED Matrix<T> operator & (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator * (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator * (const MatrixStrided<T> & A, const T scalar);
+template<class T>        Matrix<T> operator * (const T scalar,             const MatrixStrided<T> & A) {return A * scalar;}
+template<class T> SHARED Matrix<T> operator / (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator / (const MatrixStrided<T> & A, const T scalar);
+template<class T> SHARED Matrix<T> operator / (const T scalar,             const MatrixStrided<T> & A);
+template<class T> SHARED Matrix<T> operator + (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator + (const MatrixStrided<T> & A, const T scalar);
+template<class T>        Matrix<T> operator + (const T scalar,             const MatrixStrided<T> & A) {return A + scalar;}
+template<class T> SHARED Matrix<T> operator - (const MatrixStrided<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> operator - (const MatrixStrided<T> & A, const T scalar);
+template<class T> SHARED Matrix<T> operator - (const T scalar,             const MatrixStrided<T> & A);
 
 // Fixed-point operations on MatrixStrided<int>
 // These are not templates. Their implementations may be found in fixedpoint.cc
 #ifdef n2a_FP
-int         norm                (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult);  // exponentN=15
+SHARED int         norm                (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult);  // exponentN=15
 
-Matrix<int> visit               (const MatrixStrided<int> & A, int (*function) (int, int),      int exponent1);
-Matrix<int> visit               (const MatrixStrided<int> & A, int (*function) (int, int, int), int exponent1, int exponent2);
+SHARED Matrix<int> visit               (const MatrixStrided<int> & A, int (*function) (int, int),      int exponent1);
+SHARED Matrix<int> visit               (const MatrixStrided<int> & A, int (*function) (int, int, int), int exponent1, int exponent2);
 
-Matrix<int> multiplyElementwise (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);  // Don't know the exponent of B, so missing elements in B produce a 0 in the result.
-Matrix<int> multiply            (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);
-Matrix<int> multiply            (const MatrixStrided<int> & A, int b,                        int shift);
+SHARED Matrix<int> multiplyElementwise (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);  // Don't know the exponent of B, so missing elements in B produce a 0 in the result.
+SHARED Matrix<int> multiply            (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);
+SHARED Matrix<int> multiply            (const MatrixStrided<int> & A, int b,                        int shift);
 
-Matrix<int> divide              (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);  // Don't know the exponent of B, so missing elements in B produce a 0 in the result.
-Matrix<int> divide              (const MatrixStrided<int> & A, int b,                        int shift);
-Matrix<int> divide              (int a,                        const MatrixStrided<int> & B, int shift);
+SHARED Matrix<int> divide              (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);  // Don't know the exponent of B, so missing elements in B produce a 0 in the result.
+SHARED Matrix<int> divide              (const MatrixStrided<int> & A, int b,                        int shift);
+SHARED Matrix<int> divide              (int a,                        const MatrixStrided<int> & B, int shift);
 #endif
 
 template<class T>
-class Matrix : public MatrixStrided<T>
+class SHARED Matrix : public MatrixStrided<T>
 {
 public:
     n2a::Pointer data;
@@ -241,7 +254,7 @@ public:
     }
 };
 
-template<class T> Matrix<T> operator ~ (const Matrix<T> & A);
+template<class T> SHARED Matrix<T> operator ~ (const Matrix<T> & A);
 
 template<class T, int R, int C>
 class MatrixFixed : public MatrixStrided<T>
@@ -349,7 +362,7 @@ template<int R, int C>        MatrixFixed<int,R,C> divide              (int a,  
     holding the column structures would be better.
 **/
 template<class T>
-class MatrixSparse : public MatrixAbstract<T>
+class SHARED MatrixSparse : public MatrixAbstract<T>
 {
 public:
     int rows_;

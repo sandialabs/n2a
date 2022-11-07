@@ -129,7 +129,7 @@ public class RemoteSlurm extends RemoteUnix
     }
 
     @Override
-    public void submitJob (MNode job, boolean out2err, List<List<String>> commands, List<Path> addPath) throws Exception
+    public void submitJob (MNode job, boolean out2err, List<List<String>> commands, List<Path> libPath) throws Exception
     {
         int count = commands.size ();
         if (count == 0) throw new Exception ("submitJob was called without any commands");
@@ -162,12 +162,12 @@ public class RemoteSlurm extends RemoteUnix
             writer.write ("#SBATCH --error="     + err + "\n");
             writer.write ("\n");
 
-            if (addPath != null)
+            if (libPath != null)
             {
                 StringBuilder pathString = new StringBuilder ();
-                pathString.append ("export PATH=");
-                for (Path p : addPath) pathString.append (p + ":");  // Quoting is not necessary.
-                pathString.append ("$PATH");
+                pathString.append ("export LD_LIBRARY_PATH=");
+                for (Path p : libPath) pathString.append (p + ":");  // Quoting is not necessary.
+                pathString.append ("$LD_LIBRARY_PATH");
                 writer.append (pathString + "\n");
                 writer.write ("\n");
             }

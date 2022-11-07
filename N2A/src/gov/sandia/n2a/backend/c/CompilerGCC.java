@@ -81,6 +81,11 @@ public class CompilerGCC extends Compiler
             return "lib";
         }
 
+        public boolean wrapperRequired ()
+        {
+            return false;
+        }
+
         public boolean supportsUnicodeIdentifiers ()
         {
             return version >= 10;
@@ -192,6 +197,8 @@ public class CompilerGCC extends Compiler
             command.add ("-shared");
             if (host instanceof Windows)
             {
+                // For some weird reason, linker can't handle spaces in the output path, even when quoted.
+                // And it's not because .a is tacked on outside the quote.
                 command.add ("-Wl,--out-implib," + host.quote (output) + ".a");
             }
             for (Path object : objects)

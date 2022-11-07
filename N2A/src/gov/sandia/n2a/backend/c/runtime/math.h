@@ -12,6 +12,19 @@ the U.S. Government retains certain rights in this software.
 #include <cmath>
 #include <limits>
 
+#undef SHARED
+#ifdef _MSC_VER
+#  ifdef _USRDLL
+#    define SHARED __declspec(dllexport)
+#  elif defined n2a_DLL
+#    define SHARED __declspec(dllimport)
+#  else
+#    define SHARED
+#  endif
+#else
+#  define SHARED
+#endif
+
 #define TWOPI  6.283185307179586476925286766559
 #define TWOPIf 6.283185307179586476925286766559f
 
@@ -107,21 +120,21 @@ namespace std
     }
 }
 
-int atan2    (int y, int x);                                                    // returns angle in [-pi,pi], exponentResult=1; exponentA must match exponentB, but it may be arbitrary.
-int ceil     (int a,        int exponentA,                int exponentResult);  // Only needed for matrices. For scalars, an immediate implementation is emitted.
-int cos      (int a,        int exponentA);
-int exp      (int a,                                      int exponentResult);  // exponentA=7
-int floor    (int a,        int exponentA,                int exponentResult);  // Only needed for matrices.
-int log      (int a,        int exponentA,                int exponentResult);
-int log2     (int a,        int exponentA,                int exponentResult);  // Use as a subroutine. Not directly available to user.
-int modFloor (int a, int b, int exponentA, int exponentB);                      // exponentResult is promised to be min(exponentA,exponentB)
-int pow      (int a, int b, int exponentA,                int exponentResult);  // exponentB=15
-int round    (int a,        int exponentA,                int exponentResult);  // Only needed for matrices.
-int sgn      (int a,                                      int exponentResult);  // Only needed for matrices.
-int sin      (int a,        int exponentA);
-int sqrt     (int a,        int exponentA,                int exponentResult);
-int tan      (int a,        int exponentA,                int exponentResult);
-int tanh     (int a,        int exponentA);                                     // exponentResult=0
+SHARED int atan2    (int y, int x);                                                    // returns angle in [-pi,pi], exponentResult=1; exponentA must match exponentB, but it may be arbitrary.
+SHARED int ceil     (int a,        int exponentA,                int exponentResult);  // Only needed for matrices. For scalars, an immediate implementation is emitted.
+SHARED int cos      (int a,        int exponentA);
+SHARED int exp      (int a,                                      int exponentResult);  // exponentA=7
+SHARED int floor    (int a,        int exponentA,                int exponentResult);  // Only needed for matrices.
+SHARED int log      (int a,        int exponentA,                int exponentResult);
+SHARED int log2     (int a,        int exponentA,                int exponentResult);  // Use as a subroutine. Not directly available to user.
+SHARED int modFloor (int a, int b, int exponentA, int exponentB);                      // exponentResult is promised to be min(exponentA,exponentB)
+SHARED int pow      (int a, int b, int exponentA,                int exponentResult);  // exponentB=15
+SHARED int round    (int a,        int exponentA,                int exponentResult);  // Only needed for matrices.
+SHARED int sgn      (int a,                                      int exponentResult);  // Only needed for matrices.
+SHARED int sin      (int a,        int exponentA);
+SHARED int sqrt     (int a,        int exponentA,                int exponentResult);
+SHARED int tan      (int a,        int exponentA,                int exponentResult);
+SHARED int tanh     (int a,        int exponentA);                                     // exponentResult=0
 
 #endif  // n2a_FP
 
