@@ -249,7 +249,7 @@ ImageFileDelegateBMP::read (Image & image, int ignorex, int ignorey, int ignorew
                 image.buffer = new PixelBufferPacked (stride, height, 3);
                 break;
             case 32:
-                image.format = &BGRChar4;
+                image.format = &BGRxChar;
                 image.buffer = new PixelBufferPacked (stride, height, 4);
                 break;
             default:
@@ -518,7 +518,7 @@ ImageFileDelegateBMP::write (const Image & image, int ignorex, int ignorey)
         greenMask = pf->greenMask;
         blueMask  = pf->blueMask;
         alphaMask = pf->alphaMask;
-        if (*pf != BGRChar  &&  *pf != BGRChar4  &&  *pf != B5G5R5)
+        if (*pf != BGRChar  &&  *pf != BGRxChar  &&  *pf != B5G5R5)
         {
             if (bitdepth == 16  ||  bitdepth == 32)
             {

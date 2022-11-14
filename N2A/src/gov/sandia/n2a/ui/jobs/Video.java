@@ -1,5 +1,5 @@
 /*
-Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,16 +25,21 @@ import javax.imageio.ImageIO;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 
+import gov.sandia.n2a.backend.c.VideoIn;
+import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.ui.Lay;
 
 @SuppressWarnings("serial")
 public class Video extends JPanel
 {
+    public    boolean       canPlay;  // file is either an image sequence or FFmpeg is available to play the video. Set by ctor.
     protected NodeJob       job;
-    protected Path          dir;
+    protected Path          path;
     protected String        suffix;
     protected int           index = -1;
     protected int           last;
+    protected VideoIn       vin;
     protected BufferedImage image;
     protected PlayThread    thread;
 
@@ -44,28 +49,49 @@ public class Video extends JPanel
     public Video (NodeFile node)
     {
         job = (NodeJob) node.getParent ();
-        dir = node.path;
+        path = node.path;
 
-        try (Stream<Path> stream = Files.list (dir);)
+        if (Files.isDirectory (path))
         {
-            last = (int) stream.count () - 1;
-        }
-        catch (Exception e)
-        {
-            return;
-        }
+            try (Stream<Path> stream = Files.list (path);)
+            {
+                last = (int) stream.count () - 1;
+            }
+            catch (Exception e)
+            {
+                return;
+            }
 
-        try (Stream<Path> stream = Files.list (dir);)
-        {
-            Optional<Path> someFile = stream.findAny ();
-            Path p = someFile.get ();
-            String[] pieces = p.getFileName ().toString ().split ("\\.");
-            suffix = pieces[1].toLowerCase ();
+            try (Stream<Path> stream = Files.list (path);)
+            {
+                Optional<Path> someFile = stream.findAny ();
+                Path p = someFile.get ();
+                String[] pieces = p.getFileName ().toString ().split ("\\.");
+                suffix = pieces[1].toLowerCase ();
+            }
+            catch (Exception e)
+            {
+                return;
+            }
         }
-        catch (Exception e)
+        else  // Single file, so we must use FFmpeg.
         {
-            return;
+            Host localhost = Host.get ("localhost");
+            if (! localhost.objects.containsKey ("ffmpegJNI")) return;
+            vin = new VideoIn (path);
+            if (! vin.good ())
+            {
+                vin.close ();
+                vin = null;
+                return;
+            }
+            AppData.cleaner.register (this, vin);
+            double duration    = Double.valueOf (vin.get ("duration"));
+            double framePeriod = Double.valueOf (vin.get ("framePeriod"));
+            last = (int) (duration / framePeriod);
         }
+        // If we get this far, then we can play the video or image sequence.
+        canPlay = true;
 
         // Build GUI
 
@@ -119,54 +145,91 @@ public class Video extends JPanel
         );
     }
 
+    public void checkReopenVideo ()
+    {
+        if (vin.good ()) return;
+        vin.closeFile ();
+        vin.openFile (path);
+    }
+
     public void nextImage ()
     {
-        if (suffix == null) return;
+        BufferedImage temp = null;
         int nextIndex = index + 1;
-        try
+
+        if (vin != null)
         {
-            BufferedImage temp = ImageIO.read (dir.resolve (nextIndex + "." + suffix).toFile ());
-            if (temp == null) return;  // Failed parse a proper image. This can happen if we read a partially-written image file.
-            image = temp;
-            if (nextIndex > last)
-            {
-                last = nextIndex;
-                scrollbar.setMaximum (last + 1);
-            }
-            index = nextIndex;
-            scrollbar.setValue (index);
+            checkReopenVideo ();
+            vin.seekFrame (nextIndex);
+            temp = vin.readNext ();
         }
-        catch (Exception e) {}
+        else if (suffix != null)
+        {
+            try {temp = ImageIO.read (path.resolve (nextIndex + "." + suffix).toFile ());}
+            catch (Exception e) {}
+        }
+        else return;
+
+        if (temp == null) return;  // Failed parse a proper image. This can happen if we read a partially-written image file.
+        image = temp;
+        if (nextIndex > last)
+        {
+            last = nextIndex;
+            scrollbar.setMaximum (last + 1);
+        }
+        index = nextIndex;
+        scrollbar.setValue (index);
     }
 
     public void previousImage ()
     {
-        if (suffix == null) return;
+        BufferedImage temp = null;
         int nextIndex = index - 1;
         if (nextIndex < 0) return;
-        try
+
+        if (vin != null)
         {
-            BufferedImage temp = ImageIO.read (dir.resolve (nextIndex + "." + suffix).toFile ());
-            if (temp == null) return;
-            image = temp;
-            index = nextIndex;
-            scrollbar.setValue (index);
+            checkReopenVideo ();
+            vin.seekFrame (nextIndex);
+            temp = vin.readNext ();
         }
-        catch (IOException e) {}
+        else if (suffix != null)
+        {
+            try {temp = ImageIO.read (path.resolve (nextIndex + "." + suffix).toFile ());}
+            catch (IOException e) {}
+        }
+        else return;
+
+        if (temp == null) return;
+        image = temp;
+        index = nextIndex;
+        scrollbar.setValue (index);
     }
 
     public void scratch (float position)
     {
-        if (suffix == null  ||  last < 0) return;
+        if (last < 0) return;
+        BufferedImage temp = null;
         int nextIndex = (int) Math.round (position * last);
-        try
+        if      (nextIndex < 0   ) nextIndex = 0;
+        else if (nextIndex > last) nextIndex = last;
+
+        if (vin != null)
         {
-            BufferedImage temp = ImageIO.read (dir.resolve (nextIndex + "." + suffix).toFile ());
-            if (temp == null) return;
-            image = temp;
-            index = nextIndex;
+            checkReopenVideo ();
+            vin.seekFrame (nextIndex);
+            temp = vin.readNext ();
         }
-        catch (IOException e) {}
+        else if (suffix != null)
+        {
+            try {temp = ImageIO.read (path.resolve (nextIndex + "." + suffix).toFile ());}
+            catch (IOException e) {}
+        }
+        else return;
+
+        if (temp == null) return;
+        image = temp;
+        index = nextIndex;
     }
 
     public class PlayThread extends Thread

@@ -13,6 +13,7 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.Conversion;
 import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionMatrix;
 import gov.sandia.n2a.eqset.Variable;
@@ -79,11 +80,12 @@ public class JobC extends Thread
     public    Path localJobDir;
     protected Path jobDir;     // local or remote
     public    Path runtimeDir; // local or remote
-    public    Path gcc;        // local or remote
 
     protected Path ffmpegLibDir;  // Where link libraries are found.
     protected Path ffmpegIncDir;
     protected Path ffmpegBinDir;  // If non-null, then shared library dir should be added to path.
+    protected Path jniIncDir;     // jni.h
+    protected Path jniIncMdDir;   // jni_md.h
 
     protected boolean supportsUnicodeIdentifiers;
     public    String  T;
@@ -168,7 +170,7 @@ public class JobC extends Thread
             cli    = model.getFlag ("$metadata", "backend", "c", "cli");
             tls    = model.getFlag ("$metadata", "backend", "c", "tls");
             csharp = model.getFlag ("$metadata", "backend", "c", "sharp");
-            shared = model.getOrDefault (shared, "$metadata", "backend", "c", "shared");
+            if (! lib  &&  model.data ("$metadata", "backend", "c", "shared")) shared = model.getFlag ("$metadata", "backend", "c", "shared");
 
             String e = model.get ("$metadata", "backend", "all", "event");
             switch (e)
@@ -188,7 +190,6 @@ public class JobC extends Thread
             env              = Host.get (job);
             Path resourceDir = env.getResourceDir ();
             jobDir           = Host.getJobDir (resourceDir, job);  // Unlike localJobDir (which is created by MDir), this may not exist until we explicitly create it.
-            gcc              = resourceDir.getFileSystem ().getPath (env.config.getOrDefault ("g++", "backend", "c", "cxx"));  // No good way to decide absolute path for the default value. Maybe need to call "which" command for this.
             runtimeDir       = resourceDir.resolve ("backend").resolve ("c");
             detectExternalResources ();
             rebuildRuntime ();
@@ -283,8 +284,8 @@ public class JobC extends Thread
             // Plan: Detect the libraries, then estimate location of includes from that.
             String wrapper = factory.suffixLibrarySharedWrapper ();
             String libName = factory.prefixLibrary () + "avcodec" + (wrapper == null ? factory.suffixLibraryShared () : wrapper);  // Always use FFmpeg as a shared library.
-            String ffmpeg = env.config.get ("ffmpeg");
-            if (ffmpeg.isBlank ())  // Search typical locations
+            String ffmpegString = env.config.get ("backend", "c", "ffmpeg");
+            if (ffmpegString.isBlank ())  // Search typical locations
             {
                 ffmpegLibDir = runtimeDir.resolve ("ffmpeg/lib");  // Most likely location on Windows, a private copy in the c runtime dir
                 if (! Files.exists (ffmpegLibDir.resolve (libName)))  // Check typical locations on Unix-like systems (Linux, Mac).
@@ -307,9 +308,10 @@ public class JobC extends Thread
                 // Absolute path is resolved w.r.t. the root of the file system.
                 // Relative path is resolved w.r.t. the runtime dir. This make it easy to
                 // stash ffmpeg as a subdir of runtime.
-                Path temp = Paths.get (ffmpeg);
+                Path temp = Paths.get (ffmpegString);
                 if (temp.isAbsolute ()) ffmpegLibDir = runtimeDir.getRoot ().resolve (temp);
                 else                    ffmpegLibDir = runtimeDir.resolve (temp);
+                if (! Files.exists (ffmpegLibDir.resolve (libName))) ffmpegLibDir = null;
             }
             if (ffmpegLibDir != null)
             {
@@ -323,10 +325,7 @@ public class JobC extends Thread
                     if (! Files.exists (temp)) ffmpegIncDir = null;
                 }
 
-                if (wrapper != null)  // TODO: it might also be possible that a .so is not on the LD_LIBRARY_PATH
-                {
-                    ffmpegBinDir = ffmpegDir.resolve ("bin");
-                }
+                if (wrapper != null) ffmpegBinDir = ffmpegDir.resolve ("bin");
             }
 
             env.objects.put ("ffmpegLibDir", ffmpegLibDir);
@@ -335,115 +334,162 @@ public class JobC extends Thread
         }
 
         // TODO: freetype
+
+        // JNI
+        if (env.objects.containsKey ("jniIncMdDir"))
+        {
+            jniIncMdDir = (Path) env.objects.get ("jniIncMdDir");
+            jniIncDir   = (Path) env.objects.get ("jniIncDir");
+        }
+        else
+        {
+            String jni_md = env.config.get ("backend", "c", "jni_md");
+            if (jni_md.isBlank ())
+            {
+                Path javaHome = Paths.get (System.getProperty ("java.home"));
+                jniIncDir = javaHome.resolve ("include");
+                if      (Host.isWindows ()) jniIncMdDir = jniIncDir.resolve ("win32");
+                else if (Host.isMac ())     jniIncMdDir = jniIncDir.resolve ("darwin"); // don't know if this is universal
+                else                        jniIncMdDir = jniIncDir.resolve ("linux");  // ditto
+            }
+            else
+            {
+                jniIncMdDir = Paths.get (jni_md);
+                jniIncDir   = jniIncMdDir.getParent ();
+            }
+
+            if (! Files.exists (jniIncMdDir.resolve ("jni_md.h")))
+            {
+                jniIncMdDir = null;
+                jniIncDir   = null;
+            }
+
+            env.objects.put ("jniIncMdDir", jniIncMdDir);
+            env.objects.put ("jniIncDir",   jniIncDir);
+        }
     }
 
     public void rebuildRuntime () throws Exception
     {
-        // Update runtime source files, if necessary
-        boolean changed = false;
-        if (env.config.getFlag ("backend", "c", "compilerChanged"))
+        // Prevent jobs from trying to rebuild runtime in parallel.
+        // They could interfere with each other.
+        // This is the only process that synchronizes on Host.
+        synchronized (env)
         {
-            changed = true;
-            runtimeBuilt.remove (env);
-        }
-        Set<String> runtimes = runtimeBuilt.get (env);
-        if (runtimes == null)
-        {
-            if (unpackRuntime ()) changed = true;
-            runtimes = new HashSet<String> ();
-            runtimeBuilt.put (env, runtimes);
-        }
-        for (ProvideOperator pf : extensions) pf.rebuildRuntime (this);
-        env.config.clear ("backend", "c", "compilerChanged");
-
-        if (changed)  // Delete all existing object files and runtime libs.
-        {
-            runtimes.clear ();
-            try (DirectoryStream<Path> list = Files.newDirectoryStream (runtimeDir))
+            // Update runtime source files, if necessary
+            boolean changed = false;
+            if (env.config.getFlag ("backend", "c", "compilerChanged"))
             {
-                for (Path file : list)
+                changed = true;
+                runtimeBuilt.remove (env);
+            }
+            Set<String> runtimes = runtimeBuilt.get (env);
+            if (runtimes == null)
+            {
+                if (unpackRuntime ()) changed = true;
+                runtimes = new HashSet<String> ();
+                runtimeBuilt.put (env, runtimes);
+            }
+            for (ProvideOperator pf : extensions) pf.rebuildRuntime (this);
+            env.config.clear ("backend", "c", "compilerChanged");
+
+            if (changed)  // Delete all existing object files and runtime libs.
+            {
+                runtimes.clear ();
+                try (DirectoryStream<Path> list = Files.newDirectoryStream (runtimeDir))
                 {
-                    String fileName = file.getFileName ().toString ();
-                    if (fileName.endsWith (".o")  ||  fileName.contains ("runtime_"))  // The underscore after "runtime" is crucial.
+                    for (Path file : list)
                     {
-                        job.set ("deleting " + file, "status");
-                        Files.delete (file);
+                        String fileName = file.getFileName ().toString ();
+                        if (fileName.endsWith (".o")  ||  fileName.contains ("runtime_"))  // The underscore after "runtime" is crucial.
+                        {
+                            job.set ("deleting " + file, "status");
+                            Files.delete (file);
+                        }
                     }
                 }
+                catch (IOException e) {}
             }
-            catch (IOException e) {}
-        }
 
-        String runtimeName = runtimeName ();
-        if (runtimes.contains (runtimeName)) return;
+            String runtimeName = runtimeName ();
+            if (runtimes.contains (runtimeName)) return;
 
-        // Compile runtime
-        CompilerFactory factory = BackendC.getFactory (env);
-        supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
-        List<String> sources = new ArrayList<String> ();  // List of source names
-        sources.add ("runtime");
-        sources.add ("holder");
-        sources.add ("MNode");
-        sources.add ("profiling");
-        if (T.contains ("int")) sources.add ("fixedpoint");
-        sources.add ("CanvasImage");
-        sources.add ("Image");
-        sources.add ("ImageFileFormat");
-        sources.add ("ImageFileFormatBMP");
-        sources.add ("PixelBuffer");
-        sources.add ("PixelFormat");
-        if (ffmpegLibDir != null)
-        {
-            sources.add ("Video");
-            sources.add ("VideoFileFormatFFMPEG");
-        }
-
-        for (String stem : sources)
-        {
-            String objectName = objectName (stem);
-            Path object = runtimeDir.resolve (objectName);
-            if (Files.exists (object)) continue;
-            job.set ("Compiling " + objectName, "status");
-
-            Compiler c = factory.make (localJobDir);
-            if (shared) c.setShared ();
-            if (debug ) c.setDebug ();
-            if (gprof ) c.setProfiling ();
-            c.addInclude (runtimeDir);
-            if (ffmpegIncDir != null)
+            // Compile runtime
+            CompilerFactory factory = BackendC.getFactory (env);
+            supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
+            List<String> sources = new ArrayList<String> ();  // List of source names
+            sources.add ("runtime");
+            sources.add ("holder");
+            sources.add ("MNode");
+            sources.add ("profiling");
+            if (T.contains ("int")) sources.add ("fixedpoint");
+            sources.add ("CanvasImage");
+            sources.add ("Image");
+            sources.add ("ImageFileFormat");
+            sources.add ("ImageFileFormatBMP");
+            sources.add ("PixelBuffer");
+            sources.add ("PixelFormat");
+            boolean jni =  jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote);  // Only add JNI to shared runtime library on localhost
+            if (ffmpegLibDir != null)
             {
-                c.addInclude (ffmpegIncDir);
-                c.addDefine ("HAVE_FFMPEG");
+                sources.add ("Video");
+                sources.add ("VideoFileFormatFFMPEG");
+                if (jni) sources.add ("NativeResource");
             }
-            c.addDefine ("n2a_T", T);
-            if (T.contains ("int")) c.addDefine ("n2a_FP");
-            if (tls) c.addDefine ("n2a_TLS");
-            c.addSource (runtimeDir.resolve (stem + ".cc"));
-            c.setOutput (object);
 
-            Path out = c.compile ();
-            Files.delete (out);
-        }
-
-        // Link the runtime objects into a single shared library.
-        if (shared)
-        {
-            Path runtimeLib = runtimeDir.resolve (factory.prefixLibrary () + runtimeName + factory.suffixLibraryShared ());
-            if (! Files.exists (runtimeLib))
+            for (String stem : sources)
             {
-                job.set ("Linking runtime library", "status");
+                String objectName = objectName (stem);
+                Path object = runtimeDir.resolve (objectName);
+                if (Files.exists (object)) continue;
+                job.set ("Compiling " + objectName, "status");
+
                 Compiler c = factory.make (localJobDir);
-                c.setShared ();
-                if (debug) c.setDebug ();
-                if (gprof) c.setProfiling ();
-                c.setOutput (runtimeLib);
-                addRuntimeObjects (c);
-                Path out = c.linkLibrary ();
+                if (shared) c.setShared ();
+                if (debug ) c.setDebug ();
+                if (gprof ) c.setProfiling ();
+                c.addInclude (runtimeDir);
+                if (ffmpegIncDir != null)
+                {
+                    c.addInclude (ffmpegIncDir);
+                    c.addDefine ("HAVE_FFMPEG");
+                    if (jni)
+                    {
+                        c.addInclude (jniIncMdDir);
+                        c.addInclude (jniIncDir);
+                        c.addDefine ("HAVE_JNI");
+                    }
+                }
+                c.addDefine ("n2a_T", T);
+                if (T.contains ("int")) c.addDefine ("n2a_FP");
+                if (tls) c.addDefine ("n2a_TLS");
+                c.addSource (runtimeDir.resolve (stem + ".cc"));
+                c.setOutput (object);
+
+                Path out = c.compile ();
                 Files.delete (out);
             }
-        }
 
-        runtimes.add (runtimeName);
+            // Link the runtime objects into a single shared library.
+            if (shared)
+            {
+                Path runtimeLib = runtimeDir.resolve (factory.prefixLibrary () + runtimeName + factory.suffixLibraryShared ());
+                if (! Files.exists (runtimeLib))
+                {
+                    job.set ("Linking runtime library", "status");
+                    Compiler c = factory.make (localJobDir);
+                    c.setShared ();
+                    if (debug) c.setDebug ();
+                    if (gprof) c.setProfiling ();
+                    c.setOutput (runtimeLib);
+                    addRuntimeObjects (c);
+                    Path out = c.linkLibrary ();
+                    Files.delete (out);
+                }
+            }
+
+            runtimes.add (runtimeName);
+        }
     }
 
     /**
@@ -468,6 +514,8 @@ public class JobC extends Thread
             "myendian.h", "image.h", "Image.cc", "ImageFileFormat.cc", "ImageFileFormatBMP.cc", "PixelBuffer.cc", "PixelFormat.cc",
             "canvas.h", "CanvasImage.cc",
             "video.h", "Video.cc", "VideoFileFormatFFMPEG.cc",
+            "NativeResource.cc", "NativeResource.h",
+            "shared.h",
             "OutputHolder.h", "OutputParser.h"  // Not needed by runtime, but provided as a utility for users.
         );
     }
@@ -544,6 +592,10 @@ public class JobC extends Thread
             c.addLibrary ("avcodec");
             c.addLibrary ("avformat");
             c.addLibrary ("avutil");
+            if (jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
+            {
+                c.addObject (runtimeDir.resolve (objectName ("NativeResource")));
+            }
         }
 
         for (ProvideOperator po : extensions)

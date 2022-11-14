@@ -19,18 +19,7 @@ the U.S. Government retains certain rights in this software.
 #include <vector>
 #include <map>
 
-#undef SHARED
-#ifdef _MSC_VER
-#  ifdef _USRDLL
-#    define SHARED __declspec(dllexport)
-#  elif defined n2a_DLL
-#    define SHARED __declspec(dllimport)
-#  else
-#    define SHARED
-#  endif
-#else
-#  define SHARED
-#endif
+#include "shared.h"
 
 #ifdef n2a_TLS
 # define SIMULATOR Simulator<T>::instance->

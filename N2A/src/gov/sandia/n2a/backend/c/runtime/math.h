@@ -12,18 +12,7 @@ the U.S. Government retains certain rights in this software.
 #include <cmath>
 #include <limits>
 
-#undef SHARED
-#ifdef _MSC_VER
-#  ifdef _USRDLL
-#    define SHARED __declspec(dllexport)
-#  elif defined n2a_DLL
-#    define SHARED __declspec(dllimport)
-#  else
-#    define SHARED
-#  endif
-#else
-#  define SHARED
-#endif
+#include "shared.h"
 
 #define TWOPI  6.283185307179586476925286766559
 #define TWOPIf 6.283185307179586476925286766559f

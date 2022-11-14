@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.jobs;
 
+import gov.sandia.n2a.backend.c.VideoIn;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
@@ -305,6 +306,16 @@ public class PanelRun extends JPanel
         };
         refreshThreadFast.setDaemon (true);
         refreshThreadFast.start ();
+
+        Thread prepareJNI = new Thread ("Prepare JNI")
+        {
+            public void run ()
+            {
+                VideoIn.prepareJNI ();
+            }
+        };
+        prepareJNI.setDaemon (true);
+        prepareJNI.start ();
 
         displayText = new JTextArea ()
         {
@@ -712,7 +723,7 @@ public class PanelRun extends JPanel
                                         if (p instanceof Video)
                                         {
                                             Video v = (Video) p;
-                                            if (v.dir.equals (localPath)) v.refresh (last);
+                                            if (v.path.equals (localPath)) v.refresh (last);
                                         }
                                     }
                                 }
@@ -995,17 +1006,22 @@ public class PanelRun extends JPanel
         return result.toString ();
     }
 
+    public void showStatus (String message)
+    {
+        synchronized (displayText)
+        {
+            displayText.setText (message);
+            Component view = displayPane.getViewport ().getView ();
+            if (view != displayText) displayPane.setViewportView (displayText);
+        }
+    }
+
     public void viewFile (boolean refresh)
     {
         synchronized (displayText)
         {
             displayThread = null;
-            if (! refresh)
-            {
-                displayText.setText ("loading...");
-                Component view = displayPane.getViewport ().getView ();
-                if (view != displayText) displayPane.setViewportView (displayText);
-            }
+            if (! refresh) showStatus ("loading...");
         }
 
         String viz = buttons.getSelection ().getActionCommand ();

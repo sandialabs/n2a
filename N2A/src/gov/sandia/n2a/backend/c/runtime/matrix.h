@@ -24,19 +24,7 @@ the U.S. Government retains certain rights in this software.
 # include <sstream>
 #endif
 
-#undef SHARED
-#ifdef _MSC_VER
-#  ifdef _USRDLL
-#    define SHARED __declspec(dllexport)
-#  elif defined n2a_DLL
-#    define SHARED __declspec(dllimport)
-#  else
-#    define SHARED
-#  endif
-#else
-#  define SHARED
-#endif
-
+#include "shared.h"
 
 // Matrix class ID constants
 // This is a hack to avoid the cost of RTTI.

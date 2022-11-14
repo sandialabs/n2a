@@ -18,19 +18,9 @@ the U.S. Government retains certain rights in this software.
 
 #include "image.h"
 #include "StringLite.h"
+#include "NativeResource.h"
 
-#undef SHARED
-#ifdef _MSC_VER
-#  ifdef _USRDLL
-#    define SHARED __declspec(dllexport)
-#  elif defined n2a_DLL
-#    define SHARED __declspec(dllimport)
-#  else
-#    define SHARED
-#  endif
-#else
-#  define SHARED
-#endif
+#include "shared.h"
 
 
 namespace n2a
@@ -51,7 +41,11 @@ namespace n2a
         stream (in the usual OS sense), the Video class would wrap the data source
         as well.
     **/
+#   ifdef HAVE_JNI
+    class SHARED VideoIn : public NativeResource
+#   else
     class SHARED VideoIn
+#   endif
     {
     public:
         VideoIn (const String & fileName);
@@ -64,7 +58,6 @@ namespace n2a
         void      seekTime         (double timestamp); ///< Position stream so that next frame will have the smallest timestamp >= the given timestamp.
         VideoIn & operator >>      (Image & image); ///< Extract next image frame.  image may end up attached to a buffer used internally by the video device or library, so it may be freed unexpectedly.  However, this clss guarantees that the memory will not be freed before the next call to a method of this class.
         bool      good             () const; ///< Indicates that the stream is open and the last read (if any) succeeded.
-        void      setTimestampMode (bool frames = false); ///< Changes image.timestamp from presentation time to frame number.
 
         virtual String get (const String & name) const;
         virtual void   set (const String & name, const String & value);
@@ -96,12 +89,11 @@ namespace n2a
     public:
         virtual ~VideoInFile ();
 
-        virtual void   pause            () = 0;
-        virtual void   seekFrame        (int frame) = 0;
-        virtual void   seekTime         (double timestamp) = 0;
-        virtual void   readNext         (Image & image) = 0;
-        virtual bool   good             () const = 0;
-        virtual void   setTimestampMode (bool frames = false) = 0;
+        virtual void   pause     () = 0;
+        virtual void   seekFrame (int frame) = 0;
+        virtual void   seekTime  (double timestamp) = 0;
+        virtual void   readNext  (Image & image) = 0;
+        virtual bool   good      () const = 0;
 
         virtual String get (const String & name) const = 0;
         virtual void   set (const String & name, const String & value) = 0;

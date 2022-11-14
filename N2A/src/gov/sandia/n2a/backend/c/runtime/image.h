@@ -25,18 +25,7 @@ the U.S. Government retains certain rights in this software.
 #include <assert.h>
 #include <chrono>
 
-#undef SHARED
-#ifdef _MSC_VER
-#  ifdef _USRDLL
-#    define SHARED __declspec(dllexport)
-#  elif defined n2a_DLL
-#    define SHARED __declspec(dllimport)
-#  else
-#    define SHARED
-#  endif
-#else
-#  define SHARED
-#endif
+#include "shared.h"
 
 namespace n2a
 {
@@ -344,6 +333,7 @@ namespace n2a
         The leftmost letter in a name refers to the lowest numbered address.
         If a channel is larger than one byte, then the bytes are laid out
         within the channel according to the standard for the machine.
+        The channel name "x" is a byte that is unused.
 
         <p>Naming convention for accessor methods --
         The data is in machine words, so names describe sequence
@@ -882,7 +872,8 @@ namespace n2a
     extern SHARED PixelFormatRGBShort        RGBShort;
     extern SHARED PixelFormatRGBABits        B5G5R5;
     extern SHARED PixelFormatRGBABits        BGRChar;
-    extern SHARED PixelFormatRGBABits        BGRChar4;
+    extern SHARED PixelFormatRGBABits        BGRxChar;  // 4-byte word, where last byte is not used
+    extern SHARED PixelFormatRGBABits        RGBxChar;  // ditto
     extern SHARED PixelFormatRGBABits        BGRAChar;
     extern SHARED PixelFormatPackedYUV       UYVY;
     extern SHARED PixelFormatPackedYUV       YUYV;

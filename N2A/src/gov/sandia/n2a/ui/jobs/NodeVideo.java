@@ -11,6 +11,8 @@ import java.nio.file.Path;
 
 import javax.swing.ImageIcon;
 
+import gov.sandia.n2a.backend.c.VideoIn;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.PanelRun.DisplayThread;
 
@@ -44,15 +46,44 @@ public class NodeVideo extends NodeFile
         // If refresh is true, then the player is already busy-waiting for more frames, so there is nothing to do.
         if (dt.refresh) return true;
 
-        final Video v = new Video (this);
+        // Attempt to acquire FFmpeg JNI
+        // Since we are on the display thread, we can take our time.
+        PanelRun pr = PanelRun.instance;
+        Host localhost = Host.get ("localhost");
+        if (! localhost.objects.containsKey ("ffmpegJNI"))
+        {
+            EventQueue.invokeLater (new Runnable ()
+            {
+                public void run ()
+                {
+                    pr.showStatus ("Compiling C runtime to support video I/O. This can take up to a minute.");
+                }
+            });
+            VideoIn.prepareJNI ();
+        }
+
+        // Start video
+        Video v = new Video (this);
         EventQueue.invokeLater (new Runnable ()
         {
             public void run ()
             {
-                PanelRun pr = PanelRun.instance;
                 synchronized (pr.displayText)
                 {
                     if (dt != pr.displayThread) return;
+                    if (! v.canPlay)
+                    {
+                        pr.showStatus
+                        (
+                            "Video I/O is not available. Possible causes include:\n" +
+                            " * FFmpeg library is missing.\n" +
+                            " * C++ compiler is missing.\n" +
+                            " * Path to JNI headers is incorrect.\n" +
+                            "Go to Settings:Backend C and update 'localhost'.\n" +
+                            "Directions on how to obtain FFmpeg and a C++ compiler are on the wiki page."
+                        );
+                        return;
+                    }
                     pr.displayChart.buttonBar.setVisible (false);
                     pr.displayPane.setViewportView (v);
                 }

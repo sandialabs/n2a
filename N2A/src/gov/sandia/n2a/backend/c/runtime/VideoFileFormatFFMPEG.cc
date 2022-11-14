@@ -22,6 +22,9 @@ the U.S. Government retains certain rights in this software.
 #include "video.h"
 
 #include <time.h>
+#ifdef HAVE_JNI
+#  include <jni.h>
+#endif
 
 extern "C"
 {
@@ -46,7 +49,6 @@ public:
     virtual void seekTime (double timestamp);
     virtual void readNext (Image & image);
     virtual bool good () const;
-    virtual void setTimestampMode (bool frames = false);
 
     virtual String get (const String & name) const;
     virtual void   set (const String & name, const String & value);
@@ -466,12 +468,6 @@ VideoInFileFFMPEG::good () const
     return ! state;
 }
 
-void
-VideoInFileFFMPEG::setTimestampMode (bool frames)
-{
-    timestampMode = frames;
-}
-
 String
 VideoInFileFFMPEG::get (const String & name) const
 {
@@ -524,6 +520,11 @@ VideoInFileFFMPEG::get (const String & name) const
         if (interleaveRTP) return "1";
         else               return "0";
     }
+    if (name == "timestampMode")
+    {
+        if (timestampMode) return "1";
+        else               return "0";
+    }
     return "";
 }
 
@@ -535,7 +536,165 @@ VideoInFileFFMPEG::set (const String & name, const String & value)
         interleaveRTP = atoi (value.c_str ());
         return;
     }
+    if (name == "timestampMode")
+    {
+        timestampMode = atoi (value.c_str ());
+        return;
+    }
 }
+
+#ifdef HAVE_JNI
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_gov_sandia_n2a_backend_c_VideoIn_suffixes (JNIEnv * env, jclass obj)
+{
+    // Enumerate formats and accumulate their suffixes in a single string.
+    String result;
+    void * i = 0;
+    while (const AVInputFormat * format = av_demuxer_iterate (&i))
+    {
+        if (format->extensions == 0) continue;
+        result += ",";
+        result += format->extensions;
+    }
+    return env->NewStringUTF (result.c_str ());
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_gov_sandia_n2a_backend_c_VideoIn_construct (JNIEnv * env, jclass obj, jstring path)
+{
+    VideoFileFormatFFMPEG::use ();
+    const char * cpath = env->GetStringUTFChars (path, 0);
+    VideoIn * result = new VideoIn (cpath);
+    env->ReleaseStringUTFChars (path, cpath);
+    return (jlong) result;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_n2a_backend_c_VideoIn_open (JNIEnv * env, jclass obj, jlong handle, jstring path)
+{
+    const char * cpath = env->GetStringUTFChars (path, 0);
+    ((VideoIn *) handle)->open (cpath);
+    env->ReleaseStringUTFChars (path, cpath);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_n2a_backend_c_VideoIn_close (JNIEnv * env, jclass obj, jlong handle)
+{
+    ((VideoIn *) handle)->close ();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_n2a_backend_c_VideoIn_seekFrame (JNIEnv * env, jclass obj, jlong handle, jint frame)
+{
+    ((VideoIn *) handle)->seekFrame (frame);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_n2a_backend_c_VideoIn_seekTime (JNIEnv * env, jclass obj, jlong handle, jdouble timestamp)
+{
+    ((VideoIn *) handle)->seekTime (timestamp);
+}
+
+// These should exactly match the BufferedImage types in Java.
+enum
+{
+    TYPE_CUSTOM,
+    TYPE_INT_RGB,
+    TYPE_INT_ARGB,
+    TYPE_INT_ARGB_PRE,
+    TYPE_INT_BGR,
+    TYPE_3BYTE_BGR,
+    TYPE_4BYTE_ABGR,
+    TYPE_4BYTE_ABGR_PRE,
+    TYPE_USHORT_565_RGB,
+    TYPE_USHORT_555_RGB,
+    TYPE_BYTE_GRAY,
+    TYPE_USHORT_GRAY,
+    TYPE_BYTE_BINARY,
+    TYPE_BYTE_INDEXED
+};
+
+struct PixelFormat2BufferedImage
+{
+    n2a::PixelFormat * pf;
+    int                bi;
+    int                size;  // number of bytes per pixel
+};
+
+static PixelFormat2BufferedImage pixelFormat2BufferedImageMap[] =
+{
+    {&BGRxChar,   TYPE_INT_RGB,        4},
+    {&RGBAChar,   TYPE_INT_ARGB,       4},
+    {&RGBAChar,   TYPE_INT_ARGB_PRE,   4},
+    {&RGBxChar,   TYPE_INT_BGR,        4},
+    {&RGBChar,    TYPE_3BYTE_BGR,      3},
+    //{&ABGRChar,   TYPE_4BYTE_ABGR,     4},
+    //{&ABGRChar,   TYPE_4BYTE_ABGR_PRE, 4},
+    //{&B5G6R5,     TYPE_USHORT_565_RGB, 2},
+    {&B5G5R5,     TYPE_USHORT_555_RGB, 2},
+    {&GrayChar,   TYPE_BYTE_GRAY,      1},
+    {&GrayShort,  TYPE_USHORT_GRAY,    2},
+    {0}
+};
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_gov_sandia_n2a_backend_c_VideoIn_readNext (JNIEnv * env, jclass obj, jlong handle)
+{
+    VideoIn & video = * (VideoIn *) handle;
+    Image image;
+    video >> image;
+    if (! video.good ()) return 0;
+
+    PixelFormat2BufferedImage * m = pixelFormat2BufferedImageMap;
+    while (m->pf)
+    {
+        if (m->pf == &*image.format) break;
+        m++;
+    }
+    if (m->pf == 0)
+    {
+        m = pixelFormat2BufferedImageMap;
+        image *= *m->pf;
+    }
+
+    jclass     cls     = env->FindClass   ("gov/sandia/n2a/backend/c/VideoIn$Image");
+    jmethodID  ctor    = env->GetMethodID (cls, "<init>", "(IIII)V");
+    jobject    result  = env->NewObject   (cls, ctor, image.width, image.height, m->bi, m->size);
+    jfieldID   fieldID = env->GetFieldID  (cls, "buffer", "[B");
+    jbyteArray buffer  = static_cast<jbyteArray> (env->GetObjectField (result, fieldID));
+    int        count   = image.width * image.height * m->size;
+    env->SetByteArrayRegion (buffer, 0, count, (jbyte *) image.buffer->pixel (0, 0));
+
+    return result;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_gov_sandia_n2a_backend_c_VideoIn_good (JNIEnv * env, jclass obj, jlong handle)
+{
+    return ((VideoIn *) handle)->good ();
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_gov_sandia_n2a_backend_c_VideoIn_get (JNIEnv * env, jclass obj, jlong handle, jstring name)
+{
+    const char * cname = env->GetStringUTFChars (name, 0);
+    String value = ((VideoIn *) handle)->get (cname);
+    env->ReleaseStringUTFChars (name, cname);
+    return env->NewStringUTF (value.c_str ());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_n2a_backend_c_VideoIn_set (JNIEnv * env, jclass obj, jlong handle, jstring name, jstring value)
+{
+    const char * cname  = env->GetStringUTFChars (name,  0);
+    const char * cvalue = env->GetStringUTFChars (value, 0);
+    ((VideoIn *) handle)->set (cname, cvalue);
+    env->ReleaseStringUTFChars (name,  cname);
+    env->ReleaseStringUTFChars (value, cvalue);
+}
+
+#endif
 
 
 // class VideoOutFileFFMPEG ---------------------------------------------------
@@ -738,7 +897,7 @@ static PixelFormatMapping pixelFormatMap[] =
     {&RGBAShort,      AV_PIX_FMT_RGBA64LE},
     {&RGBShort,       AV_PIX_FMT_RGB48LE},
     {&B5G5R5,         AV_PIX_FMT_BGR555LE},
-    {&BGRChar4,       AV_PIX_FMT_BGR0},
+    {&BGRxChar,       AV_PIX_FMT_BGR0},
     {&BGRAChar,       AV_PIX_FMT_BGRA},
     {&UYYVYY,         AV_PIX_FMT_UYYVYY411},
     {0}

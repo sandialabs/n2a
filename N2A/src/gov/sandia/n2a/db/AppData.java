@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,6 +8,7 @@ package gov.sandia.n2a.db;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.lang.ref.Cleaner;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -36,6 +37,8 @@ public class AppData
 
     protected static boolean stop;
     protected static Thread saveThread;
+
+    public static final Cleaner cleaner = Cleaner.create ();
 
     protected static Map<String,String> indexID;  ///< Maps IDs to model names. Model names are required to be unique, so they function as the direct key into the models database.
 

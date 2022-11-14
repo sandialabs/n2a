@@ -18,18 +18,7 @@
 #include "matrix.h"
 #include "image.h"
 
-#undef SHARED
-#ifdef _MSC_VER
-#  ifdef _USRDLL
-#    define SHARED __declspec(dllexport)
-#  elif defined n2a_DLL
-#    define SHARED __declspec(dllimport)
-#  else
-#    define SHARED
-#  endif
-#else
-#  define SHARED
-#endif
+#include "shared.h"
 
 namespace n2a
 {

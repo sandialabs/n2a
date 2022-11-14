@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -80,7 +81,9 @@ public class NodeJob extends NodeBase
     public static final ImageIcon iconLingering = ImageUtil.getImage ("lingering.png");
     public static final ImageIcon iconStopped   = ImageUtil.getImage ("stop.gif");
 
-    protected static List<String> imageFileSuffixes = Arrays.asList (ImageIO.getReaderFileSuffixes ());  // We don't expect to load image handling plugins after startup, so one-time initialization is fine.
+    protected static HashSet<String> forbiddenSuffixes = new HashSet<String> (Arrays.asList ("bin", "exe", "aplx", "lib", "dll", "a", "so", "o", "obj", "pdb", "columns", "mod"));
+    protected static HashSet<String> imageSuffixes     = new HashSet<String> (Arrays.asList (ImageIO.getReaderFileSuffixes ()));  // We don't expect to load image handling plugins after startup, so one-time initialization is fine.
+    public    static HashSet<String> videoSuffixes     = new HashSet<String> (Arrays.asList ("mp4", "m4v", "mov", "qt", "avi", "flv", "mkv", "wmv", "asf", "webm", "h264", "mpeg", "mpg", "vob", "3gp"));  // Some typical video file suffixes. Others will be added from FFmpeg, if available.
 
     protected String  key;
     protected String  inherit         = "";
@@ -625,7 +628,7 @@ public class NodeJob extends NodeBase
                     try {Integer.valueOf (pieces[0]);}
                     catch (NumberFormatException e) {return false;}
                     String suffix = pieces[1].toLowerCase ();
-                    if (imageFileSuffixes.indexOf (suffix) < 0) return false;
+                    if (! imageSuffixes.contains (suffix)) return false;  // TODO: The image sequence might still be handled by FFmpeg.
                     newNode = new NodeVideo (path);
                     break;  // Only visit the first file
                 }
@@ -645,27 +648,17 @@ public class NodeJob extends NodeBase
             if (fileName.equals     ("started" )) return false;
             if (fileName.equals     ("finished")) return false;
             if (fileName.startsWith ("compile.")) return false;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
-            if (fileName.endsWith   (".bin"    )) return false;  // Don't show generated binaries
-            if (fileName.endsWith   (".exe"    )) return false;
-            if (fileName.endsWith   (".aplx"   )) return false;
-            if (fileName.endsWith   (".lib"    )) return false;
-            if (fileName.endsWith   (".dll"    )) return false;
-            if (fileName.endsWith   (".a"      )) return false;
-            if (fileName.endsWith   (".so"     )) return false;
-            if (fileName.endsWith   (".o"      )) return false;
-            if (fileName.endsWith   (".obj"    )) return false;  // Hide intermediate object file left by CL
-            if (fileName.endsWith   (".pdb"    )) return false;
-            if (fileName.endsWith   (".columns")) return false;  // Hint for column names when simulator doesn't output them.
-            if (fileName.endsWith   (".mod"    )) return false;  // NEURON files
 
             String suffix = "";
             String[] pieces = fileName.split ("\\.");
             if (pieces.length > 1) suffix = pieces[pieces.length-1].toLowerCase ();
 
-            if      (fileName.endsWith ("out"))               newNode = new NodeOutput (path);
-            else if (fileName.endsWith ("err"))               newNode = new NodeError  (path);
-            else if (imageFileSuffixes.indexOf (suffix) >= 0) newNode = new NodeImage  (path);
-            else                                              newNode = new NodeFile   (path);
+            if (forbiddenSuffixes.contains (suffix)) return false;
+            if      (fileName.endsWith ("out"))       newNode = new NodeOutput (path);
+            else if (fileName.endsWith ("err"))       newNode = new NodeError  (path);
+            else if (imageSuffixes.contains (suffix)) newNode = new NodeImage  (path);
+            else if (videoSuffixes.contains (suffix)) newNode = new NodeVideo  (path);
+            else                                      newNode = new NodeFile   (path);
         }
 
         existing.put (fileName, newNode);

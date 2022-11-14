@@ -98,15 +98,17 @@ PixelFormatHSVFloat           n2a::HSVFloat;
 
 // These "bits" formats must be endian independent.
 #if BYTE_ORDER == LITTLE_ENDIAN
-PixelFormatRGBABits n2a::B5G5R5   (2, 0x7C00,   0x3E0,    0x1F,       0x0);
-PixelFormatRGBABits n2a::BGRChar  (3, 0xFF0000, 0xFF00,   0xFF,       0x0);
-PixelFormatRGBABits n2a::BGRChar4 (4, 0xFF0000, 0xFF00,   0xFF,       0x0);
-PixelFormatRGBABits n2a::BGRAChar (4, 0xFF0000, 0xFF00,   0xFF,       0xFF000000);
+PixelFormatRGBABits n2a::B5G5R5   (2, 0x7C00,     0x3E0,    0x1F,       0x0);
+PixelFormatRGBABits n2a::BGRChar  (3, 0xFF0000,   0xFF00,   0xFF,       0x0);
+PixelFormatRGBABits n2a::BGRxChar (4, 0xFF0000,   0xFF00,   0xFF,       0x0);
+PixelFormatRGBABits n2a::RGBxChar (4, 0xFF,       0xFF00,   0xFF0000,   0x0);
+PixelFormatRGBABits n2a::BGRAChar (4, 0xFF0000,   0xFF00,   0xFF,       0xFF000000);
 #elif BYTE_ORDER == BIG_ENDIAN
-PixelFormatRGBABits n2a::B5G5R5   (2, 0x1F,     0x3E0,    0x7C00,     0x0);
-PixelFormatRGBABits n2a::BGRChar  (3, 0xFF,     0xFF00,   0xFF0000,   0x0);
-PixelFormatRGBABits n2a::BGRChar4 (4, 0xFF00,   0xFF0000, 0xFF000000, 0x0);
-PixelFormatRGBABits n2a::BGRAChar (4, 0xFF00,   0xFF0000, 0xFF000000, 0xFF);
+PixelFormatRGBABits n2a::B5G5R5   (2, 0x1F,       0x3E0,    0x7C00,     0x0);
+PixelFormatRGBABits n2a::BGRChar  (3, 0xFF,       0xFF00,   0xFF0000,   0x0);
+PixelFormatRGBABits n2a::BGRxChar (4, 0xFF00,     0xFF0000, 0xFF000000, 0x0);
+PixelFormatRGBABits n2a::RGBxChar (4, 0xFF000000, 0xFF0000, 0xFF00,     0x0);
+PixelFormatRGBABits n2a::BGRAChar (4, 0xFF00,     0xFF0000, 0xFF000000, 0xFF);
 #else
 // This traps unhandled endian types for the entire file, not just the "bits"
 // formats.  The other BYTE_ORDER tests in this file can safely skip this case.
@@ -140,7 +142,8 @@ static int incrementRefcount ()
   HSVFloat       .PointerPolyReferenceCount++;
   B5G5R5         .PointerPolyReferenceCount++;
   BGRChar        .PointerPolyReferenceCount++;
-  BGRChar4       .PointerPolyReferenceCount++;
+  BGRxChar       .PointerPolyReferenceCount++;
+  RGBxChar       .PointerPolyReferenceCount++;
   BGRAChar       .PointerPolyReferenceCount++;
 
   return 1;

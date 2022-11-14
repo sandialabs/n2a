@@ -21,6 +21,7 @@ public class SettingsC extends SettingsBackend
 {
     protected MTextField fieldCpp    = new MTextField (40);
     protected MTextField fieldFFmpeg = new MTextField (40);
+    protected MTextField fieldJNI    = new MTextField (40);
 
     public SettingsC ()
     {
@@ -33,6 +34,29 @@ public class SettingsC extends SettingsBackend
             {
                 Host h = (Host) list.getSelectedValue ();
                 h.objects.remove ("cxx");
+                h.config.set ("", "backend", "c", "compilerChanged");
+            }
+        });
+
+        fieldFFmpeg.addChangeListener (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                Host h = (Host) list.getSelectedValue ();
+                h.objects.remove ("ffmpegLibDir");
+                h.objects.remove ("ffmpegIncDir");
+                h.objects.remove ("ffmpegBinDir");
+                h.config.set ("", "backend", "c", "compilerChanged");  // Not exactly true, but sufficient to force rebuild.
+            }
+        });
+
+        fieldJNI.addChangeListener (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                Host h = (Host) list.getSelectedValue ();
+                h.objects.remove ("jniIncMdDir");
+                h.objects.remove ("jniIncDir");
                 h.config.set ("", "backend", "c", "compilerChanged");
             }
         });
@@ -49,6 +73,7 @@ public class SettingsC extends SettingsBackend
     {
         fieldCpp   .bind (parent, "cxx",    "g++");
         fieldFFmpeg.bind (parent, "ffmpeg", "");
+        fieldJNI   .bind (parent, "jni_md", "");
     }
 
     @Override
@@ -56,7 +81,8 @@ public class SettingsC extends SettingsBackend
     {
         return Lay.BxL (
             Lay.FL (new JLabel ("Compiler path"), fieldCpp),
-            Lay.FL (new JLabel ("Directory that contains FFmpeg libraries"), fieldFFmpeg)
+            Lay.FL (new JLabel ("Directory that contains FFmpeg libraries"), fieldFFmpeg),
+            Lay.FL (new JLabel ("Directory that contains jni_md.h"), fieldJNI)
         );
     }
 }

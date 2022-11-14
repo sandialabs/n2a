@@ -77,12 +77,6 @@ VideoIn::good () const
     return file  &&  file->good ();
 }
 
-void
-VideoIn::setTimestampMode (bool frames)
-{
-    if (file) file->setTimestampMode (frames);
-}
-
 String
 VideoIn::get (const String & name) const
 {
