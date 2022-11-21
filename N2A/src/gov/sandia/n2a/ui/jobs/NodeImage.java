@@ -47,7 +47,7 @@ public class NodeImage extends NodeFile
             public void run ()
             {
                 PanelRun pr = PanelRun.instance;
-                synchronized (pr.displayText)
+                synchronized (pr.displayPane)
                 {
                     if (dt != pr.displayThread) return;
                     pr.displayChart.buttonBar.setVisible (false);

@@ -625,12 +625,12 @@ struct PixelFormat2BufferedImage
 static PixelFormat2BufferedImage pixelFormat2BufferedImageMap[] =
 {
     {&BGRxChar,   TYPE_INT_RGB,        4},
-    {&RGBAChar,   TYPE_INT_ARGB,       4},
-    {&RGBAChar,   TYPE_INT_ARGB_PRE,   4},
+    {&BGRAChar,   TYPE_INT_ARGB,       4},
+    {&BGRAChar,   TYPE_INT_ARGB_PRE,   4},
     {&RGBxChar,   TYPE_INT_BGR,        4},
     {&RGBChar,    TYPE_3BYTE_BGR,      3},
-    //{&ABGRChar,   TYPE_4BYTE_ABGR,     4},
-    //{&ABGRChar,   TYPE_4BYTE_ABGR_PRE, 4},
+    //{&RGBAChar,   TYPE_4BYTE_ABGR,     4},
+    //{&RGBAChar,   TYPE_4BYTE_ABGR_PRE, 4},
     //{&B5G6R5,     TYPE_USHORT_565_RGB, 2},
     {&B5G5R5,     TYPE_USHORT_555_RGB, 2},
     {&GrayChar,   TYPE_BYTE_GRAY,      1},
@@ -898,6 +898,7 @@ static PixelFormatMapping pixelFormatMap[] =
     {&RGBShort,       AV_PIX_FMT_RGB48LE},
     {&B5G5R5,         AV_PIX_FMT_BGR555LE},
     {&BGRxChar,       AV_PIX_FMT_BGR0},
+    {&RGBxChar,       AV_PIX_FMT_RGB0},
     {&BGRAChar,       AV_PIX_FMT_BGRA},
     {&UYYVYY,         AV_PIX_FMT_UYYVYY411},
     {0}
@@ -916,6 +917,7 @@ VideoOutFileFFMPEG::writeNext (const Image & image)
         if (codec->pix_fmts)  // options are available, so enumerate and find best match for image.format
         {
             best = codec->pix_fmts[0];
+            if (best == AV_PIX_FMT_YUVJ420P) best = AV_PIX_FMT_YUV420P;  // jpeg encoder gives incorrect format
 
             // Select AV_PIX_FMT associate with image.format
             PixelFormatMapping * m = pixelFormatMap;
@@ -1095,6 +1097,93 @@ VideoOutFileFFMPEG::set (const String & name, const String & value)
         cc->max_b_frames = atoi (value.c_str ());
     }
 }
+
+#ifdef HAVE_JNI
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_gov_sandia_n2a_backend_c_VideoOut_construct (JNIEnv * env, jclass obj, jstring path, jstring format, jstring codec)
+{
+    VideoFileFormatFFMPEG::use ();
+    const char * cpath   = env->GetStringUTFChars (path,   0);
+    const char * cformat = env->GetStringUTFChars (format, 0);
+    const char * ccodec  = env->GetStringUTFChars (codec,  0);
+    VideoOut * result = new VideoOut (cpath, cformat, ccodec);
+    env->ReleaseStringUTFChars (path, cpath);
+    env->ReleaseStringUTFChars (path, cformat);
+    env->ReleaseStringUTFChars (path, ccodec);
+    return (jlong) result;
+}
+
+// Subroutine of write{type} routines below
+static void writeNext (jlong handle, jdouble timestamp, jint width, jint height, jint format, void * cbuffer)
+{
+    VideoOut & video = * (VideoOut *) handle;
+
+    PixelFormat2BufferedImage * m = pixelFormat2BufferedImageMap;
+    while (m->pf)
+    {
+        if (m->bi == format) break;
+        m++;
+    }
+    if (m->pf == 0) return;  // TODO: throw an error
+
+    Image image (cbuffer, width, height, *m->pf);
+    image.timestamp = timestamp;
+    video << image;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_n2a_backend_c_VideoOut_writeByte (JNIEnv * env, jclass obj, jlong handle, jdouble timestamp, jint width, jint height, jint format, jbyteArray buffer)
+{
+    void * cbuffer = env->GetPrimitiveArrayCritical (buffer, 0);
+    writeNext (handle, timestamp, width, height, format, cbuffer);
+    env->ReleasePrimitiveArrayCritical (buffer, cbuffer, 0);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_n2a_backend_c_VideoOut_writeShort (JNIEnv * env, jclass obj, jlong handle, jdouble timestamp, jint width, jint height, jint format, jshortArray buffer)
+{
+    void * cbuffer = env->GetPrimitiveArrayCritical (buffer, 0);
+    writeNext (handle, timestamp, width, height, format, cbuffer);
+    env->ReleasePrimitiveArrayCritical (buffer, cbuffer, 0);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_n2a_backend_c_VideoOut_writeInt (JNIEnv * env, jclass obj, jlong handle, jdouble timestamp, jint width, jint height, jint format, jintArray buffer)
+{
+    void * cbuffer = env->GetPrimitiveArrayCritical (buffer, 0);
+    try{
+    writeNext (handle, timestamp, width, height, format, cbuffer);
+    }catch(const char * e){cerr << "exception: " << e << endl;}
+    env->ReleasePrimitiveArrayCritical (buffer, cbuffer, 0);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_gov_sandia_n2a_backend_c_VideoOut_good (JNIEnv * env, jclass obj, jlong handle)
+{
+    return ((VideoOut *) handle)->good ();
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_gov_sandia_n2a_backend_c_VideoOut_get (JNIEnv * env, jclass obj, jlong handle, jstring name)
+{
+    const char * cname = env->GetStringUTFChars (name, 0);
+    String value = ((VideoOut *) handle)->get (cname);
+    env->ReleaseStringUTFChars (name, cname);
+    return env->NewStringUTF (value.c_str ());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_n2a_backend_c_VideoOut_set (JNIEnv * env, jclass obj, jlong handle, jstring name, jstring value)
+{
+    const char * cname  = env->GetStringUTFChars (name,  0);
+    const char * cvalue = env->GetStringUTFChars (value, 0);
+    ((VideoOut *) handle)->set (cname, cvalue);
+    env->ReleaseStringUTFChars (name,  cname);
+    env->ReleaseStringUTFChars (value, cvalue);
+}
+
+#endif
 
 
 // class VideoFileFormatFFMPEG ------------------------------------------------

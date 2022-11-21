@@ -18,8 +18,11 @@ import java.io.IOException;
 import java.nio.file.Path;
 import javax.imageio.ImageIO;
 
+import gov.sandia.n2a.backend.c.VideoIn;
+import gov.sandia.n2a.backend.c.VideoOut;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -129,17 +132,20 @@ public class Draw extends Function
 
     public static class Holder implements AutoCloseable
     {
-        public Path    path;
-        public boolean hold;            // Store a single frame rather than an image sequence.
-        public String  format = "png";  // name of format as recognized by supporting libraries
-        public boolean dirCreated;
+        public Path     path;
+        public boolean  hold;         // Store a single frame rather than an image sequence.
+        public String   format = "";  // name of format as recognized by supporting libraries
+        public String   codec  = "";  // nmae of codec for video file
+        public VideoOut vout;         // If null, then output an image sequence instead.
+        public boolean  opened;
+        public boolean  dirCreated;
 
         public int   width      = 1024;
         public int   height     = 1024;
         public Color clearColor = Color.BLACK;
 
-        // TODO: handle video streams. Probably use FFMPEG JNI wrapper.
         public double             t;
+        public double             timeScale;
         public int                frameCount; // Number of frames actually written so far.
         public BufferedImage      image;      // Current image being built. Null if nothing has been drawn since last write to disk.
         public Graphics2D         graphics;   // for drawing on current image
@@ -147,23 +153,64 @@ public class Draw extends Function
         public Ellipse2D.Double   disc;       // ditto
         public Rectangle2D.Double rect;       // ditto
 
-        public Holder (Simulator simulator, String filename)
+        public Holder (Path path)
         {
-            Path file = simulator.jobDir.resolve (filename);
-            Path parent = file.getParent ();
-            filename = file.getFileName ().toString ();
-            String[] pieces = filename.split ("\\.");
+            this.path = path;
+        }
+
+        public void open ()
+        {
+            opened = true;
+
+            Path parent = path.getParent ();
+            String fileName = path.getFileName ().toString ();
+            String prefix = fileName;
+            String suffix = "";
+            String[] pieces = fileName.split ("\\.");
             if (pieces.length > 1)
             {
-                format = pieces[pieces.length - 1].toLowerCase ();
-                filename = filename.substring (0, filename.length () - format.length () - 1);
+                suffix = pieces[pieces.length - 1].toLowerCase ();
+                prefix = fileName.substring (0, fileName.length () - suffix.length () - 1);
             }
-            path = parent.resolve (filename);
+            int posPercent = prefix.lastIndexOf ('%');
+            if (posPercent >= 0) prefix = prefix.substring (0, posPercent);
+            if (prefix.isBlank ()) prefix = "frame";
+
+            Host localhost = Host.get ("localhost");
+            if (! localhost.objects.containsKey ("ffmpegJNI")) VideoIn.prepareJNI ();
+            if (localhost.objects.containsKey ("ffmpegJNI"))
+            {
+                // Check if this is an image sequence, in which case modify file name to go into subdir.
+                Path videoPath;
+                if (posPercent < 0)  // Single video file
+                {
+                    videoPath  = path;
+                    dirCreated = true;  // Do't create the dir when writing.
+                }
+                else  // Image sequence, so create a subdirectory. This is more user-friendly for Runs tab.
+                {
+                    String temp = "%d";
+                    if (! suffix.isBlank ()) temp += "." + suffix;
+                    path      = parent.resolve (prefix);  // Even though we use FFmpeg, we still want to pre-create the directory.
+                    videoPath = path.resolve (temp);
+                }
+                vout = new VideoOut (videoPath, format, codec);
+                if (vout.good ()) return;
+
+                // Fall through image sequence code below ...
+                vout = null;
+            }
+
+            if (format.isBlank ()) format = suffix;
+            if (format.isBlank ()) format = "png";
+            path = parent.resolve (prefix);
         }
 
         public void close ()
         {
+            hold = false;
             writeImage ();
+            if (vout != null) vout.close ();
         }
 
         public void next (double now)
@@ -247,28 +294,41 @@ public class Draw extends Function
         public void writeImage ()
         {
             if (image == null) return;
+            if (hold) return;
 
+            if (! opened) open ();
             if (! dirCreated)
             {
                 path.toFile ().getAbsoluteFile ().mkdirs ();
                 dirCreated = true;
             }
-            String filename = path.resolve (String.format ("%d.%s", frameCount, format)).toString ();
-            // Path.toAbsolutePath() does not resolve against job directory the same way File.getAbsoluteFile() does.
-            try
-            {
-                boolean success = ImageIO.write (image, format, new File (filename).getAbsoluteFile ());
-                if (! success)
-                {
-                    format = "png";  // This should always be available in JVM. Preferable over JPEG because it is lossless.
-                    filename = path.resolve (String.format ("%d.%s", frameCount, format)).toString ();
-                    success = ImageIO.write (image, format, new File (filename).getAbsoluteFile ());
-                    if (! success) throw new AbortRun ("Failed to write images because format was not available.");
-                }
-            }
-            catch (IOException e) {e.printStackTrace ();}
 
-            if (! hold) image = null;
+            if (vout != null)
+            {
+                double timestamp;
+                if (timeScale == 0) timestamp = 1e6;  // Exceeds 95443, the threshold at which VideoOut stops using the timestamp as PTS.
+                else                timestamp = timeScale * t;
+                vout.writeNext (image, timestamp);
+            }
+            else
+            {
+                String filename = path.resolve (String.format ("%d.%s", frameCount, format)).toString ();
+                // Path.toAbsolutePath() does not resolve against job directory the same way File.getAbsoluteFile() does.
+                try
+                {
+                    boolean success = ImageIO.write (image, format, new File (filename).getAbsoluteFile ());
+                    if (! success)
+                    {
+                        format = "png";  // This should always be available in JVM. Preferable over JPEG because it is lossless.
+                        filename = path.resolve (String.format ("%d.%s", frameCount, format)).toString ();
+                        success = ImageIO.write (image, format, new File (filename).getAbsoluteFile ());
+                        if (! success) throw new AbortRun ("Failed to write images because format was not available.");
+                    }
+                }
+                catch (IOException e) {e.printStackTrace ();}
+            }
+
+            image = null;
             frameCount++;
         }
     }
@@ -279,7 +339,7 @@ public class Draw extends Function
         Object o = simulator.holders.get (path);
         if (o == null)
         {
-            Holder H = new Holder (simulator, path);
+            Holder H = new Holder (simulator.jobDir.resolve (path));
             simulator.holders.put (path, H);
             return H;
         }

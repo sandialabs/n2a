@@ -66,7 +66,11 @@ namespace n2a
     };
 
     /// Video output stream
+#   ifdef HAVE_JNI
+    class SHARED VideoOut : public NativeResource
+#   else
     class SHARED VideoOut
+#   endif
     {
     public:
         VideoOut (const String & fileName, const String & formatName = "", const String & codecName = "");

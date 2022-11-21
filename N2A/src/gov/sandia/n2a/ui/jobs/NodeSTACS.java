@@ -62,7 +62,7 @@ public class NodeSTACS extends NodeFile
         {
             public void run ()
             {
-                synchronized (pr.displayText)
+                synchronized (pr.displayPane)
                 {
                     if (dt != pr.displayThread) return;
                     displayChart.setChart (chart, raster);

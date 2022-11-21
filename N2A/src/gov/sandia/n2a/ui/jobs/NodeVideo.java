@@ -68,7 +68,7 @@ public class NodeVideo extends NodeFile
         {
             public void run ()
             {
-                synchronized (pr.displayText)
+                synchronized (pr.displayPane)
                 {
                     if (dt != pr.displayThread) return;
                     if (! v.canPlay)

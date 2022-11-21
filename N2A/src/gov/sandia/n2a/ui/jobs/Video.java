@@ -38,6 +38,7 @@ public class Video extends JPanel
     protected Path          path;
     protected String        suffix;
     protected int           index = -1;
+    protected int           first;
     protected int           last;
     protected VideoIn       vin;
     protected BufferedImage image;
@@ -55,7 +56,7 @@ public class Video extends JPanel
         {
             try (Stream<Path> stream = Files.list (path);)
             {
-                last = (int) stream.count () - 1;
+                last = (int) stream.count () - 1;  // Terminal operation, so stream really does need to be reopened below.
             }
             catch (Exception e)
             {
@@ -68,6 +69,14 @@ public class Video extends JPanel
                 Path p = someFile.get ();
                 String[] pieces = p.getFileName ().toString ().split ("\\.");
                 suffix = pieces[1].toLowerCase ();
+
+                // Determine whether sequence is 0-based or 1-based
+                if (last >= 0  &&  ! Files.exists (path.resolve ("0." + suffix)))
+                {
+                    index = 0;
+                    first = 1;
+                    last++;
+                }
             }
             catch (Exception e)
             {
@@ -124,7 +133,7 @@ public class Video extends JPanel
         panelImage.addMouseMotionListener (adapter);
         panelImage.addMouseWheelListener (adapter);
 
-        scrollbar = new JScrollBar (JScrollBar.HORIZONTAL, 0, 1, 0, last + 1);
+        scrollbar = new JScrollBar (JScrollBar.HORIZONTAL, first, 1, first, last + 1);
         scrollbar.addAdjustmentListener (new AdjustmentListener ()
         {
             public void adjustmentValueChanged (AdjustmentEvent e)
@@ -152,13 +161,14 @@ public class Video extends JPanel
         vin.openFile (path);
     }
 
-    public void nextImage ()
+    public synchronized void nextImage ()
     {
         BufferedImage temp = null;
         int nextIndex = index + 1;
 
         if (vin != null)
         {
+            if (vin.getHandle () == 0) return;  // For coordination between play thread and EDT.
             checkReopenVideo ();
             vin.seekFrame (nextIndex);
             temp = vin.readNext ();
@@ -185,7 +195,7 @@ public class Video extends JPanel
     {
         BufferedImage temp = null;
         int nextIndex = index - 1;
-        if (nextIndex < 0) return;
+        if (nextIndex < first) return;
 
         if (vin != null)
         {
@@ -211,8 +221,8 @@ public class Video extends JPanel
         if (last < 0) return;
         BufferedImage temp = null;
         int nextIndex = (int) Math.round (position * last);
-        if      (nextIndex < 0   ) nextIndex = 0;
-        else if (nextIndex > last) nextIndex = last;
+        if      (nextIndex < first) nextIndex = first;
+        else if (nextIndex > last ) nextIndex = last;
 
         if (vin != null)
         {
@@ -317,6 +327,7 @@ public class Video extends JPanel
     {
         super.removeNotify ();
         pause ();
+        if (vin != null) synchronized (this) {vin.close ();}  // Runs on EDT, but generally takes very little time.
     }
 
     public class PanelImage extends JPanel
@@ -324,7 +335,7 @@ public class Video extends JPanel
         public void paintComponent (Graphics g)
         {
             super.paintComponent (g);
-            if (index < 0) return;
+            if (index < first) return;
 
             int pw = getWidth ();
             int ph = getHeight ();

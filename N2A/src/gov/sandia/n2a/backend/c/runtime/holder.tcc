@@ -456,10 +456,32 @@ ImageOutput<T>::open ()
 {
     opened = true;
 
+    String prefix;
+    String suffix;
+    int pos = fileName.find_last_of ("\\/");
+    if (pos == String::npos)
+    {
+        prefix = fileName;
+        path   = "";
+    }
+    else
+    {
+        path   = fileName.substr (0, pos) + "/";
+        prefix = fileName.substr (pos + 1);
+    }
+    pos = prefix.find_last_of ('.');
+    if (pos != String::npos)
+    {
+        suffix = prefix.substr (pos + 1).toLowerCase ();
+        prefix = prefix.substr (0, pos);
+    }
+    int posPercent = prefix.find_last_of ("%");
+    if (posPercent != String::npos) prefix = prefix.substr (0, posPercent);
+    if (prefix.empty ()) prefix = "frame";
+
 #   ifdef HAVE_FFMPEG
     // Check if this is an image sequence, in which case modify file name to go into subdir.
     String videoFileName;
-    int posPercent = fileName.find_last_of ("%");
     if (posPercent == String::npos)  // Single video file
     {
         videoFileName = fileName;
@@ -467,11 +489,15 @@ ImageOutput<T>::open ()
     }
     else  // Image sequence, so create a subdirectory. This is more user-friendly for Runs tab.
     {
-        path        = fileName.substr (0, posPercent);
-        String temp = fileName.substr (posPercent);
-        if (path.empty ()) path = "frame/";
-        else if (! path.ends_with ("/")) path += "/";
-        videoFileName = path + temp;
+        path += prefix;
+        path += "/";
+        videoFileName = path;
+        videoFileName += "%d";
+        if (! suffix.empty ())
+        {
+            videoFileName += ".";
+            videoFileName += suffix;
+        }
     }
     video = new n2a::VideoOut (videoFileName, format, codec);
     if (video->good ()) return;
@@ -481,20 +507,9 @@ ImageOutput<T>::open ()
     video = 0;
 #   endif
 
-    // If suffix is specified, peel it off. Otherwise, assume default format.
-    int posDot   = fileName.find_last_of ('.');
-    int posSlash = fileName.find_last_of ("\\/");
-    if (posSlash == String::npos) posSlash = -1;
-    if (posDot != String::npos  &&  posDot > posSlash)
-    {
-        if (format.empty ()) format = fileName.substr (posDot + 1).toLowerCase ();
-        path = fileName.substr (0, posDot);
-    }
-    else
-    {
-        if (format.empty ()) format = "bmp";
-        path = fileName;
-    }
+    if (format.empty ()) format = suffix;
+    if (format.empty ()) format = "bmp";
+    path += prefix;
     path += "/";  // Include slash in path, so we don't have to add it later. Forward slash works for all platforms.
 }
 

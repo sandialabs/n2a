@@ -753,7 +753,7 @@ public class PanelRun extends JPanel
                                 {
                                     public void update (float percent)
                                     {
-                                        synchronized (displayText) {displayText.setText (String.format ("Downloading %2.0f%%", percent * 100));}
+                                        synchronized (displayPane) {displayText.setText (String.format ("Downloading %2.0f%%", percent * 100));}
                                     }
                                 };
                             }
@@ -798,7 +798,7 @@ public class PanelRun extends JPanel
                         if (this != fastThread)
                         {
                             fastThread.join ();  // Wait till fast thread completes before updating the display.
-                            synchronized (displayText)
+                            synchronized (displayPane)
                             {
                                 if (displayThread != fastThread) return;  // Another display process has already taken over.
                                 displayThread = this;  // Slow thread takes the place of fast thread
@@ -871,7 +871,7 @@ public class PanelRun extends JPanel
                         {
                             public void run ()
                             {
-                                synchronized (displayText)
+                                synchronized (displayPane)
                                 {
                                     if (dt != displayThread) return;
                                     displayChart.buttonBar.setVisible (p == displayChart);
@@ -892,7 +892,7 @@ public class PanelRun extends JPanel
                     {
                         public void run ()
                         {
-                            synchronized (displayText)
+                            synchronized (displayPane)
                             {
                                 if (dt != displayThread) return;
                                 if (refresh)
@@ -949,7 +949,7 @@ public class PanelRun extends JPanel
                     {
                         public void run ()
                         {
-                            synchronized (displayText)
+                            synchronized (displayPane)
                             {
                                 if (dt != displayThread) return;
                                 if (refresh)
@@ -1008,7 +1008,7 @@ public class PanelRun extends JPanel
 
     public void showStatus (String message)
     {
-        synchronized (displayText)
+        synchronized (displayPane)
         {
             displayText.setText (message);
             Component view = displayPane.getViewport ().getView ();
@@ -1018,7 +1018,7 @@ public class PanelRun extends JPanel
 
     public void viewFile (boolean refresh)
     {
-        synchronized (displayText)
+        synchronized (displayPane)
         {
             displayThread = null;
             if (! refresh) showStatus ("loading...");
@@ -1031,7 +1031,7 @@ public class PanelRun extends JPanel
 
     public void viewJob (boolean refresh)
     {
-        synchronized (displayText)
+        synchronized (displayPane)
         {
             displayThread = null;
         }
@@ -1134,7 +1134,7 @@ public class PanelRun extends JPanel
             });
         }
 
-        synchronized (displayText)
+        synchronized (displayPane)
         {
             if (displayThread != null) return;
             if (refresh)
@@ -1243,7 +1243,7 @@ public class PanelRun extends JPanel
         if (nextSelection == root)  // Tree will be empty after delete.
         {
             // Shut down the display thread.
-            synchronized (displayText)
+            synchronized (displayPane)
             {
                 displayThread = null;
                 displayNode   = null;  // All access to this happens on EDT, so safe.

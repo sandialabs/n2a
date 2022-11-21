@@ -95,21 +95,24 @@ public class NativeResource implements Closeable
     **/
     private void release ()
     {
-        handle = 0;
+        synchronized (getClass ())
+        {
+            handle = 0;
+        }
     }
 
     @Override
     public void close ()
     {
-        if (handle == 0) return;
         synchronized (getClass ())
         {
+            if (handle == 0) return;
             if (getProxy (handle) == this)
             {
                 if (selfDestruct) destruct (handle);
                 else              setProxy (handle, null);
             }
+            handle = 0;
         }
-        handle = 0;
     }
 }
