@@ -355,30 +355,25 @@ public class Draw extends Function
     {
         if (keywords == null) return false;
 
+        // Don't apply a keyword unless it is explicitly present.
+        // For compactness, use utility routines from Function, even though this is a little more expensive.
+
+        boolean raw = false;
         int width  = 0;
         int height = 0;
-
-        H.hold = getKeywordFlag ("hold");
-
-        String value = evalKeyword (context, "width", "");
-        if (! value.isBlank ())
+        for (String key : keywords.keySet ())
         {
-            try {width = Integer.valueOf (value);}
-            catch (NumberFormatException e) {}
-        }
-
-        value = evalKeyword (context, "height", "");
-        if (! value.isBlank ())
-        {
-            try {height = Integer.valueOf (value);}
-            catch (NumberFormatException e) {}
-        }
-
-        value = evalKeyword (context, "clear", "");
-        if (! value.isBlank ())
-        {
-            try {H.clearColor = Color.decode (value);}
-            catch (NumberFormatException e) {}
+            switch (key)
+            {
+                case "width":     width        = evalKeyword     (context, "width",     0);           break;
+                case "height":    height       = evalKeyword     (context, "height",    0);           break;
+                case "timeScale": H.timeScale  = evalKeyword     (context, "timeScale", 0.0);         break;
+                case "format":    H.format     = evalKeyword     (context, "format",    "");          break;
+                case "codec":     H.codec      = evalKeyword     (context, "codec",     "");          break;
+                case "clear":     H.clearColor = evalKeyword     (context, "clear",     Color.black); break;
+                case "hold":      H.hold       = evalKeywordFlag (context, "hold");                   break;
+                case "raw":       raw          = true;                                                break;
+            }
         }
 
         if      (width <= 0  &&  height >  0) width  = height;
@@ -386,7 +381,7 @@ public class Draw extends Function
         if (width  > 0) H.width  = width;
         if (height > 0) H.height = height;
 
-        return getKeywordFlag ("raw");
+        return raw;
     }
 
     public Type eval (Instance context)

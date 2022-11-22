@@ -252,10 +252,14 @@ public class RendererC extends Renderer
             }
             else  // generic Draw
             {
-                // All it does is set keyword args, so it is already handled by JobC.prepareDynamicObjects().
+                // All this does is set keyword args, so it is already handled by JobC.prepareDynamicObjects().
 
                 // Only return a value if we are not in a dummy equation, that is, if we are part of a proper expression.
-                if (! (op.parent instanceof Variable  &&  ((Variable) op.parent).hasAttribute ("dummy")))
+                if (op.parent instanceof Variable  &&  ((Variable) op.parent).hasAttribute ("dummy"))
+                {
+                    result.append ("// generic draw()");  // Just to excuse the extra semicolon.
+                }
+                else
                 {
                     result.append ("0");
                 }

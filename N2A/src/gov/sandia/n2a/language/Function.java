@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language;
 
+import java.awt.Color;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -180,6 +181,19 @@ public class Function extends Operator
         {
             Matrix m = (Matrix) result;
             if (m.rows () >= 1  &&  m.columns () >= 1) return m.get (0, 0);
+        }
+        return defaultValue;
+    }
+
+    public Color evalKeyword (Instance context, String name, Color defaultValue)
+    {
+        Type result = evalKeyword (context, name);
+        if (result == null) return defaultValue;
+        String value = result.toString ();
+        if (! value.isBlank ())
+        {
+            try {return Color.decode (value);}
+            catch (NumberFormatException e) {}
         }
         return defaultValue;
     }

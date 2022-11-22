@@ -73,15 +73,27 @@ public class NodeVideo extends NodeFile
                     if (dt != pr.displayThread) return;
                     if (! v.canPlay)
                     {
-                        pr.showStatus
-                        (
-                            "Video I/O is not available. Possible causes include:\n" +
-                            " * FFmpeg library is missing.\n" +
-                            " * C++ compiler is missing.\n" +
-                            " * Path to JNI headers is incorrect.\n" +
-                            "Go to Settings:Backend C and update 'localhost'.\n" +
-                            "Directions on how to obtain FFmpeg and a C++ compiler are on the wiki page."
-                        );
+                        if (localhost.objects.containsKey ("ffmpegJNI"))
+                        {
+                            pr.showStatus
+                            (
+                                "Failed to open video or image sequence.\n" +
+                                "There could be a bug in this program or its supporting libraries.\n" +
+                                "Please report this to the developers. If possible, send a copy of the file(s)."
+                            );
+                        }
+                        else
+                        {
+                            pr.showStatus
+                            (
+                                "Video I/O is not available. Possible causes include:\n" +
+                                " * FFmpeg library is missing.\n" +
+                                " * C++ compiler is missing.\n" +
+                                " * Path to JNI headers is incorrect.\n" +
+                                "Go to Settings:Backend C and update 'localhost'.\n" +
+                                "Directions on how to obtain FFmpeg and a C++ compiler are on the wiki page."
+                            );
+                        }
                         return;
                     }
                     pr.displayChart.buttonBar.setVisible (false);

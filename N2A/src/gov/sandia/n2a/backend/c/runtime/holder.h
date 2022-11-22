@@ -137,7 +137,7 @@ public:
 #   ifdef HAVE_FFMPEG
     n2a::VideoOut *  video;
     String           codec;      // Optional specification of video encoder. Default is derived from container.
-    double           timeScale;  // Multiply simtime (t) by this value to get PTS. Zero means 24fps, regardless of simtime. Default is 33, or roughly 1ms of simtime per video frame at a typical playback speed of 30fps.
+    double           timeScale;  // Multiply simtime (t) by this value to get PTS. Zero (default value) means 24fps, regardless of simtime.
 #   endif
 
     ImageOutput (const String & fileName);

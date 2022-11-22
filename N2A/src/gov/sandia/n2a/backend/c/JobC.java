@@ -572,6 +572,22 @@ public class JobC extends Thread
         return result.toString ();
     }
 
+    public void addIncludes (Compiler c)
+    {
+        c.addInclude (runtimeDir);
+        if (ffmpegIncDir != null)
+        {
+            c.addInclude (ffmpegIncDir);
+            c.addDefine ("HAVE_FFMPEG");
+            if (jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
+            {
+                c.addInclude (jniIncMdDir);
+                c.addInclude (jniIncDir);
+                c.addDefine ("HAVE_JNI");
+            }
+        }
+    }
+
     public void addRuntimeObjects (Compiler c) throws Exception
     {
         c.addObject (runtimeDir.resolve (objectName ("runtime")));
@@ -624,7 +640,7 @@ public class JobC extends Thread
         Compiler c = factory.make (localJobDir);
         if (debug) c.setDebug ();
         if (gprof) c.setProfiling ();
-        c.addInclude (runtimeDir);
+        addIncludes (c);
         for (ProvideOperator po : extensions)
         {
             Path include = po.include (this);
@@ -666,7 +682,7 @@ public class JobC extends Thread
         if (shared) c.setShared ();
         if (debug ) c.setDebug ();
         if (gprof ) c.setProfiling ();
-        c.addInclude (runtimeDir);
+        addIncludes (c);
         for (ProvideOperator po : extensions)
         {
             Path include = po.include (this);
@@ -1638,15 +1654,6 @@ public class JobC extends Thread
         for (Draw d : mainImageOutput)
         {
             result.append ("  " + d.name + " = imageOutputHelper<" + T + "> (\"" + d.operands[0].getString () + "\");\n");
-            if (d.keywords == null) continue;
-            boolean allConstant = true;
-            for (Operator k : d.keywords.values ())
-            {
-                if (k instanceof Constant) continue;
-                allConstant = false;
-                break;
-            }
-            if (allConstant) prepareDrawKeywords (d, context, "  ");
         }
     }
 
@@ -5271,24 +5278,12 @@ public class JobC extends Thread
                 if (op instanceof Draw)
                 {
                     Draw d = (Draw) op;
-                    boolean needKeywords = false;
                     if (! (d.operands[0] instanceof Constant)  &&  (v == null  ||  ! bed.defined.contains (v)))
                     {
                         context.result.append (pad + "ImageOutput<" + T + "> * " + d.name + " = imageOutputHelper<" + T + "> (" + d.fileName + ");\n");
-                        needKeywords = true;
                         if (v != null) bed.defined.add (v);
                     }
-                    if (d.keywords != null)
-                    {
-                        // If any keyword is non-constant, we should output the whole set.
-                        for (Operator k : d.keywords.values ())
-                        {
-                            if (needKeywords) break;
-                            if (k instanceof Constant) continue;
-                            needKeywords = true;
-                        }
-                        if (needKeywords) prepareDrawKeywords (d, context, pad);
-                    }
+                    if (d.keywords != null) prepareDrawKeywords (d, context, pad);
                     return true;
                 }
                 return true;
@@ -5311,24 +5306,32 @@ public class JobC extends Thread
     {
         for (Entry<String,Operator> k : d.keywords.entrySet ())
         {
-            context.result.append (pad + d.name + ".");
-            switch (k.getKey ())
+            String   key = k.getKey ();
+            Operator op  = k.getValue ();
+            switch (key)
             {
                 case "width":
-                    context.result.append ("width");
-                    if (! d.keywords.containsKey ("height")) context.result.append (" = " + d.name + ".height");
+                    context.result.append (pad + d.name + "->width");
+                    if (! d.keywords.containsKey ("height")) context.result.append (" = " + d.name + "->height");
                     break;
                 case "height":
-                    context.result.append ("height");
-                    if (! d.keywords.containsKey ("width")) context.result.append (" = " + d.name + ".width");
+                    context.result.append (pad + d.name + "->height");
+                    if (! d.keywords.containsKey ("width")) context.result.append (" = " + d.name + "->width");
                     break;
-                case "color":
-                    context.result.append ("color");
+                case "clear":
+                    context.result.append (pad + d.name + "->clearColor");
                     break;
-                // Silently ignore invalid keywords.
+                case "hold":
+                case "timeScale":
+                case "format":
+                case "codec":
+                    context.result.append (pad + d.name + "->" + key);
+                    break;
+                default:  // "raw" and any invalid keywords
+                    continue;
             }
             context.result.append (" = ");
-            k.getValue ().render (context);
+            op.render (context);
             context.result.append (";\n");
         }
     }
