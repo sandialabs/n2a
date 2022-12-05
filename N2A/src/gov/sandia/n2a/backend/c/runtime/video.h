@@ -132,22 +132,54 @@ namespace n2a
     };
 
 
-  // --------------------------------------------------------------------------
-  // Support for FFMPEG.  Since this is probably the only library one would
-  // ever need, it is the only one supported right now.
+    // --------------------------------------------------------------------------
+    // Support for FFMPEG.  Since this is probably the only library one would
+    // ever need, it is the only one supported right now.
 
-  class SHARED VideoFileFormatFFMPEG : public VideoFileFormat
-  {
-  public:
-	VideoFileFormatFFMPEG ();
-	static void use ();
+    class SHARED VideoFileFormatFFMPEG : public VideoFileFormat
+    {
+    public:
+        VideoFileFormatFFMPEG ();
+        static void use ();
 
-	virtual VideoInFile *  openInput  (const String & fileName) const;
-	virtual VideoOutFile * openOutput (const String & fileName, const String & formatName, const String & codecName) const;
-	virtual float          isIn       (const String & fileName) const;
-	virtual float          handles    (const String & formatName, const String & codecName) const;
-  };
+        virtual VideoInFile *  openInput  (const String & fileName) const;
+        virtual VideoOutFile * openOutput (const String & fileName, const String & formatName, const String & codecName) const;
+        virtual float          isIn       (const String & fileName) const;
+        virtual float          handles    (const String & formatName, const String & codecName) const;
+    };
 }
+
+#ifdef HAVE_JNI
+
+// These should exactly match the BufferedImage types in Java.
+enum
+{
+    TYPE_CUSTOM,
+    TYPE_INT_RGB,
+    TYPE_INT_ARGB,
+    TYPE_INT_ARGB_PRE,
+    TYPE_INT_BGR,
+    TYPE_3BYTE_BGR,
+    TYPE_4BYTE_ABGR,
+    TYPE_4BYTE_ABGR_PRE,
+    TYPE_USHORT_565_RGB,
+    TYPE_USHORT_555_RGB,
+    TYPE_BYTE_GRAY,
+    TYPE_USHORT_GRAY,
+    TYPE_BYTE_BINARY,
+    TYPE_BYTE_INDEXED
+};
+
+struct PixelFormat2BufferedImage
+{
+    n2a::PixelFormat * pf;
+    int                bi;
+    int                size;  // number of bytes per pixel
+};
+
+extern PixelFormat2BufferedImage pixelFormat2BufferedImageMap[];
+
+#endif
 
 
 #endif

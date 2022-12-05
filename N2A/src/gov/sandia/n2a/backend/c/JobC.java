@@ -34,6 +34,7 @@ import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Mfile;
 import gov.sandia.n2a.language.function.Mmatrix;
 import gov.sandia.n2a.language.function.Output;
+import gov.sandia.n2a.language.function.ReadImage;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.MultiplyElementwise;
@@ -111,6 +112,7 @@ public class JobC extends Thread
     protected HashMap<Object,String> mfileNames       = new HashMap<Object,String> ();
     protected HashMap<Object,String> inputNames       = new HashMap<Object,String> ();
     protected HashMap<Object,String> outputNames      = new HashMap<Object,String> ();
+    protected HashMap<Object,String> imageInputNames  = new HashMap<Object,String> ();
     protected HashMap<Object,String> imageOutputNames = new HashMap<Object,String> ();
     public    HashMap<Object,String> stringNames      = new HashMap<Object,String> ();
     public    HashMap<Object,String> extensionNames   = new HashMap<Object,String> ();  // Shared by all extension-provided operators.
@@ -123,6 +125,7 @@ public class JobC extends Thread
     protected List<Mfile>      mainMfile       = new ArrayList<Mfile> ();
     protected List<Input>      mainInput       = new ArrayList<Input> ();
     protected List<Output>     mainOutput      = new ArrayList<Output> ();
+    protected List<ReadImage>  mainImageInput  = new ArrayList<ReadImage> ();
     protected List<Draw>       mainImageOutput = new ArrayList<Draw> ();
     public    List<Operator>   mainExtension   = new ArrayList<Operator> ();  // Shared by all extension-provided operators.
 
@@ -282,50 +285,36 @@ public class JobC extends Thread
         else
         {
             // Plan: Detect the libraries, then estimate location of includes from that.
-            String wrapper = factory.suffixLibrarySharedWrapper ();
-            String libName = factory.prefixLibrary () + "avcodec" + (wrapper == null ? factory.suffixLibraryShared () : wrapper);  // Always use FFmpeg as a shared library.
+            String prefix = factory.wrapperRequired () ? factory.prefixLibraryStatic ()  : factory.prefixLibraryShared ();
+            String suffix = factory.wrapperRequired () ? factory.suffixLibraryWrapper () : factory.suffixLibraryShared ();
+            String libName = prefix + "avcodec" + suffix;  // Always use FFmpeg as a shared library.
             String ffmpegString = env.config.get ("backend", "c", "ffmpeg");
             if (ffmpegString.isBlank ())  // Search typical locations
             {
-                ffmpegLibDir = runtimeDir.resolve ("ffmpeg/lib");  // Most likely location on Windows, a private copy in the c runtime dir
-                if (! Files.exists (ffmpegLibDir.resolve (libName)))  // Check typical locations on Unix-like systems (Linux, Mac).
+                for (String path : new String[] {"ffmpeg/lib", "ffmpeg/bin", "/usr/lib64", "/usr/lib", "/usr/local/lib64", "/usr/local/lib"})
                 {
+                    ffmpegLibDir = runtimeDir.resolve (path);
+                    if (Files.exists (ffmpegLibDir.resolve (libName))) break;
                     ffmpegLibDir = null;
-                    Path root = runtimeDir.getRoot ();
-                    for (String path : new String[] {"/usr/lib64", "/usr/lib", "/usr/local/lib64", "/usr/local/lib"})
-                    {
-                        Path libDir = root.resolve (path);
-                        if (Files.exists (libDir.resolve (libName)))
-                        {
-                            ffmpegLibDir = libDir;
-                            break;
-                        }
-                    }
                 }
             }
             else  // User-specified
             {
-                // Absolute path is resolved w.r.t. the root of the file system.
-                // Relative path is resolved w.r.t. the runtime dir. This make it easy to
+                // Relative path is resolved w.r.t. the runtime dir. This makes it easy to
                 // stash ffmpeg as a subdir of runtime.
-                Path temp = Paths.get (ffmpegString);
-                if (temp.isAbsolute ()) ffmpegLibDir = runtimeDir.getRoot ().resolve (temp);
-                else                    ffmpegLibDir = runtimeDir.resolve (temp);
+                ffmpegLibDir = runtimeDir.resolve (ffmpegString);
                 if (! Files.exists (ffmpegLibDir.resolve (libName))) ffmpegLibDir = null;
             }
             if (ffmpegLibDir != null)
             {
                 Path ffmpegDir = ffmpegLibDir.getParent ();
-                ffmpegIncDir = ffmpegDir.resolve ("include/ffmpeg");
-                Path temp = ffmpegIncDir.resolve ("libavcodec/avcodec.h");
-                if (! Files.exists (temp))
+                if (factory.wrapperRequired ()) ffmpegBinDir = ffmpegDir.resolve ("bin");  // Use of wrapper implies that shared library is treated same as a binary, rather than living in the lib directory.
+                for (String path : new String[] {"include/ffmpeg", "include"})
                 {
-                    ffmpegIncDir = ffmpegDir.resolve ("include");
-                    temp = ffmpegIncDir.resolve ("libavcodec/avcodec.h");
-                    if (! Files.exists (temp)) ffmpegIncDir = null;
+                    ffmpegIncDir = ffmpegDir.resolve (path);
+                    if (Files.exists (ffmpegIncDir.resolve ("libavcodec/avcodec.h"))) break;
+                    ffmpegIncDir = null;
                 }
-
-                if (wrapper != null) ffmpegBinDir = ffmpegDir.resolve ("bin");
             }
 
             env.objects.put ("ffmpegLibDir", ffmpegLibDir);
@@ -429,12 +418,14 @@ public class JobC extends Thread
             sources.add ("ImageFileFormatBMP");
             sources.add ("PixelBuffer");
             sources.add ("PixelFormat");
-            boolean jni =  jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote);  // Only add JNI to shared runtime library on localhost
             if (ffmpegLibDir != null)
             {
                 sources.add ("Video");
                 sources.add ("VideoFileFormatFFMPEG");
-                if (jni) sources.add ("NativeResource");
+            }
+            if (jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))  // Only add JNI to shared runtime library on localhost.
+            {
+                sources.add ("NativeResource");
             }
 
             for (String stem : sources)
@@ -448,18 +439,7 @@ public class JobC extends Thread
                 if (shared) c.setShared ();
                 if (debug ) c.setDebug ();
                 if (gprof ) c.setProfiling ();
-                c.addInclude (runtimeDir);
-                if (ffmpegIncDir != null)
-                {
-                    c.addInclude (ffmpegIncDir);
-                    c.addDefine ("HAVE_FFMPEG");
-                    if (jni)
-                    {
-                        c.addInclude (jniIncMdDir);
-                        c.addInclude (jniIncDir);
-                        c.addDefine ("HAVE_JNI");
-                    }
-                }
+                addIncludes (c);
                 c.addDefine ("n2a_T", T);
                 if (T.contains ("int")) c.addDefine ("n2a_FP");
                 if (tls) c.addDefine ("n2a_TLS");
@@ -473,7 +453,7 @@ public class JobC extends Thread
             // Link the runtime objects into a single shared library.
             if (shared)
             {
-                Path runtimeLib = runtimeDir.resolve (factory.prefixLibrary () + runtimeName + factory.suffixLibraryShared ());
+                Path runtimeLib = runtimeDir.resolve (factory.prefixLibraryShared () + runtimeName + factory.suffixLibraryShared ());
                 if (! Files.exists (runtimeLib))
                 {
                     job.set ("Linking runtime library", "status");
@@ -579,12 +559,12 @@ public class JobC extends Thread
         {
             c.addInclude (ffmpegIncDir);
             c.addDefine ("HAVE_FFMPEG");
-            if (jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
-            {
-                c.addInclude (jniIncMdDir);
-                c.addInclude (jniIncDir);
-                c.addDefine ("HAVE_JNI");
-            }
+        }
+        if (jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
+        {
+            c.addInclude (jniIncMdDir);
+            c.addInclude (jniIncDir);
+            c.addDefine ("HAVE_JNI");
         }
     }
 
@@ -608,10 +588,10 @@ public class JobC extends Thread
             c.addLibrary ("avcodec");
             c.addLibrary ("avformat");
             c.addLibrary ("avutil");
-            if (jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
-            {
-                c.addObject (runtimeDir.resolve (objectName ("NativeResource")));
-            }
+        }
+        if (jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
+        {
+            c.addObject (runtimeDir.resolve (objectName ("NativeResource")));
         }
 
         for (ProvideOperator po : extensions)
@@ -1450,6 +1430,17 @@ public class JobC extends Thread
                                         mainOutput.add (o);
                                     }
                                 }
+                                else if (f instanceof ReadImage)
+                                {
+                                    ReadImage r = (ReadImage) f;
+                                    r.name = imageInputNames.get (fileName);
+                                    if (r.name == null)
+                                    {
+                                        r.name = "Image" + imageInputNames.size ();
+                                        imageInputNames.put (fileName, r.name);
+                                        mainImageInput.add (r);
+                                    }
+                                }
                                 else if (f instanceof Draw)
                                 {
                                     Draw d = (Draw) f;
@@ -1493,6 +1484,13 @@ public class JobC extends Thread
                                 outputNames.put (op,       o.name     = "Output"   + outputNames.size ());
                                 stringNames.put (operand0, o.fileName = "fileName" + stringNames.size ());
                                 add.name = o.fileName;
+                            }
+                            else if (f instanceof ReadImage)
+                            {
+                                ReadImage r = (ReadImage) f;
+                                imageInputNames.put (op,       r.name     = "Image"    + imageInputNames.size ());
+                                stringNames    .put (operand0, r.fileName = "fileName" + stringNames.size ());
+                                add.name = r.fileName;
                             }
                             else if (f instanceof Draw)
                             {
@@ -1550,6 +1548,17 @@ public class JobC extends Thread
                                     outputNames.put (v, o.name);
                                 }
                                 o.fileName = fileName;
+                            }
+                            else if (f instanceof ReadImage)
+                            {
+                                ReadImage r = (ReadImage) f;
+                                r.name = imageInputNames.get (v);
+                                if (r.name == null)
+                                {
+                                    r.name = "Image" + imageInputNames.size ();
+                                    imageInputNames.put (v, r.name);
+                                }
+                                r.fileName = fileName;
                             }
                             else if (f instanceof Draw)
                             {
@@ -1616,6 +1625,10 @@ public class JobC extends Thread
         {
             result.append (thread_local + "OutputHolder<" + T + "> * " + o.name + ";\n");
         }
+        for (ReadImage r : mainImageInput)
+        {
+            result.append (thread_local + "ImageInput<" + T + "> * " + r.name + ";\n");
+        }
         for (Draw d : mainImageOutput)
         {
             result.append (thread_local + "ImageOutput<" + T + "> * " + d.name + ";\n");
@@ -1650,6 +1663,10 @@ public class JobC extends Thread
         for (Output o : mainOutput)
         {
             result.append ("  " + o.name + " = outputHelper<" + T + "> (\"" + o.operands[0].getString () + "\");\n");
+        }
+        for (ReadImage r : mainImageInput)
+        {
+            result.append ("  " + r.name + " = imageInputHelper<" + T + "> (\"" + r.operands[0].getString () + "\");\n");
         }
         for (Draw d : mainImageOutput)
         {
@@ -5275,9 +5292,25 @@ public class JobC extends Thread
                     }
                     return true;
                 }
+                if (op instanceof ReadImage)
+                {
+                    ReadImage r = (ReadImage) op;
+                    if (! (r.operands[0] instanceof Constant))
+                    {
+                        if (v != null)
+                        {
+                            if (bed.defined.contains (v)) return true;
+                            bed.defined.add (v);
+                        }
+                        context.result.append (pad + "ImageInput<" + T + "> * " + r.name + " = imageInputHelper<" + T + "> (" + r.fileName + ");\n");
+                    }
+                    return true;
+                }
                 if (op instanceof Draw)
                 {
                     Draw d = (Draw) op;
+                    // Use a slightly different logical structure here, because every draw() call
+                    // should set its keyword parameters, even if the target has already been created.
                     if (! (d.operands[0] instanceof Constant)  &&  (v == null  ||  ! bed.defined.contains (v)))
                     {
                         context.result.append (pad + "ImageOutput<" + T + "> * " + d.name + " = imageOutputHelper<" + T + "> (" + d.fileName + ");\n");

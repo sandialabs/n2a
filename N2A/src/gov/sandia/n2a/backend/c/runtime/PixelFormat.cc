@@ -86,6 +86,9 @@ PixelFormatRGBAShort          n2a::RGBAShort;
 PixelFormatRGBAFloat          n2a::RGBAFloat;
 PixelFormatRGBChar            n2a::RGBChar;
 PixelFormatRGBShort           n2a::RGBShort;
+PixelFormatRGBFloat           n2a::RGBFloat;
+PixelFormatSRGBFloat          n2a::sRGBFloat;
+PixelFormatXYZFloat           n2a::XYZFloat;
 PixelFormatPackedYUV          n2a::UYVY         (tableUYVY);
 PixelFormatPackedYUV          n2a::YUYV         (tableYUYV);
 PixelFormatPackedYUV          n2a::UYV          (tableUYV);
@@ -99,16 +102,20 @@ PixelFormatHSVFloat           n2a::HSVFloat;
 // These "bits" formats must be endian independent.
 #if BYTE_ORDER == LITTLE_ENDIAN
 PixelFormatRGBABits n2a::B5G5R5   (2, 0x7C00,     0x3E0,    0x1F,       0x0);
+PixelFormatRGBABits n2a::B5G6R5   (2, 0xF800,     0x7E0,    0x1F,       0x0);
 PixelFormatRGBABits n2a::BGRChar  (3, 0xFF0000,   0xFF00,   0xFF,       0x0);
 PixelFormatRGBABits n2a::BGRxChar (4, 0xFF0000,   0xFF00,   0xFF,       0x0);
 PixelFormatRGBABits n2a::RGBxChar (4, 0xFF,       0xFF00,   0xFF0000,   0x0);
 PixelFormatRGBABits n2a::BGRAChar (4, 0xFF0000,   0xFF00,   0xFF,       0xFF000000);
+PixelFormatRGBABits n2a::ABGRChar (4, 0xFF000000, 0xFF0000, 0xFF00,     0xFF);
 #elif BYTE_ORDER == BIG_ENDIAN
 PixelFormatRGBABits n2a::B5G5R5   (2, 0x1F,       0x3E0,    0x7C00,     0x0);
+PixelFormatRGBABits n2a::B5G6R5   (2, 0x1F,       0x7E0,    0xF800,     0x0);
 PixelFormatRGBABits n2a::BGRChar  (3, 0xFF,       0xFF00,   0xFF0000,   0x0);
 PixelFormatRGBABits n2a::BGRxChar (4, 0xFF00,     0xFF0000, 0xFF000000, 0x0);
 PixelFormatRGBABits n2a::RGBxChar (4, 0xFF000000, 0xFF0000, 0xFF00,     0x0);
 PixelFormatRGBABits n2a::BGRAChar (4, 0xFF00,     0xFF0000, 0xFF000000, 0xFF);
+PixelFormatRGBABits n2a::ABGRChar (4, 0xFF,       0xFF00,   0xFF0000,   0xFF000000);
 #else
 // This traps unhandled endian types for the entire file, not just the "bits"
 // formats.  The other BYTE_ORDER tests in this file can safely skip this case.
@@ -131,6 +138,9 @@ static int incrementRefcount ()
   RGBAFloat      .PointerPolyReferenceCount++;
   RGBChar        .PointerPolyReferenceCount++;
   RGBShort       .PointerPolyReferenceCount++;
+  RGBFloat       .PointerPolyReferenceCount++;
+  sRGBFloat      .PointerPolyReferenceCount++;
+  XYZFloat       .PointerPolyReferenceCount++;
   UYVY           .PointerPolyReferenceCount++;
   YUYV           .PointerPolyReferenceCount++;
   UYV            .PointerPolyReferenceCount++;
@@ -141,10 +151,12 @@ static int incrementRefcount ()
   HSLFloat       .PointerPolyReferenceCount++;
   HSVFloat       .PointerPolyReferenceCount++;
   B5G5R5         .PointerPolyReferenceCount++;
+  B5G6R5         .PointerPolyReferenceCount++;
   BGRChar        .PointerPolyReferenceCount++;
   BGRxChar       .PointerPolyReferenceCount++;
   RGBxChar       .PointerPolyReferenceCount++;
   BGRAChar       .PointerPolyReferenceCount++;
+  ABGRChar       .PointerPolyReferenceCount++;
 
   return 1;
 }
@@ -359,7 +371,7 @@ PixelFormat::fromAny (const Image & image, Image & result) const
   // First convert to central format.
   Image central = image * RGBAChar;
 
-  // Then conver to destination format.
+  // Then convert to destination format.
   PixelBufferPacked * i = (PixelBufferPacked *) central.buffer;
   PixelBufferPacked * o = (PixelBufferPacked *) result.buffer;
   assert (i);
@@ -4450,6 +4462,227 @@ void
 PixelFormatRGBAFloat::blend (void * pixel, float values[]) const
 {
   alphaBlend (values, (float *) pixel);
+}
+
+
+// class PixelFormatRGBFloat --------------------------------------------------
+
+PixelFormatRGBFloat::PixelFormatRGBFloat ()
+{
+    planes     = 1;
+    depth      = 3 * sizeof (float);
+    precedence = 7;
+    monochrome = false;
+    hasAlpha   = false;
+}
+
+void
+PixelFormatRGBFloat::fromAny (const Image & image, Image & result) const
+{
+    float * dest = (float *) ((PixelBufferPacked *) result.buffer)->base ();
+    const PixelFormat * sourceFormat = image.format;
+
+    float pixel[4];
+    PixelBufferPacked * i = (PixelBufferPacked *) image.buffer;
+    if (i)
+    {
+        uint8_t * source      = (uint8_t *) i->base ();
+        const int sourceDepth = (int) sourceFormat->depth;
+        const int step        = i->stride - image.width * sourceDepth;
+        float *   end         = dest + image.width * image.height * 3;
+        while (dest < end)
+        {
+            float * rowEnd = dest + result.width * 3;
+            while (dest < rowEnd)
+            {
+                sourceFormat->getRGBA (source, pixel);
+                dest[0] = pixel[0];
+                dest[1] = pixel[1];
+                dest[2] = pixel[2];
+                source += sourceDepth;
+                dest += 3;
+            }
+            source += step;
+        }
+    }
+    else
+    {
+        for (int y = 0; y < image.height; y++)
+        {
+            for (int x = 0; x < image.width; x++)
+            {
+                sourceFormat->getRGBA (image.buffer->pixel (x, y), pixel);
+                dest[0] = pixel[0];
+                dest[1] = pixel[1];
+                dest[2] = pixel[2];
+                dest += 3;
+            }
+        }
+    }
+}
+
+uint32_t
+PixelFormatRGBFloat::getRGBA (void * pixel) const
+{
+    float rgbValues[3];
+    for (int i = 0; i < 3; i++) rgbValues[i] = min (max (((float *) pixel)[i], 0.0f), 1.0f);
+
+    uint32_t r = (uint32_t) lutFloat2Char[(uint16_t) (65535 * rgbValues[0])] << 24;
+    uint32_t g = (uint32_t) lutFloat2Char[(uint16_t) (65535 * rgbValues[1])] << 16;
+    uint32_t b = (uint32_t) lutFloat2Char[(uint16_t) (65535 * rgbValues[2])] <<  8;
+    uint32_t a = 255;
+    return r | g | b | a;
+}
+
+void
+PixelFormatRGBFloat::getRGBA (void * pixel, float values[]) const
+{
+    values[0] = ((float *) pixel)[0];
+    values[1] = ((float *) pixel)[1];
+    values[2] = ((float *) pixel)[2];
+    values[3] = 1;
+}
+
+void
+PixelFormatRGBFloat::setRGBA (void * pixel, uint32_t rgba) const
+{
+    float * rgbaValues = (float *) pixel;
+    rgbaValues[0] = lutChar2Float[ rgba             >> 24];
+    rgbaValues[1] = lutChar2Float[(rgba & 0xFF0000) >> 16];
+    rgbaValues[2] = lutChar2Float[(rgba &   0xFF00) >>  8];
+}
+
+void
+PixelFormatRGBFloat::setRGBA (void * pixel, float values[]) const
+{
+    ((float *) pixel)[0] = values[0];
+    ((float *) pixel)[1] = values[1];
+    ((float *) pixel)[2] = values[2];
+}
+
+
+// class PixelFormatSRGBFloat -------------------------------------------------
+
+PixelFormatSRGBFloat::PixelFormatSRGBFloat ()
+{
+    planes     = 1;
+    depth      = 3 * sizeof (float);
+    precedence = 7;
+    monochrome = false;
+    hasAlpha   = false;
+}
+
+uint32_t
+PixelFormatSRGBFloat::getRGBA (void * pixel) const
+{
+    float rgbValues[3];
+    for (int i = 0; i < 3; i++) rgbValues[i] = min (max (((float *) pixel)[i], 0.0f), 1.0f);
+
+    uint32_t r = (uint32_t) (255 * rgbValues[0]) << 24;
+    uint32_t g = (uint32_t) (255 * rgbValues[1]) << 16;
+    uint32_t b = (uint32_t) (255 * rgbValues[2]) <<  8;
+    uint32_t a = 255;
+    return r | g | b | a;
+}
+
+void
+PixelFormatSRGBFloat::getRGBA (void * pixel, float values[]) const
+{
+    // Convert to linear form
+    for (int i = 0; i < 3; i++)
+    {
+        double f = ((float *) pixel)[i];
+        if (f <= 0.04045) f /= 12.92;
+        else              f  = pow ((f + 0.055) / 1.055, 2.4);
+        values[i] = f;
+    }
+    values[3] = 1;
+}
+
+void
+PixelFormatSRGBFloat::setRGBA (void * pixel, uint32_t rgba) const
+{
+    float * rgbaValues = (float *) pixel;
+    rgbaValues[0] = ( rgba             >> 24) / 255.0f;
+    rgbaValues[1] = ((rgba & 0xFF0000) >> 16) / 255.0f;
+    rgbaValues[2] = ((rgba &   0xFF00) >>  8) / 255.0f;
+}
+
+void
+PixelFormatSRGBFloat::setRGBA (void * pixel, float values[]) const
+{
+    // Convert to non-linear form
+    for (int i = 0; i < 3; i++)
+    {
+        double f = values[i];
+        if (f <= 0.0031308) f *= 12.92;
+        else                f  = 1.055 * pow (f, 1.0 / 2.4) - 0.055;
+        ((float *) pixel)[i] = f;
+    }
+}
+
+// class SHARED PixelFormatXYZFloat -------------------------------------------
+
+PixelFormatXYZFloat::PixelFormatXYZFloat ()
+{
+    planes     = 1;
+    depth      = 3 * sizeof (float);
+    precedence = 7;
+    monochrome = false;
+    hasAlpha   = false;
+}
+
+uint32_t
+PixelFormatXYZFloat::getRGBA (void * pixel) const
+{
+    // For ease of reading, separate conversion into two steps ...
+
+    // Do matrix multiply to get linear RGB values
+    float * values = (float *) pixel;
+    float rgbValues[3];
+    rgbValues[0] =  3.2404542f * values[0] - 1.5371385f * values[1] - 0.4985314f * values[2];
+    rgbValues[1] = -0.9692660f * values[0] + 1.8760108f * values[1] + 0.0415560f * values[2];
+    rgbValues[2] =  0.0556434f * values[0] - 0.2040259f * values[1] + 1.0572252f * values[2];
+
+    // Convert linear RGB to sRGB
+    // Since XYZ values are not clamped, we clamp the linear RGB values.
+    uint32_t result = 255;
+    result |= lutFloat2Char[(uint32_t) (65535 * min (max (rgbValues[0], 0.0f), 1.0f))] << 24;
+    result |= lutFloat2Char[(uint32_t) (65535 * min (max (rgbValues[1], 0.0f), 1.0f))] << 16;
+    result |= lutFloat2Char[(uint32_t) (65535 * min (max (rgbValues[2], 0.0f), 1.0f))] <<  8;
+    return result;
+}
+
+void
+PixelFormatXYZFloat::getXYZ (void * pixel, float values[]) const
+{
+    values[0] = ((float *) pixel)[0];
+    values[1] = ((float *) pixel)[1];
+    values[2] = ((float *) pixel)[2];
+}
+
+void
+PixelFormatXYZFloat::setRGBA (void * pixel, uint32_t rgba) const
+{
+    // Convert to linear RGB
+    float rgbValues[3];
+    rgbValues[0] = lutChar2Float[(rgba & 0xFF000000) >> 24];
+    rgbValues[1] = lutChar2Float[(rgba &   0xFF0000) >> 16];
+    rgbValues[2] = lutChar2Float[(rgba &     0xFF00) >>  8];
+
+    // Matrix multiply to cast into XYZ space
+    float * values = (float *) pixel;
+    values[0] = 0.4124564f * rgbValues[0] + 0.3575761f * rgbValues[1] + 0.1804375f * rgbValues[2];
+    values[1] = 0.2126729f * rgbValues[0] + 0.7151522f * rgbValues[1] + 0.0721750f * rgbValues[2];
+    values[2] = 0.0193339f * rgbValues[0] + 0.1191920f * rgbValues[1] + 0.9503041f * rgbValues[2];
+}
+
+void
+PixelFormatXYZFloat::setXYZ (void * pixel, float values[]) const
+{
+    ((float *) pixel)[0] = values[0];
+    ((float *) pixel)[1] = values[1];
+    ((float *) pixel)[2] = values[2];
 }
 
 

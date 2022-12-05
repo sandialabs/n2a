@@ -17,6 +17,16 @@ the U.S. Government retains certain rights in this software.
 #include <fstream>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/stat.h>
+#ifdef _MSC_VER
+#  define stat _stat
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#  undef min
+#  undef max
+#else
+#  include <dirent.h>
+#endif
 
 
 // class Parameters ----------------------------------------------------------
@@ -392,10 +402,223 @@ matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle)
 
 // class ImageInput ----------------------------------------------------------
 
+inline String format (String & pattern, int index)
+{
+    String result;
+    result.reserve (pattern.size () + 16);
+    sprintf (const_cast<char *> (result.c_str ()), pattern.c_str (), index);
+    return result;
+}
+
 template<class T>
 ImageInput<T>::ImageInput (const String & fileName)
 :   Holder (fileName)
 {
+    index       = 0;
+    t           = (T) -INFINITY;
+    framePeriod = 0;
+
+    // Determine if fileName is a directory
+    String entryName;
+#   ifdef _MSC_VER  // Sure would be nice if MSVC followed the POSIX standard ...
+    WIN32_FIND_DATA entry;
+    HANDLE dir = ::FindFirstFile ((fileName + "/*.*").c_str (), &entry);
+    if (dir != INVALID_HANDLE_VALUE)
+    {
+        entryName = entry.cFileName;
+        ::FindClose (dir);
+#   else
+    DIR * dir = opendir (fileName.c_str ());
+    if (dir)
+    {
+        struct dirent * entry = readdir (dir);
+        if (entry) entryName = entry->d_name;
+        closedir (dir);
+#   endif
+
+        // fileName is a directory
+        // We assume that all files in the directory are of the form %d.suffix,
+        // where "suffix" specifies a still-image format.
+        // Get suffix from first file in directory.
+        String prefix;
+        String suffix;
+        split (entryName, ".", prefix, suffix);
+        pattern = fileName;
+        pattern += "/%d.";
+        pattern += suffix;
+
+        // Detect if sequence is 1-based rather than 0-based.
+        struct stat buffer;
+        if (stat (format (pattern, 0).c_str (), &buffer)) index = 1;  // Nonzero result from stat() indicates file does not exist.
+    }
+    else  // fileName is a video file or image sequence specifier
+    {
+        bool sequence =  fileName.find_first_of ("%") != String::npos;
+
+        // Try to use FFmpeg.
+#       ifdef HAVE_FFMPEG
+        n2a::VideoFileFormatFFMPEG::use ();
+        video = new n2a::VideoIn (fileName);
+        if (video->good ())
+        {
+            if (sequence) framePeriod = atof (video->get ("framePeriod").c_str ());
+            return;
+        }
+        delete video;
+        video = 0;
+#       endif
+
+        // Fall back on basic image I/O.
+        n2a::ImageFileFormatBMP::use ();
+        if (sequence)
+        {
+            pattern = fileName;
+            struct stat buffer;
+            if (stat (format (pattern, 0).c_str (), &buffer)) index = 1;
+        }
+        else  // single image
+        {
+            image.read (fileName);
+        }
+    }
+}
+
+template<class T>
+ImageInput<T>::~ImageInput ()
+{
+#   ifdef HAVE_FFMPEG
+    if (video) delete video;
+#   endif
+}
+
+template<class T>
+Matrix<T>
+#ifdef n2a_FP
+ImageInput<T>::get (String channelName, T now, int exponent)
+#else
+ImageInput<T>::get (String channelName, T now)
+#endif
+{
+    // Fetch next image, if needed.
+    if (video  ||  pattern.size ())
+    {
+        if (std::signbit (now))  // Negative "now" (including negative zero) indicates single step per simulation cycle.
+        {
+            if (now != t)
+            {
+                t = now;
+                n2a::Image temp;
+                if (video)
+                {
+                    (*video) >> temp;
+                }
+                else if (pattern.size ())
+                {
+                    temp.read (format (pattern, index++));
+                }
+                if (temp.width)
+                {
+                    image = temp;
+                    channels.clear ();  // Both key and value are regular class instances rather than pointers, so they should automatically destruct and free memory.
+                }
+            }
+        }
+        else  // Positive "now" (including positive zero) indicates time or frame number.
+        {
+            if (now >= t)
+            {
+                n2a::Image temp;
+                if (video)
+                {
+                    (*video) >> temp;
+                    if (temp.width)
+                    {
+                        double nextPTS = atof (video->get ("nextPTS").c_str ());
+                        if (framePeriod) nextPTS /= framePeriod;
+#                       ifdef n2a_FP
+                        t = (T) (nextPTS * pow (2.0, FP_MSB - Event<T>::exponent));
+#                       else
+                        t = nextPTS;
+#                       endif
+                    }
+                }
+                else if (pattern.size ())
+                {
+#                   ifdef n2a_FP
+                    index = (int) (now / pow (2.0f, FP_MSB - Event<T>::exponent));
+#                   else
+                    index = (int) now;
+#                   endif
+                    temp.read (format (pattern, index));
+                    if (temp.width) t = index + 1;
+                }
+                if (temp.width)
+                {
+                    image = temp;
+                    channels.clear ();
+                }
+            }
+        }
+    }
+    if (! image.width) return Matrix<T> ();
+
+    // Create converted channels, if needed.
+    int colorSpace;
+    if      (channelName == "R"  ||  channelName == "G"  ||  channelName == "B" ) colorSpace = 0;
+    else if (channelName == "R'" ||  channelName == "G'" ||  channelName == "B'") colorSpace = 1;
+    else if (channelName == "X"  ||  channelName == "Y"  ||  channelName == "Z" ) colorSpace = 2;
+    else if (channelName == "H"  ||  channelName == "S"  ||  channelName == "V" ) colorSpace = 3;
+    else
+    {
+        colorSpace  = 2;
+        channelName = "Y";
+    }
+    auto it = channels.find (channelName);
+    if (it == channels.end ())
+    {
+        n2a::Image image2;
+        String c0, c1, c2;
+        switch (colorSpace)
+        {
+            case 0:
+                image2 = image * n2a::RGBFloat;
+                c0 = "R"; c1 = "G"; c2 = "B";
+                break;
+            case 1:
+                image2 = image * n2a::sRGBFloat;
+                c0 = "R'"; c1 = "G'"; c2 = "B'";
+                break;
+            case 2:
+                image2 = image * n2a::XYZFloat;
+                c0 = "X"; c1 = "Y"; c2 = "Z";
+                break;
+            case 3:
+                image2 = image * n2a::HSVFloat;
+                c0 = "H"; c1 = "S"; c2 = "V";
+                break;
+        }
+
+        n2a::Pointer p = ((n2a::PixelBufferPacked *) image2.buffer)->memory;
+
+#       ifdef n2a_FP
+        // Convert buffer to int.
+        float conversion = pow (2.0f, PP_MSB - exponent);
+        int count = image.width * image.height * 3;
+        Pointer q (count * sizeof (T));
+        float * from = (float *) p
+        T *     to   = (T *)     q;
+        T *     end  = to + count;
+        while (to < end) *to++ = (T) (*from++ * conversion);
+        p = q;
+#       endif
+
+        channels.emplace (c0, Matrix<T> (p, 0, image.width, image.height, 3, 3 * image.width));
+        channels.emplace (c1, Matrix<T> (p, 1, image.width, image.height, 3, 3 * image.width));
+        channels.emplace (c2, Matrix<T> (p, 2, image.width, image.height, 3, 3 * image.width));
+
+        it = channels.find (channelName);  // This should always succeed.
+    }
+    return it->second;
 }
 
 template<class T>

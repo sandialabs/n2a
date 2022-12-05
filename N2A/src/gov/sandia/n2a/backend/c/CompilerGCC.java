@@ -70,20 +70,30 @@ public class CompilerGCC extends Compiler
             return ".so";
         }
 
-        public String suffixLibrarySharedWrapper ()
+        public String suffixLibraryWrapper ()
         {
             if (host instanceof Windows) return ".dll.a";
-            return null;
+            return "";
         }
 
-        public String prefixLibrary ()
+        public String prefixLibraryStatic ()
         {
+            return "lib";
+        }
+
+        public String prefixLibraryShared ()
+        {
+            if (host instanceof Windows) return "";
             return "lib";
         }
 
         public boolean wrapperRequired ()
         {
-            return false;
+            // This is not strictly true. GCC can link without a static wrapper on Windows.
+            // However, the naming of the static link library is more consistent than
+            // the naming of the associated DLLs, so this choice makes it easier to find
+            // resources like FFmpeg.
+            return host instanceof Windows;
         }
 
         public boolean supportsUnicodeIdentifiers ()
@@ -195,11 +205,15 @@ public class CompilerGCC extends Compiler
         {
             command.add (gcc.toString ());
             command.add ("-shared");
-            if (host instanceof Windows)
+            if (host instanceof Windows)  // GCC is capable of generating a wrapper library, but does not require one when linking with other code.
             {
-                // For some weird reason, linker can't handle spaces in the output path, even when quoted.
-                // And it's not because .a is tacked on outside the quote.
-                command.add ("-Wl,--out-implib," + host.quote (output) + ".a");
+                // export-all-symbols -- This is the default unless there is an explicit export in the
+                // code. When using JNI on Windows, there are explicit exports, so this is necessary.
+                // out-implib -- Output a static wrapper library. This isn't needed by GCC, but makes
+                // the output useful for MSVC.
+                // TODO: The linker can't handle spaces in the output path, even when quoted.
+                // This may be due to how GCC passes the parameters on to LD.
+                command.add ("-Wl,--export-all-symbols,--out-implib," + host.quote (output) + ".a");
             }
             for (Path object : objects)
             {

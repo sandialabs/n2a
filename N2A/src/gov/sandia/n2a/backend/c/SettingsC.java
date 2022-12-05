@@ -34,7 +34,12 @@ public class SettingsC extends SettingsBackend
             {
                 Host h = (Host) list.getSelectedValue ();
                 h.objects.remove ("cxx");
+                h.objects.remove ("ffmpegLibDir");  // Changing compiler may affect our ability to see FFmpeg libraries.
+                h.objects.remove ("ffmpegIncDir");
+                h.objects.remove ("ffmpegBinDir");
                 h.config.set ("", "backend", "c", "compilerChanged");
+                // Once a DLL is loaded, the user needs to restart JVM to get an updated version.
+                // Therefore, no point in removing "ffmpegJNI" or "JNI".
             }
         });
 

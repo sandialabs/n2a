@@ -112,7 +112,25 @@ template<class T>
 class SHARED ImageInput : public Holder
 {
 public:
+#   ifdef HAVE_FFMPEG
+    n2a::VideoIn * video;
+#   endif
+
+    n2a::Image                           image;
+    String                               pattern;     ///< printf pattern for generating sequence file names. Includes full path to directory where sequence resides. If empty, then this is not a sequence or we are using FFmpeg to handle it.
+    int                                  index;       ///< of current image in sequence
+    T                                    t;           ///< next PTS for video, or next frame number for sequence
+    double                               framePeriod; ///< for converting PTS to sequence number. Nonzero only when handling a sequence through FFmpeg.
+    std::unordered_map<String,Matrix<T>> channels;
+
     ImageInput (const String & fileName);
+    ~ImageInput ();
+
+#   ifdef n2a_FP
+    Matrix<T> get (String channelName, T now, int exponent);
+#   else
+    Matrix<T> get (String channelName, T now);  ///< @param now If positive, then desired PTS in seconds. If negative, then $t.
+#   endif
 };
 template<class T> extern SHARED ImageInput<T> * imageInputHelper (const String & fileName, ImageInput<T> * oldHandle = 0);
 

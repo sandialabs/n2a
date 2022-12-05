@@ -12,6 +12,7 @@ import java.awt.image.DataBuffer;
 import java.awt.image.DataBufferByte;
 import java.awt.image.DataBufferInt;
 import java.awt.image.DataBufferShort;
+import java.awt.image.DataBufferUShort;
 import java.awt.image.Raster;
 import java.awt.image.SampleModel;
 import java.nio.file.DirectoryStream;
@@ -20,20 +21,24 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 
 public class VideoIn extends NativeResource implements Runnable
 {
-    protected static native String  suffixes    ();
-    protected static native long    construct   (String path);
-    protected static native void    open        (long handle, String path);
-    protected static native void    close       (long handle);
-    protected static native void    seekFrame   (long handle, int frame);
-    protected static native void    seekTime    (long handle, double timestamp);
-    protected static native Image   readNext    (long handle);
-    protected static native boolean good        (long handle);
-    protected static native String  get         (long handle, String name);
-    protected static native void    set         (long handle, String name, String value);
+    protected static native String  suffixes     ();
+    protected static native void    convertByte  (int width, int height, int format, byte[]  buffer, int colorSpace, double[] matrix);
+    protected static native void    convertShort (int width, int height, int format, short[] buffer, int colorSpace, double[] matrix);
+    protected static native void    convertInt   (int width, int height, int format, int[]   buffer, int colorSpace, double[] matrix);
+    protected static native long    construct    (String path);
+    protected static native void    open         (long handle, String path);
+    protected static native void    close        (long handle);
+    protected static native void    seekFrame    (long handle, int frame);
+    protected static native void    seekTime     (long handle, double timestamp);
+    protected static native Image   readNext     (long handle);
+    protected static native boolean good         (long handle);
+    protected static native String  get          (long handle, String name);
+    protected static native void    set          (long handle, String name, String value);
 
     /**
         Makes FFmpeg available to the JVM on localhost via JNI.
@@ -43,68 +48,114 @@ public class VideoIn extends NativeResource implements Runnable
     public static void prepareJNI ()
     {
         Host localhost = Host.get ("localhost");
-        if (localhost.objects.containsKey ("ffmpegJNI")) return;  // Only set after successful load of JNI DLLs.
-
         try
         {
-            // Check runtime
-            JobC t = new JobC (new MVolatile ());
-            Path resourceDir = localhost.getResourceDir ();
-            t.runtimeDir     = resourceDir.resolve ("backend").resolve ("c");
-            t.localJobDir    = t.runtimeDir;
-            t.jobDir         = t.runtimeDir;
-            t.T              = "float";
-            t.env            = localhost;
-            t.detectExternalResources ();
-            t.rebuildRuntime ();
-
-            // Load JNI libs
-            CompilerFactory factory = BackendC.getFactory (localhost);
-            String prefix = factory.prefixLibrary ();
-            String suffix = factory.suffixLibraryShared ();
-            String runtimeName = prefix + t.runtimeName () + suffix;
-            Path runtimePath = t.runtimeDir.resolve (runtimeName).toAbsolutePath ();
-            // This is super ugly because Java doesn't support setting a search path
-            // for dependent libraries at run time.
-            Path avutilPath     = null;
-            Path swresamplePath = null;
-            // swscale
-            // postproc
-            Path avcodecPath    = null;
-            Path avformatPath   = null;
-            // avfilter
-            // avdevice
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream (t.ffmpegBinDir))
+            synchronized (localhost)
             {
-                for (Path path : stream)
+                if (localhost.objects.containsKey ("ffmpegJNI")) return;  // Only set after successful load of JNI DLLs.
+
+                // Check runtime
+                JobC t = new JobC (new MVolatile ());
+                Path resourceDir = localhost.getResourceDir ();
+                t.runtimeDir     = resourceDir.resolve ("backend").resolve ("c");
+                t.localJobDir    = t.runtimeDir;
+                t.jobDir         = t.runtimeDir;
+                t.T              = "float";
+                t.env            = localhost;
+                t.detectExternalResources ();
+                t.rebuildRuntime ();  // also synchronized on localhost
+
+                // Load JNI libs
+                CompilerFactory factory = BackendC.getFactory (localhost);
+                String prefix = factory.prefixLibraryShared ();
+                String suffix = factory.suffixLibraryShared ();
+                String runtimeName = prefix + t.runtimeName () + suffix;
+                Path runtimePath = t.runtimeDir.resolve (runtimeName).toAbsolutePath ();
+
+                boolean haveFFmpeg = localhost.objects.containsKey ("ffmpegLibDir");
+                if (haveFFmpeg)
                 {
-                    String fileName = path.getFileName ().toString ();
-                    if (! fileName.startsWith (prefix)) continue;
-                    if (! fileName.endsWith (suffix)) continue;
-                    // The library file name may contain version number.
-                    if      (fileName.contains ("avutil"    )) avutilPath     = path;
-                    else if (fileName.contains ("swresample")) swresamplePath = path;
-                    else if (fileName.contains ("avcodec"   )) avcodecPath    = path;
-                    else if (fileName.contains ("avformat"  )) avformatPath   = path;
+                    // This is super ugly because Java doesn't support setting a search path
+                    // for dependent libraries at run time.
+                    Path avutilPath     = null;
+                    Path swresamplePath = null;
+                    // swscale
+                    // postproc
+                    Path avcodecPath    = null;
+                    Path avformatPath   = null;
+                    // avfilter
+                    // avdevice
+                    try (DirectoryStream<Path> stream = Files.newDirectoryStream (t.ffmpegBinDir))
+                    {
+                        for (Path path : stream)
+                        {
+                            String fileName = path.getFileName ().toString ();
+                            if (! fileName.startsWith (prefix)) continue;
+                            if (! fileName.endsWith (suffix)) continue;
+                            // The library file name may contain version number.
+                            if      (fileName.contains ("avutil"    )) avutilPath     = path;
+                            else if (fileName.contains ("swresample")) swresamplePath = path;
+                            else if (fileName.contains ("avcodec"   )) avcodecPath    = path;
+                            else if (fileName.contains ("avformat"  )) avformatPath   = path;
+                        }
+                    }
+                    System.load (avutilPath    .toAbsolutePath ().toString ());
+                    System.load (swresamplePath.toAbsolutePath ().toString ());
+                    System.load (avcodecPath   .toAbsolutePath ().toString ());
+                    System.load (avformatPath  .toAbsolutePath ().toString ());
+                }
+                System.load (runtimePath.toAbsolutePath ().toString ());
+                localhost.objects.put ("JNI", true);  // Partial success. May be able to do image processing.
+
+                // Get suffixes. If this works, then FFmpeg support has been successfully loaded.
+                if (haveFFmpeg)
+                {
+                    String[] suffixes = suffixes ().split (",");
+                    NodeJob.videoSuffixes.addAll (Arrays.asList (suffixes));
+                    NodeJob.videoSuffixes.remove ("");
+                    localhost.objects.put ("ffmpegJNI", true);
                 }
             }
-            System.load (avutilPath    .toAbsolutePath ().toString ());
-            System.load (swresamplePath.toAbsolutePath ().toString ());
-            System.load (avcodecPath   .toAbsolutePath ().toString ());
-            System.load (avformatPath  .toAbsolutePath ().toString ());
-            System.load (runtimePath   .toAbsolutePath ().toString ());
-
-            // Get suffixes. If this works, then FFmpeg support has been successfully loaded.
-            String[] suffixes = suffixes ().split (",");
-            NodeJob.videoSuffixes.addAll (Arrays.asList (suffixes));
-            NodeJob.videoSuffixes.remove ("");
-
-            localhost.objects.put ("ffmpegJNI", true);
         }
         catch (Throwable t)
         {
             System.err.println (t.getMessage ());
         }
+    }
+
+    public static MatrixDense convert (BufferedImage image, int colorSpace)
+    {
+        int        width  = image.getWidth ();
+        int        height = image.getHeight ();
+        int        format = image.getType ();
+        DataBuffer db     = image.getRaster ().getDataBuffer ();
+
+        MatrixDense matrix = new MatrixDense (3 * width, height);
+        double[]    data   = matrix.getData ();
+
+        if (db instanceof DataBufferByte)
+        {
+            byte[] pixels = ((DataBufferByte) db).getData ();
+            convertByte (width, height, format, pixels, colorSpace, data);
+        }
+        else if (db instanceof DataBufferShort)
+        {
+            short[] pixels = ((DataBufferShort) db).getData ();
+            convertShort (width, height, format, pixels, colorSpace, data);
+        }
+        else if (db instanceof DataBufferUShort)
+        {
+            short[] pixels = ((DataBufferUShort) db).getData ();
+            convertShort (width, height, format, pixels, colorSpace, data);
+        }
+        else if (db instanceof DataBufferInt)
+        {
+            int[] pixels = ((DataBufferInt) db).getData ();
+            convertInt (width, height, format, pixels, colorSpace, data);
+        }
+        else throw new RuntimeException ("Unknown buffer type: " + db.getClass ().getSimpleName ());
+
+        return matrix;
     }
 
     public VideoIn (Path path)

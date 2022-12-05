@@ -374,7 +374,7 @@ namespace n2a
         virtual PixelBuffer * attach (void * block, int width, int height, bool copy = false) const; ///< Creates a suitable PixelBuffer bound to the given external block of memory.  Makes best effort to guess the start of each plane in the case of planar formats.  (Default implementation assumes packed buffer.)
 
         virtual bool operator == (const PixelFormat & that) const; ///< Checks if this and that describe the same interpretation of memory contents.
-        bool         operator != (const PixelFormat & that) const {return !operator == (that);}
+        bool         operator != (const PixelFormat & that) const {return ! operator== (that);}
 
         virtual uint32_t getRGBA  (void * pixel) const = 0; ///< Return value is always assumed to be non-linear sRGB.  Same for other integer RGB methods below.
         virtual void     getRGBA  (void * pixel, float values[]) const; ///< "values" must have at least four elements.  Each returned value is in [0,1].
@@ -733,7 +733,7 @@ namespace n2a
     public:
         PixelFormatRGBAFloat ();
 
-        virtual void fromAny (const Image & image, Image & result) const; ///< This method is necessary because the default conversion goes through RGBAChar, sometimes producing uncecessary information loss.
+        virtual void fromAny (const Image & image, Image & result) const; ///< This method is necessary because the default conversion goes through RGBAChar, sometimes producing unnecessary information loss.
 
         virtual uint32_t getRGBA  (void * pixel) const;
         virtual void     getRGBA  (void * pixel, float values[]) const;
@@ -742,6 +742,43 @@ namespace n2a
         virtual void     setRGBA  (void * pixel, float values[]) const;
         virtual void     setAlpha (void * pixel, uint8_t alpha) const;
         virtual void     blend    (void * pixel, float values[]) const;
+    };
+
+    /// Similar to RGBAFloat, but without the alpha channel
+    class SHARED PixelFormatRGBFloat : public PixelFormat
+    {
+    public:
+        PixelFormatRGBFloat ();
+
+        virtual void fromAny (const Image & image, Image & result) const; ///< See comment on RGBAFloat.
+
+        virtual uint32_t getRGBA (void * pixel) const;
+        virtual void     getRGBA (void * pixel, float values[]) const;
+        virtual void     setRGBA (void * pixel, uint32_t rgba) const;
+        virtual void     setRGBA (void * pixel, float values[]) const;
+    };
+
+    /// Stores non-linear values as float
+    class SHARED PixelFormatSRGBFloat : public PixelFormat
+    {
+    public:
+        PixelFormatSRGBFloat ();
+
+        virtual uint32_t getRGBA (void * pixel) const;
+        virtual void     getRGBA (void * pixel, float values[]) const;
+        virtual void     setRGBA (void * pixel, uint32_t rgba) const;
+        virtual void     setRGBA (void * pixel, float values[]) const;
+    };
+
+    class SHARED PixelFormatXYZFloat : public PixelFormat
+    {
+    public:
+        PixelFormatXYZFloat ();
+
+        virtual uint32_t getRGBA (void * pixel) const;
+        virtual void     getXYZ  (void * pixel, float values[]) const;
+        virtual void     setRGBA (void * pixel, uint32_t rgba) const;
+        virtual void     setXYZ  (void * pixel, float values[]) const;
     };
 
     class SHARED PixelFormatYUV : public PixelFormat
@@ -870,11 +907,16 @@ namespace n2a
     extern SHARED PixelFormatRGBAFloat       RGBAFloat;
     extern SHARED PixelFormatRGBChar         RGBChar;
     extern SHARED PixelFormatRGBShort        RGBShort;
+    extern SHARED PixelFormatRGBFloat        RGBFloat;
+    extern SHARED PixelFormatSRGBFloat       sRGBFloat; // with sRGB gamma, rather than linear values
+    extern SHARED PixelFormatXYZFloat        XYZFloat;
     extern SHARED PixelFormatRGBABits        B5G5R5;
+    extern SHARED PixelFormatRGBABits        B5G6R5;
     extern SHARED PixelFormatRGBABits        BGRChar;
     extern SHARED PixelFormatRGBABits        BGRxChar;  // 4-byte word, where last byte is not used
     extern SHARED PixelFormatRGBABits        RGBxChar;  // ditto
     extern SHARED PixelFormatRGBABits        BGRAChar;
+    extern SHARED PixelFormatRGBABits        ABGRChar;
     extern SHARED PixelFormatPackedYUV       UYVY;
     extern SHARED PixelFormatPackedYUV       YUYV;
     extern SHARED PixelFormatPackedYUV       UYV;

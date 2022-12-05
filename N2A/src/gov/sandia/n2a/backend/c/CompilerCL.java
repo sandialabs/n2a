@@ -137,12 +137,17 @@ public class CompilerCL extends Compiler
             return ".dll";
         }
 
-        public String suffixLibrarySharedWrapper ()
+        public String suffixLibraryWrapper ()
         {
             return ".lib";
         }
 
-        public String prefixLibrary ()
+        public String prefixLibraryStatic ()
+        {
+            return "";
+        }
+
+        public String prefixLibraryShared ()
         {
             return "";
         }

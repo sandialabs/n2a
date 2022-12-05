@@ -383,8 +383,7 @@ VideoInFileFFMPEG::readNext (Image * image)
             while (state == AVERROR(EAGAIN)  ||  state == 0  &&  packet->stream_index != stream->index);
             if (state) state = avcodec_send_packet (cc, 0);  // Start draining last frames
             else       state = avcodec_send_packet (cc, packet);
-            if (state < 0) return;
-            continue;  // Try again to get a frame.
+            if (state == 0) continue;  // Try again to get a frame.
         }
         if (state < 0) return;  // Either we have drained the last frame or there is an error.
         gotPicture = true; // At this point, frame is good
@@ -474,16 +473,16 @@ VideoInFileFFMPEG::get (const String & name) const
     char buffer[100];
     if (stream)
     {
-        if (name == "duration")
+        if (name == "duration")  // total length of video
         {
             if (fc->duration == AV_NOPTS_VALUE) return "";
             return (double) fc->duration / AV_TIME_BASE;
         }
-        else if (name == "startTime")
+        if (name == "startTime")
         {
             return startTime;
         }
-        else if (name == "startTimeNTP")
+        if (name == "startTimeNTP")
         {
             if (fc  &&  strcmp (fc->iformat->name, "rtsp") == 0)
             {
@@ -505,9 +504,14 @@ VideoInFileFFMPEG::get (const String & name) const
             }
             return "";
         }
-        else if (name == "framePeriod")
+        if (name == "framePeriod")  // average duration of a frame
         {
             return (double) stream->r_frame_rate.den / stream->r_frame_rate.num;
+        }
+        if (name == "nextPTS")  // Expected timestamp of next frame in seconds. Not necessarily the same as current PTS + "framePeriod", since video can have variable frame rate.
+        {
+            if (state  ||  nextPTS == AV_NOPTS_VALUE) return INFINITY;
+            return (double) nextPTS * stream->time_base.num / stream->time_base.den;
         }
     }
     if (fc)
@@ -595,48 +599,6 @@ Java_gov_sandia_n2a_backend_c_VideoIn_seekTime (JNIEnv * env, jclass obj, jlong 
 {
     ((VideoIn *) handle)->seekTime (timestamp);
 }
-
-// These should exactly match the BufferedImage types in Java.
-enum
-{
-    TYPE_CUSTOM,
-    TYPE_INT_RGB,
-    TYPE_INT_ARGB,
-    TYPE_INT_ARGB_PRE,
-    TYPE_INT_BGR,
-    TYPE_3BYTE_BGR,
-    TYPE_4BYTE_ABGR,
-    TYPE_4BYTE_ABGR_PRE,
-    TYPE_USHORT_565_RGB,
-    TYPE_USHORT_555_RGB,
-    TYPE_BYTE_GRAY,
-    TYPE_USHORT_GRAY,
-    TYPE_BYTE_BINARY,
-    TYPE_BYTE_INDEXED
-};
-
-struct PixelFormat2BufferedImage
-{
-    n2a::PixelFormat * pf;
-    int                bi;
-    int                size;  // number of bytes per pixel
-};
-
-static PixelFormat2BufferedImage pixelFormat2BufferedImageMap[] =
-{
-    {&BGRxChar,   TYPE_INT_RGB,        4},
-    {&BGRAChar,   TYPE_INT_ARGB,       4},
-    {&BGRAChar,   TYPE_INT_ARGB_PRE,   4},
-    {&RGBxChar,   TYPE_INT_BGR,        4},
-    {&RGBChar,    TYPE_3BYTE_BGR,      3},
-    //{&RGBAChar,   TYPE_4BYTE_ABGR,     4},
-    //{&RGBAChar,   TYPE_4BYTE_ABGR_PRE, 4},
-    //{&B5G6R5,     TYPE_USHORT_565_RGB, 2},
-    {&B5G5R5,     TYPE_USHORT_555_RGB, 2},
-    {&GrayChar,   TYPE_BYTE_GRAY,      1},
-    {&GrayShort,  TYPE_USHORT_GRAY,    2},
-    {0}
-};
 
 extern "C" JNIEXPORT jobject JNICALL
 Java_gov_sandia_n2a_backend_c_VideoIn_readNext (JNIEnv * env, jclass obj, jlong handle)
@@ -1152,9 +1114,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_gov_sandia_n2a_backend_c_VideoOut_writeInt (JNIEnv * env, jclass obj, jlong handle, jdouble timestamp, jint width, jint height, jint format, jintArray buffer)
 {
     void * cbuffer = env->GetPrimitiveArrayCritical (buffer, 0);
-    try{
     writeNext (handle, timestamp, width, height, format, cbuffer);
-    }catch(const char * e){cerr << "exception: " << e << endl;}
     env->ReleasePrimitiveArrayCritical (buffer, cbuffer, 0);
 }
 

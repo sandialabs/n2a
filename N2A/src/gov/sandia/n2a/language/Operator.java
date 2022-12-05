@@ -46,6 +46,7 @@ import gov.sandia.n2a.language.function.SumSquares;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Pulse;
+import gov.sandia.n2a.language.function.ReadImage;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.function.UnitMap;
 import gov.sandia.n2a.language.operator.AND;
@@ -449,6 +450,7 @@ public class Operator implements Cloneable
         register (Mstring          .factory ());
         register (Norm             .factory ());
         register (Pulse            .factory ());
+        register (ReadImage        .factory ());
         register (ReadMatrix       .factory ());
         register (Round            .factory ());
         register (Rows             .factory ());
@@ -462,7 +464,11 @@ public class Operator implements Cloneable
         register (Output           .factory ());
         register (Uniform          .factory ());
         register (UnitMap          .factory ());
-        operators.put ("pow", Power.factory ());  // hack to map pow() function to ^ operator
+
+        // Map both pow() and operator^ to the Power class.
+        Factory pow = Power.factory ();
+        operators.put ("^",   pow);
+        operators.put ("pow", pow);
 
         // Operators
         register (Add                .factory ());
@@ -480,7 +486,6 @@ public class Operator implements Cloneable
         register (Negate             .factory ());
         register (NOT                .factory ());
         register (OR                 .factory ());
-        register (Power              .factory ());
         register (Subtract           .factory ());
         register (Transpose          .factory ());
     }

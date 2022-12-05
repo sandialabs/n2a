@@ -261,10 +261,4 @@ public class Windows extends Host
             catch (Exception e) {}
         }
     }
-
-    @Override
-    public String quote (Path path)
-    {
-        return "\"" + path + "\"";
-    }
 }

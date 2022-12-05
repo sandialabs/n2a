@@ -41,6 +41,7 @@ import gov.sandia.n2a.language.function.Min;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Pulse;
+import gov.sandia.n2a.language.function.ReadImage;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Rows;
 import gov.sandia.n2a.language.function.Sat;
@@ -561,6 +562,18 @@ public class RendererC extends Renderer
                 result.append (", ");
                 renderType (p.operands[i]);
             }
+            result.append (")");
+            return true;
+        }
+        if (op instanceof ReadImage)
+        {
+            ReadImage r = (ReadImage) op;
+            result.append (r.name + "->get (");
+            if (r.operands.length < 1) result.append ("\"Y\"");
+            else                       r.operands[1].render (this);
+            result.append (", ");
+            if (r.operands.length < 2) result.append ("-" + job.SIMULATOR + "currentEvent->t");
+            else                       r.operands[2].render (this);
             result.append (")");
             return true;
         }
