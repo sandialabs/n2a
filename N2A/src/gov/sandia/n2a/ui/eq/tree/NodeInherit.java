@@ -42,7 +42,7 @@ public class NodeInherit extends NodeBase
         String[] IDs   = source.get ("$metadata", "id").split (",", -1);
         for (int i = 0; i < names.length; i++)
         {
-            String parentName = names[i].replace ("\"", "");
+            String parentName = names[i].trim ().replace ("\"", "");
             MNode  parent     = AppData.models.child (parentName);
             if (parent == null)
             {
