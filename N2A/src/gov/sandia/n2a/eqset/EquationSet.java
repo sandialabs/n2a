@@ -677,8 +677,8 @@ public class EquationSet implements Comparable<EquationSet>
         if (n.equations.size () != 1) return false;
         EquationEntry ne = n.equations.first ();
 
-        // Ideally we would evaluate the expression, but that's not possible when isSingleton() is called
-        // before resolveRHS(). Instead, we do a simple check for constant 1.
+        // Ideally we would evaluate the expression, but that's not possible when isSingleton()
+        // is called before resolveRHS(). Instead, we do a simple check for constant 1.
         if (! ne.ifString.isEmpty ()  &&  ! ne.ifString.equals ("$init")) return false;  // Any condition besides $init indicates the potential to change during run.
         if (ne.expression == null) return true;  // Treat missing expression as 1.
         return ne.expression.getDouble () == 1;
