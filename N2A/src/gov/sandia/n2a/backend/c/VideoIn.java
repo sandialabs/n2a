@@ -72,7 +72,7 @@ public class VideoIn extends NativeResource implements Runnable
                 String runtimeName = prefix + t.runtimeName () + suffix;
                 Path runtimePath = t.runtimeDir.resolve (runtimeName).toAbsolutePath ();
 
-                boolean haveFFmpeg = localhost.objects.containsKey ("ffmpegLibDir");
+                boolean haveFFmpeg = localhost.objects.get ("ffmpegLibDir") != null;
                 if (haveFFmpeg)
                 {
                     // This is super ugly because Java doesn't support setting a search path
