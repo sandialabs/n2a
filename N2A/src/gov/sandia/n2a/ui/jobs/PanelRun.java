@@ -1197,7 +1197,7 @@ public class PanelRun extends JPanel
 
     public void delete (TreePath[] paths)
     {
-        if (paths.length == 0) return;
+        if (paths == null  ||  paths.length == 0) return;
 
         NodeBase nextSelection = null;  // The node that will be focused after all the deletes are done.
         TreePath leadSelection = tree.getLeadSelectionPath ();
