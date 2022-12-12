@@ -59,8 +59,9 @@ public class RemoteSlurm extends RemoteUnix
     @SuppressWarnings("serial")
     public class EditorPanel2 extends EditorPanel
     {
-        public MTextField fieldAccount = new MTextField (config, "account");
-        public MTextField fieldMaxTime = new MTextField (config, "maxTime", "1d");
+        public MTextField fieldAccount     = new MTextField (config, "account");
+        public MTextField fieldReservation = new MTextField (config, "reservation");
+        public MTextField fieldMaxTime     = new MTextField (config, "maxTime", "1d");
 
         public void arrange ()
         {
@@ -72,7 +73,8 @@ public class RemoteSlurm extends RemoteUnix
                     Lay.FL (Box.createHorizontalStrut (30), labelWarning),
                     Lay.FL (new JLabel ("Home Directory"), fieldHome),
                     Lay.FL (new JLabel ("Slurm Account"), fieldAccount),
-                    Lay.FL (new JLabel ("Max Job Time (as UCUM d, h or min)"), fieldMaxTime),
+                    Lay.FL (new JLabel ("Reservation"), fieldReservation),
+                    Lay.FL (new JLabel ("Max Job Time (include UCUM d, h or min)"), fieldMaxTime),
                     Lay.FL (new JLabel ("Timeout (seconds)"), fieldTimeout),
                     Lay.FL (new JLabel ("Max Channels"), fieldMaxChannels),
                     Lay.FL (buttonConnect, buttonRestart, buttonZombie),
@@ -139,27 +141,57 @@ public class RemoteSlurm extends RemoteUnix
         Path jobDir      = jobsDir.resolve (job.key ());
         Path scriptFile  = jobDir.resolve ("n2a_job");
 
-        String inherit = job.get ("$inherit");
-        String account = config.get ("account");
-        String maxTime = config.getOrDefault ("1d", "maxTime");
-        String time    = job.getOrDefault (maxTime, "host", "time");  // time=0 indicates request infinite time; negative means don't specify time limit (use default for partition)
-        int    nodes   = job.getOrDefault (1,       "host", "nodes");
-        int    cores   = job.getOrDefault (1,       "host", "cores");
-        String out     = quote (jobDir.resolve (out2err ? "err" : "out"));
-        String err     = quote (jobDir.resolve ("err"));
+        String inherit      = job.get ("$inherit");
+        String account      = config.get ("account");
+        String reservation  = config.get ("reservation");
+        String maxTime      = config.getOrDefault ("1d", "maxTime");
+        String time         = job.getOrDefault (maxTime,     "host", "time");  // time=0 indicates request infinite time; negative means don't specify time limit (use default for partition)
+        reservation         = job.getOrDefault (reservation, "host", "reservation");
+        int    nodes        = job.getOrDefault (1,           "host", "nodes");
+        int    tasksPerNode = job.getOrDefault (1,           "host", "tasksPerNode");
+        int    cpusPerNode  = job.getOrDefault (1,           "host", "cpusPerNode");
+        int    gpusPerNode  = job.getOrDefault (0,           "host", "gpusPerNode");
+        String out          = quote (jobDir.resolve (out2err ? "err" : "out"));
+        String err          = quote (jobDir.resolve ("err"));
+
+        // Miscellaneous sbatch parameters
+        // These are named explicitly rather than simply dumping out all "host" subkeys,
+        // because "host" may have other subkeys that are not intended to be sbatch parms.
+        String qos        = job.get ("host", "qos");
+        String constraint = job.get ("host", "constraint");
 
         double duration = new UnitValue (time).get ();
 
         try (BufferedWriter writer = Files.newBufferedWriter (scriptFile))
         {
+            // "node" means roughly "host", a level above socket, which is in turn above core.
+            // --nodes = "nodes"
+            // --ntasks = "tasks" = total number of tasks
+            // --ntasks-per-node = "tasksPerNode"
+            // --gpus-per-node = "gpusPerNode"
+            // --mincpus = "cpusPerNode" = minimum number of logical cpus/processors per node
+            // --cpus-per-gpu
+            // --cpus-per-task
+            // --gpus-per-node
+            // --gpus-per-socket
+            // --gpus-per-task
+            // --ntasks-per-core
+            // --ntasks-per-gpu
+            // --ntasks-per-node
+            // --ntasks-per-socket
             writer.write ("#!/bin/bash -l\n");
-            // Note: There may be other sbatch parameters that are worth controlling here.
-            writer.write ("#SBATCH --nodes="     + nodes + "\n");
-            if (duration >= 0) writer.write ("#SBATCH --time=" + (int) Math.ceil (duration / 60) + "\n");  // minutes. Can be > 59.
-            writer.write ("#SBATCH --account="   + account + "\n");
-            writer.write ("#SBATCH --job-name="  + inherit + "\n");
-            writer.write ("#SBATCH --output="    + out + "\n");
-            writer.write ("#SBATCH --error="     + err + "\n");
+            writer.write ("#SBATCH --nodes="           + nodes + "\n");
+            writer.write ("#SBATCH --ntasks-per-node=" + tasksPerNode + "\n");
+            writer.write ("#SBATCH --mincpus="         + cpusPerNode + "\n");
+            writer.write ("#SBATCH --gpus-per-node="   + gpusPerNode + "\n");
+            writer.write ("#SBATCH --account="         + account + "\n");
+            writer.write ("#SBATCH --job-name="        + inherit + "\n");
+            writer.write ("#SBATCH --output="          + out + "\n");
+            writer.write ("#SBATCH --error="           + err + "\n");
+            if (duration >= 0)            writer.write ("#SBATCH --time="        + (int) Math.ceil (duration / 60) + "\n");  // minutes. Can be > 59.
+            if (! reservation.isEmpty ()) writer.write ("#SBATCH --reservation=" + reservation + "\n");
+            if (! qos        .isEmpty ()) writer.write ("#SBATCH --qos="         + qos         + "\n");
+            if (! constraint .isEmpty ()) writer.write ("#SBATCH --constraint="  + constraint  + "\n");
             writer.write ("\n");
 
             if (libPath != null)
@@ -172,12 +204,11 @@ public class RemoteSlurm extends RemoteUnix
                 writer.write ("\n");
             }
 
-            // TODO: Update command line with correct form for target HPC system.
-            // TODO: need a way to determine ranks per resource set. Right now it's just one per core.
-            writer.write ("mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + combine (commands.get (0)) + "\n");
+            String run = "srun";
+            writer.write (run + " " + combine (commands.get (0)) + "\n");
             for (int i = 1; i < count; i++)
             {
-                writer.write ("[ $? -eq 0 ] && mpiexec --npernode " + cores + " " + "numa_wrapper --ppn " + cores + " " + combine (commands.get (i)) + "\n");
+                writer.write ("[ $? -eq 0 ] && " + run + " " + combine (commands.get (i)) + "\n");
             }
             writer.write ("\n");
 
@@ -221,6 +252,11 @@ public class RemoteSlurm extends RemoteUnix
         {
             proc.wait ();  // To avoid killing the process by closing the channel.
         }
+    }
+
+    public boolean hasRun ()
+    {
+        return true;
     }
 
     // Load management is handled by slurm, so the following functions lie about resources

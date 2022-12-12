@@ -139,18 +139,25 @@ public class RemoteLSF extends RemoteUnix
         Path jobDir      = jobsDir.resolve (job.key ());
         Path scriptFile  = jobDir.resolve ("n2a_job.lsf");
 
-        String inherit = job.get ("$inherit").replaceAll (" ", "_");
-        String project = config.get ("project");
-        String maxTime = config.getOrDefault ("1d", "maxTime");
-        String time    = job.getOrDefault (maxTime, "host", "time");
-        int    nodes   = job.getOrDefault (1,       "host", "nodes");
-        int    cores   = job.getOrDefault (1,       "host", "cores");
-        int    gpus    = job.getOrDefault (0,       "host", "gpus");
+        String inherit      = job.get ("$inherit").replaceAll (" ", "_");
+        String project      = config.get ("project");
+        String maxTime      = config.getOrDefault ("1d", "maxTime");
+        String time         = job.getOrDefault (maxTime, "host", "time");
+        int    nodes        = job.getOrDefault (1,       "host", "nodes");
+        int    tasksPerNode = job.getOrDefault (1,       "host", "tasksPerNode");
+        int    cpusPerNode  = job.getOrDefault (1,       "host", "cpusPerNode");
+        int    gpusPerNode  = job.getOrDefault (0,       "host", "gpusPerNode");
 
         double duration = new UnitValue (time).get ();
 
         try (BufferedWriter writer = Files.newBufferedWriter (scriptFile))
         {
+            // "resource set" is roughly equivalent to "node".
+            // -n = "nodes" = number of resource sets
+            // -a = "tasksPerNode" = tasks per resource set
+            // -c = "cpusPerNode" = cpus per resource set
+            // -g = "gpusPerNode" = gpus per resource set
+            // -p = "tasks" = total number of tasks (not currently used here)
             writer.write ("#!/bin/bash\n");
             writer.write ("#BSUB -P " + project + "\n");
             if (duration >= 0) writer.write ("#BSUB -W " + (int) Math.ceil (duration / 60) + "\n");
@@ -172,11 +179,11 @@ public class RemoteLSF extends RemoteUnix
                 writer.write ("\n");
             }
 
-            writer.write ("jsrun -n " + nodes + " -a " + cores + " -c " + cores + " -g " + gpus + " " + combine (commands.get (0)) + "\n");
+            String run = "jsrun -n " + nodes + " -a " + tasksPerNode + " -c " + cpusPerNode + " -g " + gpusPerNode;
+            writer.write (run + " " + combine (commands.get (0)) + "\n");
             for (int i = 1; i < count; i++)
             {
-                // TODO: need a way to determine ranks per resource set. Right now it's just one per core.
-                writer.write ("[ $? -eq 0 ] && jsrun -n " + nodes + " -a " + cores + " -c " + cores + " -g " + gpus + " " + combine (commands.get (i)) + "\n");
+                writer.write ("[ $? -eq 0 ] && " + run + " " + combine (commands.get (i)) + "\n");
             }
             writer.write ("\n");
 
@@ -208,6 +215,11 @@ public class RemoteLSF extends RemoteUnix
     }
 
     public boolean clobbersOut ()
+    {
+        return true;
+    }
+
+    public boolean hasRun ()
     {
         return true;
     }

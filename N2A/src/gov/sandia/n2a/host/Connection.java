@@ -67,7 +67,7 @@ public class Connection implements Closeable, UserInteraction
     protected int           timeout;
     protected String        home;          // Path of user's home directory on remote system. Includes leading slash.
     protected boolean       allowDialogs;  // Initially false. Dialogs must be specifically enabled by the user.
-    protected boolean       failedAuth;    // Failed to authenticate while in interactive mode. Indicates that user password is necessary, so don't keep trying when not interactive.
+    protected boolean       failedAuth;    // Last authentication attempt failed. Indicates that user password is necessary, so don't keep trying when not interactive.
     protected Set<String>   messages = new HashSet<String> ();  // Remember messages, so we only display them once per session.
 
     public static SshClient client = SshClient.setUpDefaultClient ();  // shared between remote execution system and git wrapper
@@ -88,8 +88,11 @@ public class Connection implements Closeable, UserInteraction
         timeout  = host.config.getOrDefault (20,        "timeout") * 1000;
         password = host.config.get ("password");  // may be empty
 
-        // Retrieve username from ssh/config, defaulting to system property.
-        // TODO: integrate ssh hop UI (in RemoteUnix) with ssh/config
+        // Retrieve username. Order of precedence (highest to lowest):
+        // 1) Directly specified in the UI, stored in host.config
+        // 2) Specified in ssh/config
+        // 3) Logged in user account for current JVM
+        // The code below processes these from lowest to highest precedence.
         username = System.getProperty ("user.name");
         try
         {
@@ -97,6 +100,7 @@ public class Connection implements Closeable, UserInteraction
             if (entry != null) username = entry.getUsername ();
         }
         catch (IOException e) {}
+        username = host.config.getOrDefault (username, "username");  // Overrides all the above, if present.
 
         home = host.config.getOrDefault ("/home/" + username, "home");
     }
@@ -121,7 +125,7 @@ public class Connection implements Closeable, UserInteraction
                 if (keepalive > 0) session.setSessionHeartbeat (HeartbeatType.IGNORE, Duration.ofSeconds (keepalive));
             }
             if (! password.isEmpty ()) session.addPasswordIdentity (password);  // This assumes that you never use an empty password. Thus, empty indicates to ask for password.
-            if (allowDialogs) failedAuth = true;  // This will get immediately reversed if we succeed ...
+            failedAuth = true;  // This will get immediately reversed if we succeed ...
             session.auth ().verify (120000);  // Two minutes.
             failedAuth = false;
 

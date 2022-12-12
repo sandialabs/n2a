@@ -223,22 +223,24 @@ public class RemoteUnix extends Unix implements Remote
         // connection.connect() could take a long time, so don't run on EDT.
         // This should only be on EDT when the call comes through enable(),
         // but enable() may also be called outside of EDT.
-        if (! EventQueue.isDispatchThread ())  // Not on EDT, so run directly.
+        if (EventQueue.isDispatchThread ())
+        {
+            // Spawn a new thread for connection.connect().
+            Thread thread = new Thread ("Connect to " + name)
+            {
+                public void run ()
+                {
+                    try {connection.connect ();}
+                    catch (Exception e) {}
+                }
+            };
+            thread.setDaemon (true);
+            thread.start ();
+        }
+        else  // Not on EDT, so run directly.
         {
             connection.connect ();
-            return;
         }
-        // On EDT, so spawn a new thread for connection.connect().
-        Thread thread = new Thread ()
-        {
-            public void run ()
-            {
-                try {connection.connect ();}
-                catch (Exception e) {}
-            }
-        };
-        thread.setDaemon (true);
-        thread.start ();
     }
 
     public synchronized void close ()

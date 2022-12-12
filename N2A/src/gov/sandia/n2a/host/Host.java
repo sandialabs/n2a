@@ -589,6 +589,18 @@ public abstract class Host
         return false;
     }
 
+    /**
+        Indicates that the scheduling system on this host has its own special command for
+        starting parallel jobs, so the backend should not use a special script/command
+        for this.
+        Examples of scheduling-system run commands include: srun, jsrun.
+        Examples of parallel run commands include: mpiexec, mpirun, charmrun.
+    **/
+    public boolean hasRun ()
+    {
+        return false;
+    }
+
     public class ProcessInfo
     {
         public long   pid;
