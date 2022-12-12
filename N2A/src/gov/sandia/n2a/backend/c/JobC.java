@@ -1061,6 +1061,7 @@ public class JobC extends Thread
 
         StringBuilder vectorDefinitions = new StringBuilder ();
         String SHARED = "";
+        String ns = "n2a";
         if (lib)
         {
             // Generate a companion header file
@@ -1071,6 +1072,9 @@ public class JobC extends Thread
                 String define = NodePart.validIdentifierFrom (libStem).replace (" ", "_") + "_h";
                 header.append ("#ifndef " + define + "\n");
                 header.append ("#define " + define + "\n");
+                header.append ("\n");
+                header.append ("#include <vector>\n");
+                header.append ("#include <string>\n");
                 header.append ("\n");
 
                 CompilerFactory factory = BackendC.getFactory (env);
@@ -1086,45 +1090,67 @@ public class JobC extends Thread
                     header.append ("\n");
                 }
 
-                header.append ("class " + SHARED + "IOvector\n");
+                header.append ("namespace " + ns + "\n");
                 header.append ("{\n");
-                header.append ("public:\n");
-                header.append ("  virtual int size () = 0;\n");
-                header.append ("  virtual " + T + " get  (int i) = 0;\n");
-                header.append ("  virtual void set (int i, " + T + " value) = 0;\n");
-                header.append ("};\n");
-                header.append ("\n");
+                header.append ("  class " + SHARED + "IOvector\n");
+                header.append ("  {\n");
+                header.append ("  public:\n");
+                header.append ("    virtual int size () = 0;\n");
+                header.append ("    virtual " + T + " get (int i) = 0;\n");
+                header.append ("    virtual void set (int i, " + T + " value) = 0;\n");
+                header.append ("  };\n");
 
-                header.append ("extern \"C\"\n");
-                header.append ("{\n");
-                header.append ("  " + SHARED + "void init (int argc, const char * argv[]);\n");
-                header.append ("  " + SHARED + "void run (" + T + " until);\n");
-                header.append ("  " + SHARED + "void finish ();\n");
+                String ns_ = "";
+                if (csharp)
+                {
+                    ns_ = ns + "_";
+                    header.append ("}\n");
+                    header.append ("\n");
+                    header.append ("extern \"C\"\n");
+                    header.append ("{\n");
+                }
+                else
+                {
+                    header.append ("\n");
+                }
+
+                header.append ("  " + SHARED + "void " + ns_ + "init (int argc, const char * argv[]);\n");
+                header.append ("  " + SHARED + "void " + ns_ + "run (" + T + " until);\n");
+                header.append ("  " + SHARED + "void " + ns_ + "finish ();\n");
                 header.append ("\n");
-                generateIOvector (digestedModel, SHARED, header, vectorDefinitions);
+                generateIOvector (digestedModel, SHARED, ns, header, vectorDefinitions);
                 if (csharp  &&  ! vectorDefinitions.isEmpty ())
                 {
                     header.append ("\n");
-                    header.append ("  " + SHARED + "void  IOvectorDelete (IOvector * self);\n");
-                    header.append ("  " + SHARED + "int   IOvectorSize   (IOvector * self);\n");
-                    header.append ("  " + SHARED + T + " IOvectorGet    (IOvector * self, int i);\n");
-                    header.append ("  " + SHARED + "void  IOvectorSet    (IOvector * self, int i, " + T + " value);\n");
+                    header.append ("  " + SHARED + "void  " + ns + "_IOvectorDelete (" + ns + "::IOvector * self);\n");
+                    header.append ("  " + SHARED + "int   " + ns + "_IOvectorSize   (" + ns + "::IOvector * self);\n");
+                    header.append ("  " + SHARED + T +  " " + ns + "_IOvectorGet    (" + ns + "::IOvector * self, int i);\n");
+                    header.append ("  " + SHARED + "void  " + ns + "_IOvectorSet    (" + ns + "::IOvector * self, int i, " + T + " value);\n");
                 }
-                header.append ("}\n");
-                header.append ("\n");
+
+                if (csharp)
+                {
+                    header.append ("}\n");
+                    header.append ("\n");
+                    header.append ("namespace " + ns + "\n");
+                    header.append ("{\n");
+                }
+                else
+                {
+                    header.append ("\n");
+                }
 
                 // Convenience wrappers for init()
-                header.append ("#include <vector>\n");
-                header.append ("#include <string>\n");
-                header.append ("inline void initVector (const std::vector<std::string> & args)\n");
-                header.append ("{\n");
-                header.append ("  int argc = args.size () + 1;\n");
-                header.append ("  const char ** argv = (const char **) malloc (sizeof (char *) * argc);\n");
-                header.append ("  for (int i = 1; i < argc; i++) argv[i] = args[i-1].c_str ();\n");
-                header.append ("  init (argc, argv);\n");
-                header.append ("  free (argv);\n");
+                header.append ("  inline void initVector (const std::vector<std::string> & args)\n");
+                header.append ("  {\n");
+                header.append ("    int argc = args.size () + 1;\n");
+                header.append ("    const char ** argv = (const char **) malloc (sizeof (char *) * argc);\n");
+                header.append ("    for (int i = 1; i < argc; i++) argv[i] = args[i-1].c_str ();\n");
+                header.append ("    " + ns_ + "init (argc, argv);\n");
+                header.append ("    free (argv);\n");
+                header.append ("  }\n");
+                header.append ("  template<typename... Args> void initVector (Args... keys) {initVector ({keys...});}\n");
                 header.append ("}\n");
-                header.append ("template<typename... Args> void initVector (Args... keys) {initVector ({keys...});}\n");
                 header.append ("\n");
 
                 header.append ("#endif\n");
@@ -1230,10 +1256,10 @@ public class JobC extends Thread
 
                 if (csharp)
                 {
-                    result.append ("void  IOvectorDelete (IOvector * self)                     {delete self;}\n");
-                    result.append ("int   IOvectorSize   (IOvector * self)                     {return self->size ();}\n");
-                    result.append (T + " IOvectorGet    (IOvector * self, int i)              {return self->get (i);}\n");
-                    result.append ("void  IOvectorSet    (IOvector * self, int i, " + T + " value) {self->set (i, value);}\n");
+                    result.append ("void  " + ns + "_IOvectorDelete (IOvector * self)                     {delete self;}\n");
+                    result.append ("int   " + ns + "_IOvectorSize   (IOvector * self)                     {return self->size ();}\n");
+                    result.append (T +  " " + ns + "_IOvectorGet    (IOvector * self, int i)              {return self->get (i);}\n");
+                    result.append ("void  " + ns + "_IOvectorSet    (IOvector * self, int i, " + T + " value) {self->set (i, value);}\n");
                 }
             }
         }
@@ -1674,9 +1700,9 @@ public class JobC extends Thread
         }
     }
 
-    public void generateIOvector (EquationSet s, String SHARED, Writer header, StringBuilder vectorDefinitions) throws IOException
+    public void generateIOvector (EquationSet s, String SHARED, String ns, Writer header, StringBuilder vectorDefinitions) throws IOException
     {
-        for (EquationSet p : s.parts) generateIOvector (p, SHARED, header, vectorDefinitions);
+        for (EquationSet p : s.parts) generateIOvector (p, SHARED, ns, header, vectorDefinitions);
 
         // Determine if any IO vectors are present
         boolean found = false;
@@ -1752,7 +1778,9 @@ public class JobC extends Thread
 
             // A complete copy of the get() function, including code to locate population, will be emitted for each variable.
             // Since it's unlikely there will be more than one variable, this isn't too redundant.
-            String prototype = "IOvector * get" + name + " (" + args + ")";
+            String prototype;
+            if (csharp) prototype = ns + "::IOvector * " + ns + "_get" + name + " (" + args + ")";
+            else        prototype =        "IOvector * get"            + name + " (" + args + ")";
             vectorDefinitions.append (prototype + "\n");
             vectorDefinitions.append ("{\n");
             vectorDefinitions.append (f);
