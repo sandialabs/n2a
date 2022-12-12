@@ -500,7 +500,11 @@ ImageInput<T>::get (String channelName, T now)
 #endif
 {
     // Fetch next image, if needed.
+#   ifdef HAVE_FFMPEG
     if (video  ||  pattern.size ())
+#   else
+    if (pattern.size ())
+#   endif
     {
         if (std::signbit (now))  // Negative "now" (including negative zero) indicates single step per simulation cycle.
         {
@@ -508,11 +512,14 @@ ImageInput<T>::get (String channelName, T now)
             {
                 t = now;
                 n2a::Image temp;
+#               ifdef HAVE_FFMPEG
                 if (video)
                 {
                     (*video) >> temp;
                 }
-                else if (pattern.size ())
+                else
+#               endif
+                if (pattern.size ())
                 {
                     temp.read (format (pattern, index++));
                 }
@@ -528,6 +535,7 @@ ImageInput<T>::get (String channelName, T now)
             if (now >= t)
             {
                 n2a::Image temp;
+#               ifdef HAVE_FFMPEG
                 if (video)
                 {
                     (*video) >> temp;
@@ -542,7 +550,9 @@ ImageInput<T>::get (String channelName, T now)
 #                       endif
                     }
                 }
-                else if (pattern.size ())
+                else
+#               endif
+                if (pattern.size ())
                 {
 #                   ifdef n2a_FP
                     index = (int) (now / pow (2.0f, FP_MSB - Event<T>::exponent));

@@ -770,7 +770,7 @@ PixelFormatPalette::setRGBA  (void * pixel, uint32_t rgba) const
   const uint32_t * p         = palette;
   const uint32_t * end       = p + 256;
   const uint32_t * bestEntry = p;
-  int smallestDifference = INT_MAX;
+  int smallestDifference = numeric_limits<int>::max ();
   while (p < end)
   {
 	// Compute difference

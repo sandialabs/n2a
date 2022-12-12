@@ -11,6 +11,7 @@ the U.S. Government retains certain rights in this software.
 #include "MatrixSparse.tcc"
 
 #ifdef HAVE_JNI
+#  include "image.h"
 #  include <jni.h>
 #endif
 
