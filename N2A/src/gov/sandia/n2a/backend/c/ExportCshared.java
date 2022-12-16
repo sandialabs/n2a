@@ -16,6 +16,6 @@ public class ExportCshared extends ExportCstatic
     @Override
     public String getName ()
     {
-        return "C shared library";
+        return "C library shared";
     }
 }

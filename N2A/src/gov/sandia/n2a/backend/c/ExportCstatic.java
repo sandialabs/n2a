@@ -29,7 +29,7 @@ public class ExportCstatic implements ExportModel
     @Override
     public String getName ()
     {
-        return "C static library";
+        return "C library static";
     }
 
     @Override

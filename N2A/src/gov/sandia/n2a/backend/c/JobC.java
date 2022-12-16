@@ -1061,9 +1061,11 @@ public class JobC extends Thread
 
         StringBuilder vectorDefinitions = new StringBuilder ();
         String SHARED = "";
-        String ns = "n2a";
+        String ns = "";
         if (lib)
         {
+            ns = "n2a";
+
             // Generate a companion header file
             String include = libStem + ".h";
             Path headerPath = source.getParent ().resolve (include);
@@ -1188,7 +1190,12 @@ public class JobC extends Thread
         result.append ("\n");
 
         // Init
-        result.append ("void init (int argc, const char * argv[])\n");
+        if (lib)
+        {
+            if (csharp) ns += "_";
+            else        ns += "::";
+        }
+        result.append ("void " + ns + "init (int argc, const char * argv[])\n");
         result.append ("{\n");
         if (kokkos)
         {
@@ -1220,7 +1227,7 @@ public class JobC extends Thread
         result.append ("\n");
 
         // Finish
-        result.append ("void finish ()\n");
+        result.append ("void " + ns + "finish ()\n");
         result.append ("{\n");
         if (tls)
         {
@@ -1245,7 +1252,7 @@ public class JobC extends Thread
         // Main
         if (lib)
         {
-            result.append ("void run (" + T + " until)\n");
+            result.append ("void " + ns + "run (" + T + " until)\n");
             result.append ("{\n");
             result.append ("  " + SIMULATOR + "run (until);\n");
             result.append ("}\n");
@@ -1778,10 +1785,16 @@ public class JobC extends Thread
 
             // A complete copy of the get() function, including code to locate population, will be emitted for each variable.
             // Since it's unlikely there will be more than one variable, this isn't too redundant.
-            String prototype;
-            if (csharp) prototype = ns + "::IOvector * " + ns + "_get" + name + " (" + args + ")";
-            else        prototype =        "IOvector * get"            + name + " (" + args + ")";
-            vectorDefinitions.append (prototype + "\n");
+            if (csharp)
+            {
+                header.append ("  " + SHARED + ns + "::IOvector * " + ns + "_get" + name + " (" + args + ");\n");
+                vectorDefinitions.append ("IOvector * " + ns + "_get" + name + " (" + args + ")\n");
+            }
+            else
+            {
+                header.append ("  " + SHARED + "IOvector * " + "get" + name + " (" + args + ");\n");
+                vectorDefinitions.append ("IOvector * " + ns + "::get" + name + " (" + args + ")\n");
+            }
             vectorDefinitions.append ("{\n");
             vectorDefinitions.append (f);
             vectorDefinitions.append ("\n");
@@ -1790,8 +1803,6 @@ public class JobC extends Thread
             vectorDefinitions.append ("  return result;\n");
             vectorDefinitions.append ("}\n");
             vectorDefinitions.append ("\n");
-
-            header.append ("  " + SHARED + prototype + ";\n");
         }
     }
 
