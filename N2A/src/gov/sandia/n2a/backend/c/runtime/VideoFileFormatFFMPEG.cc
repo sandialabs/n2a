@@ -393,9 +393,10 @@ VideoInFileFFMPEG::readNext (Image * image)
             frame->pts = frame->best_effort_timestamp;  // Less accurate, but more available.
         }
 
-        if (frame->duration)
+        // TODO: change pkt_duration to duration once this is commonly available in distribution packages (some time in 2023).
+        if (frame->pkt_duration)
         {
-            nextPTS = frame->pts + frame->duration;
+            nextPTS = frame->pts + frame->pkt_duration;
         }
         else
         {
