@@ -2606,7 +2606,10 @@ public class EquationSet implements Comparable<EquationSet>
         TreeSet<Variable> temp = new TreeSet<Variable> (variables);
         for (Variable v : temp)
         {
-            if (v.hasUsers ()  ||  v.hasAttribute ("externalWrite")) continue;
+            // External combiners which have no effect on the target variable. This is a rare case.
+            boolean emptyCombinerReference =  v.hasAttribute ("reference")  &&  v.isEmptyCombiner ();
+
+            if ((v.hasUsers ()  ||  v.hasAttribute ("externalWrite"))  &&  ! emptyCombinerReference) continue;
 
             // Even if a $variable has no direct users, we must respect any statements about it.
             // Exceptions:

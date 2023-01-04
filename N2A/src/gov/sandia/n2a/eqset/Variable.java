@@ -1244,19 +1244,16 @@ public class Variable implements Comparable<Variable>, Cloneable
 
     public void removeDependencyOn (Variable whatWeDontNeedAnymore)
     {
-        if (uses == null) return;
-        if (uses.containsKey (whatWeDontNeedAnymore))
+        if (uses == null  ||  ! uses.containsKey (whatWeDontNeedAnymore)) return;
+        int newCount = uses.get (whatWeDontNeedAnymore) - 1;
+        if (newCount > 0)
         {
-            int newCount = uses.get (whatWeDontNeedAnymore) - 1;
-            if (newCount > 0)
-            {
-                uses.put (whatWeDontNeedAnymore, newCount);
-            }
-            else
-            {
-                uses.remove (whatWeDontNeedAnymore);
-                whatWeDontNeedAnymore.removeUser (this);
-            }
+            uses.put (whatWeDontNeedAnymore, newCount);
+        }
+        else
+        {
+            uses.remove (whatWeDontNeedAnymore);
+            whatWeDontNeedAnymore.removeUser (this);
         }
     }
 
