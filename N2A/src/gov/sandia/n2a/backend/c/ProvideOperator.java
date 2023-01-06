@@ -1,5 +1,5 @@
 /*
-Copyright 2021-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -36,12 +36,14 @@ public interface ProvideOperator extends ExtensionPoint
         code may be built. The provider should use a naming scheme that allows
         many different builds to reside in the same directory, for example by
         calling JobC.objectName().
+        @return True if a new library file was built. False if the existing library
+        file is unchanged. See the function library(JobC).
     **/
-    public void rebuildRuntime (JobC job) throws Exception;
+    public boolean rebuildRuntime (JobC job) throws Exception;
 
     /**
         @return Path to the object that should be linked into the C runtime.
-        Can be either a simple object file (.o) or a static library (.a).
+        Can be either a simple object file or a static library.
         Should not be a dynamic-link library. Instead, if dynamic linking
         is in use, the provided object will be incorporated into the runtime's main
         library. OK to return null.

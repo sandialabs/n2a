@@ -379,7 +379,18 @@ public class JobC extends Thread
                 runtimes = new HashSet<String> ();
                 runtimeBuilt.put (env, runtimes);
             }
-            for (ProvideOperator pf : extensions) pf.rebuildRuntime (this);
+            String runtimeName = runtimeName ();
+            CompilerFactory factory = BackendC.getFactory (env);
+            Path runtimeLib = runtimeDir.resolve (factory.prefixLibraryShared () + runtimeName + factory.suffixLibraryShared ());
+            for (ProvideOperator pf : extensions)
+            {
+                if (pf.rebuildRuntime (this))  // Returns true of a new plugin object file was built.
+                {
+                    // Need to incorporate plugin object into runtime library, so force rebuild.
+                    runtimes.remove (runtimeName);
+                    Files.deleteIfExists (runtimeLib);
+                }
+            }
             env.config.clear ("backend", "c", "compilerChanged");
 
             if (changed)  // Delete all existing object files and runtime libs.
@@ -400,11 +411,9 @@ public class JobC extends Thread
                 catch (IOException e) {}
             }
 
-            String runtimeName = runtimeName ();
             if (runtimes.contains (runtimeName)) return;
 
             // Compile runtime
-            CompilerFactory factory = BackendC.getFactory (env);
             supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
             List<String> sources = new ArrayList<String> ();  // List of source names
             sources.add ("runtime");
@@ -453,7 +462,6 @@ public class JobC extends Thread
             // Link the runtime objects into a single shared library.
             if (shared)
             {
-                Path runtimeLib = runtimeDir.resolve (factory.prefixLibraryShared () + runtimeName + factory.suffixLibraryShared ());
                 if (! Files.exists (runtimeLib))
                 {
                     job.set ("Linking runtime library", "status");
