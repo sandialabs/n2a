@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,6 +25,10 @@ import java.util.Set;
     For example, if an operation is implemented in terms of several other operations, and the state
     of the tree should not be modified between those operations, then the method is synchronized.
     If the method is naturally atomic, then it is not synchronized. Such choices may not hold for derived implementations.
+
+    A node can be "undefined". For the most part, this behaves as having a value of "".
+    Undefined nodes have a special role in tree differencing, where they act as structural placeholders.
+    The tree-differencing and merge functions in this class assume that leaf nodes are always defined.
 **/
 public class MNode implements Iterable<MNode>, Comparable<MNode>
 {
@@ -152,9 +156,9 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     public synchronized MNode child (String... keys)
     {
         MNode result = this;
-        for (int i = 0; i < keys.length; i++)
+        for (String key : keys)
         {
-            MNode c = result.getChild (keys[i]);
+            MNode c = result.getChild (key);
             if (c == null) return null;
             result = c;
         }
@@ -175,10 +179,10 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     public synchronized MNode childOrCreate (String... keys)
     {
         MNode result = this;
-        for (int i = 0; i < keys.length; i++)
+        for (String key : keys)
         {
-            MNode c = result.getChild (keys[i]);
-            if (c == null) c = result.set (null, keys[i]);
+            MNode c = result.getChild (key);
+            if (c == null) c = result.set (null, key);
             result = c;
         }
         return result;
@@ -534,7 +538,9 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     **/
     public MNode set (String value, String key)
     {
-        return new MNode ();  // A completely useless object.
+        // A lie that allows this base class to be minimally useful.
+        // Could also return null, but that might needlessly break some simple use cases.
+        return new MNode ();
     }
 
     /**

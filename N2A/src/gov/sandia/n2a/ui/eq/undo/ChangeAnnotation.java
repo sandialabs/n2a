@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -129,23 +129,25 @@ public class ChangeAnnotation extends UndoableView
 
         // Update database
         String[] names = nameAfter.split ("\\.");
-        if (nameAfter.equals (nameBefore))
+        if (nameAfter.equals (nameBefore))  // Same name
         {
-            // If name is unchanged, then node should already exist,
-            // and we only need to change the direct value, not the subtree.
-            String valueBefore = mparent.get (names);
-            String valueAfter  = savedTree.get ();
-            MPart partBefore = (MPart) mparent.child (names);
-            MPart partAfter  = (MPart) mparent.set (valueAfter, names);
-
-            // If there was no change in value, then toggle override state.
-            if (partBefore != null  &&  valueAfter.equals (valueBefore))
+            // Node already exists, and we only need to change the direct value, not the subtree.
+            MPart  part       = (MPart) mparent.child (names);
+            String tempBefore = part.get ();
+            String tempAfter  = savedTree.get ();
+            if (tempAfter.equals (tempBefore)  &&  ! part.isFromTopDocument ())  // Special case to allow re-assert of inherited flag, such as "watch".
             {
-                if (partAfter.isOverridden ()) partAfter.clearPath ();
-                else                           partAfter.override ();
+                part.override ();  // Creates a node in top document with undefined value.
+                part.getSource ().set (tempAfter);  // Enforces that leaf nodes are always defined.
+                // De-assert is done below, simply by setting the inherited value on the node.
+                // It is not possible de-assert an inherited flag unless it is a leaf node.
+            }
+            else
+            {
+                part.set (tempAfter);
             }
         }
-        else
+        else  // Name changed
         {
             if (! prefixBefore.isEmpty ())
             {

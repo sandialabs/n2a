@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -29,6 +29,12 @@ import gov.sandia.n2a.db.MNode;
 
     All MNode functions are fully supported. In particular, merge() is safe to use, even
     if it involves $inherit lines.
+
+    See notes on MNode regarding "undefined" nodes. A value of undefined in a top-level
+    document allows an underlying inherited value to show through. This should be used
+    only for interior structural nodes, not for leaf nodes. It is possible to set a
+    top-level leaf node to null, but this should be immediately followed by setting
+    children.
 **/
 public class MPart extends MNode
 {
@@ -129,10 +135,11 @@ public class MPart extends MNode
     /**
         Injects inherited equations as children of this node.
         Handles recursion up the hierarchy of parents.
+        Handles relinking to parents whose name has changed. (ID is assumed to be constant and universal.)
         @param visited Used to guard against a document loading itself.
         @param root The node in the collated tree (named "$inherit") which triggered the current
-        round of inheritance. May be a child of a higher node, or a child of this node, but never a child
-        of a lower node.
+        round of inheritance. May be a child of a higher node, or a child of this node, but never
+        a child of a lower node.
         @param from The $inherit node to be processed. We parse this into a set of part names
         which we retrieve from the database.
     **/
@@ -220,7 +227,7 @@ public class MPart extends MNode
     **/
     protected synchronized void underride (MPart from, MNode newSource)
     {
-        if (inheritedFrom == null  &&  from != this)  // The second clause is for very peculiar case. We don't allow incoming $inherit lines to underride the $inherit that brought them in, since their existence is completely contingent on it.
+        if (inheritedFrom == null  &&  from != this)  // The second clause is for a very peculiar case. We don't allow incoming $inherit lines to underride the $inherit that brought them in, since their existence is completely contingent on it.
         {
             inheritedFrom = from;
             original = newSource;
@@ -311,7 +318,7 @@ public class MPart extends MNode
         // * original == source and inheritedFrom != null -- node holds an inherited value
         // * original == source and inheritedFrom == null -- node holds a top-level value
         // * original != source and inheritedFrom != null -- node holds a top-level value and an underride (inherited value)
-        // The fourth case is excluded by the logic of this class (if it does its job right).
+        // The fourth case is excluded by the logic of this class.
         return original != source  ||  inheritedFrom == null;
     }
 
@@ -354,12 +361,13 @@ public class MPart extends MNode
 
     public boolean data ()
     {
-        return source.data ();
+        return source.data ()  ||  original.data ();
     }
 
     public synchronized String getOrDefault (String defaultValue)
     {
-        return source.getOrDefault (defaultValue);
+        if (source.data ()) return source.getOrDefault (defaultValue); 
+        return original.getOrDefault (defaultValue);
     }
 
     /**
@@ -435,13 +443,15 @@ public class MPart extends MNode
     /**
         Extends the trail of overrides from the root to this node.
         Used to prepare this node for modification, where all edits must reside in top-level document.
+        If this is a leaf node, then be sure to set a non-null value afterward. IE: leaf nodes should
+        always be defined in documents.
     **/
     public synchronized void override ()
     {
         if (isFromTopDocument ()) return;
         // The only way to get past the above line is if original==source
         container.override ();
-        source = container.source.set (get (), key ());  // Most intermediate nodes will have a value of "", unless they are a variable.
+        source = container.source.set (null, key ());
     }
 
     /**
@@ -459,7 +469,7 @@ public class MPart extends MNode
     **/
     public synchronized void clearPath ()
     {
-        if (source != original  &&  source.get ().equals (original.get ())  &&  ! overrideNecessary ())
+        if (source != original  &&  (! source.data ()  ||  source.get ().equals (original.get ()))  &&  ! overrideNecessary ())
         {
             source.parent ().clear (source.key ());  // delete ourselves from the top-level document
             source = original;
@@ -467,10 +477,22 @@ public class MPart extends MNode
         }
     }
 
+    /**
+        Changes value of this node in the top-level document, possibly creating
+        of clearing a chain of overrides in parent nodes. Setting a value that
+        exactly matches an inherited value will possibly clear overrides. Setting
+        a value different from inherited will create an override.
+
+        Setting null has a more subtle effect. It will change the top-level document
+        as described above, possibly creating or clearing overrides. However, an
+        undefined node in the top-level document allows an inherited value to show
+        through in calls to get() and data(). Thus, setting null will not generally
+        make this MPart node undefined.
+    **/
     public synchronized void set (String value)
     {
-        if (source.get ().equals (value)) return;  // No change, so nothing to do.
-        boolean couldReset = original.get ().equals (value);
+        if (source.data () ? source.get ().equals (value) : value == null) return;  // No change, so nothing to do.
+        boolean couldReset = original.data () ? original.get ().equals (value) : value == null;
         if (! couldReset) override ();
         source.set (value);
         if (couldReset) clearPath ();
@@ -554,9 +576,9 @@ public class MPart extends MNode
             
             // Now do the equivalent of inherit.merge(thatInherit), but pay attention to IDs.
             // If "that" comes from an outside source, it could merge in IDs which disagree
-            // with the ones we would otherwise look up during getIDs() called by set(). To honor the
+            // with the ones we would otherwise look up during setIDs() called by set(). To honor the
             // imported IDs (that is, prioritize them over imported names), we merge the metadata
-            // under $inherit first, then set the node itself in a way that avoids calling getIDs().
+            // under $inherit first, then set the node itself in a way that avoids calling setIDs().
             for (MNode thatInheritChild : thatInherit)
             {
                 String index = thatInheritChild.key ();
@@ -566,7 +588,7 @@ public class MPart extends MNode
             String thatInheritValue = thatInherit.get ();
             if (! thatInheritValue.isEmpty ())
             {
-                // This is a copy of set() with appropriate modifications
+                // This is a copy of set() with appropriate modifications.
                 String thisInheritValue = inherit.source.get ();
                 if (! thisInheritValue.equals (thatInheritValue))
                 {
@@ -603,11 +625,18 @@ public class MPart extends MNode
         {
             if (! ((MPart) c).clearRedundantOverrides ()) overrideNecessary = true;
         }
-        if (overrideNecessary) return false;
-        if (source != original  &&  source.get ().equals (original.get ()))
+
+        if (source != original  &&  (! source.data ()  ||  source.get ().equals (original.get ())))
         {
-            source.parent ().clear (source.key ());
-            source = original;
+            if (overrideNecessary)
+            {
+                source.set (null);
+            }
+            else
+            {
+                source.parent ().clear (source.key ());
+                source = original;
+            }
         }
         return ! isFromTopDocument ();
     }
