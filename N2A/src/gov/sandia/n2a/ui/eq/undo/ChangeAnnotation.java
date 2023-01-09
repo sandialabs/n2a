@@ -131,21 +131,8 @@ public class ChangeAnnotation extends UndoableView
         String[] names = nameAfter.split ("\\.");
         if (nameAfter.equals (nameBefore))  // Same name
         {
-            // Node already exists, and we only need to change the direct value, not the subtree.
-            MPart  part       = (MPart) mparent.child (names);
-            String tempBefore = part.get ();
-            String tempAfter  = savedTree.get ();
-            if (tempAfter.equals (tempBefore)  &&  ! part.isFromTopDocument ())  // Special case to allow re-assert of inherited flag, such as "watch".
-            {
-                part.override ();  // Creates a node in top document with undefined value.
-                part.getSource ().set (tempAfter);  // Enforces that leaf nodes are always defined.
-                // De-assert is done below, simply by setting the inherited value on the node.
-                // It is not possible de-assert an inherited flag unless it is a leaf node.
-            }
-            else
-            {
-                part.set (tempAfter);
-            }
+            // We only need to change the direct value, not the subtree.
+            mparent.set (savedTree.get (), names);
         }
         else  // Name changed
         {

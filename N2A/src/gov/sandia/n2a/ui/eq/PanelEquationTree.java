@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -803,31 +803,37 @@ public class PanelEquationTree extends JScrollPane
             // Toggle watch on the selected variable
             boolean selectVariable =  multi  ||  tree.isCollapsed (new TreePath (v.getPath ()));
             MPart watch = (MPart) v.source.child ("$metadata", "watch");
-            if (watch != null)
+            UndoableView u;
+            if (watch == null)  // Currently off, so turn it on.
+            {
+                u = new AddAnnotation (v, v.getChildCount (), new MVolatile ("", "watch"));
+                ((AddAnnotation) u).selectVariable = selectVariable;
+            }
+            else
             {
                 NodeAnnotation watchNode = (NodeAnnotation) v.child ("watch");
-                if (watch.isFromTopDocument ())  // currently on, so turn it off
+                if (watch.isInherited ())
                 {
-                    DeleteAnnotation d = new DeleteAnnotation (watchNode, false);
-                    d.selectVariable = selectVariable;
-                    if (multi) compound.addEdit (d);
-                    else       um.apply (d);
+                    // Override and toggle
+                    u = new ChangeAnnotation (watchNode, "watch", watch.getFlag () ? "0" : "1");
+                    ((ChangeAnnotation) u).selectVariable = selectVariable;
                 }
-                else  // Currently off, because it is not explicitly set in this document. Turn it on by overriding it locally.
+                else  // local only
                 {
-                    ChangeAnnotation c = new ChangeAnnotation (watchNode, "watch", "");
-                    c.selectVariable = selectVariable;
-                    if (multi) compound.addEdit (c);
-                    else       um.apply (c);
+                    if (watch.getFlag ())  // Currently on, so turn it off.
+                    {
+                        u = new DeleteAnnotation (watchNode, false);
+                        ((DeleteAnnotation) u).selectVariable = selectVariable;
+                    }
+                    else  // Currently off ("0"), so turn it on. This case is only necessary because the user could directly define watch.
+                    {
+                        u = new ChangeAnnotation (watchNode, "watch", "");
+                        ((ChangeAnnotation) u).selectVariable = selectVariable;
+                    }
                 }
             }
-            else  // currently off, so turn it on
-            {
-                AddAnnotation a = new AddAnnotation (v, v.getChildCount (), new MVolatile ("", "watch"));
-                a.selectVariable = selectVariable;
-                if (multi) compound.addEdit (a);
-                else       um.apply (a);
-            }
+            if (multi) compound.addEdit (u);
+            else       um.apply (u);
         }
         if (multi)
         {

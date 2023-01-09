@@ -312,6 +312,9 @@ public class MPart extends MNode
         return true;
     }
 
+    /**
+        Indicates that the current value comes from the top-level document.
+    **/
     public boolean isFromTopDocument ()
     {
         // There are only 3 cases allowed:
@@ -322,9 +325,22 @@ public class MPart extends MNode
         return original != source  ||  inheritedFrom == null;
     }
 
+    /**
+        Indicates that the current value comes from the top-level document
+        and that some parent also defines this node.
+    **/
     public boolean isOverridden ()
     {
-        return original != source;
+        return original != source;  // and inheritedFrom != null, but no need to check that.
+    }
+
+    /**
+       Indicates that this node exists in some parent document, regardless of whether
+       there is a local override or not.
+    **/
+    public boolean isInherited ()
+    {
+        return inheritedFrom != null;
     }
 
     public MPart parent ()

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -320,55 +320,51 @@ public class EquationSet implements Comparable<EquationSet>
                     if (! v.killed) variables.add (v);
 
                     // Add a watch expression, if requested.
-                    MNode p = getTopDocumentNode ();
-                    if (p != null)
+                    MNode vmeta = v.getMetadata ();
+                    if (vmeta.getFlag ("watch"))
                     {
-                        MNode watch = p.child (e.key (), "$metadata", "watch");
-                        if (watch != null)
+                        boolean spike = vmeta.get ("watch").equals ("spike");
+
+                        // Determine dummy variable name
+                        String dummy = "x0";
+                        int suffix = 1;
+                        while (find (new Variable (dummy, -1)) != null  ||  source.child (dummy) != null) dummy = "x" + suffix++;
+
+                        // Check for timeScale
+                        EquationSet root = getRoot ();
+                        String timeScale = root.metadata.get ("watch", "timeScale");  // typically the horizontal axis
+                        String scale = "";                                            // typically the vertical axis
+                        if (v.order > 0  &&  ! timeScale.isEmpty ())
                         {
-                            boolean spike = watch.get ().equals ("spike");
-
-                            // Determine dummy variable name
-                            String dummy = "x0";
-                            int suffix = 1;
-                            while (find (new Variable (dummy, -1)) != null  ||  source.child (dummy) != null) dummy = "x" + suffix++;
-
-                            // Check for timeScale
-                            EquationSet root = getRoot ();
-                            String timeScale = root.metadata.get ("watch", "timeScale");  // typically the horizontal axis
-                            String scale = "";                                            // typically the vertical axis
-                            if (v.order > 0  &&  ! timeScale.isEmpty ())
+                            try
                             {
-                                try
-                                {
-                                    UnitValue uv = new UnitValue (timeScale);
-                                    if (uv.value == 0) uv.value = 1;
-                                    if (uv.unit == null) uv.unit = AbstractUnit.ONE;
-                                    uv.unit = uv.unit.pow (-v.order);
-                                    uv.value = Math.pow (uv.value, -v.order);
-                                    scale = uv.bareUnit ();
-                                }
-                                catch (Exception ex) {}
+                                UnitValue uv = new UnitValue (timeScale);
+                                if (uv.value == 0) uv.value = 1;
+                                if (uv.unit == null) uv.unit = AbstractUnit.ONE;
+                                uv.unit = uv.unit.pow (-v.order);
+                                uv.value = Math.pow (uv.value, -v.order);
+                                scale = uv.bareUnit ();
                             }
-
-                            // Check for interval (output at less than every timestep)
-                            String interval = root.metadata.get ("watch", "interval");
-
-                            // Create output expression
-                            String expression = dummy + "=output(\"\",";
-                            if (spike) expression += "1";
-                            else       expression += v.nameString ();
-                            if (! timeScale.isEmpty ())
-                            {
-                                expression += ",\"\",\"timeScale=" + timeScale;
-                                if (! scale.isEmpty ()) expression += ",scale=" + scale;
-                                expression += "\"";
-                            }
-                            expression += ")";
-                            if (spike) expression += "@" + v.nameString ();
-                            else if (! interval.isEmpty ()) expression += "@$t%" + interval + "<$t'/2";
-                            override (expression);
+                            catch (Exception ex) {}
                         }
+
+                        // Check for interval (output at less than every timestep)
+                        String interval = root.metadata.get ("watch", "interval");
+
+                        // Create output expression
+                        String expression = dummy + "=output(\"\",";
+                        if (spike) expression += "1";
+                        else       expression += v.nameString ();
+                        if (! timeScale.isEmpty ())
+                        {
+                            expression += ",\"\",\"timeScale=" + timeScale;
+                            if (! scale.isEmpty ()) expression += ",scale=" + scale;
+                            expression += "\"";
+                        }
+                        expression += ")";
+                        if (spike) expression += "@" + v.nameString ();
+                        else if (! interval.isEmpty ()) expression += "@$t%" + interval + "<$t'/2";
+                        override (expression);
                     }
                 }
             }
@@ -516,20 +512,6 @@ public class EquationSet implements Comparable<EquationSet>
             return result.find (Variable.fromLHS (key));
         }
         return result;
-    }
-
-    /**
-        Returns the top-level document node associated with this equation set,
-        assuming that $inherit was hacked to point to the name of the model in the database.
-        It is possible that the associated node is created by inheritance and thus does not appear in top document.
-        In that case we return null.
-    **/
-    public MNode getTopDocumentNode ()
-    {
-        if (container == null) return AppData.models.child (name);
-        MNode p = container.getTopDocumentNode ();
-        if (p == null) return null;
-        return p.child (name);
     }
 
     /**

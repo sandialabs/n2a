@@ -210,8 +210,7 @@ public class NodeVariable extends NodeContainer
     public Icon getIcon (boolean expanded)
     {
         if (isBinding) return iconBinding;
-        MPart watch = (MPart) source.child ("$metadata", "watch");
-        if (watch != null  &&  watch.isFromTopDocument ()) return iconWatch;
+        if (source.getFlag ("$metadata", "watch")) return iconWatch;
         return iconVariable;
     }
 
