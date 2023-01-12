@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -102,8 +102,27 @@ public class AddVariable extends UndoableView implements AddEditable
         int index = parent.getIndexFiltered (createdNode);
         if (canceled) index--;
 
+        // Update database
         MPart mparent = parent.source;
-        mparent.clear (name);
+        MPart mchild  = (MPart) mparent.child (name);
+        if (mchild.isFromTopDocument ())  // Local. Includes newly-created, locally-revoked, and locally un-revoked.
+        {
+            mparent.clear (name);
+        }
+        else  // inherited
+        {
+            if (mchild.getFlag ("$kill"))  // currently revoked, so restore
+            {
+                mchild.set ("0", "$kill");  // un-revoke
+            }
+            else  // currently active, so revoke
+            {
+                MNode mflag = mchild.child ("$kill");
+                mchild.set (mflag == null ? "" : "1",  "$kill");  // revoke or re-revoke
+            }
+        }
+
+        // Update GUI
         if (mparent.child (name) == null)  // Node is fully deleted
         {
             if (createdNode.isBinding)
@@ -166,6 +185,12 @@ public class AddVariable extends UndoableView implements AddEditable
         // Update database
         MPart createdPart = (MPart) parent.source.childOrCreate (name);
         createdPart.merge (newPart);
+        if (createdPart.getFlag ("$kill"))  // Restoring a revoked variable.
+        {
+            MPart mflag = (MPart) createdPart.child ("$kill");
+            if (mflag.isInherited ()) mflag.set ("0");
+            else                      createdPart.clear ("$kill");
+        }
 
         // Update GUI
 
@@ -232,5 +257,12 @@ public class AddVariable extends UndoableView implements AddEditable
             }
         }
         return false;
+    }
+
+    public String getPresentationName ()
+    {
+        // Hack to allow NodeVariable.applyEdit() to distinguish between new blank variable
+        // and one that already has its name/value set.
+        return "AddVariable" + (nameIsGenerated ? " noname" : "");
     }
 }

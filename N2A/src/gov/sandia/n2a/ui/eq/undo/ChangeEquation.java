@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,8 +11,6 @@ import java.util.List;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
-import javax.swing.undo.UndoableEdit;
-
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
@@ -29,9 +27,9 @@ public class ChangeEquation extends UndoableView
     protected String       nameAfter;
     protected String       combinerAfter;
     protected String       valueAfter;
-    protected List<String> replacePath;
+    protected boolean      killed;
+    protected boolean      killedVariable;
     protected boolean      multi;
-    protected boolean      multiLast;
 
     /**
         @param variable The direct container of the node being changed.
@@ -46,12 +44,8 @@ public class ChangeEquation extends UndoableView
         this.nameAfter      = "@" + nameAfter;
         this.valueAfter     = valueAfter;
         this.combinerAfter  = combinerAfter;
-    }
-
-    public ChangeEquation (NodeVariable variable, String nameBefore, String combinerBefore, String valueBefore, String nameAfter, String combinerAfter, String valueAfter, List<String> replacePath)
-    {
-        this (variable, nameBefore, combinerBefore, valueBefore, nameAfter, combinerAfter, valueAfter);
-        this.replacePath = replacePath;
+        killed              = variable.source.getFlag (this.nameBefore, "$kill");
+        killedVariable      = variable.source.getFlag ("$kill");
     }
 
     public void setMulti (boolean value)
@@ -59,24 +53,19 @@ public class ChangeEquation extends UndoableView
         multi = value;
     }
 
-    public void setMultiLast (boolean value)
-    {
-        multiLast = value;
-    }
-
     public void undo ()
     {
         super.undo ();
-        apply (nameAfter, nameBefore, combinerBefore, valueBefore, multi, multiLast);
+        apply (nameAfter, nameBefore, combinerBefore, valueBefore, killed, killedVariable, multi);
     }
 
     public void redo ()
     {
         super.redo ();
-        apply (nameBefore, nameAfter, combinerAfter, valueAfter, multi, multiLast);
+        apply (nameBefore, nameAfter, combinerAfter, valueAfter, false, false, multi);
     }
 
-    public void apply (String nameBefore, String nameAfter, String combinerAfter, String valueAfter, boolean multi, boolean multiLast)
+    public void apply (String nameBefore, String nameAfter, String combinerAfter, String valueAfter, boolean killed, boolean killedVariable, boolean multi)
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -87,18 +76,23 @@ public class ChangeEquation extends UndoableView
         FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
 
         NodeBase nodeAfter;
+        MPart mparent = parent.source;
         if (nameBefore.equals (nameAfter))
         {
             nodeAfter = nodeBefore;
-            nodeAfter.source.set (valueAfter);
+            MPart mchild = nodeAfter.source;
+            mchild.set (valueAfter);
+            ChangeVariable.updateRevokation (mchild,  killed);
+            ChangeVariable.updateRevokation (mparent, killedVariable);
         }
         else
         {
             // Update the database
-            MPart mparent = parent.source;
             MPart newPart = (MPart) mparent.set (valueAfter, nameAfter);
             mparent.clear (nameBefore);
             MPart oldPart = (MPart) mparent.child (nameBefore);
+            ChangeVariable.updateRevokation (newPart, killed);
+            ChangeVariable.updateRevokation (mparent, killedVariable);
 
             // Update GUI
             nodeAfter = parent.child (nameAfter);
@@ -127,9 +121,9 @@ public class ChangeEquation extends UndoableView
             }
         }
 
-        if (! parent.source.get ().equals (combinerAfter))
+        if (! mparent.get ().equals (combinerAfter))
         {
-            parent.source.set (combinerAfter);
+            mparent.set (combinerAfter);
             parent.setUserObject ();
             NodeBase grandparent = (NodeBase) parent.getParent ();
             grandparent.invalidateColumns (model);
@@ -138,25 +132,9 @@ public class ChangeEquation extends UndoableView
         nodeAfter.setUserObject ();
         parent.invalidateColumns (null);
         TreeNode[] afterPath = nodeAfter.getPath ();
-        boolean killed = valueAfter.isEmpty ();
-        boolean setSelection;
-        if (killed) setSelection =  ! multi  ||  multiLast;  // Revoke, which hides the node, so like delete.
-        else        setSelection =  ! multi;
-        pet.updateVisibility (afterPath, -2, setSelection);
-        if (multi  &&  ! killed) pet.tree.addSelectionPath (new TreePath (afterPath));
+        pet.updateVisibility (afterPath, -2, ! multi);
+        if (multi) pet.tree.addSelectionPath (new TreePath (afterPath));
         parent.allNodesChanged (model);
         pet.animate ();
-    }
-
-    public boolean replaceEdit (UndoableEdit edit)
-    {
-        if (edit instanceof AddVariable)
-        {
-            AddVariable av = (AddVariable) edit;
-            if (! av.nameIsGenerated) return false;
-            return av.fullPath ().equals (replacePath);
-        }
-
-        return false;
     }
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -78,13 +78,6 @@ public class NodeVariable extends NodeContainer
         this.source = source;
     }
 
-    public String getValue ()
-    {
-        String value = source.get ();
-        if (value.startsWith ("$kill")) return "";
-        return value;
-    }
-
     @Override
     public void build ()
     {
@@ -101,6 +94,8 @@ public class NodeVariable extends NodeContainer
         {
             if (n.key ().startsWith ("@")) add (new NodeEquation ((MPart) n));
         }
+
+        // $kill flag is excluded by not being explicitly added
 
         MPart metadata = (MPart) source.child ("$metadata");
         if (metadata != null)
@@ -141,7 +136,7 @@ public class NodeVariable extends NodeContainer
         }
 
         String value = source.get ();
-        if (value.startsWith ("$kill")) value = "";
+        if (source.getFlag ("$kill")) value = "";
         Variable.ParsedValue pieces = new Variable.ParsedValue (value);
         boolean empty =  pieces.expression.isEmpty ()  &&  pieces.condition.isEmpty ();
 
@@ -185,7 +180,7 @@ public class NodeVariable extends NodeContainer
         else
         {
             // Constraints on form
-            if (value.isEmpty ()  ||  value.startsWith ("$kill")) return;  // Must not be revoked.
+            if (value.isBlank ()  ||  source.getFlag ("$kill")) return;  // Must not be revoked.
             if (name.contains ("$")  ||  name.contains ("\\.")  ||  name.endsWith ("'")) return;  // LHS must be a simple identifier.
             if (! NodePart.isIdentifierPath (value)) return;  // RHS must be a valid part name path (not a derivative, no combiner, no expression, no condition).
             if (children != null)  // Must be single line.
@@ -214,13 +209,6 @@ public class NodeVariable extends NodeContainer
         return iconVariable;
     }
 
-    @Override
-    public int getForegroundColor ()
-    {
-        if (source.get ().startsWith ("$kill")) return KILL;
-        return super.getForegroundColor ();
-    }
-
     public boolean findHighlights (String name)
     {
         boolean result = false;
@@ -232,7 +220,7 @@ public class NodeVariable extends NodeContainer
         if (name.isEmpty ()) return result;
 
         // Generate 3rd column using same method as getColumns().
-        Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
+        Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
         String expression = pieces.expression;
         if (! pieces.condition.isEmpty ()) expression += " @ " + pieces.condition;
         if (! expression.isEmpty ())
@@ -289,7 +277,7 @@ public class NodeVariable extends NodeContainer
     {
         List<String> result = new ArrayList<String> (3);
         result.add (source.key ());
-        Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
+        Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
         result.add ("=" + pieces.combiner);
 
         if (FilteredTreeModel.showParam  &&  source.get ("$metadata", "param").equals ("watch"))
@@ -331,7 +319,7 @@ public class NodeVariable extends NodeContainer
     {
         List<Integer> result = new ArrayList<Integer> (2);
         result.add (fm.stringWidth (source.key () + " "));
-        Variable.ParsedValue pieces = new Variable.ParsedValue (getValue ());
+        Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
         result.add (fm.stringWidth ("=" + pieces.combiner + " "));
         return result;
     }
@@ -509,32 +497,24 @@ public class NodeVariable extends NodeContainer
     {
         String input = toString ();
         UndoManager um = MainFrame.instance.undoManager;
-        boolean canceled = um.getPresentationName ().equals ("AddVariable");
+        boolean added = um.getPresentationName ().equals ("AddVariable noname");
         if (input.isEmpty ())
         {
-            delete (canceled);
+            delete (added);
             return;
         }
 
         String[] parts = input.split ("=", 2);
         String nameAfter = Identifier.canonical (parts[0].trim ().replaceAll ("[\\n\\t]", ""));
-        String valueAfter;
-        if (parts.length > 1)  // Explicit assignment
-        {
-            valueAfter = parts[1].trim ();
-            if (valueAfter.startsWith ("$kill")) valueAfter = valueAfter.substring (5).trim ();
-        }
-        else
-        {
-            valueAfter = "";  // Input was a variable name with no assignment.
-        }
+        String valueAfter = "";
+        if (parts.length > 1) valueAfter = parts[1].trim ();
 
         // What follows is a series of analyses, most having to do with enforcing constraints
         // on name change (which implies moving the variable tree or otherwise modifying another variable).
 
         // Handle a naked expression.
         String nameBefore  = source.key ();
-        String valueBefore = getValue ();
+        String valueBefore = source.get ();
         if (! isValidIdentifier (nameAfter))  // Not a proper variable name. The user actually passed a naked expression, so resurrect the old (probably auto-assigned) variable name.
         {
             nameAfter  = nameBefore;
@@ -573,7 +553,7 @@ public class NodeVariable extends NodeContainer
             boolean isVariable = nodeAfter instanceof NodeVariable;
             boolean different  = nodeAfter != this;
             boolean topdoc     = nodeAfter.source.isFromTopDocument ();
-            boolean revoked    = nodeAfter.source.get ().equals ("$kill");
+            boolean revoked    = nodeAfter.source.getFlag ("$kill");
             if (! isVariable  ||  (different  &&  topdoc  &&  ! revoked  &&  ! canInject))
             {
                 nameAfter = nameBefore;
@@ -593,7 +573,7 @@ public class NodeVariable extends NodeContainer
         if (nodeAfter != null)  // There exists a variable in the target location, so we may end up injecting an equation into a multiconditional expression.
         {
             // In this section, "dest" refers to state of target node before it is overwritten, while "after" refers to newly input values from user.
-            Variable.ParsedValue piecesDest  = new Variable.ParsedValue (((NodeVariable) nodeAfter).getValue ());
+            Variable.ParsedValue piecesDest  = new Variable.ParsedValue (((NodeVariable) nodeAfter).source.get ());
             Variable.ParsedValue piecesAfter = new Variable.ParsedValue (valueAfter);
             boolean expressionAfter = ! piecesAfter.expression.isEmpty ()  ||  ! piecesAfter.condition.isEmpty ();
             if (piecesAfter.combiner.isEmpty ()) piecesAfter.combiner = piecesDest.combiner;  // If the user doesn't specify a combiner, absorb it from our destination.
@@ -634,8 +614,8 @@ public class NodeVariable extends NodeContainer
                 if (canInject)  // Inject into/over an existing variable.
                 {
                     // Remove this variable, regardless of what we do to nodeAfter.
-                    um.addEdit (new CompoundEdit ());
-                    um.apply (new DeleteVariable (this, canceled));
+                    if (! added) um.addEdit (new CompoundEdit ());  // If newly added, then DeleteVariable will neutralize the previous AddVariable, so no need for compound edit.
+                    um.apply (new DeleteVariable (this, added));
 
                     // Decide what change (if any) to apply to nodeAfter.
                     if (expressionAfter)
@@ -643,27 +623,25 @@ public class NodeVariable extends NodeContainer
                         NodeVariable nva = (NodeVariable) nodeAfter;
                         if (equationCount == 0)
                         {
-                            if (piecesAfter.condition.equals (piecesDest.condition))  // Directly overwrite the target, since they share the say name and condition.
+                            if (piecesAfter.condition.equals (piecesDest.condition))  // Directly overwrite the target, since they share the same name and condition.
                             {
-                                um.apply (new ChangeVariable (nva, nameAfter, valueAfter, getKeyPath ()));
+                                um.apply (new ChangeVariable (nva, nameAfter, valueAfter));
                             }
                             else  // Inject new equation and change target into a multiconditional variable.
                             {
-                                // Possible to revoke non-existent equation
-                                um.apply (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                                um.apply (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                             }
                         }
                         else
                         {
                             if (equationMatch == null)  // Add new equation to an existing multiconditional.
                             {
-                                // Possible to revoke non-existent equation
-                                um.apply (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                                um.apply (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                             }
                             else  // Overwrite an existing equation in a multiconditional
                             {
                                 Variable.ParsedValue piecesMatch = new Variable.ParsedValue (piecesDest.combiner + equationMatch.source.get () + equationMatch.source.key ());
-                                um.apply (new ChangeEquation (nva, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression, getKeyPath ()));
+                                um.apply (new ChangeEquation (nva, piecesMatch.condition, piecesMatch.combiner, piecesMatch.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                             }
                         }
                     }
@@ -682,7 +660,6 @@ public class NodeVariable extends NodeContainer
     @Override
     public Undoable makeDelete (boolean canceled)
     {
-        if (source.isFromTopDocument ()) return new DeleteVariable (this, canceled);
-        return new ChangeVariable (this, source.key (), "$kill");  // revoke the variable
+        return new DeleteVariable (this, canceled);
     }
 }

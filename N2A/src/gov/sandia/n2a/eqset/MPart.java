@@ -34,7 +34,7 @@ import gov.sandia.n2a.db.MNode;
     document allows an underlying inherited value to show through. This should be used
     only for interior structural nodes, not for leaf nodes. It is possible to set a
     top-level leaf node to null, but this should be immediately followed by setting
-    children.
+    children or a value.
 **/
 public class MPart extends MNode
 {
@@ -221,16 +221,24 @@ public class MPart extends MNode
     /**
         Injects inherited equations at this node.
         Handles recursion down our containment hierarchy.
-        This method only changes the node if it has no existing inheritedFrom value,
-        so it is safe to run more than once for a given $inherit statement.
         @param newSource The current node in the source document which corresponds to this node in the MPart tree.
     **/
     protected synchronized void underride (MPart from, MNode newSource)
     {
-        if (inheritedFrom == null  &&  from != this)  // The second clause is for a very peculiar case. We don't allow incoming $inherit lines to underride the $inherit that brought them in, since their existence is completely contingent on it.
+        if (from != this)  // We don't allow incoming $inherit lines to underride the $inherit that brought them in, since their existence is completely contingent on it.
         {
-            inheritedFrom = from;
-            original = newSource;
+            if (inheritedFrom == null)
+            {
+                inheritedFrom = from;
+                original = newSource;
+            }
+            else if (! original.data ())  // an inherited value of undefined
+            {
+                // Allow deeper inherited value to show through.
+                // Does not change which $inherit line is responsible for the existence of this node.
+                if (original == source) original = source = newSource;
+                else                    original = newSource;
+            }
         }
         underrideChildren (from, newSource);
     }
@@ -321,7 +329,7 @@ public class MPart extends MNode
         // * original == source and inheritedFrom != null -- node holds an inherited value
         // * original == source and inheritedFrom == null -- node holds a top-level value
         // * original != source and inheritedFrom != null -- node holds a top-level value and an underride (inherited value)
-        // The fourth case is excluded by the logic of this class.
+        // The fourth case is excluded by the logic of this class. If original != source, then inheritedFrom cannot be null.
         return original != source  ||  inheritedFrom == null;
     }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -42,7 +42,7 @@ public class EquationEntry implements Comparable<EquationEntry>
     {
         ifString                = source.key ();
         String expressionString = source.get ();
-        if (expressionString.isEmpty ()  ||  expressionString.startsWith ("$kill")) return;  // Has no meaning for simulation. Probably a revoked equation.
+        if (expressionString.isEmpty ()) return;  // Has no meaning for simulation.
         try
         {
             expression = Operator.parse (expressionString);
@@ -79,7 +79,7 @@ public class EquationEntry implements Comparable<EquationEntry>
         ifString = "";
 
         String[] parts = rhs.split ("@", 2);
-        if (parts[0].isEmpty ()  ||  parts[0].startsWith ("$kill")) return;
+        if (parts[0].isEmpty ()) return;
         try
         {
             expression = Operator.parse (parts[0]);

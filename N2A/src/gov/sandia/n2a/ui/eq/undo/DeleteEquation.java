@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -23,6 +23,8 @@ public class DeleteEquation extends UndoableView
     protected String       name;  // includes the leading @
     protected String       combiner;
     protected String       value;
+    protected boolean      killed;
+    public    boolean      killedVariable;
     protected boolean      neutralized;
     protected boolean      multi;
     protected boolean      multiLast;
@@ -30,12 +32,14 @@ public class DeleteEquation extends UndoableView
     public DeleteEquation (NodeEquation node, boolean canceled)
     {
         NodeBase variable = (NodeBase) node.getParent ();
-        path          = variable.getKeyPath ();
-        index         = variable.getIndex (node);
-        this.canceled = canceled;
-        name          = node.source.key ();
-        combiner      = new Variable.ParsedValue (variable.source.get ()).combiner;
-        value         = node.source.get ();
+        path           = variable.getKeyPath ();
+        index          = variable.getIndex (node);
+        this.canceled  = canceled;
+        name           = node.source.key ();
+        combiner       = new Variable.ParsedValue (variable.source.get ()).combiner;
+        value          = node.source.get ();
+        killed         = node.source.getFlag ("$kill");
+        killedVariable = variable.source.getFlag ("$kill");
 
         // Note that equationCount is zero at start of constructor
         for (MNode n : variable.source)
@@ -60,13 +64,14 @@ public class DeleteEquation extends UndoableView
     public void undo ()
     {
         super.undo ();
-        AddEquation.create (path, equationCount, index, name, combiner, value, multi);
+        if (killed) AddEquation.destroy (path, equationCount, false, name, combiner, killedVariable, ! multi  ||  multiLast);
+        else        AddEquation.create  (path, equationCount, index, name, combiner, value, multi);
     }
 
     public void redo ()
     {
         super.redo ();
-        AddEquation.destroy (path, equationCount, canceled, name, combiner, ! multi  ||  multiLast);
+        AddEquation.destroy (path, equationCount, canceled, name, combiner, killedVariable, ! multi  ||  multiLast);
     }
 
     public boolean replaceEdit (UndoableEdit edit)

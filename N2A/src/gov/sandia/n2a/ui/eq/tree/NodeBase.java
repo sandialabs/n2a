@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -58,7 +58,7 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public boolean isRevoked ()
     {
-        return source.get ().startsWith ("$kill");
+        return source.getFlag ("$kill");
     }
 
     public boolean isLocal ()
@@ -235,6 +235,7 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public int getForegroundColor ()
     {
+        if (source.getFlag ("$kill"))    return KILL;
         if (source.isFromTopDocument ()) return OVERRIDE;
         return                                  INHERIT;
     }

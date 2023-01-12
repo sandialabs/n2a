@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -35,7 +35,7 @@ public class AddEquation extends UndoableView implements AddEditable
     protected String       combinerAfter;
     protected String       value;
     protected NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
-    protected List<String> replacePath;  // If non-null, contains path to NodeVariable that created this action.
+    protected boolean      killedVariable;
     protected boolean      multi;
     protected boolean      multiLast;
 
@@ -46,6 +46,7 @@ public class AddEquation extends UndoableView implements AddEditable
         Variable.ParsedValue pieces = new Variable.ParsedValue (parent.source.get ());
         combinerBefore = pieces.combiner;
         combinerAfter  = combinerBefore;
+        killedVariable = parent.source.getFlag ("$kill");
 
         TreeSet<String> equations = new TreeSet<String> ();
         for (MNode n : parent.source)
@@ -78,14 +79,9 @@ public class AddEquation extends UndoableView implements AddEditable
         combinerBefore = new Variable.ParsedValue (parent.source.get ()).combiner;
         combinerAfter  = combiner;
         this.value     = value;
+        killedVariable = parent.source.getFlag ("$kill");
 
         for (MNode n : parent.source) if (n.key ().startsWith ("@")) equationCount++;
-    }
-
-    public AddEquation (NodeVariable parent, String name, String combiner, String value, List<String> replacePath)
-    {
-        this (parent, name, combiner, value);
-        this.replacePath = replacePath;
     }
 
     public void setMulti (boolean value)
@@ -101,10 +97,10 @@ public class AddEquation extends UndoableView implements AddEditable
     public void undo ()
     {
         super.undo ();
-        destroy (path, equationCount, false, name, combinerBefore, ! multi  ||  multiLast);
+        destroy (path, equationCount, false, name, combinerBefore, killedVariable, ! multi  ||  multiLast);
     }
 
-    public static void destroy (List<String> path, int equationCount, boolean canceled, String name, String combinerBefore, boolean setSelection)
+    public static void destroy (List<String> path, int equationCount, boolean canceled, String name, String combinerBefore, boolean killedVariable, boolean setSelection)
     {
         // Retrieve created node
         NodeBase parent = NodeBase.locateNode (path);
@@ -120,7 +116,24 @@ public class AddEquation extends UndoableView implements AddEditable
 
         // Update database
         MPart mparent = parent.source;
-        mparent.clear (name);
+        MPart mchild  = (MPart) mparent.child (name);
+        if (mchild.isFromTopDocument ())  // Local. Includes newly-created, locally-revoked, and locally un-revoked.
+        {
+            mparent.clear (name);
+        }
+        else  // inherited
+        {
+            if (mchild.getFlag ("$kill"))  // currently revoked, so restore
+            {
+                mchild.set ("0", "$kill");  // un-revoke
+            }
+            else  // currently active, so revoke
+            {
+                MNode mflag = mchild.child ("$kill");
+                mchild.set (mflag == null ? "" : "1",  "$kill");  // revoke or re-revoke
+            }
+        }
+        ChangeVariable.updateRevokation (mparent, killedVariable);
         boolean parentChanged = false;
         if (! mparent.get ().equals (combinerBefore))
         {
@@ -204,7 +217,14 @@ public class AddEquation extends UndoableView implements AddEditable
             MPart equation = (MPart) parent.source.set (parentPiecesBefore.expression, "@" + parentPiecesBefore.condition);
             model.insertNodeIntoUnfiltered (new NodeEquation (equation), parent, 0);
         }
+        ChangeVariable.updateRevokation (parent.source, false);
         MPart createdPart = (MPart) parent.source.set (value == null ? "0" : value, name);
+        if (createdPart.getFlag ("$kill"))  // Restoring a revoked equation.
+        {
+            MPart mflag = (MPart) createdPart.child ("$kill");
+            if (mflag.isInherited ()) mflag.set ("0");
+            else                      createdPart.clear ("$kill");
+        }
         boolean parentChanged = false;
         if (! combinerAfter.equals (parentValueBefore))
         {
@@ -226,7 +246,7 @@ public class AddEquation extends UndoableView implements AddEditable
             NodeBase grandparent = (NodeBase) parent.getParent ();
             grandparent.invalidateColumns (model);
         }
-        if (value != null)  // create was merged with change name/value
+        if (value != null)  // Create was merged with change name/value, or we are un-deleting a node.
         {
             parent.invalidateColumns (null);
             TreeNode[] createdPath = createdNode.getPath ();
@@ -241,7 +261,7 @@ public class AddEquation extends UndoableView implements AddEditable
 
     public boolean addEdit (UndoableEdit edit)
     {
-        if (value == null  &&  edit instanceof ChangeEquation)
+        if (value == null  &&  edit instanceof ChangeEquation)  // null value means the edit has not merged a change yet
         {
             ChangeEquation change = (ChangeEquation) edit;
             if (name.equals (change.nameBefore))
@@ -256,15 +276,10 @@ public class AddEquation extends UndoableView implements AddEditable
         return false;
     }
 
-    public boolean replaceEdit (UndoableEdit edit)
+    public String getPresentationName ()
     {
-        if (edit instanceof AddVariable)
-        {
-            AddVariable av = (AddVariable) edit;
-            if (! av.nameIsGenerated) return false;
-            return av.fullPath ().equals (replacePath);
-        }
-
-        return false;
+        // Hack to allow NodeEquation.applyEdit() to distinguish between new blank equation
+        // and one that already has its name/value set.
+        return "AddEquation" + (killedVariable ? " killed" : "");
     }
 }

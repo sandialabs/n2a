@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -52,24 +52,9 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
-    public boolean isRevoked ()
-    {
-        String value = source.get ();
-        return  value.isEmpty ()  ||  value.startsWith ("$kill");
-    }
-
-    @Override
     public Icon getIcon (boolean expanded)
     {
         return icon;
-    }
-
-    @Override
-    public int getForegroundColor ()
-    {
-        String value = source.get ();
-        if (value.isEmpty ()  ||  value.startsWith ("$kill")) return KILL;
-        return super.getForegroundColor ();
     }
 
     public boolean findHighlights (String name)
@@ -149,7 +134,7 @@ public class NodeEquation extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddEquation");
+            boolean canceled = MainFrame.instance.undoManager.getPresentationName ().startsWith ("AddEquation");
             delete (canceled);
             return;
         }
@@ -166,11 +151,9 @@ public class NodeEquation extends NodeBase
         if (! piecesBefore.condition.equals (piecesAfter.condition))
         {
             MPart partAfter = (MPart) parent.source.child ("@" + piecesAfter.condition);
-            if (partAfter != null  &&  partAfter.isFromTopDocument ())  // Can't overwrite another top-document node, unless it is a revocation ...
+            if (partAfter != null  &&  partAfter.isFromTopDocument ()  &&  ! partAfter.getFlag ("$kill"))  // Can't overwrite another top-document node, unless it is a revocation ...
             {
-                String value = partAfter.get ();
-                boolean revoked =  value.isEmpty ()  ||  value.startsWith ("$kill");
-                if (! revoked) piecesAfter.condition = piecesBefore.condition;  // reject key change
+                piecesAfter.condition = piecesBefore.condition;  // reject key change
             }
         }
 
@@ -191,12 +174,13 @@ public class NodeEquation extends NodeBase
     @Override
     public Undoable makeDelete (boolean canceled)
     {
-        if (source.isFromTopDocument ()) return new DeleteEquation (this, canceled);
-
-        NodeVariable parent   = (NodeVariable) getParent ();
-        String       combiner = parent.source.get ();
-        String       name     = source.key ().substring (1);  // strip @ from name, as required by ChangeEquation
-        String       value    = source.get ();
-        return new ChangeEquation (parent, name, combiner, value, name, combiner, "$kill");  // revoke the equation
+        DeleteEquation result = new DeleteEquation (this, canceled);
+        if (canceled)  // Our delete is expected to neutralize an add. (But we still verify below that the add exists.)
+        {
+            // Hack to ensure unkill on variable gets reversed properly.
+            String last = MainFrame.instance.undoManager.getPresentationName ();
+            result.killedVariable = last.equals ("AddEquation killed");
+        }
+        return result;
     }
 }

@@ -298,6 +298,8 @@ public class EquationSet implements Comparable<EquationSet>
         boolean exception = false;
         for (MNode e : source)
         {
+            if (e.getFlag ("$kill")) continue;
+
             String index = e.key ();
             if (index.equals ("$inherit")) continue;
             if (index.equals ("$reference")) continue;
@@ -317,7 +319,7 @@ public class EquationSet implements Comparable<EquationSet>
                 else
                 {
                     Variable v = new Variable (this, e);
-                    if (! v.killed) variables.add (v);
+                    variables.add (v);
 
                     // Add a watch expression, if requested.
                     MNode vmeta = v.getMetadata ();

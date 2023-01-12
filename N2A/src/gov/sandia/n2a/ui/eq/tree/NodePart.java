@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -176,6 +176,7 @@ public class NodePart extends NodeContainer
     public void buildTriage (MPart line)
     {
         String key = line.key ();
+        if (key.equals ("$kill")) return;  // $kill flag should always be hidden
         if (key.equals ("$inherit"))
         {
             NodeInherit i = new NodeInherit (line);

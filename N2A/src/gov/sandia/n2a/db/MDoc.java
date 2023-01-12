@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -186,12 +186,14 @@ public class MDoc extends MPersistent
 	    children = new TreeMap<String,MNode> (comparator);
         Path file = path ();
         needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
+        int version = -1;
         try (BufferedReader br = Files.newBufferedReader (file))
         {
-            Schema.readAll (this, br);
+            version = Schema.readAll (this, br).version;
         }
         catch (IOException e) {}  // This exception is common for a newly created doc that has not yet been flushed to disk.
         clearChanged ();  // After load(), clear the slate so we can detect any changes and save the document.
+        if (version == 2) visit (new ConvertSchema2 ());  // Positioned after clearChanged() so that updates get written back to db.
 	}
 
 	public synchronized void save ()
@@ -212,5 +214,41 @@ public class MDoc extends MPersistent
             System.err.println ("Failed to write file: " + file);
             e.printStackTrace ();
 	    }
+	}
+
+    /**
+        Upgrade this document from schema 2.
+        Specifically, the semantics/names of some entries have changed.
+        This function will be called on all documents when they are opened, so
+        it does not distinguish between parts/models and other kinds of docs.
+        Instead, we assume that certain patterns are so unique that they only
+        appear in parts/models.
+    **/
+	protected class ConvertSchema2 implements Visitor
+	{
+        public boolean visit (MNode node)
+        {
+            String key   = node.key ();
+            String value = node.get ();
+            if (value.equals ("$kill")  ||  key.startsWith ("@")  &&  value.isBlank ()  &&  node.data ())  // revoked variable or equation
+            {
+                node.set (null);
+                node.set ("", "$kill");
+                return false;  // A revocation should always be a leaf node.
+            }
+            /*  Not ready for these yet.
+            if (key.equals ("$metadata"))
+            {
+                node.parent ().move ("$metadata", "$meta");
+                return false;
+            }
+            if (key.equals ("$reference"))
+            {
+                node.parent ().move ("$reference", "$ref");
+                return false;
+            }
+            */
+            return true;
+        }
 	}
 }

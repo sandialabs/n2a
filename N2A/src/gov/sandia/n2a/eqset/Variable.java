@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -57,7 +57,6 @@ public class Variable implements Comparable<Variable>, Cloneable
     public NavigableSet<EquationEntry>  equations;
     public int                          assignment;
     public MNode                        metadata;
-    public boolean                      killed;     // Indicates to EquationSet constructor that this variable was explicitly removed.
 
     // resolution
     public EquationSet                  container;  // non-null iff this variable is contained in an EquationSet.variables collection
@@ -128,16 +127,12 @@ public class Variable implements Comparable<Variable>, Cloneable
             if (! rhs.isEmpty ())
             {
                 rhs = parseAssignment (rhs);
-                if (rhs.startsWith ("$kill"))
-                {
-                    killed = true;
-                    return;
-                }
                 EquationEntry e = new EquationEntry (rhs);
                 if (e.expression != null) add (e);
             }
             for (MNode i : source)
             {
+                if (i.getFlag ("$kill")) continue;
                 String key = i.key ();
                 if (key.startsWith ("@"))
                 {

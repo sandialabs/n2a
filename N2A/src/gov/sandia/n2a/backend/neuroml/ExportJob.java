@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -501,7 +501,7 @@ public class ExportJob extends XMLutility
                     //   - Disconnected. Might only occur in NML example files.
                     String inputID = input (p, elements, null, DL);  // Construct the input generator element.
                     String B = p.get ("B");
-                    if (B.isEmpty ()  ||  B.startsWith ("$kill"))  // Shared input
+                    if (B.isEmpty ()  ||  p.getFlag ("B", "$kill"))  // Shared input
                     {
                         EquationSet part = getEquations (p);
                         Variable n = part.find (new Variable ("$n"));
@@ -4103,8 +4103,8 @@ public class ExportJob extends XMLutility
             String key = p.key ();
             if (partEquations.findConnection (key) != null) continue;  // Skip connection bindings. They are unpacked elsewhere.
             if (skipList.contains (key)) continue;
+            if (p.getFlag ("$kill")) continue;
             String value = p.get ();
-            if (value.startsWith ("$kill")) continue;
 
             if (key.startsWith ("$"))
             {

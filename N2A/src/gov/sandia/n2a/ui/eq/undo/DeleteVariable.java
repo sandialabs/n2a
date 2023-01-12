@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -22,6 +22,7 @@ public class DeleteVariable extends UndoableView
     protected boolean      canceled;
     protected String       name;
     protected MNode        savedSubtree;
+    protected boolean      killed;
     protected boolean      neutralized;
     protected boolean      multi;
     protected boolean      multiLast;
@@ -33,6 +34,7 @@ public class DeleteVariable extends UndoableView
         index         = container.getIndex (node);
         this.canceled = canceled;
         name          = node.source.key ();
+        killed        = node.source.getFlag ("$kill");
 
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source.getSource ());
@@ -51,7 +53,8 @@ public class DeleteVariable extends UndoableView
     public void undo ()
     {
         super.undo ();
-        AddVariable.create (path, index, name, savedSubtree, false, multi);
+        if (killed) AddVariable.destroy (path, false, name, ! multi  ||  multiLast);
+        else        AddVariable.create  (path, index, name, savedSubtree, false, multi);
     }
 
     public void redo ()

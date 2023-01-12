@@ -940,7 +940,7 @@ public class PanelEquationTree extends JScrollPane
         Deleted nodes should already be removed from tree by the caller, with proper notification.
         @param index Position of the last node in its parent node. Only used if the last node has been deleted.
         A value of -1 causes selection to shift up to the parent.
-        A value of -2 cause index to be derived from given path.
+        A value of -2 causes index to be derived from given path.
         @param setSelection Highlights the closest tree node to the given path. Only does something if tree is non-null. 
     **/
     public static void updateVisibility (PanelEquationTree pet, TreeNode path[], int index, boolean setSelection)

@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,8 +18,6 @@ import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
-import javax.swing.undo.UndoableEdit;
-
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.EquationEntry;
@@ -49,9 +47,8 @@ public class ChangeVariable extends UndoableView
     protected String       valueBefore;
     protected String       valueAfter;
     protected MNode        savedTree;   // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
-    protected List<String> replacePath; // If a newly-created variable turns out to modify another node, this lets us remove the AddVariable from the undo stack.
+    protected boolean      killed;
     protected boolean      multi;
-    protected boolean      multiLast;
 
     /**
         @param node The variable being changed.
@@ -68,12 +65,8 @@ public class ChangeVariable extends UndoableView
 
         savedTree = new MVolatile ();
         if (node.source.isFromTopDocument ()) savedTree.merge (node.source.getSource ());
-    }
 
-    public ChangeVariable (NodeVariable node, String nameAfter, String valueAfter, List<String> replacePath)
-    {
-        this (node, nameAfter, valueAfter);
-        this.replacePath = replacePath;
+        killed = node.source.getFlag ("$kill");
     }
 
     public void setMulti (boolean value)
@@ -81,26 +74,21 @@ public class ChangeVariable extends UndoableView
         multi = value;
     }
 
-    public void setMultiLast (boolean value)
-    {
-        multiLast = value;
-    }
-
     public void undo ()
     {
         super.undo ();
         savedTree.set (valueBefore);
-        apply (nameAfter, nameBefore, multi, multiLast);
+        apply (nameAfter, nameBefore, killed, multi);
     }
 
     public void redo ()
     {
         super.redo ();
         savedTree.set (valueAfter);
-        apply (nameBefore, nameAfter, multi, multiLast);
+        apply (nameBefore, nameAfter, false, multi);
     }
 
-    public void apply (String nameBefore, String nameAfter, boolean multi, boolean multiLast)
+    public void apply (String nameBefore, String nameAfter, boolean killed, boolean multi)
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -118,7 +106,9 @@ public class ChangeVariable extends UndoableView
         if (nameBefore.equals (nameAfter))
         {
             nodeAfter = nodeBefore;
-            nodeAfter.source.set (savedTree.get ());  // Same as valueAfter. Sub-tree is not relevant here.
+            MPart mchild = nodeAfter.source;
+            mchild.set (savedTree.get ());  // Same as valueAfter. Sub-tree is not relevant here.
+            updateRevokation (mchild, killed);
         }
         else
         {
@@ -131,6 +121,7 @@ public class ChangeVariable extends UndoableView
             mparent.set (savedTree, nameAfter);
             MPart newPart = (MPart) mparent.child (nameAfter);
             MPart oldPart = (MPart) mparent.child (nameBefore);
+            updateRevokation (newPart, killed);
 
             //   Change references to this variable
             //   See ChangePart.apply() for a similar procedure.
@@ -281,12 +272,8 @@ public class ChangeVariable extends UndoableView
             parent.invalidateColumns (model);
             TreeNode[] nodePath = nodeAfter.getPath ();
             pet.updateOrder (nodePath);
-            boolean killed = savedTree.get ().equals ("$kill");
-            boolean setSelection;
-            if (killed) setSelection =  ! multi  ||  multiLast;
-            else        setSelection =  ! multi;
-            pet.updateVisibility (nodePath, -2, setSelection);
-            if (multi  &&  ! killed) pet.tree.addSelectionPath (new TreePath (nodePath));
+            pet.updateVisibility (nodePath, -2, ! multi);
+            if (multi) pet.tree.addSelectionPath (new TreePath (nodePath));
         }
 
         for (List<String> ref : references)
@@ -336,6 +323,21 @@ public class ChangeVariable extends UndoableView
 
             MPart mparent = parent.source;
             if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
+        }
+    }
+
+    public static void updateRevokation (MPart mchild, boolean wasKilled)
+    {
+        MPart mflag = (MPart) mchild.child ("$kill");
+        if (mchild.getFlag ("$kill"))  // Currently revoked, so restore it.
+        {
+            if (mflag.isInherited ()) mflag.set ("0");
+            else                      mchild.clear ("$kill");
+        }
+        else if (wasKilled)  // Currently active, but we are undoing something that was originally revoked.
+        {
+            if (mflag == null) mchild.set ("", "$kill"); // was local
+            else               mchild.clear ("$kill");   // revert to inherited
         }
     }
 
@@ -563,17 +565,5 @@ public class ChangeVariable extends UndoableView
 
         // Is there a sub-part with the given name?
         return container.findPart (name) != null;
-    }
-
-    public boolean replaceEdit (UndoableEdit edit)
-    {
-        if (edit instanceof AddVariable)
-        {
-            AddVariable av = (AddVariable) edit;
-            if (! av.nameIsGenerated) return false;
-            return av.fullPath ().equals (replacePath);
-        }
-
-        return false;
     }
 }

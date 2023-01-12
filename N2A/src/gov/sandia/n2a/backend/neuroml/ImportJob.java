@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -2006,7 +2006,7 @@ public class ImportJob extends XMLutility
         for (MNode c : part)
         {
             if (c.child ("$inherit") == null) continue;  // not a sub-part
-            c.set ("$kill", "B");  // force sub-part to get its connection binding from part
+            c.set ("", "B", "$kill");  // force sub-part to get its connection binding from part
         }
     }
 
@@ -2039,8 +2039,8 @@ public class ImportJob extends XMLutility
             MNode synapse = part.childOrCreate (id);
             synapse.set (id, "$inherit");
             addDependency (synapse, id);
-            synapse.set ("$kill", "A");  // force synapse to get its connection bindings from part
-            synapse.set ("$kill", "B");
+            synapse.set ("", "A", "$kill");  // force synapse to get its connection bindings from part
+            synapse.set ("", "B", "$kill");
         }
     }
 
@@ -2292,8 +2292,8 @@ public class ImportJob extends XMLutility
                     {
                         // Create modified part
                         MNode c = models.childOrCreate (modelName, component);
-                        c.set ("$kill", "B");
-                        c.set ("$kill", "B.I");
+                        c.set ("", "B",   "$kill");
+                        c.set ("", "B.I", "$kill");
 
                         // Create connection
                         base.set ("+A.I", "B.I");
@@ -2715,8 +2715,8 @@ public class ImportJob extends XMLutility
                 part.clear ("$inherit");
                 MNode connection = part.set (inherit, "A");
                 addDependencyFromConnection (connection, inherit);
-                sourcePart.set ("$kill", "B");
-                sourcePart.set ("$kill", "B.I");
+                sourcePart.set ("", "B",   "$kill");
+                sourcePart.set ("", "B.I", "$kill");
                 part.set ("+A.I", "B.I");
             }
         }
@@ -4117,7 +4117,7 @@ public class ImportJob extends XMLutility
                         }
                     }
                 }
-                for (String pc : kill) v.set ("", "@" + pc);  // For conditional equations, used "" rather than "$kill".
+                for (String pc : kill) v.set ("", "@" + pc, "$kill");
             }
 
             // Pretty print and name mapping
@@ -4509,7 +4509,7 @@ public class ImportJob extends XMLutility
                 List<MNode> parents = collectParents (source);
                 child = definitionFor (name, parents);
             }
-            if (child != null) root.set ("$kill", name);
+            if (child != null) root.set ("", name, "$kill");
         }
     }
 
