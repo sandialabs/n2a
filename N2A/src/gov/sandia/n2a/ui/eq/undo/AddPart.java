@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -292,8 +292,11 @@ public class AddPart extends UndoableView implements AddEditable
         int index = parent.getIndexFiltered (createdNode);  // returns -1 if createdNode is filtered out of parent
         if (canceled) index--;
 
+        // Update database
         MPart mparent = parent.source;
-        mparent.clear (name);
+        AddVariable.deleteOrKill (mparent, name);
+
+        // Update GUI
         if (mparent.child (name) == null)  // Node is fully deleted
         {
             pe.deleteFocus (createdNode);
@@ -370,6 +373,7 @@ public class AddPart extends UndoableView implements AddEditable
         // Update database
         MPart createdPart = (MPart) parent.source.childOrCreate (name);
         createdPart.merge (newPart);
+        AddVariable.unkill (createdPart);
 
         // Update GUI
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -45,6 +45,7 @@ public class ChangePart extends UndoableView
     protected String       nameBefore;
     protected String       nameAfter;
     protected MNode        savedTree;  // The entire subtree from the top document. If not from top document, then at least a single node for the part itself.
+    protected boolean      killed;
 
     /**
         @param node The part being renamed.
@@ -58,20 +59,22 @@ public class ChangePart extends UndoableView
 
         savedTree = new MVolatile ();
         if (node.source.isFromTopDocument ()) savedTree.merge (node.source.getSource ());
+
+        killed = node.source.getFlag ("$kill");
     }
 
     public void undo ()
     {
         updatePath (nameAfter);
         super.undo ();
-        apply (nameAfter, nameBefore);
+        apply (nameAfter, nameBefore, killed);
     }
 
     public void redo ()
     {
         updatePath (nameBefore);
         super.redo ();
-        apply (nameBefore, nameAfter);
+        apply (nameBefore, nameAfter, false);
     }
 
     protected void updatePath (String name)
@@ -83,7 +86,7 @@ public class ChangePart extends UndoableView
         }
     }
 
-    public void apply (String nameBefore, String nameAfter)
+    public void apply (String nameBefore, String nameAfter, boolean killed)
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -99,6 +102,7 @@ public class ChangePart extends UndoableView
         mparent.set (savedTree, nameAfter);
         MPart oldPart = (MPart) mparent.child (nameBefore);
         MPart newPart = (MPart) mparent.child (nameAfter);
+        ChangeVariable.updateRevokation (newPart, killed);
 
         //   Change connection bindings to this part.
         //   See ChangeVariable.apply() for a similar procedure. More detailed comments appear there.

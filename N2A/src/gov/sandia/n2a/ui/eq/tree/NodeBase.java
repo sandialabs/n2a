@@ -50,10 +50,11 @@ public class NodeBase extends DefaultMutableTreeNode
     **/
     public boolean visible ()
     {
-        if (FilteredTreeModel.showParam) return isParam ()  &&  ! isRevoked ();
-        if (isRevoked ()) return FilteredTreeModel.showRevoked;
-        if (isLocal ())   return FilteredTreeModel.showLocal;
-        else              return FilteredTreeModel.showInherited;
+        boolean revoked = isRevoked ();
+        if (FilteredTreeModel.showParam) return isParam ()  &&  ! revoked;
+        if (revoked)    return FilteredTreeModel.showRevoked;
+        if (isLocal ()) return FilteredTreeModel.showLocal;
+        else            return FilteredTreeModel.showInherited;
     }
 
     public boolean isRevoked ()

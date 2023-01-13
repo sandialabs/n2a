@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -544,7 +544,9 @@ public class PanelEquationGraph extends JScrollPane
                 Object c = children.nextElement ();
                 if (c instanceof NodePart)
                 {
-                    GraphNode gn = new GraphNode (this, (NodePart) c, null);
+                    NodePart np = (NodePart) c;
+                    if (np.isRevoked ()  &&  ! FilteredTreeModel.showRevoked) continue;  // Can't use NodePart.visible() here, because that implementation is specifically for equation tree.
+                    GraphNode gn = new GraphNode (this, np, null);
                     if (gn.open) add (gn, 0);  // Put open nodes at top of z order
                     else         add (gn);
                     if (gn.getX () == 0  &&  gn.getY () == 0) needLayout.add (gn);

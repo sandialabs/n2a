@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -22,6 +22,7 @@ public class DeletePart extends UndoableView
     protected boolean      canceled;
     protected String       name;
     protected MNode        savedSubtree;
+    protected boolean      killed;
     protected boolean      neutralized;
     protected boolean      multi;          // Indicates that this is one of several parts being deleted at the same time. During undo, set selected.
     protected boolean      multiLast;      // Indicates this is the focused item in the selection.
@@ -41,6 +42,7 @@ public class DeletePart extends UndoableView
         index         = container.getIndex (node);
         this.canceled = canceled;
         name          = node.source.key ();
+        killed        = node.source.getFlag ("$kill");
 
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source.getSource ());  // Only take the top-doc data, not the collated tree.
@@ -61,7 +63,8 @@ public class DeletePart extends UndoableView
     public void undo ()
     {
         super.undo ();
-        AddPart.create (path, index, name, savedSubtree, false, multi, multiLast, false, touchesPin);
+        if (killed) AddPart.destroy (path, false, name, ! multi  ||  multiLast, false, touchesPin);
+        else        AddPart.create  (path, index, name, savedSubtree, false, multi, multiLast, false, touchesPin);
     }
 
     public void redo ()

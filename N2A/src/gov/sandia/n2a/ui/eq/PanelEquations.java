@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -292,6 +292,7 @@ public class PanelEquations extends JPanel
         buttonFilterInherited.setSelected (FilteredTreeModel.showInherited);
         buttonFilterInherited.setToolTipText ("Show Inherited Equations");
         buttonFilterInherited.addActionListener (listenerFilter);
+        buttonFilterInherited.setActionCommand ("Inherited");
 
         buttonFilterLocal = new JToggleButton (iconFilter);  // black
         buttonFilterLocal.setSelectedIcon (iconFilterFilled);
@@ -300,6 +301,7 @@ public class PanelEquations extends JPanel
         buttonFilterLocal.setSelected (FilteredTreeModel.showLocal);
         buttonFilterLocal.setToolTipText ("Show Local Equations");
         buttonFilterLocal.addActionListener (listenerFilter);
+        buttonFilterLocal.setActionCommand ("Local");
 
         Color darkGreen = new Color (0, 128, 0);
         buttonFilterParam = new JToggleButton (colorize (iconFilter, darkGreen));
@@ -309,6 +311,7 @@ public class PanelEquations extends JPanel
         buttonFilterParam.setSelected (FilteredTreeModel.showParam);
         buttonFilterParam.setToolTipText ("Show Parameters Only (disable other filters)");
         buttonFilterParam.addActionListener (listenerFilter);
+        buttonFilterParam.setActionCommand ("Param");
 
         Color darkRed = new Color (192, 0, 0);
         buttonFilterRevoked = new JToggleButton (colorize (iconFilter, darkRed));
@@ -318,6 +321,7 @@ public class PanelEquations extends JPanel
         buttonFilterRevoked.setSelected (FilteredTreeModel.showRevoked);
         buttonFilterRevoked.setToolTipText ("Show Revoked Equations");
         buttonFilterRevoked.addActionListener (listenerFilter);
+        buttonFilterRevoked.setActionCommand ("Revoked");
 
         buttonView = new JButton ();
         switch (view)
@@ -801,7 +805,7 @@ public class PanelEquations extends JPanel
 
     public void drillUp ()
     {
-        NodePart parent = (NodePart) part.getTrueParent ();
+        NodePart parent = part.getTrueParent ();
         if (parent != null) drill (parent);
     }
 
@@ -1371,6 +1375,32 @@ public class PanelEquations extends JPanel
             AppData.state.set (FilteredTreeModel.showLocal,     "PanelModel", "filter", "local");
             AppData.state.set (FilteredTreeModel.showParam,     "PanelModel", "filter", "param");
             AppData.state.set (FilteredTreeModel.showRevoked,   "PanelModel", "filter", "revoked");
+
+            if (e.getActionCommand ().equals ("Revoked"))
+            {
+                NodePart revoked = null;
+                if (! FilteredTreeModel.showRevoked)  // Need to shift view up to nearest parent that is not revoked.
+                {
+                    NodePart p = part;
+                    while (p != null)
+                    {
+                        if (p.isRevoked ()) revoked = p;
+                        p = p.getTrueParent ();
+                    }
+                }
+                if (revoked == null)
+                {
+                    saveFocus ();
+                    panelEquationGraph.reloadPart ();
+                    takeFocus ();
+                    // Fall through to tree updates below, even though peg.updateFilterLevel() is unneeded.
+                }
+                else
+                {
+                    drill (revoked.getTrueParent ());  // "revoked" will never be the top level, so this is safe.
+                    return;
+                }
+            }
 
             if (panelEquationTree.isVisible ()) panelEquationTree.updateFilterLevel ();
             if (view == NODE)

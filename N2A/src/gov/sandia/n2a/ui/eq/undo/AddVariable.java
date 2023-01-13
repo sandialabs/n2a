@@ -104,23 +104,7 @@ public class AddVariable extends UndoableView implements AddEditable
 
         // Update database
         MPart mparent = parent.source;
-        MPart mchild  = (MPart) mparent.child (name);
-        if (mchild.isFromTopDocument ())  // Local. Includes newly-created, locally-revoked, and locally un-revoked.
-        {
-            mparent.clear (name);
-        }
-        else  // inherited
-        {
-            if (mchild.getFlag ("$kill"))  // currently revoked, so restore
-            {
-                mchild.set ("0", "$kill");  // un-revoke
-            }
-            else  // currently active, so revoke
-            {
-                MNode mflag = mchild.child ("$kill");
-                mchild.set (mflag == null ? "" : "1",  "$kill");  // revoke or re-revoke
-            }
-        }
+        deleteOrKill (mparent, name);
 
         // Update GUI
         if (mparent.child (name) == null)  // Node is fully deleted
@@ -163,6 +147,56 @@ public class AddVariable extends UndoableView implements AddEditable
         }
     }
 
+    /**
+        Toggles between local override, inherited, killed and unkilled.
+        The state transitions are (roughly):
+        Local only (no parent value)
+            -> Nonexistent
+        Overridden (has a parent value and local value)
+            -> Inherited
+        Inherited (has a parent value only, no local value)
+            -> Overridden Killed
+        Overridden Killed (local override sets kill true)
+            -> Inherited
+        Inherited Killed (kill flag is set true in parent)
+            -> Overridden Unkilled
+        Overridden Unkilled (local override sets kill false)
+            -> Inherited Killed
+    **/
+    public static void deleteOrKill (MPart mparent, String name)
+    {
+        MPart mchild = (MPart) mparent.child (name);
+        if (mchild.isFromTopDocument ())  // Local. Includes newly-created, locally-revoked, and locally un-revoked.
+        {
+            mparent.clear (name);
+        }
+        else  // inherited
+        {
+            if (mchild.getFlag ("$kill"))  // currently revoked, so restore
+            {
+                mchild.set ("0", "$kill");  // un-revoke
+            }
+            else  // currently active, so revoke
+            {
+                MNode mflag = mchild.child ("$kill");
+                mchild.set (mflag == null ? "" : "1",  "$kill");  // revoke or re-revoke
+            }
+        }
+    }
+
+    /**
+        Ensure that added node is not currently revoked.
+        A new node could be revoked if it overwrites a node that was revoked,
+        either locally or inherited.
+    **/
+    public static void unkill (MPart createdPart)
+    {
+        if (! createdPart.getFlag ("$kill")) return;
+        MPart mflag = (MPart) createdPart.child ("$kill");
+        if (mflag.isInherited ()) mflag.set ("0");
+        else                      createdPart.clear ("$kill");
+    }
+
     public void redo ()
     {
         super.redo ();
@@ -185,12 +219,7 @@ public class AddVariable extends UndoableView implements AddEditable
         // Update database
         MPart createdPart = (MPart) parent.source.childOrCreate (name);
         createdPart.merge (newPart);
-        if (createdPart.getFlag ("$kill"))  // Restoring a revoked variable.
-        {
-            MPart mflag = (MPart) createdPart.child ("$kill");
-            if (mflag.isInherited ()) mflag.set ("0");
-            else                      createdPart.clear ("$kill");
-        }
+        unkill (createdPart);
 
         // Update GUI
 

@@ -116,23 +116,7 @@ public class AddEquation extends UndoableView implements AddEditable
 
         // Update database
         MPart mparent = parent.source;
-        MPart mchild  = (MPart) mparent.child (name);
-        if (mchild.isFromTopDocument ())  // Local. Includes newly-created, locally-revoked, and locally un-revoked.
-        {
-            mparent.clear (name);
-        }
-        else  // inherited
-        {
-            if (mchild.getFlag ("$kill"))  // currently revoked, so restore
-            {
-                mchild.set ("0", "$kill");  // un-revoke
-            }
-            else  // currently active, so revoke
-            {
-                MNode mflag = mchild.child ("$kill");
-                mchild.set (mflag == null ? "" : "1",  "$kill");  // revoke or re-revoke
-            }
-        }
+        AddVariable.deleteOrKill (mparent, name);
         ChangeVariable.updateRevokation (mparent, killedVariable);
         boolean parentChanged = false;
         if (! mparent.get ().equals (combinerBefore))
@@ -219,12 +203,7 @@ public class AddEquation extends UndoableView implements AddEditable
         }
         ChangeVariable.updateRevokation (parent.source, false);
         MPart createdPart = (MPart) parent.source.set (value == null ? "0" : value, name);
-        if (createdPart.getFlag ("$kill"))  // Restoring a revoked equation.
-        {
-            MPart mflag = (MPart) createdPart.child ("$kill");
-            if (mflag.isInherited ()) mflag.set ("0");
-            else                      createdPart.clear ("$kill");
-        }
+        AddVariable.unkill (createdPart);
         boolean parentChanged = false;
         if (! combinerAfter.equals (parentValueBefore))
         {

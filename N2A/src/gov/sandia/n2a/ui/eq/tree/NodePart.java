@@ -254,13 +254,6 @@ public class NodePart extends NodeContainer
     }
 
     @Override
-    public boolean isRevoked ()
-    {
-        // TODO: implement a way to revoke parts
-        return false;
-    }
-
-    @Override
     public boolean isParam ()
     {
         // Check if we have subnodes and at least some of them are visible.
@@ -1001,8 +994,8 @@ public class NodePart extends NodeContainer
     @Override
     public Undoable makeDelete (boolean canceled)
     {
-        // Graph nodes are handled by GraphNode.TitleRenderer. A delete on the title of a graph node never reaches here.
-        if (! source.isFromTopDocument ()) return null;
+        // A delete on the title of a graph node does not reach here.
+        // Instead, graph nodes are handled by GraphNode.TitleRenderer.
         if (isTrueRoot ()) return new DeleteDoc ((MDoc) source.getSource ());  // Root will always be from top document.
         return new DeletePart (this, canceled);
     }

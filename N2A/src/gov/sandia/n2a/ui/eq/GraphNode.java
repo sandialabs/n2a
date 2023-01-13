@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -951,8 +951,6 @@ public class GraphNode extends JPanel
                 public void actionPerformed (ActionEvent e)
                 {
                     // Compare this implementation with NodePart.delete(). Here we specifically handle graph nodes.
-
-                    if (! node.source.isFromTopDocument ()) return;
 
                     List<GraphNode> selection = parent.getSelection ();
                     selection.remove (GraphNode.this);
