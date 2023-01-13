@@ -28,6 +28,7 @@ import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
@@ -120,12 +121,12 @@ public class AddPart extends UndoableView implements AddEditable
             return location;
         }
 
-        // Base on stored position of viewport. 
-        MNode boundsParent = parent.source.child ("$metadata", "gui", "bounds", "parent");
-        if (boundsParent != null)
+        // Base on stored position of viewport.
+        FocusCacheEntry fce = pe.createFocus (parent);
+        if (fce.position != null)
         {
-            location.x += boundsParent.getInt ("x");
-            location.y += boundsParent.getInt ("y");
+            location.x += fce.position.x;
+            location.y += fce.position.y;
             return location;
         }
 
@@ -154,8 +155,11 @@ public class AddPart extends UndoableView implements AddEditable
             location.x = center.x / count;
             location.y = center.y / count;
         }
-
-        return new Point (100, 100);
+        else  // count == 0
+        {
+            location = new Point (100, 100);
+        }
+        return location;
     }
 
     /**

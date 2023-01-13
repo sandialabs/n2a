@@ -813,7 +813,6 @@ public class PanelEquations extends JPanel
     {
         breadcrumbRenderer.updateSelected (); // Update icon.
         panelParent.animate ();               // Sets size of parent panel from metadata, in getPreferredSize().
-        panelEquationGraph.updateGUI ();      // Updates canvas position.
     }
 
     ActionListener listenerAdd = new ActionListener ()

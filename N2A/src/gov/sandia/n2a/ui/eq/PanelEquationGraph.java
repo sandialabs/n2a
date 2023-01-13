@@ -57,7 +57,6 @@ import javax.swing.event.MouseInputAdapter;
 import javax.swing.tree.TreePath;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.MainFrame;
@@ -127,23 +126,6 @@ public class PanelEquationGraph extends JScrollPane
         Point focus = vp.getViewPosition ();
         focus.x -= graphPanel.offset.x;
         focus.y -= graphPanel.offset.y;
-        if (! container.locked  &&  container.part != null)
-        {
-            // Check if offset has actually changed. This is a nicety to avoid modifying models unless absolutely necessary.
-            Point old = new Point ();
-            MNode parent = container.part.source.child ("$metadata", "gui", "bounds", "parent");
-            if (parent != null)
-            {
-                old.x = parent.getInt ("x");
-                old.y = parent.getInt ("y");
-            }
-            if (! focus.equals (old))
-            {
-                parent = container.part.source.childOrCreate ("$metadata", "gui", "bounds", "parent");
-                if (focus.x != old.x) parent.set (focus.x, "x");
-                if (focus.y != old.y) parent.set (focus.y, "y");
-            }
-        }
         return focus;
     }
 
@@ -171,40 +153,10 @@ public class PanelEquationGraph extends JScrollPane
     public void restoreViewportPosition (FocusCacheEntry fce)
     {
         Point focus = new Point ();  // (0,0)
-        if (fce.position == null)
-        {
-            MPart parent = (MPart) container.part.source.child ("$metadata", "gui", "bounds", "parent");
-            if (parent != null)
-            {
-                focus.x = parent.getOrDefault (0, "x");
-                focus.y = parent.getOrDefault (0, "y");
-            }
-        }
-        else
+        if (fce.position != null)
         {
             focus.x = fce.position.x;
             focus.y = fce.position.y;
-        }
-
-        focus.x += graphPanel.offset.x;
-        focus.y += graphPanel.offset.y;
-        graphPanel.layout.shiftViewport (focus);
-    }
-
-    /**
-        Apply changes in metadata.
-    **/
-    public void updateGUI ()
-    {
-        Point focus = vp.getViewPosition ();
-        focus.x -= graphPanel.offset.x;
-        focus.y -= graphPanel.offset.y;
-
-        MPart parent = (MPart) container.part.source.child ("$metadata", "gui", "bounds", "parent");
-        if (parent != null)
-        {
-            focus.x = parent.getOrDefault (focus.x, "x");
-            focus.y = parent.getOrDefault (focus.y, "y");
         }
 
         focus.x += graphPanel.offset.x;
