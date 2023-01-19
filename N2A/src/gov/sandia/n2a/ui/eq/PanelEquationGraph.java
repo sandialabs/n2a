@@ -152,15 +152,13 @@ public class PanelEquationGraph extends JScrollPane
 
     public void restoreViewportPosition (FocusCacheEntry fce)
     {
-        Point focus = new Point ();  // (0,0)
+        Point focus = null;
         if (fce.position != null)
         {
-            focus.x = fce.position.x;
-            focus.y = fce.position.y;
+            focus = new Point ();
+            focus.x = fce.position.x + graphPanel.offset.x;
+            focus.y = fce.position.y + graphPanel.offset.y;
         }
-
-        focus.x += graphPanel.offset.x;
-        focus.y += graphPanel.offset.y;
         graphPanel.layout.shiftViewport (focus);
     }
 
@@ -1408,8 +1406,9 @@ public class PanelEquationGraph extends JScrollPane
         **/
         public Point shiftViewport (Point n)
         {
-            // Compute tight bounds which include new position
-            bounds = new Rectangle (n.x, n.y, 1, 1);
+            // Compute tight bounds
+            if (n == null) bounds = new Rectangle (0, 0, -1, -1);   // Only consider component bounds.
+            else           bounds = new Rectangle (n.x, n.y, 1, 1); // Also include new position in bounds.
             for (Component c : graphPanel.getComponents ())
             {
                 bounds = bounds.union (c.getBounds ());
@@ -1418,6 +1417,11 @@ public class PanelEquationGraph extends JScrollPane
             {
                 if (ge.nameTo != null) continue;  // Don't include external edges in tight bound. Their size is arbitrary and viewport-dependent.
                 bounds = bounds.union (ge.bounds);
+            }
+            if (n == null)
+            {
+                n = new Point (bounds.x - 10, bounds.y - 10);
+                bounds.add (n);
             }
 
             // Shift components so bounds start at origin
