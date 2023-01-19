@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -36,7 +36,6 @@ public class AppData
     public static MCombo references;
 
     protected static boolean stop;
-    protected static Thread saveThread;
 
     public static final Cleaner cleaner = Cleaner.create ();
 
@@ -97,8 +96,7 @@ public class AppData
         //convert (modelContainers);
         //convert (referenceContainers);
 
-        stop = false;
-        saveThread = new Thread ("Save AppData")
+        Thread saveThread = new Thread ("Save AppData")
         {
             public void run ()
             {
