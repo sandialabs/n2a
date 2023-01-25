@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -204,9 +204,10 @@ public class InternalBackend extends Backend
         e.addSpecials ();  // $connect, $index, $init, $n, $t, $t'
         e.addAttribute ("global",       false, true,  "$max", "$min", "$k", "$radius");
         e.addAttribute ("global",       false, false, "$n");
+        e.addAttribute ("state",        true,  false, "$n");  // Forbid $n from being temporary, even if it meets the criteria.
         e.addAttribute ("preexistent",  true,  false, "$t'", "$t");  // variables that are not stored because Instance.get/set intercepts them
         e.addAttribute ("readOnly",     true,  false, "$t");
-        e.addAttribute ("externalRead", true,  false, "$type");  // Force $type to be double-buffered. Because this is combined with REPLACE, we need to explicitly zero $type in finish().
+        e.addAttribute ("externalRead", false, false, "$type");  // Force $type to be double-buffered. Because this is combined with REPLACE, we need to explicitly zero $type in finish().
         e.resolveLHS ();
         e.fillIntegratedVariables ();
         e.findIntegrated ();

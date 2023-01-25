@@ -1837,6 +1837,7 @@ public class EquationSet implements Comparable<EquationSet>
                                 type.reference = new VariableReference ();
                                 type.reference.variable = type;
                                 type.addUser (part);  // Keep part.$type from being removed.
+                                type.addAttribute ("state");
                             }
 
                             if (type != from) type.addDependencyOn (from); // Because part.$type value can be changed by from.
@@ -3762,6 +3763,7 @@ public class EquationSet implements Comparable<EquationSet>
         As part of the process, removes arithmetic operations that have no effect.
         Depends on results of:
             resolveRHS() -- so that named constants can be found during evaluation
+            findExternal() -- marks "externalWrite" variables, which cannot be "constant"
     **/
     public void findConstants ()
     {
@@ -3931,38 +3933,150 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Check for special variables that we wish not to store in connections.
-        Depends on results of: none
+        Mark all variables that can possibly be temporary.
+        Some variables cannot be temporary:
+        <ul>
+        <li>Derivatives and integrated values.
+        <li>Reductions.
+        <li>Read or written outside the equation set.
+        <li>Has forbidden attributes. This effectively excludes certain $variables.
+        </ul>
+
+        <p>Temporaries are not allowed to have cycles among themselves. This routine
+        breaks any cycles by iteratively making the variable with the most cycles
+        back into a state variable.
+        Uses algorithm from "Finding All The Elementary Circuits of a Directed Graph"
+        by Donald B. Johnson, SIAM J. Comput., Vol. 4, No. 1, March 1975.
+
+        <p>Depends on results of:
+        <ul>
+        <li>findIntegrated() -- marks integrated values
+        <li>resolveRHS() -- establishes dependency graph
+        <li>findExternal() -- marks targets of external references
+        <li>flatten() - optional, allows better optimization 
+        <li>findConstants() -- optional, simplifies the equation set
+        <li>removeUnused() -- optional, simplifies the equation set
+        </ul>
+        findInitOnly() should not be run before this method. This helps ensure that
+        any "initOnly" attribute is there explicitly, for example on $index.
     **/
-    public void findTemporary () throws Exception
+    public void findTemporary ()
     {
         for (EquationSet s : parts)
         {
             s.findTemporary ();
         }
 
+        // Determine which variables can be temporary.
+        ArrayList<Variable> temps = new ArrayList<Variable> ();
+        ReplacePhaseIndicators replacePhase = new ReplacePhaseIndicators ();
         for (Variable v : variables)
         {
-            if (connectionBindings != null  &&  v.order == 0)
+            v.before = null;  // v is not in the working set (yet).
+            if (v.assignment != Variable.REPLACE) continue;  // No reductions. Usually a reductions will have some external writer and so be eliminated by the attribute test below, but that is not necessarily the case.
+            if (v.order > 0) continue;  // No derivatives
+            if (v.derivative != null) continue;  // No integrated values
+            if (v.hasAny ("state", "constant", "initOnly", "readOnly", "instance", "reference", "accessor", "preexistent", "externalRead", "externalWrite", "cycle", "dummy")) continue;
+
+            // A general requirement is that v not depend on its own current value.
+            // * Must not have a cycle that leads back to self. This will be handled by cycle breaking below.
+            // * Must have an equation that will always fire during update. (Otherwise, default comes from previous value.)
+            if (! v.hasAttribute ("temporary"))
             {
-                if (v.name.equals ("$p"))
+                // See findInitOnly() for similar code.
+                boolean hasDefault = false;
+                for (EquationEntry e : v.equations)
                 {
-                    if (! v.hasAny ("externalRead", "externalWrite")  &&  v.derivative == null)
+                    if (e.condition == null)
                     {
-                        v.addAttribute ("temporary");
-                        continue;
+                        hasDefault = true;
                     }
+                    else
+                    {
+                        // We only count the equation as a default if we are absolutely certain it will fire.
+                        Operator test = e.condition.deepCopy ().transform (replacePhase).simplify (v, true);
+                        if (test.isScalar ()  &&  test.getDouble () != 0) hasDefault = true;
+                    }
+                    if (hasDefault) break;
                 }
-                else if (v.name.contains ("$project"))
+                if (! hasDefault) continue;
+            }
+
+            temps.add (v);
+            v.before = new HashSet<Variable> ();  // Stores "B" from the paper.
+            v.priority = 0;  // Holds count of cycles through this vertex.
+        }
+        for (Variable v : variables) if (v.before == null) v.removeAttribute ("temporary");  // Just in case the user marked some variables as temporary which don't meet the basic criteria above, for example a derivative.
+
+        // Eliminate cycles.
+        int count = temps.size ();
+        if (count == 0) return;  // nothing to do
+
+        // Get initial counts using Johnson algorithm.
+        for (int i = count - 1; i >= 0; i--)
+        {
+            // Unlike A_K from the paper, we do not find a strongly-connected component (SCC)
+            // for the working set. Instead, we remove vertices as they get processed.
+            // This is less efficient, but also less complicated. The proof of correctness
+            // still holds, as it does not depend on using an SCC.
+
+            // Clear attributes associated with working set.
+            for (int j = 0; j <= i; j++)
+            {
+                Variable w = temps.get (j);
+                w.before.clear ();
+                w.blocked = false;
+                w.visited = null;
+            }
+            Variable v = temps.get (i);
+            v.circuit (v, 1);
+            v.before = null;  // v is no longer in working set.
+        }
+
+        // Eliminate variables until there are no more cycles.
+        ArrayList<Variable> A = new ArrayList<Variable> (temps);
+        for (Variable v : temps) if (v.before == null) v.before = new HashSet<Variable> ();  // Restore working set.
+        while (count > 0)
+        {
+            // Find variable with greatest number of cycles.
+            Variable most = A.get (0);
+            for (int i = 1; i < count; i++)
+            {
+                Variable v = A.get (i);
+                if (v.hasAttribute ("temporary"))  // v is hinted
                 {
-                    if (! v.hasAttribute ("constant"))
-                    {
-                        v.addAttribute ("temporary");
-                        continue;
-                    }
+                    if (most.hasAttribute ("temporary")  &&  v.priority > most.priority) most = v;
+                    // Otherwise, a non-hinted item in best is better than any possible item in v.
+                }
+                else  // v is non-hinted
+                {
+                    if (most.hasAttribute ("temporary")) most = v;  // Non-hinted item in v is better than any possible item in best.
+                    else if (v.priority > most.priority) most = v;
                 }
             }
+            if (most.priority == 0) break;
+
+            // Release cycles through variable.
+            if (most.hasAttribute ("temporary"))
+            {
+                Backend.err.get ().println (most.fullName () + " -- Hinted as temporary, but must be a state variable in order to break a cyclic dependency.");
+                most.removeAttribute ("temporary");
+            }
+            for (Variable w : A)
+            {
+                w.before.clear ();
+                w.blocked = false;
+                w.visited = null;
+            }
+            most.circuit (most, -1);
+            A.remove (most);
+            most.before = null;
+            count--;
         }
+        for (Variable v : A) v.addAttribute ("temporary");
+
+        // Release resources
+        for (Variable v : temps) v.before = null;
     }
 
     /**
@@ -4035,7 +4149,7 @@ public class EquationSet implements Comparable<EquationSet>
         ordered = new ArrayList<Variable> ();
         for (Variable v : variables)
         {
-            v.before   = new ArrayList<Variable> ();
+            v.before   = new HashSet<Variable> ();
             v.priority = 0;
         }
 
@@ -4100,7 +4214,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         for (Variable v : list)
         {
-            v.before   = new ArrayList<Variable> ();
+            v.before   = new HashSet<Variable> ();
             v.priority = 0;
         }
         for (Variable v : list) v.setBefore (true);

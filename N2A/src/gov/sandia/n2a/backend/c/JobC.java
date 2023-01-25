@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -706,9 +706,10 @@ public class JobC extends Thread
         }
         digestedModel.resolveConnectionBindings ();
         digestedModel.addGlobalConstants ();
-        digestedModel.addSpecials ();  // $connect, $index, $init, $n, $t, $t', $type
+        digestedModel.addSpecials ();  // $connect, $index, $init, $n, $t, $t'
         digestedModel.addAttribute ("global",      false, true,  "$max", "$min", "$k", "$radius");
         digestedModel.addAttribute ("global",      false, false, "$n");
+        digestedModel.addAttribute ("state",       true,  false, "$n");  // Forbid $n from being temporary, even if it meets the criteria.
         digestedModel.addAttribute ("preexistent", true,  false, "$index", "$t'", "$t");  // Technically, $index is not pre-existent, but always receives special handling which has the same effect.
         if (cli)
         {
@@ -736,7 +737,7 @@ public class JobC extends Thread
         createBackendData (digestedModel);
         findPathToContainer (digestedModel);
         digestedModel.findAccountableConnections ();
-        digestedModel.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances. TODO: make sure this doesn't violate evaluation order rules
+        digestedModel.findTemporary ();  // for connections, makes $p and $project "temporary" under some circumstances.
         digestedModel.determineOrder ();
         digestedModel.findDerivative ();
         digestedModel.findInitOnly ();  // propagate initOnly through ASTs
@@ -5401,10 +5402,11 @@ public class JobC extends Thread
                 case "clear":
                     context.result.append (pad + d.name + "->clearColor");
                     break;
-                case "hold":
                 case "timeScale":
-                case "format":
                 case "codec":
+                    if (ffmpegLibDir == null) continue;  // "timeScale" and "codec" only apply to FFmpeg.
+                case "hold":
+                case "format":
                     context.result.append (pad + d.name + "->" + key);
                     break;
                 default:  // "raw" and any invalid keywords

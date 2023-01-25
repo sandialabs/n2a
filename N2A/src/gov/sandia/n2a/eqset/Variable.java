@@ -66,10 +66,11 @@ public class Variable implements Comparable<Variable>, Cloneable
     // graph analysis
     public Map<Variable,Integer>        uses;       // Variables we depend on, along with count of the number of references we make. Forms a digraph (which may have cycles) on Variable nodes.
     public List<Object>                 usedBy;     // Variables and EquationSets that depend on us.
-    public List<Variable>               before;     // Variables that must be evaluated after us. Generally the same as uses, unless we are a temporary, in which case the ordering is reversed. Note EquationSet.ordered
+    public Set<Variable>                before;     // Variables that must be evaluated after us. Generally the same as uses, unless we are a temporary, in which case the ordering is reversed. Note EquationSet.ordered
     public Variable                     visited;    // Points to the previous variable visited on the current path. Used to prevent infinite recursion. Only works on a single thread.
     public int                          priority;   // For evaluation order.
     public boolean                      changed;    // Indicates that analysis touched one or more equations in a way that merits another pass.
+    public boolean                      blocked;    // For Johnson circuit algorithm.
 
     // fixed-point analysis
     public int                          exponent = Operator.UNKNOWN; // power of most significant bit expected to be stored by this variable.
@@ -256,7 +257,8 @@ public class Variable implements Comparable<Variable>, Cloneable
             case '/': assignment = DIVIDE;        return rhs.substring (1);
             case '<': assignment = MIN;           return rhs.substring (1);
             case '>': assignment = MAX;           return rhs.substring (1);
-            case ':': addAttribute ("temporary"); return rhs.substring (1);  // We are already set to REPLACE
+            case ':': addAttribute ("state");     return rhs.substring (1);  // We are already set to REPLACE
+            case ';': addAttribute ("temporary"); return rhs.substring (1);
         }
 
         return rhs;
@@ -265,7 +267,7 @@ public class Variable implements Comparable<Variable>, Cloneable
     public static boolean isCombiner (String value)
     {
         if (value.length () != 1) return false;
-        return "+*/<>:".contains (value);
+        return "+*/<>:;".contains (value);
     }
 
     /**
@@ -1452,9 +1454,67 @@ public class Variable implements Comparable<Variable>, Cloneable
         return visitor.found;
     }
 
+    public boolean circuit (Variable from, int increment)
+    {
+        boolean result = false;
+        visited = from;
+        blocked = true;
+        if (uses != null)
+        {
+            for (Variable w : uses.keySet ())
+            {
+                if (w.container != container) continue;
+                if (w.before == null) continue;  // Presence of "before" indicates member of working set.
+                if (w == this)  // Self edge
+                {
+                    if (from == this) priority += increment;  // If we are the root of the stack, then count 1 cycle.
+                    continue;  // Johnson algorithm assumes these do not exist.
+                }
+                if (w.visited == w)  // Found root of stack, so completed a circuit.
+                {
+                    result = true;
+
+                    // Increment count of everything on stack.
+                    Variable i = this;
+                    while (i.visited != i)
+                    {
+                        i.priority += increment;
+                        i = i.visited;
+                    }
+                    i.priority += increment;
+                }
+                else if (! w.blocked)
+                {
+                    if (w.circuit (this, increment)) result = true;
+                }
+            }
+        }
+        if (result)
+        {
+            unblock ();
+        }
+        else if (uses != null)
+        {
+            for (Variable w : uses.keySet ())
+            {
+                if (w.container != container) continue;
+                if (w.before == null) continue;
+                w.before.add (this);
+            }
+        }
+        return result;
+    }
+
+    public void unblock ()
+    {
+        blocked = false;
+        for (Variable w : before) if (w.blocked) w.unblock ();
+        before.clear ();
+    }
+
     public void setBefore (Variable after)
     {
-        if (before == null) before = new ArrayList<Variable> ();
+        if (before == null) before = new HashSet<Variable> ();
         before.add (after);  // I am before the given variable, and it is after me.
     }
 
@@ -1547,6 +1607,8 @@ public class Variable implements Comparable<Variable>, Cloneable
                 <dd>this variable is used immediately in the equation set and
                 never stored between time-steps; a temporary must not be
                 accessed by other equation sets</dd>
+            <dt>state</dt>
+                <dd>Explicitly marked as not temporary.</dd>
             <dt>externalRead</dt>
                 <dd>an equation in some other equation-set uses this variable</dd>
             <dt>externalWrite</dt>

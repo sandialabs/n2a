@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -107,7 +107,16 @@ public class AccessVariable extends Operator
             AccessVariable av = (AccessVariable) e.expression;
             Variable v2 = av.reference.variable;
             if (v2 == v) return this;
-            if (v2.hasAttribute ("temporary")  &&  v2.container != from.container) return this;  // Can't reference a temporary outside the current equation set.
+            if (v2.container != from.container)  // Referencing external variable, so exercise some caution.
+            {
+                // If v2 is explicitly marked as "temporary", we must not reference it.
+                if (v2.hasAttribute ("temporary")) return this;
+
+                // If v2 will be changed into a more expensive form (buffered), nothing is gained by this "optimization".
+                // Not forming a dependency on v2 also supports the case where v2 is acting as an (unmarked) local
+                // temporary that is made externally visible via a second variable.
+                if (! v2.hasAny ("externalRead", "externalWrite")) return this;
+            }
 
             // Fold aliased variable
             from.changed = true;
