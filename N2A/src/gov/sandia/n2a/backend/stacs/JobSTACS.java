@@ -18,7 +18,6 @@ import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
-import gov.sandia.n2a.host.RemoteLSF;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Operator;
@@ -123,21 +122,16 @@ public class JobSTACS extends Thread
 
             List<List<String>> commands = new ArrayList<List<String>> ();
 
-            List<String> charmrun = new ArrayList<String> ();
-            if (! (env instanceof RemoteLSF))
+            List<String> command = new ArrayList<String> ();
+            if (! env.hasRun ())
             {
-                charmrun.add ("charmrun");
-                charmrun.add ("+p" + processes);
+                command.add ("charmrun");
+                command.add ("+p" + processes);
             }
-            charmrun.add (env.config.getOrDefault ("stacs", "backend", "stacs", "stacs"));
-            charmrun.add ("config.yml");
-
-            List<String> command = new ArrayList<String> (charmrun);
-            command.add ("build");  // generate network
+            command.add (env.config.getOrDefault ("stacs", "backend", "stacs", "stacs"));
+            command.add ("config.yml");
+            command.add ("buildsim");
             commands.add (command);
-
-            command = new ArrayList<String> (charmrun);
-            commands.add (command);  // run network
 
             env.submitJob (job, true, commands, null);
             job.clear ("status");
@@ -256,14 +250,15 @@ public class JobSTACS extends Thread
             for (MNode mod : model)
             {
                 writer.write ("---\n");
+                writer.write ("type: " + mod.get ("type"));
                 writer.write ("modname: " + mod.key () + "\n");
                 for (MNode config : mod)
                 {
-                    writer.write (config.key () + ": " + config.get () + "\n");
+                    String key = config.key ();
+                    if (key.equals ("type")) continue;
+                    writer.write (key + ": " + config.get () + "\n");
                     for (MNode v : config) dumpWithKey ("", "name", v, writer);
                 }
-                writer.write ("...\n");
-                writer.write ("\n");
             }
         }
     }
@@ -275,16 +270,17 @@ public class JobSTACS extends Thread
         String modname = s.prefix ();
         MNode part = model.childOrCreate (modname);
         boolean isVertex = s.connectionBindings == null;
-        part.set (isVertex ? "vertex" : "edge", "type");
+        part.set (isVertex ? "vertex" : "edge", "type");  // TODO: handle types "record" and "stream"
         String modtype = s.source.get ("$metadata", "backend", "stacs", "part");
         modtype = modtype.split (",")[0];
-        if (modtype.equals ("13"))  // Check for STDP
+        if (modtype.equals ("13"))  // Check for drop-ins
         {
             for (MNode c : s.source)
             {
                 if (! MPart.isPart (c)) continue;
-                String inherit = c.get ("$inherit");
-                if (inherit.startsWith ("Plasticity")) modtype = "12";
+                String inherit = c.get ("$inherit").trim ();
+                if (inherit.startsWith ("Plasticity")) modtype = "12";  // STDP
+                if (inherit.equals     ("Spinapse"))   modtype = "11";
             }
         }
         part.set (modtype, "modtype");
@@ -340,7 +336,7 @@ public class JobSTACS extends Thread
 
             //   Determine type and value
             double value = 0;
-            String type  = "constant";
+            String type  = "constant";  // initialization method
             EquationEntry regular = null;
             EquationEntry init    = null;
             for (EquationEntry ee : v.equations)
@@ -408,15 +404,11 @@ public class JobSTACS extends Thread
                 value = converter.convert (value);
                 entry.set (Scalar.print (value), "value");
             }
-            if (! isParam) entry.set (type, "type");  // param values are always constant, so only need to specify type for state values
+            if (! isParam) entry.set (type, "init");  // param values are always constant, so only need to specify initialization type for state values.
         }
 
         // Add part-specific STACS variables which are not included in N2A base models.
-        if (modtype.equals ("10"))
-        {
-            if (part.child ("I") == null) add (part, "state", "I", "constant", null, "0");
-        }
-        else if (modtype.equals ("12")  ||  modtype.equals ("13"))
+        if (modtype.equals ("12")  ||  modtype.equals ("13"))
         {
             // Determine initial weight
             Variable v = s.find (new Variable ("weight"));
@@ -430,13 +422,8 @@ public class JobSTACS extends Thread
             add (part, "state", "weight", "constant", null, Scalar.print (weight));
             if (modtype.equals ("12"))
             {
-                add (part, "param", "wmax",   null,       null,   Scalar.print (Imax));
-                add (part, "param", "update", null,       null,   "1000");  // hard-coded 1s update cycle
-                add (part, "state", "wdelta", "constant", null,   "0");
-                add (part, "state", "ptrace", "constant", null,   "0");
-                add (part, "state", "ntrace", "constant", null,   "0");
-                add (part, "state", "ptlast", "constant", "tick", "0");
-                add (part, "state", "ntlast", "constant", "tick", "0");
+                add (part, "param", "wmax",   null, null, Scalar.print (Imax));
+                add (part, "param", "update", null, null, "1000");  // hard-coded 1s update cycle
             }
         }
 
