@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -32,6 +32,8 @@ template SHARED n2a_T pulse (n2a_T t, n2a_T width, n2a_T period, n2a_T rise, n2a
 
 template SHARED n2a_T unitmap (const MatrixAbstract<n2a_T> & A, n2a_T row, n2a_T column);
 
+template SHARED void removeMonitor (std::vector<Part<n2a_T> *> & partList, Part<n2a_T> * part);
+
 #ifndef N2A_SPINNAKER
 void signalHandler (int number)
 {
@@ -58,7 +60,6 @@ void signalHandler (int number)
 template class Parameters<n2a_T>;
 template class Simulatable<n2a_T>;
 template class Part<n2a_T>;
-template void  removeMonitor (std::vector<Part<n2a_T> *> & partList, Part<n2a_T> * part);
 template class PartTime<n2a_T>;
 template class WrapperBase<n2a_T>;
 template class ConnectIterator<n2a_T>;

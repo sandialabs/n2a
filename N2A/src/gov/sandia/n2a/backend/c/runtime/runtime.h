@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -275,7 +275,7 @@ public:
     virtual void finalizeEvent ();  ///< Does finalize on any external references touched by some event in this part.
 };
 
-template<class T> void removeMonitor (std::vector<Part<T> *> & partList, Part<T> * part);
+template<class T> SHARED void removeMonitor (std::vector<Part<T> *> & partList, Part<T> * part);
 
 /**
     Supports ability to dequeue and move to a different simulation period.
