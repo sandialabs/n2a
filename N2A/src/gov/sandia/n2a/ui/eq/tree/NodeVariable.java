@@ -97,7 +97,7 @@ public class NodeVariable extends NodeContainer
 
         // $kill flag is excluded by not being explicitly added
 
-        MPart metadata = (MPart) source.child ("$metadata");
+        MPart metadata = (MPart) source.child ("$meta");
         if (metadata != null)
         {
             for (MNode m : metadata)
@@ -108,7 +108,7 @@ public class NodeVariable extends NodeContainer
             }
         }
 
-        MPart references = (MPart) source.child ("$reference");
+        MPart references = (MPart) source.child ("$ref");
         if (references != null)
         {
             for (MNode r : references) add (new NodeReference ((MPart) r));
@@ -205,7 +205,7 @@ public class NodeVariable extends NodeContainer
     public Icon getIcon (boolean expanded)
     {
         if (isBinding) return iconBinding;
-        if (source.getFlag ("$metadata", "watch")) return iconWatch;
+        if (source.getFlag ("$meta", "watch")) return iconWatch;
         return iconVariable;
     }
 
@@ -280,7 +280,7 @@ public class NodeVariable extends NodeContainer
         Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
         result.add ("=" + pieces.combiner);
 
-        if (FilteredTreeModel.showParam  &&  source.get ("$metadata", "param").equals ("watch"))
+        if (FilteredTreeModel.showParam  &&  source.get ("$meta", "param").equals ("watch"))
         {
             result.add ("(watchable)");
             return result;
@@ -333,8 +333,8 @@ public class NodeVariable extends NodeContainer
         while (cf.hasMoreElements ())
         {
             NodeBase child = (NodeBase) cf.nextElement ();
-            if      (child instanceof NodeAnnotation) child.copy (n.childOrCreate ("$metadata"));
-            else if (child instanceof NodeReference)  child.copy (n.childOrCreate ("$reference"));
+            if      (child instanceof NodeAnnotation) child.copy (n.childOrCreate ("$meta"));
+            else if (child instanceof NodeReference)  child.copy (n.childOrCreate ("$ref"));
             else     child.copy (n);
         }
     }
@@ -480,7 +480,7 @@ public class NodeVariable extends NodeContainer
     @Override
     public boolean allowEdit ()
     {
-        if (FilteredTreeModel.showParam) return ! source.get ("$metadata", "param").equals ("watch");
+        if (FilteredTreeModel.showParam) return ! source.get ("$meta", "param").equals ("watch");
         return true;
     }
 

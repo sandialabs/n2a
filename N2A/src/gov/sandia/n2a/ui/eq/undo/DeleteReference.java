@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,7 +14,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 public class DeleteReference extends UndoableView
 {
-    protected List<String> path;  // to parent of $reference node
+    protected List<String> path;  // to parent of $ref node
     protected int          index; // where to insert among siblings
     protected boolean      canceled;
     protected String       name;
@@ -27,7 +27,7 @@ public class DeleteReference extends UndoableView
     {
         NodeBase container = (NodeBase) node.getParent ();
         index         = container.getIndex (node);
-        if (container.source.key ().equals ("$reference")) container = (NodeBase) container.getParent ();
+        if (container.source.key ().equals ("$ref")) container = (NodeBase) container.getParent ();
         path          = container.getKeyPath ();
         this.canceled = canceled;
 

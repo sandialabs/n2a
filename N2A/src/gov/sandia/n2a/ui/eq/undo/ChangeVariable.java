@@ -312,7 +312,7 @@ public class ChangeVariable extends UndoableView
 
             // Update edges to pins, if present.
             PanelEquationGraph peg = pe.panelEquationGraph;
-            if (parent.source.child ("$metadata", "gui", "pin") != null)
+            if (parent.source.child ("$meta", "gui", "pin") != null)
             {
                 parent.updatePins ();
                 peg.updatePins ();

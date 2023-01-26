@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -61,7 +61,7 @@ public class GraphParent extends JPanel
     {
         boolean nextOpen = ! isVisible ();
         setOpen (nextOpen);
-        if (! container.locked) part.source.set (nextOpen, "$metadata", "gui", "bounds", "parent");
+        if (! container.locked) part.source.set (nextOpen, "$meta", "gui", "bounds", "parent");
     }
 
     public void setOpen (boolean value)
@@ -119,7 +119,7 @@ public class GraphParent extends JPanel
     {
         int w = 0;
         int h = 0;
-        MNode boundsParent = part.source.child ("$metadata", "gui", "bounds", "parent");
+        MNode boundsParent = part.source.child ("$meta", "gui", "bounds", "parent");
         if (boundsParent != null)
         {
             w = boundsParent.getInt ("width");

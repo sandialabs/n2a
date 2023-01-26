@@ -1,5 +1,5 @@
 /*
-Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -23,7 +23,7 @@ public abstract class ExportBibliography implements Export
     public void export (MNode document, Path destination) throws Exception
     {
         MNode references = new MVolatile ();
-        if (document.child ("$metadata") == null  &&  document.child ("form") != null)  // document is a reference.
+        if (document.child ("$meta") == null  &&  document.child ("form") != null)  // document is a reference.
         {
             references.set (document, document.key ());
         }
@@ -34,7 +34,7 @@ public abstract class ExportBibliography implements Export
             {
                 public boolean visit (MNode node)
                 {
-                    if (! node.key ().equals ("$reference")) return true;
+                    if (! node.key ().equals ("$ref")) return true;
 
                     String[] keyPath = node.parent ().keyPath ();
                     String location = keyPath[0];

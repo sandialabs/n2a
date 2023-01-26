@@ -152,7 +152,7 @@ public class JobC extends Thread
             job.set (System.currentTimeMillis (), "started");
             MNode model = NodeJob.getModel (job);
 
-            T = model.getOrDefault ("float", "$metadata", "backend", "c", "type");
+            T = model.getOrDefault ("float", "$meta", "backend", "c", "type");
             if (T.contains ("int"))
             {
                 if (T.length () > 3)
@@ -167,15 +167,15 @@ public class JobC extends Thread
                 Backend.err.get ().println ("WARNING: Unsupported numeric type. Defaulting to single-precision float.");
             }
 
-            kokkos = model.getFlag ("$metadata", "backend", "c", "kokkos");
-            gprof  = model.getFlag ("$metadata", "backend", "c", "gprof");
-            debug  = model.getFlag ("$metadata", "backend", "c", "debug");
-            cli    = model.getFlag ("$metadata", "backend", "c", "cli");
-            tls    = model.getFlag ("$metadata", "backend", "c", "tls");
-            csharp = model.getFlag ("$metadata", "backend", "c", "sharp");
-            if (! lib  &&  model.data ("$metadata", "backend", "c", "shared")) shared = model.getFlag ("$metadata", "backend", "c", "shared");
+            kokkos = model.getFlag ("$meta", "backend", "c", "kokkos");
+            gprof  = model.getFlag ("$meta", "backend", "c", "gprof");
+            debug  = model.getFlag ("$meta", "backend", "c", "debug");
+            cli    = model.getFlag ("$meta", "backend", "c", "cli");
+            tls    = model.getFlag ("$meta", "backend", "c", "tls");
+            csharp = model.getFlag ("$meta", "backend", "c", "sharp");
+            if (! lib  &&  model.data ("$meta", "backend", "c", "shared")) shared = model.getFlag ("$meta", "backend", "c", "shared");
 
-            String e = model.get ("$metadata", "backend", "all", "event");
+            String e = model.get ("$meta", "backend", "all", "event");
             switch (e)
             {
                 case "before":
@@ -206,7 +206,7 @@ public class JobC extends Thread
             seed = -1;
             if (digestedModel.usesRandom ())  // only record seed if actually used
             {
-                seed = model.getOrDefault (System.currentTimeMillis () & 0x7FFFFFFF, "$metadata", "seed");
+                seed = model.getOrDefault (System.currentTimeMillis () & 0x7FFFFFFF, "$meta", "seed");
                 job.set (seed, "seed");
             }
 

@@ -69,7 +69,7 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public boolean isParam ()
     {
-        return source.getFlag ("$metadata", "param");
+        return source.getFlag ("$meta", "param");
     }
 
     /**
@@ -211,9 +211,9 @@ public class NodeBase extends DefaultMutableTreeNode
 
     public static String getToolTipText (MNode node, FontMetrics fm)
     {
-        String                notes = node.get ("$metadata", "notes");
-        if (notes.isBlank ()) notes = node.get ("$metadata", "note");
-        if (notes.isBlank ()) notes = node.get ("$metadata", "description");  // for NeuroML parts
+        String                notes = node.get ("$meta", "notes");
+        if (notes.isBlank ()) notes = node.get ("$meta", "note");
+        if (notes.isBlank ()) notes = node.get ("$meta", "description");  // for NeuroML parts
         if (notes.isBlank ()) return null;
         return formatToolTipText (notes, fm);
     }

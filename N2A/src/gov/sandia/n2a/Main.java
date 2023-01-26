@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -62,7 +62,7 @@ public class Main
             else if (arg.startsWith ("-pluginDir=" )) pluginDirs      .add (Paths.get (arg.substring (11)).toAbsolutePath ());
             else if (arg.startsWith ("-param="     )) processParamFile (arg.substring (7), record);
             else if (arg.startsWith ("-install"    )) headless = "install";
-            else if (arg.startsWith ("-csv"        )) record.set (true, "$metadata", "csv");
+            else if (arg.startsWith ("-csv"        )) record.set (true, "$meta", "csv");
             else if (arg.startsWith ("-run="))
             {
                 MNode temp = new MVolatile ("", arg.substring (5));
@@ -170,7 +170,7 @@ public class Main
             }
             else if (line.contains ("variables"))  // Dakota
             {
-                record.set ("", "$metadata", "dakota");  // Existence of key indicates that a Dakota-style response is requested.
+                record.set ("", "$meta", "dakota");  // Existence of key indicates that a Dakota-style response is requested.
 
                 // Variables
                 int count = Integer.parseUnsignedInt (line.trim ().split ("\\s+")[0]);
@@ -193,7 +193,7 @@ public class Main
                     String[] pieces = line.trim ().split ("\\s+");
                     // Ignore value. N2A only returns function result, not gradient or Hessian. The user is responsible to configure Dakota accordingly.
                     String name = pieces[1].split (":")[1];  // Strip off "ASV"
-                    record.set (name, "$metadata", "dakota", "ASV", i);
+                    record.set (name, "$meta", "dakota", "ASV", i);
                 }
             }
             else
@@ -247,7 +247,7 @@ public class Main
         while (node.complete < 1) node.monitorProgress ();
 
         // Convert to CSV, if requested.
-        if (record.getFlag ("$metadata", "csv"))
+        if (record.getFlag ("$meta", "csv"))
         {
             Table table = new Table (jobDir.resolve ("out"), false);
             try {table.dumpCSV (jobDir.resolve ("out.csv"));}
@@ -255,7 +255,7 @@ public class Main
         }
 
         // Extract results requested in ASV
-        MNode ASV = record.child ("$metadata", "dakota", "ASV");
+        MNode ASV = record.child ("$meta", "dakota", "ASV");
         if (ASV == null) return;  // nothing more to do
         OutputParser output = new OutputParser ();
         output.parse (jobDir.resolve ("out"));
@@ -312,7 +312,7 @@ public class Main
         study.waitForCompletion ();
 
         // Output CSV files, if requested.
-        if (record.getFlag ("$metadata", "csv"))
+        if (record.getFlag ("$meta", "csv"))
         {
             Path studyDir = study.getDir ();
             try (BufferedWriter parms = Files.newBufferedWriter (studyDir.resolve ("study.csv")))

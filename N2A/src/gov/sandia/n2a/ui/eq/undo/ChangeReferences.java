@@ -1,5 +1,5 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,15 +25,15 @@ import gov.sandia.n2a.ui.eq.tree.NodeReferences;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 /**
-    Applies multiple changes to an existing $reference subtree.
+    Applies multiple changes to an existing $ref subtree.
 **/
 public class ChangeReferences extends UndoableView
 {
-    protected List<String> path;          // To node that contains the references. $reference itself may be explicit (for parts) or hidden (for variables).
-    protected int          index;         // If we create $reference, this is where it goes.
-    protected MNode        undoAdd;       // Nodes to apply during undo, starting at $reference. If $reference is absent, then this is null.
-    protected MNode        undoRemove;    // Nodes that should be removed during undo, via MNode.uniqueNodes(). Like undoAdd, this is null if $reference is absent.
-    protected MNode        doAdd;         // The nodes to be changed, rooted at $reference. There is no corresponding doRemove.
+    protected List<String> path;          // To node that contains the references. $ref itself may be explicit (for parts) or hidden (for variables).
+    protected int          index;         // If we create $ref, this is where it goes.
+    protected MNode        undoAdd;       // Nodes to apply during undo, starting at $ref. If $ref is absent, then this is null.
+    protected MNode        undoRemove;    // Nodes that should be removed during undo, via MNode.uniqueNodes(). Like undoAdd, this is null if $ref is absent.
+    protected MNode        doAdd;         // The nodes to be changed, rooted at $ref. There is no corresponding doRemove.
     protected boolean      multi;
 
     public ChangeReferences (NodeBase parent, MNode reference)
@@ -43,10 +43,10 @@ public class ChangeReferences extends UndoableView
         path  = parent.getKeyPath ();
         doAdd = reference;
 
-        MNode currentTree = parent.source.child ("$reference");
+        MNode currentTree = parent.source.child ("$ref");
         if (currentTree == null)
         {
-            // We will create a new $reference node. Don't put it in front of either $inherit or $metadata.
+            // We will create a new $ref node. Don't put it in front of either $inherit or $meta.
             if (parent instanceof NodePart)
             {
                 int i = 0;
@@ -103,23 +103,23 @@ public class ChangeReferences extends UndoableView
         }
 
         NodeContainer referenceNode;          // The immediate container of reference items in the tree.
-        MNode         referenceSource = null; // The $reference node under which all changes are made.
+        MNode         referenceSource = null; // The $ref node under which all changes are made.
         if (parent instanceof NodeVariable)
         {
             referenceNode   = (NodeContainer) parent;
-            referenceSource = referenceNode.source.child ("$reference");
+            referenceSource = referenceNode.source.child ("$ref");
         }
         else  // NodePart is the default case
         {
-            referenceNode = (NodeContainer) parent.child ("$reference");
+            referenceNode = (NodeContainer) parent.child ("$ref");
             if (referenceNode != null) referenceSource = referenceNode.source;
         }
 
         boolean needBuild = true;
-        if (add == null)  // This is an undo, and $reference did not exist before, so remove it.
+        if (add == null)  // This is an undo, and $ref did not exist before, so remove it.
         {
             // We can safely assume that referenceSource is non-null, since we only get here during an undo.
-            referenceSource.parent ().clear ("$reference");
+            referenceSource.parent ().clear ("$ref");
             if (parent instanceof NodePart)
             {
                 if (model == null) FilteredTreeModel.removeNodeFromParentStatic (referenceNode);
@@ -127,9 +127,9 @@ public class ChangeReferences extends UndoableView
                 needBuild = false;
             }
         }
-        else  // Update $reference node. Create if it doesn't exist.
+        else  // Update $ref node. Create if it doesn't exist.
         {
-            if (referenceSource == null) referenceSource = parent.source.childOrCreate ("$reference");
+            if (referenceSource == null) referenceSource = parent.source.childOrCreate ("$ref");
             if (referenceNode == null)  // only happens when parent is NodePart
             {
                 referenceNode = new NodeReferences ((MPart) referenceSource);

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -61,12 +61,12 @@ public class AddDoc extends Undoable
                 {
                     category = ((NodeBase) n.getParent ()).getCategory ();
                 }
-                if (! category.isEmpty ()) saved.set (category, "$metadata", "gui", "category");
+                if (! category.isEmpty ()) saved.set (category, "$meta", "gui", "category");
             }
         }
 
         // Insert ID, if given doc does not already have one.
-        MNode id = saved.childOrCreate ("$metadata", "id");
+        MNode id = saved.childOrCreate ("$meta", "id");
         String idString = id.get ();
         if (idString.isEmpty ()  ||  AppData.getModel (idString) != null) id.set (generateID ());
     }
@@ -109,7 +109,7 @@ public class AddDoc extends Undoable
     public static void destroy (String name, List<String> pathAfter, boolean fromSearchPanel)
     {
         MNode doc = AppData.models.child (name);
-        String id = doc.get ("$metadata", "id");
+        String id = doc.get ("$meta", "id");
         if (! id.isEmpty ()) AppData.set (id, null);
         AppData.models.clear (name);  // Triggers PanelModel.childDeleted(name), which removes doc from all 3 sub-panels.
 
@@ -132,8 +132,8 @@ public class AddDoc extends Undoable
         MDoc doc = (MDoc) AppData.models.childOrCreate (name);  // Triggers PanelModel.childAdded(name), which updates the select and MRU panels, but not the equation tree panel.
         doc.merge (saved);
         new MPart (doc).clearRedundantOverrides ();
-        AppData.set (doc.get ("$metadata", "id"), doc);
-        if (doc.get ("$metadata", "gui", "category").contains (",")) pm.panelSearch.search ();  // update for multiple categories
+        AppData.set (doc.get ("$meta", "id"), doc);
+        if (doc.get ("$meta", "gui", "category").contains (",")) pm.panelSearch.search ();  // update for multiple categories
 
         if (wasShowing) pm.panelEquations.load (doc);  // Takes focus
         if (fromSearchPanel)

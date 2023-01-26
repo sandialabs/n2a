@@ -183,8 +183,8 @@ public class ChangePart extends UndoableView
             if (! (o instanceof NodePart)) continue;
             NodePart sibling = (NodePart) o;
             MNode pins;
-            if (sibling == nodeBefore) pins = parent .source.child (nameAfter, "$metadata", "gui", "pin", "in");  // because the old source is no longer attached to document
-            else                       pins = sibling.source.child (           "$metadata", "gui", "pin", "in");
+            if (sibling == nodeBefore) pins = parent .source.child (nameAfter, "$meta", "gui", "pin", "in");  // because the old source is no longer attached to document
+            else                       pins = sibling.source.child (           "$meta", "gui", "pin", "in");
             if (pins == null) continue;
             List<String> bound = null;
             for (MNode pin : pins)
@@ -200,7 +200,7 @@ public class ChangePart extends UndoableView
             if (bound != null) rebind.put (sibling, bound);
         }
         //   Check parent for pin exports.
-        MNode pins = parent.source.child ("$metadata", "gui", "pin", "out");
+        MNode pins = parent.source.child ("$meta", "gui", "pin", "out");
         if (pins != null)
         {
             List<String> bound = null;
@@ -328,7 +328,7 @@ public class ChangePart extends UndoableView
         for (NodePart peer : rebind.keySet ())
         {
             PanelEquationTree subpet = peer.getTree ();
-            NodeBase metadata = peer.child ("$metadata");  // also works for parent
+            NodeBase metadata = peer.child ("$meta");  // also works for parent
             for (String pinKey : rebind.get (peer))
             {
                 // Retrieve GUI metadata node so it can be updated to match DB.

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -55,7 +55,7 @@ public class ChangeDoc extends Undoable
         // Update database
         AppData.models.move (A, B);
         MNode doc = AppData.models.child (B);
-        String id = doc.get ("$metadata", "id");
+        String id = doc.get ("$meta", "id");
         if (! id.isEmpty ()) AppData.set (id, doc);
         if (AppData.state.get ("PanelModel", "lastUsed").equals (A)) AppData.state.set (B, "PanelModel", "lastUsed");
 

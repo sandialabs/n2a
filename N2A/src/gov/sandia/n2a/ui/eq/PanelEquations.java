@@ -927,7 +927,7 @@ public class PanelEquations extends JPanel
             UndoManager um = MainFrame.instance.undoManager;
             if (pin == null)
             {
-                if (context.source.child ("$metadata", "gui", "pin") == null)
+                if (context.source.child ("$meta", "gui", "pin") == null)
                 {
                     if (context.connectionBindings != null  &&  ! context.connectionBindings.containsValue (null))
                     {
@@ -1112,24 +1112,24 @@ public class PanelEquations extends JPanel
         String key = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
         MDoc study = (MDoc) AppData.studies.childOrCreate (key);
         study.set (collated.key (), "$inherit");
-        study.set (collated.childOrEmpty ("$metadata", "study"), "config");  // Copy top-level study tag (general parameters controlling study).
+        study.set (collated.childOrEmpty ("$meta", "study"), "config");  // Copy top-level study tag (general parameters controlling study).
         // Collect study tags
         MNode variables = study.childOrCreate ("variables");
         collated.visit (new Visitor ()
         {
             public boolean visit (MNode n)
             {
-                // Find "study" somewhere under "$metadata".
+                // Find "study" somewhere under "$meta".
                 if (! n.key ().equals ("study")) return true;  // Filter on "study" first.
                 String[] keyPath = n.keyPath ();
-                int i = keyPath.length - 1;  // Search backwards for "$metadata", because it is most likely to be immediate parent of "study".
-                for (; i >= 0; i--) if (keyPath[i].equals ("$metadata")) break;
+                int i = keyPath.length - 1;  // Search backwards for "$meta", because it is most likely to be immediate parent of "study".
+                for (; i >= 0; i--) if (keyPath[i].equals ("$meta")) break;
                 if (i < 0) return true;  // move along, nothing to see here
 
                 if (i == keyPath.length - 2)  // immediate parent
                 {
                     if (keyPath.length < 3) return true;  // This is the top-level metadata block, so ignore study. It contains general parameters, rather than tagging a variable.
-                    keyPath = Arrays.copyOfRange (keyPath, 0, keyPath.length - 2);  // skip up to the parent of $metadata, which should be a variable
+                    keyPath = Arrays.copyOfRange (keyPath, 0, keyPath.length - 2);  // skip up to the parent of $meta, which should be a variable
                 }
                 else  // more distant parent, so a metadata key is the item to be iterated, rather than a variable
                 {
@@ -1675,7 +1675,7 @@ public class PanelEquations extends JPanel
                 }
                 String base64 = Base64.getEncoder ().encodeToString (stream.toByteArray ());
 
-                // Save image in $metadata.gui.icon
+                // Save image in $meta.gui.icon
                 MNode metadata = new MVolatile ();
                 metadata.set (base64, "gui", "icon");
                 um.apply (new ChangeAnnotations (target, metadata));
@@ -1820,7 +1820,7 @@ public class PanelEquations extends JPanel
                     if (c instanceof NodePart)
                     {
                         NodePart p = (NodePart) c;
-                        if (! p.source.getFlag ("$metadata", "gui", "pin")) oldParts.add (p);
+                        if (! p.source.getFlag ("$meta", "gui", "pin")) oldParts.add (p);
                     }
                 }
 
@@ -2413,7 +2413,7 @@ public class PanelEquations extends JPanel
             panelParent.loadPart ();  // Loads our panelEquationTree when not in NODE view.
 
             breadcrumbRenderer.update ();
-            if (view == NODE) panelParent.setOpen (part.source.getBoolean ("$metadata", "gui", "bounds", "parent")  ||  panelEquationGraph.isEmpty ());
+            if (view == NODE) panelParent.setOpen (part.source.getBoolean ("$meta", "gui", "bounds", "parent")  ||  panelEquationGraph.isEmpty ());
             panelEquationGraph.restoreViewportPosition (createFocus (part));
             validate ();  // In case breadcrumbRenderer changes shape.
         }

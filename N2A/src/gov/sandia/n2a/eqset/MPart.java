@@ -151,7 +151,7 @@ public class MPart extends MNode
         boolean changedID   = false;
 
         String[] parentNames = from.get ().split (",");
-        List<String> IDs     = Arrays.asList (from.get ("$metadata", "id").split (",", -1));  // -1 allows for unassigned ID in middle of list
+        List<String> IDs     = Arrays.asList (from.get ("$meta", "id").split (",", -1));  // -1 allows for unassigned ID in middle of list
         for (int i = 0; i < parentNames.length; i++)
         {
             String parentName = parentNames[i];
@@ -164,7 +164,7 @@ public class MPart extends MNode
             String parentID = "";
             if (parentSource != null)
             {
-                parentID = parentSource.get ("$metadata", "id");
+                parentID = parentSource.get ("$meta", "id");
                 if (! id.isEmpty ()  &&  ! parentID.equals (id)) parentSource = null;  // Even though the name matches, parentSource is not really the same model that was originally linked.
             }
             if (parentSource == null)
@@ -214,7 +214,7 @@ public class MPart extends MNode
             StringBuilder value = new StringBuilder ();
             value.append (IDs.get (0));
             for (int i = 1; i < IDs.size (); i++) value.append ("," + IDs.get (i));
-            root.source.set (value, "$metadata", "id");
+            root.source.set (value, "$meta", "id");
         }
     }
 
@@ -562,7 +562,7 @@ public class MPart extends MNode
         String[] parentNames = get ().split (",");
         if (parentNames.length == 0)
         {
-            clear ("$metadata", "id");
+            clear ("$meta", "id");
             return;
         }
 
@@ -573,12 +573,12 @@ public class MPart extends MNode
             parentName = parentName.trim ().replace ("\"", "");
             MNode parentSource = models.get ().child (parentName);
             if (parentSource == null) newIDs.add ("");
-            else                      newIDs.add (parentSource.get ("$metadata", "id"));
+            else                      newIDs.add (parentSource.get ("$meta", "id"));
         }
 
         String id = newIDs.get (0);
         for (int i = 1; i < newIDs.size (); i++) id += "," + newIDs.get (i);
-        set (id, "$metadata", "id");
+        set (id, "$meta", "id");
     }
 
     /**

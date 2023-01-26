@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -92,7 +92,7 @@ public class BackendNeuroML extends Backend
                 Path jnmlHomeDir = env.getResourceDir ().getRoot ().resolve (jnmlHome);
                 Path jnmlCommand = jnmlHomeDir.resolve ("jnml");
 
-                if (target == null) target = doc.get ("$metadata", "backend", "lems", "target");
+                if (target == null) target = doc.get ("$meta", "backend", "lems", "target");
                 if (! target.isEmpty ()  &&  ! target.equals ("neuron"))  // NUERON gets special treatment because jnml will run it for us.
                 {
                     AnyProcessBuilder b = env.build (jnmlCommand.toString (), modelPath.toString (), "-" + target);

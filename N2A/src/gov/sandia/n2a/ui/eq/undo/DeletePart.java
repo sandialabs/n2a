@@ -47,7 +47,7 @@ public class DeletePart extends UndoableView
         savedSubtree = new MVolatile ();
         savedSubtree.merge (node.source.getSource ());  // Only take the top-doc data, not the collated tree.
 
-        touchesPin =  savedSubtree.child ("$metadata", "gui", "pin") != null;
+        touchesPin =  savedSubtree.child ("$meta", "gui", "pin") != null;
     }
 
     public void setMulti (boolean value)

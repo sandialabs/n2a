@@ -546,12 +546,12 @@ public class PanelEquationTree extends JScrollPane
             // Auto-close graph node when it loses focus, if it was auto-opened.
             if (root.graph != null)
             {
-                boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "open");
+                boolean open = root.source.getBoolean ("$meta", "gui", "bounds", "open");
                 if (! open) root.graph.setOpen (false);
             }
             else if (root == container.part)
             {
-                boolean open = root.source.getBoolean ("$metadata", "gui", "bounds", "parent");
+                boolean open = root.source.getBoolean ("$meta", "gui", "bounds", "parent");
                 if (! open) container.panelParent.setOpen (false);
             }
         }
@@ -802,7 +802,7 @@ public class PanelEquationTree extends JScrollPane
         {
             // Toggle watch on the selected variable
             boolean selectVariable =  multi  ||  tree.isCollapsed (new TreePath (v.getPath ()));
-            MPart watch = (MPart) v.source.child ("$metadata", "watch");
+            MPart watch = (MPart) v.source.child ("$meta", "watch");
             UndoableView u;
             if (watch == null)  // Currently off, so turn it on.
             {
@@ -856,7 +856,7 @@ public class PanelEquationTree extends JScrollPane
             else if (o instanceof NodeVariable)
             {
                 NodeVariable v = (NodeVariable) o;
-                if (v.source.getFlag ("$metadata", "watch")  &&  ! variables.contains (v)) variables.add (v);
+                if (v.source.getFlag ("$meta", "watch")  &&  ! variables.contains (v)) variables.add (v);
             }
         }
     }
@@ -869,7 +869,7 @@ public class PanelEquationTree extends JScrollPane
 
         NodeBase nodeBefore = (NodeBase) path.getLastPathComponent ();
         NodeBase parent     = (NodeBase) nodeBefore.getParent ();
-        if (parent instanceof NodePart)  // Only parts support $metadata.gui.order
+        if (parent instanceof NodePart)  // Only parts support $meta.gui.order
         {
             // First check if we can move in the filtered (visible) list.
             int indexBefore = model.getIndexOfChild (parent, nodeBefore);
@@ -905,7 +905,7 @@ public class PanelEquationTree extends JScrollPane
         // Prepare data
         MVolatile data = new MVolatile ();
         data.merge (part.source);  // This takes all data, not just visible nodes.
-        data.clear ("$metadata", "gui", "bounds");
+        data.clear ("$meta", "gui", "bounds");
 
         // Create transaction
         UndoManager um = MainFrame.instance.undoManager;
@@ -1113,9 +1113,9 @@ public class PanelEquationTree extends JScrollPane
         }
         if (parent == null) return;  // This should never happen, because root of tree is a NodePart.
 
-        // Find $metadata/gui.order for the currently selected node. If it exists, update it.
+        // Find $meta/gui.order for the currently selected node. If it exists, update it.
         // Note that this is a modified version of moveSelected() which does not actually move
-        // anything, and which only modifies an existing $metadata/gui.order, not create a new one.
+        // anything, and which only modifies an existing $meta/gui.order, not create a new one.
         NodeAnnotations metadataNode = null;
         String order = null;
         Enumeration<?> i = parent.children ();
@@ -1125,7 +1125,7 @@ public class PanelEquationTree extends JScrollPane
             String key = c.source.key ();
             if (order == null) order = key;
             else               order = order + "," + key;
-            if (key.equals ("$metadata")) metadataNode = (NodeAnnotations) c;
+            if (key.equals ("$meta")) metadataNode = (NodeAnnotations) c;
         }
         if (metadataNode == null) return;
 

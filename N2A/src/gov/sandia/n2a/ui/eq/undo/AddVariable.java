@@ -59,7 +59,7 @@ public class AddVariable extends UndoableView implements AddEditable
         if (FilteredTreeModel.showParam  &&  ! FilteredTreeModel.showLocal)
         {
             // Force variable to be a parameter, so it will be visible when going into edit mode.
-            if (! createSubtree.getFlag ("$metadata", "param")) createSubtree.set ("", "$metadata", "param");
+            if (! createSubtree.getFlag ("$meta", "param")) createSubtree.set ("", "$meta", "param");
         }
     }
 

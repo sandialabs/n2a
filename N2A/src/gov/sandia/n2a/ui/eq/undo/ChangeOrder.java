@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -31,14 +31,14 @@ public class ChangeOrder extends UndoableView
     public ChangeOrder (NodePart parent, int indexBefore, int indexAfter)
     {
         path        = parent.getKeyPath ();
-        orderAbsent = parent.source.child ("$metadata", "gui", "order") == null;
+        orderAbsent = parent.source.child ("$meta", "gui", "order") == null;
 
         if (orderAbsent)
         {
-            NodeBase metadataNode = parent.child ("$metadata");
-            if (metadataNode == null)  // We will create a new $metadata node (to hold the gui.order node). This changes meaning of the given indices.
+            NodeBase metadataNode = parent.child ("$meta");
+            if (metadataNode == null)  // We will create a new $meta node (to hold the gui.order node). This changes meaning of the given indices.
             {
-                // Test whether the first child is $inherit, and whether it will remain so after the move. In that case, don't put $metadata in front of it.
+                // Test whether the first child is $inherit, and whether it will remain so after the move. In that case, don't put $meta in front of it.
                 if (((NodeBase) parent.getChildAt (0)).source.key ().equals ("$inherit")  &&  indexBefore > 0  &&  indexAfter > 0) indexMetadata = 1;  // otherwise it is 0
                 if (indexAfter >= indexMetadata) indexAfter++;
             }
@@ -71,13 +71,13 @@ public class ChangeOrder extends UndoableView
         NodeBase moveNode = (NodeBase) parent.getChildAt (indexBefore);
         model.removeNodeFromParent (moveNode);
 
-        NodeAnnotations metadataNode = (NodeAnnotations) parent.child ("$metadata");
+        NodeAnnotations metadataNode = (NodeAnnotations) parent.child ("$meta");
         boolean needBuild = false;
         if (createOrder)
         {
             if (metadataNode == null)
             {
-                metadataNode = new NodeAnnotations ((MPart) parent.source.childOrCreate ("$metadata"));
+                metadataNode = new NodeAnnotations ((MPart) parent.source.childOrCreate ("$meta"));
                 model.insertNodeIntoUnfiltered (metadataNode, parent, indexMetadata);
             }
             metadataNode.source.childOrCreate ("gui", "order");
@@ -90,7 +90,7 @@ public class ChangeOrder extends UndoableView
             if (mparent.child ("gui").size () == 0) mparent.clear ("gui");
             if (mparent.size () == 0)
             {
-                parent.source.clear ("$metadata");
+                parent.source.clear ("$meta");
                 model.removeNodeFromParent (metadataNode);
             }
             else

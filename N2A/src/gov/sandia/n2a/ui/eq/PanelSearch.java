@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -755,7 +755,7 @@ public class PanelSearch extends JPanel
     {
         MNode doc = AppData.models.child (key);
         if (doc == null) return "";
-        String result = doc.get ("$metadata", "gui", "category");
+        String result = doc.get ("$meta", "gui", "category");
         if (! result.isEmpty ()) return result;
 
         // No local definition, so check parents.

@@ -125,7 +125,7 @@ public class ChangeAnnotation extends UndoableView
         NodeContainer parent = (NodeContainer) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
         MPart mparent = parent.source;
-        if (parent instanceof NodeVariable) mparent = (MPart) mparent.child ("$metadata");
+        if (parent instanceof NodeVariable) mparent = (MPart) mparent.child ("$meta");
 
         // Update database
         String[] names = nameAfter.split ("\\.");

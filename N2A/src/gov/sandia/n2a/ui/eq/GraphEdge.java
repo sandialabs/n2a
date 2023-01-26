@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -74,7 +74,7 @@ public class GraphEdge
 
         if (partTo == null)
         {
-            MNode pin = nodeFrom.node.source.child ("$metadata", "gui", "pin");
+            MNode pin = nodeFrom.node.source.child ("$meta", "gui", "pin");
             if (pin == null) return;  // Simply an unconnected edge
             if (nodeFrom.node.connectionBindings == null) return;
 
@@ -129,13 +129,13 @@ public class GraphEdge
         else  // partTo is inside the current container. Now check if the connection is to a pin.
         {
             NodePart partFrom = nodeFrom.node;  // The connection part
-            String pinName = partFrom.source.get (alias, "$metadata", "gui", "pin");
+            String pinName = partFrom.source.get (alias, "$meta", "gui", "pin");
             if (pinName.isEmpty ()) return;  // absent
             String[] pieces = pinName.split ("\\.", 2);
             if (pieces.length != 2) return;  // malformed
             String inout = pieces[0];
             String key   = pieces[1];
-            if (nodeTo.node.source.child ("$metadata", "gui", "pin", inout, key) == null) return;  // pin doesn't exist
+            if (nodeTo.node.source.child ("$meta", "gui", "pin", inout, key) == null) return;  // pin doesn't exist
             pinSideTo = inout;
             pinKeyTo  = key;
             if (inout.equals ("in")) nodeTo.node.pinIn .set ("", key, "bound");
@@ -180,7 +180,7 @@ public class GraphEdge
             pinSideTo = "in";
             pinKeyTo  = pinKey;
             // pinSideFrom and pinKeyFrom are null, just like a connector. The distinction is that alias is empty.
-            topic = nodeFrom.node.source.getOrDefault ("data", "$metadata", "gui", "pin", "topic");
+            topic = nodeFrom.node.source.getOrDefault ("data", "$meta", "gui", "pin", "topic");
 
             nodeTo.node.pinIn.set ("", pinKey, "bound");
         }
@@ -234,8 +234,8 @@ public class GraphEdge
         root       = null;
 
         int padTip = 0;  // Distance from boundary of nodeTo to target the tip. Varies depending on arrow type.
-        String headType = nodeFrom.node.source.get (alias, "$metadata", "gui", "arrow");
-        boolean straight = nodeFrom.node.source.getFlag (alias, "$metadata", "gui", "arrow", "straight");
+        String headType = nodeFrom.node.source.get (alias, "$meta", "gui", "arrow");
+        boolean straight = nodeFrom.node.source.getFlag (alias, "$meta", "gui", "arrow", "straight");
         switch (headType)
         {
             case "circle":

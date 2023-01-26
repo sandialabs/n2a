@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1109,7 +1109,7 @@ public class PanelRun extends JPanel
                 {
                     List<String> keyList   = Arrays.asList (node.keyPath (doc));
                     List<String> paramPath = new ArrayList<String> (keyList);
-                    paramPath.add ("$metadata");
+                    paramPath.add ("$meta");
                     paramPath.add ("param");
                     Object[] paramArray = paramPath.toArray ();
                     if (! model.getFlag (paramArray)) return true;  // node is not a parameter

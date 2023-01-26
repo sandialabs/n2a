@@ -104,11 +104,11 @@ public class GraphNode extends JPanel
         if (node == null)
         {
             node = new NodeIO (side, container.part);
-            bounds = container.part.source.child ("$metadata", "gui", "pin", "bounds", side);
+            bounds = container.part.source.child ("$meta", "gui", "pin", "bounds", side);
         }
         else
         {
-            bounds = node.source.child ("$metadata", "gui", "bounds");
+            bounds = node.source.child ("$meta", "gui", "bounds");
         }
 
         this.parent = parent;
@@ -125,7 +125,7 @@ public class GraphNode extends JPanel
 
         // Internally, this class uses the null/non-null state of panelEquationsTree to indicated whether
         // container.view is NODE or a property panel mode.
-        open =  panelEquationTree != null  &&  node.source.getBoolean ("$metadata", "gui", "bounds", "open");
+        open =  panelEquationTree != null  &&  node.source.getBoolean ("$meta", "gui", "bounds", "open");
 
         title = new TitleRenderer ();
         title.getTreeCellRendererComponent (getEquationTree ().tree, node, false, open, false, -2, false);  // Configure JLabel with info from node.
@@ -299,7 +299,7 @@ public class GraphNode extends JPanel
     {
         boolean nextOpen = ! open;
         setOpen (nextOpen);
-        if (! container.locked) node.source.set (nextOpen, "$metadata", "gui", "bounds", "open");
+        if (! container.locked) node.source.set (nextOpen, "$meta", "gui", "bounds", "open");
     }
 
     public void setOpen (boolean value)
@@ -335,7 +335,7 @@ public class GraphNode extends JPanel
     {
         int w = 0;
         int h = 0;
-        MNode bounds = node.source.child ("$metadata", "gui", "bounds");
+        MNode bounds = node.source.child ("$meta", "gui", "bounds");
         if (bounds != null)
         {
             if (open)
@@ -475,7 +475,7 @@ public class GraphNode extends JPanel
     }
 
     /**
-        Apply any changes from $metadata.gui
+        Apply any changes from $meta.gui
     **/
     public void updateGUI ()
     {
@@ -484,7 +484,7 @@ public class GraphNode extends JPanel
         // Determine new position
         int x = parent.offset.x;
         int y = parent.offset.y;
-        MNode bounds = node.source.child ("$metadata", "gui", "bounds");
+        MNode bounds = node.source.child ("$meta", "gui", "bounds");
         if (bounds != null)
         {
             x += bounds.getInt ("x");
@@ -1034,9 +1034,9 @@ public class GraphNode extends JPanel
                 {
                     if (side != null)  // This is a pin IO block.
                     {
-                        // Shift focus to $metadata.gui.pin.side in parent part.
+                        // Shift focus to $meta.gui.pin.side in parent part.
                         container.switchFocus (false, false);  // Select the parent tree.
-                        NodeBase metadata = container.part.child ("$metadata");
+                        NodeBase metadata = container.part.child ("$meta");
                         if (metadata != null)
                         {
                             metadata = AddAnnotation.findClosest (metadata, "gui", "pin", side);
@@ -1573,7 +1573,7 @@ public class GraphNode extends JPanel
                             String pinNew = gn.findPinAt (p);
                             if (gn.node instanceof NodeIO)
                             {
-                                if (node.source.child ("$metadata", "gui", "pin") == null)
+                                if (node.source.child ("$meta", "gui", "pin") == null)
                                 {
                                     String pin = "";
                                     boolean OK;

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -39,7 +39,7 @@ public class NodeInherit extends NodeBase
 
         // Check if all IDs match
         String[] names = source.get ().split (",");
-        String[] IDs   = source.get ("$metadata", "id").split (",", -1);
+        String[] IDs   = source.get ("$meta", "id").split (",", -1);
         for (int i = 0; i < names.length; i++)
         {
             String parentName = names[i].trim ().replace ("\"", "");
@@ -51,7 +51,7 @@ public class NodeInherit extends NodeBase
             }
             else
             {
-                String parentID = parent.get ("$metadata", "id");
+                String parentID = parent.get ("$meta", "id");
                 String childID  = "";
                 if (i < IDs.length) childID = IDs[i];
                 if (! parentID.equals (childID))
@@ -76,7 +76,7 @@ public class NodeInherit extends NodeBase
         result.add (source.key ());
         result.add ("=");
         String value = source.get ();
-        if (showID) value = value + " (" + source.get ("$metadata", "id") + ")";
+        if (showID) value = value + " (" + source.get ("$meta", "id") + ")";
         result.add (value);
         return result;
     }

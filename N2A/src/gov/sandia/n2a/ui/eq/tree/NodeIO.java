@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -41,7 +41,7 @@ public class NodeIO extends NodePart
     public int getForegroundColor ()
     {
         NodePart np = (NodePart) trueParent;
-        MPart pin = (MPart) np.source.child ("$metadata", "gui", "pin", side);
+        MPart pin = (MPart) np.source.child ("$meta", "gui", "pin", side);
         if (pin != null  &&  pin.isFromTopDocument ()) return OVERRIDE;
         return INHERIT;
     }

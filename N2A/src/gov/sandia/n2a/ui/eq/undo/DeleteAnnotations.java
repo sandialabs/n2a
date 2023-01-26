@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,9 +15,9 @@ import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 public class DeleteAnnotations extends UndoableView
 {
-    protected List<String> path;  // to parent of $metadata node
+    protected List<String> path;  // to parent of $meta node
     protected int          index; // Position within parent node
-    protected MVolatile    saved; // subtree under $metadata
+    protected MVolatile    saved; // subtree under $meta
     protected boolean      multi;
     protected boolean      multiLast;
     protected boolean      touchesPin;
@@ -29,8 +29,8 @@ public class DeleteAnnotations extends UndoableView
         path  = container.getKeyPath ();
         index = container.getIndex (node);
 
-        saved = new MVolatile (null, "$metadata");
-        saved.merge (node.source.getSource ());  // We only save top-document data. $metadata node is guaranteed to be from top doc, due to guard in NodeAnnotations.delete().
+        saved = new MVolatile (null, "$meta");
+        saved.merge (node.source.getSource ());  // We only save top-document data. $meta node is guaranteed to be from top doc, due to guard in NodeAnnotations.delete().
 
         touchesPin      =  saved.containsKey ("pin");
         touchesCategory =  container.getTrueParent () == null  &&  saved.containsKey ("category");

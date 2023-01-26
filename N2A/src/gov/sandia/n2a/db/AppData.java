@@ -207,7 +207,7 @@ public class AppData
             indexID = new HashMap<String,String> ();
             for (MNode n : models)
             {
-                String nid = n.get ("$metadata", "id");
+                String nid = n.get ("$meta", "id");
                 if (! nid.isEmpty ()) indexID.put (nid, n.key ());
             }
         }

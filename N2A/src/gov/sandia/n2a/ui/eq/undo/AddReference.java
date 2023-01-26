@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -26,7 +26,7 @@ import gov.sandia.n2a.ui.ref.PanelReference;
 
 public class AddReference extends UndoableView implements AddEditable
 {
-    protected List<String> path;        // to parent of $reference node
+    protected List<String> path;        // to parent of $ref node
     protected int          index;       // where to insert among siblings
     protected String       name;
     protected String       value;
@@ -35,7 +35,7 @@ public class AddReference extends UndoableView implements AddEditable
     protected boolean      multiLast;
 
     /**
-        @param parent Must be the node that contains $reference, not the $reference node itself.
+        @param parent Must be the node that contains $ref, not the $ref node itself.
         @param index Position in the unfiltered tree where the node should be inserted.
     **/
     public AddReference (NodeBase parent, int index, MNode data)
@@ -43,7 +43,7 @@ public class AddReference extends UndoableView implements AddEditable
         path = parent.getKeyPath ();
         this.index = index;
 
-        MPart block = (MPart) parent.source.child ("$reference");
+        MPart block = (MPart) parent.source.child ("$ref");
         if (data == null)
         {
             // First attempt to use the currently selected record on the Reference tab.
@@ -97,7 +97,7 @@ public class AddReference extends UndoableView implements AddEditable
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
         NodeBase container = parent;
-        if (parent instanceof NodePart) container = parent.child ("$reference");
+        if (parent instanceof NodePart) container = parent.child ("$ref");
         NodeBase createdNode = container.child (name);
 
         PanelEquationTree pet = parent.getTree ();
@@ -108,14 +108,14 @@ public class AddReference extends UndoableView implements AddEditable
         int index = container.getIndexFiltered (createdNode);
         if (canceled) index--;
 
-        MPart block = (MPart) parent.source.child ("$reference");
+        MPart block = (MPart) parent.source.child ("$ref");
         block.clear (name);
         if (block.child (name) == null)  // There is no overridden value, so this node goes away completely.
         {
             model.removeNodeFromParent (createdNode);
             if (block.size () == 0)
             {
-                parent.source.clear ("$reference");  // commit suicide
+                parent.source.clear ("$ref");  // commit suicide
                 if (parent instanceof NodePart)
                 {
                     model.removeNodeFromParent (container);
@@ -158,7 +158,7 @@ public class AddReference extends UndoableView implements AddEditable
     {
         NodeBase parent = NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
-        MPart block = (MPart) parent.source.childOrCreate ("$reference");
+        MPart block = (MPart) parent.source.childOrCreate ("$ref");
 
         PanelEquationTree pet = parent.getTree ();
         FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
@@ -173,7 +173,7 @@ public class AddReference extends UndoableView implements AddEditable
             }
             else  // the node is present, so retrieve it
             {
-                container = parent.child ("$reference");
+                container = parent.child ("$ref");
             }
         }
 

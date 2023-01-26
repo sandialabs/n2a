@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -42,7 +42,7 @@ public class DeleteAnnotation extends UndoableView
 
         if (container instanceof NodeAnnotations)
         {
-            if (container.getChildCount () == 1)  // $metadata node that will go away
+            if (container.getChildCount () == 1)  // $meta node that will go away
             {
                 NodeBase part = (NodeBase) container.getParent ();
                 index = part.getIndex (container);
@@ -80,7 +80,7 @@ public class DeleteAnnotation extends UndoableView
     **/
     public static DeleteAnnotation withName (NodePart part, String... names)
     {
-        NodeAnnotations metadata = (NodeAnnotations) part.child ("$metadata");
+        NodeAnnotations metadata = (NodeAnnotations) part.child ("$meta");
         if (metadata == null) return null;
         NodeBase target = AddAnnotation.findExact (metadata, true, names);
         if (target == null) return null;

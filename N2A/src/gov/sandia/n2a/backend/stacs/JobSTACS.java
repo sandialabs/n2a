@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -100,7 +100,7 @@ public class JobSTACS extends Thread
             String duration = digestedModel.metadata.getOrDefault ("1s", "duration");
             job.set (duration, "duration");
 
-            seed = model.getOrDefault (System.currentTimeMillis () & 0x7FFFFFFF, "$metadata", "seed");
+            seed = model.getOrDefault (System.currentTimeMillis () & 0x7FFFFFFF, "$meta", "seed");
             job.set (seed, "seed");
 
             int cores = 1;
@@ -271,7 +271,7 @@ public class JobSTACS extends Thread
         MNode part = model.childOrCreate (modname);
         boolean isVertex = s.connectionBindings == null;
         part.set (isVertex ? "vertex" : "edge", "type");  // TODO: handle types "record" and "stream"
-        String modtype = s.source.get ("$metadata", "backend", "stacs", "part");
+        String modtype = s.source.get ("$meta", "backend", "stacs", "part");
         modtype = modtype.split (",")[0];
         if (modtype.equals ("13"))  // Check for drop-ins
         {
@@ -566,7 +566,7 @@ public class JobSTACS extends Thread
     **/
     public MNode findBasePart (MNode part)
     {
-        if (part.child ("$metadata", "backend", "stacs", "part") != null) return part;
+        if (part.child ("$meta", "backend", "stacs", "part") != null) return part;
 
         // In the case of triangle inheritance, this implementation is inefficient because
         // it could examine the same part several times. However, the usual case is single

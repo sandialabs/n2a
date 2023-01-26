@@ -66,11 +66,11 @@ public class AddPart extends UndoableView implements AddEditable
         }
 
         if (location == null) location = centerOf (parent);
-        MNode bounds = createSubtree.childOrCreate ("$metadata", "gui", "bounds");
+        MNode bounds = createSubtree.childOrCreate ("$meta", "gui", "bounds");
         bounds.set (location.x, "x");
         bounds.set (location.y, "y");
 
-        touchesPin =  createSubtree.child ("$metadata", "gui", "pin") != null;
+        touchesPin =  createSubtree.child ("$meta", "gui", "pin") != null;
     }
 
     public AddPart (NodePart parent, MNode data)
@@ -83,7 +83,7 @@ public class AddPart extends UndoableView implements AddEditable
         createSubtree = new MVolatile ();
         createSubtree.merge (data);
 
-        touchesPin =  createSubtree.child ("$metadata", "gui", "pin") != null;
+        touchesPin =  createSubtree.child ("$meta", "gui", "pin") != null;
     }
 
     public static String uniqueName (NodeBase parent, String prefix, int suffix, boolean allowEmptySuffix)
@@ -139,7 +139,7 @@ public class AddPart extends UndoableView implements AddEditable
             Object o = children.nextElement ();
             if (! (o instanceof NodePart)) continue;
             NodePart p = (NodePart) o;
-            MNode bounds = p.source.child ("$metadata", "gui", "bounds");
+            MNode bounds = p.source.child ("$meta", "gui", "bounds");
             if (bounds == null) continue;
             count++;
             center.x += bounds.getInt ("x");
@@ -174,7 +174,7 @@ public class AddPart extends UndoableView implements AddEditable
         int count = 0;
         for (MNode p : data)
         {
-            MNode bounds = p.child ("$metadata", "gui", "bounds");
+            MNode bounds = p.child ("$meta", "gui", "bounds");
             if (bounds == null) continue;
             count++;
             center.x += bounds.getInt ("x");
@@ -194,10 +194,10 @@ public class AddPart extends UndoableView implements AddEditable
         Map<String,String> nameChanges = new HashMap<String,String> ();
         for (MNode p : data)
         {
-            MNode bounds = p.child ("$metadata", "gui", "bounds");
+            MNode bounds = p.child ("$meta", "gui", "bounds");
             if (bounds == null)
             {
-                bounds = p.childOrCreate ("$metadata", "gui", "bounds");
+                bounds = p.childOrCreate ("$meta", "gui", "bounds");
                 bounds.set ((l % columns) * 100, "x");
                 bounds.set ((l / columns) * 100, "y");
                 l++;

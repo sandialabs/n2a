@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -445,7 +445,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
             text = columns.get (2);  // 3rd column contains the value of the parameter.
             if (isAnnotation) param = editingNode.source.get ("param");
-            else              param = editingNode.source.get ("$metadata", "param");
+            else              param = editingNode.source.get ("$meta", "param");
         }
         else
         {

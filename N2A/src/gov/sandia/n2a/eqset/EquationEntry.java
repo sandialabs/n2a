@@ -35,8 +35,8 @@ public class EquationEntry implements Comparable<EquationEntry>
         will add us to it.
         Note that the formatting of a multiconditional statement is different from
         a single line, in that the condition itself serves as the index. The @
-        symbol is included in the stored index (to allow commingling with $metadata
-        and $reference).
+        symbol is included in the stored index (to allow commingling with $meta
+        and $ref).
     **/
     public EquationEntry (MNode source) throws Exception
     {

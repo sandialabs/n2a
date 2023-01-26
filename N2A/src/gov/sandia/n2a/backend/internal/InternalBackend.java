@@ -103,11 +103,11 @@ public class InternalBackend extends Backend
                 String duration = digestedModel.metadata.get ("duration");
                 if (! duration.isEmpty ()) job.set (duration, "duration");
 
-                long seed = model.getOrDefault (System.currentTimeMillis (), "$metadata", "seed");
+                long seed = model.getOrDefault (System.currentTimeMillis (), "$meta", "seed");
                 job.set (seed, "seed");
 
                 simulator = new Simulator (new Wrapper (digestedModel), seed, localJobDir);
-                String e = model.get ("$metadata", "backend", "all", "event");
+                String e = model.get ("$meta", "backend", "all", "event");
                 switch (e)
                 {
                     case "before":

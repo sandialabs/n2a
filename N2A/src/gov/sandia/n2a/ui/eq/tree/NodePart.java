@@ -106,14 +106,14 @@ public class NodePart extends NodeContainer
     }
 
     /**
-        Extracts icon from $metadata.gui.icon, if it exists.
+        Extracts icon from $meta.gui.icon, if it exists.
         Otherwise, iconCustom is left null and standard icons are used.
     **/
     public void setIcon ()
     {
         iconCustom   = null;
         iconCustom16 = null;
-        String base64 = source.get ("$metadata", "gui", "icon");
+        String base64 = source.get ("$meta", "gui", "icon");
         if (base64.isEmpty ()) return;
 
         byte[] bytes = Base64.getDecoder ().decode (base64);
@@ -150,7 +150,7 @@ public class NodePart extends NodeContainer
         removeAllChildren ();
         ancestors = null;
 
-        String order = source.get ("$metadata", "gui", "order");
+        String order = source.get ("$meta", "gui", "order");
         Set<String> sorted = new HashSet<String> ();
         String[] subkeys = order.split (",");  // comma-separated list
         for (String k : subkeys)
@@ -183,14 +183,14 @@ public class NodePart extends NodeContainer
             add (i);
             return;
         }
-        if (key.equals ("$metadata"))
+        if (key.equals ("$meta"))
         {
             NodeAnnotations a = new NodeAnnotations (line);
             add (a);
             a.build ();
             return;
         }
-        if (key.equals ("$reference"))
+        if (key.equals ("$ref"))
         {
             NodeReferences r = new NodeReferences (line);
             add (r);
@@ -647,7 +647,7 @@ public class NodePart extends NodeContainer
         if (children != null)
         {
             // Forwarded outputs. These take lowest precedence, so process them first.
-            MNode out = source.child ("$metadata", "gui", "pin", "out");
+            MNode out = source.child ("$meta", "gui", "pin", "out");
             if (out != null)
             {
                 for (MNode op : out)
@@ -660,7 +660,7 @@ public class NodePart extends NodeContainer
                     if (! (o instanceof NodePart)) continue;
 
                     NodePart n = (NodePart) o;
-                    MNode pin = n.source.child ("$metadata", "gui", "pin", "out", bindPin);
+                    MNode pin = n.source.child ("$meta", "gui", "pin", "out", bindPin);
                     if (pin == null) continue;
                     String pinName = op.key ();  // The pin name is determined by our out list, not the inner part's out list.
 
@@ -700,7 +700,7 @@ public class NodePart extends NodeContainer
                 }
 
                 // Regular parts
-                MNode pin = n.source.child ("$metadata", "gui", "pin");
+                MNode pin = n.source.child ("$meta", "gui", "pin");
                 if (pin != null  &&  (! pin.get ().isEmpty ()  ||  pin.child ("in") == null  &&  pin.child ("out") == null))  // pin must be explicit, or both "in" and "out" must be absent.
                 {
                     MNode side = null;
@@ -732,7 +732,7 @@ public class NodePart extends NodeContainer
 
         // Post-process pins
         //   Apply overrides from our own pin metadata.
-        MNode in = source.child ("$metadata", "gui", "pin", "in");
+        MNode in = source.child ("$meta", "gui", "pin", "in");
         if (in != null) pinIn.merge (in);
         //   Establish order down side of part.
         if (pinIn.size () == 0)
@@ -757,7 +757,7 @@ public class NodePart extends NodeContainer
             }
         }
         //   Ditto for output pins
-        MNode out = source.child ("$metadata", "gui", "pin", "out");
+        MNode out = source.child ("$meta", "gui", "pin", "out");
         if (out != null) pinOut.merge (out);
         if (pinOut.size () == 0)
         {
@@ -846,7 +846,7 @@ public class NodePart extends NodeContainer
 
         if (type.equals ("Annotation"))
         {
-            return new AddAnnotation (this, metadataIndex, data);  // will automagically insert a $metadata block if needed
+            return new AddAnnotation (this, metadataIndex, data);  // will automagically insert a $meta block if needed
         }
         else if (type.equals ("Annotations"))
         {

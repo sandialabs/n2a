@@ -45,7 +45,7 @@ public class NodeReferences extends NodeContainer
     public List<String> getColumns (boolean selected, boolean expanded)
     {
         List<String> result = new ArrayList<String> (1);
-        result.add ("<html><i>$reference</i></html>");
+        result.add ("<html><i>$ref</i></html>");
         return result;
     }
 

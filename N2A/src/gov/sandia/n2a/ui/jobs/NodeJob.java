@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -203,7 +203,7 @@ public class NodeJob extends NodeBase
             Path jobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
             MDoc model = new MDoc (jobDir.resolve ("model"));
             collectJobParameters (model, model.get ("$inherit"), source);
-            String temp = model.get ("$metadata", "pid");
+            String temp = model.get ("$meta", "pid");
             if (! temp.isEmpty ()) source.set (temp, "pid");
         }
         inherit = source.getOrDefault (key, "$inherit").split (",", 2)[0].replace ("\"", "");
@@ -267,7 +267,7 @@ public class NodeJob extends NodeBase
 
         // Take the entire host subtree, in case there are host-specific configurations as subkeys.
         // For example: "nodes" and "cores" for HPC systems.
-        MNode host = model.child ("$metadata", "host");
+        MNode host = model.child ("$meta", "host");
         if (host != null)
         {
             job.set (host, "host");
@@ -275,16 +275,16 @@ public class NodeJob extends NodeBase
         }
 
         // Only need the main backend key, since the backend will always open the model, and thus can access detailed keys directly.
-        String temp = model.get ("$metadata", "backend");
+        String temp = model.get ("$meta", "backend");
         if (! temp.isEmpty ()) job.set (temp, "backend");
 
-        temp = model.get ("$metadata", "duration");
+        temp = model.get ("$meta", "duration");
         if (! temp.isEmpty ()) job.set (temp, "duration");
 
         // Unlike everything above, "seed" is merely trivia.
         // However, it is useful for reproducing a run, so is frequently displayed to user.
         // To avoid constantly opening the model, we copy it over to the job record.
-        temp = model.get ("$metadata", "seed");
+        temp = model.get ("$meta", "seed");
         if (! temp.isEmpty ()) job.set (temp, "seed");
     }
 

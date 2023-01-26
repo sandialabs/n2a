@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,9 +16,9 @@ import gov.sandia.n2a.ui.eq.tree.NodeReferences;
 
 public class AddReferences extends UndoableView
 {
-    protected List<String> path;  ///< to parent of $metadata node
+    protected List<String> path;  ///< to parent of $meta node
     protected int          index; ///< Position within parent node
-    protected MVolatile    saved; ///< subtree under $metadata
+    protected MVolatile    saved; ///< subtree under $meta
     protected boolean      multi;
     protected boolean      multiLast;
 
@@ -27,7 +27,7 @@ public class AddReferences extends UndoableView
         path = parent.getKeyPath ();
         this.index = index;
 
-        saved = new MVolatile (null, "$reference");
+        saved = new MVolatile (null, "$ref");
         saved.merge (data);
     }
 

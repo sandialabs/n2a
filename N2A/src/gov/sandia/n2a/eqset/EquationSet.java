@@ -302,8 +302,8 @@ public class EquationSet implements Comparable<EquationSet>
 
             String index = e.key ();
             if (index.equals ("$inherit")) continue;
-            if (index.equals ("$reference")) continue;
-            if (index.equals ("$metadata"))
+            if (index.equals ("$ref")) continue;
+            if (index.equals ("$meta"))
             {
                 metadata.merge (e);
                 continue;

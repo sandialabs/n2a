@@ -1,5 +1,5 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -37,7 +37,7 @@ public class ChangeCategory extends Undoable
     public ChangeCategory (MNode doc, String categoryAfter, List<String> selectionBefore, List<String> selectionAfter)
     {
         key                  = doc.key ();
-        categoryBefore       = doc.get ("$metadata", "gui", "category");
+        categoryBefore       = doc.get ("$meta", "gui", "category");
         this.categoryAfter   = categoryAfter;
         this.selectionBefore = selectionBefore;
         this.selectionAfter  = selectionAfter;
@@ -69,13 +69,13 @@ public class ChangeCategory extends Undoable
         PanelEquations pe = PanelModel.instance.panelEquations;
         if (doc != pe.record)  // direct to db
         {
-            doc.set (categoryAfter, "$metadata", "gui", "category");
+            doc.set (categoryAfter, "$meta", "gui", "category");
         }
         else  // got through MPart
         {
             MNode source = pe.root.source;
-            if (categoryAfter.isEmpty ()) source.clear (          "$metadata", "gui", "category");
-            else                     source.set   (categoryAfter, "$metadata", "gui", "category");
+            if (categoryAfter.isEmpty ()) source.clear (          "$meta", "gui", "category");
+            else                     source.set   (categoryAfter, "$meta", "gui", "category");
 
             PanelEquationTree pet = pe.root.getTree ();
             FilteredTreeModel model = null;
@@ -83,7 +83,7 @@ public class ChangeCategory extends Undoable
 
             // See ChangeAnnotations for more general code.
             // To simplify things, we always rebuild the metadata block, even though that is often overkill.
-            NodeAnnotations metadataNode = (NodeAnnotations) pe.root.child ("$metadata");  // For simplicity, assume this exists. DB models should always some metadata, such as "id". It is possible for the $metadata node to be deleted by user, so this is not guaranteed.
+            NodeAnnotations metadataNode = (NodeAnnotations) pe.root.child ("$meta");  // For simplicity, assume this exists. DB models should always some metadata, such as "id". It is possible for the $meta node to be deleted by user, so this is not guaranteed.
             List<String> expanded = null;
             if (model != null) expanded = AddAnnotation.saveExpandedNodes (pet.tree, metadataNode);
             metadataNode.build ();

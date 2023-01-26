@@ -581,7 +581,7 @@ public class PanelEquationGraph extends JScrollPane
                 // Build connection edges
                 if (gn.node.connectionBindings == null)  // Population. Might be exposed as a pin, in which case there should be an edge to the IO block.
                 {
-                    MNode pin = gn.node.source.child ("$metadata", "gui", "pin");
+                    MNode pin = gn.node.source.child ("$meta", "gui", "pin");
                     if (pin != null  &&  (! pin.get ().isEmpty ()  ||  pin.child ("in") == null  &&  pin.child ("out") == null))  // This is an output population.
                     {
                         String pinName = pin.getOrDefault (gn.node.source.key ());
@@ -745,7 +745,7 @@ public class PanelEquationGraph extends JScrollPane
             if (pinIn != null)
             {
                 Dimension d = pinIn.getPreferredSize ();
-                MNode bounds = container.part.source.child ("$metadata", "gui", "pin", "bounds", "in");
+                MNode bounds = container.part.source.child ("$meta", "gui", "pin", "bounds", "in");
                 if (bounds == null)
                 {
                     int x = tightBounds.x - 100 - pinIn.pinOutBounds.width - d.width;
@@ -766,7 +766,7 @@ public class PanelEquationGraph extends JScrollPane
             if (pinOut != null)
             {
                 Dimension d = pinOut.getPreferredSize ();
-                MNode bounds = container.part.source.child ("$metadata", "gui", "pin", "bounds", "out");
+                MNode bounds = container.part.source.child ("$meta", "gui", "pin", "bounds", "out");
                 if (bounds == null)
                 {
                     int x = tightBounds.x + tightBounds.width + 100 + pinOut.pinInBounds.width;
@@ -1009,7 +1009,7 @@ public class PanelEquationGraph extends JScrollPane
                 String action = e.getActionCommand ();
                 if (action.equals ("straight"))
                 {
-                    if (n.source.getFlag ("$metadata", "gui", "arrow", "straight")) metadata.set ("0", "gui", "arrow", "straight");
+                    if (n.source.getFlag ("$meta", "gui", "arrow", "straight")) metadata.set ("0", "gui", "arrow", "straight");
                     else                                                            metadata.set ("",  "gui", "arrow", "straight");
                 }
                 else
@@ -1054,7 +1054,7 @@ public class PanelEquationGraph extends JScrollPane
                     case "Color":
                     {
                         Color initialColor = Color.black;
-                        String colorName = container.part.source.get ("$metadata", "gui", "pin", pinSide, pinKey, "color");
+                        String colorName = container.part.source.get ("$meta", "gui", "pin", pinSide, pinKey, "color");
                         if (! colorName.isEmpty ())
                         {
                             try {initialColor = Color.decode (colorName);}
@@ -1252,7 +1252,7 @@ public class PanelEquationGraph extends JScrollPane
                 }
 
                 // Rename pin annotations in container itself.
-                MNode child = container.part.source.child ("$metadata", "gui", "pin", "in", pinKey);
+                MNode child = container.part.source.child ("$meta", "gui", "pin", "in", pinKey);
                 if (child != null)  // There actually is a container-level pin annotation.
                 {
                     // Ideally we would use MNode.move(), but that would require a new kind of undo class.
@@ -1288,7 +1288,7 @@ public class PanelEquationGraph extends JScrollPane
                     }
                 }
 
-                MNode child = container.part.source.child ("$metadata", "gui", "pin", "out", pinKey);
+                MNode child = container.part.source.child ("$meta", "gui", "pin", "out", pinKey);
                 if (child != null)
                 {
                     MNode metadata = new MVolatile ();
@@ -1306,11 +1306,11 @@ public class PanelEquationGraph extends JScrollPane
         public void applyPinTopicChange (GraphEdge e, String topic)
         {
             NodePart part = e.nodeFrom.node;
-            if (topic.equals (part.source.get ("$metadata", "gui", "pin", "topic"))) return;
+            if (topic.equals (part.source.get ("$meta", "gui", "pin", "topic"))) return;
             UndoManager um = MainFrame.instance.undoManager;
             if (topic.isEmpty ())  // reset to default
             {
-                DeleteAnnotation da = DeleteAnnotation.withName (part, "$metadata", "gui", "pin", "topic");
+                DeleteAnnotation da = DeleteAnnotation.withName (part, "$meta", "gui", "pin", "topic");
                 if (da != null) um.apply (da);
             }
             else  // change value
@@ -1976,8 +1976,8 @@ public class PanelEquationGraph extends JScrollPane
                         boolean pass =  nodeTo == graphPanel.pinOut;
                         if (nodeTo == graphPanel.pinIn  ||  pass)
                         {
-                            String    oldKey = partFrom.source.getOrDefault (partFrom.source.key (), "$metadata", "gui", "pin");
-                            if (pass) oldKey = partFrom.source.getOrDefault (oldKey,                 "$metadata", "gui", "pin", "pass");
+                            String    oldKey = partFrom.source.getOrDefault (partFrom.source.key (), "$meta", "gui", "pin");
+                            if (pass) oldKey = partFrom.source.getOrDefault (oldKey,                 "$meta", "gui", "pin", "pass");
                             if (! newKey.equals (oldKey))  // target pin has changed
                             {
                                 MNode metadata = new MVolatile ();
@@ -2287,7 +2287,7 @@ public class PanelEquationGraph extends JScrollPane
         **/
         public boolean hasAttributes (String pinSide, String pinName)
         {
-            MNode pin = container.part.source.child ("$metadata", "gui", "pin", pinSide, pinName);
+            MNode pin = container.part.source.child ("$meta", "gui", "pin", pinSide, pinName);
             if (pin == null) return false;
             if (pin.child ("color") != null) return true;
             if (pin.child ("notes") != null) return true;
@@ -2373,7 +2373,7 @@ public class PanelEquationGraph extends JScrollPane
             if (node.pinIn.child (baseName + (index + 1)) != null) return false;  // There is another generated pin above us, so don't delete.
 
             // Delete all contiguous unbound pins, in reverse order.
-            NodeBase metadata = (NodeBase) node.child ("$metadata");
+            NodeBase metadata = (NodeBase) node.child ("$meta");
             for (i = index; i >= 1; i--)
             {
                 // Is the current pin deletable?

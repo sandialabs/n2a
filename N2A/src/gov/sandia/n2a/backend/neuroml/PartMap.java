@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -57,14 +57,14 @@ public class PartMap
         public void build (MNode part)
         {
             internal = part.key ();
-            String pieces[] = part.get ("$metadata", "backend", "lems", "part").split (",");
+            String pieces[] = part.get ("$meta", "backend", "lems", "part").split (",");
             for (String n : pieces)
             {
                 neuroml.add (n);
             }
             if (neuroml.size () == 0) neuroml.add (internal);  // Simply a tagged part, with no name change.
 
-            MNode metadata = part.child ("$metadata", "backend", "lems", "children");
+            MNode metadata = part.child ("$meta", "backend", "lems", "children");
             if (metadata != null)
             {
                 for (MNode m : metadata)
@@ -87,7 +87,7 @@ public class PartMap
 
                 // Add name mapping
                 String key = c.key ();
-                String param = c.get ("$metadata", "backend", "lems", "param");
+                String param = c.get ("$meta", "backend", "lems", "param");
                 if (! param.isEmpty ())
                 {
                     pieces = param.split (",");
@@ -101,7 +101,7 @@ public class PartMap
                 }
 
                 // Add default unit
-                MNode metaDL = c.child ("$metadata", "backend", "lems", "DL");
+                MNode metaDL = c.child ("$meta", "backend", "lems", "DL");
                 if (metaDL != null)
                 {
                     if (dimensions == null) dimensions = new HashMap<String,String> ();
@@ -307,7 +307,7 @@ public class PartMap
     {
         for (MNode c : AppData.models)
         {
-            if (c.child ("$metadata", "backend", "lems", "part") == null) continue;  // Must directly declare a NeuroML part to be included.
+            if (c.child ("$meta", "backend", "lems", "part") == null) continue;  // Must directly declare a NeuroML part to be included.
             NameMap map = new NameMap (new MPart (c));  // Create map using fully-collated part, not just the immediate one.
             outward.put (map.internal, map);
             for (String n : map.neuroml) inward.put (n, map);

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -20,7 +20,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class ChangeReference extends UndoableView
 {
-    protected List<String> path;  // to the direct parent, whether a $metadata block or a variable
+    protected List<String> path;  // to the direct parent, whether a $meta block or a variable
     protected String nameBefore;
     protected String nameAfter;
     protected String valueBefore;
@@ -71,7 +71,7 @@ public class ChangeReference extends UndoableView
         {
             // Update database
             MPart mparent;
-            if (parent instanceof NodeVariable) mparent = (MPart) parent.source.child ("$reference");
+            if (parent instanceof NodeVariable) mparent = (MPart) parent.source.child ("$ref");
             else                                mparent =         parent.source;
             MPart newPart = (MPart) mparent.set (valueAfter, nameAfter);  // should directly change destinationNode if it exists
             mparent.clear (nameBefore);

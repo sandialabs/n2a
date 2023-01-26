@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -34,7 +34,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class AddAnnotation extends UndoableView implements AddEditable
 {
-    protected List<String> path;            // to the container of the new node. Can be a variable, $metadata (under a part), or annotation.
+    protected List<String> path;            // to the container of the new node. Can be a variable, $meta (under a part), or annotation.
     protected int          index;           // Where to insert among siblings. Unfiltered.
     protected String       name;
     protected String       prefix;          // Name path to first node that does not already exist at add location. If all nodes already exist (and this is merely a value set), then string is empty and undo() will not clear anything.
@@ -48,8 +48,8 @@ public class AddAnnotation extends UndoableView implements AddEditable
     protected boolean      touchesCategory;
 
     /**
-        @param parent Direct container of the new node, even if not a $metadata node.
-        Sometimes this can be a part which doesn't yet contain a $metadata node. In that case, the part node is
+        @param parent Direct container of the new node, even if not a $meta node.
+        Sometimes this can be a part which doesn't yet contain a $meta node. In that case, the part node is
         treated as if it contained a metadata node, and the non-existent metadata node becomes the parent.
         @param index Position in the unfiltered tree where the node should be inserted.
         @param data The key, value, and perhaps subtree to be installed. Could be null, in which
@@ -60,10 +60,10 @@ public class AddAnnotation extends UndoableView implements AddEditable
         path = parent.getKeyPath ();
         this.index = index;
 
-        if (parent instanceof NodePart) path.add ("$metadata");  // Fake the metadata block.
+        if (parent instanceof NodePart) path.add ("$meta");  // Fake the metadata block.
 
         MNode mparent = parent.source;
-        if (parent instanceof NodePart  ||  parent instanceof NodeVariable) mparent = mparent.child ("$metadata");
+        if (parent instanceof NodePart  ||  parent instanceof NodeVariable) mparent = mparent.child ("$meta");
 
         createSubtree = new MVolatile ();
         if (data == null)
@@ -164,18 +164,18 @@ public class AddAnnotation extends UndoableView implements AddEditable
         // Update database
 
         MPart mparent = parent.source;
-        if (parent instanceof NodeVariable) mparent = (MPart) mparent.child ("$metadata");
+        if (parent instanceof NodeVariable) mparent = (MPart) mparent.child ("$meta");
         else if (parent instanceof NodeAnnotation) mparent = ((NodeAnnotation) parent).folded;
-        // else parent is a NodeAnnotations, so mparent is $metadata, which should be used directly.
+        // else parent is a NodeAnnotations, so mparent is $meta, which should be used directly.
 
         boolean killBlock = false;
         if (! prefix.isEmpty ())
         {
             String[] names = prefix.split ("\\.");
             mparent.clear (names);
-            if (mparent.key ().equals ("$metadata")  &&  mparent.size () == 0)
+            if (mparent.key ().equals ("$meta")  &&  mparent.size () == 0)
             {
-                mparent.parent ().clear ("$metadata");
+                mparent.parent ().clear ("$meta");
                 killBlock = true;
             }
         }
@@ -190,11 +190,11 @@ public class AddAnnotation extends UndoableView implements AddEditable
         int index = parent.getIndexFiltered (createdNode);
         if (canceled) index--;
 
-        if (killBlock  &&  parent instanceof NodeAnnotations)  // We just emptied $metadata, so remove the node.
+        if (killBlock  &&  parent instanceof NodeAnnotations)  // We just emptied $meta, so remove the node.
         {
             if (model == null) FilteredTreeModel.removeNodeFromParentStatic (parent);
             else               model.removeNodeFromParent (parent);
-            // No need to update order, because we just destroyed $metadata, where order is stored.
+            // No need to update order, because we just destroyed $meta, where order is stored.
             // No need to update tab stops in grandparent, because block nodes don't offer any tab stops.
         }
         else  // Rebuild container (variable, metadata block, or annotation)
@@ -223,7 +223,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
 
     /**
         Do related record-keeping.
-        This function is shared by all undo classes that modify $metadata.
+        This function is shared by all undo classes that modify $meta.
     **/
     public static void update (NodeBase parent, boolean touchesPin, boolean touchesCategory)
     {
@@ -238,7 +238,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
         if (! (parent instanceof NodePart)) return;
         NodePart p = (NodePart) parent;
 
-        boolean touchesImage =  p.iconCustom != null  ||  p.source.child ("$metadata", "gui", "icon") != null;
+        boolean touchesImage =  p.iconCustom != null  ||  p.source.child ("$meta", "gui", "icon") != null;
         if (touchesImage) p.setIcon ();
 
         PanelEquations pe = PanelModel.instance.panelEquations;
@@ -295,16 +295,16 @@ public class AddAnnotation extends UndoableView implements AddEditable
         if (parent == null)
         {
             int last = path.size () - 1;
-            if (path.get (last).equals ("$metadata")) parent = NodeBase.locateNode (path.subList (0, last));
+            if (path.get (last).equals ("$meta")) parent = NodeBase.locateNode (path.subList (0, last));
         }
         if (parent == null) throw new CannotRedoException ();
 
         // Update database
 
         MPart mparent = parent.source;
-        if (parent instanceof NodePart  ||  parent instanceof NodeVariable) mparent = (MPart) mparent.childOrCreate ("$metadata");
+        if (parent instanceof NodePart  ||  parent instanceof NodeVariable) mparent = (MPart) mparent.childOrCreate ("$meta");
         else if (parent instanceof NodeAnnotation) mparent = ((NodeAnnotation) parent).folded;
-        // else parent is a NodeAnnotations, so mparent is $metadata, which can be used directly.
+        // else parent is a NodeAnnotations, so mparent is $meta, which can be used directly.
 
         // For a simple add, name has only one path element. However, if a ChangeAnnotation was
         // merged into this, then the name may have several path elements.
@@ -321,7 +321,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
         NodeContainer container = (NodeContainer) parent;
         if (parent instanceof NodePart)  // If this is a part, then display special block.
         {
-            container = (NodeContainer) parent.child ("$metadata");
+            container = (NodeContainer) parent.child ("$meta");
             if (container == null)
             {
                 container = new NodeAnnotations (mparent);
@@ -435,7 +435,7 @@ public class AddAnnotation extends UndoableView implements AddEditable
 
     /**
         Returns a node that is guaranteed to edit the exact metadata key specified.
-        Creates $metadata if it does not already exist. Searches the specified path.
+        Creates $meta if it does not already exist. Searches the specified path.
         If the path ends short, then adds the necessary node to reach the key.
         If the path runs long (because folding goes past the exact key), then
         adds a new node that unfolds the tree at the required point.
@@ -444,8 +444,8 @@ public class AddAnnotation extends UndoableView implements AddEditable
     **/
     public static NodeAnnotation findOrCreate (UndoManager um, NodePart part, String... names)
     {
-        // Get or create the $metadata node.
-        NodeBase metadata = part.child ("$metadata");
+        // Get or create the $meta node.
+        NodeBase metadata = part.child ("$meta");
         if (metadata == null)
         {
             int index = 0;
