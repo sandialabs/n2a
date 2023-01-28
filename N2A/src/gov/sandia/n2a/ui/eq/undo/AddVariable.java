@@ -150,18 +150,20 @@ public class AddVariable extends UndoableView implements AddEditable
     /**
         Toggles between local override, inherited, killed and unkilled.
         The state transitions are (roughly):
-        Local only (no parent value)
-            -> Nonexistent
-        Overridden (has a parent value and local value)
-            -> Inherited
-        Inherited (has a parent value only, no local value)
-            -> Overridden Killed
-        Overridden Killed (local override sets kill true)
-            -> Inherited
-        Inherited Killed (kill flag is set true in parent)
-            -> Overridden Unkilled
-        Overridden Unkilled (local override sets kill false)
-            -> Inherited Killed
+        <dl>
+        <di>Local only (no parent value)</di>
+            <dd> -> Nonexistent</dd>
+        <di>Overridden (has a parent value and local value)</di>
+            <dd> -> Inherited</dd>
+        <di>Inherited (has a parent value only, no local value)</di>
+            <dd> -> Overridden Killed</dd>
+        <di>Overridden Killed (local override sets kill true)</di>
+            <dd> -> Inherited</dd>
+        <di>Inherited Killed (kill flag is set true in parent)</di>
+            <dd> -> Overridden Unkilled</dd>
+        <di>Overridden Unkilled (local override sets kill false)</di>
+            <dd> -> Inherited Killed</dd>
+        </dl>
     **/
     public static void deleteOrKill (MPart mparent, String name)
     {
