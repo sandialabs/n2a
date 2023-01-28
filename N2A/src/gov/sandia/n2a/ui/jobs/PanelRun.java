@@ -22,6 +22,7 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.studies.Study;
 
 import java.awt.Component;
@@ -530,13 +531,16 @@ public class PanelRun extends JPanel
         );
         setFocusCycleRoot (true);
 
-        split.setDividerLocation (AppData.state.getOrDefault (250, "PanelRun", "divider"));
+        float em = SettingsLookAndFeel.em;
+        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (19.0, "PanelRun", "divider") * em));
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
             {
                 Object o = e.getNewValue ();
-                if (o instanceof Integer) AppData.state.set (o, "PanelRun", "divider");
+                if (! (o instanceof Integer)) return;
+                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
+                AppData.state.setTruncated (value, 2, "PanelRun", "divider");
             }
         });
     }

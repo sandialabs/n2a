@@ -73,6 +73,7 @@ import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 import gov.sandia.n2a.ui.eq.undo.DeleteAnnotation;
 import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
 @SuppressWarnings("serial")
 public class PanelEquationGraph extends JScrollPane
@@ -741,6 +742,7 @@ public class PanelEquationGraph extends JScrollPane
                 if (c != pinIn  &&  c != pinOut)
                     tightBounds = tightBounds.union (c.getBounds ());
             int y = tightBounds.y + tightBounds.height / 2;
+            float em = SettingsLookAndFeel.em;
 
             if (pinIn != null)
             {
@@ -754,8 +756,8 @@ public class PanelEquationGraph extends JScrollPane
                 else  // Make the fairly safe assumption that x and y are both set to something meaningful.
                 {
                     Point location = new Point ();
-                    location.x = bounds.getInt ("x") + offset.x;
-                    location.y = bounds.getInt ("y") + offset.y;
+                    location.x = (int) Math.round (bounds.getDouble ("x") * em) + offset.x;
+                    location.y = (int) Math.round (bounds.getDouble ("y") * em) + offset.y;
                     pinIn.setLocation (location);
                 }
                 pinIn.setSize (d);  // Only necessary for previously-existing node, but we don't bother remembering whether it is new or existing.
@@ -775,8 +777,8 @@ public class PanelEquationGraph extends JScrollPane
                 else
                 {
                     Point location = new Point ();
-                    location.x = bounds.getInt ("x") + offset.x;
-                    location.y = bounds.getInt ("y") + offset.y;
+                    location.x = (int) Math.round (bounds.getDouble ("x") * em) + offset.x;
+                    location.y = (int) Math.round (bounds.getDouble ("y") * em) + offset.y;
                     pinOut.setLocation (location);
                 }
                 pinOut.setSize (d);

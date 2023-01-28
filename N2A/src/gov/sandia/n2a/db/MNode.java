@@ -553,6 +553,40 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         return result;
     }
 
+    /**
+        Formats a number by truncating it to the given number of decimal places.
+        Drops any trailing zeroes to produce the most compact form.
+        The purpose of this function is to efficiently store numbers when the
+        desired/reasonable precision is known. Otherwise, might get a bunch of junk
+        precision at the end of the string.
+        @param value Must have a relatively small exponent, because this routine
+        relies on converting to integer then back again.
+        @param precision Of the digits after (to the right of) the decimal point.
+        Cannot be negative.
+    **/
+    public MNode setTruncated (double value, int precision, String... keys)
+    {
+        double shift = Math.pow (10, precision);
+        String converted = String.valueOf (Math.round (value * shift) / shift);
+        int pos = converted.lastIndexOf ('.');
+        if (pos >= 0)
+        {
+            int end = Math.min (pos + precision, converted.length () - 1);
+            for (; end >= pos; end--)
+            {
+                char c = converted.charAt (end);
+                if (c != '0'  &&  c != '.') break;
+            }
+            converted = converted.substring (0, end + 1);
+        }
+        return set (converted, keys);
+    }
+
+    public MNode setTruncated (double value, int precision, Object... keys)
+    {
+        return setTruncated (value, precision, toStrings (keys));
+    }
+
     public synchronized MNode set (Object value, String... keys)
     {
         MNode result = childOrCreate (keys);
@@ -574,9 +608,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     public synchronized MNode set (Object value, Object... keys)
     {
-        String[] stringKeys = new String[keys.length];
-        for (int i = 0; i < keys.length; i++) stringKeys[i] = keys[i].toString ();
-        return set (value, stringKeys);
+        return set (value, toStrings (keys));
     }
 
     /**

@@ -31,6 +31,7 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
 public class AddPart extends UndoableView implements AddEditable
 {
@@ -66,9 +67,10 @@ public class AddPart extends UndoableView implements AddEditable
         }
 
         if (location == null) location = centerOf (parent);
+        float em = SettingsLookAndFeel.em;
         MNode bounds = createSubtree.childOrCreate ("$meta", "gui", "bounds");
-        bounds.set (location.x, "x");
-        bounds.set (location.y, "y");
+        bounds.setTruncated (location.x / em, 2, "x");
+        bounds.setTruncated (location.y / em, 2, "y");
 
         touchesPin =  createSubtree.child ("$meta", "gui", "pin") != null;
     }
@@ -133,6 +135,7 @@ public class AddPart extends UndoableView implements AddEditable
         // Base on average position of existing parts.
         Point center = new Point ();
         int count = 0;
+        float em = SettingsLookAndFeel.em;
         Enumeration<?> children = parent.children ();
         while (children.hasMoreElements ())
         {
@@ -142,8 +145,8 @@ public class AddPart extends UndoableView implements AddEditable
             MNode bounds = p.source.child ("$meta", "gui", "bounds");
             if (bounds == null) continue;
             count++;
-            center.x += bounds.getInt ("x");
-            center.y += bounds.getInt ("y");
+            center.x += (int) Math.round (bounds.getDouble ("x") * em);
+            center.y += (int) Math.round (bounds.getDouble ("y") * em);
         }
         if (count == 1)
         {
@@ -172,13 +175,14 @@ public class AddPart extends UndoableView implements AddEditable
 
         Point center = new Point ();
         int count = 0;
+        float em = SettingsLookAndFeel.em;
         for (MNode p : data)
         {
             MNode bounds = p.child ("$meta", "gui", "bounds");
             if (bounds == null) continue;
             count++;
-            center.x += bounds.getInt ("x");
-            center.y += bounds.getInt ("y");
+            center.x += (int) Math.round (bounds.getDouble ("x") * em);
+            center.y += (int) Math.round (bounds.getDouble ("y") * em);
         }
         if (count > 0)
         {
@@ -187,6 +191,8 @@ public class AddPart extends UndoableView implements AddEditable
         }
 
         if (location == null) location = centerOf (parent);
+        double lcx = (location.x - center.x) / em;
+        double lcy = (location.y - center.y) / em;
         int needLayout = data.size () - count;
         int columns = (int) Math.sqrt (needLayout);
         int l = 0;
@@ -198,12 +204,12 @@ public class AddPart extends UndoableView implements AddEditable
             if (bounds == null)
             {
                 bounds = p.childOrCreate ("$meta", "gui", "bounds");
-                bounds.set ((l % columns) * 100, "x");
-                bounds.set ((l / columns) * 100, "y");
+                bounds.set ((l % columns) * 100 / em, "x");
+                bounds.set ((l / columns) * 100 / em, "y");
                 l++;
             }
-            bounds.set (location.x + bounds.getInt ("x") - center.x, "x");
-            bounds.set (location.y + bounds.getInt ("y") - center.y, "y");
+            bounds.setTruncated (lcx + bounds.getDouble ("x"), 2, "x");
+            bounds.setTruncated (lcy + bounds.getDouble ("y"), 2, "y");
 
             String key = p.key ();
             String name = key;

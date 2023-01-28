@@ -109,7 +109,7 @@ class OutputHolder:
 
     def writeModes(self):
         with open(self.columnFileName, 'w') as mo:
-            mo.write('N2A.schema=2\n')
+            mo.write('N2A.schema=3\n')
             for columnName, columnIndex in self.columnMap.items():
                 mo.write('{}:{}\n'.format (columnIndex, columnName))
                 for attributeName, attributeValue in self.columnMode[columnIndex].items():

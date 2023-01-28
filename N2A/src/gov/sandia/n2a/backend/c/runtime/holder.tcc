@@ -1772,7 +1772,7 @@ void
 OutputHolder<T>::writeModes ()
 {
     std::ofstream mo (columnFileName.c_str ());
-    mo << "N2A.schema=2\n";
+    mo << "N2A.schema=3\n";
     for (auto it : columnMap)
     {
         int i = it.second;

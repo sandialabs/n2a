@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,6 +18,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
 import gov.sandia.n2a.ui.jobs.OutputParser.Column;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.jobs.PanelRun;
 import java.awt.Component;
 import java.awt.EventQueue;
@@ -192,13 +193,16 @@ public class PanelStudy extends JPanel
         );
         setFocusCycleRoot (true);
 
-        split.setDividerLocation (AppData.state.getOrDefault (250, "PanelStudy", "divider"));
+        float em = SettingsLookAndFeel.em;
+        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (19.0, "PanelStudy", "divider") * em));
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
             {
                 Object o = e.getNewValue ();
-                if (o instanceof Integer) AppData.state.set (o, "PanelStudy", "divider");
+                if (! (o instanceof Integer)) return;
+                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
+                AppData.state.setTruncated (value, 2, "PanelStudy", "divider");
             }
         });
     }

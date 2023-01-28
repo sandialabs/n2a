@@ -3015,7 +3015,7 @@ public class ExportJob extends XMLutility
 
                 try (PrintStream ps = new PrintStream (new FileOutputStream (jobDir.resolve (name + ".columns").toFile (), true), false, "UTF-8"))
                 {
-                    ps.println ("N2A.schema=2,Columns");
+                    ps.println ("N2A.schema=3,Columns");
                     ps.println ("0:$t");  // Because this function is used mainly by the LEMS backend, and LEMS always puts time in first column.
                     if (! timeScale.isEmpty ()) ps.println (" scale:" + timeScale);
 

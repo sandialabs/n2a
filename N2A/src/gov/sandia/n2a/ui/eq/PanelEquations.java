@@ -123,6 +123,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.PanelRun;
 import gov.sandia.n2a.ui.ref.ExportBibliography;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.studies.PanelStudy;
 
 @SuppressWarnings("serial")
@@ -416,14 +417,16 @@ public class PanelEquations extends JPanel
         else              split = new JSplitPane (JSplitPane.VERTICAL_SPLIT);
         split.setOneTouchExpandable(true);
         split.setResizeWeight (1);
-        int dividerLocation = AppData.state.getInt ("PanelModel", "view", view);
+        int dividerLocation = (int) Math.round (AppData.state.getDouble ("PanelModel", "view", view) * SettingsLookAndFeel.em);
         if (dividerLocation != 0) split.setDividerLocation (dividerLocation);
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
             {
                 Object o = e.getNewValue ();
-                if (o instanceof Integer) AppData.state.set (o, "PanelModel", "view", view);
+                if (! (o instanceof Integer)) return;
+                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
+                AppData.state.setTruncated (value, 2, "PanelModel", "view", view);
             }
         });
 
@@ -1343,7 +1346,7 @@ public class PanelEquations extends JPanel
             else if (view == BOTTOM) split.setOrientation (JSplitPane.VERTICAL_SPLIT);
             if (view != NODE)
             {
-                int dividerLocation = AppData.state.getInt ("PanelModel", "view", view);
+                int dividerLocation = (int) Math.round (AppData.state.getDouble ("PanelModel", "view", view) * SettingsLookAndFeel.em);
                 if (dividerLocation != 0) split.setDividerLocation (dividerLocation);
             }
             validate ();

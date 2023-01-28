@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,10 +9,13 @@ package gov.sandia.n2a.ui.settings;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Component;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
@@ -44,6 +47,7 @@ import javax.swing.plaf.metal.OceanTheme;
 public class SettingsLookAndFeel extends JPanel implements Settings
 {
     public static SettingsLookAndFeel instance;
+    public static float               em = 13;  // Size of M in current JTree font. Used to scale UI items such as nodes in equation graph.
 
     protected Map<String, Laf> catalog = new HashMap<String, Laf> ();
     protected ButtonGroup      group   = new ButtonGroup ();
@@ -113,6 +117,7 @@ public class SettingsLookAndFeel extends JPanel implements Settings
             {
                 e.printStackTrace ();
             }
+            updateEm ();
             for (Window w : Window.getWindows ()) SwingUtilities.updateComponentTreeUI (w);  // Don't call w.pack(). It creates a mess, such as oversizing the main window.
         }
 
@@ -209,12 +214,22 @@ public class SettingsLookAndFeel extends JPanel implements Settings
         fontScale = (float) AppData.state.getOrDefault (1.0, "FontScale");
         fieldFontScale.setText (Float.toString (fontScale));
 
+        Laf laf = null;
         String name = AppData.state.get ("LookAndFeel");
-        if (name.isEmpty ()) return;
-        Laf laf = catalog.get (name);
-        if (laf == null) return;
+        if (! name.isEmpty ()) laf = catalog.get (name);
+        if (laf == null) laf = currentLaf;  // currentLaf is set by constructor above.
+        if (laf == null) return;  // but just in case we couldn't find it
+
         laf.apply ();
         group.setSelected (laf.item.getModel (), true);
+    }
+
+    public static void updateEm ()
+    {
+        if (MainFrame.instance == null) return;  // If app is still booting, can't get a graphics context.
+        Font font = UIManager.getFont ("Tree.font");
+        FontMetrics fm = MainFrame.instance.getGraphics ().getFontMetrics (font);
+        em = fm.stringWidth ("M");
     }
 
     @Override

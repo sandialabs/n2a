@@ -32,6 +32,7 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
 @SuppressWarnings("serial")
 public class GraphParent extends JPanel
@@ -122,10 +123,11 @@ public class GraphParent extends JPanel
         MNode boundsParent = part.source.child ("$meta", "gui", "bounds", "parent");
         if (boundsParent != null)
         {
-            w = boundsParent.getInt ("width");
-            h = boundsParent.getInt ("height");
+            float em = SettingsLookAndFeel.em;
+            w = (int) Math.round (boundsParent.getDouble ("width")  * em);
+            h = (int) Math.round (boundsParent.getDouble ("height") * em);
+            if (w != 0  &&  h != 0) return new Dimension (w, h);
         }
-        if (w != 0  &&  h != 0) return new Dimension (w, h);
 
         Dimension d = super.getPreferredSize ();  // Gets the layout manager's opinion.
         d.width  = Math.max (d.width,  w);
@@ -254,8 +256,9 @@ public class GraphParent extends JPanel
                     MNode metadata = new MVolatile ();
                     MNode boundsParent = metadata.childOrCreate ("gui", "bounds", "parent");
                     Rectangle now = getBounds ();
-                    if (now.width  != old.width ) boundsParent.set (now.width,  "width");
-                    if (now.height != old.height) boundsParent.set (now.height, "height");
+                    float em = SettingsLookAndFeel.em;
+                    if (now.width  != old.width ) boundsParent.setTruncated (now.width  / em, 2, "width");
+                    if (now.height != old.height) boundsParent.setTruncated (now.height / em, 2, "height");
                     if (boundsParent.size () > 0) MainFrame.instance.undoManager.apply (new ChangeAnnotations (part, metadata));
                 }
             }

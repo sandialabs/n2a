@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -27,6 +27,7 @@ import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Import;
 import gov.sandia.n2a.ui.eq.PanelEquations.BreadcrumbRenderer;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
 @SuppressWarnings("serial")
 public class PanelModel extends JPanel implements MNodeListener
@@ -232,7 +233,7 @@ public class PanelModel extends JPanel implements MNodeListener
 
         splitMRU = new JSplitPane (JSplitPane.VERTICAL_SPLIT, panelMRU, panelSearch);
         split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT, splitMRU, panelEquations);
-        split.setOneTouchExpandable(true);
+        split.setOneTouchExpandable (true);
 
         setLayout (new BorderLayout ());
         add (split, BorderLayout.CENTER);
@@ -243,23 +244,28 @@ public class PanelModel extends JPanel implements MNodeListener
         // Determine the split positions.
 
         FontMetrics fm = panelSearch.tree.getFontMetrics (panelSearch.tree.getFont ());
-        splitMRU.setDividerLocation (AppData.state.getOrDefault (fm.getHeight () * 4, "PanelModel", "dividerMRU"));
+        float em = SettingsLookAndFeel.em;
+        splitMRU.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (fm.getHeight () * 4 / em, "PanelModel", "dividerMRU") * em));
         splitMRU.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
             {
                 Object o = e.getNewValue ();
-                if (o instanceof Integer) AppData.state.set (o, "PanelModel", "dividerMRU");
+                if (! (o instanceof Integer)) return;
+                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
+                AppData.state.setTruncated (value, 2, "PanelModel", "dividerMRU");
             }
         });
 
-        split.setDividerLocation (AppData.state.getOrDefault (fm.stringWidth ("Example Hodgkin-Huxley Cable"), "PanelModel", "divider"));
+        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (fm.stringWidth ("Example Hodgkin-Huxley Cable") / em, "PanelModel", "divider") * em));
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
             {
                 Object o = e.getNewValue ();
-                if (o instanceof Integer) AppData.state.set (o, "PanelModel", "divider");
+                if (! (o instanceof Integer)) return;
+                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
+                AppData.state.setTruncated (value, 2, "PanelModel", "divider");
             }
         });
 

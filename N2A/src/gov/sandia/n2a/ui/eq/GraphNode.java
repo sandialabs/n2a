@@ -66,6 +66,7 @@ import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
 @SuppressWarnings("serial")
 public class GraphNode extends JPanel
@@ -143,8 +144,9 @@ public class GraphNode extends JPanel
 
         if (bounds != null)
         {
-            int x = bounds.getInt ("x") + parent.offset.x;
-            int y = bounds.getInt ("y") + parent.offset.y;
+            float em = SettingsLookAndFeel.em;
+            int x = (int) Math.round (bounds.getDouble ("x") * em) + parent.offset.x;
+            int y = (int) Math.round (bounds.getDouble ("y") * em) + parent.offset.y;
             setLocation (x, y);
         }
         updatePins ();
@@ -338,22 +340,24 @@ public class GraphNode extends JPanel
         MNode bounds = node.source.child ("$meta", "gui", "bounds");
         if (bounds != null)
         {
+            float em = SettingsLookAndFeel.em;
             if (open)
             {
                 MNode boundsOpen = bounds.child ("open");
                 if (boundsOpen != null)
                 {
-                    w = boundsOpen.getInt ("width");
-                    h = boundsOpen.getInt ("height");
+                    w = (int) Math.round (boundsOpen.getDouble ("width")  * em);
+                    h = (int) Math.round (boundsOpen.getDouble ("height") * em);
                 }
             }
             else  // closed
             {
-                w = bounds.getInt ("width");
-                h = bounds.getInt ("height");
+                w = (int) Math.round (bounds.getDouble ("width")  * em);
+                h = (int) Math.round (bounds.getDouble ("height") * em);
             }
+            
+            if (w != 0  &&  h != 0) return new Dimension (w, h);
         }
-        if (w != 0  &&  h != 0) return new Dimension (w, h);
 
         Dimension d = super.getPreferredSize ();  // Gets the layout manager's opinion.
         d.width  = Math.max (d.width,  w);
@@ -412,8 +416,9 @@ public class GraphNode extends JPanel
             bounds = metadata.childOrCreate ("gui", "bounds");
         }
         Rectangle now = getBounds ();
-        if (dx != 0  ||  np != node) metadata.set (now.x - parent.offset.x + dx, "gui", "bounds", "x");
-        if (dy != 0  ||  np != node) metadata.set (now.y - parent.offset.y + dy, "gui", "bounds", "y");
+        float em = SettingsLookAndFeel.em;
+        if (dx != 0  ||  np != node) metadata.setTruncated ((now.x - parent.offset.x + dx) / em, 2, "gui", "bounds", "x");
+        if (dy != 0  ||  np != node) metadata.setTruncated ((now.y - parent.offset.y + dy) / em, 2, "gui", "bounds", "y");
         ChangeAnnotations ca = new ChangeAnnotations (np, metadata);
         ca.graph = true;
 
@@ -448,8 +453,8 @@ public class GraphNode extends JPanel
                     if (compound.leadPath == null) compound.leadPath = np.getKeyPath ();
                 }
                 now = g.getBounds ();
-                if (dx != 0  ||  np != node) bounds.set (now.x - parent.offset.x + dx, "x");
-                if (dy != 0  ||  np != node) bounds.set (now.y - parent.offset.y + dy, "y");
+                if (dx != 0  ||  np != node) bounds.setTruncated ((now.x - parent.offset.x + dx) / em, 2, "x");
+                if (dy != 0  ||  np != node) bounds.setTruncated ((now.y - parent.offset.y + dy) / em, 2, "y");
                 ca = new ChangeAnnotations (np, metadata);
                 ca.graph = true;
                 compound.addEdit (ca);
@@ -487,8 +492,9 @@ public class GraphNode extends JPanel
         MNode bounds = node.source.child ("$meta", "gui", "bounds");
         if (bounds != null)
         {
-            x += bounds.getInt ("x");
-            y += bounds.getInt ("y");
+            float em = SettingsLookAndFeel.em;
+            x += (int) Math.round (bounds.getDouble ("x") * em);
+            y += (int) Math.round (bounds.getDouble ("y") * em);
             if (panelEquationTree != null) setOpen (bounds.getBoolean ("open"));
         }
 
@@ -1627,6 +1633,7 @@ public class GraphNode extends JPanel
                     Rectangle now = getBounds ();
                     boolean moved =  now.x != old.x  ||  now.y != old.y;
                     GraphPanel gp = container.panelEquationGraph.graphPanel;
+                    float em = SettingsLookAndFeel.em;
                     if (GraphNode.this == gp.pinIn)
                     {
                         np = container.part;
@@ -1644,20 +1651,20 @@ public class GraphNode extends JPanel
                         if (open)
                         {
                             MNode boundsOpen = bounds.childOrCreate ("open");
-                            if (now.width  != old.width ) boundsOpen.set (now.width,  "width");
-                            if (now.height != old.height) boundsOpen.set (now.height, "height");
+                            if (now.width  != old.width ) boundsOpen.setTruncated (now.width  / em, 2, "width");
+                            if (now.height != old.height) boundsOpen.setTruncated (now.height / em, 2, "height");
                             if (boundsOpen.size () == 0) bounds.clear ("open");
                         }
                         else
                         {
-                            if (now.width  != old.width ) bounds.set (now.width,  "width");
-                            if (now.height != old.height) bounds.set (now.height, "height");
+                            if (now.width  != old.width ) bounds.setTruncated (now.width  / em, 2, "width");
+                            if (now.height != old.height) bounds.setTruncated (now.height / em, 2, "height");
                         }
                     }
                     if (moved)
                     {
-                        bounds.set (now.x - parent.offset.x, "x");
-                        bounds.set (now.y - parent.offset.y, "y");
+                        bounds.setTruncated ((now.x - parent.offset.x) / em, 2, "x");
+                        bounds.setTruncated ((now.y - parent.offset.y) / em, 2, "y");
                     }
                     if (bounds.size () > 0)
                     {
@@ -1695,8 +1702,8 @@ public class GraphNode extends JPanel
                                     if (compound.leadPath == null) compound.leadPath = np.getKeyPath ();
                                 }
                                 now = g.getBounds ();
-                                bounds.set (now.x - parent.offset.x, "x");
-                                bounds.set (now.y - parent.offset.y, "y");
+                                bounds.setTruncated ((now.x - parent.offset.x) / em, 2, "x");
+                                bounds.setTruncated ((now.y - parent.offset.y) / em, 2, "y");
                                 ca = new ChangeAnnotations (np, metadata);
                                 ca.graph = true;
                                 compound.addEdit (ca);

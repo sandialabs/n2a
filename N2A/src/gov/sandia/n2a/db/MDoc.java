@@ -16,6 +16,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.Iterator;
 import java.util.TreeMap;
 
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
+
 /**
     Stores a document in memory and coordinates with its persistent form on disk.
     We assume that only one instance of this class exists for a given disk document
@@ -193,7 +195,12 @@ public class MDoc extends MPersistent
         }
         catch (IOException e) {}  // This exception is common for a newly created doc that has not yet been flushed to disk.
         clearChanged ();  // After load(), clear the slate so we can detect any changes and save the document.
-        if (version == 2) visit (new ConvertSchema2 ());  // Positioned after clearChanged() so that updates get written back to db.
+        if (version == 2)
+        {
+            System.out.println ("converting: " + file);
+            visit (new ConvertSchema2 ());  // Positioned after clearChanged() so that updates get written back to db.
+            markChanged ();  // Force a save in the new schema, even if doc is otherwise unmodified. This stops us from re-checking the doc each time it is loaded.
+        }
 	}
 
 	public synchronized void save ()
@@ -219,26 +226,91 @@ public class MDoc extends MPersistent
     /**
         Upgrade this document from schema 2.
         Specifically, the semantics/names of some entries have changed.
-        This function will be called on all documents when they are opened, so
+        This function will be called on all documents as they are opened, so
         it does not distinguish between parts/models and other kinds of docs.
         Instead, we assume that certain patterns are so unique that they only
         appear in parts/models.
     **/
 	protected class ConvertSchema2 implements Visitor
 	{
-        public boolean visit (MNode node)
+	    public double em = SettingsLookAndFeel.em;
+
+        public void convert (MNode parent, String key)
+	    {
+	        MNode c = parent.child (key);
+	        if (c == null) return;
+	        double value = c.getDouble () / em;
+	        c.setTruncated (value, 2);
+	    }
+
+	    public boolean visit (MNode node)
         {
             String key   = node.key ();
             String value = node.get ();
+
+            // Models
             if (value.equals ("$kill")  ||  key.startsWith ("@")  &&  value.isBlank ()  &&  node.data ())  // revoked variable or equation
             {
                 node.set (null);
                 node.set ("", "$kill");
                 return false;  // A revocation should always be a leaf node.
             }
-            /*  Not ready for these yet.
             if (key.equals ("$metadata"))
             {
+                MNode gui = node.child ("gui");
+                if (gui != null)
+                {
+                    MNode bounds = gui.child ("bounds");
+                    if (bounds != null)
+                    {
+                        convert (bounds, "x");
+                        convert (bounds, "y");
+                        convert (bounds, "width");
+                        convert (bounds, "height");
+
+                        MNode open = bounds.child ("open");
+                        if (open != null)
+                        {
+                            convert (open, "width");
+                            convert (open, "height");
+                        }
+
+                        MNode parent = bounds.child ("parent");
+                        if (parent != null)
+                        {
+                            parent.clear ("x");
+                            parent.clear ("y");
+                            if (parent.isEmpty ())
+                            {
+                                if (! parent.getBoolean ()) bounds.clear ("parent");
+                            }
+                            else
+                            {
+                                convert (parent, "width");
+                                convert (parent, "height");
+                            }
+                        }
+                    }
+
+                    MNode pinBounds = gui.child ("pin", "bounds");
+                    if (pinBounds != null)
+                    {
+                        MNode in = pinBounds.child ("in");
+                        if (in != null)
+                        {
+                            convert (in, "x");
+                            convert (in, "y");
+                        }
+
+                        MNode out = pinBounds.child ("out");
+                        if (out != null)
+                        {
+                            convert (out, "x");
+                            convert (out, "y");
+                        }
+                    }
+                }
+
                 node.parent ().move ("$metadata", "$meta");
                 return false;
             }
@@ -247,7 +319,44 @@ public class MDoc extends MPersistent
                 node.parent ().move ("$reference", "$ref");
                 return false;
             }
-            */
+            if (value.startsWith (":"))
+            {
+                node.set (";" + value.substring (1));
+                return false;
+            }
+
+            // Application state
+            if (key.equals ("WinLayout"))
+            {
+                convert (node, "x");
+                convert (node, "y");
+                convert (node, "width");
+                convert (node, "height");
+                return false;
+            }
+            if (key.equals ("PanelModel"))
+            {
+                convert (node, "divider");
+                convert (node, "dividerMRU");
+                MNode view = node.child ("view");
+                if (view != null)
+                {
+                    convert (view, "1"); // SIDE
+                    convert (view, "2"); // BOTTOM
+                }
+                return false;
+            }
+            if (key.equals ("PanelReference"))
+            {
+                convert (node, "divider");
+                return false;
+            }
+            if (key.equals ("PanelRun"))
+            {
+                convert (node, "divider");
+                return false;
+            }
+
             return true;
         }
 	}

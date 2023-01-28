@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,6 +14,7 @@ import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.ShutdownHook;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.studies.PanelStudy;
 
 import java.awt.Image;
@@ -46,7 +47,6 @@ public class MainFrame extends JFrame
 
     public MainFrame ()
     {
-        if (instance != null) throw new RuntimeException ("Multiple attempts to create main application window.");
         instance = this;
 
         String appName = AppData.properties.get ("name");
@@ -78,15 +78,24 @@ public class MainFrame extends JFrame
             "C", tabs
         );
 
+        // Get em so we can size the window. (All size info is stored in ems.)
+        // Even though SettingLookAndFeel attempts to calculate em before now, it does not
+        // yet have a main window, so there is no graphics context in which size the font.
+        setExtendedState (ICONIFIED);
+        setVisible (true);  // All we need to get a graphics context.
+        setVisible (false); // Graphics context remains valid even after we hide ourselves.
+        SettingsLookAndFeel.updateEm ();
+        float em = SettingsLookAndFeel.em;
+
         MNode winProps = AppData.state.childOrCreate ("WinLayout");
-        int w = winProps.getOrDefault (900, "width");
-        int h = winProps.getOrDefault (600, "height");
-        int x = winProps.getOrDefault (-1,  "x");
-        int y = winProps.getOrDefault (-1,  "y");
+        int w = (int) Math.round (winProps.getOrDefault (90.0, "width")  * em);
+        int h = (int) Math.round (winProps.getOrDefault (60.0, "height") * em);
+        int x = (int) Math.round (winProps.getOrDefault (-1.0, "x")      * em);
+        int y = (int) Math.round (winProps.getOrDefault (-1.0, "y")      * em);
         if (w >= 0  &&  h >= 0) setSize (w, h);
         if (x >= 0  &&  y >= 0) setLocation (x, y);
         else                    setLocationRelativeTo (null);
-        setExtendedState (winProps.getOrDefault (0, "state"));
+        setExtendedState (winProps.getOrDefault (NORMAL, "state"));
         setVisible (true);
 
         addComponentListener (new ComponentAdapter ()
@@ -95,8 +104,9 @@ public class MainFrame extends JFrame
             {
                 if (getExtendedState () == NORMAL)
                 {
-                    AppData.state.set (getWidth (),  "WinLayout", "width");
-                    AppData.state.set (getHeight (), "WinLayout", "height");
+                    float em = SettingsLookAndFeel.em;
+                    AppData.state.setTruncated (getWidth ()  / em, 2, "WinLayout", "width");
+                    AppData.state.setTruncated (getHeight () / em, 2, "WinLayout", "height");
                 }
             }
 
@@ -104,8 +114,9 @@ public class MainFrame extends JFrame
             {
                 if (getExtendedState () == NORMAL)
                 {
-                    AppData.state.set (getX (), "WinLayout", "x");
-                    AppData.state.set (getY (), "WinLayout", "y");
+                    float em = SettingsLookAndFeel.em;
+                    AppData.state.setTruncated (getX () / em, 2, "WinLayout", "x");
+                    AppData.state.setTruncated (getY () / em, 2, "WinLayout", "y");
                 }
             }
         });
