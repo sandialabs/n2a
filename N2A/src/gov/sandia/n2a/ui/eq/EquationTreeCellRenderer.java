@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,6 +14,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.Insets;
 import java.awt.LayoutManager2;
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ import java.util.List;
 
 import javax.swing.Box;
 import javax.swing.Icon;
+import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -202,7 +204,7 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         NodeBase n = (NodeBase) value;
 
         Color fg        = getForegroundFor (n, selected  ||  isDropCell);  // Currently, we don't use colorDropCell, but rather the usual foreground that indicates override state.
-        Font  fontBase  = tree.getFont ();
+        Font  fontBase  = getBaseFont (tree);
         Font  fontPlain = n.getPlainFont (fontBase);
 
         iconHolder.setIcon (getIconFor (n, expanded, leaf));  // If icon is null, this should result in a zero-sized label.
@@ -279,19 +281,38 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         return this;
     }
 
+    public Font getBaseFont (JTree tree)
+    {
+        return tree.getFont ();
+    }
+
     public Icon getIconFor (NodeBase node, boolean expanded, boolean leaf)
     {
         if (hideIcon) return null;
+
+        Icon result = null;
         if (bigIcon)  // OK to use icon larger than 16x16. Implies that node is a NodePart.
         {
             NodePart np = (NodePart) node;
-            if (np.iconCustom != null) return np.iconCustom;
+            result = np.iconCustom;
         }
-        Icon result = node.getIcon (expanded);  // A node knows whether it should hold other nodes or not, so no need to pass leaf to it.
-        if (result != null) return result;
-        if (leaf)     return iconLeaf;
-        if (expanded) return iconOpen;
-        return               iconClosed;
+        if (result == null) result = node.getIcon (expanded);  // A node knows whether it should hold other nodes or not, so no need to pass leaf to it.
+        if (result == null)
+        {
+            if      (leaf)     result = iconLeaf;
+            else if (expanded) result = iconOpen;
+            else               result = iconClosed;
+        }
+
+        // At this point, we definitely have a non-null result.
+        double zoom = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel.zoom;
+        if (zoom >= 1) return result;
+        int w = (int) Math.round (result.getIconWidth  () * zoom);
+        int h = (int) Math.round (result.getIconHeight () * zoom);
+        if (w == 0  ||  h == 0) return null;
+        // TODO: Cache downscaled versions of icons. Should use something like MultiResolutionImage.
+        Image i = ((ImageIcon) result).getImage ().getScaledInstance (w, h, Image.SCALE_SMOOTH);
+        return new ImageIcon (i);
     }
 
     public static Color getForegroundFor (NodeBase node, boolean selected)

@@ -15,6 +15,7 @@ import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
@@ -35,12 +36,14 @@ import gov.sandia.n2a.ui.eq.undo.UndoableView;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Insets;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -52,6 +55,7 @@ import javax.swing.Action;
 import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
 import javax.swing.InputMap;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
@@ -74,10 +78,12 @@ public class PanelEquationTree extends JScrollPane
     public    FilteredTreeModel model;
     public    NodePart          root;
     protected PanelEquations    container;
+    protected boolean           needZoom;
 
-    public PanelEquationTree (PanelEquations container)
+    public PanelEquationTree (PanelEquations container, boolean needZoom)
     {
         this.container = container;
+        this.needZoom  = needZoom;
 
         model = new FilteredTreeModel (root);  // member "root" is null at this point
         tree  = new JTree (model)
@@ -93,11 +99,12 @@ public class PanelEquationTree extends JScrollPane
                 TreePath path = getPathForLocation (e.getX (), e.getY ());
                 if (path == null) return null;
                 NodeBase node = (NodeBase) path.getLastPathComponent ();
-                return node.getToolTipText (getFontMetrics (getFont ()));
+                return node.getToolTipText (getFontMetrics (MainFrame.instance.getFont ()));
             }
 
             public void updateUI ()
             {
+                if (needZoom) setFont (container.panelEquationGraph.graphPanel.scaledTreeFont);
                 if (root != null) root.filter ();  // Force (later) update to tab stops, in case font has changed. This can also affect cell size.
                 super.updateUI ();  // Causes tree to poll for cell sizes.
             }
@@ -280,16 +287,6 @@ public class PanelEquationTree extends JScrollPane
 
         MouseAdapter mouseAdapter = new MouseAdapter ()
         {
-            public void mouseDragged (MouseEvent e)
-            {
-                // For some reason, a DnD gesture does not cause JTree to take focus.
-                // This is a hack to grab focus in that case. At the start of a drag,
-                // we receive a small handful of mouseDragged() messages. Perhaps
-                // they stop because DnD takes over. In any case, this is sufficient to detect
-                // the start of DnD and grab focus.
-                if (! tree.isFocusOwner ()) tree.requestFocusInWindow ();
-            }
-
             /**
                 Does bookkeeping for focus change caused by direct click (as opposed to keyboard navigation or undo).
             **/
@@ -312,13 +309,23 @@ public class PanelEquationTree extends JScrollPane
                 }
             }
 
-            public void mouseClicked (MouseEvent e)
+            public void translate (MouseEvent me, GraphPanel gp)
             {
-                int     x       = e.getX ();
-                int     y       = e.getY ();
-                int     clicks  = e.getClickCount ();
-                boolean control = e.isControlDown ();
-                boolean shift   = e.isShiftDown ();
+                Point p = me.getPoint ();
+                Component c = me.getComponent ();
+                Point vp = SwingUtilities.convertPoint (c, p, gp);
+                me.translatePoint (vp.x-p.x, vp.y-p.y);
+            }
+
+            public void mouseClicked (MouseEvent me)
+            {
+                if (SwingUtilities.isMiddleMouseButton (me)) return;  // Prevent control-middle click from being processed below.
+
+                int     x       = me.getX ();
+                int     y       = me.getY ();
+                int     clicks  = me.getClickCount ();
+                boolean control = me.isControlDown ();
+                boolean shift   = me.isShiftDown ();
 
                 TreePath path = tree.getClosestPathForLocation (x, y);
                 if (path != null)
@@ -330,7 +337,7 @@ public class PanelEquationTree extends JScrollPane
                     if (! r.contains (x, y)) path = null;
                 }
 
-                if (SwingUtilities.isRightMouseButton (e)  ||  control  &&  Host.isMac ())
+                if (SwingUtilities.isRightMouseButton (me)  ||  control  &&  Host.isMac ())
                 {
                     if (clicks == 1)  // Show popup menu
                     {
@@ -343,7 +350,7 @@ public class PanelEquationTree extends JScrollPane
                         }
                     }
                 }
-                else if (SwingUtilities.isLeftMouseButton (e))
+                else if (SwingUtilities.isLeftMouseButton (me))
                 {
                     if (clicks == 1)
                     {
@@ -376,9 +383,95 @@ public class PanelEquationTree extends JScrollPane
                     }
                 }
             }
+
+            public void mousePressed (MouseEvent me)
+            {
+                if (SwingUtilities.isMiddleMouseButton (me))
+                {
+                    if (container.view == PanelEquations.NODE  &&  root != null  &&  root.graph != null)
+                    {
+                        GraphPanel gp = root.graph.parent;
+                        translate (me, gp);
+                        gp.mouseListener.mousePressed (me);
+                    }
+                }
+            }
+
+            public void mouseReleased (MouseEvent me)
+            {
+                if (SwingUtilities.isMiddleMouseButton (me))
+                {
+                    if (container.view == PanelEquations.NODE  &&  root != null  &&  root.graph != null)
+                    {
+                        GraphPanel gp = root.graph.parent;
+                        translate (me, gp);
+                        gp.mouseListener.mouseReleased (me);
+                    }
+                }
+            }
+
+            public void mouseWheelMoved (MouseWheelEvent me)
+            {
+                if (me.getScrollType() == MouseWheelEvent.WHEEL_UNIT_SCROLL)
+                {
+                    if (container.view == PanelEquations.NODE  &&  root != null  &&  root.graph != null)
+                    {
+                        GraphPanel gp = root.graph.parent;
+                        if (me.isControlDown ())  // zoom
+                        {
+                            translate (me, gp);
+                            gp.mouseListener.mouseWheelMoved (me);
+                            return;
+                        }
+                        else  // scroll
+                        {
+                            JScrollBar sb;
+                            if (me.isShiftDown ()) sb = getHorizontalScrollBar ();
+                            else                   sb = getVerticalScrollBar ();
+                            boolean shouldForward = true;
+                            if (sb.isVisible ())
+                            {
+                                int units   = me.getUnitsToScroll ();
+                                int value   = sb.getValue ();
+                                int visible = sb.getVisibleAmount ();
+                                if (units < 0) shouldForward =  value           <= sb.getMinimum ();
+                                else           shouldForward =  value + visible >= sb.getMaximum ();
+                            }
+                            if (shouldForward)
+                            {
+                                gp.mouseListener.mouseWheelMoved (me);
+                                return;
+                            }
+                        }
+                    }
+                }
+                tree.getParent ().dispatchEvent (me);  // default JTree mouse wheel processing
+            }
+
+            public void mouseDragged (MouseEvent me)
+            {
+                if (SwingUtilities.isMiddleMouseButton (me))
+                {
+                    if (container.view == PanelEquations.NODE  &&  root != null  &&  root.graph != null)
+                    {
+                        GraphPanel gp = root.graph.parent;
+                        translate (me, gp);
+                        gp.mouseListener.mouseDragged (me);
+                    }
+                    return;
+                }
+
+                // For some reason, a DnD gesture does not cause JTree to take focus.
+                // This is a hack to grab focus in that case. At the start of a drag,
+                // we receive a small handful of mouseDragged() messages. Perhaps
+                // they stop because DnD takes over. In any case, this is sufficient to detect
+                // the start of DnD and grab focus.
+                if (! tree.isFocusOwner ()) tree.requestFocusInWindow ();
+            }
         };
         tree.addMouseListener (mouseAdapter);
         tree.addMouseMotionListener (mouseAdapter);
+        tree.addMouseWheelListener (mouseAdapter);
 
         tree.addTreeWillExpandListener (new TreeWillExpandListener ()
         {

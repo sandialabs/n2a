@@ -12,6 +12,7 @@ import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -28,6 +29,7 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Line2D;
+import java.awt.geom.Point2D;
 import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +39,7 @@ import javax.swing.ActionMap;
 import javax.swing.Box;
 import javax.swing.InputMap;
 import javax.swing.JPanel;
+import javax.swing.JTree;
 import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
@@ -66,7 +69,6 @@ import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.DeletePart;
-import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
 @SuppressWarnings("serial")
 public class GraphNode extends JPanel
@@ -87,8 +89,10 @@ public class GraphNode extends JPanel
     protected Rectangle           pinOutBounds;  // Surrounds graphic representation of pins. Null if no out pins.
     protected Rectangle           pinInBounds;   // ditto for in pins
     protected String              side;          // Only non-null if this is a pin I/O block. In that case, this is one of "in" or "out".
+    protected Point2D.Double      tempPosition;  // If this graph node has coordinate that are not stored in $meta, then they are stored here, in ems.
 
-    protected static RoundedBorder border = new RoundedBorder (5);
+    public static final int        borderThicknes = 5;
+    protected static RoundedBorder border = new RoundedBorder (borderThicknes);
 
     /**
         Constructs both regular graph nodes and pin I/O blocks.
@@ -120,7 +124,7 @@ public class GraphNode extends JPanel
         node.fakeRoot (true);
         if (container.view == PanelEquations.NODE)
         {
-            panelEquationTree = new PanelEquationTree (container);
+            panelEquationTree = new PanelEquationTree (container, true);
             panelEquationTree.loadPart (node);
         }
 
@@ -144,7 +148,7 @@ public class GraphNode extends JPanel
 
         if (bounds != null)
         {
-            float em = SettingsLookAndFeel.em;
+            double em = parent.em;
             int x = (int) Math.round (bounds.getDouble ("x") * em) + parent.offset.x;
             int y = (int) Math.round (bounds.getDouble ("y") * em) + parent.offset.y;
             setLocation (x, y);
@@ -168,6 +172,57 @@ public class GraphNode extends JPanel
         });
     }
 
+    public void holdTempPosition ()
+    {
+        Point p = getLocation ();
+        if (tempPosition == null) tempPosition = new Point2D.Double ();
+        tempPosition.x = (p.x - parent.offset.x) / parent.em;
+        tempPosition.y = (p.y - parent.offset.y) / parent.em;
+    }
+
+    /**
+        Update bounds based on new zoom.
+        Assumes that both parent.em and parent.offset have been updated already.
+    **/
+    public void rescale ()
+    {
+        MNode bounds;
+        GraphPanel gp = container.panelEquationGraph.graphPanel;
+        if (this == gp.pinIn)
+        {
+            bounds = container.part.source.child ("$meta", "gui", "pin", "bounds", "in");
+        }
+        else if (this == gp.pinOut)
+        {
+            bounds = container.part.source.child ("$meta", "gui", "pin", "bounds", "out");
+        }
+        else
+        {
+            bounds = node.source.child ("$meta", "gui", "bounds");
+        }
+
+        Point2D.Double position;
+        if (bounds == null)
+        {
+            position = tempPosition;
+        }
+        else
+        {
+            position = new Point2D.Double ();
+            position.x = (float) bounds.getDouble ("x");
+            position.y = (float) bounds.getDouble ("y");
+        }
+
+        int x = (int) Math.round (position.x * parent.em) + parent.offset.x;
+        int y = (int) Math.round (position.y * parent.em) + parent.offset.y;
+        setLocation (x, y);
+
+        title.UIupdated = true;
+        if (panelEquationTree != null) panelEquationTree.tree.updateUI ();
+        updatePins ();
+        setSize (getPreferredSize ());
+    }
+
     public void updateUI ()
     {
         super.updateUI ();
@@ -180,9 +235,15 @@ public class GraphNode extends JPanel
         if (panelEquationTree != null) SwingUtilities.updateComponentTreeUI (panelEquationTree);
     }
 
+    public Font getFont ()
+    {
+        if (parent == null) return super.getFont ();  // for startup
+        return parent.getFont ();
+    }
+
     public String getToolTipText ()
     {
-        FontMetrics fm = getFontMetrics (getFont ());
+        FontMetrics fm = getFontMetrics (MainFrame.instance.getFont ());
         return node.getToolTipText (fm);
     }
 
@@ -340,7 +401,7 @@ public class GraphNode extends JPanel
         MNode bounds = node.source.child ("$meta", "gui", "bounds");
         if (bounds != null)
         {
-            float em = SettingsLookAndFeel.em;
+            double em = parent.em;
             if (open)
             {
                 MNode boundsOpen = bounds.child ("open");
@@ -416,9 +477,9 @@ public class GraphNode extends JPanel
             bounds = metadata.childOrCreate ("gui", "bounds");
         }
         Rectangle now = getBounds ();
-        float em = SettingsLookAndFeel.em;
-        if (dx != 0  ||  np != node) metadata.setTruncated ((now.x - parent.offset.x + dx) / em, 2, "gui", "bounds", "x");
-        if (dy != 0  ||  np != node) metadata.setTruncated ((now.y - parent.offset.y + dy) / em, 2, "gui", "bounds", "y");
+        double em = parent.em;
+        if (dx != 0  ||  np != node) bounds.setTruncated ((now.x - parent.offset.x + dx) / em, 2, "x");
+        if (dy != 0  ||  np != node) bounds.setTruncated ((now.y - parent.offset.y + dy) / em, 2, "y");
         ChangeAnnotations ca = new ChangeAnnotations (np, metadata);
         ca.graph = true;
 
@@ -492,7 +553,7 @@ public class GraphNode extends JPanel
         MNode bounds = node.source.child ("$meta", "gui", "bounds");
         if (bounds != null)
         {
-            float em = SettingsLookAndFeel.em;
+            double em = parent.em;
             x += (int) Math.round (bounds.getDouble ("x") * em);
             y += (int) Math.round (bounds.getDouble ("y") * em);
             if (panelEquationTree != null) setOpen (bounds.getBoolean ("open"));
@@ -661,24 +722,16 @@ public class GraphNode extends JPanel
         if (node.pinIn != null)
         {
             pinInBounds = new Rectangle ();
-            for (MNode c : node.pinIn)
-            {
-                String name = c.key ();
-                pinInBounds.width   = Math.max (pinInBounds.width, fm.stringWidth (name));
-                pinInBounds.height += height;
-            }
+            pinInBounds.height = height * node.pinIn.size ();
+            for (MNode c : node.pinIn) pinInBounds.width = Math.max (pinInBounds.width, fm.stringWidth (c.key ()));
             pinInBounds.width += boxWidth + 2 * GraphEdge.padNameSide;
         }
 
         if (node.pinOut != null)
         {
             pinOutBounds = new Rectangle ();
-            for (MNode c : node.pinOut)
-            {
-                String name = c.key ();
-                pinOutBounds.width   = Math.max (pinOutBounds.width, fm.stringWidth (name));
-                pinOutBounds.height += height;
-            }
+            pinOutBounds.height = height * node.pinOut.size ();
+            for (MNode c : node.pinOut) pinOutBounds.width = Math.max (pinOutBounds.width, fm.stringWidth (c.key ()));
             pinOutBounds.width += boxWidth + 2 * GraphEdge.padNameSide;
         }
     }
@@ -689,8 +742,6 @@ public class GraphNode extends JPanel
     **/
     public String findPinAt (Point p)
     {
-        // Could calculate lineHeight based on font metrics, but the method here is more efficient
-        // and should be equally correct.
         if (pinInBounds != null  &&  pinInBounds.contains (p))
         {
             int lineHeight = pinInBounds.height / node.pinIn.size ();
@@ -1181,9 +1232,15 @@ public class GraphNode extends JPanel
             UIupdated = true;
         }
 
+        @Override
+        public Font getBaseFont (JTree tree)
+        {
+            return parent.scaledTreeFont;
+        }
+
         public String getToolTipText ()
         {
-            FontMetrics fm = getFontMetrics (getFont ());
+            FontMetrics fm = getFontMetrics (MainFrame.instance.getFont ());  // Don't use our own font, because it could be scaled.
             return node.getToolTipText (fm);
         }
 
@@ -1192,8 +1249,8 @@ public class GraphNode extends JPanel
             if (UIupdated)
             {
                 UIupdated = false;
-                // We are never the focus owner, because updateUI() is triggered from the L&F panel.
-                getTreeCellRendererComponent (getEquationTree ().tree, node, false, open, false, -2, false);
+                boolean focused = isFocusOwner ();
+                getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected || focused, open, false, -2, focused);
             }
             return super.getPreferredSize ();
         }
@@ -1224,7 +1281,7 @@ public class GraphNode extends JPanel
 
             if (container.editor.editingNode != null) container.editor.stopCellEditing ();  // Edit could be in progress on another node title or on any tree, including our own.
             container.editor.addCellEditorListener (this);
-            editingComponent = container.editor.getTitleEditorComponent (getEquationTree ().tree, node, open);
+            editingComponent = container.editor.getTitleEditorComponent (getEquationTree ().tree, node, this, open);
             panelTitle.add (editingComponent, BorderLayout.NORTH, 0);  // displaces this renderer from the layout manager's north slot
             setVisible (false);  // hide this renderer
 
@@ -1300,7 +1357,13 @@ public class GraphNode extends JPanel
 
         public void mousePressed (MouseEvent me)
         {
-            if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())
+            if (SwingUtilities.isMiddleMouseButton (me))
+            {
+                me.translatePoint (getX (), getY ());
+                parent.mouseListener.mousePressed (me);
+                return;
+            }
+            else if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())
             {
                 takeFocusOnTitle ();  // Because this method won't be called unless the tree portion is empty.
                 container.menuPopup.show (GraphNode.this, me.getX (), me.getY ());
@@ -1352,6 +1415,13 @@ public class GraphNode extends JPanel
 
         public void mouseDragged (MouseEvent me)
         {
+            if (SwingUtilities.isMiddleMouseButton (me))
+            {
+                me.translatePoint (getX (), getY ());
+                parent.mouseListener.mouseDragged (me);
+                return;
+            }
+
             if (start == null) return;
             dragged = true;
 
@@ -1547,7 +1617,12 @@ public class GraphNode extends JPanel
             start = null;
             timer.stop ();
 
-            if (SwingUtilities.isLeftMouseButton (me))
+            if (SwingUtilities.isMiddleMouseButton (me))
+            {
+                me.translatePoint (getX (), getY ());
+                parent.mouseListener.mouseReleased (me);
+            }
+            else if (SwingUtilities.isLeftMouseButton (me))
             {
                 UndoManager um = MainFrame.instance.undoManager;
                 if (connect)
@@ -1633,7 +1708,7 @@ public class GraphNode extends JPanel
                     Rectangle now = getBounds ();
                     boolean moved =  now.x != old.x  ||  now.y != old.y;
                     GraphPanel gp = container.panelEquationGraph.graphPanel;
-                    float em = SettingsLookAndFeel.em;
+                    double em = parent.em;
                     if (GraphNode.this == gp.pinIn)
                     {
                         np = container.part;

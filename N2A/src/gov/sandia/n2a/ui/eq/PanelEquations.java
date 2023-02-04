@@ -151,7 +151,7 @@ public class PanelEquations extends JPanel
     public    PanelEquationTree        active;             // Tree which most recently received focus. Could be panelEquationTree or a GraphNode.panelEquations.
     protected TransferHandler          transferHandler        = new EquationTransferHandler ();
     protected EquationTreeCellRenderer renderer               = new EquationTreeCellRenderer ();
-    protected EquationTreeCellEditor   editor                 = new EquationTreeCellEditor (renderer);
+    protected EquationTreeCellEditor   editor                 = new EquationTreeCellEditor ();
     public    BreadcrumbRenderer       breadcrumbRenderer     = new BreadcrumbRenderer ();  // References transferHandler in constructor, so must wait till after transferHandler is constructed.
     protected MVolatile                focusCache             = new MVolatile ();
 
@@ -280,7 +280,7 @@ public class PanelEquations extends JPanel
 
         FilteredTreeModel.showInherited = AppData.state.getOrDefault (true,  "PanelModel", "filter", "inherited");
         FilteredTreeModel.showLocal     = AppData.state.getOrDefault (true,  "PanelModel", "filter", "local");
-        FilteredTreeModel.showParam     = AppData.state.getOrDefault (true,  "PanelModel", "filter", "param");
+        FilteredTreeModel.showParam     = AppData.state.getOrDefault (false, "PanelModel", "filter", "param");
         FilteredTreeModel.showRevoked   = AppData.state.getOrDefault (false, "PanelModel", "filter", "revoked");
 
         ImageIcon iconFilter       = ImageUtil.getImage ("filter.png");
@@ -411,14 +411,13 @@ public class PanelEquations extends JPanel
         panelGraph.add (panelBreadcrumb,    BorderLayout.NORTH);
         panelGraph.add (panelEquationGraph, BorderLayout.CENTER);
 
-        panelEquationTree = new PanelEquationTree (this);
+        panelEquationTree = new PanelEquationTree (this, false);
 
         if (view == SIDE) split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT);
         else              split = new JSplitPane (JSplitPane.VERTICAL_SPLIT);
         split.setOneTouchExpandable(true);
         split.setResizeWeight (1);
-        int dividerLocation = (int) Math.round (AppData.state.getDouble ("PanelModel", "view", view) * SettingsLookAndFeel.em);
-        if (dividerLocation != 0) split.setDividerLocation (dividerLocation);
+        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (30.0, "PanelModel", "view", view) * SettingsLookAndFeel.em));  // Assumes initial window height is 60em
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
@@ -1347,7 +1346,8 @@ public class PanelEquations extends JPanel
             if (view != NODE)
             {
                 int dividerLocation = (int) Math.round (AppData.state.getDouble ("PanelModel", "view", view) * SettingsLookAndFeel.em);
-                if (dividerLocation != 0) split.setDividerLocation (dividerLocation);
+                if (dividerLocation == 0) dividerLocation = MainFrame.instance.getHeight () / 2;
+                split.setDividerLocation (dividerLocation);
             }
             validate ();
             repaint ();
@@ -2343,7 +2343,7 @@ public class PanelEquations extends JPanel
 
             if (editor.editingNode != null) editor.stopCellEditing ();  // Edit could be in progress on a node title or on any tree, including our own.
             editor.addCellEditorListener (this);
-            editingComponent = editor.getTitleEditorComponent (getParentEquationTree ().tree, part, panelParent.isVisible ());
+            editingComponent = editor.getTitleEditorComponent (getParentEquationTree ().tree, part, this, panelParent.isVisible ());
             panelBreadcrumb.add (editingComponent, BorderLayout.CENTER, 0);  // displaces this renderer from the layout manager's center slot
             setVisible (false);  // hide this renderer
 

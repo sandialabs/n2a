@@ -47,7 +47,7 @@ public class GraphParent extends JPanel
     public GraphParent (PanelEquations container)
     {
         this.container = container;
-        panelEquationTree = new PanelEquationTree (container);
+        panelEquationTree = new PanelEquationTree (container, false);
 
         Lay.BLtg (this, "C", panelEquationTree);
         setBorder (border);

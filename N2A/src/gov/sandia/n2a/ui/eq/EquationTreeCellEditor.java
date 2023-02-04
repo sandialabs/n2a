@@ -91,7 +91,9 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected boolean                  multiLineRequested; // Indicates that the next getTreeCellEditorComponent() call should return multi-line, even if the node is normally single line.
     protected JTree                    editingTree;        // Could be different than focusTree
     protected NodeBase                 editingNode;
-    protected boolean                  editingTitle;       // Indicates that we are in a graph node title rather than a proper tree.
+    protected boolean                  editingExpanded;
+    protected boolean                  editingLeaf;
+    protected boolean                  editingTitle;       // Indicates that we are in a graph node title rather than a proper tree. Used for focus control.
     protected Container                editingContainer;
     protected Component                editingComponent;
     protected int                      offset;
@@ -101,9 +103,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected double                   rangeHi;
     protected double                   rangeStepSize;
 
-    public EquationTreeCellEditor (EquationTreeCellRenderer renderer)
+    public EquationTreeCellEditor ()
     {
-        this.renderer = renderer;
         undoManager = new UndoManager ();
         editingContainer = new EditorContainer ();
 
@@ -155,7 +156,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 int at     = text.indexOf ('@');
                 if (equals >= 0  &&  equals < text.length () - 1)  // also check for combiner character
                 {
-                    if (":+*/<>".indexOf (text.charAt (equals + 1)) >= 0) equals++;
+                    if (";:+*/<>".indexOf (text.charAt (equals + 1)) >= 0) equals++;
                 }
                 if (at < 0)  // no condition
                 {
@@ -399,24 +400,27 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         multiLineEditor.updateUI ();
     }
 
-    public Component getTitleEditorComponent (JTree tree, NodePart value, boolean open)
+    public Component getTitleEditorComponent (JTree tree, NodePart value, EquationTreeCellRenderer renderer, boolean open)
     {
-        return getTreeCellEditorComponent (tree, value, open, false, true);
+        return getTreeCellEditorComponent (tree, value, renderer, open, false, true);
     }
 
     @Override
     public Component getTreeCellEditorComponent (JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row)
     {
-        return getTreeCellEditorComponent (tree, value, expanded, leaf, false);
+        return getTreeCellEditorComponent (tree, value, PanelModel.instance.panelEquations.renderer, expanded, leaf, false);
     }
 
-    public Component getTreeCellEditorComponent (JTree tree, Object value, boolean expanded, boolean leaf, boolean isTitle)
+    public Component getTreeCellEditorComponent (JTree tree, Object value, EquationTreeCellRenderer renderer, boolean expanded, boolean leaf, boolean isTitle)
     {
         editingTree     = tree;
         editingNode     = (NodeBase) value;
+        editingExpanded = expanded;
+        editingLeaf     = leaf;
         editingTitle    = isTitle;
+        this.renderer   = renderer;  // For use by EditorContainer
         offset          = renderer.getTextOffset ();
-        Font fontBase   = tree.getFont ();
+        Font fontBase   = renderer.getBaseFont (tree);
         Font fontPlain  = editingNode.getPlainFont (fontBase);
         Font fontStyled = editingNode.getStyledFont (fontBase);
         FontMetrics fm  = tree.getFontMetrics (fontStyled);
@@ -516,6 +520,19 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         editingContainer.add (editingComponent);
 
         return editingContainer;
+    }
+
+    // TODO: layout gets wider during zoom out. In general, layout is not updated properly.
+    public void rescale ()
+    {
+        iconHolder.setIcon (renderer.getIconFor (editingNode, editingExpanded, editingLeaf));
+
+        Font fontBase   = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel.scaledTreeFont;
+        Font fontPlain  = editingNode.getPlainFont (fontBase);
+        Font fontStyled = editingNode.getStyledFont (fontBase);
+
+        for (JLabel l : labels) if (l.isVisible ()) l.setFont (fontPlain);
+        editingComponent.setFont (fontStyled);
     }
 
     @Override

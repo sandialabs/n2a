@@ -13,6 +13,7 @@ import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FocusTraversalPolicy;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -81,6 +82,7 @@ public class PanelEquationGraph extends JScrollPane
     protected PanelEquations container;
     protected GraphPanel     graphPanel;
     protected JViewport      vp;  // for convenience
+    protected Point          vpOverride;  // When non-null, hack the position of viewport during layout.
     protected ColoredBorder  border;
 
     protected static Color background = new Color (0xF0F0F0);  // light gray
@@ -307,6 +309,15 @@ public class PanelEquationGraph extends JScrollPane
                         size.width  += Math.max (0, extent.width  - visibleWidth);
                         size.height += Math.max (0, extent.height - visibleHeight);
                         vp.setViewSize (size);
+
+                        // This hack seems necessary for scaling.
+                        // During earlier steps of layout, the scroll bars get set to a position
+                        // which overrides our carefully-calculated position.
+                        if (vpOverride != null)
+                        {
+                            vp.setViewPosition (vpOverride);
+                            vpOverride = null;
+                        }
                     }
                 };
             }
@@ -360,6 +371,9 @@ public class PanelEquationGraph extends JScrollPane
         protected JPopupMenu         pinMenu;
         protected GraphNode          pinIn;
         protected GraphNode          pinOut;
+        protected double             zoom   = 1;
+        protected double             em     = SettingsLookAndFeel.em;
+        protected Font               scaledTreeFont;
 
         public GraphPanel ()
         {
@@ -432,7 +446,18 @@ public class PanelEquationGraph extends JScrollPane
         public void updateUI ()
         {
             super.updateUI ();
+            if (zoom == 0) zoom = 1;  // Workaround. Superclass calls updateUI() before our constructor runs.
+            scaleFonts ();
             if (layout != null) layout.UIupdated = true;
+        }
+
+        public void scaleFonts ()
+        {
+            Font font = UIManager.getFont ("Panel.font");
+            setFont (font.deriveFont ((float) (font.getSize2D () * zoom)));
+
+            font = UIManager.getFont ("Tree.font");
+            scaledTreeFont = font.deriveFont ((float) (font.getSize2D () * zoom));
         }
 
         public boolean isOptimizedDrawingEnabled ()
@@ -455,7 +480,7 @@ public class PanelEquationGraph extends JScrollPane
             else                         notes = gn.node.pinOut.get (pieces[1], "notes");
             if (notes.isEmpty ()) return null;
 
-            FontMetrics fm = getFontMetrics (getFont ());
+            FontMetrics fm = getFontMetrics (MainFrame.instance.getFont ());
             return NodeBase.formatToolTipText (notes, fm);
         }
 
@@ -525,9 +550,9 @@ public class PanelEquationGraph extends JScrollPane
                         h = 0;
                     }
                     gn.setLocation (x, y);
+                    gn.holdTempPosition ();  // Don't save bounds in metadata. Only touch part if user manually adjusts layout.
                     Rectangle bounds = gn.getBounds ();
                     layout.bounds = layout.bounds.union (bounds);
-                    // Don't save bounds in metadata. Only touch part if user manually adjusts layout.
                     x += bounds.width + xgap;
                     h = Math.max (h, bounds.height);
                 }
@@ -538,6 +563,7 @@ public class PanelEquationGraph extends JScrollPane
                 Rectangle tightBounds = new Rectangle (0, 0, -1, -1);  // Needed for placing pins. layout.bounds includes (0,0) so it is not tight enough a fit round the components.
                 for (Component c : getComponents ()) tightBounds = tightBounds.union (c.getBounds ());
                 int y = tightBounds.y + tightBounds.height / 2;
+                int gap = (int) Math.round (8 * em);
 
                 if (container.part.pinIn != null)
                 {
@@ -545,8 +571,9 @@ public class PanelEquationGraph extends JScrollPane
                     if (pinIn.getX () == 0  &&  pinIn.getY () == 0)
                     {
                         Dimension d = pinIn.getPreferredSize ();
-                        int x = tightBounds.x - 100 - pinIn.pinOutBounds.width - d.width;
+                        int x = tightBounds.x - gap - pinIn.pinOutBounds.width - d.width;
                         pinIn.setLocation (x, y - d.height / 2);
+                        pinIn.holdTempPosition ();
                     }
                     add (pinIn);
                 }
@@ -556,9 +583,10 @@ public class PanelEquationGraph extends JScrollPane
                     pinOut = new GraphNode (this, null, "out");
                     if (pinOut.getX () == 0  &&  pinOut.getY () == 0)
                     {
-                        int x = tightBounds.x + tightBounds.width + 100 + pinOut.pinInBounds.width;
+                        int x = tightBounds.x + tightBounds.width + gap + pinOut.pinInBounds.width;
                         Dimension d = pinOut.getPreferredSize ();
                         pinOut.setLocation (x, y - d.height / 2);
+                        pinOut.holdTempPosition ();
                     }
                     add (pinOut);
                 }
@@ -742,7 +770,6 @@ public class PanelEquationGraph extends JScrollPane
                 if (c != pinIn  &&  c != pinOut)
                     tightBounds = tightBounds.union (c.getBounds ());
             int y = tightBounds.y + tightBounds.height / 2;
-            float em = SettingsLookAndFeel.em;
 
             if (pinIn != null)
             {
@@ -752,6 +779,7 @@ public class PanelEquationGraph extends JScrollPane
                 {
                     int x = tightBounds.x - 100 - pinIn.pinOutBounds.width - d.width;
                     pinIn.setLocation (x, y - d.height / 2);
+                    pinIn.holdTempPosition ();
                 }
                 else  // Make the fairly safe assumption that x and y are both set to something meaningful.
                 {
@@ -773,6 +801,7 @@ public class PanelEquationGraph extends JScrollPane
                 {
                     int x = tightBounds.x + tightBounds.width + 100 + pinOut.pinInBounds.width;
                     pinOut.setLocation (x, y - d.height / 2);
+                    pinOut.holdTempPosition ();
                 }
                 else
                 {
@@ -784,6 +813,32 @@ public class PanelEquationGraph extends JScrollPane
                 pinOut.setSize (d);
                 layout.bounds = layout.bounds.union (pinOut.getBounds ());
                 pinOut.title.updateSelected ();
+            }
+        }
+
+        /**
+            Apply change in zoom.
+            Similar to GraphLayout.layoutContainer(), except we must update both
+            location and size for every object on the canvas.
+        **/
+        public void rescale (double factor)
+        {
+            zoom *= factor;
+            scaleFonts ();
+            em = SettingsLookAndFeel.em * zoom;
+            GraphEdge.rescale (zoom);
+
+            GraphNode.border.t = (int) Math.ceil (GraphNode.borderThicknes * Math.min (1, zoom));
+
+            offset.x = (int) Math.round (offset.x * factor);
+            offset.y = (int) Math.round (offset.y * factor);
+            for (Component c : graphPanel.getComponents ())
+            {
+                if (c instanceof GraphNode) ((GraphNode) c).rescale ();
+            }
+            for (GraphEdge ge : graphPanel.edges)
+            {
+                ge.updateShape (false);
             }
         }
 
@@ -855,7 +910,7 @@ public class PanelEquationGraph extends JScrollPane
             Vector2 p2 = new Vector2 (p.x, p.y);
             for (GraphEdge e : edges)
             {
-                if (e.tip != null  &&  e.tip.distance (p2) < GraphEdge.arrowheadLength) return e;
+                if (e.tip != null  &&  e.tip.distance (p2) < GraphEdge.arrowheadLengthScaled) return e;
                 // These tests extend the clickable area to include the full width of the pin zone.
                 if (e.pinKeyFrom != null  &&  findTipAtPin (p, e.nodeFrom, e.pinSideFrom, e.pinKeyFrom)) return e;
                 if (e.pinKeyTo   != null  &&  findTipAtPin (p, e.nodeTo,   e.pinSideTo,   e.pinKeyTo  )) return e;
@@ -988,7 +1043,7 @@ public class PanelEquationGraph extends JScrollPane
 
             // Draw connection edges
             Stroke oldStroke = g2.getStroke ();
-            g2.setStroke (new BasicStroke (GraphEdge.strokeThickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.setStroke (new BasicStroke (GraphEdge.strokeThicknessScaled, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             g2.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             for (GraphEdge e : edges) if (e.bounds.intersects (clip)) e.paintComponent (g2);
 
@@ -1012,7 +1067,7 @@ public class PanelEquationGraph extends JScrollPane
                 if (action.equals ("straight"))
                 {
                     if (n.source.getFlag ("$meta", "gui", "arrow", "straight")) metadata.set ("0", "gui", "arrow", "straight");
-                    else                                                            metadata.set ("",  "gui", "arrow", "straight");
+                    else                                                        metadata.set ("",  "gui", "arrow", "straight");
                 }
                 else
                 {
@@ -1402,7 +1457,9 @@ public class PanelEquationGraph extends JScrollPane
             Moves viewport so that the given point is in the upper-left corner of the visible area.
             Does a tight fit around existing components to minimize size of scrolled region.
             This could result in a shift of components, even if the requested position is same as current position.
-            @param n New position of viewport, in terms of current viewport layout.
+            @param n New position of viewport, in terms of current viewport layout. If null, sets
+            components to a reasonable start position. If non-null, then gets modified to be the
+            final viewport position after any adjustments.
             @return Amount to shift any external components to keep position relative to internal components.
             This value should be added to their coordinates.
         **/
@@ -1422,7 +1479,7 @@ public class PanelEquationGraph extends JScrollPane
             }
             if (n == null)
             {
-                n = new Point (bounds.x - 10, bounds.y - 10);
+                n = new Point (bounds.x - 10, bounds.y - 10);  // Rather the cramming components right against edge of screen, give them a littl margin.
                 bounds.add (n);
             }
 
@@ -1431,7 +1488,7 @@ public class PanelEquationGraph extends JScrollPane
             bounds.translate (d.x, d.y);
             graphPanel.offset.translate (d.x, d.y);
             n.translate (d.x, d.y);
-            vp.setViewPosition (n);  // Need to do this before GraphEdge.updateShape().
+            vp.setViewPosition (n);
 
             if (d.x != 0  ||  d.y != 0)  // Avoid calling these expensive operations unless shift actually occurred.
             {
@@ -1589,13 +1646,43 @@ public class PanelEquationGraph extends JScrollPane
             }
         }
 
-        public void mouseWheelMoved (MouseWheelEvent e)
+        public void mouseWheelMoved (MouseWheelEvent me)
         {
-            if (e.getScrollType() == MouseWheelEvent.WHEEL_UNIT_SCROLL)
+            if (me.getScrollType() == MouseWheelEvent.WHEEL_UNIT_SCROLL)
             {
                 Point p = vp.getViewPosition ();  // should be exactly same as current scrollbar values
-                if (e.isShiftDown ()) p.x += e.getUnitsToScroll () * 15;  // 15px is approximately one line of text; units to scroll is typically 3, so about 45px or 3 lines of text per click of scroll wheel
-                else                  p.y += e.getUnitsToScroll () * 15;
+                if (me.isControlDown ())  // zoom
+                {
+                    double factor = Math.pow (me.isShiftDown () ? 2 : 1.2, -me.getPreciseWheelRotation ());
+
+                    // Adjust p so we get zoom around the current pointer
+                    Point location;
+                    if (container.editor.editingNode != null)  // Active edit, so zoom around edit control.
+                    {
+                        Component c = container.editor.editingComponent;
+                        location = SwingUtilities.convertPoint (c.getParent (), c.getLocation (), graphPanel);
+                    }
+                    else  // Zoom around mouse pointer.
+                    {
+                        location = me.getPoint ();
+                    }
+                    p.x -= location.x;  // p becomes vector from location to upper-left corner, in original pixels
+                    p.y -= location.y;
+                    double lx = (location.x - graphPanel.offset.x) / graphPanel.em;  // This method is slightly more accurate than directly re-scaling location.
+                    double ly = (location.y - graphPanel.offset.y) / graphPanel.em;
+                    graphPanel.rescale (factor);  // Quantizes offset, which makes slight difference in new positions compared to direct scaling.
+                    p.x += (int) Math.round (lx * graphPanel.em) + graphPanel.offset.x;  // origin->location->corner; effectively puts location back at same place on visible viewport
+                    p.y += (int) Math.round (ly * graphPanel.em) + graphPanel.offset.y;
+
+                    if (container.editor.editingNode != null) container.editor.rescale ();
+                }
+                else  // scroll
+                {
+                    Font font = UIManager.getFont ("Tree.font");
+                    int scrollStep = getFontMetrics (font).getHeight ();
+                    if (me.isShiftDown ()) p.x += me.getUnitsToScroll () * scrollStep;  // units to scroll is typically 3 per click of scroll wheel
+                    else                   p.y += me.getUnitsToScroll () * scrollStep;
+                }
                 graphPanel.layout.shiftViewport (p);
                 graphPanel.revalidate ();  // necessary to show scrollbars when components go past right or bottom
                 graphPanel.repaint ();
@@ -1614,7 +1701,20 @@ public class PanelEquationGraph extends JScrollPane
         {
             Point p = me.getPoint ();
 
-            if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())  // Context menus
+            if (SwingUtilities.isMiddleMouseButton (me))
+            {
+                if (me.isControlDown ())
+                {
+                    selectStart = p;
+                    selectRegion = new Rectangle (p);
+                }
+                else
+                {
+                    startPan = p;
+                    setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
+                }
+            }
+            else if (SwingUtilities.isRightMouseButton (me)  ||  me.isControlDown ())  // Context menus
             {
                 if (container.locked) return;
 
@@ -1724,11 +1824,6 @@ public class PanelEquationGraph extends JScrollPane
                     setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
                     edge.animate (p);  // Activates tipDrag
                 }
-            }
-            else if (SwingUtilities.isMiddleMouseButton (me))
-            {
-                startPan = p;
-                setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
             }
         }
 
@@ -2157,59 +2252,108 @@ public class PanelEquationGraph extends JScrollPane
             else if (selectStart != null)  // finish region select
             {
                 Point p = me.getPoint ();
+                Point s = selectStart;
                 Rectangle old = selectRegion;
                 Rectangle r = new Rectangle (selectStart);
                 r.add (p);
                 selectStart = null;
                 selectRegion = null;
-
-                boolean toggle =  me.isShiftDown ()  ||  me.isControlDown ();
-                if (! toggle) graphPanel.clearSelection ();
-
                 List<GraphNode> selected = graphPanel.findNodesIn (r);
-                for (int i = selected.size () - 1; i >= 0; i--)
+
+                if (SwingUtilities.isMiddleMouseButton (me))
                 {
-                    GraphNode g = selected.get (i);
-                    if (toggle)
+                    boolean editorVisible = true;
+                    if (container.editor.editingNode != null)
                     {
-                        if (g.selected) selected.remove (i);
-                        g.setSelected (! g.selected);
+                        Component c = container.editor.editingComponent;
+                        Point e = SwingUtilities.convertPoint (c.getParent (), c.getLocation (), vp);
+                        editorVisible = r.contains (e);
                     }
-                    else
+                    int dx = p.x - s.x;
+                    int dy = p.y - s.y;
+                    if (editorVisible  &&  (Math.abs (dx) >= 10  ||  Math.abs (dy) >= 10))  // enough movement to justify action
                     {
-                        g.setSelected (true);
+                        Dimension e = vp.getExtentSize ();
+                        Point location = new Point (r.x + r.width / 2, r.y + r.height / 2);  // Center of zoom on current canvas.
+                        double factor;
+                        Point corner = null;
+                        if (dx < 0  ||  dy < 0)  // Negative motion, so reset zoom.
+                        {
+                            factor = 1 / graphPanel.zoom;
+                            if (! selected.isEmpty ()) corner = new Point ();
+                            // else shiftViewport(null) will restore startup position of canvas.
+                        }
+                        else  // Positive motion, so zoom to selected region.
+                        {
+                            double ratioWidth  = (double) e.width  / r.width;
+                            double ratioHeight = (double) e.height / r.height;
+                            factor = Math.min (ratioWidth, ratioHeight);
+                            corner = new Point ();
+                        }
+
+                        if (corner != null)
+                        {
+                            corner.x = (int) Math.round (location.x * factor) - e.width  / 2;  // effectively puts location in center of visible viewport
+                            corner.y = (int) Math.round (location.y * factor) - e.height / 2;
+                        }
+
+                        graphPanel.rescale (factor);
+                        if (container.editor.editingNode != null) container.editor.rescale ();
+                        graphPanel.layout.shiftViewport (corner);  // corner gets modified to be the final viewport position after adjustments.
+                        vpOverride = corner;  // Prevent layout process from scrambling our carefully-selected position.
+                        graphPanel.revalidate ();
+                        graphPanel.repaint ();
                     }
                 }
-
-                boolean focusNearest = true;
-                if (toggle)
+                else
                 {
-                    // Move focus to graph if it is not already here. Prefer node associated with current part shown in property panel.
-                    focusNearest = false;
-                    GraphNode g = PanelModel.getGraphNode (KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ());
-                    if (g == null)  // Current focus is not on a graph node, so pull it here.
+                    boolean toggle =  me.isShiftDown ()  ||  me.isControlDown ();
+                    if (! toggle) graphPanel.clearSelection ();
+
+                    for (int i = selected.size () - 1; i >= 0; i--)
                     {
-                        focusNearest = true;  // Fallback
-                        if (container.view != PanelEquations.NODE)
+                        GraphNode g = selected.get (i);
+                        if (toggle)
                         {
-                            g = container.panelEquationTree.root.graph;
-                            if (g != null)
+                            if (g.selected) selected.remove (i);
+                            g.setSelected (! g.selected);
+                        }
+                        else
+                        {
+                            g.setSelected (true);
+                        }
+                    }
+
+                    boolean focusNearest = true;
+                    if (toggle)
+                    {
+                        // Move focus to graph if it is not already here. Prefer node associated with current part shown in property panel.
+                        focusNearest = false;
+                        GraphNode g = PanelModel.getGraphNode (KeyboardFocusManager.getCurrentKeyboardFocusManager ().getFocusOwner ());
+                        if (g == null)  // Current focus is not on a graph node, so pull it here.
+                        {
+                            focusNearest = true;  // Fallback
+                            if (container.view != PanelEquations.NODE)
                             {
-                                g.takeFocusOnTitle ();
-                                focusNearest = false;
+                                g = container.panelEquationTree.root.graph;
+                                if (g != null)
+                                {
+                                    g.takeFocusOnTitle ();
+                                    focusNearest = false;
+                                }
                             }
                         }
                     }
-                }
-                if (focusNearest)  // Move focus to nearest graph node.
-                {
-                    GraphNode c;
-                    if (selected.isEmpty ()) c = graphPanel.findNodeClosest (p);
-                    else                     c = graphPanel.findNodeClosest (p, selected);
-                    if (c != null) c.takeFocusOnTitle ();
-                }
+                    if (focusNearest)  // Move focus to nearest graph node.
+                    {
+                        GraphNode c;
+                        if (selected.isEmpty ()) c = graphPanel.findNodeClosest (p);
+                        else                     c = graphPanel.findNodeClosest (p, selected);
+                        if (c != null) c.takeFocusOnTitle ();
+                    }
 
-                graphPanel.repaint (old.union (r));
+                    graphPanel.repaint (old.union (r));
+                }
             }
             else if (orderPin != null)
             {

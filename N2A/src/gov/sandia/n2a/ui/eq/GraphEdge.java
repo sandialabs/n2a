@@ -31,6 +31,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
 public class GraphEdge
 {
@@ -59,12 +60,23 @@ public class GraphEdge
     protected boolean   tipDrag;
     protected Point     anchor;  // When non-null, use this as start for tip drag. Value is relative to the upper-left corner of nodeFrom. Mainly for aesthetics.
 
-    protected static double arrowheadAngle  = Math.PI / 5;
-    protected static double arrowheadLength = 10;
-    protected static float  strokeThickness = 3;
-    protected static int    padNameTop      = 1;
-    protected static int    padNameSide     = 2;
-    protected static int    padNameBetween  = 10;
+    // Constants for drawing.
+    protected static final double arrowheadAngle  = Math.PI / 5;
+    protected static final double arrowheadLength = 10;
+    protected static final float  strokeThickness = 3;
+    protected static final int    padNameTop      = 1;
+    protected static final int    padNameSide     = 2;
+    protected static final float  padNameBetween  = 1; // em
+
+    // Drawing parameters that update when zoom level changes.
+    protected static double arrowheadLengthScaled;
+    protected static float  strokeThicknessScaled;
+    protected static int    padNameBetweenScaled; // px
+
+    static
+    {
+        rescale (1);
+    }
 
     public GraphEdge (GraphNode nodeFrom, NodePart partTo, String alias)
     {
@@ -221,6 +233,14 @@ public class GraphEdge
         // Must call updateShape() to fully implement the changes.
     }
 
+    public static void rescale (double zoom)
+    {
+        double z = Math.min (1, zoom);
+        arrowheadLengthScaled = Math.max (1, arrowheadLength * z);
+        strokeThicknessScaled = (float) (strokeThickness * z);
+        padNameBetweenScaled  = (int) Math.ceil (padNameBetween * SettingsLookAndFeel.em * z);
+    }
+
     /**
         Updates our cached shape information based on current state of graph nodes.
     **/
@@ -234,13 +254,13 @@ public class GraphEdge
         root       = null;
 
         int padTip = 0;  // Distance from boundary of nodeTo to target the tip. Varies depending on arrow type.
-        String headType = nodeFrom.node.source.get (alias, "$meta", "gui", "arrow");
+        String  headType = nodeFrom.node.source.get     (alias, "$meta", "gui", "arrow");
         boolean straight = nodeFrom.node.source.getFlag (alias, "$meta", "gui", "arrow", "straight");
         switch (headType)
         {
             case "circle":
             case "circleFill":
-                padTip = (int) Math.round (arrowheadLength / 2);
+                padTip = (int) Math.round (arrowheadLengthScaled / 2);
         }
 
         Rectangle Cbounds = nodeFrom.getBounds ();
@@ -434,8 +454,8 @@ public class GraphEdge
                 int count = widths.size ();
                 if (count > 1)
                 {
-                    totalWidth += (count - 1) * padNameBetween;  // pad between each label
-                    for (int i = 0; i < index; i++) offset += widths.get (i) + padNameBetween;  // Add widths and padding for all labels that precede this one.
+                    totalWidth += (count - 1) * padNameBetweenScaled;  // pad between each label
+                    for (int i = 0; i < index; i++) offset += widths.get (i) + padNameBetweenScaled;  // Add widths and padding for all labels that precede this one.
                     offset += widths.get (index) / 2.0;  // Add half of this label, to reach its center.
                     offset -= totalWidth / 2.0;  // Offset to center the whole thing over the node.
                 }
@@ -444,7 +464,7 @@ public class GraphEdge
                 // Determine text box. Need text height to locate arrowhead, so might as well calculate it all now.
                 double ew = fm.stringWidth (nameTo);
                 double eh = fm.getHeight ();
-                labelTo = new Vector2 (x - ew / 2, Cbounds.y - 3 * eh - 2 * arrowheadLength);
+                labelTo = new Vector2 (x - ew / 2, Cbounds.y - 3 * eh - 2 * arrowheadLengthScaled);
 
                 textBoxTo = new Rectangle ();
                 textBoxTo.x      = (int) labelTo.x - padNameSide;
@@ -540,11 +560,11 @@ public class GraphEdge
                 double length;
                 if (absAngle > nodeAngle)  // top or bottom
                 {
-                    length = (Cbounds.height / 2 + th + arrowheadLength + strokeThickness) / Math.abs (tip.y);
+                    length = (Cbounds.height / 2 + th + arrowheadLengthScaled + strokeThicknessScaled) / Math.abs (tip.y);
                 }
                 else  // left or right
                 {
-                    length = (Cbounds.width / 2 + tw + arrowheadLength + strokeThickness) / Math.abs (tip.x);
+                    length = (Cbounds.width / 2 + tw + arrowheadLengthScaled + strokeThicknessScaled) / Math.abs (tip.x);
                 }
                 tip = tip.multiply (length).add (c);
             }
@@ -613,30 +633,30 @@ public class GraphEdge
         }
 
         // Arrow head
-        double ah = arrowheadLength / 2;  // arrowhead half-width
+        double ah = arrowheadLengthScaled / 2;  // arrowhead half-width
         switch (headType)
         {
             case "arrow":
                 Path2D path = new Path2D.Double (line);  // Wrap shape in path object so we can extend it
-                Vector2 end = new Vector2 (tip, tipAngle + arrowheadAngle, arrowheadLength);
+                Vector2 end = new Vector2 (tip, tipAngle + arrowheadAngle, arrowheadLengthScaled);
                 path.append (new Line2D.Double (end.x, end.y, tip.x, tip.y), false);
-                end = new Vector2 (tip, tipAngle - arrowheadAngle, arrowheadLength);
+                end = new Vector2 (tip, tipAngle - arrowheadAngle, arrowheadLengthScaled);
                 path.append (new Line2D.Double (tip.x, tip.y, end.x, end.y), false);
                 line = path;
                 break;
             case "circle":
-                head = new Ellipse2D.Double (tip.x - ah, tip.y - ah, arrowheadLength, arrowheadLength);
+                head = new Ellipse2D.Double (tip.x - ah, tip.y - ah, arrowheadLengthScaled, arrowheadLengthScaled);
                 headFill = false;
                 break;
             case "circleFill":
-                head = new Ellipse2D.Double (tip.x - ah, tip.y - ah, arrowheadLength, arrowheadLength);
+                head = new Ellipse2D.Double (tip.x - ah, tip.y - ah, arrowheadLengthScaled, arrowheadLengthScaled);
                 headFill = true;
                 break;
         }
 
         bounds = bounds.union (line.getBounds ());
         if (head != null) bounds = bounds.union (head.getBounds ());
-        int t = (int) Math.ceil (strokeThickness / 2);
+        int t = (int) Math.ceil (strokeThicknessScaled / 2);
         bounds.grow (t, t);
 
         // Name
