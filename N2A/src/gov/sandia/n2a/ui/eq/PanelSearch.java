@@ -120,6 +120,7 @@ public class PanelSearch extends JPanel
             }
         };
         tree.setRootVisible (false);
+        tree.setShowsRootHandles (true);
         tree.setExpandsSelectedPaths (true);
         tree.setScrollsOnExpand (true);
         tree.getSelectionModel ().setSelectionMode (TreeSelectionModel.SINGLE_TREE_SELECTION);  // No multiple selection.
