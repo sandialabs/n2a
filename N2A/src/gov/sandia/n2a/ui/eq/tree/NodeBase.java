@@ -14,6 +14,7 @@ import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.undo.AddEditable;
+import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -215,13 +216,21 @@ public class NodeBase extends DefaultMutableTreeNode
         if (notes.isBlank ()) notes = node.get ("$meta", "note");
         if (notes.isBlank ()) notes = node.get ("$meta", "description");  // for NeuroML parts
         if (notes.isBlank ()) return null;
+
+        int pos = notes.indexOf ('.');
+        if (pos < 0) pos = notes.indexOf ('\n');
+        else         pos++;  // To include '.' in truncated text.
+        if (pos > 0) notes = notes.substring (0, pos);
+        if (node.getFlag ("$meta", "gui", "mixin" )) notes = "[MIXIN] "  + notes;
+        if (node.getFlag ("$meta", "gui", "dropin")) notes = "[DROPIN] " + notes;
         return formatToolTipText (notes, fm);
     }
 
     public static String formatToolTipText (String text, FontMetrics fm)
     {
-        int frameWidth = Math.min (800, MainFrame.instance.getWidth ());
-        frameWidth = Math.max (300, frameWidth);
+        double em = SettingsLookAndFeel.em;
+        int frameWidth = (int) Math.min (60 * em, MainFrame.instance.getWidth ());
+        frameWidth = (int) Math.max (23 * em, frameWidth);
         int notesWidth = fm.stringWidth (text);
         if (notesWidth < frameWidth) return text;
 

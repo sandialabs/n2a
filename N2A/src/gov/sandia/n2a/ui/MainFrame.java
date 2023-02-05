@@ -34,6 +34,7 @@ import javax.swing.InputMap;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.KeyStroke;
+import javax.swing.ToolTipManager;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 
@@ -173,5 +174,7 @@ public class MainFrame extends JFrame
                 catch (CannotRedoException e) {}
             }
         });
+
+        ToolTipManager.sharedInstance ().setDismissDelay (20000);
     }
 }
