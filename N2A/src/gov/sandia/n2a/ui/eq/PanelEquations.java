@@ -110,13 +110,18 @@ import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
+import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeInherit;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.AddEditable;
+import gov.sandia.n2a.ui.eq.undo.AddInherit;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
+import gov.sandia.n2a.ui.eq.undo.ChangeAnnotation;
 import gov.sandia.n2a.ui.eq.undo.ChangeAnnotations;
+import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
 import gov.sandia.n2a.ui.eq.undo.ChangeOrder;
 import gov.sandia.n2a.ui.eq.undo.CompoundEditView;
 import gov.sandia.n2a.ui.eq.undo.UndoableView;
@@ -1566,6 +1571,18 @@ public class PanelEquations extends JPanel
                 return true;
             }
 
+            // Detect dropin and mixin
+            boolean dropin = false;
+            boolean mixin  = false;
+            if (xfer.isDrop ()  &&  data.size () == 1)
+            {
+                for (MNode c : data)
+                {
+                    dropin = c.getFlag ("$meta", "gui", "dropin");
+                    mixin  = c.getFlag ("$meta", "gui", "mixin");
+                }
+            }
+
             // Determine target node.
             NodeBase target = null;
             um.addEdit (new CompoundEdit ());  // If handling DnD MOVE with TransferableNode, this will be closed by the sending side's exportDone(). Otherwise, we close it at the end of this importData().
@@ -1584,7 +1601,7 @@ public class PanelEquations extends JPanel
             {
                 if (view == NODE)
                 {
-                    if (gn.open)
+                    if (gn.open  ||  dropin  ||  mixin)
                     {
                         target = gn.node;
                         tree = gn.panelEquationTree.tree;
@@ -1595,7 +1612,7 @@ public class PanelEquations extends JPanel
                         tree = panelParent.panelEquationTree.tree;
                     }
                 }
-                else  // Property-panel mode. Choose target based on type of user
+                else  // Property-panel mode. Choose target based on contents of data.
                 {
                     boolean allParts = true;
                     if (schema != null  &&  schema.type.equals ("Clip"))
@@ -1611,13 +1628,13 @@ public class PanelEquations extends JPanel
                         }
                     }
 
-                    if (allParts)  // Treat as node as closed, and direct paste into parent.
+                    if (allParts  &&  ! dropin  &&  ! mixin)  // Treat as node as closed, and direct paste into parent.
                     {
                         target = part;
                         if (panelEquationTree.root == part) tree = panelEquationTree.tree;
                         else                                tree = null;
                     }
-                    else
+                    else  // Treat node as open, and direct paste into node itself.
                     {
                         target = gn.node;
                         if (panelEquationTree.root == gn.node) tree = panelEquationTree.tree;
@@ -1759,7 +1776,7 @@ public class PanelEquations extends JPanel
                 // Ideally, these would all be packed into a CompoundEditView and executed as a group.
                 // However, some edits rely on the results of others (for example AddEquation), so each needs
                 // to be applied before the next is constructed. The exception to this is parts, which get special
-                // pre-processing by AddPart.makeMulti(). However, they work OK with either approach method, so
+                // pre-processing by AddPart.makeMulti(). However, they work OK with either approach, so
                 // we stick with serial application. The drawback is that we have to do a lot of work here
                 // that CompoundEditView would otherwise do for us.
                 CompoundEditView compound = null;
@@ -1820,6 +1837,8 @@ public class PanelEquations extends JPanel
             {
                 result = true;
 
+                target = target.containerFor ("Part");
+
                 // Prepare lists for suggesting connections.
                 List<NodePart> newParts = new ArrayList<NodePart> ();
                 List<NodePart> oldParts = new ArrayList<NodePart> ();
@@ -1839,6 +1858,7 @@ public class PanelEquations extends JPanel
                 for (MNode child : data)  // There could be multiple parts, though currently the search panel does not support this.
                 {
                     // The plan is to create a link (via inheritance) to an existing part.
+                    // This is similar to PanelEquationTree.outsource ().
                     // The part may need to be fully imported if it does not already exist in the db.
                     String key = child.key ();
                     if (AppData.models.child (key) == null)
@@ -1848,16 +1868,43 @@ public class PanelEquations extends JPanel
                         um.apply (a);
                     }
 
-                    // Create an include-style part
-                    MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
-                    include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
-                    include.clear ("$inherit");  // get rid of IDs from included part, so they won't override the new $inherit line ...
-                    include.set (key, "$inherit");
-                    Point2D.Double p = null;
-                    if (location != null) p = new Point2D.Double (location.x + (i % columns) * 8, location.y + (i / columns) * 8);  // Keep multiple parts from going to the same place on graph panel.
-                    NodePart added = (NodePart) target.add ("Part", tree, include, p);
-                    if (added != null) newParts.add (added);
-                    i++;
+                    if (mixin)
+                    {
+                        NodeInherit ni = (NodeInherit) target.child ("$inherit");
+                        if (ni == null)
+                        {
+                            AddInherit a = new AddInherit ((NodePart) target, key);
+                            um.apply (a);
+                        }
+                        else
+                        {
+                            String inherit = ni.source.get ();
+                            ChangeInherit c = new ChangeInherit (ni, key + "," + inherit);
+                            um.apply (c);
+                        }
+
+                        // Suppress mixin flag in top-level part.
+                        // This way, we don't transform a part into a mixin just by adding a mixin.
+                        if (target.source.root () == target.source)
+                        {
+                            NodeAnnotation m = (NodeAnnotation) NodeBase.locateNode (Arrays.asList ("","$meta", "gui", "mixin"));
+                            ChangeAnnotation ca = new ChangeAnnotation (m, "mixin", "0");
+                            um.apply (ca);
+                        }
+                    }
+                    else  // Regular or dropin
+                    {
+                        // Create an include-style part.
+                        MNode include = new MVolatile ();  // Note the empty key. This enables AddPart to generate a name.
+                        include.merge (child);
+                        include.clear ("$inherit");  // get rid of IDs from included part, so they won't override the new $inherit line ...
+                        include.set (key, "$inherit");
+                        Point2D.Double p = null;
+                        if (location != null) p = new Point2D.Double (location.x + (i % columns) * 8, location.y + (i / columns) * 8);  // Keep multiple parts from going to the same place on graph panel.
+                        NodePart added = (NodePart) target.add ("Part", tree, include, p);
+                        if (added != null) newParts.add (added);
+                        i++;
+                    }
                 }
 
                 if ((modifiers & (InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK)) == 0)  // Could filter on drop action instead. However, this allows us to discriminate any combination of modifiers, not just Swing's interpretation of them.

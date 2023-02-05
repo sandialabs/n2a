@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -52,7 +52,8 @@ public class AddInherit extends UndoableView
 
         PanelEquations pe = PanelModel.instance.panelEquations;
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
         PanelEquationGraph peg = pe.panelEquationGraph;
 
         MPart mparent = parent.source;
@@ -67,11 +68,18 @@ public class AddInherit extends UndoableView
             peg.reloadPart ();  // safely disconnects old nodes, even though parent has been rebuilt with new nodes
             parent.filter ();  // Ensure that parts are not visible in parent panel.
         }
-        model.nodeStructureChanged (parent);  // Presumably, part node is still visible. Is there any harm in doing this if it is not?
 
-        pet.updateOrder (nodePath);
-        pet.updateVisibility (nodePath, index);
-        pet.animate ();
+        if (pet == null)
+        {
+            if (parent.graph != null) parent.graph.updateTitle ();
+        }
+        else
+        {
+            model.nodeStructureChanged (parent);  // Presumably, part node is still visible. Is there any harm in doing this if it is not?
+            pet.updateOrder (nodePath);
+            pet.updateVisibility (nodePath, index);
+            pet.animate ();
+        }
 
         if (parent != pe.part)
         {
@@ -100,7 +108,8 @@ public class AddInherit extends UndoableView
 
         PanelEquations pe = PanelModel.instance.panelEquations;
         PanelEquationTree pet = parent.getTree ();
-        FilteredTreeModel model = (FilteredTreeModel) pet.tree.getModel ();
+        FilteredTreeModel model = null;
+        if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
         PanelEquationGraph peg = pe.panelEquationGraph;
 
         parent.source.set (value, "$inherit");
@@ -114,12 +123,19 @@ public class AddInherit extends UndoableView
             peg.reloadPart ();
             parent.filter ();
         }
-        model.nodeStructureChanged (parent);  // Since $inherit is being added, parent will almost certainly become visible, if it's not already.
 
-        TreeNode[] createdPath = parent.child ("$inherit").getPath ();
-        pet.updateOrder (createdPath);
-        pet.updateVisibility (createdPath);
-        pet.animate ();
+        if (pet == null)
+        {
+            if (parent.graph != null) parent.graph.updateTitle ();
+        }
+        else
+        {
+            model.nodeStructureChanged (parent);  // Since $inherit is being added, parent will almost certainly become visible, if it's not already.
+            TreeNode[] createdPath = parent.child ("$inherit").getPath ();
+            pet.updateOrder (createdPath);
+            pet.updateVisibility (createdPath);
+            pet.animate ();
+        }
 
         if (parent != pe.part)
         {
