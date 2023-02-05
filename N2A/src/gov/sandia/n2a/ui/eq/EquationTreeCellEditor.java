@@ -26,6 +26,7 @@ import java.util.List;
 
 import javax.swing.AbstractAction;
 import javax.swing.AbstractCellEditor;
+import javax.swing.Action;
 import javax.swing.ActionMap;
 import javax.swing.Icon;
 import javax.swing.InputMap;
@@ -259,6 +260,15 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
         actionMap = multiLineEditor.getActionMap ();
+        Action caretBackward = actionMap.get ("caret-backward");
+        actionMap.put ("caret-backward", new AbstractAction ("BackOrStopEditing")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                if (PanelModel.instance.panelEquations.locked) stopCellEditing ();
+                else caretBackward.actionPerformed (evt);
+            }
+        });
         actionMap.put ("stopEditing", new AbstractAction ("StopEditing")
         {
             public void actionPerformed (ActionEvent evt)

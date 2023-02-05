@@ -156,6 +156,7 @@ public class PanelEquationTree extends JScrollPane
         Action selectPrevious   = actionMap.get ("selectPrevious");
         Action selectParent     = actionMap.get ("selectParent");
         Action aquaCollapseNode = actionMap.get ("aquaCollapseNode");
+        Action selectChild      = actionMap.get ("selectChild");
         actionMap.put ("selectPrevious", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
@@ -197,6 +198,24 @@ public class PanelEquationTree extends JScrollPane
                 else
                 {
                     aquaCollapseNode.actionPerformed (e);
+                }
+            }
+        });
+        actionMap.put ("selectChild", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                NodeBase n = null;
+                TreePath path = tree.getLeadSelectionPath ();
+                if (path != null) n = (NodeBase) path.getLastPathComponent ();
+                if (n != null  &&  model.isLeaf (n)  &&  n.showMultiLine ())
+                {
+                    tree.setEditable (true);  // Hack to allow users to view truncated fields in locked models. Lock will be restored to correct state when the edit ends.
+                    tree.startEditingAtPath (path);
+                }
+                else
+                {
+                    selectChild.actionPerformed (e);
                 }
             }
         });
