@@ -34,9 +34,11 @@ import java.awt.event.MouseWheelEvent;
 import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
-
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.JColorChooser;
@@ -906,15 +908,46 @@ public class PanelEquationGraph extends JScrollPane
 
         public GraphEdge findTipAt (Point p)
         {
-            Vector2 p2 = new Vector2 (p.x, p.y);
+            Vector2 v = new Vector2 (p.x, p.y);
+            Map<GraphEdge,Double> found = new HashMap<GraphEdge,Double> ();
             for (GraphEdge e : edges)
             {
-                if (e.tip != null  &&  e.tip.distance (p2) < GraphEdge.arrowheadLengthScaled) return e;
+                if (e.tip != null)
+                {
+                    double d = e.tip.distance (v);
+                    if (d < GraphEdge.arrowheadLengthScaled)
+                    {
+                        found.put (e, d);
+                        // Purge any other edges that are farther away than e.
+                        Iterator<GraphEdge> i = found.keySet ().iterator ();
+                        while (i.hasNext ())
+                        {
+                            GraphEdge e2 = i.next ();
+                            double d2 = found.get (e2);
+                            if (d2 > d) i.remove ();
+                        }
+                    }
+                }
+                if (! found.isEmpty ()) continue;  // If there is any connection edge, then it takes priority over pin edges.
+
                 // These tests extend the clickable area to include the full width of the pin zone.
                 if (e.pinKeyFrom != null  &&  findTipAtPin (p, e.nodeFrom, e.pinSideFrom, e.pinKeyFrom)) return e;
                 if (e.pinKeyTo   != null  &&  findTipAtPin (p, e.nodeTo,   e.pinSideTo,   e.pinKeyTo  )) return e;
             }
-            return null;
+            int count = found.size ();
+            if (count == 0) return null;
+            if (count == 1) return found.keySet ().iterator ().next ();
+
+            // Select from edge tips that are exactly the same distance from mouse pointer.
+            // This can happen if they have exactly the same tip position. In this case,
+            // we disambiguate by side.
+            // GraphEdge.ba should always be non-null in this case.
+            for (GraphEdge e : found.keySet ())
+            {
+                Vector2 m = v.subtract (e.tip);  // Vector from tip to mouse pointer.
+                if (m.dot (e.ba) > 0) return e;
+            }
+            return found.keySet ().iterator ().next ();
         }
 
         /**

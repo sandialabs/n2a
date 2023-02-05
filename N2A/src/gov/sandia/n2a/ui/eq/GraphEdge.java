@@ -54,10 +54,11 @@ public class GraphEdge
     protected Rectangle textBox;
     protected Vector2   labelTo;
     protected Rectangle textBoxTo;
-    protected Rectangle bounds = new Rectangle (0, 0, -1, -1);  // empty. Allows call to animate() on brand-new edges that have not previously called updateShape().
+    protected Rectangle bounds = new Rectangle (0, 0, -1, -1);  // Initially empty. Allows call to animate() on brand-new edges that have not previously called updateShape().
     protected Vector2   root;
     protected Vector2   tip;
     protected boolean   tipDrag;
+    protected Vector2   ba;      // Intermediate value for creating curves. Saved to help disambiguate which curve is under mouse pointer in findTipAt().
     protected Point     anchor;  // When non-null, use this as start for tip drag. Value is relative to the upper-left corner of nodeFrom. Mainly for aesthetics.
 
     // Constants for drawing.
@@ -312,7 +313,7 @@ public class GraphEdge
             }
         }
 
-        Vector2 ba = null;  // Non-null for binary connections that also need a curve rather than straight line.
+        ba = null;  // Non-null for binary connections that also need a curve rather than straight line.
         Vector2 c2c = null;
         if (! straight  &&  nodeTo != null  &&  edgeOther != null  &&  edgeOther.nodeTo != null)  // curve passing through a connection
         {
