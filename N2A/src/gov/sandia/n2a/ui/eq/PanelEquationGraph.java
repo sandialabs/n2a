@@ -1473,7 +1473,6 @@ public class PanelEquationGraph extends JScrollPane
             }
             for (GraphEdge ge : graphPanel.edges)
             {
-                if (ge.nameTo != null) continue;  // Don't include external edges in tight bound. Their size is arbitrary and viewport-dependent.
                 bounds = bounds.union (ge.bounds);
             }
             if (n == null)

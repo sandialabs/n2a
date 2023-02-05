@@ -235,10 +235,9 @@ public class GraphEdge
 
     public static void rescale (double zoom)
     {
-        double z = Math.min (1, zoom);
-        arrowheadLengthScaled = Math.max (1, arrowheadLength * z);
-        strokeThicknessScaled = (float) (strokeThickness * z);
-        padNameBetweenScaled  = (int) Math.ceil (padNameBetween * SettingsLookAndFeel.em * z);
+        arrowheadLengthScaled = Math.max (1, arrowheadLength * zoom);
+        strokeThicknessScaled = (float) (strokeThickness * Math.min (1, zoom));
+        padNameBetweenScaled  = (int) Math.ceil (padNameBetween * SettingsLookAndFeel.em * zoom);
     }
 
     /**
