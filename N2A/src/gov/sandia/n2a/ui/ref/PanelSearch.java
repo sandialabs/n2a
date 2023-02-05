@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -88,7 +88,7 @@ public class PanelSearch extends JPanel
 
         InputMap inputMap = list.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl EQUALS"),       "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),             "select");

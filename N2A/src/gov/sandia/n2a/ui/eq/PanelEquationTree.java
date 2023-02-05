@@ -136,7 +136,12 @@ public class PanelEquationTree extends JScrollPane
         inputMap.put (KeyStroke.getKeyStroke ("shift ctrl UP"),     "moveUp");       // selectPreviousExtendSelection   shift-UP
         inputMap.put (KeyStroke.getKeyStroke ("shift ctrl DOWN"),   "moveDown");     // selectNextExtendSelection       shift-DOWN
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl EQUALS"),       "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl 1"),            "addPart");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl 2"),            "addVariable");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl 3"),            "addEquation");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl 4"),            "addAnnotation");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl 5"),            "addReference");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),             "startEditing");
@@ -221,6 +226,41 @@ public class PanelEquationTree extends JScrollPane
             public void actionPerformed (ActionEvent e)
             {
                 addAtSelected ("");
+            }
+        });
+        actionMap.put ("addPart", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                addAtSelected ("Part");
+            }
+        });
+        actionMap.put ("addVariable", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                addAtSelected ("Variable");
+            }
+        });
+        actionMap.put ("addEquation", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                addAtSelected ("Equation");
+            }
+        });
+        actionMap.put ("addAnnotation", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                addAtSelected ("Annotation");
+            }
+        });
+        actionMap.put ("addReference", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                addAtSelected ("Reference");
             }
         });
         actionMap.put ("delete", new AbstractAction ()

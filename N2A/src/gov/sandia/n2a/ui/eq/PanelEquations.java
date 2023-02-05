@@ -235,35 +235,35 @@ public class PanelEquations extends JPanel
         buttonAddPart = new JButton (ImageUtil.getImage ("comp.gif"));
         buttonAddPart.setMargin (new Insets (2, 2, 2, 2));
         buttonAddPart.setFocusable (false);
-        buttonAddPart.setToolTipText ("Add Part");
+        buttonAddPart.setToolTipText ("Add Part (ctrl-1)");
         buttonAddPart.setActionCommand ("Part");
         buttonAddPart.addActionListener (listenerAdd);
 
         buttonAddVariable = new JButton (ImageUtil.getImage ("delta.png"));
         buttonAddVariable.setMargin (new Insets (2, 2, 2, 2));
         buttonAddVariable.setFocusable (false);
-        buttonAddVariable.setToolTipText ("Add Variable");
+        buttonAddVariable.setToolTipText ("Add Variable (ctrl-2)");
         buttonAddVariable.setActionCommand ("Variable");
         buttonAddVariable.addActionListener (listenerAdd);
 
         buttonAddEquation = new JButton (ImageUtil.getImage ("assign.png"));
         buttonAddEquation.setMargin (new Insets (2, 2, 2, 2));
         buttonAddEquation.setFocusable (false);
-        buttonAddEquation.setToolTipText ("Add Equation");
+        buttonAddEquation.setToolTipText ("Add Equation (ctrl-3)");
         buttonAddEquation.setActionCommand ("Equation");
         buttonAddEquation.addActionListener (listenerAdd);
 
         buttonAddAnnotation = new JButton (ImageUtil.getImage ("edit.gif"));
         buttonAddAnnotation.setMargin (new Insets (2, 2, 2, 2));
         buttonAddAnnotation.setFocusable (false);
-        buttonAddAnnotation.setToolTipText ("Add Annotation");
+        buttonAddAnnotation.setToolTipText ("Add Annotation (ctrl-4)");
         buttonAddAnnotation.setActionCommand ("Annotation");
         buttonAddAnnotation.addActionListener (listenerAdd);
 
         buttonAddReference = new JButton (ImageUtil.getImage ("book.gif"));
         buttonAddReference.setMargin (new Insets (2, 2, 2, 2));
         buttonAddReference.setFocusable (false);
-        buttonAddReference.setToolTipText ("Add Reference");
+        buttonAddReference.setToolTipText ("Add Reference (ctrl-5)");
         buttonAddReference.setActionCommand ("Reference");
         buttonAddReference.addActionListener (listenerAdd);
 
@@ -2092,7 +2092,12 @@ public class PanelEquations extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("shift INSERT"),      "paste");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl V"),            "paste");
             inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
-            inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl EQUALS"),       "add");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl 1"),            "addPart");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl 2"),            "addVariable");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl 3"),            "addEquation");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl 4"),            "addAnnotation");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl 5"),            "addReference");
             inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
             inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
             inputMap.put (KeyStroke.getKeyStroke ("ENTER"),             "startEditing");
@@ -2157,6 +2162,46 @@ public class PanelEquations extends JPanel
                             }
                         });
                     }
+                }
+            });
+            actionMap.put ("addPart", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    ActionEvent e2 = new ActionEvent (BreadcrumbRenderer.this, ActionEvent.ACTION_FIRST, "Part");
+                    listenerAdd.actionPerformed (e2);
+                }
+            });
+            actionMap.put ("addVariable", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    ActionEvent e2 = new ActionEvent (BreadcrumbRenderer.this, ActionEvent.ACTION_FIRST, "Variable");
+                    listenerAdd.actionPerformed (e2);
+                }
+            });
+            actionMap.put ("addEquation", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    ActionEvent e2 = new ActionEvent (BreadcrumbRenderer.this, ActionEvent.ACTION_FIRST, "Equation");
+                    listenerAdd.actionPerformed (e2);
+                }
+            });
+            actionMap.put ("addAnnotation", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    ActionEvent e2 = new ActionEvent (BreadcrumbRenderer.this, ActionEvent.ACTION_FIRST, "Annotation");
+                    listenerAdd.actionPerformed (e2);
+                }
+            });
+            actionMap.put ("addReference", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    ActionEvent e2 = new ActionEvent (BreadcrumbRenderer.this, ActionEvent.ACTION_FIRST, "Reference");
+                    listenerAdd.actionPerformed (e2);
                 }
             });
             actionMap.put ("delete", new AbstractAction ()

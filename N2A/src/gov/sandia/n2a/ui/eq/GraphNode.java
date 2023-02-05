@@ -886,7 +886,12 @@ public class GraphNode extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("shift INSERT"),      "paste");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl V"),            "paste");
             inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
-            inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl EQUALS"),       "add");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl 1"),            "addPart");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl 2"),            "addVariable");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl 3"),            "addEquation");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl 4"),            "addAnnotation");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl 5"),            "addReference");
             inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
             inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
             inputMap.put (KeyStroke.getKeyStroke ("ENTER"),             "startEditing");
@@ -1002,6 +1007,46 @@ public class GraphNode extends JPanel
                             }
                         });
                     }
+                }
+            });
+            actionMap.put ("addPart", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    ActionEvent e2 = new ActionEvent (TitleRenderer.this, ActionEvent.ACTION_FIRST, "Part");
+                    container.listenerAdd.actionPerformed (e2);
+                }
+            });
+            actionMap.put ("addVariable", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    ActionEvent e2 = new ActionEvent (TitleRenderer.this, ActionEvent.ACTION_FIRST, "Variable");
+                    container.listenerAdd.actionPerformed (e2);
+                }
+            });
+            actionMap.put ("addEquation", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    ActionEvent e2 = new ActionEvent (TitleRenderer.this, ActionEvent.ACTION_FIRST, "Equation");
+                    container.listenerAdd.actionPerformed (e2);
+                }
+            });
+            actionMap.put ("addAnnotation", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    ActionEvent e2 = new ActionEvent (TitleRenderer.this, ActionEvent.ACTION_FIRST, "Annotation");
+                    container.listenerAdd.actionPerformed (e2);
+                }
+            });
+            actionMap.put ("addReference", new AbstractAction ()
+            {
+                public void actionPerformed (ActionEvent e)
+                {
+                    ActionEvent e2 = new ActionEvent (TitleRenderer.this, ActionEvent.ACTION_FIRST, "Reference");
+                    container.listenerAdd.actionPerformed (e2);
                 }
             });
             actionMap.put ("delete", new AbstractAction ()

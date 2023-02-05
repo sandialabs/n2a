@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -213,7 +213,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         inputMap.put (KeyStroke.getKeyStroke ("shift UP"),          "moveUp");
         inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),        "moveDown");
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
-        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl EQUALS"),       "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
         inputMap.put (KeyStroke.getKeyStroke ("SPACE"),             "startEditing");
