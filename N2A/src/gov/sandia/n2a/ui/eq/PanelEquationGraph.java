@@ -31,6 +31,7 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
+import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -117,6 +118,7 @@ public class PanelEquationGraph extends JScrollPane
     {
         container.active = null;  // on the presumption that container.panelEquationGraph was most recently on display. This function is only called in that case.
         graphPanel.clear ();
+        graphPanel.rescale (1 / graphPanel.zoom);
     }
 
     public void updateLock ()
@@ -124,12 +126,13 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel.updateLock ();
     }
 
-    public Point saveFocus ()
+    public Point2D.Double saveFocus ()
     {
+        Point2D.Double result = new Point2D.Double ();
         Point focus = vp.getViewPosition ();
-        focus.x -= graphPanel.offset.x;
-        focus.y -= graphPanel.offset.y;
-        return focus;
+        result.x = (focus.x - graphPanel.offset.x) / graphPanel.em;
+        result.y = (focus.y - graphPanel.offset.y) / graphPanel.em;
+        return result;
     }
 
     public void takeFocus (FocusCacheEntry fce)
@@ -155,14 +158,16 @@ public class PanelEquationGraph extends JScrollPane
 
     public void restoreViewportPosition (FocusCacheEntry fce)
     {
+        graphPanel.rescale (fce.zoom / graphPanel.zoom);
         Point focus = null;
         if (fce.position != null)
         {
             focus = new Point ();
-            focus.x = fce.position.x + graphPanel.offset.x;
-            focus.y = fce.position.y + graphPanel.offset.y;
+            focus.x = (int) Math.round (fce.position.x * graphPanel.em) + graphPanel.offset.x;
+            focus.y = (int) Math.round (fce.position.y * graphPanel.em) + graphPanel.offset.y;
         }
         graphPanel.layout.shiftViewport (focus);
+        vpOverride = focus;
     }
 
     public void updatePins ()
@@ -180,18 +185,6 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel.updateFilterLevel ();
     }
 
-    /**
-        Gives the coordinates of the center of the graph panel, in a form that is suitable for storing in a part.
-    **/
-    public Point getCenter ()
-    {
-        Point     result = vp.getViewPosition ();
-        Dimension extent = vp.getExtentSize ();
-        result.x += extent.width  / 2 - graphPanel.offset.x;
-        result.y += extent.height / 2 - graphPanel.offset.y;
-        return result;
-    }
-
     public Dimension getExtentSize ()
     {
         return vp.getExtentSize ();
@@ -200,6 +193,11 @@ public class PanelEquationGraph extends JScrollPane
     public Point getViewPosition ()
     {
         return vp.getViewPosition ();
+    }
+
+    public double getEm ()
+    {
+        return graphPanel.em;
     }
 
     /**
@@ -535,8 +533,8 @@ public class PanelEquationGraph extends JScrollPane
 
                 // For now, a very simple layout. Arrange in a grid with some space between nodes.
                 int columns = (int) Math.sqrt (needLayout.size ());  // Truncate, so more rows than columns.
-                final int xgap = 100;
-                final int ygap = 60;
+                final int xgap = (int) Math.round (8 * em);
+                final int ygap = (int) Math.round (5 * em);
                 int x = 0;
                 int y = 0;
                 int h = 0;
@@ -770,6 +768,7 @@ public class PanelEquationGraph extends JScrollPane
                 if (c != pinIn  &&  c != pinOut)
                     tightBounds = tightBounds.union (c.getBounds ());
             int y = tightBounds.y + tightBounds.height / 2;
+            int gap = (int) Math.round (8 * em);
 
             if (pinIn != null)
             {
@@ -777,7 +776,7 @@ public class PanelEquationGraph extends JScrollPane
                 MNode bounds = container.part.source.child ("$meta", "gui", "pin", "bounds", "in");
                 if (bounds == null)
                 {
-                    int x = tightBounds.x - 100 - pinIn.pinOutBounds.width - d.width;
+                    int x = tightBounds.x - gap - pinIn.pinOutBounds.width - d.width;
                     pinIn.setLocation (x, y - d.height / 2);
                     pinIn.holdTempPosition ();
                 }
@@ -799,7 +798,7 @@ public class PanelEquationGraph extends JScrollPane
                 MNode bounds = container.part.source.child ("$meta", "gui", "pin", "bounds", "out");
                 if (bounds == null)
                 {
-                    int x = tightBounds.x + tightBounds.width + 100 + pinOut.pinInBounds.width;
+                    int x = tightBounds.x + tightBounds.width + gap + pinOut.pinInBounds.width;
                     pinOut.setLocation (x, y - d.height / 2);
                     pinOut.holdTempPosition ();
                 }

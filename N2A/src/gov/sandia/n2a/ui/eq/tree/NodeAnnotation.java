@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,7 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
-import java.awt.Point;
+import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -195,7 +195,7 @@ public class NodeAnnotation extends NodeContainer
     }
 
     @Override
-    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point2D.Double location)
     {
         if (type.isEmpty ()) type = "Annotation";  // By context, we assume the user wants to add another annotation.
         if (type.equals ("Annotation"))

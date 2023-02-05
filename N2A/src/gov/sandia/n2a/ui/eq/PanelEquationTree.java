@@ -574,8 +574,9 @@ public class PanelEquationTree extends JScrollPane
         Dimension result = super.getPreferredSize ();
 
         // If tree is empty, it could collapse to very small width. Keep this from getting smaller than cell editor preferred size.
+        double em = container.panelEquationGraph.graphPanel.em;
         Insets insets = tree.getInsets ();
-        result.width = Math.max (result.width, 100 + EquationTreeCellEditor.offsetPerLevel + insets.left + insets.right);
+        result.width = Math.max (result.width, (int) Math.ceil (8 * em) + EquationTreeCellEditor.offsetPerLevel + insets.left + insets.right);
 
         return result;
     }

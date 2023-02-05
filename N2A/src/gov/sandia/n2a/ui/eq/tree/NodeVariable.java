@@ -11,7 +11,7 @@ import java.awt.Composite;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Image;
-import java.awt.Point;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -356,7 +356,7 @@ public class NodeVariable extends NodeContainer
     }
 
     @Override
-    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point2D.Double location)
     {
         if (type.isEmpty ())
         {

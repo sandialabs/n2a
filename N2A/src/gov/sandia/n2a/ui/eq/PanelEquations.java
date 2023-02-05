@@ -31,6 +31,7 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
+import java.awt.geom.Point2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeEvent;
@@ -653,6 +654,7 @@ public class PanelEquations extends JPanel
         if (root == null) return;
 
         FocusCacheEntry fce = createFocus (part);
+        fce.zoom     = panelEquationGraph.graphPanel.zoom;
         fce.position = panelEquationGraph.saveFocus ();
         if (active != null)
         {
@@ -822,16 +824,17 @@ public class PanelEquations extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             String type = e.getActionCommand ();
-            Point location = null;
+            Point2D.Double location = null;
             GraphPanel gp = panelEquationGraph.graphPanel;
             if (e.getSource () == itemAddPart)
             {
                 Component invoker = menuPopup.getInvoker ();
                 if (invoker == gp)
                 {
-                    location = gp.popupLocation;
-                    location.x -= gp.offset.x;
-                    location.y -= gp.offset.y;
+                    Point p = gp.popupLocation;
+                    location = new Point2D.Double ();
+                    location.x = (p.x - gp.offset.x) / gp.em;
+                    location.y = (p.y - gp.offset.y) / gp.em;
                 }
             }
             // To be strictly consistent, adding a variable (or other non-part type) on a closed
@@ -840,9 +843,10 @@ public class PanelEquations extends JPanel
             // inserting a part on a closed node should always go to the parent.
             if (type.equals ("Part")  &&  location == null  &&  active != null  &&  active.root.graph != null  &&  ! active.root.graph.open)
             {
-                location = active.root.graph.getLocation ();
-                location.x += 100 - gp.offset.x;
-                location.y += 100 - gp.offset.y;
+                Point p = active.root.graph.getLocation ();
+                location = new Point2D.Double ();
+                location.x = (p.x - gp.offset.x) / gp.em + 8;
+                location.y = (p.y - gp.offset.y) / gp.em + 8;
             }
 
             if (record == null)
@@ -1687,25 +1691,28 @@ public class PanelEquations extends JPanel
             }
 
             // Determine location
-            Point location = null;
+            Point2D.Double location = null;
             if (dl != null)
             {
-                Point offset = panelEquationGraph.getOffset ();
+                Point  offset = panelEquationGraph.getOffset ();
+                double em     = panelEquationGraph.getEm ();
                 if (peg != null  ||  br == null  &&  gn == null  &&  tree != null  &&  tree == panelParent.panelEquationTree.tree)  // Direct drop to graph, or a drop to parent tree (which is treated like drop to graph).
                 {
                     Point vp = panelEquationGraph.getViewPosition ();
-                    location = dl.getDropPoint ();
-                    location.x += vp.x - offset.x;
-                    location.y += vp.y - offset.y;
+                    Point d = dl.getDropPoint ();
+                    location = new Point2D.Double ();
+                    location.x = (d.x + vp.x - offset.x) / em;
+                    location.y = (d.y + vp.y - offset.y) / em;
 
                     panelParent.panelEquationTree.tree.clearSelection ();  // Just in case this was a DnD to the parent tree in NODE view.
                 }
                 else if (gn != null  &&  ! gn.open)
                 {
                     Point p = gn.getLocation ();
-                    location = dl.getDropPoint ();
-                    location.x += p.x - offset.x;
-                    location.y += p.y - offset.y;
+                    Point d = dl.getDropPoint ();
+                    location = new Point2D.Double ();
+                    location.x = (d.x + p.x - offset.x) / em;
+                    location.y = (d.y + p.y - offset.y) / em;
                 }
             }
 
@@ -1846,8 +1853,8 @@ public class PanelEquations extends JPanel
                     include.merge (child);  // TODO: What if this brings in a $inherit line, and that line does not match the $inherit line in the source part? One possibility is to add the new values to the end of the $inherit line created below.
                     include.clear ("$inherit");  // get rid of IDs from included part, so they won't override the new $inherit line ...
                     include.set (key, "$inherit");
-                    Point p = null;
-                    if (location != null) p = new Point (location.x + (i % columns) * 100, location.y + (i / columns) * 100);  // Keep multiple parts from going to the same place on graph panel.
+                    Point2D.Double p = null;
+                    if (location != null) p = new Point2D.Double (location.x + (i % columns) * 8, location.y + (i / columns) * 8);  // Keep multiple parts from going to the same place on graph panel.
                     NodePart added = (NodePart) target.add ("Part", tree, include, p);
                     if (added != null) newParts.add (added);
                     i++;
@@ -2433,10 +2440,11 @@ public class PanelEquations extends JPanel
 
     public static class FocusCacheEntry
     {
-        public boolean    titleFocused = true; // state of GraphNode.titleFocused or PanelEquations.titleFocused, whichever was set most recently
-        public StoredPath sp;                  // path state of tree, whether as parent or as child
-        public Point      position;            // when parent: offset of viewport
-        public String     subpart      = "";   // when parent: name of child which has keyboard focus. If empty, then the parent itself has focus.
+        public boolean        titleFocused = true; // state of GraphNode.titleFocused or PanelEquations.titleFocused, whichever was set most recently
+        public StoredPath     sp;                  // path state of tree, whether as parent or as child
+        public double         zoom         = 1;    // when parent: zoom level of viewport
+        public Point2D.Double position;            // when parent: offset of viewport in em units
+        public String         subpart      = "";   // when parent: name of child which has keyboard focus. If empty, then the parent itself has focus.
     }
 
     /**

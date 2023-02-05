@@ -8,6 +8,7 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.awt.Dimension;
 import java.awt.Point;
+import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -31,7 +32,6 @@ import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.PanelEquations.FocusCacheEntry;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
-import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
 public class AddPart extends UndoableView implements AddEditable
 {
@@ -46,7 +46,7 @@ public class AddPart extends UndoableView implements AddEditable
     public    boolean      multiShared;    // Do not adjust selection or focus at all. Our tree node is not visible because our parent is also the graph parent. Our graph node is visible, but focus should remain in tree.
     protected boolean      touchesPin;
 
-    public AddPart (NodePart parent, int index, MNode data, Point location)
+    public AddPart (NodePart parent, int index, MNode data, Point2D.Double location)
     {
         path       = parent.getKeyPath ();
         this.index = index;
@@ -67,10 +67,9 @@ public class AddPart extends UndoableView implements AddEditable
         }
 
         if (location == null) location = centerOf (parent);
-        float em = SettingsLookAndFeel.em;
         MNode bounds = createSubtree.childOrCreate ("$meta", "gui", "bounds");
-        bounds.setTruncated (location.x / em, 2, "x");
-        bounds.setTruncated (location.y / em, 2, "y");
+        bounds.setTruncated (location.x, 2, "x");
+        bounds.setTruncated (location.y, 2, "y");
 
         touchesPin =  createSubtree.child ("$meta", "gui", "pin") != null;
     }
@@ -103,23 +102,24 @@ public class AddPart extends UndoableView implements AddEditable
         Determine the anchor position for a set of new parts.
         The main approach is to approximate the center of the viewport when the parent part is displayed.
         If that is not possible, the fallback is the average position of existing parts.
-        If there are no existing parts, the position is set arbitrarily to (100,100). This gives a small
+        If there are no existing parts, the position is set arbitrarily to (8,8)em. This gives a small
         margin from the edge for nice appearance, while not straying far from (0,0).
     **/
-    public static Point centerOf (NodePart parent)
+    public static Point2D.Double centerOf (NodePart parent)
     {
         PanelEquations     pe  = PanelModel.instance.panelEquations;
         PanelEquationGraph peg = pe.panelEquationGraph;
         Dimension d = peg.getExtentSize ();
-        Point location = new Point (d.width / 2, d.height / 2);
+        double em = peg.getEm ();
+        Point2D.Double location = new Point2D.Double (d.width / 2 / em, d.height / 2 / em);
 
         // Base on active viewport.
         if (parent == pe.part)
         {
             Point vp     = peg.getViewPosition ();
             Point offset = peg.getOffset ();
-            location.x += vp.x - offset.x;
-            location.y += vp.y - offset.y;
+            location.x += (vp.x - offset.x) / em;
+            location.y += (vp.y - offset.y) / em;
             return location;
         }
 
@@ -133,9 +133,8 @@ public class AddPart extends UndoableView implements AddEditable
         }
 
         // Base on average position of existing parts.
-        Point center = new Point ();
+        Point2D.Double center = new Point2D.Double ();
         int count = 0;
-        float em = SettingsLookAndFeel.em;
         Enumeration<?> children = parent.children ();
         while (children.hasMoreElements ())
         {
@@ -145,13 +144,13 @@ public class AddPart extends UndoableView implements AddEditable
             MNode bounds = p.source.child ("$meta", "gui", "bounds");
             if (bounds == null) continue;
             count++;
-            center.x += (int) Math.round (bounds.getDouble ("x") * em);
-            center.y += (int) Math.round (bounds.getDouble ("y") * em);
+            center.x += bounds.getDouble ("x");
+            center.y += bounds.getDouble ("y");
         }
         if (count == 1)
         {
-            location.x = center.x + 100;
-            location.y = center.y + 100;
+            location.x = center.x + 8;
+            location.y = center.y + 8;
         }
         else if (count > 1)
         {
@@ -160,7 +159,7 @@ public class AddPart extends UndoableView implements AddEditable
         }
         else  // count == 0
         {
-            location = new Point (100, 100);
+            location = new Point2D.Double (8, 8);
         }
         return location;
     }
@@ -168,21 +167,20 @@ public class AddPart extends UndoableView implements AddEditable
     /**
         Construct a set of AddPart edits to create a self-consistent set of new parts.
     **/
-    public static List<AddPart> makeMulti (NodePart parent, MNode data, Point location)
+    public static List<AddPart> makeMulti (NodePart parent, MNode data, Point2D.Double location)
     {
         // Pre-process part set held in data.
         // Handle name collisions and set location of each part.
 
-        Point center = new Point ();
+        Point2D.Double center = new Point2D.Double ();
         int count = 0;
-        float em = SettingsLookAndFeel.em;
         for (MNode p : data)
         {
             MNode bounds = p.child ("$meta", "gui", "bounds");
             if (bounds == null) continue;
             count++;
-            center.x += (int) Math.round (bounds.getDouble ("x") * em);
-            center.y += (int) Math.round (bounds.getDouble ("y") * em);
+            center.x += bounds.getDouble ("x");
+            center.y += bounds.getDouble ("y");
         }
         if (count > 0)
         {
@@ -191,8 +189,8 @@ public class AddPart extends UndoableView implements AddEditable
         }
 
         if (location == null) location = centerOf (parent);
-        double lcx = (location.x - center.x) / em;
-        double lcy = (location.y - center.y) / em;
+        location.x -= center.x;
+        location.y -= center.y;
         int needLayout = data.size () - count;
         int columns = (int) Math.sqrt (needLayout);
         int l = 0;
@@ -204,12 +202,12 @@ public class AddPart extends UndoableView implements AddEditable
             if (bounds == null)
             {
                 bounds = p.childOrCreate ("$meta", "gui", "bounds");
-                bounds.set ((l % columns) * 100 / em, "x");
-                bounds.set ((l / columns) * 100 / em, "y");
+                bounds.set ((l % columns) * 8, "x");
+                bounds.set ((l / columns) * 8, "y");
                 l++;
             }
-            bounds.setTruncated (lcx + bounds.getDouble ("x"), 2, "x");
-            bounds.setTruncated (lcy + bounds.getDouble ("y"), 2, "y");
+            bounds.setTruncated (location.x + bounds.getDouble ("x"), 2, "x");
+            bounds.setTruncated (location.y + bounds.getDouble ("y"), 2, "y");
 
             String key = p.key ();
             String name = key;

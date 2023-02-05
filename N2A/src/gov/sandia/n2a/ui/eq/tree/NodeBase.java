@@ -17,7 +17,7 @@ import gov.sandia.n2a.ui.eq.undo.AddEditable;
 
 import java.awt.Font;
 import java.awt.FontMetrics;
-import java.awt.Point;
+import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -476,7 +476,7 @@ public class NodeBase extends DefaultMutableTreeNode
         return ((NodeBase) parent).containerFor (type);
     }
 
-    public NodeBase add (String type, JTree tree, MNode data, Point location)
+    public NodeBase add (String type, JTree tree, MNode data, Point2D.Double location)
     {
         Undoable u = makeAdd (type, tree, data, location);
         if (u != null) MainFrame.instance.undoManager.apply (u);
@@ -484,7 +484,7 @@ public class NodeBase extends DefaultMutableTreeNode
         return null;
     }
 
-    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point2D.Double location)
     {
         return ((NodeBase) parent).makeAdd (type, tree, data, location);  // default action is to refer the add request up the tree
     }

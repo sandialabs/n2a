@@ -988,9 +988,10 @@ public class GraphNode extends JPanel
                     }
                     else  // closed, so add new peer part in graph area near this node
                     {
-                        Point location = GraphNode.this.getLocation ();
-                        location.x += 100 - parent.offset.x;
-                        location.y += 100 - parent.offset.y;
+                        Point p = GraphNode.this.getLocation ();
+                        Point2D.Double location = new Point2D.Double ();
+                        location.x = (p.x - parent.offset.x) / parent.em + 8;
+                        location.y = (p.y - parent.offset.y) / parent.em + 8;
                         NodePart editMe = (NodePart) container.part.add ("Part", null, null, location);
                         if (editMe == null) return;
                         EventQueue.invokeLater (new Runnable ()

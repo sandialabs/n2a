@@ -11,6 +11,7 @@ import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Image;
 import java.awt.Point;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -789,7 +790,7 @@ public class NodePart extends NodeContainer
     }
 
     @Override
-    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point2D.Double location)
     {
         if (tree == null)
         {

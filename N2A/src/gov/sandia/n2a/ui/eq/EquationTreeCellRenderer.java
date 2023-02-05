@@ -207,7 +207,8 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         Font  fontBase  = getBaseFont (tree);
         Font  fontPlain = n.getPlainFont (fontBase);
 
-        iconHolder.setIcon (getIconFor (n, expanded, leaf));  // If icon is null, this should result in a zero-sized label.
+        boolean zoomed =  fontBase == PanelModel.instance.panelEquations.panelEquationGraph.graphPanel.scaledTreeFont;
+        iconHolder.setIcon (getIconFor (n, expanded, leaf, zoomed));  // If icon is null, this should result in a zero-sized label.
 
         List<Integer> columnWidths = null;
         FontMetrics fm = getFontMetrics (n.getStyledFont (fontBase));
@@ -286,7 +287,7 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         return tree.getFont ();
     }
 
-    public Icon getIconFor (NodeBase node, boolean expanded, boolean leaf)
+    public Icon getIconFor (NodeBase node, boolean expanded, boolean leaf, boolean zoomed)
     {
         if (hideIcon) return null;
 
@@ -305,12 +306,13 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         }
 
         // At this point, we definitely have a non-null result.
+        if (! zoomed) return result;
         double zoom = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel.zoom;
-        if (zoom >= 1) return result;
+        if (Math.abs (zoom - 1) < 0.05) return result;
         int w = (int) Math.round (result.getIconWidth  () * zoom);
         int h = (int) Math.round (result.getIconHeight () * zoom);
         if (w == 0  ||  h == 0) return null;
-        // TODO: Cache downscaled versions of icons. Should use something like MultiResolutionImage.
+        // TODO: Cache scaled versions of icons. Should use something like MultiResolutionImage.
         Image i = ((ImageIcon) result).getImage ().getScaledInstance (w, h, Image.SCALE_SMOOTH);
         return new ImageIcon (i);
     }

@@ -1,12 +1,12 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.eq.tree;
 
-import java.awt.Point;
+import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -57,7 +57,7 @@ public class NodeReferences extends NodeContainer
     }
 
     @Override
-    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point2D.Double location)
     {
         if (type.isEmpty ()  ||  type.equals ("Reference"))
         {

@@ -7,7 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq.tree;
 
 import java.awt.FontMetrics;
-import java.awt.Point;
+import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -122,7 +122,7 @@ public class NodeEquation extends NodeBase
     }
 
     @Override
-    public Undoable makeAdd (String type, JTree tree, MNode data, Point location)
+    public Undoable makeAdd (String type, JTree tree, MNode data, Point2D.Double location)
     {
         if (type.isEmpty ()) type = "Equation";
         return ((NodeBase) parent).makeAdd (type, tree, data, location);

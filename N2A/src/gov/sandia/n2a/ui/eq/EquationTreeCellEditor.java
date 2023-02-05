@@ -27,6 +27,7 @@ import java.util.List;
 import javax.swing.AbstractAction;
 import javax.swing.AbstractCellEditor;
 import javax.swing.ActionMap;
+import javax.swing.Icon;
 import javax.swing.InputMap;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
@@ -57,6 +58,7 @@ import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
+import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodeEquation;
@@ -94,9 +96,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     protected boolean                  editingExpanded;
     protected boolean                  editingLeaf;
     protected boolean                  editingTitle;       // Indicates that we are in a graph node title rather than a proper tree. Used for focus control.
-    protected Container                editingContainer;
+    protected EditorContainer          editingContainer;
     protected Component                editingComponent;
-    protected int                      offset;
     protected static int               offsetPerLevel;     // How much to indent per tree level to accommodate for expansion handles.
     protected String                   rangeUnits;
     protected double                   rangeLo;
@@ -419,13 +420,16 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         editingLeaf     = leaf;
         editingTitle    = isTitle;
         this.renderer   = renderer;  // For use by EditorContainer
-        offset          = renderer.getTextOffset ();
         Font fontBase   = renderer.getBaseFont (tree);
         Font fontPlain  = editingNode.getPlainFont (fontBase);
         Font fontStyled = editingNode.getStyledFont (fontBase);
         FontMetrics fm  = tree.getFontMetrics (fontStyled);
 
-        iconHolder.setIcon (renderer.getIconFor (editingNode, expanded, leaf));
+        GraphPanel gp = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel;
+        boolean zoomed =  fontBase == gp.scaledTreeFont;
+        Icon icon = renderer.getIconFor (editingNode, expanded, leaf, zoomed);
+        iconHolder.setIcon (icon);
+        int offset = icon.getIconWidth () + iconHolder.getIconTextGap ();
 
         String text;
         String param;
@@ -460,6 +464,12 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
 
         // Update editing component
         if (editingComponent != null) editingContainer.remove (editingComponent);
+        editingContainer.nodeWidth = 0;
+        if (editingNode instanceof NodePart)
+        {
+            NodePart editingPart = (NodePart) editingNode;
+            if (editingPart.graph != null) editingContainer.nodeWidth = editingPart.graph.panelTitle.getWidth () / gp.em;
+        }
         if (param.equals ("flag"))
         {
             editingComponent = flagEditor;
@@ -517,22 +527,41 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             }
             undoManager.discardAllEdits ();
         }
+        editingComponent.setLocation (offset, 0);
         editingContainer.add (editingComponent);
 
         return editingContainer;
     }
 
-    // TODO: layout gets wider during zoom out. In general, layout is not updated properly.
     public void rescale ()
     {
-        iconHolder.setIcon (renderer.getIconFor (editingNode, editingExpanded, editingLeaf));
-
-        Font fontBase   = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel.scaledTreeFont;
+        GraphPanel gp   = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel;
+        Font fontBase   = gp.scaledTreeFont;
         Font fontPlain  = editingNode.getPlainFont (fontBase);
         Font fontStyled = editingNode.getStyledFont (fontBase);
+        FontMetrics fm  = editingComponent.getFontMetrics (fontStyled);
 
-        for (JLabel l : labels) if (l.isVisible ()) l.setFont (fontPlain);
+        Icon icon = renderer.getIconFor (editingNode, editingExpanded, editingLeaf, true);
+        iconHolder.setIcon (icon);
+        int offset = icon.getIconWidth () + iconHolder.getIconTextGap ();
+
+        boolean isSimpleVariable =  editingNode instanceof NodeVariable  &&  ! ((NodeVariable) editingNode).hasEquations ();
+        boolean isAnnotation     =  editingNode instanceof NodeAnnotation;
+        if (FilteredTreeModel.showParam  &&  editingNode.isParam ()  &&  (isSimpleVariable  ||  isAnnotation))
+        {
+            NodeBase      p            = editingNode.getTrueParent ();
+            List<Integer> columnWidths = p.getMaxColumnWidths (editingNode.getColumnGroup (), fm);
+            for (int i = 0; i < 2; i++)
+            {
+                JLabel l = labels.get (i);
+                l.setFont (fontPlain);
+                l.setLocation (offset, 0);
+                offset += columnWidths.get (i);
+            }
+        }
+
         editingComponent.setFont (fontStyled);
+        editingComponent.setLocation (offset, 0);
     }
 
     @Override
@@ -665,6 +694,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
     **/
     public class EditorContainer extends Container
     {
+        public double nodeWidth;  // in ems
+
         public EditorContainer ()
         {
             setLayout (null);
@@ -700,20 +731,18 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 // In the case of a combo-box (choiceEditor), there is no way to scroll interior content.
                 // Also, it looks terrible if stretched wide. Better to show at its preferred size.
                 d = editingComponent.getPreferredSize ();
-                if (editingComponent != choiceEditor) d.width = w - offset; 
+                int x = editingComponent.getX ();
+                if (editingComponent != choiceEditor) d.width = w - x; 
                 y = Math.max (0, h - d.height) / 2;
-                editingComponent.setBounds (offset, y, d.width, d.height);
+                editingComponent.setBounds (x, y, d.width, d.height);
             }
         }
 
         public Dimension getPreferredSize ()
         {
             int rightMargin = -1;
-            if (editingNode instanceof NodePart)  // Possibly use size of graph node
-            {
-                NodePart editingPart = (NodePart) editingNode;
-                if (editingPart.graph != null) rightMargin = editingPart.graph.panelTitle.getWidth ();
-            }
+            double em = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel.em;
+            if (nodeWidth > 0) rightMargin = (int) Math.round (nodeWidth * em);
             if (rightMargin < 0)  // Use tree boundaries
             {
                 JViewport vp     = (JViewport) editingTree.getParent ();
@@ -725,7 +754,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             Dimension pSize = editingComponent.getPreferredSize ();
             Insets insets = editingTree.getInsets ();
             pSize.width = rightMargin - offsetPerLevel * editingNode.getLevel () - insets.left - insets.right;
-            pSize.width = Math.max (100, pSize.width);
+            pSize.width = Math.max ((int) Math.round (8 * em), pSize.width);
 
             Dimension rSize = renderer.getPreferredSize ();
             pSize.height = Math.max (pSize.height, rSize.height);

@@ -18,7 +18,6 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.UndoManager;
-import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.search.NameEditor;
 import gov.sandia.n2a.ui.eq.search.NodeBase;
 import gov.sandia.n2a.ui.eq.search.NodeCategory;
@@ -33,7 +32,6 @@ import gov.sandia.n2a.ui.settings.SettingsRepo;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.FontMetrics;
-import java.awt.Point;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
@@ -43,6 +41,7 @@ import java.awt.event.FocusListener;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.Point2D;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
@@ -1245,31 +1244,23 @@ public class PanelSearch extends JPanel
             }
 
             // Determine position in graph.
-            float x     = 0;
-            float y     = 0;
-            int   count = 0;
+            double x     = 0;
+            double y     = 0;
+            int    count = 0;
             for (NodePart p : query)
             {
-                if (p.graph != null)
-                {
-                    Point l = p.graph.getLocation ();
-                    x += l.x;
-                    y += l.y;
-                    count++;
-                }
+                MNode bounds = p.source.child ("$meta", "bounds");
+                if (bounds == null) continue;
+                x += bounds.getDouble ("x");
+                y += bounds.getDouble ("y");
+                count++;
             }
-            Point center = null;
-            if (count > 1)
-            {
-                GraphPanel graphPanel = PanelModel.instance.panelEquations.panelEquationGraph.graphPanel;
-                center = new Point ();
-                center.x = Math.round (x / count) - graphPanel.offset.x;
-                center.y = Math.round (y / count) - graphPanel.offset.y;
-            }
+            Point2D.Double center = null;
+            if (count > 1) center = new Point2D.Double (x / count, y / count);
 
             // UI changes must be done on the EDT.
             NodePart parent = query.get (0).getTrueParent ();
-            final Point c = center;
+            final Point2D.Double c = center;
             EventQueue.invokeLater (new Runnable ()
             {
                 public void run ()
