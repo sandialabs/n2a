@@ -148,7 +148,7 @@ public class ChangeVariable extends UndoableView
                 {
                     vkeypath.add (Variable.stripContextPrefix (nameBefore));
                     vold = (Variable) compiled.getObject (vkeypath);
-                    vkeypath.set (vkeypath.size () - 1, nameAfter);
+                    vkeypath.set (vkeypath.size () - 1, Variable.stripContextPrefix (nameAfter));
                 }
                 vnew = (Variable) compiled.getObject (vkeypath);
 
