@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,8 +13,9 @@ public class Identifier
 {
     public String  name;
     public boolean hadParens;
-    public int     columnBegin; // position of first character in source line
-    public int     columnEnd;   // position of last character in source line. Not necessarily same as columnBegin+name.length()-1, since original text might not be canonical.
+    public int     columnBegin;    // position of first character in source line
+    public int     columnEnd;      // position of last character in source line. Not necessarily same as columnBegin+name.length()-1, since original text might not be canonical.
+    public int     trailingSpaces; // Leading spaces get skipped by lexer, but trailing spaces are included in token. We save them for use by variable renaming code.
 
     /**
         Parses the given string, which must be properly-formatted number with optional unit specified at end.
@@ -24,6 +25,9 @@ public class Identifier
         this.name        = canonical (name);
         this.columnBegin = columnBegin;
         this.columnEnd   = columnEnd;
+
+        int i = name.length () - 1;
+        while (i >= 0  &&  name.charAt (i--) == ' ') trailingSpaces++;
     }
 
     public static String canonical (String name)

@@ -32,6 +32,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
@@ -340,10 +341,13 @@ public class NodePart extends NodeContainer
     }
 
     /**
-        Walks to part hierarchy while unpacking the given name path.
+        Walks the part hierarchy while unpacking the given name path.
         Subroutine of NodeVariable.findConnections()
         @param from The NodeVariable that originated this search.
-        @param sibling If this call came from child part, then reference to that part. Otherwise null.
+        @param upFrom If this call came from child part, then reference to that part. Otherwise null.
+        @param name The remaining name path to be resolved. Generally, this routine pops names off
+        the front of this value and recursively travels the tree based on its directions.
+        @param stopAt If non-null, indicates a tree object where the search should terminate if found.
         @return The tree node, or null if the path does not resolve exactly.
     **/
     public NodeBase resolveName (NodeVariable from, NodePart upFrom, String name)
@@ -368,6 +372,7 @@ public class NodePart extends NodeContainer
         {
             NodeBase n = (NodeBase) i.nextElement ();
             String key = n.source.key ();
+            key = Variable.stripContextPrefix (key);
             if (! key.startsWith (ns)) continue;
             int keyLength = key.length ();
             if (keyLength != nsLength  &&  key.charAt (nsLength) != '\'') continue;
@@ -399,6 +404,58 @@ public class NodePart extends NodeContainer
 
         if (parent == null) return null;
         return parent.resolveName (from, this, name);
+    }
+
+    /**
+        Version of name resolution used by ChangeVariable.NameVisitor to find position of
+        name in a key path, if it is semantically present.
+        "Semantic" presence means not simply that a string appears in the path, but that
+        it references the specific given object.
+        @param names The key path, broken into an array.
+        @param index The current element in the path to be examined.
+        @param stopAt The target object we are trying to match.
+        @return The index of the semantically-matching path element, or -1 if there is no match.
+    **/
+    public int resolveName (String[] names, int index, NodeBase stopAt)
+    {
+        if (index >= names.length) return -1;
+        String ns = names[index];  // We assume this is already trimmed.
+
+        NodePart parent = (NodePart) getTrueParent ();
+        if (ns.equals ("$up"))
+        {
+            if (parent == null) return -1;  // Can't go up.
+            return parent.resolveName (names, index+1, stopAt);
+        }
+
+        Enumeration<?> i = children ();
+        while (i.hasMoreElements ())
+        {
+            NodeBase n = (NodeBase) i.nextElement ();
+            String key = n.source.key ();
+            key = Variable.stripContextPrefix (key);
+            if (! key.equals (ns)) continue;  // Want an exact name match, including order of derivative.
+            if (n == stopAt) return index;
+
+            if (n instanceof NodeVariable)
+            {
+                if (((NodeVariable) n).isBinding  &&  connectionBindings != null)
+                {
+                    NodePart p = connectionBindings.get (ns);
+                    if (p != null) return p.resolveName (names, index+1, stopAt);
+                }
+                return -1;  // Can't go any further.
+            }
+            else if (n instanceof NodePart)
+            {
+                return ((NodePart) n).resolveName (names, index+1, stopAt);
+            }
+        }
+
+        // Refer current name up the containment hierarchy.
+        if (ns.startsWith ("$")) return -1;  // $variables should not be referred up. They are always local.
+        if (parent == null) return -1;  // Can't go any further.
+        return parent.resolveName (names, index, stopAt);
     }
 
     public Set<String> getAncestors ()

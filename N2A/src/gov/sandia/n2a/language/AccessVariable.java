@@ -19,18 +19,17 @@ public class AccessVariable extends Operator
     public VariableReference reference; // non-null when this node has been resolved in the context of an EquationSet
 
     // For in-place renaming of variables by the UI.
-    public int columnBegin; // Position of first character in source line.
-    public int columnEnd;   // Position of last character in source line. Not necessarily same as columnBegin+name.lenght()-1, since original text might not be canonical.
+    public int columnBegin;    // Position of first character in source line.
+    public int columnEnd;      // Position of last character in source line. Not necessarily same as columnBegin+name.length()-1, since original text might not be canonical.
+    public int trailingSpaces; // Number of spaces that lexer included in token after any other kind of character.
 
     public AccessVariable ()
     {
     }
 
-    public AccessVariable (String name, int columnBegin, int columnEnd)
+    public AccessVariable (SimpleNode node)
     {
-        this.name        = name;
-        this.columnBegin = columnBegin;
-        this.columnEnd   = columnEnd;
+        getOperandsFrom (node);
     }
 
     public AccessVariable (VariableReference reference)
@@ -42,9 +41,10 @@ public class AccessVariable extends Operator
     public void getOperandsFrom (SimpleNode node)
     {
         Identifier ID = (Identifier) node.jjtGetValue ();
-        name        = ID.name;
-        columnBegin = ID.columnBegin;
-        columnEnd   = ID.columnEnd;
+        name           = ID.name;
+        columnBegin    = ID.columnBegin - 1;  // columnBegin and columnEnd are 1-based rather than 0-based.
+        columnEnd      = ID.columnEnd   - 1;  // This is a quirk of JavaCC.
+        trailingSpaces = ID.trailingSpaces;
     }
 
     public int getOrder ()

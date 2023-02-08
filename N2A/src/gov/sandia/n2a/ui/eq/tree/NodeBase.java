@@ -519,4 +519,20 @@ public class NodeBase extends DefaultMutableTreeNode
         // Only nodes that can actually be deleted need to override this.
         return null;
     }
+
+    public interface Visitor
+    {
+        /**
+            @return true to continue descent. false to terminate descent along this branch.
+            A value of false only prunes this branch. Sibling branches will still be visited.
+        **/
+        public boolean visit (NodeBase n);
+    }
+
+    public void visit (Visitor visitor)
+    {
+        if (! visitor.visit (this)) return;
+        if (children == null) return;
+        for (TreeNode t : children) ((NodeBase) t).visit (visitor);
+    }
 }

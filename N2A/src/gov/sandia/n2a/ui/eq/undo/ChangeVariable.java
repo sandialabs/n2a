@@ -6,13 +6,11 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.TreeMap;
 
 import javax.swing.JTree;
 import javax.swing.tree.TreeNode;
@@ -20,22 +18,17 @@ import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.eqset.VariableReference;
-import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.language.AccessVariable;
-import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.Renderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeEquation;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
@@ -102,8 +95,8 @@ public class ChangeVariable extends UndoableView
 
         NodeVariable nodeAfter;
         boolean touchedBindings = false;
-        List<List<String>> references = new ArrayList<List<String>> ();  // Key paths to each variable that references this one.
-        if (nameBefore.equals (nameAfter))
+        boolean sameName = nameBefore.equals (nameAfter);
+        if (sameName)
         {
             nodeAfter = nodeBefore;
             MPart mchild = nodeAfter.source;
@@ -113,8 +106,6 @@ public class ChangeVariable extends UndoableView
         else
         {
             // Update database
-
-            //   Move the subtree
             MPart mparent = parent.source;
             mparent.clear (nameBefore);
             mparent.clear (nameAfter);  // Removes any reference changes in target node.
@@ -123,102 +114,7 @@ public class ChangeVariable extends UndoableView
             MPart oldPart = (MPart) mparent.child (nameBefore);
             updateRevokation (newPart, killed);
 
-            //   Change references to this variable
-            //   See ChangePart.apply() for a similar procedure.
-            try
-            {
-                // "doc" is a collated model, so changes will also be made to references from inherited nodes.
-                // Such changes will be saved as an override.
-                MPart doc = pe.root.source;
-                EquationSet compiled = new EquationSet (doc);  // TODO: this is a potentially lengthy operation. For very large models, need to reduce load on EDT. Either maintain incremental compilation, or compile on separate thread.
-                compiled.name = doc.key ();
-                List<String> vkeypath = new ArrayList<String> (path.subList (1, path.size ()));
-                Variable vold;
-                Variable vnew;
-                if (oldPart == null)
-                {
-                    EquationSet p = (EquationSet) compiled.getObject (vkeypath);
-                    vold = Variable.fromLHS (nameBefore);
-                    vold.equations = new TreeSet<EquationEntry> ();
-                    if (nodeBefore.isBinding) vold.equations.add (new EquationEntry (newPart.get ()));
-                    p.add (vold);
-                    vkeypath.add (Variable.stripContextPrefix (nameAfter));
-                }
-                else
-                {
-                    vkeypath.add (Variable.stripContextPrefix (nameBefore));
-                    vold = (Variable) compiled.getObject (vkeypath);
-                    vkeypath.set (vkeypath.size () - 1, Variable.stripContextPrefix (nameAfter));
-                }
-                vnew = (Variable) compiled.getObject (vkeypath);
-
-                try
-                {
-                    // This will throw an AbortRun if any connection is not properly bound.
-                    // However, not every connection binding necessarily leads to this variable.
-                    compiled.resolveConnectionBindings ();
-                }
-                catch (Exception e) {}
-                try
-                {
-                    compiled.resolveLHS ();
-                }
-                catch (Exception e) {}
-                try
-                {
-                    // This will very likely throw an AbortRun exception to report unresolved variables.
-                    // This will do no harm. All we need is that other equations resolve to this variable.
-                    compiled.resolveRHS ();
-                }
-                catch (Exception e) {}
-                prepareConnections (compiled);
-
-                List<Variable> users = new ArrayList<Variable> ();
-                if (vold.usedBy != null)
-                {
-                    for (Object o : vold.usedBy)
-                    {
-                        if (! (o instanceof Variable)) continue;
-                        if ((o == vnew  ||  o == vold)  &&  nameAfter.equals (this.nameBefore)) continue;  // On undo, don't touch savedTree or exposed node. They should return to their exact previous values.
-                        users.add ((Variable) o);
-                    }
-                }
-                // A variable depends on other variables which write to it. These appear in its "uses" member.
-                // The write relationship is created by naming the target variable on the LHS of the source variable.
-                // This kind of relationship is not generally reciprocal, so we must check uses as well as usedBy.
-                if (vold.uses != null)
-                {
-                    for (Variable v : vold.uses.keySet ())
-                    {
-                        if (v.reference.variable == vold) users.add (v);
-                    }
-                }
-
-                vold.name  = vnew.name;
-                vold.order = vnew.order;
-                for (Variable v : users)
-                {
-                    if (v == vnew  &&  v.equations.size () == 1) continue;  // Don't modify expression on variable line itself. Instead, assume the user edited it exactly as intended.
-
-                    List<String> ref = v.getKeyPath ();
-                    MNode n = doc.child (ref.toArray ());
-                    String oldKey = n.key ();
-                    String newKey = changeReferences (vold, n, v);
-                    if (! newKey.equals (oldKey))  // Handle a change in variable name.
-                    {
-                        NodeBase nb = pe.root.locateNodeFromHere (ref);
-                        n.parent ().move (oldKey, newKey);
-                        ref.set (ref.size () - 1, newKey);
-                        nb.source = (MPart) doc.child (ref.toArray ());
-                    }
-                    if (v != vnew  &&  v != vold) references.add (ref);  // Queue GUI updates for nodes other than the primary ones.
-                }
-            }
-            catch (Exception e) {}
-
-
             // Update GUI
-
             nodeAfter = (NodeVariable) parent.child (nameAfter);
             if (oldPart == null)
             {
@@ -264,6 +160,14 @@ public class ChangeVariable extends UndoableView
 
         nodeAfter.build ();
         nodeAfter.filter ();
+        NameVisitor nameVisitor = null;
+        if (! sameName)
+        {
+            nameVisitor = new NameVisitor (nameBefore, nameAfter, nameAfter.equals (this.nameBefore), nodeBefore, nodeAfter);
+            try {pe.root.visit (nameVisitor);}
+            catch (Exception e) {e.printStackTrace ();}  // Trap the exception so we can at least clearFakeObject().
+            nameVisitor.clearFakeObject ();
+        }
         Set<PanelEquationTree> needAnimate = new HashSet<PanelEquationTree> ();
         if (pet != null)
         {
@@ -276,30 +180,30 @@ public class ChangeVariable extends UndoableView
             if (multi) pet.tree.addSelectionPath (new TreePath (nodePath));
         }
 
-        for (List<String> ref : references)
+        if (! sameName)
         {
-            NodeVariable n = (NodeVariable) pe.root.locateNodeFromHere (ref);
-            if (n == null) continue;
-
-            // Rebuild n, because equations and/or their conditions may have changed.
-            n.build ();
-            n.findConnections ();
-            n.filter ();
-            if (n.visible ())  // n's visibility won't change
+            for (NodeVariable n : nameVisitor.references)
             {
-                PanelEquationTree subpet = n.getTree ();
-                if (subpet == null) continue;
-                JTree subtree = subpet.tree;
-                FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
-                NodeBase subparent = (NodeBase) n.getParent ();
+                // Rebuild n, because equations and/or their conditions may have changed.
+                n.build ();
+                n.findConnections ();
+                n.filter ();
+                if (n.visible ())  // n's visibility won't change
+                {
+                    PanelEquationTree subpet = n.getTree ();
+                    if (subpet == null) continue;
+                    JTree subtree = subpet.tree;
+                    FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
+                    NodeBase subparent = (NodeBase) n.getParent ();
 
-                boolean added = needAnimate.add (subpet);
-                if (added) subpet.updateHighlights (subpet.root, nameAfter);
-                else       subpet.updateHighlights (n, nameAfter);
-                subparent.invalidateColumns (null);
-                submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
-                subpet.updateVisibility (n.getPath (), -2, false);
-                subparent.allNodesChanged (submodel);
+                    boolean added = needAnimate.add (subpet);
+                    if (added) subpet.updateHighlights (subpet.root, nameAfter);
+                    else       subpet.updateHighlights (n, nameAfter);
+                    subparent.invalidateColumns (null);
+                    submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
+                    subpet.updateVisibility (n.getPath (), -2, false);
+                    subparent.allNodesChanged (submodel);
+                }
             }
         }
 
@@ -341,229 +245,202 @@ public class ChangeVariable extends UndoableView
         }
     }
 
-    /**
-        Tags dependencies between connection binding variables.
-        Also prepares the variable held in each connection binding so it can be emitted by changeExpression()
-        and associated functions.
-    **/
-    public static void prepareConnections (EquationSet s)
+    public static class NameVisitor implements NodeBase.Visitor
     {
-        for (EquationSet p : s.parts) prepareConnections (p);
+        public String   nameBefore;
+        public String   nameAfter;
+        public boolean  undoing;
+        public NodeBase nodeBefore;
+        public NodeBase nodeAfter;
+        public NodeBase renamed;
 
-        if (s.connectionBindings == null) return;
-        for (ConnectionBinding cb : s.connectionBindings)
+        public HashSet<NodeVariable> references = new HashSet<NodeVariable> ();
+
+        public NameVisitor (String nameBefore, String nameAfter, boolean undoing, NodeBase nodeBefore, NodeBase nodeAfter)
         {
-            cb.addDependencies ();
-            cb.variable.container = s;  // Re-attach variable to container, so we can use Variable.getKeyPath()
-            cb.variable.addAttribute ("instance");
+            this.nameBefore = Variable.stripContextPrefix (nameBefore);
+            this.nameAfter  = Variable.stripContextPrefix (nameAfter);
+            this.undoing    = undoing;
+            this.nodeBefore = nodeBefore;
+            this.nodeAfter  = nodeAfter;
 
-            // Hack to make cb.variable look as if it has been resolved ...
-            AccessVariable av = (AccessVariable) cb.variable.equations.first ().expression;
-            av.reference = new VariableReference ();
-            av.reference.variable = cb.variable;
-            av.reference.resolution = cb.resolution;  // must not be modified after this
+            NodePart parent = (NodePart) nodeAfter.getTrueParent ();
+            renamed = parent.child (nameBefore);  // Our ctor parameter may still have context prefix.
+            if (renamed != null) return;  // In this case, renamed should also equal nodeBefore.
+            MPart c = new MPart (new MVolatile (nameBefore));
+            if (nodeAfter instanceof NodeVariable) renamed = new NodeVariable (c);
+            else                                   renamed = new NodePart (c);
+            parent.add (renamed);
         }
-    }
 
-    /**
-        Given variable "v", change all places where its code references "renamed".
-        The name change is already embedded in the compiled model. We simply re-render the code.
-        @param renamed The object that has a new name, for safety checks.
-            This code is called by both ChangeVariable and ChangePart, so "renamed" can be either a Variable or an EquationSet.
-        @param mv The database object associated with the compiled variable.
-        @param v The compiled variable, which is part of the fully-compiled model.
-    **/
-    public static String changeReferences (Object renamed, MNode mv, Variable v)
-    {
-        if (v.equations.size () == 1)  // single-line equation
+        /**
+            If our ctor created a fake object, then remove it.
+        **/
+        public void clearFakeObject ()
         {
-            EquationEntry ee = v.equations.first ();
-            String ifString = "";
-            if (ee.condition != null) ifString = "@" + changeExpression (ee.condition, renamed, v.container);
-            mv.set (v.combinerString () + changeExpression (ee.expression, renamed, v.container) + ifString);
+            if (renamed == nodeBefore) return;
+            NodePart parent = (NodePart) nodeAfter.getTrueParent ();
+            parent.remove (renamed);
         }
-        else  // multi-line equation
+
+        public boolean visit (NodeBase n)
         {
-            try  // Mostly, to trap parse errors when mapping keys.
+            if (undoing  &&  (n == nodeBefore  ||  n == nodeAfter)) return false;  // On undo, don't touch savedTree or exposed node. They should return to their exact previous values.
+            if (n == renamed  &&  renamed != nodeBefore) return false;  // Don't process the fake target, if it exists.
+
+            if (n instanceof NodeVariable)
             {
-                // Create a mapping from equation entries to database nodes.
-                // The idea here is to re-render the keys just like they have been for EquationEntry.ifString.
-                // This lets us use ifString as the key.
-                Map<String,MNode> map = new HashMap<String,MNode> ();
-                for (MNode e : mv)
+                if (n == nodeAfter) return true;  // Don't modify expression on variable line itself. Instead, assume the user edited it exactly as intended.
+                NodeVariable nv = (NodeVariable) n;
+                NodePart parent = (NodePart) n.getTrueParent ();
+
+                // Check LHS
+                MNode m = n.source;
+                String key = m.key ();
+                if (key.contains (nameBefore)  &&  key.contains ("."))
                 {
-                    String key = e.key ();
-                    if (! key.startsWith ("@")) continue;
-                    key = key.substring (1);
-                    if (! key.isEmpty ()) key = Operator.parse (key).render ();
-                    map.put (key, e);
+                    // Check if key actually references the renamed object.
+                    String newKey = resolve (parent, key);
+                    if (newKey != null)
+                    {
+                        MNode mparent = parent.source;
+                        mparent.move (key, newKey);
+                        m = nv.source = (MPart) mparent.child (newKey);
+                        references.add (nv);
+                    }
                 }
 
-                // Modify each equation entry and post to db.
-                for (EquationEntry ee : v.equations)
+                // Check RHS
+                String value = m.get ();
+                if (value.contains (nameBefore))
                 {
-                    MNode me = map.get (ee.ifString);
-                    me.set (changeExpression (ee.expression, renamed, v.container));
-
-                    String ifString = "@";
-                    if (ee.condition != null) ifString += changeExpression (ee.condition, renamed, v.container);
-                    mv.move (me.key (), ifString);
+                    // Check if any name paths in the expression actually references the renamed object.
+                    Variable.ParsedValue pv = new Variable.ParsedValue (value);
+                    String newExpression = null;
+                    String newCondition  = null;
+                    if (pv.expression != null) newExpression = resolveExpression (parent, pv.expression);
+                    if (pv.condition  != null) newCondition  = resolveExpression (parent, pv.condition);
+                    if (newExpression != null  ||  newCondition != null)
+                    {
+                        if (newExpression != null) pv.expression = newExpression;
+                        if (newCondition  != null) pv.condition  = newCondition;
+                        m.set (pv.toString ());
+                        references.add (nv);
+                    }
                 }
+
+                return true;  // Drill down to any equations under this variable.
             }
-            catch (Exception e) {}
-        }
 
-        // The name of v can also change, since it might describe a path through a changed part or connection binding. See EquationSet.resolveLHS().
-        AccessVariable av = new AccessVariable (v.nameString (), 0, 0);
-        av.reference = v.reference;
-        return changeExpression (av, renamed, v.container);
-    }
-
-    public static String changeExpression (Operator expression, Object renamed, EquationSet container)
-    {
-        Renderer r = new Renderer ()
-        {
-            public boolean render (Operator op)
+            if (n instanceof NodeEquation)
             {
-                if (op instanceof AccessVariable)
+                NodeEquation ne = (NodeEquation) n;
+                NodeVariable nv = (NodeVariable) n .getParent ();
+                NodePart     np = (NodePart)     nv.getParent ();
+
+                MNode m = ne.source;
+                String key = m.key ();
+                if (key.contains (nameBefore))
                 {
-                    AccessVariable av = (AccessVariable) op;
-
-                    // Safety checks. We won't modify code unless we are confident that it can be done correctly.
-                    boolean safe =  av.reference != null  &&  av.reference.variable != null;  // Must be fully resolved.
-                    if (safe  &&  av.reference.variable != renamed)
+                    String newKey = resolveExpression (np, key);
+                    if (newKey != null)
                     {
-                        // If the endpoint is not "renamed", then "renamed" must occur along the resolution path.
-                        safe = false;
-                        for (Object o : av.reference.resolution)
-                        {
-                            if (o == renamed  ||  o instanceof ConnectionBinding  &&  ((ConnectionBinding) o).variable == renamed)
-                            {
-                                safe = true;
-                                break;
-                            }
-                        }
+                        MNode mparent = nv.source;
+                        mparent.move (key, newKey);
+                        m = ne.source = (MPart) mparent.child (newKey);
+                        references.add (nv);
                     }
-                    if (! safe)
-                    {
-                        result.append (av.name);  // This is the original text from the parser.
-                        return true;
-                    }
-
-                    // Walk the resolution path and emit a new variable name.
-                    EquationSet current = container;  // The working target of resolution.
-                    EquationSet home    = container;  // Where the resolution actually is, based on emitted path so far.
-                    String path = "";
-                    int last = av.reference.resolution.size () - 1;
-                    for (int i = 0; i <= last; i++)
-                    {
-                        Object o = av.reference.resolution.get (i);
-                        if (o instanceof EquationSet)  // We are following the containment hierarchy.
-                        {
-                            EquationSet s = (EquationSet) o;
-                            if (s.container == current)  // descend into one of our contained populations
-                            {
-                                path += emitPath (home, current, s.name);
-                                path += s.name + ".";
-                                home = s;
-                            }
-                            // else ascend to our container
-                            // The resolution for the ascent will be handled as soon as we need to reference a sub-part or variable.
-                            current = s;
-                        }
-                        else if (o instanceof ConnectionBinding)  // We are following a part reference (which means we are a connection)
-                        {
-                            ConnectionBinding c = (ConnectionBinding) o;
-                            String name = c.variable.nameString ();
-                            path += emitPath (home, current, name);
-                            path += name + ".";
-                            home = c.endpoint;
-                            current = c.endpoint;
-                        }
-                    }
-                    String name = av.reference.variable.nameString ();
-                    path += emitPath (home, current, name);
-                    if (av.reference.variable.hasAttribute ("instance"))
-                    {
-                        if (! path.isEmpty ()) path = path.substring (0, path.length () - 1);  // Get rid of trailing dot.
-                    }
-                    else
-                    {
-                        path += name;
-                    }
-                    result.append (path);
-
-                    return true;
                 }
-                if (op instanceof Constant)
+
+                String expression = m.get ();
+                if (expression.contains (nameBefore))
                 {
-                    Constant c = (Constant) op;
-                    if (c.unitValue != null)
+                    String newExpression = resolveExpression (np, expression);
+                    if (newExpression != null)
                     {
-                        result.append (c.unitValue);
-                        return true;
+                        m.set (newExpression);
+                        references.add (nv);
                     }
                 }
 
                 return false;
             }
-        };
 
-        expression.render (r);
-        return r.result.toString ();
-    }
-
-    public static String emitPath (EquationSet home, EquationSet target, String name)
-    {
-        // If there is an unambiguous path up to "name", then emit nothing.
-        EquationSet e = home;
-        while (e != target)
-        {
-            if (isVisible (e, name)) break;
-            e = e.container;
+            if (n instanceof NodePart) return true;
+            return false;
         }
-        if (e == target) return "";
 
-        // If there is an unambiguous path to the container of "name", then use that.
-        if (target.container != null)  // Only do this if not top-level container, as that container can't be referenced explicitly.
+        /**
+            Follow the name path to see if any part of it resolves to the renamed object.
+            If so, construct a replacement string.
+            @return The replacement string, or null if the name does no intersect with the
+            renamed object.
+        **/
+        public String resolve (NodePart part, String name)
         {
-            int depth = 0;  // Count depth to decide between using this method or $up. For a single level, $up is a nicer choice. For many levels, an explicit part name is more concise.
-            e = home;
-            while (e != target)
+            name = Variable.stripContextPrefix (name);
+            String[] names = name.split ("\\.");
+            for (int i = 0; i < names.length; i++) names[i] = names[i].trim ();
+
+            int index = part.resolveName (names, 0, renamed);
+            if (index < 0) return null;
+
+            names[index] = nameAfter;
+            String result = names[0];
+            for (int i = 1; i < names.length; i++) result += "." + names[i];
+            return result;
+        }
+
+        /**
+            Parse the expression and for each reference to a variable, follow the name path
+            to see if any part of it resolves to the renamed object. If so, construct a
+            replacement string for the entire expression. The affected references will be
+            rewritten in place, with minimal impact on surrounding text, including white space.
+            @return The replacement string, or null if none of the variable names intersect
+            with the renamed object.
+        **/
+        public String resolveExpression (NodePart part, String expression)
+        {
+            // Parse the expression.
+            Operator op = null;
+            try {op = Operator.parse (expression);}
+            catch (Exception e) {return null;}
+
+            // Create a sorted list of references that need to be rewritten.
+            class ResolutionVisitor implements gov.sandia.n2a.language.Visitor
             {
-                depth++;
-                if (isVisible (e, target.name)) break;
-                e = e.container;
-            }
-            if (e == target  &&  depth > 1) return target.name + ".";
-        }
+                public TreeMap<Integer,AccessVariable> changes = new TreeMap<Integer,AccessVariable> ();
 
-        // Otherwise, use $up.
-        String result = "";
-        e = home;
-        while (e != target)
-        {
-            result += "$up.";
-            e = e.container;
-        }
-        return result;
-    }
+                public boolean visit (Operator op)
+                {
+                    if (op instanceof AccessVariable)
+                    {
+                        AccessVariable av = (AccessVariable) op;
+                        String newName = resolve (part, av.name);
+                        if (newName != null)
+                        {
+                            // An identifier does not have leading spaces, but can have trailing spaces. Preserve these.
+                            av.name = newName;
+                            for (int i = 0; i < av.trailingSpaces; i++) av.name += " ";
+                            changes.put (av.columnBegin, av);
+                        }
+                        return false;
+                    }
+                    return true;
+                }
+            };
+            ResolutionVisitor visitor = new ResolutionVisitor ();
+            op.visit (visitor);
+            if (visitor.changes.isEmpty ()) return null;
 
-    public static boolean isVisible (EquationSet container, String name)
-    {
-        // Does a variable with given name exist?
-        if (container.find (Variable.fromLHS (name)) != null) return true;
-
-        // Is there a connection binding with the given name?
-        if (container.connectionBindings != null)
-        {
-            for (ConnectionBinding cb : container.connectionBindings)
+            // Edit the original expression.
+            Entry<Integer,AccessVariable> e;
+            while ((e = visitor.changes.pollLastEntry ()) != null)
             {
-                if (cb.alias.equals (name)) return true;
+                AccessVariable av = e.getValue ();
+                expression = expression.substring (0, av.columnBegin) + av.name + expression.substring (av.columnEnd + 1);
             }
+            return expression;
         }
-
-        // Is there a sub-part with the given name?
-        return container.findPart (name) != null;
     }
 }

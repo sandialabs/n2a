@@ -20,14 +20,7 @@ import javax.swing.undo.CannotRedoException;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.eqset.EquationEntry;
-import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.MPart;
-import gov.sandia.n2a.eqset.Variable;
-import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
-import gov.sandia.n2a.language.AccessVariable;
-import gov.sandia.n2a.language.Operator;
-import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
@@ -38,6 +31,7 @@ import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
+import gov.sandia.n2a.ui.eq.undo.ChangeVariable.NameVisitor;
 
 public class ChangePart extends UndoableView
 {
@@ -95,129 +89,21 @@ public class ChangePart extends UndoableView
         NodePart nodeBefore = (NodePart) temp;
 
         // Update the database
-        
-        //   Move the subtree
         MPart mparent = parent.source;
         mparent.clear (nameBefore);
+        mparent.clear (nameAfter);
         mparent.set (savedTree, nameAfter);
         MPart oldPart = (MPart) mparent.child (nameBefore);
         MPart newPart = (MPart) mparent.child (nameAfter);
         ChangeVariable.updateRevokation (newPart, killed);
 
-        //   Change connection bindings to this part.
-        //   See ChangeVariable.apply() for a similar procedure. More detailed comments appear there.
-        //   We make use of static functions in that class to do the heavy work of emitting code with name changes.
-        //   TODO: This approach will probably fail on parts that contain references to themselves.
-        PanelEquations pe = PanelModel.instance.panelEquations;
-        List<List<String>> references = new ArrayList<List<String>> ();
-        try
-        {
-            MPart doc = pe.root.source;
-            EquationSet compiled = new EquationSet (doc);
-            List<String> keypath = new ArrayList<String> (path.subList (1, path.size ()));
-            EquationSet eold;
-            EquationSet enew;
-            if (oldPart == null)
-            {
-                EquationSet p = (EquationSet) compiled.getObject (keypath);
-                eold = new EquationSet (p, nameBefore);
-                p.parts.add (eold);
-                keypath.add (nameAfter);
-            }
-            else
-            {
-                keypath.add (nameBefore);
-                eold = (EquationSet) compiled.getObject (keypath);
-                keypath.set (keypath.size () - 1, nameAfter);
-            }
-            enew = (EquationSet) compiled.getObject (keypath);
-
-            try
-            {
-                compiled.resolveConnectionBindings ();
-            }
-            catch (Exception e) {}
-            try
-            {
-                compiled.resolveLHS ();
-                compiled.resolveRHS ();
-            }
-            catch (Exception e) {}
-            ChangeVariable.prepareConnections (compiled);
-
-            // Collect variables that might have changed.
-            List<Variable> users = collectVariables (compiled, eold);
-            if (eold.dependentConnections != null)
-            {
-                // Each equation set tracks connection bindings which depend on it for their resolution.
-                // The variable associated with such a connection binding could explicitly mention the part name.
-                for (ConnectionBinding cb : eold.dependentConnections) users.add (cb.variable);
-            }
-
-            eold.name = enew.name;
-            for (Variable v : users)
-            {
-                List<String> ref = v.getKeyPath ();
-                MNode n = doc.child (ref.toArray ());
-                String oldKey = n.key ();
-                String newKey = ChangeVariable.changeReferences (eold, n, v);
-                if (! newKey.equals (oldKey))  // Handle a change in variable name.
-                {
-                    NodeBase nb = pe.root.locateNodeFromHere (ref);
-                    n.parent ().move (oldKey, newKey);
-                    ref.set (ref.size () - 1, newKey);
-                    nb.source = (MPart) doc.child (ref.toArray ());
-                }
-                if (v.container != enew  &&  v.container != eold) references.add (ref);  // Queue GUI updates for nodes other than the primary ones.
-            }
-        }
-        catch (Exception e) {}
-
-        //   Change pin links to this part.
-        //   Scan peer parts (which is the only place a pin link can be declared) and check for "bind" keys that reference nameBefore.
-        Map<NodePart,List<String>> rebind = new HashMap<NodePart,List<String>> ();  // for updating GUI later
-        Enumeration<?> siblings = parent.children ();
-        while (siblings.hasMoreElements ())
-        {
-            Object o = siblings.nextElement ();
-            if (! (o instanceof NodePart)) continue;
-            NodePart sibling = (NodePart) o;
-            MNode pins;
-            if (sibling == nodeBefore) pins = parent .source.child (nameAfter, "$meta", "gui", "pin", "in");  // because the old source is no longer attached to document
-            else                       pins = sibling.source.child (           "$meta", "gui", "pin", "in");
-            if (pins == null) continue;
-            List<String> bound = null;
-            for (MNode pin : pins)
-            {
-                if (pin.get ("bind").equals (nameBefore))
-                {
-                    pin.set (nameAfter, "bind");
-                    sibling.pinIn.set (nameAfter, pin.key (), "bind");  // Also set the new name in collated pin data.
-                    if (bound == null) bound = new ArrayList<String> ();
-                    bound.add (pin.key ());
-                }
-            }
-            if (bound != null) rebind.put (sibling, bound);
-        }
-        //   Check parent for pin exports.
-        MNode pins = parent.source.child ("$meta", "gui", "pin", "out");
-        if (pins != null)
-        {
-            List<String> bound = null;
-            for (MNode pin : pins)
-            {
-                if (pin.get ("bind").equals (nameBefore))
-                {
-                    pin.set (nameAfter, "bind");
-                    if (bound == null) bound = new ArrayList<String> ();
-                    bound.add (pin.key ());
-                }
-            }
-            if (bound != null) rebind.put (parent, bound);
-        }
-
         // Update GUI
+        // The main GUI update is standard. OTOH, the update of name references
+        // scattered through the rest of the model is a mix of DB and GUI updates,
+        // with no clean separation. The reason for this is that we rely on the GUI
+        // tree as a kind of compiled model, taking advantage of some cached information.
 
+        PanelEquations pe = PanelModel.instance.panelEquations;
         boolean graphParent =  parent == pe.part;
         PanelEquationTree pet = graphParent ? null : parent.getTree ();
         FilteredTreeModel model = null;
@@ -226,6 +112,8 @@ public class ChangePart extends UndoableView
 
         NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
         boolean addGraphNode = false;
+        Map<NodePart,List<String>> rebind = new HashMap<NodePart,List<String>> ();  // for updating GUI later
+        NameVisitor nameVisitor;
         if (oldPart == null)  // Only one node will remain when we are done.
         {
             pe.renameFocus (nodeBefore.getKeyPath (), nameAfter);
@@ -241,6 +129,10 @@ public class ChangePart extends UndoableView
                 else               model.removeNodeFromParent (nodeBefore);
                 if (graphParent) peg.removePart (nodeBefore, true);
             }
+
+            // Change references in other parts of the model.
+            nodeAfter.build ();
+            nameVisitor = renameReferences (parent, nameBefore, nameAfter, nodeBefore, nodeAfter, rebind);
         }
         else  // Need two nodes
         {
@@ -255,6 +147,9 @@ public class ChangePart extends UndoableView
             }
 
             nodeBefore.build ();
+            nodeAfter.build ();
+            nameVisitor = renameReferences (parent, nameBefore, nameAfter, nodeBefore, nodeAfter, rebind);
+
             nodeBefore.findConnections ();
             nodeBefore.rebuildPins ();
             nodeBefore.filter ();
@@ -281,7 +176,6 @@ public class ChangePart extends UndoableView
             }
         }
 
-        nodeAfter.build ();
         if (graphParent) parent   .findConnections ();
         else             nodeAfter.findConnections ();
         nodeAfter.rebuildPins ();
@@ -302,11 +196,8 @@ public class ChangePart extends UndoableView
             needAnimate.add (pet);
         }
 
-        for (List<String> ref : references)
+        for (NodeVariable n : nameVisitor.references)
         {
-            NodeVariable n = (NodeVariable) pe.root.locateNodeFromHere (ref);
-            if (n == null) continue;
-
             // Rebuild n, because equations and/or their conditions may have changed.
             n.build ();
             n.findConnections ();
@@ -381,37 +272,59 @@ public class ChangePart extends UndoableView
         }
     }
 
-    public List<Variable> collectVariables (EquationSet s, EquationSet renamed)
+    public NameVisitor renameReferences (NodePart parent, String nameBefore, String nameAfter, NodePart nodeBefore, NodePart nodeAfter, Map<NodePart,List<String>> rebind)
     {
-        List<Variable> result = new ArrayList<Variable> ();
-        for (EquationSet p : s.parts) result.addAll (collectVariables (p, renamed));
+        NameVisitor result = new NameVisitor (nameBefore, nameAfter, nameAfter.equals (this.nameBefore), nodeBefore, nodeAfter);
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        if (parent == pe.part)
+        {
+            parent.findConnections ();
+        }
+        else
+        {
+            nodeAfter.findConnections ();
+            if (nodeBefore != nodeAfter  &&  nodeBefore != null) nodeBefore.findConnections ();
+        }
+        try {pe.root.visit (result);}
+        catch (Exception e) {e.printStackTrace ();}  // Trap the exception so we can at least clearFakeObject().
+        result.clearFakeObject ();
 
-        // Regular variables might mention the part name, on either the LHS or RHS.
-        class PartVisitor implements Visitor
+        // Scan peer parts (which is the only place a pin link can be declared) and check for "bind" keys that reference nameBefore.
+        Enumeration<?> siblings = parent.children ();
+        while (siblings.hasMoreElements ())
         {
-            boolean found;
-            public boolean visit (Operator op)
+            Object o = siblings.nextElement ();
+            if (! (o instanceof NodePart)) continue;
+            NodePart sibling = (NodePart) o;  // This can also include nodeBefore and nodeAfter, so we address self-references.
+            MNode pins = sibling.source.child ("$meta", "gui", "pin", "in");
+            if (pins == null) continue;
+            List<String> bound = new ArrayList<String> ();
+            for (MNode pin : pins)
             {
-                if (op instanceof AccessVariable)
+                if (pin.get ("bind").equals (nameBefore))
                 {
-                    AccessVariable av = (AccessVariable) op;
-                    if (av.reference.resolution.contains (renamed)) found = true;
-                    return false;
+                    pin.set (nameAfter, "bind");
+                    sibling.pinIn.set (nameAfter, pin.key (), "bind");  // Also set the new name in collated pin data.
+                    bound.add (pin.key ());
                 }
-                return true;
             }
-        };
-        PartVisitor visitor = new PartVisitor ();
-        for (Variable v : s.variables)
+            if (! bound.isEmpty ()) rebind.put (sibling, bound);
+        }
+
+        // Check parent for pin exports.
+        MNode pins = parent.source.child ("$meta", "gui", "pin", "out");
+        if (pins != null)
         {
-            visitor.found = v.reference.resolution.contains (renamed);
-            for (EquationEntry ee : v.equations)
+            List<String> bound = new ArrayList<String> ();
+            for (MNode pin : pins)
             {
-                if (visitor.found) break;
-                ee.expression.visit (visitor);
-                if (ee.condition != null) ee.condition.visit (visitor);
+                if (pin.get ("bind").equals (nameBefore))
+                {
+                    pin.set (nameAfter, "bind");
+                    bound.add (pin.key ());
+                }
             }
-            if (visitor.found) result.add (v);
+            if (! bound.isEmpty ()) rebind.put (parent, bound);
         }
 
         return result;
