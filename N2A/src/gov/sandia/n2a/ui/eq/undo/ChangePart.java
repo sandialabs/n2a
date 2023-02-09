@@ -87,6 +87,19 @@ public class ChangePart extends UndoableView
         NodeBase temp = parent.child (nameBefore);
         if (! (temp instanceof NodePart)) throw new CannotRedoException ();
         NodePart nodeBefore = (NodePart) temp;
+        NodePart nodeAfter  = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
+
+        // Modify references to the renamed part.
+        // Do this before any other changes, so that we can take advantage of the
+        // existing structure to correctly identify references. This does not touch
+        // the part itself. After renaming, we will also update references internal
+        // to the part.
+        PanelEquations pe = PanelModel.instance.panelEquations;
+        NameVisitor nameVisitor = new NameVisitor (nameBefore, nameAfter, true, nodeBefore, nodeAfter);
+        nameVisitor.renamed = nodeBefore;
+        try {pe.root.visit (nameVisitor);}
+        catch (Exception e) {e.printStackTrace ();}
+        nameVisitor.periphery = nameAfter.equals (this.nameBefore);
 
         // Update the database
         MPart mparent = parent.source;
@@ -98,22 +111,14 @@ public class ChangePart extends UndoableView
         ChangeVariable.updateRevokation (newPart, killed);
 
         // Update GUI
-        // The main GUI update is standard. OTOH, the update of name references
-        // scattered through the rest of the model is a mix of DB and GUI updates,
-        // with no clean separation. The reason for this is that we rely on the GUI
-        // tree as a kind of compiled model, taking advantage of some cached information.
-
-        PanelEquations pe = PanelModel.instance.panelEquations;
         boolean graphParent =  parent == pe.part;
         PanelEquationTree pet = graphParent ? null : parent.getTree ();
         FilteredTreeModel model = null;
         if (pet != null) model = (FilteredTreeModel) pet.tree.getModel ();
         PanelEquationGraph peg = pe.panelEquationGraph;  // Only used if graphParent is true.
 
-        NodePart nodeAfter = (NodePart) parent.child (nameAfter);  // It's either a NodePart or it's null. Any other case should be blocked by GUI constraints.
         boolean addGraphNode = false;
         Map<NodePart,List<String>> rebind = new HashMap<NodePart,List<String>> ();  // for updating GUI later
-        NameVisitor nameVisitor;
         if (oldPart == null)  // Only one node will remain when we are done.
         {
             pe.renameFocus (nodeBefore.getKeyPath (), nameAfter);
@@ -132,7 +137,9 @@ public class ChangePart extends UndoableView
 
             // Change references in other parts of the model.
             nodeAfter.build ();
-            nameVisitor = renameReferences (parent, nameBefore, nameAfter, nodeBefore, nodeAfter, rebind);
+            nameVisitor.nodeBefore = null;
+            nameVisitor.nodeAfter  = nodeAfter;
+            renameReferences (parent, nameVisitor, rebind);
         }
         else  // Need two nodes
         {
@@ -148,7 +155,7 @@ public class ChangePart extends UndoableView
 
             nodeBefore.build ();
             nodeAfter.build ();
-            nameVisitor = renameReferences (parent, nameBefore, nameAfter, nodeBefore, nodeAfter, rebind);
+            renameReferences (parent, nameVisitor, rebind);
 
             nodeBefore.findConnections ();
             nodeBefore.rebuildPins ();
@@ -272,24 +279,36 @@ public class ChangePart extends UndoableView
         }
     }
 
-    public NameVisitor renameReferences (NodePart parent, String nameBefore, String nameAfter, NodePart nodeBefore, NodePart nodeAfter, Map<NodePart,List<String>> rebind)
+    public void renameReferences (NodePart parent, NameVisitor visitor, Map<NodePart,List<String>> rebind)
     {
-        NameVisitor result = new NameVisitor (nameBefore, nameAfter, nameAfter.equals (this.nameBefore), nodeBefore, nodeAfter);
-        PanelEquations pe = PanelModel.instance.panelEquations;
-        if (parent == pe.part)
+        // We've already processed the periphery. Here, we need to process the main node(s).
+        // If this is an undo, then we only process periphery, so there is nothing left to do.
+        if (! visitor.periphery)
         {
-            parent.findConnections ();
+            PanelEquations pe = PanelModel.instance.panelEquations;
+            if (parent == pe.part)
+            {
+                parent.findConnections ();
+            }
+            else
+            {
+                ((NodePart) visitor.nodeAfter).findConnections ();
+                if (visitor.nodeBefore != null) ((NodePart) visitor.nodeBefore).findConnections ();
+            }
+            visitor.setFakeObject ();
+            try
+            {
+                // There's no need to visit the whole tree, just the node(s) we haven't processed yet.
+                visitor.nodeAfter.visit (visitor);
+                if (visitor.nodeBefore != null) visitor.nodeBefore.visit (visitor);
+            }
+            catch (Exception e) {e.printStackTrace ();}  // Trap the exception so we can at least clearFakeObject().
+            visitor.clearFakeObject ();
         }
-        else
-        {
-            nodeAfter.findConnections ();
-            if (nodeBefore != nodeAfter  &&  nodeBefore != null) nodeBefore.findConnections ();
-        }
-        try {pe.root.visit (result);}
-        catch (Exception e) {e.printStackTrace ();}  // Trap the exception so we can at least clearFakeObject().
-        result.clearFakeObject ();
 
         // Scan peer parts (which is the only place a pin link can be declared) and check for "bind" keys that reference nameBefore.
+        String nameBefore = visitor.nameBefore;
+        String nameAfter  = visitor.nameAfter;
         Enumeration<?> siblings = parent.children ();
         while (siblings.hasMoreElements ())
         {
@@ -326,7 +345,5 @@ public class ChangePart extends UndoableView
             }
             if (! bound.isEmpty ()) rebind.put (parent, bound);
         }
-
-        return result;
     }
 }

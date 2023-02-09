@@ -134,6 +134,7 @@ public class ChangeVariable extends UndoableView
                     if (model == null) FilteredTreeModel.removeNodeFromParentStatic (nodeBefore);
                     else               model.removeNodeFromParent (nodeBefore);
                 }
+                nodeBefore = null;
             }
             else
             {
@@ -164,9 +165,13 @@ public class ChangeVariable extends UndoableView
         if (! sameName)
         {
             nameVisitor = new NameVisitor (nameBefore, nameAfter, nameAfter.equals (this.nameBefore), nodeBefore, nodeAfter);
-            try {pe.root.visit (nameVisitor);}
-            catch (Exception e) {e.printStackTrace ();}  // Trap the exception so we can at least clearFakeObject().
-            nameVisitor.clearFakeObject ();
+            if (! nameVisitor.nameBefore.equals (nameVisitor.nameAfter))  // Special case: skip $all and $each
+            {
+                nameVisitor.setFakeObject ();
+                try {pe.root.visit (nameVisitor);}
+                catch (Exception e) {e.printStackTrace ();}  // Trap the exception so we can at least clearFakeObject().
+                nameVisitor.clearFakeObject ();
+            }
         }
         Set<PanelEquationTree> needAnimate = new HashSet<PanelEquationTree> ();
         if (pet != null)
@@ -180,7 +185,7 @@ public class ChangeVariable extends UndoableView
             if (multi) pet.tree.addSelectionPath (new TreePath (nodePath));
         }
 
-        if (! sameName)
+        if (nameVisitor != null)
         {
             for (NodeVariable n : nameVisitor.references)
             {
@@ -249,21 +254,29 @@ public class ChangeVariable extends UndoableView
     {
         public String   nameBefore;
         public String   nameAfter;
-        public boolean  undoing;
+        public boolean  periphery;  // Indicates not to touch nodeBefore or nodeAfter.
         public NodeBase nodeBefore;
         public NodeBase nodeAfter;
         public NodeBase renamed;
 
         public HashSet<NodeVariable> references = new HashSet<NodeVariable> ();
 
-        public NameVisitor (String nameBefore, String nameAfter, boolean undoing, NodeBase nodeBefore, NodeBase nodeAfter)
+        public NameVisitor (String nameBefore, String nameAfter, boolean periphery, NodeBase nodeBefore, NodeBase nodeAfter)
         {
+            // Strip $up, $all and $each prefixes, because ...
+            // $all and $each should not appear in references.
+            // $up produces non-reversible changes in references, and it is an unlikely use-case.
+            while (nameBefore.startsWith ("$up.")) nameBefore = nameBefore.substring (4);
+            while (nameAfter .startsWith ("$up.")) nameAfter  = nameAfter .substring (4);
             this.nameBefore = Variable.stripContextPrefix (nameBefore);
             this.nameAfter  = Variable.stripContextPrefix (nameAfter);
-            this.undoing    = undoing;
+            this.periphery  = periphery;
             this.nodeBefore = nodeBefore;
             this.nodeAfter  = nodeAfter;
+        }
 
+        public void setFakeObject ()
+        {
             NodePart parent = (NodePart) nodeAfter.getTrueParent ();
             renamed = parent.child (nameBefore);  // Our ctor parameter may still have context prefix.
             if (renamed != null) return;  // In this case, renamed should also equal nodeBefore.
@@ -285,7 +298,7 @@ public class ChangeVariable extends UndoableView
 
         public boolean visit (NodeBase n)
         {
-            if (undoing  &&  (n == nodeBefore  ||  n == nodeAfter)) return false;  // On undo, don't touch savedTree or exposed node. They should return to their exact previous values.
+            if (periphery  &&  (n == nodeBefore  ||  n == nodeAfter)) return false;
             if (n == renamed  &&  renamed != nodeBefore) return false;  // Don't process the fake target, if it exists.
 
             if (n instanceof NodeVariable)
@@ -301,7 +314,7 @@ public class ChangeVariable extends UndoableView
                 {
                     // Check if key actually references the renamed object.
                     String newKey = resolve (parent, key);
-                    if (newKey != null)
+                    if (newKey != null  &&  parent.child (newKey) == null)
                     {
                         MNode mparent = parent.source;
                         mparent.move (key, newKey);
@@ -339,16 +352,20 @@ public class ChangeVariable extends UndoableView
                 NodePart     np = (NodePart)     nv.getParent ();
 
                 MNode m = ne.source;
-                String key = m.key ();
+                String key = m.key ();  // Starts with @
                 if (key.contains (nameBefore))
                 {
-                    String newKey = resolveExpression (np, key);
+                    String newKey = resolveExpression (np, key.substring (1));  // Process without @
                     if (newKey != null)
                     {
-                        MNode mparent = nv.source;
-                        mparent.move (key, newKey);
-                        m = ne.source = (MPart) mparent.child (newKey);
-                        references.add (nv);
+                        newKey = "@" + newKey;
+                        if (nv.child (newKey) == null)
+                        {
+                            MNode mparent = nv.source;
+                            mparent.move (key, newKey);
+                            m = ne.source = (MPart) mparent.child (newKey);
+                            references.add (nv);
+                        }
                     }
                 }
 
