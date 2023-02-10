@@ -361,8 +361,18 @@ public class GraphNode extends JPanel
     public void toggleOpen ()
     {
         boolean nextOpen = ! open;
-        setOpen (nextOpen);
-        if (! container.locked) node.source.set (nextOpen, "$meta", "gui", "bounds", "open");
+        if (container.locked)
+        {
+            setOpen (nextOpen);
+        }
+        else
+        {
+            MNode metadata = new MVolatile ();
+            metadata.set (nextOpen, "gui", "bounds", "open");
+            ChangeAnnotations ca = new ChangeAnnotations (node, metadata);
+            ca.graph = true;
+            ca.redo ();  // and don't record with undo manager.
+        }
     }
 
     public void setOpen (boolean value)

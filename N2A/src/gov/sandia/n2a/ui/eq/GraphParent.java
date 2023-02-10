@@ -61,8 +61,18 @@ public class GraphParent extends JPanel
     public void toggleOpen ()
     {
         boolean nextOpen = ! isVisible ();
-        setOpen (nextOpen);
-        if (! container.locked) part.source.set (nextOpen, "$meta", "gui", "bounds", "parent");
+        if (container.locked)
+        {
+            setOpen (nextOpen);
+        }
+        else
+        {
+            MNode metadata = new MVolatile ();
+            metadata.set (nextOpen, "gui", "bounds", "parent");
+            ChangeAnnotations ca = new ChangeAnnotations (part, metadata);
+            ca.graph = true;
+            ca.redo ();  // and don't record with undo manager.
+        }
     }
 
     public void setOpen (boolean value)
@@ -139,6 +149,13 @@ public class GraphParent extends JPanel
         d.height = Math.min (d.height, extent.height / 2);
 
         return d;
+    }
+
+    public void updateGUI ()
+    {
+        MNode boundsParent = part.source.child ("$meta", "gui", "bounds", "parent");
+        if (boundsParent != null) setOpen (boundsParent.getBoolean ());
+        animate ();
     }
 
     public void animate ()
