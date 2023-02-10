@@ -251,7 +251,7 @@ public class PanelEquations extends JPanel
         buttonAddVariable.setActionCommand ("Variable");
         buttonAddVariable.addActionListener (listenerAdd);
 
-        buttonAddEquation = new JButton (ImageUtil.getImage ("assign.png"));
+        buttonAddEquation = new JButton (ImageUtil.getImage ("equation-16.png"));
         buttonAddEquation.setMargin (new Insets (2, 2, 2, 2));
         buttonAddEquation.setFocusable (false);
         buttonAddEquation.setToolTipText ("Add Equation (ctrl-3)");
@@ -457,7 +457,7 @@ public class PanelEquations extends JPanel
         itemAddVariable.setActionCommand ("Variable");
         itemAddVariable.addActionListener (listenerAdd);
 
-        JMenuItem itemAddEquation = new JMenuItem ("Add Equation", ImageUtil.getImage ("assign.png"));
+        JMenuItem itemAddEquation = new JMenuItem ("Add Equation", ImageUtil.getImage ("equation-16.png"));
         itemAddEquation.setActionCommand ("Equation");
         itemAddEquation.addActionListener (listenerAdd);
 
