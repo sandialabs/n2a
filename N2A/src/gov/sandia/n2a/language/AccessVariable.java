@@ -20,7 +20,7 @@ public class AccessVariable extends Operator
 
     // For in-place renaming of variables by the UI.
     public int columnBegin;    // Position of first character in source line.
-    public int columnEnd;      // Position of last character in source line. Not necessarily same as columnBegin+name.length()-1, since original text might not be canonical.
+    public int columnEnd;      // Position just after last character in source line. Not necessarily same as columnBegin+name.length(), since original text might not be canonical.
     public int trailingSpaces; // Number of spaces that lexer included in token after any other kind of character.
 
     public AccessVariable ()
@@ -42,8 +42,8 @@ public class AccessVariable extends Operator
     {
         Identifier ID = (Identifier) node.jjtGetValue ();
         name           = ID.name;
-        columnBegin    = ID.columnBegin - 1;  // columnBegin and columnEnd are 1-based rather than 0-based.
-        columnEnd      = ID.columnEnd   - 1;  // This is a quirk of JavaCC.
+        columnBegin    = ID.columnBegin - 1;  // columnBegin and columnEnd are 1-based rather than 0-based. This is a quirk of JavaCC.
+        columnEnd      = ID.columnEnd;        // Don't adjust this value, because we want it to be 1 past the last character.
         trailingSpaces = ID.trailingSpaces;
     }
 

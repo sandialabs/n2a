@@ -603,8 +603,8 @@ public class PanelEquationTree extends JScrollPane
                 if      (o instanceof NodeVariable) v = (NodeVariable) o;
                 else if (o instanceof NodeEquation) v = (NodeVariable) ((NodeBase) o).getParent ();
 
-                if (v == null  ||  v.toString ().isEmpty ()) updateHighlights (root, "");  // Remove old highlights.
-                else                                         updateHighlights (root, v.source.key ());
+                if (v == null  ||  v.toString ().isEmpty ()) updateHighlights (root, null, null);  // Remove old highlights.
+                else                                         updateHighlights (root, v);
             }
         });
 
@@ -661,7 +661,7 @@ public class PanelEquationTree extends JScrollPane
 
         root = part;
         root.pet = this;
-        updateHighlights (root, "");
+        updateHighlights (root, null, null);
         model.setRoot (root);  // triggers repaint
     }
 
@@ -1297,9 +1297,16 @@ public class PanelEquationTree extends JScrollPane
 
     // For now, this is fast enough to run on EDT, but larger models could bog down the UI.
     // TODO: run this on a separate thread, if the need arises
-    public void updateHighlights (NodeBase node, String name)
+    public void updateHighlights (NodeBase node, NodeVariable target)
     {
-        name = Variable.stripContextPrefix (name);  // TODO: organize this code better, so that name is only stripped once.
+        String name = target.source.key ();
+        while (name.startsWith ("$up.")) name = name.substring (4);
+        name = Variable.stripContextPrefix (name);
+        updateHighlights (node, target, name);
+    }
+
+    public void updateHighlights (NodeBase node, NodeVariable target, String name)
+    {
         int count = node.getChildCount ();
         for (int i = 0; i < count; i++)
         {
@@ -1309,16 +1316,16 @@ public class PanelEquationTree extends JScrollPane
             boolean needsRepaint = false;
             if (n instanceof NodePart)
             {
-                updateHighlights (n, name);
+                updateHighlights (n, target, name);
             }
             else if (n instanceof NodeVariable)
             {
-                needsRepaint = ((NodeVariable) n).findHighlights (name);
-                updateHighlights (n, name);
+                needsRepaint = ((NodeVariable) n).findHighlights (target, name);
+                updateHighlights (n, target, name);
             }
             else if (n instanceof NodeEquation)
             {
-                needsRepaint = ((NodeEquation) n).findHighlights (name);
+                needsRepaint = ((NodeEquation) n).findHighlights (target, name);
             }
 
             if (! needsRepaint) continue;

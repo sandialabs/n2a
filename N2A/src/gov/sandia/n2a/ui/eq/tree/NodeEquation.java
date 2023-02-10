@@ -57,12 +57,17 @@ public class NodeEquation extends NodeBase
         return icon;
     }
 
-    public boolean findHighlights (String name)
+    public boolean findHighlights (NodeVariable target, String name)
     {
         boolean result =  highlightsExpression != null  ||  highlightsCondition != null;
+        if (target == null)
+        {
+            highlightsExpression = null;
+            highlightsCondition  = null;
+            return result;
+        }
         if (highlightsExpression != null) highlightsExpression.clear ();
         if (highlightsCondition  != null) highlightsCondition .clear ();
-        if (name.isEmpty ()) return result;
 
         // Generate strings using same method as getColumns().
         String expression = source.get ();
@@ -70,7 +75,8 @@ public class NodeEquation extends NodeBase
 
         // The following logic is excessively complicated in order to minimize number of objects created and stored.
         if (highlightsExpression == null) highlightsExpression = new ArrayList<Integer> ();
-        NodeVariable.findHighlights (name, expression, highlightsExpression);  // This is the important line.
+        NodeVariable parent = (NodeVariable) getParent ();
+        parent.findHighlights (target, expression, highlightsExpression);  // This is the important line.
         List<Integer> reuse = null;
         if (highlightsExpression.isEmpty ())
         {
@@ -84,13 +90,19 @@ public class NodeEquation extends NodeBase
 
         if (! condition.equals ("@")  ||  expression.length () == 0)
         {
-            condition = "@ " + condition.substring (1);
-
             if (highlightsCondition == null) highlightsCondition = reuse;
             if (highlightsCondition == null) highlightsCondition = new ArrayList<Integer> ();
-            NodeVariable.findHighlights (name, condition, highlightsCondition);
-            if (highlightsCondition.isEmpty ()) highlightsCondition = null;
-            else                                result = true;
+            parent.findHighlights (target, condition.substring (1), highlightsCondition);
+            if (highlightsCondition.isEmpty ())
+            {
+                highlightsCondition = null;
+            }
+            else
+            {
+                result = true;
+                int count = highlightsCondition.size ();
+                for (int i = 0; i < count; i++) highlightsCondition.set (i, highlightsCondition.get (i) + 2);  // add 2 for "@ "
+            }
         }
 
         return result;

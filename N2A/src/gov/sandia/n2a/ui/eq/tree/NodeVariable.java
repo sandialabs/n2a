@@ -21,6 +21,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
+import gov.sandia.n2a.language.AccessVariable;
 import gov.sandia.n2a.language.Identifier;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.CompoundEdit;
@@ -209,43 +210,81 @@ public class NodeVariable extends NodeContainer
         return iconVariable;
     }
 
-    public boolean findHighlights (String name)
+    /**
+        @param target The specific node that name refers to.
+        @param name How the name of the target appears in a reference. Not necessarily equal
+        to target.source.key(), since some prefixes may be stripped. We could strip prefixes
+        in this routine, but that would end up repeating some work that only needs to be done once.
+        @return true if this node should be repainted. Indicates that the visual
+        appearance of highlights has changed.
+    **/
+    public boolean findHighlights (NodeVariable target, String name)
     {
-        boolean result = false;
-        if (highlights != null)
+        boolean result =  highlights != null;  // Only non-null if there are current highlights.
+        if (target == null)  // Indicates that we should clear all highlights. In this case, name is ignored, but should be null as well.
         {
-            result = true;
-            highlights.clear ();
+            highlights = null;
+            return result;
         }
-        if (name.isEmpty ()) return result;
+        if (highlights != null) highlights.clear ();  // So we can re-use the object.
 
-        // Generate 3rd column using same method as getColumns().
-        Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
-        String expression = pieces.expression;
-        if (! pieces.condition.isEmpty ()) expression += " @ " + pieces.condition;
-        if (! expression.isEmpty ())
+        String value = source.get ();
+        if (value.contains (name))
         {
             if (highlights == null) highlights = new ArrayList<Integer> ();
-            findHighlights (name, expression, highlights);
-            if (highlights.isEmpty ()) highlights = null;
+
+            Variable.ParsedValue pieces = new Variable.ParsedValue (value);
+            if (! pieces.expression.isEmpty ()) findHighlights (target, pieces.expression, highlights);
+            if (! pieces.condition .isEmpty ())
+            {
+                int start = highlights.size ();
+                findHighlights (target, pieces.condition, highlights);
+                int count = highlights.size ();
+
+                // Should match 3rd column created by getColumns().
+                int offset = pieces.expression.length () + 3;  // add 3 characters for " @ "
+                for (int i = start; i < count; i++) highlights.set (i, highlights.get (i) + offset);
+            }
         }
+
+        if (highlights != null  &&  highlights.isEmpty ()) highlights = null;
         return  result  ||  highlights != null;
     }
 
-    public static void findHighlights (String name, String expression, List<Integer> inout)
+    public void findHighlights (NodeVariable target, String expression, List<Integer> inout)
     {
-        inout.clear ();
-        int next = 0;
-        while (next < expression.length ())
+        Operator op = null;
+        try {op = Operator.parse (expression);}
+        catch (Exception e) {return;}
+
+        op.visit (new gov.sandia.n2a.language.Visitor ()
         {
-            int in = expression.indexOf (name, next);
-            if (in < 0) return;
-            next = in + name.length ();
-            if (in   > 0                     &&  Character.isJavaIdentifierPart (expression.charAt (in - 1))) continue;
-            if (next < expression.length ()  &&  Character.isJavaIdentifierPart (expression.charAt (next  ))) continue;
-            inout.add (in);
-            inout.add (next);
-        }
+            public boolean visit (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    resolve (target, av.name, av.columnBegin, inout);
+                    return false;
+                }
+                return true;
+            }
+        });
+    }
+
+    public void resolve (NodeVariable target, String name, int offset, List<Integer> inout)
+    {
+        String[] names = name.split ("\\.");
+        String[] trimmed = new String[names.length];
+        for (int i = 0; i < names.length; i++) trimmed[i] = names[i].trim ();
+
+        int index = ((NodePart) getParent ()).resolveName (trimmed, 0, target);
+        if (index < 0) return;
+
+        int in = offset + index;  // Number of dot separators preceding the matched string.
+        for (int i = 0; i < index; i++) in += names[i].length ();
+        inout.add (in);
+        inout.add (in + names[index].length ());
     }
 
     public static String markHighlights (String value, List<Integer> inout)

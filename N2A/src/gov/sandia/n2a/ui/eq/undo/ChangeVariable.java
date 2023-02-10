@@ -177,7 +177,7 @@ public class ChangeVariable extends UndoableView
         if (pet != null)
         {
             needAnimate.add (pet);
-            pet.updateHighlights (pet.root, nameAfter);  // Must be done before invalidateColumns(), because that function causes new columns to be fetched for renderer sizing.
+            pet.updateHighlights (pet.root, nodeAfter);  // Must be done before invalidateColumns(), because that function causes new columns to be fetched for renderer sizing.
             parent.invalidateColumns (model);
             TreeNode[] nodePath = nodeAfter.getPath ();
             pet.updateOrder (nodePath);
@@ -202,8 +202,8 @@ public class ChangeVariable extends UndoableView
                     NodeBase subparent = (NodeBase) n.getParent ();
 
                     boolean added = needAnimate.add (subpet);
-                    if (added) subpet.updateHighlights (subpet.root, nameAfter);
-                    else       subpet.updateHighlights (n, nameAfter);
+                    if (added) subpet.updateHighlights (subpet.root, nodeAfter);
+                    else       subpet.updateHighlights (n, nodeAfter);
                     subparent.invalidateColumns (null);
                     submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
                     subpet.updateVisibility (n.getPath (), -2, false);
@@ -331,8 +331,8 @@ public class ChangeVariable extends UndoableView
                     Variable.ParsedValue pv = new Variable.ParsedValue (value);
                     String newExpression = null;
                     String newCondition  = null;
-                    if (pv.expression != null) newExpression = resolveExpression (parent, pv.expression);
-                    if (pv.condition  != null) newCondition  = resolveExpression (parent, pv.condition);
+                    if (! pv.expression.isBlank ()) newExpression = resolveExpression (parent, pv.expression);
+                    if (! pv.condition .isBlank ()) newCondition  = resolveExpression (parent, pv.condition);
                     if (newExpression != null  ||  newCondition != null)
                     {
                         if (newExpression != null) pv.expression = newExpression;
@@ -455,7 +455,7 @@ public class ChangeVariable extends UndoableView
             while ((e = visitor.changes.pollLastEntry ()) != null)
             {
                 AccessVariable av = e.getValue ();
-                expression = expression.substring (0, av.columnBegin) + av.name + expression.substring (av.columnEnd + 1);
+                expression = expression.substring (0, av.columnBegin) + av.name + expression.substring (av.columnEnd);
             }
             return expression;
         }
