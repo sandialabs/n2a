@@ -92,7 +92,7 @@ public class Main
         // Set global application properties.
         AppData.properties.set ("Neurons to Algorithms", "name");
         AppData.properties.set ("N2A",                   "abbreviation");
-        AppData.properties.set ("1.1",                   "version");
+        AppData.properties.set ("1.2",                   "version");
         AppData.properties.set (! headless.isEmpty (),   "headless");
         AppData.checkInitialDB ();
         Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
