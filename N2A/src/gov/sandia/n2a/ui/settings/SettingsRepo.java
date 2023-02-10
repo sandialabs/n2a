@@ -358,6 +358,16 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 if (needSave)  // Indicates that focus previously left this settings tab. Also true when this tab is first exposed.
                 {
+                    // On first boot, attach "base" to upstream repo.
+                    if (AppData.state.getFlag ("Repos", "needUpstream"))
+                    {
+                        int count = repoModel.getRowCount ();
+                        int row = 0;
+                        for (; row < count; row++) if (repoModel.getValueAt (row, 4).equals ("base")) break;
+                        if (row < count) repoModel.setValueAt ("git@github.com:frothga/n2a-repo-base.git", row, 5);
+                        AppData.state.clear ("Repos", "needUpstream");
+                    }
+
                     // Save name of currently-focused document
                     String file = null;
                     int row = gitTable.getSelectedRow ();

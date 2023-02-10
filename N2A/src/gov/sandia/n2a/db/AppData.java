@@ -126,16 +126,17 @@ public class AppData
         repos.set (1, "base",  "visible");
         state.set ("local,base", "Repos", "order");
         state.set ("local",      "Repos", "primary");
+        state.set ("",           "Repos", "needUpstream");
 
         Path root = Paths.get (properties.get ("resourceDir")).toAbsolutePath ();
         Path reposDir = root.resolve ("repos");
         Path baseDir  = reposDir.resolve ("base");
         Path localDir = reposDir.resolve ("local");
 
-        MDir baseModels      = new MDir (baseDir .resolve ("models"));
-        MDir baseReferences  = new MDir (baseDir .resolve ("references"));
-        MDir localModels     = new MDir (localDir.resolve ("models"));
-        MDir localReferences = new MDir (localDir.resolve ("references"));
+        MDir baseModels      = new MDir ("base",  baseDir .resolve ("models"));
+        MDir baseReferences  = new MDir ("base",  baseDir .resolve ("references"));
+        MDir localModels     = new MDir ("local", localDir.resolve ("models"));
+        MDir localReferences = new MDir ("local", localDir.resolve ("references"));
 
         List<MNode> modelContainers     = new ArrayList<MNode> ();
         List<MNode> referenceContainers = new ArrayList<MNode> ();
