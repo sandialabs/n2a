@@ -1,5 +1,5 @@
 /**
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 **/
@@ -85,7 +85,7 @@ public class VideoIn extends NativeResource implements Runnable
                     Path avformatPath   = null;
                     // avfilter
                     // avdevice
-                    try (DirectoryStream<Path> stream = Files.newDirectoryStream (t.ffmpegBinDir))
+                    try (DirectoryStream<Path> stream = Files.newDirectoryStream (t.ffmpegBinDir == null ? t.ffmpegLibDir : t.ffmpegBinDir))
                     {
                         for (Path path : stream)
                         {
@@ -99,10 +99,19 @@ public class VideoIn extends NativeResource implements Runnable
                             else if (fileName.contains ("avformat"  )) avformatPath   = path;
                         }
                     }
-                    System.load (avutilPath    .toAbsolutePath ().toString ());
-                    System.load (swresamplePath.toAbsolutePath ().toString ());
-                    System.load (avcodecPath   .toAbsolutePath ().toString ());
-                    System.load (avformatPath  .toAbsolutePath ().toString ());
+
+                    try
+                    {
+                        System.load (avutilPath    .toAbsolutePath ().toString ());
+                        System.load (swresamplePath.toAbsolutePath ().toString ());
+                        System.load (avcodecPath   .toAbsolutePath ().toString ());
+                        System.load (avformatPath  .toAbsolutePath ().toString ());
+                    }
+                    catch (Throwable error)
+                    {
+                    	System.err.println ("Unable to find FFmpeg libraries");
+                    	haveFFmpeg = false;
+                    }
                 }
                 System.load (runtimePath.toAbsolutePath ().toString ());
                 localhost.objects.put ("JNI", true);  // Partial success. May be able to do image processing.
@@ -117,9 +126,9 @@ public class VideoIn extends NativeResource implements Runnable
                 }
             }
         }
-        catch (Throwable t)
+        catch (Throwable error)
         {
-            System.err.println (t.getMessage ());
+            System.err.println ("Video JNI: " + error.getMessage ());
         }
     }
 
