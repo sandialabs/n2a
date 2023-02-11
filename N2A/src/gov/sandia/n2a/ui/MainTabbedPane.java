@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -54,7 +54,7 @@ public class MainTabbedPane extends JTabbedPane
     {
         // Load all panels provided by plugins.
         // Create tabs in the order the user has specified.
-        String order = AppData.state.getOrDefault ("Model", "MainTabbedPane", "order");
+        String order = AppData.state.getOrDefault ("Models,References,Runs,Studies,Settings", "MainTabbedPane", "order");
         Set<String> sorted = new HashSet<String> ();
         String[] titles = order.split (",");  // comma-separated list
         Map<String,Activity> activities = new TreeMap<String,Activity> ();
