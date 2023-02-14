@@ -102,13 +102,6 @@ public class Main
         System.setProperty ("sun.java2d.uiScale", "1.0");
 
         // Load plugins
-        pluginClassNames.add ("gov.sandia.n2a.backend.internal.InternalPlugin");
-        pluginClassNames.add ("gov.sandia.n2a.backend.c.PluginC");
-        pluginClassNames.add ("gov.sandia.n2a.backend.python.PluginPython");
-        pluginClassNames.add ("gov.sandia.n2a.backend.xyce.XycePlugin");
-        pluginClassNames.add ("gov.sandia.n2a.backend.neuroml.PluginNeuroML");
-        pluginClassNames.add ("gov.sandia.n2a.backend.neuron.PluginNeuron");
-        pluginClassNames.add ("gov.sandia.n2a.backend.stacs.PluginSTACS");
         Path pluginDir = resourceDir.resolve ("plugins").toAbsolutePath ();
         try {Files.createDirectories (pluginDir);}
         catch (IOException e) {}

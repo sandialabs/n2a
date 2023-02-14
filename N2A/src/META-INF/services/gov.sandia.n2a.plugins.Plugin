@@ -1,0 +1,8 @@
+gov.sandia.n2a.backend.internal.InternalPlugin
+gov.sandia.n2a.backend.c.PluginC
+gov.sandia.n2a.backend.python.PluginPython
+gov.sandia.n2a.backend.xyce.XycePlugin
+gov.sandia.n2a.backend.neuroml.PluginNeuroML
+gov.sandia.n2a.backend.neuron.PluginNeuron
+gov.sandia.n2a.backend.stacs.PluginSTACS
+gov.sandia.n2a.backend.vensim.PluginVensim
