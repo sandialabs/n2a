@@ -87,6 +87,7 @@ public class PanelEquationGraph extends JScrollPane
     protected JViewport      vp;  // for convenience
     protected Point          vpOverride;  // When non-null, hack the position of viewport during layout.
     protected ColoredBorder  border;
+    protected NodeBase       lastHighlightTarget;
 
     protected static Color background = new Color (0xF0F0F0);  // light gray
 
@@ -175,6 +176,12 @@ public class PanelEquationGraph extends JScrollPane
     public void updatePins ()
     {
         graphPanel.updatePins ();
+    }
+
+    public void updateHighlights (NodeBase target)
+    {
+        lastHighlightTarget = target;
+        graphPanel.updateHighlights (target);
     }
 
     public GraphNode getPinOut ()
@@ -814,6 +821,19 @@ public class PanelEquationGraph extends JScrollPane
                 pinOut.setSize (d);
                 layout.bounds = layout.bounds.union (pinOut.getBounds ());
                 pinOut.title.updateSelected ();
+            }
+        }
+
+        /**
+            This function assumes NODE mode, so every graph node has its own equation tree.
+        **/
+        public void updateHighlights (NodeBase target)
+        {
+            for (Component c : getComponents ())
+            {
+                if (! (c instanceof GraphNode)) continue;
+                GraphNode g = (GraphNode) c;
+                g.panelEquationTree.updateHighlights (g.panelEquationTree.root, target);
             }
         }
 

@@ -195,12 +195,24 @@ public class ChangePart extends UndoableView
         {
             PanelEquationTree.updateOrder (null, nodePath);
             PanelEquationTree.updateVisibility (null, nodePath, -2, false);
+
+            // In case we have self-references:
+            if (pe.view == PanelEquations.NODE)
+            {
+                if (nodeAfter.graph != null) nodeAfter.graph.panelEquationTree.updateHighlights (nodeAfter, nodeAfter);
+            }
+            else
+            {
+                pe.panelEquationTree.updateHighlights (pe.panelEquationTree.root, nodeAfter);
+            }
         }
         else
         {
+            needAnimate.add (pet);
+            pet.updateHighlights (pet.root, nodeAfter);
+            parent.invalidateColumns (model);
             pet.updateOrder (nodePath);
             pet.updateVisibility (nodePath);  // Will include nodeStructureChanged(), if necessary.
-            needAnimate.add (pet);
         }
 
         for (NodeVariable n : nameVisitor.references)
@@ -217,9 +229,11 @@ public class ChangePart extends UndoableView
                 FilteredTreeModel submodel = (FilteredTreeModel) subtree.getModel ();
                 NodeBase subparent = (NodeBase) n.getParent ();
 
+                boolean added = needAnimate.add (subpet);
+                if (added) subpet.updateHighlights (subpet.root, nodeAfter);
+                else       subpet.updateHighlights (n, nodeAfter);
                 submodel.nodeStructureChanged (n);  // Node will collapse if it was open. Don't worry about this.
                 subparent.invalidateColumns (submodel);
-                needAnimate.add (subpet);
             }
         }
 

@@ -57,7 +57,7 @@ public class NodeEquation extends NodeBase
         return icon;
     }
 
-    public boolean findHighlights (NodeVariable target, String name)
+    public boolean findHighlights (NodeBase target, String name)
     {
         boolean result =  highlightsExpression != null  ||  highlightsCondition != null;
         if (target == null)
@@ -74,25 +74,35 @@ public class NodeEquation extends NodeBase
         String condition  = source.key ();
 
         // The following logic is excessively complicated in order to minimize number of objects created and stored.
-        if (highlightsExpression == null) highlightsExpression = new ArrayList<Integer> ();
         NodeVariable parent = (NodeVariable) getParent ();
-        parent.findHighlights (target, expression, highlightsExpression);  // This is the important line.
         List<Integer> reuse = null;
-        if (highlightsExpression.isEmpty ())
+
+        if (expression.contains (name))
         {
-            reuse = highlightsExpression;
-            highlightsExpression = null;
+            if (highlightsExpression == null) highlightsExpression = new ArrayList<Integer> ();
+            parent.findHighlights (target, expression, highlightsExpression);  // This is the important line.
         }
-        else
+        if (highlightsExpression != null)
         {
-            result = true;
+            if (highlightsExpression.isEmpty ())
+            {
+                reuse = highlightsExpression;
+                highlightsExpression = null;
+            }
+            else
+            {
+                result = true;
+            }
         }
 
-        if (! condition.equals ("@")  ||  expression.length () == 0)
+        if (condition.contains (name))
         {
             if (highlightsCondition == null) highlightsCondition = reuse;
             if (highlightsCondition == null) highlightsCondition = new ArrayList<Integer> ();
             parent.findHighlights (target, condition.substring (1), highlightsCondition);
+        }
+        if (highlightsCondition != null)
+        {
             if (highlightsCondition.isEmpty ())
             {
                 highlightsCondition = null;

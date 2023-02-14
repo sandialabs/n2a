@@ -1265,6 +1265,7 @@ public class GraphNode extends JPanel
                 {
                     getTreeCellRendererComponent (getEquationTree ().tree, node, true, open, false, -2, true);
                     restoreFocus ();  // does repaint
+                    container.updateHighlights (node);
                 }
 
                 public void focusLost (FocusEvent e)

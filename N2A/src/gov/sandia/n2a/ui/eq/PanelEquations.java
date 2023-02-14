@@ -824,6 +824,19 @@ public class PanelEquations extends JPanel
         panelParent.updateGUI ();             // Sets size of parent panel from metadata, in getPreferredSize().
     }
 
+    public void updateHighlights (NodeBase target)
+    {
+        if (view == NODE)
+        {
+            panelEquationGraph.updateHighlights (target);
+            panelParent.panelEquationTree.updateHighlights (part, target);
+        }
+        else
+        {
+            panelEquationTree.updateHighlights (panelEquationTree.root, target);
+        }
+    }
+
     ActionListener listenerAdd = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
@@ -2322,6 +2335,7 @@ public class PanelEquations extends JPanel
                 public void focusGained (FocusEvent e)
                 {
                     restoreFocus ();
+                    updateHighlights (part);
                 }
 
                 public void focusLost (FocusEvent e)

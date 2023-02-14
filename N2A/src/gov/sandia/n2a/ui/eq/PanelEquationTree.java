@@ -593,18 +593,39 @@ public class PanelEquationTree extends JScrollPane
         {
             public void valueChanged (TreeSelectionEvent e)
             {
-                // Update highlights based on currently selected variable
-
+                // Update highlights based on currently selected node.
                 if (root == null) return;
-                NodeVariable v = null;
+                NodeBase n = null;
                 TreePath path = e.getNewLeadSelectionPath ();
-                Object o = null;
-                if (path != null) o = path.getLastPathComponent ();
-                if      (o instanceof NodeVariable) v = (NodeVariable) o;
-                else if (o instanceof NodeEquation) v = (NodeVariable) ((NodeBase) o).getParent ();
+                if (path != null)
+                {
+                    n = (NodeBase) path.getLastPathComponent ();
+                    if (! (n instanceof NodePart  ||  n instanceof NodeVariable)) n = null;
+                }
 
-                if (v == null  ||  v.toString ().isEmpty ()) updateHighlights (root, null, null);  // Remove old highlights.
-                else                                         updateHighlights (root, v);
+                if (n == null  ||  n.toString ().isEmpty ())  // Remove old highlights.
+                {
+                    if (container.view == PanelEquations.NODE)
+                    {
+                        // If another graph is receiving focus, then it has already updated its
+                        // selection before we receive this selection event. In that case, we
+                        // don't want to clear the highlights, because that will undo its work.
+                        NodeBase lastTarget = container.panelEquationGraph.lastHighlightTarget;
+                        if (lastTarget == null  ||  lastTarget.isNodeAncestor (root))
+                        {
+                            container.panelEquationGraph.updateHighlights (null);
+                        }
+                    }
+                    else
+                    {
+                        updateHighlights (root, null);
+                    }
+                }
+                else
+                {
+                    if (container.view == PanelEquations.NODE) container.panelEquationGraph.updateHighlights (n);
+                    else                                       updateHighlights (root, n);
+                }
             }
         });
 
@@ -661,7 +682,7 @@ public class PanelEquationTree extends JScrollPane
 
         root = part;
         root.pet = this;
-        updateHighlights (root, null, null);
+        updateHighlights (root, null);
         model.setRoot (root);  // triggers repaint
     }
 
@@ -1297,20 +1318,24 @@ public class PanelEquationTree extends JScrollPane
 
     // For now, this is fast enough to run on EDT, but larger models could bog down the UI.
     // TODO: run this on a separate thread, if the need arises
-    public void updateHighlights (NodeBase node, NodeVariable target)
+    public void updateHighlights (NodeBase container, NodeBase target)
     {
-        String name = target.source.key ();
-        while (name.startsWith ("$up.")) name = name.substring (4);
-        name = Variable.stripContextPrefix (name);
-        updateHighlights (node, target, name);
+        String name = null;
+        if (target != null)
+        {
+            name = target.source.key ();
+            while (name.startsWith ("$up.")) name = name.substring (4);
+            name = Variable.stripContextPrefix (name);
+        }
+        updateHighlights (container, target, name);
     }
 
-    public void updateHighlights (NodeBase node, NodeVariable target, String name)
+    public void updateHighlights (NodeBase container, NodeBase target, String name)
     {
-        int count = node.getChildCount ();
+        int count = container.getChildCount ();
         for (int i = 0; i < count; i++)
         {
-            NodeBase n = (NodeBase) node.getChildAt (i);
+            NodeBase n = (NodeBase) container.getChildAt (i);
             if (! n.visible ()) continue;
 
             boolean needsRepaint = false;

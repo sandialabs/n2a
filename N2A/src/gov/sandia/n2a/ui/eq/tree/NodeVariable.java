@@ -55,7 +55,8 @@ public class NodeVariable extends NodeContainer
     protected static ImageIcon iconWatch    = ImageUtil.getImage ("watch.png");  // gets modified in static section below
 
     public    boolean       isBinding;
-    protected List<Integer> highlights;
+    protected List<Integer> highlightLHS;
+    protected List<Integer> highlightRHS;
 
     static
     {
@@ -218,40 +219,70 @@ public class NodeVariable extends NodeContainer
         @return true if this node should be repainted. Indicates that the visual
         appearance of highlights has changed.
     **/
-    public boolean findHighlights (NodeVariable target, String name)
+    public boolean findHighlights (NodeBase target, String name)
     {
-        boolean result =  highlights != null;  // Only non-null if there are current highlights.
+        boolean result =  highlightLHS != null  ||  highlightRHS != null;  // Only non-null if there are current highlights.
         if (target == null)  // Indicates that we should clear all highlights. In this case, name is ignored, but should be null as well.
         {
-            highlights = null;
+            highlightLHS = null;
+            highlightRHS = null;
             return result;
         }
-        if (highlights != null) highlights.clear ();  // So we can re-use the object.
+        if (highlightLHS != null) highlightLHS.clear ();  // So we can re-use the object.
+        if (highlightRHS != null) highlightRHS.clear ();
 
+        String key   = source.key ();
         String value = source.get ();
-        if (value.contains (name))
+
+        // The following logic is excessively complicated in order to minimize number of objects created and stored.
+        List<Integer> reuse = null;
+
+        if (key.contains (name))
         {
-            if (highlights == null) highlights = new ArrayList<Integer> ();
-
-            Variable.ParsedValue pieces = new Variable.ParsedValue (value);
-            if (! pieces.expression.isEmpty ()) findHighlights (target, pieces.expression, highlights);
-            if (! pieces.condition .isEmpty ())
+            if (highlightLHS == null) highlightLHS = new ArrayList<Integer> ();
+            findHighlights (target, key, highlightLHS);
+        }
+        if (highlightLHS != null)
+        {
+            if (highlightLHS.isEmpty ())
             {
-                int start = highlights.size ();
-                findHighlights (target, pieces.condition, highlights);
-                int count = highlights.size ();
-
-                // Should match 3rd column created by getColumns().
-                int offset = pieces.expression.length () + 3;  // add 3 characters for " @ "
-                for (int i = start; i < count; i++) highlights.set (i, highlights.get (i) + offset);
+                reuse = highlightLHS;
+                highlightLHS = null;
+            }
+            else
+            {
+                result = true;
             }
         }
 
-        if (highlights != null  &&  highlights.isEmpty ()) highlights = null;
-        return  result  ||  highlights != null;
+        if (value.contains (name))
+        {
+            if (highlightRHS == null) highlightRHS = reuse;
+            if (highlightRHS == null) highlightRHS = new ArrayList<Integer> ();
+
+            Variable.ParsedValue pieces = new Variable.ParsedValue (value);
+            if (! pieces.expression.isEmpty ()) findHighlights (target, pieces.expression, highlightRHS);
+            if (! pieces.condition .isEmpty ())
+            {
+                int start = highlightRHS.size ();
+                findHighlights (target, pieces.condition, highlightRHS);
+                int count = highlightRHS.size ();
+
+                // Should match 3rd column created by getColumns().
+                int offset = pieces.expression.length () + 3;  // add 3 characters for " @ "
+                for (int i = start; i < count; i++) highlightRHS.set (i, highlightRHS.get (i) + offset);
+            }
+        }
+        if (highlightRHS != null)
+        {
+            if (highlightRHS.isEmpty ()) highlightRHS = null;
+            else                         result = true;
+        }
+
+        return  result;
     }
 
-    public void findHighlights (NodeVariable target, String expression, List<Integer> inout)
+    public void findHighlights (NodeBase target, String expression, List<Integer> inout)
     {
         Operator op = null;
         try {op = Operator.parse (expression);}
@@ -272,7 +303,7 @@ public class NodeVariable extends NodeContainer
         });
     }
 
-    public void resolve (NodeVariable target, String name, int offset, List<Integer> inout)
+    public void resolve (NodeBase target, String name, int offset, List<Integer> inout)
     {
         String[] names = name.split ("\\.");
         String[] trimmed = new String[names.length];
@@ -315,7 +346,9 @@ public class NodeVariable extends NodeContainer
     public List<String> getColumns (boolean selected, boolean expanded)
     {
         List<String> result = new ArrayList<String> (3);
-        result.add (source.key ());
+        String key = source.key ();
+        if (! selected) key = markHighlights (key, highlightLHS);
+        result.add (key);
         Variable.ParsedValue pieces = new Variable.ParsedValue (source.get ());
         result.add ("=" + pieces.combiner);
 
@@ -346,7 +379,7 @@ public class NodeVariable extends NodeContainer
         {
             String expression = pieces.expression;
             if (! pieces.condition.isEmpty ()) expression += " @ " + pieces.condition;
-            if (! selected) expression = markHighlights (expression, highlights);
+            if (! selected) expression = markHighlights (expression, highlightRHS);
             result.add (expression);
         }
 
