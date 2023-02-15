@@ -29,6 +29,7 @@ import java.util.TreeSet;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
+import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
@@ -226,9 +227,21 @@ public class SettingsLookAndFeel extends JPanel implements Settings
 
     public static void updateEm ()
     {
-        if (MainFrame.instance == null) return;  // If app is still booting, can't get a graphics context.
         Font font = UIManager.getFont ("Tree.font");
-        FontMetrics fm = MainFrame.instance.getGraphics ().getFontMetrics (font);
+        FontMetrics fm;
+        if (MainFrame.instance == null)
+        {
+            // Application is still booting, so create a temporary hidden window.
+            JFrame temp = new JFrame ();
+            temp.setExtendedState (JFrame.ICONIFIED);
+            temp.setVisible (true);  // Create graphics context.
+            fm = temp.getGraphics ().getFontMetrics (font);
+            temp.dispose ();  // At this moment, this is the last window. However, the app does not exit because our main thread is still running.
+        }
+        else
+        {
+            fm = MainFrame.instance.getGraphics ().getFontMetrics (font);
+        }
         em = fm.stringWidth ("M");
     }
 

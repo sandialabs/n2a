@@ -60,9 +60,7 @@ public class MainFrame extends JFrame
             awtAppClassNameField.setAccessible (true);
             awtAppClassNameField.set (xToolkit, appName);
         }
-        catch (Exception e)
-        {
-        }
+        catch (Exception e) {}
 
         ArrayList<Image> icons = new ArrayList<Image> ();
         icons.add (ImageUtil.getImage ("n2a-16.png").getImage ());
@@ -79,16 +77,8 @@ public class MainFrame extends JFrame
             "C", tabs
         );
 
-        // Get em so we can size the window. (All size info is stored in ems.)
-        // Even though SettingLookAndFeel attempts to calculate em before now, it does not
-        // yet have a main window, so there is no graphics context in which size the font.
-        setExtendedState (ICONIFIED);
-        setVisible (true);  // All we need to get a graphics context.
-        setVisible (false); // Graphics context remains valid even after we hide ourselves.
-        SettingsLookAndFeel.updateEm ();
-        float em = SettingsLookAndFeel.em;
-
         MNode winProps = AppData.state.childOrCreate ("WinLayout");
+        float em = SettingsLookAndFeel.em;
         int w = (int) Math.round (winProps.getOrDefault (90.0, "width")  * em);
         int h = (int) Math.round (winProps.getOrDefault (60.0, "height") * em);
         int x = (int) Math.round (winProps.getOrDefault (-1.0, "x")      * em);
