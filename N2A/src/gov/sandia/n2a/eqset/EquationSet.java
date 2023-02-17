@@ -359,9 +359,8 @@ public class EquationSet implements Comparable<EquationSet>
                         else       expression += v.nameString ();
                         if (! timeScale.isEmpty ())
                         {
-                            expression += ",\"\",\"timeScale=" + timeScale;
+                            expression += ",\"\",timeScale=" + timeScale;
                             if (! scale.isEmpty ()) expression += ",scale=" + scale;
-                            expression += "\"";
                         }
                         expression += ")";
                         if (spike) expression += "@" + v.nameString ();
