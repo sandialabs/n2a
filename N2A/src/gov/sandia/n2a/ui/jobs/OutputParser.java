@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -40,6 +40,7 @@ public class OutputParser
     public double       xmax = Double.NaN; // Note that "x" is always time.
     public double       ymin = Double.NaN;
     public double       ymax = Double.NaN;
+    public double       duration;  // Expected time when job is finished. If nonzero and xmax not specified, then set bounds of graph to [0,duration].
 
     public static Map<String,Color> HTMLcolors = new HashMap<String,Color> ();
     static

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -78,8 +78,9 @@ public class Plot extends OutputParser
         }
 
         // Determine range of x axis
-        if (! Double.isNaN (xmin)  ||  ! Double.isNaN (xmax))
+        if (! Double.isNaN (xmin)  ||  ! Double.isNaN (xmax))  // If either limit has been explicitly set ...
         {
+            // then supply any missing data so that they are both set.
             time.computeStats ();
             if (Double.isNaN (xmin)) xmin = time.min;
             if (Double.isNaN (xmax)) xmax = time.max;
@@ -265,10 +266,16 @@ public class Plot extends OutputParser
         else            axis0.setAutoRangeMinimumSize (1);
         if (! Double.isNaN (ymin)) axis0.setRange (ymin, ymax);  // range locked
 
+        ValueAxis x = plot.getDomainAxis ();
         if (! Double.isNaN (xmin))
         {
-            ValueAxis x = plot.getDomainAxis ();
             x.setRange (xmin, xmax);
+        }
+        else if (duration > 0)
+        {
+            double max = duration;
+            if (time.scale != null) max /= time.scale.get ();
+            x.setRange (0, max);
         }
 
         int count = dataset0.getSeriesCount ();

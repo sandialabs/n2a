@@ -650,7 +650,8 @@ public class PanelRun extends JPanel
                 //   big   -- too big for memory; must load/display in segments
                 //   huge  -- too big to store on local filesystem, for example a supercomputer job; must be downloaded/displayed in segments
                 // The current code only handles small files.
-                MNode job = ((NodeJob) node.getParent ()).getSource ();
+                NodeJob nodeJob = (NodeJob) node.getParent ();
+                MNode job = nodeJob.getSource ();
                 Host env = Host.get (job);
                 if (env instanceof Remote)
                 {
@@ -820,8 +821,9 @@ public class PanelRun extends JPanel
                 DisplayThread dt = this;
                 if (! viz.equals ("Text")  &&  node.isGraphable ())
                 {
-                    Component panel   = null;
-                    Component current = displayPane.getViewport ().getView ();
+                    Component panel    = null;
+                    Component current  = displayPane.getViewport ().getView ();
+                    double    duration = nodeJob.complete < 1 ? nodeJob.expectedSimTime : 0;
                     if (viz.startsWith ("Table"))
                     {
                         if (refresh)
@@ -841,12 +843,15 @@ public class PanelRun extends JPanel
                         {
                             if (current == displayChart  &&  displayChart.source instanceof Raster)
                             {
-                                ((Raster) displayChart.source).updateChart (displayChart.chart);
+                                Raster raster = (Raster) displayChart.source;
+                                raster.duration = duration;
+                                raster.updateChart (displayChart.chart);
                                 displayChart.offscreen = true;
                                 return;
                             }
                         }
                         Raster raster = new Raster (node.path);
+                        raster.duration = duration;
                         displayChart.setChart (raster.createChart (), raster);
                         displayChart.offscreen = false;
                         panel = displayChart;
@@ -857,12 +862,15 @@ public class PanelRun extends JPanel
                         {
                             if (current == displayChart  &&  displayChart.source instanceof Plot)
                             {
-                                ((Plot) displayChart.source).updateChart (displayChart.chart);
+                                Plot plot = (Plot) displayChart.source;
+                                plot.duration = duration;
+                                plot.updateChart (displayChart.chart);
                                 displayChart.offscreen = true;
                                 return;
                             }
                         }
                         Plot plot = new Plot (node.path);
+                        plot.duration = duration;
                         displayChart.setChart (plot.createChart (), plot);
                         displayChart.offscreen = false;
                         panel = displayChart;

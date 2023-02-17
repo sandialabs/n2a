@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -167,9 +167,15 @@ public class Raster extends OutputParser implements XYDataset
             tr.notifyListeners (new RendererChangeEvent (tr));  // This is the same event as issued by setSeriesPaint() when notify is true.
         }
 
-        if (xmin < xmax)
+        ValueAxis x = plot.getDomainAxis ();
+        if (needXmin  &&  needXmax  &&  duration > 0)
         {
-            ValueAxis x = plot.getDomainAxis ();
+            double max = duration;
+            if (time.scale != null) max /= time.scale.get ();
+            x.setRange (0, max);
+        }
+        else if (xmin < xmax)
+        {
             x.setRange (xmin, xmax);
         }
 

@@ -94,7 +94,6 @@ public class NodeJob extends NodeBase
     protected double  lastSimTime     = 0;  // Even if expectedSimTime is unknown, we can still compare this to check for progress.
     protected long    lastMonitored   = 0;
     protected long    lastActive      = 0;
-    protected long    lastDisplay     = 0;
     protected long    died            = 0;  // Marks time when process died. Enables us to wait a little bit for "finished" to be written.
     public    boolean deleted;
     public    boolean old;                  // Indicates that the associated job existed before the current invocation of this app started. Used to limit which hosts are automatically enabled.
@@ -170,7 +169,6 @@ public class NodeJob extends NodeBase
         expectedSimTime = 0;
         lastMonitored   = 0;
         lastActive      = 0;
-        lastDisplay     = 0;
 
         // Purge files
         Host localhost = Host.get ();
@@ -434,13 +432,13 @@ public class NodeJob extends NodeBase
                     else if (panelRun.displayNode instanceof NodeFile  &&  panelRun.displayNode.getParent () == NodeJob.this)
                     {
                         panelRun.buttonStop.setEnabled (complete < 1  ||  complete == 3);
-                        // Update the display every 5 seconds during the run.
-                        // Some displays, such as a chart, could take longer than 5s to construct, so don't interrupt those.
-                        // Always update the display when a run finishes.
-                        long currentTime = System.currentTimeMillis ();
-                        if (complete >= 1  &&  complete != 3  ||  panelRun.displayThread == null  &&  currentTime - lastDisplay > 5000)
+                        // Update the display. This code is already limited to no faster than once
+                        // per second, so no need to further throttle. Some displays, such as a chart,
+                        // could take longer to construct, so don't interrupt their thread.
+                        // Always update the display when a run finishes. In this case, it's OK to
+                        // interrupt the current thread.
+                        if (complete >= 1  &&  complete != 3  ||  panelRun.displayThread == null  ||  ! panelRun.displayThread.isAlive ())
                         {
-                            lastDisplay = currentTime;
                             panelRun.viewFile (true);
                         }
                     }
