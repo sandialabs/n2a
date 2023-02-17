@@ -140,45 +140,41 @@ public class ProvideSpreadsheet implements ProvideOperator
         StringBuilder result = context.result;
 
         String call = "get";
-        String mode = s.getMode ();
-        int length = s.operands.length;
-        if (! mode.isEmpty ())
+        Operator info = s.getKeyword ("info");
+        if (info != null)
         {
-            // The way "spreadsheet" is currently defined, the last string in parameters
-            // can be mode or cell anchor or prefix. Since it is so ambiguous, we only
-            // take away the last parameter if we positively identify a mode keyword.
-            boolean found = false;
-            for (String p : mode.split (","))
+            String p = info.getString ().trim ();
+            if (   p.equals ("rows")
+                || p.equals ("columns")
+                || p.equals ("rowsInColumn")
+                || p.equals ("columnsInRow"))
             {
-                p = p.trim ();
-                switch (p)
-                {
-                    case "rows":
-                    case "columns":
-                    case "rowsInColumn":
-                    case "columnsInRow":
-                        call = p;
-                        found = true;
-                        break;
-                    default:
-                        if (p.startsWith ("median")) found = true;
-                }
+                call = p;
             }
-            if (found) length--;
         }
 
         int shift = s.exponent - s.exponentNext;
         if (context.useExponent  &&  shift != 0) result.append ("(");
 
         result.append (s.name + "->" + call + " (");
+        int length = s.operands.length;
         if (length > 1)
         {
             s.operands[1].render (context);  // anchor cell
         }
-        for (int i = 2; i < length; i++)
+        if (call.equals ("get"))
         {
-            result.append (", ");
-            s.operands[i].render (context);
+            Operator prefix = s.getKeyword ("prefix");
+            if (prefix != null)
+            {
+                result.append (", ");
+                prefix.render (context);
+            }
+            for (int i = 2; i < length; i++)
+            {
+                result.append (", ");
+                s.operands[i].render (context);
+            }
         }
         result.append (")");
 

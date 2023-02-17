@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -77,18 +77,16 @@ public class Spreadsheet extends Function implements NonzeroIterable
     {
         for (int i = 0; i < operands.length; i++) operands[i].determineExponent (context);
 
-        if (getType () instanceof Text) return;  // If we return a string, leave exponent as unknown.
-
-        String mode = getMode ();
-        if (mode.contains ("rows")  ||  mode.contains ("columns"))
-        {
-            updateExponent (context, MSB, 0);  // Return an integer
-        }
-        else
+        if (getKeyword ("info") == null)  // normal mode
         {
             int centerNew   = MSB / 2;
             int exponentNew = getExponentHint (0) + MSB - centerNew;
             updateExponent (context, exponentNew, centerNew);
+        }
+        else  // info mode
+        {
+            if (getType () instanceof Text) return;  // If we return a string, leave exponent as unknown.
+            updateExponent (context, MSB, 0);  // Return an integer
         }
     }
 
@@ -110,20 +108,8 @@ public class Spreadsheet extends Function implements NonzeroIterable
 
     public Type getType ()
     {
-        // Return type depends on parameter form:
-        // (filename, ..., mode) -- Scalar
-        // (filename, cell) -- Scalar
-        // (filename, row, column) -- Scalar
-        // (filename, cell, row, column) -- Scalar
-        // (filename, cell, prefix, row, column) -- Text
-
-        String mode = "";
-        int lastParm = operands.length - 1;
-        if (lastParm > 0) mode = operands[lastParm].getString ();
-        if (mode.contains ("rows")  ||  mode.contains ("columns")) return new Scalar ();
-
-        if (operands.length > 2  &&  operands[2].getType () instanceof Text) return new Text ();  // prefix can only be in third position
-
+        if (getKeyword ("info"  ) != null) return new Scalar ();
+        if (getKeyword ("prefix") != null) return new Text ();
         return new Scalar ();
     }
 
@@ -294,7 +280,7 @@ public class Spreadsheet extends Function implements NonzeroIterable
                                     // Dates are stored by Excel internally as number of days since December 31, 1899.
                                     // Day 25569 is start of Unix epoch, January 1, 1970.
                                     // I believe that day number includes leap days, so all we need to do is multiply by 86400.
-                                    // There are more subtle elements of horology to consider, but the should be good enough.
+                                    // There are more subtle elements of horology to consider, but this should be good enough.
 
                                     // The difficulty is identifying a date cell. The only way is to check style (attribute "s").
                                     // See https://www.brendanlong.com/the-minimum-viable-xlsx-reader.html
@@ -550,17 +536,16 @@ public class Spreadsheet extends Function implements NonzeroIterable
 
         Type op1 = null;
         if (operands.length > 1) op1 = operands[1].eval (context);
-        String cell = "";
-        if (op1 instanceof Text) cell = ((Text) op1).value;
+        String anchor = "";
+        if (op1 instanceof Text) anchor = ((Text) op1).value;
 
-        String mode = getMode ();
-        String modeCell = operands.length <= 2 ? "" : cell;
-        if (mode.equals ("columns"     )) return new Scalar (H.getColumns      (modeCell));
-        if (mode.equals ("rows"        )) return new Scalar (H.getRows         (modeCell));
-        if (mode.equals ("columnsInRow")) return new Scalar (H.getColumnsInRow (modeCell));
-        if (mode.equals ("rowsInColumn")) return new Scalar (H.getRowsInColumn (modeCell));
+        String info = evalKeyword (context, "info", "");
+        if (info.equals ("columns"     )) return new Scalar (H.getColumns      (anchor));
+        if (info.equals ("rows"        )) return new Scalar (H.getRows         (anchor));
+        if (info.equals ("columnsInRow")) return new Scalar (H.getColumnsInRow (anchor));
+        if (info.equals ("rowsInColumn")) return new Scalar (H.getRowsInColumn (anchor));
 
-        String prefix = null;
+        Type prefix = evalKeyword (context, "prefix");
         double row = 0;
         double col = 0;
 
@@ -568,8 +553,6 @@ public class Spreadsheet extends Function implements NonzeroIterable
         if (operands.length > 2) op2 = operands[2].eval (context);
         Type op3 = null;
         if (operands.length > 3) op3 = operands[3].eval (context);
-        Type op4 = null;
-        if (operands.length > 4) op4 = operands[4].eval (context);
 
         if (op1 instanceof Scalar)
         {
@@ -581,23 +564,9 @@ public class Spreadsheet extends Function implements NonzeroIterable
             row                            = ((Scalar) op2).value;
             if (op3 instanceof Scalar) col = ((Scalar) op3).value;
         }
-        else if (op2 instanceof Text)
-        {
-            prefix = op2.toString ();
-            if (op3 instanceof Scalar) row = ((Scalar) op3).value;
-            if (op4 instanceof Scalar) col = ((Scalar) op4).value;
-            return new Text (prefix + H.getString (cell, (int) row, (int) col));
-        }
-        return new Scalar (H.getDouble (cell, row, col));
-    }
 
-    public String getMode ()
-    {
-        int lastParm = operands.length - 1;
-        if (lastParm <= 0) return "";
-        String result = operands[lastParm].getString ();  // Must be a constant string, not computed.
-        if (result.contains ("!")) return "";  // anchor cell, so can't be mode
-        return result;
+        if (prefix instanceof Text) return new Text (prefix + H.getString (anchor, (int) row, (int) col));
+        return new Scalar (H.getDouble (anchor, row, col));
     }
 
     public String toString ()
