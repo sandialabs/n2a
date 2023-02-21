@@ -49,6 +49,7 @@ template<> inline int modFloor (int a, int b)
     return result;
 }
 
+void n2a_srand (unsigned int seed);  // Hack to work around Microsoft C library behavior when in DLL.
 template<class T> SHARED T                  uniform ();
 template<class T> SHARED T                  uniform (T sigma);
 template<class T> SHARED T                  uniform (T lo, T hi, T step = (T) 1);

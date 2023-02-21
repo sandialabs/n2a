@@ -1289,7 +1289,7 @@ public class JobC extends Thread
             result.append ("\n");
             if (seed >= 0)
             {
-                result.append ("  srand (" + seed + ");\n");
+                result.append ("  n2a_srand (" + seed + ");\n");
             }
             result.append ("  try\n");
             result.append ("  {\n");
