@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -138,6 +138,23 @@ public abstract class Matrix extends Type
     public void set (int row, double a)
     {
         set (row, 0, a);
+    }
+
+    /**
+        Copies overlapping elements from that into this.
+        The "overlap" refers to the rows and columns that exist in both matrices.
+    **/
+    public void set (Matrix that)
+    {
+        int rows = Math.min (rows (),    that.rows ());
+        int cols = Math.min (columns (), that.columns ());
+        for (int c = 0; c < cols; c++)
+        {
+            for (int r = 0; r < rows; r++)
+            {
+                set (r, c, that.get (r, c));
+            }
+        }
     }
 
     public Type clear ()
@@ -682,6 +699,11 @@ public abstract class Matrix extends Type
             result = Math.pow (result, 1 / n);
         }
         return result;
+    }
+
+    public Matrix normalize ()
+    {
+        return divide (new Scalar (norm (2)));
     }
 
     public double dot (Matrix that)

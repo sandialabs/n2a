@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -87,6 +87,11 @@ public class MatrixDense extends Matrix
                 }
             }
         }
+    }
+
+    public MatrixDense (double[] data)
+    {
+        this (data, 0, data.length, 1, 1, data.length);
     }
 
     public MatrixDense (double[] data, int offset, int rows, int columns, int strideR, int strideC)
@@ -1204,6 +1209,11 @@ public class MatrixDense extends Matrix
             result = Math.pow (result, 1 / n);
         }
         return result;
+    }
+
+    public MatrixDense normalize ()
+    {
+        return divide (norm (2));
     }
 
     public double dot (Matrix that)
