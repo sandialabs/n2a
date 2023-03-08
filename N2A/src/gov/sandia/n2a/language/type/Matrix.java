@@ -608,6 +608,21 @@ public abstract class Matrix extends Type
         throw new EvaluationException ("Can't compute deteminant of matrices larger then 3x3 (because we are lazy).");
     }
 
+    public MatrixDense cross (Matrix that)
+    {
+        MatrixDense result = new MatrixDense (3, 1);
+        double a0 = get (0);
+        double a1 = get (1);
+        double a2 = get (2);
+        double b0 = that.get (0);
+        double b1 = that.get (1);
+        double b2 = that.get (2);
+        result.set (0, a1 * b2 - a2 * b1);
+        result.set (1, a2 * b0 - a0 * b2);
+        result.set (2, a0 * b1 - a1 * b0);
+        return result;
+    }
+
     public double norm (double n)
     {
         int w = columns ();

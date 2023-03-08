@@ -11,6 +11,14 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <repositories>
+        <repository>
+            <id>JogAmp</id>
+            <name>JogAmp</name>
+            <url>https://jogamp.org/deployment/maven</url>
+        </repository>
+    </repositories>
+
     <build>
         <sourceDirectory>src</sourceDirectory>
 
@@ -189,6 +197,134 @@
             <groupId>org.jfree</groupId>
             <artifactId>jfreesvg</artifactId>
             <version>3.4.1</version>
+        </dependency>
+
+        <!-- https://jogamp.org/wiki/index.php?title=Maven - Reference page for configuring Maven.
+             The version on Maven central is not well maintained. We link directly to
+             the Maven repo on JogAmp's site. (See repository section above.)
+             Use atomic dependencies to minimize payload (except for gluegen, where it makes
+             little difference). -->
+        <dependency>
+            <groupId>org.jogamp.gluegen</groupId>
+            <artifactId>gluegen-rt-main</artifactId>
+            <version>2.4.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>gldesktop</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>awt</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>glu</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>util</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>util-awt</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>os-win</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>os-x11</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>os-osx</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>natives-windows-amd64</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>natives-linux-amd64</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>jogl</artifactId>
+            <version>2.4.0</version>
+            <classifier>natives-macosx-universal</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>nativewindow</artifactId>
+            <version>2.4.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>nativewindow</artifactId>
+            <version>2.4.0</version>
+            <classifier>awt</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>nativewindow</artifactId>
+            <version>2.4.0</version>
+            <classifier>os-win</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>nativewindow</artifactId>
+            <version>2.4.0</version>
+            <classifier>os-x11</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jogamp.jogl</groupId>
+            <artifactId>nativewindow</artifactId>
+            <version>2.4.0</version>
+            <classifier>os-osx</classifier>
         </dependency>
     </dependencies>
 </project>

@@ -1,10 +1,14 @@
 /*
-Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
+
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.geom.Line2D;
 
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.Variable;
@@ -70,10 +74,26 @@ public class DrawSegment extends Draw implements Draw.Shape
         double x2 = p.get (0);
         double y2 = p.get (1);
 
-        double width = ((Scalar) operands[3].eval (context)).value;
-        double color = ((Scalar) operands[4].eval (context)).value;
+        double thickness = ((Scalar) operands[3].eval (context)).value;
+        double color     = ((Scalar) operands[4].eval (context)).value;
 
-        H.drawSegment (now, raw, x, y, x2, y2, width, (int) color);
+        H.next (now);
+
+        if (! raw)
+        {
+            x         *= H.width;
+            y         *= H.width;
+            x2        *= H.width;
+            y2        *= H.width;
+            thickness *= H.width;
+        }
+        if (thickness < 1) thickness = 1;
+
+        if (H.line == null) H.line = new Line2D.Double (x, y, x2, y2);
+        else                H.line.setLine             (x, y, x2, y2);
+        H.graphics.setStroke (new BasicStroke ((float) thickness));
+        H.graphics.setColor (new Color ((int) color));
+        H.graphics.draw (H.line);
 
         return new Scalar (0);
     }

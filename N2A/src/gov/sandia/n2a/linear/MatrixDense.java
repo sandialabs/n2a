@@ -331,10 +331,11 @@ public class MatrixDense extends Matrix
         while (r < end)
         {
             int columnEnd = r + rows;
-            while (r++ < columnEnd)
+            while (r < columnEnd)
             {
                 if (data[i] != 0) return false;
                 i += strideR;
+                r++;
             }
             i += step;
         }
@@ -424,7 +425,11 @@ public class MatrixDense extends Matrix
 
     public MatrixDense add (Scalar that) throws EvaluationException
     {
-        double scalar = ((Scalar) that).value;
+        return add (that.value);
+    }
+
+    public MatrixDense add (double that)
+    {
         MatrixDense result = new MatrixDense (rows, columns);
         int step = strideC - rows * strideR;
         int i = offset;
@@ -435,7 +440,7 @@ public class MatrixDense extends Matrix
             int columnEnd = r + rows;
             while (r < columnEnd)
             {
-                result.data[r++] = data[i] + scalar;
+                result.data[r++] = data[i] + that;
                 i += strideR;
             }
             i += step;
@@ -526,25 +531,29 @@ public class MatrixDense extends Matrix
         }
         if (that instanceof Scalar)
         {
-            double scalar = ((Scalar) that).value;
-            MatrixDense result = new MatrixDense (rows, columns);
-            int step = strideC - rows * strideR;
-            int i   = offset;
-            int r   = 0;
-            int end = rows * columns;
-            while (r < end)
-            {
-                int columnEnd = r + rows;
-                while (r < columnEnd)
-                {
-                    result.data[r++] = data[i] - scalar;
-                    i += strideR;
-                }
-                i += step;
-            }
-            return result;
+            return subtract (((Scalar) that).value);
         }
         throw new EvaluationException ("type mismatch");
+    }
+
+    public MatrixDense subtract (double that)
+    {
+        MatrixDense result = new MatrixDense (rows, columns);
+        int step = strideC - rows * strideR;
+        int i   = offset;
+        int r   = 0;
+        int end = rows * columns;
+        while (r < end)
+        {
+            int columnEnd = r + rows;
+            while (r < columnEnd)
+            {
+                result.data[r++] = data[i] - that;
+                i += strideR;
+            }
+            i += step;
+        }
+        return result;
     }
 
     public MatrixDense multiply (Type that) throws EvaluationException
@@ -822,25 +831,29 @@ public class MatrixDense extends Matrix
         }
         if (that instanceof Scalar)
         {
-            double scalar = ((Scalar) that).value;
-            MatrixDense result = new MatrixDense (rows, columns);
-            int step = strideC - rows * strideR;
-            int i = offset;
-            int r = 0;
-            int end = rows * columns;
-            while (r < end)
-            {
-                int columnEnd = r + rows;
-                while (r < columnEnd)
-                {
-                    result.data[r++] = data[i] / scalar;
-                    i += strideR;
-                }
-                i += step;
-            }
-            return result;
+            return divide (((Scalar) that).value);
         }
         throw new EvaluationException ("type mismatch");
+    }
+
+    public MatrixDense divide (double that)
+    {
+        MatrixDense result = new MatrixDense (rows, columns);
+        int step = strideC - rows * strideR;
+        int i = offset;
+        int r = 0;
+        int end = rows * columns;
+        while (r < end)
+        {
+            int columnEnd = r + rows;
+            while (r < columnEnd)
+            {
+                result.data[r++] = data[i] / that;
+                i += strideR;
+            }
+            i += step;
+        }
+        return result;
     }
 
     public MatrixDense min (Type that) throws EvaluationException
@@ -1122,10 +1135,11 @@ public class MatrixDense extends Matrix
             while (r < end)
             {
                 int columnEnd = r + rows;
-                while (r++ < columnEnd)
+                while (r < columnEnd)
                 {
                     if (data[i] != 0) result++;
                     i += strideR;
+                    r++;
                 }
                 i += step;
             }
@@ -1135,10 +1149,11 @@ public class MatrixDense extends Matrix
             while (r < end)
             {
                 int columnEnd = r + rows;
-                while (r++ < columnEnd)
+                while (r < columnEnd)
                 {
                     result += Math.abs (data[i]);
                     i += strideR;
+                    r++;
                 }
                 i += step;
             }
@@ -1148,11 +1163,12 @@ public class MatrixDense extends Matrix
             while (r < end)
             {
                 int columnEnd = r + rows;
-                while (r++ < columnEnd)
+                while (r < columnEnd)
                 {
                     double d = data[i];
                     result += d * d;
                     i += strideR;
+                    r++;
                 }
                 i += step;
             }
@@ -1163,10 +1179,11 @@ public class MatrixDense extends Matrix
             while (r < end)
             {
                 int columnEnd = r + rows;
-                while (r++ < columnEnd)
+                while (r < columnEnd)
                 {
                     result = Math.max (result, Math.abs (data[i]));
                     i += strideR;
+                    r++;
                 }
                 i += step;
             }
@@ -1176,10 +1193,11 @@ public class MatrixDense extends Matrix
             while (r < end)
             {
                 int columnEnd = r + rows;
-                while (r++ < columnEnd)
+                while (r < columnEnd)
                 {
                     result += Math.pow (data[i], n);
                     i += strideR;
+                    r++;
                 }
                 i += step;
             }
@@ -1299,13 +1317,14 @@ public class MatrixDense extends Matrix
             while (r < end)
             {
                 int columnEnd = r + rows;
-                while (r++ < columnEnd)
+                while (r < columnEnd)
                 {
                     double d = data[a] - B.data[b];
                     if (d > 0) return  1;
                     if (d < 0) return -1;
                     a +=   strideR;
                     b += B.strideR;
+                    r++;
                 }
                 a += stepA;
                 b += stepB;

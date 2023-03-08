@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,8 +17,11 @@ import gov.sandia.n2a.language.function.Cosine;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Draw;
 import gov.sandia.n2a.language.function.DrawBlock;
+import gov.sandia.n2a.language.function.DrawCylinder;
 import gov.sandia.n2a.language.function.DrawDisc;
+import gov.sandia.n2a.language.function.DrawLight;
 import gov.sandia.n2a.language.function.DrawSegment;
+import gov.sandia.n2a.language.function.DrawSphere;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Floor;
@@ -49,6 +52,11 @@ import gov.sandia.n2a.language.function.Pulse;
 import gov.sandia.n2a.language.function.ReadImage;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.function.UnitMap;
+import gov.sandia.n2a.language.function.glLookAt;
+import gov.sandia.n2a.language.function.glOrtho;
+import gov.sandia.n2a.language.function.glRotate;
+import gov.sandia.n2a.language.function.glScale;
+import gov.sandia.n2a.language.function.glTranslate;
 import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Divide;
@@ -432,12 +440,20 @@ public class Operator implements Cloneable
         register (Delay            .factory ());
         register (Draw             .factory ());
         register (DrawBlock        .factory ());
+        register (DrawCylinder     .factory ());
         register (DrawDisc         .factory ());
+        register (DrawLight        .factory ());
         register (DrawSegment      .factory ());
+        register (DrawSphere       .factory ());
         register (Event            .factory ());
         register (Exp              .factory ());
-        register (Gaussian         .factory ());
         register (Floor            .factory ());
+        register (Gaussian         .factory ());
+        register (glLookAt         .factory ());
+        register (glOrtho          .factory ());
+        register (glRotate         .factory ());
+        register (glScale          .factory ());
+        register (glTranslate      .factory ());
         register (Grid             .factory ());
         register (HyperbolicTangent.factory ());
         register (Input            .factory ());

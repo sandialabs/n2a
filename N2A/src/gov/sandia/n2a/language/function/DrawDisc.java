@@ -1,10 +1,13 @@
 /*
-Copyright 2019-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
+
+import java.awt.Color;
+import java.awt.geom.Ellipse2D;
 
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.Variable;
@@ -68,7 +71,22 @@ public class DrawDisc extends Draw implements Draw.Shape
         double radius = ((Scalar) operands[2].eval (context)).value;
         double color  = ((Scalar) operands[3].eval (context)).value;
 
-        H.drawDisc (now, raw, x, y, radius, (int) color);
+        H.next (now);
+
+        if (! raw)
+        {
+            x      *= H.width;
+            y      *= H.width;
+            radius *= H.width;
+        }
+        if (radius < 0.5) radius = 0.5;  // 1px diameter
+
+        double w = 2 * radius;
+        if (H.disc == null) H.disc = new Ellipse2D.Double (x - radius, y - radius, w, w);
+        else                H.disc.setFrame               (x - radius, y - radius, w, w);
+
+        H.graphics.setColor (new Color ((int) color));
+        H.graphics.fill (H.disc);
 
         return new Scalar (0);
     }

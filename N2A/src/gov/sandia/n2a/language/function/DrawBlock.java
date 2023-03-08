@@ -1,10 +1,13 @@
 /*
-Copyright 2021-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
+
+import java.awt.Color;
+import java.awt.geom.Rectangle2D;
 
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.Variable;
@@ -71,7 +74,23 @@ public class DrawBlock extends Draw implements Draw.Shape
         double h     = ((Scalar) operands[3].eval (context)).value;
         double color = ((Scalar) operands[4].eval (context)).value;
 
-        H.drawBlock (now, raw, x, y, w, h, (int) color);
+        H.next (now);
+
+        if (! raw)
+        {
+            x *= H.width;
+            y *= H.width;
+            w *= H.width;
+            h *= H.width;
+        }
+        if (w < 0.5) w = 0.5;  // 1px
+        if (h < 0.5) h = 0.5;
+
+        if (H.rect == null) H.rect = new Rectangle2D.Double (x - w/2, y - h/2, w, h);
+        else                H.rect.setFrame                 (x - w/2, y - h/2, w, h);
+
+        H.graphics.setColor (new Color ((int) color));
+        H.graphics.fill (H.rect);
 
         return new Scalar (0);
     }

@@ -1,12 +1,11 @@
 /*
-Copyright 2019-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
-import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.geom.Ellipse2D;
@@ -15,8 +14,29 @@ import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.FloatBuffer;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.TreeMap;
+import java.util.TreeSet;
+
 import javax.imageio.ImageIO;
+
+import com.jogamp.opengl.DefaultGLCapabilitiesChooser;
+import com.jogamp.opengl.GL;
+import com.jogamp.opengl.GL2ES2;
+import com.jogamp.opengl.GLAutoDrawable;
+import com.jogamp.opengl.GLCapabilities;
+import com.jogamp.opengl.GLDrawableFactory;
+import com.jogamp.opengl.GLProfile;
+import com.jogamp.opengl.GLUniformData;
+import com.jogamp.opengl.util.GLArrayDataServer;
+import com.jogamp.opengl.util.PMVMatrix;
+import com.jogamp.opengl.util.awt.AWTGLReadBufferUtil;
+import com.jogamp.opengl.util.glsl.ShaderCode;
+import com.jogamp.opengl.util.glsl.ShaderProgram;
+import com.jogamp.opengl.util.glsl.ShaderState;
 
 import gov.sandia.n2a.backend.c.VideoIn;
 import gov.sandia.n2a.backend.c.VideoOut;
@@ -27,8 +47,10 @@ import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import tech.units.indriya.AbstractUnit;
@@ -130,12 +152,85 @@ public class Draw extends Function
         return new Scalar ();
     }
 
+    public Type eval (Instance context)
+    {
+        Simulator simulator = Simulator.instance.get ();
+        if (simulator == null) return new Scalar (0);
+
+        Holder H = getHolder (simulator, context);
+        applyKeywords (context, H);
+
+        // We don't do any actual drawing, nor do we advance the clock.
+        // All this function does is stage canvas and camera configurations
+        // for the next time the clock advances by a drawX() that makes a mark.
+
+        return new Scalar (0);
+    }
+
+    public String toString ()
+    {
+        return "draw";
+    }
+
+    public Holder getHolder (Simulator simulator, Instance context)
+    {
+        String path = ((Text) operands[0].eval (context)).value;
+        Object o = simulator.holders.get (path);
+        if (o == null)
+        {
+            Holder H = new Holder (simulator.jobDir.resolve (path));
+            simulator.holders.put (path, H);
+            return H;
+        }
+        if (! (o instanceof Holder))
+        {
+            Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
+            throw new Backend.AbortRun ();
+        }
+        return (Holder) o;
+    }
+
+    public boolean applyKeywords (Instance context, Holder H)
+    {
+        if (keywords == null) return false;
+
+        // Don't apply a keyword unless it is explicitly present.
+        // For compactness, use utility routines from Function, even though this is a little more expensive.
+
+        boolean raw = false;
+        int width  = 0;
+        int height = 0;
+        for (String key : keywords.keySet ())
+        {
+            switch (key)
+            {
+                case "width":      width        =          evalKeyword     (context, "width",     0);           break;
+                case "height":     height       =          evalKeyword     (context, "height",    0);           break;
+                case "timeScale":  H.timeScale  =          evalKeyword     (context, "timeScale", 0.0);         break;
+                case "format":     H.format     =          evalKeyword     (context, "format",    "");          break;
+                case "codec":      H.codec      =          evalKeyword     (context, "codec",     "");          break;
+                case "clear":      H.clearColor =          evalKeyword     (context, "clear",     Color.black); break;
+                case "view":       H.view       = (Matrix) evalKeyword     (context, key);                      break;
+                case "projection": H.projection = (Matrix) evalKeyword     (context, key);                      break;
+                case "hold":       H.hold       =          evalKeywordFlag (context, "hold");                   break;
+                case "raw":        raw          =          evalKeywordFlag (context, "raw");                    break;
+            }
+        }
+
+        if      (width <= 0  &&  height >  0) width  = height;
+        else if (width >  0  &&  height <= 0) height = width;
+        if (width  > 0) H.width  = width;
+        if (height > 0) H.height = height;
+
+        return raw;
+    }
+
     public static class Holder implements AutoCloseable
     {
         public Path     path;
         public boolean  hold;         // Store a single frame rather than an image sequence.
         public String   format = "";  // name of format as recognized by supporting libraries
-        public String   codec  = "";  // nmae of codec for video file
+        public String   codec  = "";  // name of codec for video file
         public VideoOut vout;         // If null, then output an image sequence instead.
         public boolean  opened;
         public boolean  dirCreated;
@@ -152,6 +247,15 @@ public class Draw extends Function
         public Line2D.Double      line;       // Re-usable Shape object
         public Ellipse2D.Double   disc;       // ditto
         public Rectangle2D.Double rect;       // ditto
+
+        // OpenGL support
+        public GLAutoDrawable         drawable;
+        public ShaderState            st;
+        public PMVMatrix              pv;
+        public Matrix                 view;
+        public Matrix                 projection;
+        public TreeMap<Integer,Light> lights;
+        public boolean                have3D;  // 3D objects were drawn during the current cycle
 
         public Holder (Path path)
         {
@@ -211,6 +315,12 @@ public class Draw extends Function
             hold = false;
             writeImage ();
             if (vout != null) vout.close ();
+            if (drawable != null)
+            {
+                GL2ES2 gl = drawable.getGL ().getGL2ES2 ();
+                if (st != null) st.destroy (gl);
+                drawable.destroy ();
+            }
         }
 
         public void next (double now)
@@ -224,71 +334,108 @@ public class Draw extends Function
             {
                 image = new BufferedImage (width, height, BufferedImage.TYPE_INT_ARGB);
                 graphics = image.createGraphics ();
-                graphics.setColor (clearColor);
-                graphics.fillRect (0, 0, width, height);
             }
         }
 
-        public void drawDisc (double now, boolean raw, double x, double y, double radius, int color)
+        // Called immediately after next() to prepare for 3D drawing.
+        public void next3D ()
         {
-            next (now);
-
-            if (! raw)
+            // One-time setup of GL for entire simulation
+            int w = image.getWidth ();
+            int h = image.getHeight ();
+            if (drawable != null  &&  (drawable.getSurfaceWidth () != w  ||  drawable.getSurfaceHeight () != h))
             {
-                x      *= width;
-                y      *= width;
-                radius *= width;
+                GL2ES2 gl = drawable.getGL ().getGL2ES2 ();
+                if (st != null) st.destroy (gl);
+                st = null;
+                drawable.destroy ();
+                drawable = null;
             }
-            if (radius < 0.5) radius = 0.5;  // 1px diameter
-
-            double w = 2 * radius;
-            if (disc == null) disc = new Ellipse2D.Double (x - radius, y - radius, w, w);
-            else              disc.setFrame               (x - radius, y - radius, w, w);
-
-            graphics.setColor (new Color (color));
-            graphics.fill (disc);
-        }
-
-        public void drawBlock (double now, boolean raw, double x, double y, double w, double h, int color)
-        {
-            next (now);
-
-            if (! raw)
+            if (drawable == null)
             {
-                x *= width;
-                y *= width;
-                w *= width;
-                h *= width;
+                GLProfile glp = GLProfile.getDefault ();
+                GLCapabilities caps = new GLCapabilities (glp);
+                caps.setHardwareAccelerated (true);
+                caps.setDoubleBuffered (false);
+                caps.setAlphaBits (8);
+                caps.setRedBits (8);
+                caps.setBlueBits (8);
+                caps.setGreenBits (8);
+                caps.setOnscreen (false);
+                GLDrawableFactory factory = GLDrawableFactory.getFactory (glp);
+
+                drawable = factory.createOffscreenAutoDrawable (factory.getDefaultDevice(), caps, new DefaultGLCapabilitiesChooser(), w, h);
+                drawable.display ();
+                drawable.getContext ().makeCurrent();
             }
-            if (w < 0.5) w = 0.5;  // 1px
-            if (h < 0.5) h = 0.5;
-
-            if (rect == null) rect = new Rectangle2D.Double (x - w/2, y - h/2, w, h);
-            else              rect.setFrame                 (x - w/2, y - h/2, w, h);
-
-            graphics.setColor (new Color (color));
-            graphics.fill (rect);
-        }
-
-        public void drawSegment (double now, boolean raw, double x, double y, double x2, double y2, double thickness, int color)
-        {
-            next (now);
-
-            if (! raw)
+            GL2ES2 gl = drawable.getGL ().getGL2ES2 ();
+            if (st == null)
             {
-                x         *= width;
-                y         *= width;
-                x2        *= width;
-                y2        *= width;
-                thickness *= width;
-            }
-            if (width < 1) width = 1;
+                ShaderCode vp = ShaderCode.create (gl, GL2ES2.GL_VERTEX_SHADER,   this.getClass(), "", "", "Shader", "vp", null, true);
+                ShaderCode fp = ShaderCode.create (gl, GL2ES2.GL_FRAGMENT_SHADER, this.getClass(), "", "", "Shader", "fp", null, true);
+                ShaderProgram sp = new ShaderProgram ();
+                vp.defaultShaderCustomization (gl, true, true);
+                fp.defaultShaderCustomization (gl, true, true);
+                sp.add (gl, vp, System.err);
+                sp.add (gl, fp, System.err);
 
-            if (line == null) line = new Line2D.Double (x, y, x2, y2);
-            else              line.setLine             (x, y, x2, y2);
-            graphics.setStroke (new BasicStroke ((float) thickness));
-            graphics.setColor (new Color (color));
-            graphics.draw (line);
+                st = new ShaderState ();
+                st.attachShaderProgram (gl, sp, false);
+                st.bindAttribLocation (gl, 0, "vertexPosition");
+                st.bindAttribLocation (gl, 1, "vertexNormal");
+                st.useProgram (gl, true);
+            }
+
+            // Setup for current cycle
+            if (! have3D)
+            {
+                gl.glEnable (GL.GL_DEPTH_TEST);
+                //gl.glEnable (GL.GL_CULL_FACE);
+                float[] cv = clearColor.getRGBComponents (null);  // always RGBA
+                gl.glClearColor (cv[0], cv[1], cv[2], cv[3]);
+                gl.glClear (GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT);
+
+                if (pv == null) pv = new PMVMatrix ();
+                pv.glMatrixMode (PMVMatrix.GL_MODELVIEW);
+                if (view == null) pv.glLoadIdentity ();
+                else              pv.glLoadMatrixf (getMatrix (view), 0);
+                pv.glMatrixMode (PMVMatrix.GL_PROJECTION);
+                if (projection == null)  // Use default projection
+                {
+                    pv.glLoadIdentity ();  // because glOrtho multiplies the current matrix.
+                    float s = 50e-6f;
+                    if (width <= height)
+                    {
+                        float r = (float) height / width;
+                        pv.glOrthof (-s, s, -s*r, s*r, -s, s);
+                    }
+                    else
+                    {
+                        float r = (float) width / height;
+                        pv.glOrthof (-s*r, s*r, -s, s, -s, s);
+                    }
+                }
+                else  // Use given projection
+                {
+                    pv.glLoadMatrixf (getMatrix (projection), 0);
+                }
+                pv.update ();
+
+                st.uniform (gl, new GLUniformData ("modelViewMatrix",  4, 4, pv.glGetMvMatrixf ()));
+                st.uniform (gl, new GLUniformData ("projectionMatrix", 4, 4, pv.glGetPMatrixf ()));
+                st.uniform (gl, new GLUniformData ("normalMatrix",     4, 4, pv.glGetMvitMatrixf ()));  // This is only necessary if there is non-uniform scaling in the model-view matrix. Always using it is a safe choice.
+
+                if (lights == null) lights = new TreeMap<Integer,Light> ();
+                if (lights.isEmpty ()) lights.put (0, new Light ());
+                int i = 0;
+                for (Light l : lights.values ())
+                {
+                    l.setUniform (st, gl);
+                    i++;
+                    if (i >= 8) break;
+                }
+            }
+            have3D = true;
         }
 
         public void writeImage ()
@@ -302,6 +449,35 @@ public class Draw extends Function
                 path.toFile ().getAbsoluteFile ().mkdirs ();
                 dirCreated = true;
             }
+
+            BufferedImage background;
+            Graphics2D g2;
+            int w = image.getWidth ();
+            int h = image.getHeight ();
+            if (have3D)  // Composite 2D and 3D outputs.
+            {
+                background = new AWTGLReadBufferUtil (drawable.getGLProfile (), true).readPixelsToBufferedImage (drawable.getGL (), 0, 0, w, h, true);
+                try
+                {
+                    ImageIO.write(background, "png", new File("/Users/frothga/gltest.png"));
+                }
+                catch (IOException e)
+                {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
+                g2 = background.createGraphics ();
+            }
+            else  // Fill background with clear color, since this won't be provided by the 3D scene.
+            {
+                background = new BufferedImage (w, h, BufferedImage.TYPE_INT_ARGB);
+                g2 = background.createGraphics ();
+                g2.setColor (clearColor);
+                g2.fillRect (0, 0, w, h);
+            }
+            g2.drawImage (image, 0, 0, null);
+            image = background;
+            g2.dispose ();
 
             if (vout != null)
             {
@@ -329,78 +505,250 @@ public class Draw extends Function
             }
 
             image = null;
+            have3D = false;
             frameCount++;
         }
     }
 
-    public Holder getHolder (Simulator simulator, Instance context)
+    public static float[] getMatrix (Matrix A)
     {
-        String path = ((Text) operands[0].eval (context)).value;
-        Object o = simulator.holders.get (path);
-        if (o == null)
+        float[] result = new float[16];
+        int i = 0;
+        for (int c = 0; c < 4; c++)
         {
-            Holder H = new Holder (simulator.jobDir.resolve (path));
-            simulator.holders.put (path, H);
-            return H;
+            for (int r = 0; r < 4; r++)
+            {
+                result[i++] = (float) A.get (r, c);
+            }
         }
-        if (! (o instanceof Holder))
-        {
-            Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
-            throw new Backend.AbortRun ();
-        }
-        return (Holder) o;
+        return result;
     }
 
-    public boolean applyKeywords (Instance context, Holder H)
+    public static GLUniformData uniformVector (String name, float x, float y, float z)
     {
-        if (keywords == null) return false;
+        float[] b = new float[3];
+        b[0] = x;
+        b[1] = y;
+        b[2] = z;
+        FloatBuffer buffer = FloatBuffer.wrap (b);
+        return new GLUniformData (name, 3, buffer);
+    }
 
-        // Don't apply a keyword unless it is explicitly present.
-        // For compactness, use utility routines from Function, even though this is a little more expensive.
+    public static GLUniformData uniformVector (String name, float[] data)
+    {
+        FloatBuffer buffer = FloatBuffer.wrap (data);
+        return new GLUniformData (name, data.length, buffer);
+    }
 
-        boolean raw = false;
-        int width  = 0;
-        int height = 0;
-        for (String key : keywords.keySet ())
+    public static void extractColor (Type from, float[] to)
+    {
+        if (from instanceof Matrix)
         {
-            switch (key)
+            MatrixDense A = (MatrixDense) from;
+            int count = Math.min (to.length, A.rows () * A.columns ());
+            for (int i = 0; i < count; i++) to[i] = (float) A.get (i);
+        }
+        else if (from instanceof Scalar)
+        {
+            long c = (long) ((Scalar) from).value;
+            to[0] = (c >> 16 & 0xFF) / 255.0f;
+            to[1] = (c >>  8 & 0xFF) / 255.0f;
+            to[2] = (c       & 0xFF) / 255.0f;
+            if (to.length > 3) to[3] = (c >> 24 & 0xFF) / 255.0f;
+        }
+    }
+
+    public static void extractVector (Type from, float[] to)
+    {
+        if (! (from instanceof Matrix)) return;
+        Matrix A = (Matrix) from;
+        int count = Math.max (A.rows (), to.length);
+        for (int i = 0; i < count; i++) to[i] = (float) A.get (i);
+    }
+
+    public static class Light
+    {
+        public int     index;
+        public boolean on           = true;
+        public float[] position     = {0, 0, 1};  // In world coordinates, not eye coordinates.
+        public float[] direction    = {0, 0, -1}; // Ditto
+        public float[] ambient      = {0, 0, 0};
+        public float[] diffuse      = {1, 1, 1};
+        public float[] specular     = {1, 1, 1};
+        public float   spotExponent;
+        public float   spotCutoff   = 180;        // In degrees
+        public float   attenuation0 = 1;          // The suffix digit refers to power of r in 1 / (a + b*r + c*r^2).
+        public float   attenuation1;
+        public float   attenuation2;
+
+        public void extract (Function f, Instance context)
+        {
+            if (f.keywords == null) return;
+            for (String key : f.keywords.keySet ())
             {
-                case "width":     width        = evalKeyword     (context, "width",     0);           break;
-                case "height":    height       = evalKeyword     (context, "height",    0);           break;
-                case "timeScale": H.timeScale  = evalKeyword     (context, "timeScale", 0.0);         break;
-                case "format":    H.format     = evalKeyword     (context, "format",    "");          break;
-                case "codec":     H.codec      = evalKeyword     (context, "codec",     "");          break;
-                case "clear":     H.clearColor = evalKeyword     (context, "clear",     Color.black); break;
-                case "hold":      H.hold       = evalKeywordFlag (context, "hold");                   break;
-                case "raw":       raw          = true;                                                break;
+                // Rather than preemptively evaluating every keyword, we explicitly evaluate each one that's relevant.
+                switch (key)
+                {
+                    case "direction":    extractVector (f.evalKeyword (context, key), direction);    break;
+                    case "ambient":      extractColor  (f.evalKeyword (context, key), ambient);      break;
+                    case "diffuse":      extractColor  (f.evalKeyword (context, key), diffuse);      break;
+                    case "specular":     extractColor  (f.evalKeyword (context, key), specular);     break;
+                    case "on":           on           =         f.evalKeyword (context, key,  true); break;
+                    case "spotExponent": spotExponent = (float) f.evalKeyword (context, key,   0.0); break;
+                    case "spotCutoff":   spotCutoff   = (float) f.evalKeyword (context, key, 180.0); break;
+                    case "attenuation0": attenuation0 = (float) f.evalKeyword (context, key,   1.0); break;
+                    case "attenuation1": attenuation1 = (float) f.evalKeyword (context, key,   0.0); break;
+                    case "attenuation2": attenuation2 = (float) f.evalKeyword (context, key,   0.0); break;
+                    case "position":
+                        Type t = f.evalKeyword (context, key);
+                        if (t instanceof Scalar) position[0] = Float.POSITIVE_INFINITY;
+                        else                     extractVector (t, position);
+                        break;
+                }
             }
         }
 
-        if      (width <= 0  &&  height >  0) width  = height;
-        else if (width >  0  &&  height <= 0) height = width;
-        if (width  > 0) H.width  = width;
-        if (height > 0) H.height = height;
-
-        return raw;
+        public void setUniform (ShaderState st, GL2ES2 gl)
+        {
+            // TODO: how to set an array of structs
+            st.uniform (gl, new GLUniformData ("light.on",           on ? 1 : 0));
+            st.uniform (gl, uniformVector     ("light.position",     position));
+            st.uniform (gl, uniformVector     ("light.direction",    direction));
+            st.uniform (gl, uniformVector     ("light.ambient",      ambient));
+            st.uniform (gl, uniformVector     ("light.diffuse",      diffuse));
+            st.uniform (gl, uniformVector     ("light.specular",     specular));
+            st.uniform (gl, new GLUniformData ("light.spotExponent", spotExponent));
+            st.uniform (gl, new GLUniformData ("light.spotCutoff",   spotCutoff));
+            st.uniform (gl, new GLUniformData ("light.attenuation0", attenuation0));
+            st.uniform (gl, new GLUniformData ("light.attenuation1", attenuation1));
+            st.uniform (gl, new GLUniformData ("light.attenuation2", attenuation2));
+        }
     }
 
-    public Type eval (Instance context)
+    public static class Material
     {
-        Simulator simulator = Simulator.instance.get ();
-        if (simulator == null) return new Scalar (0);
+        public float[] ambient   = {0.2f, 0.2f, 0.2f};
+        public float[] diffuse   = {0.8f, 0.8f, 0.8f, 1};
+        public float[] emission  = {0, 0, 0};
+        public float[] specular  = {0, 0, 0};
+        public float   shininess = 0;
 
-        Holder H = getHolder (simulator, context);
-        applyKeywords (context, H);
+        public void extract (Function f, Instance context)
+        {
+            if (f.keywords == null) return;
 
-        // We don't do any actual drawing, nor do we advance the clock.
-        // All this function does is stage canvas and camera configurations
-        // for the next time the clock advances by a drawX() that makes a mark.
+            for (String key : f.keywords.keySet ())
+            {
+                switch (key)
+                {
+                    case "ambient":   extractColor       (f.evalKeyword (context, key), ambient);  break;
+                    case "diffuse":   extractColor       (f.evalKeyword (context, key), diffuse);  break;
+                    case "emission":  extractColor       (f.evalKeyword (context, key), emission); break;
+                    case "specular":  extractColor       (f.evalKeyword (context, key), specular); break;
+                    case "shininess": shininess = (float) f.evalKeyword (context, key, 0.0);       break;
+                }
+            }
+        }
 
-        return new Scalar (1);
+        public void setUniform (ShaderState st, GL2ES2 gl)
+        {
+            st.uniform (gl, uniformVector     ("material.ambient",   ambient));
+            st.uniform (gl, uniformVector     ("material.diffuse",   diffuse));
+            st.uniform (gl, uniformVector     ("material.emission",  emission));
+            st.uniform (gl, uniformVector     ("material.specular",  specular));
+            st.uniform (gl, new GLUniformData ("material.shininess", shininess));
+        }
     }
 
-    public String toString ()
+    public static class SharedVertex implements Comparable<SharedVertex>
     {
-        return "draw";
+        public float x;
+        public float y;
+        public float z;
+        public float nx;
+        public float ny;
+        public float nz;
+        public int index = -1;  // in vertices array. -1 means not added yet.
+
+        public SharedVertex (float x, float y, float z, float nx, float ny, float nz)
+        {
+            this.x  = x;
+            this.y  = y;
+            this.z  = z;
+            this.nx = nx;
+            this.ny = ny;
+            this.nz = nz;
+        }
+
+        public int compareTo (SharedVertex o)
+        {
+            if (o == this) return 0;
+            if (x < o.x) return -1;
+            if (x > o.x) return 1; 
+            if (y < o.y) return -1;
+            if (y > o.y) return 1; 
+            if (z < o.z) return -1;
+            if (z > o.z) return 1; 
+            return 0;
+        }
+
+        public String toString ()
+        {
+            return index + " = " + x + " " + y + " " + z + " " + nx + " " + ny + " " + nz;
+        }
+    }
+
+    public static class SharedVertexSet
+    {
+        protected ArrayList<SharedVertex> vertices = new ArrayList<SharedVertex> ();
+        protected TreeSet<SharedVertex>   lookup   = new TreeSet<SharedVertex> ();
+
+        public int add (float x, float y, float z, float nx, float ny, float nz)
+        {
+            return add (new SharedVertex (x, y, z, nx, ny, nz));
+        }
+
+        public int add (SharedVertex v)
+        {
+            SharedVertex result = lookup.floor (v);
+            if (result != null  &&  result.compareTo (v) == 0) return result.index;
+
+            v.index = vertices.size ();
+            vertices.add (v);
+            lookup.add (v);
+            return v.index;
+        }
+
+        public GLArrayDataServer vertexArray (ShaderState st)
+        {
+            int count = vertices.size ();
+            GLArrayDataServer result = GLArrayDataServer.createGLSLInterleaved (6, GL.GL_FLOAT, false, count, GL.GL_STATIC_DRAW);
+            result.addGLSLSubArray ("vertexPosition", 3, GL.GL_ARRAY_BUFFER);
+            result.addGLSLSubArray ("vertexNormal",   3, GL.GL_ARRAY_BUFFER);
+
+            for (SharedVertex v : vertices)
+            {
+                result.putf (v.x);
+                result.putf (v.y);
+                result.putf (v.z);
+                result.putf (v.nx);
+                result.putf (v.ny);
+                result.putf (v.nz);
+            }
+
+            result.seal (true);
+            result.associate (st, true);
+            return result;
+        }
+
+        public static GLArrayDataServer indexArray (List<Integer> indices, ShaderState st)
+        {
+            int count = indices.size ();
+            GLArrayDataServer result = GLArrayDataServer.createData (1, GL.GL_UNSIGNED_INT, count, GL.GL_STATIC_DRAW, GL.GL_ELEMENT_ARRAY_BUFFER);
+            for (int i : indices) result.puti (i);
+            result.seal (true);
+            result.associate (st, true);
+            return result;
+        }
     }
 }

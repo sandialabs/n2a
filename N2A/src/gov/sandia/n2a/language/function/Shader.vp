@@ -1,0 +1,33 @@
+attribute vec3 vertexPosition;
+attribute vec3 vertexNormal;
+attribute vec3 vertexColor;
+
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+
+struct LightSource
+{
+    bool  on;
+    vec3  position;
+    vec3  direction;
+    vec3  ambient;
+    vec3  diffuse;
+    vec3  specular;
+    float spotExponent;
+    float spotCutoff;
+    float attenuation0;
+    float attenuation1;
+    float attenuation2;
+};
+uniform LightSource light;
+
+varying vec3 vN; // normal direction
+varying vec3 vL; // vector to light source
+
+void main()
+{
+    vN          = normalize (vec3 (modelViewMatrix * vec4 (vertexNormal,   0)));    // normal direction rotated into eye frame
+    vec3 P      =            vec3 (modelViewMatrix * vec4 (vertexPosition, 1));     // position in eye frame
+    vL          =            vec3 (modelViewMatrix * vec4 (light.position, 1)) - P; // direction from vertex to light source
+    gl_Position = projectionMatrix * vec4 (P, 1);
+}
