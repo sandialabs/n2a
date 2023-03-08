@@ -31,6 +31,7 @@ import com.jogamp.opengl.GLCapabilities;
 import com.jogamp.opengl.GLDrawableFactory;
 import com.jogamp.opengl.GLProfile;
 import com.jogamp.opengl.GLUniformData;
+import com.jogamp.opengl.math.FloatUtil;
 import com.jogamp.opengl.util.GLArrayDataServer;
 import com.jogamp.opengl.util.PMVMatrix;
 import com.jogamp.opengl.util.awt.AWTGLReadBufferUtil;
@@ -404,14 +405,14 @@ public class Draw extends Function
                 {
                     pv.glLoadIdentity ();  // because glOrtho multiplies the current matrix.
                     float s = 50e-6f;
-                    if (width <= height)
+                    if (w <= h)
                     {
-                        float r = (float) height / width;
+                        float r = (float) h / w;
                         pv.glOrthof (-s, s, -s*r, s*r, -s, s);
                     }
                     else
                     {
-                        float r = (float) width / height;
+                        float r = (float) w / h;
                         pv.glOrthof (-s*r, s*r, -s, s, -s, s);
                     }
                 }
@@ -419,19 +420,17 @@ public class Draw extends Function
                 {
                     pv.glLoadMatrixf (getMatrix (projection), 0);
                 }
-                pv.update ();
 
                 st.uniform (gl, new GLUniformData ("modelViewMatrix",  4, 4, pv.glGetMvMatrixf ()));
+                st.uniform (gl, new GLUniformData ("normalMatrix",     4, 4, pv.glGetMvitMatrixf ()));
                 st.uniform (gl, new GLUniformData ("projectionMatrix", 4, 4, pv.glGetPMatrixf ()));
-                st.uniform (gl, new GLUniformData ("normalMatrix",     4, 4, pv.glGetMvitMatrixf ()));  // This is only necessary if there is non-uniform scaling in the model-view matrix. Always using it is a safe choice.
 
                 if (lights == null) lights = new TreeMap<Integer,Light> ();
                 if (lights.isEmpty ()) lights.put (0, new Light ());
                 int i = 0;
                 for (Light l : lights.values ())
                 {
-                    l.setUniform (st, gl);
-                    i++;
+                    l.setUniform (i++, this);
                     if (i >= 8) break;
                 }
             }
@@ -608,12 +607,42 @@ public class Draw extends Function
             }
         }
 
-        public void setUniform (ShaderState st, GL2ES2 gl)
+        public void setUniform (int index, Holder H)
         {
-            // TODO: how to set an array of structs
+            ShaderState st = H.st;
+            GL2ES2 gl = H.drawable.getGL ().getGL2ES2 ();
+
+            // Preemptively transform the position and direction vectors, since it is
+            // a waste to do that for every pixel in the fragment shader, and this
+            // doesn't really belong in the vertex shader.
+            float[] P = new float[4];
+            P[0] = position[0];
+            P[1] = position[1];
+            P[2] = position[2];
+            P[3] = 1;
+            FloatBuffer Mv = H.pv.glGetMvMatrixf ();
+            float[] temp = new float[4];
+            FloatUtil.multMatrixVec (Mv, P, temp);
+            P = new float[3];
+            P[0] = temp[0];
+            P[1] = temp[1];
+            P[2] = temp[2];
+
+            float[] D = new float[4];
+            D[0] = direction[0];
+            D[1] = direction[1];
+            D[2] = direction[2];
+            D[3] = 1;
+            FloatBuffer Mvit = H.pv.glGetMvitMatrixf ();
+            FloatUtil.multMatrixVec (Mvit, D, temp);
+            D = new float[3];
+            D[0] = temp[0];
+            D[1] = temp[1];
+            D[2] = temp[2];
+
             st.uniform (gl, new GLUniformData ("light.on",           on ? 1 : 0));
-            st.uniform (gl, uniformVector     ("light.position",     position));
-            st.uniform (gl, uniformVector     ("light.direction",    direction));
+            st.uniform (gl, uniformVector     ("light.position",     P));
+            st.uniform (gl, uniformVector     ("light.direction",    D));
             st.uniform (gl, uniformVector     ("light.ambient",      ambient));
             st.uniform (gl, uniformVector     ("light.diffuse",      diffuse));
             st.uniform (gl, uniformVector     ("light.specular",     specular));

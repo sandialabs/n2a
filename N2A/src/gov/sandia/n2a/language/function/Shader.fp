@@ -25,13 +25,14 @@ struct Material
 uniform Material material;
 
 varying vec3 vN; // normal direction
-varying vec3 vL; // vector to light source
+varying vec3 vP; // position in eye space
 
 void main()
 {
     vec3 N = normalize (vN);
-    float distance = length (vL);
-    vec3 L = vL / distance;  // normalize
+    vec3 L = light.position - vP; // direction from vertex to light source
+    float distance = length (L);
+    L /= distance;  // normalize
 
     float diffuseFactor  = max (0, dot (N, L));  // Lambertian reflection
     float specularFactor = 0;

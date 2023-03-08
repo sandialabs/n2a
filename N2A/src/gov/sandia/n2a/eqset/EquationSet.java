@@ -47,6 +47,7 @@ import tech.units.indriya.AbstractUnit;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -4090,7 +4091,11 @@ public class EquationSet implements Comparable<EquationSet>
     public void addDrawDependencies ()
     {
         for (EquationSet p : parts) p.addDrawDependencies ();
+        addDrawDependencies (variables);
+    }
 
+    public static void addDrawDependencies (Collection<Variable> list)
+    {
         // First pass -- collect lists of draw() and drawX() variables.
         class DrawVisitor implements Visitor
         {
@@ -4115,7 +4120,7 @@ public class EquationSet implements Comparable<EquationSet>
         }
         DrawVisitor visitor = new DrawVisitor ();
 
-        for (Variable v : variables)
+        for (Variable v : list)
         {
             visitor.v = v;
             v.visit (visitor);

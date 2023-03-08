@@ -1453,6 +1453,7 @@ public class InternalBackendData
                 if (alwaysFires) break;  // Don't check any more equations, because Internal will stop here.
             }
         }
+        EquationSet.addDrawDependencies (list);
 
         EquationSet.determineOrderInit (list);
 

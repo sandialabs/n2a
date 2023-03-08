@@ -401,6 +401,7 @@ public class Variable implements Comparable<Variable>, Cloneable
             xform.v = v;
             v.transform (xform);
         }
+        EquationSet.addDrawDependencies (list);
     }
 
     public static int equationCount (MNode v)

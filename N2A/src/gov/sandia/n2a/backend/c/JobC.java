@@ -105,7 +105,7 @@ public class JobC extends Thread
     public    boolean tls;           // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
     protected boolean usesPolling;
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
-    
+
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
     // Where possible, the key is a String. Otherwise, it is an Operator which is specific to one expression.
     protected HashMap<Object,String> matrixNames      = new HashMap<Object,String> ();
