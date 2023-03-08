@@ -42,11 +42,19 @@ public class DrawLight extends Draw
 
         // Lights function much like generic draw. They stage info until start of next cycle.
 
-        Light light = new Light ();
-        light.index = (int) ((Scalar) operands[1].eval (context)).value;
+        int index = (int) ((Scalar) operands[1].eval (context)).value;
         if (H.lights == null) H.lights = new TreeMap<Integer,Light> ();
-        H.lights.put (light.index, light);
-        light.extract (this, context);
+        if (evalKeyword (context, "on", true))
+        {
+            Light light = new Light ();
+            light.index = index;
+            H.lights.put (index, light);
+            light.extract (this, context);
+        }
+        else
+        {
+            H.lights.remove (index);
+        }
 
         return new Scalar (0);
     }

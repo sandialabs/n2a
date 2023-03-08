@@ -433,6 +433,7 @@ public class Draw extends Function
                     l.setUniform (i++, this);
                     if (i >= 8) break;
                 }
+                st.uniform (gl, new GLUniformData ("enabled", i));
             }
             have3D = true;
         }
@@ -568,7 +569,6 @@ public class Draw extends Function
     public static class Light
     {
         public int     index;
-        public boolean on           = true;
         public float[] position     = {0, 0, 1};  // In world coordinates, not eye coordinates.
         public float[] direction    = {0, 0, -1}; // Ditto
         public float[] ambient      = {0, 0, 0};
@@ -592,7 +592,6 @@ public class Draw extends Function
                     case "ambient":      extractColor  (f.evalKeyword (context, key), ambient);      break;
                     case "diffuse":      extractColor  (f.evalKeyword (context, key), diffuse);      break;
                     case "specular":     extractColor  (f.evalKeyword (context, key), specular);     break;
-                    case "on":           on           =         f.evalKeyword (context, key,  true); break;
                     case "spotExponent": spotExponent = (float) f.evalKeyword (context, key,   0.0); break;
                     case "spotCutoff":   spotCutoff   = (float) f.evalKeyword (context, key, 180.0); break;
                     case "attenuation0": attenuation0 = (float) f.evalKeyword (context, key,   1.0); break;
@@ -640,17 +639,16 @@ public class Draw extends Function
             D[1] = temp[1];
             D[2] = temp[2];
 
-            st.uniform (gl, new GLUniformData ("light.on",           on ? 1 : 0));
-            st.uniform (gl, uniformVector     ("light.position",     P));
-            st.uniform (gl, uniformVector     ("light.direction",    D));
-            st.uniform (gl, uniformVector     ("light.ambient",      ambient));
-            st.uniform (gl, uniformVector     ("light.diffuse",      diffuse));
-            st.uniform (gl, uniformVector     ("light.specular",     specular));
-            st.uniform (gl, new GLUniformData ("light.spotExponent", spotExponent));
-            st.uniform (gl, new GLUniformData ("light.spotCutoff",   spotCutoff));
-            st.uniform (gl, new GLUniformData ("light.attenuation0", attenuation0));
-            st.uniform (gl, new GLUniformData ("light.attenuation1", attenuation1));
-            st.uniform (gl, new GLUniformData ("light.attenuation2", attenuation2));
+            st.uniform (gl, uniformVector     ("light[" + index + "].position",     P));
+            st.uniform (gl, uniformVector     ("light[" + index + "].direction",    D));
+            st.uniform (gl, uniformVector     ("light[" + index + "].ambient",      ambient));
+            st.uniform (gl, uniformVector     ("light[" + index + "].diffuse",      diffuse));
+            st.uniform (gl, uniformVector     ("light[" + index + "].specular",     specular));
+            st.uniform (gl, new GLUniformData ("light[" + index + "].spotExponent", spotExponent));
+            st.uniform (gl, new GLUniformData ("light[" + index + "].spotCutoff",   spotCutoff));
+            st.uniform (gl, new GLUniformData ("light[" + index + "].attenuation0", attenuation0));
+            st.uniform (gl, new GLUniformData ("light[" + index + "].attenuation1", attenuation1));
+            st.uniform (gl, new GLUniformData ("light[" + index + "].attenuation2", attenuation2));
         }
     }
 

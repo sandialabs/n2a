@@ -1,6 +1,5 @@
 struct LightSource
 {
-    bool  on;
     vec3  position;
     vec3  direction;
     vec3  ambient;
@@ -12,7 +11,8 @@ struct LightSource
     float attenuation1;
     float attenuation2;
 };
-uniform LightSource light;
+uniform LightSource light[8];
+uniform int enabled;  // how many lights are on
 
 struct Material
 {
@@ -30,26 +30,30 @@ varying vec3 vP; // position in eye space
 void main()
 {
     vec3 N = normalize (vN);
-    vec3 L = light.position - vP; // direction from vertex to light source
-    float distance = length (L);
-    L /= distance;  // normalize
 
-    float diffuseFactor  = max (0, dot (N, L));  // Lambertian reflection
-    float specularFactor = 0;
-    if (diffuseFactor > 0)
+    vec3 color = vec3 (0.0);
+    for (int i = 0; i < enabled; i++)
     {
-        // Blinn-Phong specularity
-        vec3 H         = normalize (L + vec3 (0,0,1)); // light half vector
-        float angle    = max (0, dot (N, H));
-        specularFactor = pow (angle, material.shininess);
+        vec3 L = light[i].position - vP; // direction from vertex to light source
+        float distance = length (L);
+        L /= distance;  // normalize
+
+        float diffuseFactor  = max (0, dot (N, L));  // Lambertian reflection
+        float specularFactor = 0;
+        if (diffuseFactor > 0)
+        {
+            // Blinn-Phong specularity
+            vec3 H         = normalize (L + vec3 (0,0,1)); // light half vector
+            float angle    = max (0, dot (N, H));
+            specularFactor = pow (angle, material.shininess);
+        }
+
+        float attenuation = light[i].attenuation0 + (light[i].attenuation1 + light[i].attenuation2 * distance) * distance;
+        color +=      material.emission;
+        color +=      material.ambient  * light[i].ambient;
+        color += vec3(material.diffuse) * light[i].diffuse  * diffuseFactor  / attenuation;
+        color +=      material.specular * light[i].specular * specularFactor / attenuation;
     }
 
-    distance *= distance;
-    float attenuation = light.attenuation0 + (light.attenuation1 + light.attenuation2 * distance) * distance;
-    vec3 ambient  =      material.ambient  * light.ambient;
-    vec3 diffuse  = vec3(material.diffuse) * light.diffuse  * diffuseFactor  / attenuation;
-    vec3 specular =      material.specular * light.specular * specularFactor / attenuation;
-
-    vec3 color = clamp(material.emission + ambient + diffuse + specular, 0, 1);
-    gl_FragColor = vec4(color, material.diffuse.a);
+    gl_FragColor = vec4(clamp (color, 0, 1), material.diffuse.a);
 }
