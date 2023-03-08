@@ -106,7 +106,11 @@ public class DrawCylinder extends Draw implements Draw.Shape
         // This frame will be anchored first at one end, then at the other.
         // Its scale will be determined by the radius of the current end.
         //   The z vector runs along axis of the cylinder.
-        MatrixDense fz = p1.subtract (p2).normalize ();  // Positive direction is toward p1 just because that's how all the geometry code below was originally developed.
+        //   Positive direction is toward p1 just because that's how all the
+        //   geometry code was developed before moving to flexible coordinates.
+        MatrixDense fz = p1.subtract (p2);
+        double length = fz.norm (2);
+        fz = fz.divide (length);
         //   Create x vector along the axis that z has smallest extent.
         //   This is an arbitrary choice, but it should be the best conitioned when computing cross product.
         MatrixDense fx = new MatrixDense (3, 1);
@@ -122,6 +126,16 @@ public class DrawCylinder extends Draw implements Draw.Shape
         f.getColumn (2).set (fz);
         f.getColumn (3).set (p1);
         if (t == null) t = new MatrixDense (4, 1);
+
+        // Determine extra z component for sloped tube (r1 different from r2).
+        // Suppose r1 is longer than r2. A triangle is formed by the tip of r1,
+        // the tip of r2, and the projection of r1 onto the extension of r2.
+        // This triangle is similar to the triangle formed by the tip of r1,
+        // the tip of the normal added onto r1, and the slopeZ value we are
+        // computing. The ratio between the triangles sizes is
+        // 1 (for the normal) / (distance between p1 and p2).
+        // This also works when r1 is shorter than r2.
+        float slopeZ = (r2 - r1) / (float) length;
 
         double angleStep    = Math.PI * 2 / steps;
         double angleStepCap = Math.PI / 2 / (stepsCap + 1);
@@ -184,7 +198,8 @@ public class DrawCylinder extends Draw implements Draw.Shape
                 double a = i * angleStep;
                 float c = (float) Math.cos (a);
                 float s = (float) Math.sin (a);
-                put (f, c*r1, s*r1, 0, c, s, 0);
+                float l = (float) Math.sqrt (1 + slopeZ * slopeZ);  // 1 comes from c*c+s*s
+                put (f, c*r1, s*r1, 0, c/l, s/l, slopeZ/l);
             }
         }
 
@@ -200,7 +215,8 @@ public class DrawCylinder extends Draw implements Draw.Shape
                 double a = i * angleStep;
                 float c = (float) Math.cos (a);
                 float s = (float) Math.sin (a);
-                put (f, c*r2, s*r2, 0, c, s, 0);
+                float l = (float) Math.sqrt (1 + slopeZ * slopeZ);
+                put (f, c*r2, s*r2, 0, c/l, s/l, slopeZ/l);
             }
         }
         else
