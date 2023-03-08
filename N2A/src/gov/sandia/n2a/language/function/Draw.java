@@ -569,6 +569,7 @@ public class Draw extends Function
     public static class Light
     {
         public int     index;
+        public boolean infinite;
         public float[] position     = {0, 0, 1};  // In world coordinates, not eye coordinates.
         public float[] direction    = {0, 0, -1}; // Ditto
         public float[] ambient      = {0, 0, 0};
@@ -599,7 +600,7 @@ public class Draw extends Function
                     case "attenuation2": attenuation2 = (float) f.evalKeyword (context, key,   0.0); break;
                     case "position":
                         Type t = f.evalKeyword (context, key);
-                        if (t instanceof Scalar) position[0] = Float.POSITIVE_INFINITY;
+                        if (t instanceof Scalar) infinite = true;
                         else                     extractVector (t, position);
                         break;
                 }
@@ -635,10 +636,12 @@ public class Draw extends Function
             FloatBuffer Mvit = H.pv.glGetMvitMatrixf ();
             FloatUtil.multMatrixVec (Mvit, D, temp);
             D = new float[3];
-            D[0] = temp[0];
-            D[1] = temp[1];
-            D[2] = temp[2];
+            float l = (float) Math.sqrt (temp[0] * temp[0] + temp[1] * temp[1] + temp[2] * temp[2]);
+            D[0] = temp[0] / l;
+            D[1] = temp[1] / l;
+            D[2] = temp[2] / l;
 
+            st.uniform (gl, new GLUniformData ("light[" + index + "].infinite",     infinite ? 1 : 0));
             st.uniform (gl, uniformVector     ("light[" + index + "].position",     P));
             st.uniform (gl, uniformVector     ("light[" + index + "].direction",    D));
             st.uniform (gl, uniformVector     ("light[" + index + "].ambient",      ambient));
