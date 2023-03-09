@@ -38,17 +38,38 @@ public class glScale extends Function
         return new Scalar ();
     }
 
-    public Type eval (Instance context) throws EvaluationException
+    public static MatrixDense make (Matrix scale)
     {
-        Matrix scale = (MatrixDense) operands[0].eval (context);
-
         MatrixDense result = new MatrixDense (4, 4);
         result.set (0, 0, scale.get (0));
         result.set (1, 1, scale.get (1));
         result.set (2, 2, scale.get (2));
         result.set (3, 3, 1);
-
         return result;
+    }
+
+    public Type eval (Instance context) throws EvaluationException
+    {
+        Matrix scale;
+        Type op0 = operands[0].eval (context);
+        if (op0 instanceof Matrix)
+        {
+            scale = (Matrix) op0;
+        }
+        else
+        {
+            scale = new MatrixDense (3, 1);
+            double x = 0;
+            double y = 0;
+            double z = 0;
+            if (op0 != null) x = ((Scalar) op0).value;
+            if (operands.length > 1) y = ((Scalar) operands[1].eval (context)).value;
+            if (operands.length > 2) z = ((Scalar) operands[2].eval (context)).value;
+            scale.set (0, x);
+            scale.set (1, y);
+            scale.set (2, z);
+        }
+        return make (scale);
     }
 
     public String toString ()

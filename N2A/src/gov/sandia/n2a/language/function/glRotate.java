@@ -11,6 +11,7 @@ import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
+import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.linear.MatrixDense;
 
@@ -37,16 +38,13 @@ public class glRotate extends Function
         return new Scalar ();
     }
 
-    public Type eval (Instance context) throws EvaluationException
+    public static MatrixDense make (double a, Matrix xyz)
     {
-        double      a   = ((Scalar)     operands[0].eval (context)).value;
-        MatrixDense xyz = (MatrixDense) operands[1].eval (context);
-
         double c = Math.cos (a);
         double s = Math.sin (a);
         double c1 = 1 - c;
 
-        xyz = xyz.divide (xyz.norm (2));
+        xyz = xyz.normalize ();
         double x = xyz.get (0);
         double y = xyz.get (1);
         double z = xyz.get (2);
@@ -64,6 +62,31 @@ public class glRotate extends Function
         result.set (3, 3, 1);
 
         return result;
+    }
+
+    public Type eval (Instance context) throws EvaluationException
+    {
+        double a = ((Scalar) operands[0].eval (context)).value;
+        Matrix xyz;
+        Type op1 = operands[1].eval (context);
+        if (op1 instanceof Matrix)
+        {
+            xyz = (Matrix) op1;
+        }
+        else
+        {
+            xyz = new MatrixDense (3, 1);
+            double x = 0;
+            double y = 0;
+            double z = 0;
+            if (op1 != null) x = ((Scalar) op1).value;
+            if (operands.length > 2) y = ((Scalar) operands[2].eval (context)).value;
+            if (operands.length > 3) z = ((Scalar) operands[3].eval (context)).value;
+            xyz.set (0, x);
+            xyz.set (1, y);
+            xyz.set (2, z);
+        }
+        return make (a, xyz);
     }
 
     public String toString ()

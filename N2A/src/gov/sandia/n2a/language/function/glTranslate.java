@@ -38,10 +38,8 @@ public class glTranslate extends Function
         return new Scalar ();
     }
 
-    public Type eval (Instance context) throws EvaluationException
+    public static MatrixDense make (Matrix to)
     {
-        Matrix to = (MatrixDense) operands[0].eval (context);
-
         MatrixDense result = new MatrixDense (4, 4);
         result.set (0, 3, to.get (0));
         result.set (1, 3, to.get (1));
@@ -50,8 +48,31 @@ public class glTranslate extends Function
         result.set (1, 1, 1);
         result.set (2, 2, 1);
         result.set (3, 3, 1);
-
         return result;
+    }
+
+    public Type eval (Instance context) throws EvaluationException
+    {
+        Matrix to;
+        Type op0 = operands[0].eval (context);
+        if (op0 instanceof Matrix)
+        {
+            to = (Matrix) op0;
+        }
+        else
+        {
+            to = new MatrixDense (3, 1);
+            double x = 0;
+            double y = 0;
+            double z = 0;
+            if (op0 != null) x = ((Scalar) op0).value;
+            if (operands.length > 1) y = ((Scalar) operands[1].eval (context)).value;
+            if (operands.length > 2) z = ((Scalar) operands[2].eval (context)).value;
+            to.set (0, x);
+            to.set (1, y);
+            to.set (2, z);
+        }
+        return make (to);
     }
 
     public String toString ()
