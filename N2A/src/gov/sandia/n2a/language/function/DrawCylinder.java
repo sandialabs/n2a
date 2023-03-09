@@ -8,7 +8,10 @@ package gov.sandia.n2a.language.function;
 
 import com.jogamp.opengl.GL;
 import com.jogamp.opengl.GL2ES2;
+import com.jogamp.opengl.GLUniformData;
 import com.jogamp.opengl.util.GLArrayDataServer;
+import com.jogamp.opengl.util.glsl.ShaderState;
+
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
@@ -18,9 +21,7 @@ import gov.sandia.n2a.linear.MatrixDense;
 
 public class DrawCylinder extends Draw implements Draw.Shape
 {
-    protected GLArrayDataServer vertices;
-    protected GLArrayDataServer indices;
-    protected MatrixDense       t;  // Temporary variable used by put(). For efficiency we only create it once.
+    protected MatrixDense t; // temporary used by put(). For efficiency, we don't want to keep creating every time.
 
     public static Factory factory ()
     {
@@ -85,8 +86,11 @@ public class DrawCylinder extends Draw implements Draw.Shape
         Material m = new Material ();
         m.extract (this, context);
         GL2ES2 gl = H.drawable.getGL ().getGL2ES2 ();
-        m.setUniform (H.st, gl);
+        ShaderState st = H.st;
+        m.setUniform (st, gl);
 
+        GLArrayDataServer vertices = H.buffers.get ("cylinderVertices");
+        GLArrayDataServer indices  = H.buffers.get ("cylinderIndices");
         if (vertices == null)
         {
             int count = 2 + steps * (2 + stepsCap);  // estimate based on rounded caps at both ends
@@ -94,8 +98,10 @@ public class DrawCylinder extends Draw implements Draw.Shape
             vertices.addGLSLSubArray ("vertexPosition", 3, GL.GL_ARRAY_BUFFER);
             vertices.addGLSLSubArray ("vertexNormal",   3, GL.GL_ARRAY_BUFFER);
             indices  = GLArrayDataServer.createData (1, GL.GL_UNSIGNED_INT, count * 3, GL.GL_STATIC_DRAW, GL.GL_ELEMENT_ARRAY_BUFFER);
-            vertices.associate (H.st, true);
-            indices .associate (H.st, true);
+            vertices.associate (st, true);
+            indices .associate (st, true);
+            H.buffers.put ("cylinderVertices", vertices);
+            H.buffers.put ("cylinderIndices",  indices);
         }
         else
         {
@@ -155,13 +161,13 @@ public class DrawCylinder extends Draw implements Draw.Shape
             {
                 cone1 = true;
                 rowsBegin = rowsEnd = 1 + steps;  // So we can have separate normals for the disc.
-                put (f, 0, 0, 0, 0, 0, 1);
+                put (vertices, f, 0, 0, 0, 0, 0, 1);
                 for (int i = 0; i < steps; i++)
                 {
                     double a = i * angleStep;
                     float x = (float) Math.cos (a) * r1;
                     float y = (float) Math.sin (a) * r1;
-                    put (f, x, y, 0, 0, 0, 1);
+                    put (vertices, f, x, y, 0, 0, 0, 1);
                 }
             }
             else if (cap1 == 2)
@@ -169,7 +175,7 @@ public class DrawCylinder extends Draw implements Draw.Shape
                 cone1 = true;
                 rowsBegin = 1;
                 rowsEnd   = 1 + stepsCap * steps;
-                put (f, 0, 0, r1, 0, 0, 1);
+                put (vertices, f, 0, 0, r1, 0, 0, 1);
                 for (int s = stepsCap; s > 0; s--)
                 {
                     double a = s * angleStepCap;
@@ -181,7 +187,7 @@ public class DrawCylinder extends Draw implements Draw.Shape
                         float x = (float) Math.cos (a) * r;
                         float y = (float) Math.sin (a) * r;
                         float l = (float) Math.sqrt (x * x + y * y + z * z);
-                        put (f, x, y, z, x/l, y/l, z/l);
+                        put (vertices, f, x, y, z, x/l, y/l, z/l);
                     }
                 }
             }
@@ -202,7 +208,7 @@ public class DrawCylinder extends Draw implements Draw.Shape
                 ns = (float) Math.sin (a + angleStep2);
             }
             float l = (float) Math.sqrt (1 + slopeZ * slopeZ);  // 1 comes from c*c+s*s
-            put (f, c*r1, s*r1, 0, nc/l, ns/l, slopeZ/l);
+            put (vertices, f, c*r1, s*r1, 0, nc/l, ns/l, slopeZ/l);
         }
 
         // Move frame to end point
@@ -223,7 +229,7 @@ public class DrawCylinder extends Draw implements Draw.Shape
                 ns = (float) Math.sin (a - angleStep2);
             }
             float l = (float) Math.sqrt (1 + slopeZ * slopeZ);
-            put (f, c*r2, s*r2, 0, nc/l, ns/l, slopeZ/l);
+            put (vertices, f, c*r2, s*r2, 0, nc/l, ns/l, slopeZ/l);
         }
 
         // Cap 2
@@ -239,9 +245,9 @@ public class DrawCylinder extends Draw implements Draw.Shape
                     double a = i * angleStep;
                     float x = (float) Math.cos (a) * r2;
                     float y = (float) Math.sin (a) * r2;
-                    put (f, x, y, 0, 0, 0, -1);
+                    put (vertices, f, x, y, 0, 0, 0, -1);
                 }
-                put (f, 0, 0, 0, 0, 0, -1);
+                put (vertices, f, 0, 0, 0, 0, 0, -1);
             }
             else if (cap2 == 2)
             {
@@ -259,10 +265,10 @@ public class DrawCylinder extends Draw implements Draw.Shape
                         float x = (float) Math.cos (a) * r;
                         float y = (float) Math.sin (a) * r;
                         float l = (float) Math.sqrt (x * x + y * y + z * z);
-                        put (f, x, y, z, x/l, y/l, z/l);
+                        put (vertices, f, x, y, z, x/l, y/l, z/l);
                     }
                 }
-                put (f, 0, 0, -r2, 0, 0, -1);
+                put (vertices, f, 0, 0, -r2, 0, 0, -1);
             }
         }
 
@@ -339,6 +345,9 @@ public class DrawCylinder extends Draw implements Draw.Shape
             }
         }
 
+        st.uniform (gl, new GLUniformData ("modelViewMatrix", 4, 4, H.pv.glGetMvMatrixf ()));
+        st.uniform (gl, new GLUniformData ("normalMatrix",    4, 4, H.pv.glGetMvitMatrixf ()));
+
         vertices.seal (true);
         indices.seal (true);
         vertices.enableBuffer (gl, true);
@@ -349,7 +358,7 @@ public class DrawCylinder extends Draw implements Draw.Shape
         return new Scalar (0);
     }
 
-    public void put (MatrixDense f, float x, float y, float z, float nx, float ny, float nz)
+    public void put (GLArrayDataServer vertices, MatrixDense f, float x, float y, float z, float nx, float ny, float nz)
     {
         t.set (0, x);
         t.set (1, y);

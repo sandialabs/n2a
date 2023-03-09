@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -250,13 +251,15 @@ public class Draw extends Function
         public Rectangle2D.Double rect;       // ditto
 
         // OpenGL support
-        public GLAutoDrawable         drawable;
-        public ShaderState            st;
-        public PMVMatrix              pv;
-        public Matrix                 view;
-        public Matrix                 projection;
-        public TreeMap<Integer,Light> lights;
-        public boolean                have3D;  // 3D objects were drawn during the current cycle
+        public GLAutoDrawable                    drawable;
+        public ShaderState                       st;
+        public PMVMatrix                         pv;
+        public Matrix                            view;
+        public Matrix                            projection;
+        public TreeMap<Integer,Light>            lights;
+        public boolean                           have3D;  // 3D objects were drawn during the current cycle
+        public HashMap<String,GLArrayDataServer> buffers; // Assuming serialized access to GL, this lets DrawX instances share their buffers. These are automatically destroyed on close.
+        public HashMap<String,Object>            objects; // Ditto for generic objects.
 
         public Holder (Path path)
         {
@@ -316,12 +319,25 @@ public class Draw extends Function
             hold = false;
             writeImage ();
             if (vout != null) vout.close ();
-            if (drawable != null)
+            close3D ();
+        }
+
+        public void close3D ()
+        {
+            if (drawable == null) return;
+            GL2ES2 gl = drawable.getGL ().getGL2ES2 ();
+            if (buffers != null)
             {
-                GL2ES2 gl = drawable.getGL ().getGL2ES2 ();
-                if (st != null) st.destroy (gl);
-                drawable.destroy ();
+                for (GLArrayDataServer b : buffers.values ()) b.destroy (gl);
+                buffers.clear ();
             }
+            if (st != null)
+            {
+                st.destroy (gl);
+                st = null;
+            }
+            drawable.destroy ();
+            drawable = null;
         }
 
         public void next (double now)
@@ -346,11 +362,7 @@ public class Draw extends Function
             int h = image.getHeight ();
             if (drawable != null  &&  (drawable.getSurfaceWidth () != w  ||  drawable.getSurfaceHeight () != h))
             {
-                GL2ES2 gl = drawable.getGL ().getGL2ES2 ();
-                if (st != null) st.destroy (gl);
-                st = null;
-                drawable.destroy ();
-                drawable = null;
+                close3D ();
             }
             if (drawable == null)
             {
@@ -386,6 +398,8 @@ public class Draw extends Function
                 st.bindAttribLocation (gl, 1, "vertexNormal");
                 st.useProgram (gl, true);
             }
+            if (buffers == null) buffers = new HashMap<String,GLArrayDataServer> ();
+            if (objects == null) objects = new HashMap<String,Object> ();
 
             // Setup for current cycle
             if (! have3D)
@@ -421,9 +435,8 @@ public class Draw extends Function
                     pv.glLoadMatrixf (getMatrix (projection), 0);
                 }
 
-                st.uniform (gl, new GLUniformData ("modelViewMatrix",  4, 4, pv.glGetMvMatrixf ()));
-                st.uniform (gl, new GLUniformData ("normalMatrix",     4, 4, pv.glGetMvitMatrixf ()));
                 st.uniform (gl, new GLUniformData ("projectionMatrix", 4, 4, pv.glGetPMatrixf ()));
+                // Each individual drawX() should set modelViewMatrix and normalMatrix from pv just before drawing.
 
                 if (lights == null) lights = new TreeMap<Integer,Light> ();
                 if (lights.isEmpty ()) lights.put (0, new Light ());
