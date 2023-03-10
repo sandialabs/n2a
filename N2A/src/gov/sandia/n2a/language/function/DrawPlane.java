@@ -76,10 +76,10 @@ public class DrawPlane extends Draw implements Draw.Shape
 
             float[] n = new float[3];
             n[2] = 1;
-            put (vertices,  1,  1, 0, n);
-            put (vertices, -1,  1, 0, n);
-            put (vertices, -1, -1, 0, n);
-            put (vertices,  1, -1, 0, n);
+            put (vertices,  0.5f,  0.5f, 0, n);
+            put (vertices, -0.5f,  0.5f, 0, n);
+            put (vertices, -0.5f, -0.5f, 0, n);
+            put (vertices,  0.5f, -0.5f, 0, n);
 
             // first triangle
             indices.puti (0);

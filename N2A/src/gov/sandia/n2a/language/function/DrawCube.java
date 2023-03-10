@@ -119,47 +119,47 @@ public class DrawCube extends Draw implements Draw.Shape
         // Top face, y=1
         float[] n = new float[3];
         n[1] = 1;
-        put (vertices,  1, 1, -1, n);
-        put (vertices, -1, 1, -1, n);
-        put (vertices, -1, 1,  1, n);
-        put (vertices,  1, 1,  1, n);
+        put (vertices,  0.5f, 0.5f, -0.5f, n);
+        put (vertices, -0.5f, 0.5f, -0.5f, n);
+        put (vertices, -0.5f, 0.5f,  0.5f, n);
+        put (vertices,  0.5f, 0.5f,  0.5f, n);
 
         // Bottom face, y=-1
         n[1] = -1;
-        put (vertices,  1, -1,  1, n);
-        put (vertices, -1, -1,  1, n);
-        put (vertices, -1, -1, -1, n);
-        put (vertices,  1, -1, -1, n);
+        put (vertices,  0.5f, -0.5f,  0.5f, n);
+        put (vertices, -0.5f, -0.5f,  0.5f, n);
+        put (vertices, -0.5f, -0.5f, -0.5f, n);
+        put (vertices,  0.5f, -0.5f, -0.5f, n);
 
         // Front face, z=1
         n[1] = 0;
         n[2] = 1;
-        put (vertices,  1,  1,  1, n);
-        put (vertices, -1,  1,  1, n);
-        put (vertices, -1, -1,  1, n);
-        put (vertices,  1, -1,  1, n);
+        put (vertices,  0.5f,  0.5f,  0.5f, n);
+        put (vertices, -0.5f,  0.5f,  0.5f, n);
+        put (vertices, -0.5f, -0.5f,  0.5f, n);
+        put (vertices,  0.5f, -0.5f,  0.5f, n);
 
         // Back face, z=-1
         n[2] = -1;
-        put (vertices,  1, -1,  -1, n);
-        put (vertices, -1, -1,  -1, n);
-        put (vertices, -1,  1,  -1, n);
-        put (vertices,  1,  1,  -1, n);
+        put (vertices,  0.5f, -0.5f,  -0.5f, n);
+        put (vertices, -0.5f, -0.5f,  -0.5f, n);
+        put (vertices, -0.5f,  0.5f,  -0.5f, n);
+        put (vertices,  0.5f,  0.5f,  -0.5f, n);
 
         // Left face, x=-1
         n[0] = -1;
         n[2] = 0;
-        put (vertices, -1,  1,  1, n);
-        put (vertices, -1,  1, -1, n);
-        put (vertices, -1, -1, -1, n);
-        put (vertices, -1, -1,  1, n);
+        put (vertices, -0.5f,  0.5f,  0.5f, n);
+        put (vertices, -0.5f,  0.5f, -0.5f, n);
+        put (vertices, -0.5f, -0.5f, -0.5f, n);
+        put (vertices, -0.5f, -0.5f,  0.5f, n);
 
         // Right face, x=1
         n[0] = 1;
-        put (vertices, 1,  1, -1, n);
-        put (vertices, 1,  1,  1, n);
-        put (vertices, 1, -1,  1, n);
-        put (vertices, 1, -1, -1, n);
+        put (vertices, 0.5f,  0.5f, -0.5f, n);
+        put (vertices, 0.5f,  0.5f,  0.5f, n);
+        put (vertices, 0.5f, -0.5f,  0.5f, n);
+        put (vertices, 0.5f, -0.5f, -0.5f, n);
 
         for (int v = 0; v < 24; v += 4)
         {
