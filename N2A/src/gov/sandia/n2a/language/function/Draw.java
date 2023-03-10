@@ -600,7 +600,7 @@ public class Draw extends Function
         public float[] diffuse      = {1, 1, 1};
         public float[] specular     = {1, 1, 1};
         public float   spotExponent;
-        public float   spotCutoff   = 180;        // In degrees
+        public float   spotCutoff   = -1;         // cos(cutoff).
         public float   attenuation0 = 1;          // The suffix digit refers to power of r in 1 / (a + b*r + c*r^2).
         public float   attenuation1;
         public float   attenuation2;
@@ -613,15 +613,15 @@ public class Draw extends Function
                 // Rather than preemptively evaluating every keyword, we explicitly evaluate each one that's relevant.
                 switch (key)
                 {
-                    case "direction":    extractVector (f.evalKeyword (context, key), direction);    break;
-                    case "ambient":      extractColor  (f.evalKeyword (context, key), ambient);      break;
-                    case "diffuse":      extractColor  (f.evalKeyword (context, key), diffuse);      break;
-                    case "specular":     extractColor  (f.evalKeyword (context, key), specular);     break;
-                    case "spotExponent": spotExponent = (float) f.evalKeyword (context, key,   0.0); break;
-                    case "spotCutoff":   spotCutoff   = (float) f.evalKeyword (context, key, 180.0); break;
-                    case "attenuation0": attenuation0 = (float) f.evalKeyword (context, key,   1.0); break;
-                    case "attenuation1": attenuation1 = (float) f.evalKeyword (context, key,   0.0); break;
-                    case "attenuation2": attenuation2 = (float) f.evalKeyword (context, key,   0.0); break;
+                    case "direction":    extractVector                   (f.evalKeyword (context, key), direction);             break;
+                    case "ambient":      extractColor                    (f.evalKeyword (context, key), ambient);               break;
+                    case "diffuse":      extractColor                    (f.evalKeyword (context, key), diffuse);               break;
+                    case "specular":     extractColor                    (f.evalKeyword (context, key), specular);              break;
+                    case "spotExponent": spotExponent = (float)           f.evalKeyword (context, key,   0.0);                  break;
+                    case "spotCutoff":   spotCutoff   = (float) Math.cos (f.evalKeyword (context, key, 180.0) * Math.PI / 180); break;
+                    case "attenuation0": attenuation0 = (float)           f.evalKeyword (context, key,   1.0);                  break;
+                    case "attenuation1": attenuation1 = (float)           f.evalKeyword (context, key,   0.0);                  break;
+                    case "attenuation2": attenuation2 = (float)           f.evalKeyword (context, key,   0.0);                  break;
                     case "position":
                         Type t = f.evalKeyword (context, key);
                         if (t instanceof Scalar) infinite = true;

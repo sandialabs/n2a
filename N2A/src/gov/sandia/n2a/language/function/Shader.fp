@@ -7,7 +7,7 @@ struct LightSource
     vec3  diffuse;
     vec3  specular;
     float spotExponent;
-    float spotCutoff;
+    float spotCutoff;  // cos(cutoff) rather than raw angle
     float attenuation0;
     float attenuation1;
     float attenuation2;
@@ -38,6 +38,7 @@ void main()
     {
         vec3 L; // direction from vertex to light source
         float distance;
+        float theta = -1;  // cos(angle between L and direction). -1 means no cutoff.
         if (light[i].infinite)
         {
             L = -light[i].direction;
@@ -47,6 +48,7 @@ void main()
             L = light[i].position - vP;
             distance = length (L);
             L /= distance;  // normalize
+            theta = dot (L, -light[i].direction);
         }
 
         float diffuseFactor  = max (0, dot (N, L));  // Lambertian reflection
@@ -59,12 +61,20 @@ void main()
             if (angle > 0) specularFactor = pow (angle, material.shininess);
         }
 
-        float attenuation = 1;
-        if (! light[i].infinite) attenuation = light[i].attenuation0 + (light[i].attenuation1 + light[i].attenuation2 * distance) * distance;
-        color +=      material.emission;
-        color +=      material.ambient  * light[i].ambient;
-        color += vec3(material.diffuse) * light[i].diffuse  * diffuseFactor  / attenuation;
-        color +=      material.specular * light[i].specular * specularFactor / attenuation;
+        color += material.emission;
+        color += material.ambient * light[i].ambient;
+        if (light[i].infinite)
+        {
+            color += vec3(material.diffuse) * light[i].diffuse  * diffuseFactor;
+            color +=      material.specular * light[i].specular * specularFactor;
+        }
+        else if (theta >= light[i].spotCutoff)
+        {
+            float attenuation = pow (theta, light[i].spotExponent);
+            attenuation /= light[i].attenuation0 + (light[i].attenuation1 + light[i].attenuation2 * distance) * distance;
+            color += vec3(material.diffuse) * light[i].diffuse  * diffuseFactor  * attenuation;
+            color +=      material.specular * light[i].specular * specularFactor * attenuation;
+        }
     }
 
     gl_FragColor = vec4(clamp (color, 0, 1), material.diffuse.a);
