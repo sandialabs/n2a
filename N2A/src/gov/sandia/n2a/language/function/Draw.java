@@ -685,7 +685,7 @@ public class Draw extends Function
         public float[] diffuse   = {0.8f, 0.8f, 0.8f, 1};
         public float[] emission  = {0, 0, 0};
         public float[] specular  = {0, 0, 0};
-        public float   shininess = 0;
+        public float   shininess = 16;  // Different than OpenGL default. 0 would produce 100% specularity across entire surface, probably confusing the user.
 
         public void extract (Function f, Instance context)
         {

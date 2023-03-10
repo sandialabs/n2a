@@ -31,6 +31,7 @@ varying vec3 vP; // position in eye space
 void main()
 {
     vec3 N = normalize (vN);
+    vec3 V = normalize (-vP);
 
     vec3 color = vec3 (0.0);
     for (int i = 0; i < enabled; i++)
@@ -52,10 +53,10 @@ void main()
         float specularFactor = 0;
         if (diffuseFactor > 0)
         {
-            // Blinn-Phong specularity
-            vec3 H         = normalize (L + vec3 (0,0,1)); // light half vector
-            float angle    = max (0, dot (N, H));
-            specularFactor = pow (angle, material.shininess);
+            // Phong specularity
+            vec3  R     = reflect (-L, N);
+            float angle = dot (R, V);
+            if (angle > 0) specularFactor = pow (angle, material.shininess);
         }
 
         float attenuation = 1;
