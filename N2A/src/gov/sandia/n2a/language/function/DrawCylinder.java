@@ -202,12 +202,13 @@ public class DrawCylinder extends Draw implements Draw.Shape
             float s = (float) Math.sin (a);
             float nc = c;
             float ns = s;
+            float l = (float) Math.sqrt (1 + slopeZ * slopeZ);  // 1 comes from c*c+s*s
             if (r1 == 0)  // Advance by half a step to get the average norm.
             {
                 nc = (float) Math.cos (a + angleStep2);
                 ns = (float) Math.sin (a + angleStep2);
+                l *= 1000;  // Make the tip normal a lot smaller than the other two. This trick makes smoother shading on the cone.
             }
-            float l = (float) Math.sqrt (1 + slopeZ * slopeZ);  // 1 comes from c*c+s*s
             put (vertices, f, c*r1, s*r1, 0, nc/l, ns/l, slopeZ/l);
         }
 
@@ -223,12 +224,13 @@ public class DrawCylinder extends Draw implements Draw.Shape
             float s = (float) Math.sin (a);
             float nc = c;
             float ns = s;
+            float l = (float) Math.sqrt (1 + slopeZ * slopeZ);
             if (r2 == 0)
             {
                 nc = (float) Math.cos (a - angleStep2);
                 ns = (float) Math.sin (a - angleStep2);
+                l *= 1000;
             }
-            float l = (float) Math.sqrt (1 + slopeZ * slopeZ);
             put (vertices, f, c*r2, s*r2, 0, nc/l, ns/l, slopeZ/l);
         }
 

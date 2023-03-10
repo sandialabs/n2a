@@ -10,7 +10,10 @@ varying vec3 vP; // position in eye space
 
 void main()
 {
-    vN = normalize (vec3 (normalMatrix    * vec4 (vertexNormal,   0)));
-    vP =            vec3 (modelViewMatrix * vec4 (vertexPosition, 1));
+    // As long as normalMatrix is orthonormal, no need to normalize vN here.
+    // It gets normalized in the fragment shader.
+    // This allows us to use the trick for smoother shading of cones.
+    vN = vec3 (normalMatrix    * vec4 (vertexNormal,   0));
+    vP = vec3 (modelViewMatrix * vec4 (vertexPosition, 1));
     gl_Position = projectionMatrix * vec4 (vP, 1);
 }
