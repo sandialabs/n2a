@@ -579,6 +579,17 @@ public class Draw extends Function
         for (int i = 0; i < count; i++) to[i] = (float) A.get (i);
     }
 
+    public static void put (GLArrayDataServer vertices, float x, float y, float z, float[] n)
+    {
+        vertices.putf (x);
+        vertices.putf (y);
+        vertices.putf (z);
+
+        vertices.putf (n[0]);
+        vertices.putf (n[1]);
+        vertices.putf (n[2]);
+    }
+
     public static class Light
     {
         public int     index;

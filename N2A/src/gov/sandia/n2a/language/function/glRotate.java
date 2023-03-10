@@ -40,8 +40,9 @@ public class glRotate extends Function
 
     public static MatrixDense make (double a, Matrix xyz)
     {
-        double c = Math.cos (a);
-        double s = Math.sin (a);
+        double degrees = Math.PI / 180;
+        double c = Math.cos (a * degrees);
+        double s = Math.sin (a * degrees);
         double c1 = 1 - c;
 
         xyz = xyz.normalize ();

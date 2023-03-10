@@ -18,7 +18,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 
-public class DrawBlock extends Draw implements Draw.Shape
+public class DrawSquare extends Draw implements Draw.Shape
 {
     public static Factory factory ()
     {
@@ -26,12 +26,12 @@ public class DrawBlock extends Draw implements Draw.Shape
         {
             public String name ()
             {
-                return "drawBlock";
+                return "drawSquare";
             }
 
             public Operator createInstance ()
             {
-                return new DrawBlock ();
+                return new DrawSquare ();
             }
         };
     }
@@ -97,6 +97,6 @@ public class DrawBlock extends Draw implements Draw.Shape
 
     public String toString ()
     {
-        return "drawBlock";
+        return "drawSquare";
     }
 }
