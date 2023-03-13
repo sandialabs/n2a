@@ -1302,6 +1302,11 @@ public class JobC extends Thread
             result.append ("    cerr << \"Exception: \" << message << endl;\n");
             result.append ("    return 1;\n");
             result.append ("  }\n");
+            result.append ("  catch (...)\n");
+            result.append ("  {\n");
+            result.append ("    cerr << \"Generic Exception\" << endl;\n");
+            result.append ("    return 1;\n");
+            result.append ("  }\n");
             result.append ("  return 0;\n");
             result.append ("}\n");
         }

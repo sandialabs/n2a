@@ -6,7 +6,7 @@ Distributed under the UIUC/NCSA Open Source License.  See the file LICENSE
 for details.
 
 
-Copyright 2005-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1097,6 +1097,8 @@ namespace n2a
     {
         timestamp    = getTimestamp ();
         this->format = &format;
+        width        = A.rows ();  // Because matrices are usually column major.
+        height       = A.columns ();
         if (A.strideR_ == 1)
         {
             buffer = new PixelBufferPacked (A.data, A.strideC_ * sizeof (T), sizeof (T), A.offset * sizeof(T));

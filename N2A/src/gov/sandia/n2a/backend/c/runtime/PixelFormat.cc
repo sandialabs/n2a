@@ -6,7 +6,7 @@ Distributed under the UIUC/NCSA Open Source License.  See the file LICENSE
 for details.
 
 
-Copyright 2005-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -4700,43 +4700,42 @@ PixelFormatYUV::PixelFormatYUV (int ratioH, int ratioV)
 PixelFormatPackedYUV::PixelFormatPackedYUV (YUVindex * table)
 : PixelFormatYUV (1, 1)
 {
-  planes     = -1;
-  precedence = 1;
-  monochrome = false;
-  hasAlpha   = false;
+    planes     = -1;
+    precedence = 1;
+    monochrome = false;
+    hasAlpha   = false;
 
-  // Analyze table to initialize remaining members
-  this->table = table;
-  pixels = 0;
-  bytes = 0;
-  depth = 0;
-  if (table)
-  {
-	// Count number of entries in table, which is same as pixels in macropixel.
-	YUVindex * i = table;
-	while (i->y >= 0)
-	{
-	  i++;
-	  pixels++;
-	}
-	this->table = new YUVindex[pixels + 1];
+    // Analyze table to initialize remaining members
+    this->table = table;
+    pixels = 0;
+    bytes = 0;
+    depth = 0;
+    if (! table  ||  table->y < 0) return;  // Non-existent or empty table.
 
-	set<int> Usamples;
-	set<int> Vsamples;
-	i = table;
-	YUVindex * j = this->table;
-	while (i->y >= 0)
-	{
-	  bytes = max (max (bytes, i->y), max (i->u, i->v));  // 4-way max, with "bytes" as one of the items
-	  Usamples.insert (i->u);
-	  Vsamples.insert (i->v);
-	  *j++ = *i++;
-	}
-	j->y = -1;
-	bytes++;  // Up to now, bytes is the index of highest byte in group.  Must convert to quantity of bytes.
-	depth = (float) bytes / pixels;
-	ratioH = pixels / min (Usamples.size (), Vsamples.size ());
-  }
+    //   Count number of entries in table, which is same as pixels in macropixel.
+    YUVindex * i = table;
+    while (i->y >= 0)
+    {
+        i++;
+        pixels++;
+    }
+    this->table = new YUVindex[pixels + 1];
+
+    set<int> Usamples;
+    set<int> Vsamples;
+    i = table;
+    YUVindex * j = this->table;
+    while (i->y >= 0)
+    {
+        bytes = max (max (bytes, i->y), max (i->u, i->v));  // 4-way max, with "bytes" as one of the items
+        Usamples.insert (i->u);
+        Vsamples.insert (i->v);
+        *j++ = *i++;
+    }
+    j->y = -1;
+    bytes++;  // Up to now, bytes is the index of highest byte in group.  Must convert to quantity of bytes.
+    depth = (float) bytes / pixels;
+    ratioH = pixels / min (Usamples.size (), Vsamples.size ());
 }
 
 PixelFormatPackedYUV::~PixelFormatPackedYUV ()

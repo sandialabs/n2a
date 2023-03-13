@@ -6,7 +6,7 @@ Distributed under the UIUC/NCSA Open Source License.  See the file LICENSE
 for details.
 
 
-Copyright 2005-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -58,7 +58,11 @@ ImageFile::open (const String & fileName, const String & mode, const String & fo
     if (mode == "w")  // write
     {
         String suffix = formatName;
-        if (!suffix.size ()) suffix = fileName.substr (fileName.find_last_of ('.') + 1);
+        if (! suffix.size ())
+        {
+            String::size_type pos = fileName.find_last_of ('.');
+            if (pos != String::npos) suffix = fileName.substr (pos + 1);
+        }
 
         ImageFileFormat *ff;
         float P = ImageFileFormat::findName (suffix, ff);
@@ -159,7 +163,9 @@ float
 ImageFileFormat::find (const String & fileName, ImageFileFormat *& result)
 {
     ifstream ifs (fileName.c_str (), ios::binary);
-    String suffix = fileName.substr (fileName.find_last_of ('.') + 1);
+    String suffix = "";
+    String::size_type pos = fileName.find_last_of ('.');
+    if (pos != String::npos) suffix = fileName.substr (pos + 1);
 
     float P = 0;
     result = 0;

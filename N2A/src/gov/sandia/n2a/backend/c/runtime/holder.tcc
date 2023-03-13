@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -677,7 +677,14 @@ template<class T>
 ImageOutput<T>::~ImageOutput ()
 {
     hold = false;
-    writeImage ();
+    try
+    {
+        writeImage ();
+    }
+    catch (...)
+    {
+        std::cerr << "WARNING: last image might have been lost" << std::endl;
+    }
 #   ifdef HAVE_FFMPEG
     if (video) delete video;
 #   endif
@@ -1491,11 +1498,25 @@ OutputHolder<T>::~OutputHolder ()
 {
     if (out)
     {
-        writeTrace ();
+        try
+        {
+            writeTrace ();
+        }
+        catch (...)
+        {
+            std::cerr << "WARNING: final trace values might have been lost" << std::endl;
+        }
         out->flush ();
         if (out != &std::cout) delete out;
 
-        writeModes ();
+        try
+        {
+            writeModes ();
+        }
+        catch (...)
+        {
+            std::cerr << "WARNING: column info might have been lost" << std::endl;
+        }
     }
     for (auto it : columnMode) delete it;
 }

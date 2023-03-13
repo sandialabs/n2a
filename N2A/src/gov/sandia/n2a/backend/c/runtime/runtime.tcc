@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1300,7 +1300,8 @@ template<class T>
 Simulator<T>::Simulator ()
 {
     integrator = 0;
-    stop = false;
+    stop       = false;
+    after      = false;
 
 #   ifdef n2a_FP
     EventStep<T> * event = new EventStep<T> (0, (1 << FP_MSB) / 10000);  // Works for exponentTime=0. For any other case, it is necessary for top-level part to call setPeriod().

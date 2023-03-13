@@ -7,7 +7,7 @@ it separately and add to a library. In first case, just include this source file
 as if it were a header. In the second case, you can use MNode.h as an ordinary
 header to expose symbols.
 
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -93,7 +93,7 @@ n2a::remove_all (const String & path)
     }
     else
     {
-        remove (path.c_str ());
+        if (remove (path.c_str ())) throw "Failed to delete file";  // non-zero return from remove() indicates failure
     }
 }
 
@@ -1048,11 +1048,8 @@ n2a::MDoc::set (const char * value)
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (container) return;  // Not stand-alone, so ignore.
     if (strcmp (this->value, value) == 0) return;  // Don't call file move if location on disk has not changed.
-    try
-    {
-        rename (this->value, value);  // TODO: do UTF-8 filenames require special handling on Windows?
-    }
-    catch (...)
+    // TODO: do UTF-8 filenames require special handling on Windows?
+    if (rename (this->value, value))  // non-zero return from rename() indicates failure
     {
         std::cerr << "Failed to move file: " << this->value << " --> " << value << std::endl;
     }
