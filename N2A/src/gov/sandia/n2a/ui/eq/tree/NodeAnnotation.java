@@ -109,7 +109,7 @@ public class NodeAnnotation extends NodeContainer
     public boolean isParam ()
     {
         // We tag a metadata node simply by adding another metadata node immediately under it.
-        if (source.getFlag ("param")) return true;
+        if (folded.getFlag ("param")) return true;
 
         // If this node contains other nodes that are parameters, then we must also be visible.
         // This behavior is similar to NodePart and NodeAnnotations.
