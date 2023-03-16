@@ -124,11 +124,6 @@ public class PanelEquationGraph extends JScrollPane
         graphPanel.rescale (1 / graphPanel.zoom);
     }
 
-    public void updateLock ()
-    {
-        graphPanel.updateLock ();
-    }
-
     public Point2D.Double saveFocus ()
     {
         Point2D.Double result = new Point2D.Double ();
@@ -173,25 +168,9 @@ public class PanelEquationGraph extends JScrollPane
         vpOverride = focus;
     }
 
-    public void updatePins ()
-    {
-        graphPanel.updatePins ();
-    }
-
-    public void updateHighlights (NodeBase target)
-    {
-        lastHighlightTarget = target;
-        graphPanel.updateHighlights (target);
-    }
-
     public GraphNode getPinOut ()
     {
         return graphPanel.pinOut;
-    }
-
-    public void updateFilterLevel ()
-    {
-        graphPanel.updateFilterLevel ();
     }
 
     public Dimension getExtentSize ()
@@ -267,14 +246,30 @@ public class PanelEquationGraph extends JScrollPane
         return graphPanel.getSelection ();
     }
 
-    /**
-        Called by ChangePart to apply name change to an existing graph node.
-        Note that underride implies several other cases besides simple name change.
-        Those cases are handled by addPart() and removePart().
-    **/
-    public void updatePart (NodePart node)
+    public void updateLock ()
     {
-        if (node.graph != null) node.graph.updateTitle ();
+        graphPanel.updateLock ();
+    }
+
+    public void updateTitles ()
+    {
+        graphPanel.updateTitles ();
+    }
+
+    public void updatePins ()
+    {
+        graphPanel.updatePins ();
+    }
+
+    public void updateHighlights (NodeBase target)
+    {
+        lastHighlightTarget = target;
+        graphPanel.updateHighlights (target);
+    }
+
+    public void updateFilterLevel ()
+    {
+        graphPanel.updateFilterLevel ();
     }
 
     public void reconnect ()
@@ -715,6 +710,14 @@ public class PanelEquationGraph extends JScrollPane
             buildEdges ();
         }
 
+        public void updateTitles ()
+        {
+            for (Component c : getComponents ())
+            {
+                if (c instanceof GraphNode) ((GraphNode) c).updateTitle ();
+            }
+        }
+
         public void updatePins ()
         {
             // Since NodePart.updatePins() rebuilds NodePart.pinIn and pinOut, our references to them are
@@ -849,7 +852,7 @@ public class PanelEquationGraph extends JScrollPane
             em = SettingsLookAndFeel.em * zoom;
             GraphEdge.rescale (zoom);
 
-            GraphNode.border.t = (int) Math.ceil (GraphNode.borderThicknes * Math.min (1, zoom));
+            GraphNode.border.t = (int) Math.ceil (GraphNode.borderThickness * Math.min (1, zoom));
 
             offset.x = (int) Math.round (offset.x * factor);
             offset.y = (int) Math.round (offset.y * factor);

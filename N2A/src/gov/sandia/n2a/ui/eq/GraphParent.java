@@ -331,6 +331,8 @@ public class GraphParent extends JPanel
 
         public int getCursor (MouseEvent me)
         {
+            if (! PanelModel.instance.panelEquations.enableResize) return Cursor.DEFAULT_CURSOR;
+
             int x = me.getX ();
             int y = me.getY ();
             Component c = me.getComponent ();

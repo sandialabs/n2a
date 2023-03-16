@@ -275,9 +275,10 @@ public class NodePart extends NodeContainer
     {
         List<String> result = new ArrayList<String> (1);
         String key = source.key ();
-        if (expanded  ||  inheritName.isEmpty ()) result.add ("<html><b>" + key + "</b></html>");
-        else if (graph == null)                   result.add ("<html><b>" + key + "</b>  <i>(" + inheritName + ")</i></html>");
-        else                                      result.add ("<html><b>" + key + "</b><br/><i>" + inheritName + "</i></html>");
+        boolean noInherit = expanded  ||  inheritName.isEmpty ()  ||  ! PanelModel.instance.panelEquations.showInherit;
+        if (noInherit)          result.add ("<html><b>" + key + "</b></html>");
+        else if (graph == null) result.add ("<html><b>" + key + "</b>  <i>("   + inheritName + ")</i></html>");
+        else                    result.add ("<html><b>" + key + "</b><br/><i>" + inheritName +  "</i></html>");
         return result;
     }
 

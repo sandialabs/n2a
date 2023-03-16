@@ -126,7 +126,7 @@ public class ChangePart extends UndoableView
             {
                 nodeAfter = nodeBefore;
                 nodeAfter.source = newPart;
-                if (graphParent) peg.updatePart (nodeAfter);
+                if (graphParent  &&  nodeAfter.graph != null) nodeAfter.graph.updateTitle ();
             }
             else  // Use existing nodeAfter, so get rid of nodeBefore.
             {

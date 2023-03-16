@@ -405,8 +405,15 @@ public class GraphEdge
             if (updateOther) edgeOther.updateShape (false);
         }
 
-        if (topic.isEmpty ()) text = alias;
-        else                  text = alias + "(" + topic + ")";
+        if (nodeFrom.isMinimized ())
+        {
+            text = "";
+        }
+        else
+        {
+            if (topic.isEmpty ()) text = alias;
+            else                  text = alias + "(" + topic + ")";
+        }
         double tw = fm.stringWidth (text);
         double th = fm.getHeight ();
         double nodeAngle = Math.atan ((double) Cbounds.height / Cbounds.width);

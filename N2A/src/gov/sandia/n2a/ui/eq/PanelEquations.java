@@ -62,6 +62,7 @@ import javax.swing.Box;
 import javax.swing.ImageIcon;
 import javax.swing.InputMap;
 import javax.swing.JButton;
+import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
@@ -146,6 +147,11 @@ public class PanelEquations extends JPanel
     public static final int BOTTOM = 2;  // In a panel at the bottom
     public int view = AppData.state.getOrDefault (BOTTOM, "PanelModel", "view");
 
+    public boolean minimizeConnections  = AppData.state.getOrDefault (false, "PanelModel", "minimizeConnections");
+    public boolean minimizeCompartments = AppData.state.getOrDefault (false, "PanelModel", "minimizeCompartments");
+    public boolean showInherit          = AppData.state.getOrDefault (true,  "PanelModel", "showInherit");
+    public boolean enableResize         = AppData.state.getOrDefault (false, "PanelModel", "enableResize");
+
     protected JSplitPane               split;
     protected PanelGraph               panelGraph;
     protected JPanel                   panelBreadcrumb;
@@ -175,6 +181,7 @@ public class PanelEquations extends JPanel
     protected JToggleButton buttonFilterParam;
     protected JToggleButton buttonFilterRevoked;
     protected JButton       buttonView;
+    protected JButton       buttonViewOptions;
     public    JButton       buttonRun;
     protected JButton       buttonStudy;
     protected JButton       buttonExport;
@@ -183,7 +190,9 @@ public class PanelEquations extends JPanel
     protected JMenuItem  itemAddPart;
     protected JPopupMenu menuPopup;
     protected JPopupMenu menuView;
-    protected JPopupMenu menuFilter;
+    protected JPopupMenu menuViewOptions;
+    protected JMenuItem  itemMinimizeConnections;
+    protected JMenuItem  itemMinimizeCompartments;
     protected long       menuCanceledAt;
 
     protected static ImageIcon iconViewNode   = ImageUtil.getImage ("viewGraph.png");
@@ -351,6 +360,21 @@ public class PanelEquations extends JPanel
             }
         });
 
+        buttonViewOptions = new JButton (ImageUtil.getImage ("viewOptions.png"));
+        buttonViewOptions.setMargin (new Insets (2, 2, 2, 2));
+        buttonViewOptions.setFocusable (false);
+        buttonViewOptions.setToolTipText ("Node Display Options");
+        buttonViewOptions.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                if (System.currentTimeMillis () - menuCanceledAt > 500)
+                {
+                    menuViewOptions.show (buttonViewOptions, 0, buttonViewOptions.getHeight ());
+                }
+            }
+        });
+
         buttonRun = new JButton (ImageUtil.getImage ("run-16.png"));
         buttonRun.setMargin (new Insets (2, 2, 2, 2));
         buttonRun.setFocusable (false);
@@ -395,6 +419,7 @@ public class PanelEquations extends JPanel
                 buttonFilterLocal,
                 buttonFilterRevoked,
                 buttonView,
+                buttonViewOptions,
                 Box.createHorizontalStrut (15),
                 buttonRun,
                 buttonStudy,
@@ -521,6 +546,38 @@ public class PanelEquations extends JPanel
             }
         };
         menuView.addPopupMenuListener (rememberCancelTime);
+
+
+        // View Options menu
+
+        itemMinimizeConnections = new JCheckBoxMenuItem ("Minimize Connections", minimizeConnections);
+        itemMinimizeConnections.setToolTipText ("Reduce connection nodes to small boxes.");
+        itemMinimizeConnections.setEnabled (view != NODE);
+        itemMinimizeConnections.setActionCommand ("Connections");
+        itemMinimizeConnections.addActionListener (listenerViewOptions);
+
+        itemMinimizeCompartments = new JCheckBoxMenuItem ("Minimize Compartments", minimizeCompartments);
+        itemMinimizeCompartments.setToolTipText ("Reduce compartment nodes to small boxes.");
+        itemMinimizeCompartments.setEnabled (view != NODE);
+        itemMinimizeCompartments.setActionCommand ("Compartments");
+        itemMinimizeCompartments.addActionListener (listenerViewOptions);
+
+        JMenuItem itemShowInherit = new JCheckBoxMenuItem ("Show $inherit In Title", showInherit);
+        itemShowInherit.setToolTipText ("Add an extra line naming the parent part.");
+        itemShowInherit.setActionCommand ("Inherit");
+        itemShowInherit.addActionListener (listenerViewOptions);
+
+        JMenuItem itemEnableResize = new JCheckBoxMenuItem ("Custom Size", enableResize);
+        itemEnableResize.setToolTipText ("Allow nodes to be sized using the mouse. Otherwise, nodes are automatically sized to fit their content.");
+        itemEnableResize.setActionCommand ("Resize");
+        itemEnableResize.addActionListener (listenerViewOptions);
+
+        menuViewOptions = new JPopupMenu ();
+        menuViewOptions.add (itemMinimizeConnections);
+        menuViewOptions.add (itemMinimizeCompartments);
+        menuViewOptions.add (itemShowInherit);
+        menuViewOptions.add (itemEnableResize);
+        menuViewOptions.addPopupMenuListener (rememberCancelTime);
 
 
         // Load initial model
@@ -670,7 +727,7 @@ public class PanelEquations extends JPanel
             }
             else
             {
-                fce.subpart = active.root.source.key ();  // TODO: Brad Aimone once made this line produce a NullPointerException, but not sure how (can't reproduce).
+                fce.subpart = active.root.source.key ();
                 fce = createFocus (active.root);
                 if (active.root.graph != null) fce.titleFocused = active.root.graph.titleFocused;
             }
@@ -1371,6 +1428,8 @@ public class PanelEquations extends JPanel
                 if (dividerLocation == 0) dividerLocation = MainFrame.instance.getHeight () / 2;
                 split.setDividerLocation (dividerLocation);
             }
+            itemMinimizeConnections .setEnabled (view != NODE);
+            itemMinimizeCompartments.setEnabled (view != NODE);
             validate ();
             repaint ();
 
@@ -1381,6 +1440,37 @@ public class PanelEquations extends JPanel
                 part = null;  // force update to run
                 loadPart (p);
             }
+        }
+    };
+
+    ActionListener listenerViewOptions = new ActionListener ()
+    {
+        public void actionPerformed (ActionEvent e)
+        {
+            boolean needRedisplay = true;
+            String command = e.getActionCommand ();
+            switch (command)
+            {
+                case "Connections":
+                    minimizeConnections = ! minimizeConnections;
+                    AppData.state.set (minimizeConnections, "PanelModel", "minimizeConnections");
+                    break;
+                case "Compartments":
+                    minimizeCompartments = ! minimizeCompartments;
+                    AppData.state.set (minimizeCompartments, "PanelModel", "minimizeCompartments");
+                    break;
+                case "Inherit":
+                    showInherit = ! showInherit;
+                    AppData.state.set (showInherit, "PanelModel", "showInherit");
+                    break;
+                case "Resize":
+                    enableResize = ! enableResize;
+                    AppData.state.set (enableResize, "PanelModel", "enableResize");
+                    needRedisplay = false;
+                    break;
+            }
+
+            if (needRedisplay) panelEquationGraph.updateTitles ();
         }
     };
 

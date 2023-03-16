@@ -30,6 +30,7 @@ import java.awt.event.FocusListener;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
 import java.util.List;
@@ -91,8 +92,8 @@ public class GraphNode extends JPanel
     protected String              side;          // Only non-null if this is a pin I/O block. In that case, this is one of "in" or "out".
     protected Point2D.Double      tempPosition;  // If this graph node has coordinate that are not stored in $meta, then they are stored here, in ems.
 
-    public static final int        borderThicknes = 5;
-    protected static RoundedBorder border = new RoundedBorder (borderThicknes);
+    public static final int        borderThickness = 5;
+    protected static RoundedBorder border = new RoundedBorder (borderThickness);
 
     /**
         Constructs both regular graph nodes and pin I/O blocks.
@@ -146,13 +147,7 @@ public class GraphNode extends JPanel
         setBorder (border);
         setOpaque (false);
 
-        if (bounds != null)
-        {
-            double em = parent.em;
-            int x = (int) Math.round (bounds.getDouble ("x") * em) + parent.offset.x;
-            int y = (int) Math.round (bounds.getDouble ("y") * em) + parent.offset.y;
-            setLocation (x, y);
-        }
+        if (bounds != null) setLocation (getIdealLocation (bounds));
         updatePins ();
 
         ToolTipManager.sharedInstance ().registerComponent (this);
@@ -172,9 +167,31 @@ public class GraphNode extends JPanel
         });
     }
 
+    public boolean isMinimized ()
+    {
+        if (container.editor.editingNode == node) return false;
+        if (pinInBounds != null  ||  pinOutBounds != null) return false;  // Don't minimize a node with pins, because it would look weird.
+        if (container.view == PanelEquations.NODE) return false;  // Don't minimize in node mode, because it would be ugly to expand from minimized to equation tree.
+        boolean compartment =  node == null  ||  node.connectionBindings == null;
+        return compartment ? container.minimizeCompartments : container.minimizeConnections;
+    }
+
+    /**
+        Determines the offset, if any, between the pixel position of this node and its
+        box on screen. The offset is only nonzero when the node is minimized.
+    **/
+    public void offset (Point p, int sign)
+    {
+        if (! isMinimized ()) return;
+        Dimension d = title.getPreferredSize ();
+        p.x += sign * (border.t + d.width  / 2);
+        p.y += sign * (border.t + d.height / 2);
+    }
+
     public void holdTempPosition ()
     {
         Point p = getLocation ();
+        offset (p, -1);
         if (tempPosition == null) tempPosition = new Point2D.Double ();
         tempPosition.x = (p.x - parent.offset.x) / parent.em;
         tempPosition.y = (p.y - parent.offset.y) / parent.em;
@@ -186,25 +203,29 @@ public class GraphNode extends JPanel
     **/
     public void rescale ()
     {
-        MNode bounds;
-        GraphPanel gp = container.panelEquationGraph.graphPanel;
-        if (this == gp.pinIn)
-        {
-            bounds = container.part.source.child ("$meta", "gui", "pin", "bounds", "in");
-        }
-        else if (this == gp.pinOut)
-        {
-            bounds = container.part.source.child ("$meta", "gui", "pin", "bounds", "out");
-        }
-        else
-        {
-            bounds = node.source.child ("$meta", "gui", "bounds");
-        }
+        title.UIupdated = true;
+        if (panelEquationTree != null) panelEquationTree.tree.updateUI ();
+        updatePins ();
+        setSize (getPreferredSize ());
 
+        setLocation (getIdealLocation (getBoundsNode ()));
+    }
+
+    public MNode getBoundsNode ()
+    {
+        GraphPanel gp = container.panelEquationGraph.graphPanel;
+        if (this == gp.pinIn)  return container.part.source.child ("$meta", "gui", "pin", "bounds", "in");
+        if (this == gp.pinOut) return container.part.source.child ("$meta", "gui", "pin", "bounds", "out");
+        else                   return node.source.child ("$meta", "gui", "bounds");
+    }
+
+    public Point getIdealLocation (MNode bounds)
+    {
         Point2D.Double position;
         if (bounds == null)
         {
             position = tempPosition;
+            if (position == null) position = new Point2D.Double ();
         }
         else
         {
@@ -213,14 +234,12 @@ public class GraphNode extends JPanel
             position.y = (float) bounds.getDouble ("y");
         }
 
-        int x = (int) Math.round (position.x * parent.em) + parent.offset.x;
-        int y = (int) Math.round (position.y * parent.em) + parent.offset.y;
-        setLocation (x, y);
+        Point p = new Point ();
+        p.x = (int) Math.round (position.x * parent.em) + parent.offset.x;
+        p.y = (int) Math.round (position.y * parent.em) + parent.offset.y;
+        offset (p, 1);
 
-        title.UIupdated = true;
-        if (panelEquationTree != null) panelEquationTree.tree.updateUI ();
-        updatePins ();
-        setSize (getPreferredSize ());
+        return p;
     }
 
     public void updateUI ()
@@ -406,6 +425,12 @@ public class GraphNode extends JPanel
 
     public Dimension getPreferredSize ()
     {
+        if (isMinimized ())
+        {
+            int w = 2 * border.t;
+            return new Dimension (w, w);
+        }
+
         int w = 0;
         int h = 0;
         MNode bounds = node.source.child ("$meta", "gui", "bounds");
@@ -486,7 +511,8 @@ public class GraphNode extends JPanel
             np = node;
             bounds = metadata.childOrCreate ("gui", "bounds");
         }
-        Rectangle now = getBounds ();
+        Point now = getLocation ();
+        offset (now, -1);
         double em = parent.em;
         if (dx != 0  ||  np != node) bounds.setTruncated ((now.x - parent.offset.x + dx) / em, 2, "x");
         if (dy != 0  ||  np != node) bounds.setTruncated ((now.y - parent.offset.y + dy) / em, 2, "y");
@@ -523,7 +549,8 @@ public class GraphNode extends JPanel
                     bounds = metadata.childOrCreate ("gui", "bounds");
                     if (compound.leadPath == null) compound.leadPath = np.getKeyPath ();
                 }
-                now = g.getBounds ();
+                now = g.getLocation ();
+                g.offset (now, -1);
                 if (dx != 0  ||  np != node) bounds.setTruncated ((now.x - parent.offset.x + dx) / em, 2, "x");
                 if (dy != 0  ||  np != node) bounds.setTruncated ((now.y - parent.offset.y + dy) / em, 2, "y");
                 ca = new ChangeAnnotations (np, metadata);
@@ -537,17 +564,10 @@ public class GraphNode extends JPanel
 
     public void updateTitle ()
     {
-        Rectangle old = getBounds ();
-
         node.setUserObject ();
         boolean focused = title.isFocusOwner ();
         title.getTreeCellRendererComponent (getEquationTree ().tree, node, focused || selected, open, false, -2, focused);
-
-        panelTitle.invalidate ();
-        setSize (getPreferredSize ());  // GraphLayout won't do this, so we must do it manually.
-        Rectangle next = getBounds ();
-        parent.layout.componentMoved (this);
-        parent.repaint (old.union (next));
+        animate ();
     }
 
     /**
@@ -556,25 +576,23 @@ public class GraphNode extends JPanel
     public void updateGUI ()
     {
         title.updateSelected ();  // In case icon changed.
+        updatePins ();
 
         // Determine new position
-        int x = parent.offset.x;
-        int y = parent.offset.y;
+        Point p = new Point (parent.offset);
         MNode bounds = node.source.child ("$meta", "gui", "bounds");
         if (bounds != null)
         {
             double em = parent.em;
-            x += (int) Math.round (bounds.getDouble ("x") * em);
-            y += (int) Math.round (bounds.getDouble ("y") * em);
-            if (panelEquationTree != null) setOpen (bounds.getBoolean ("open"));
+            p.x += (int) Math.round (bounds.getDouble ("x") * em);
+            p.y += (int) Math.round (bounds.getDouble ("y") * em);
+            if (panelEquationTree == null) offset (p, 1);
+            else                           setOpen (bounds.getBoolean ("open"));
         }
 
-        // Determine new size
-        updatePins ();
-        Dimension d = getPreferredSize ();  // Fetches updated width and height.
-
         // Apply
-        Rectangle r = new Rectangle (x, y, d.width, d.height);
+        Dimension d = getPreferredSize ();  // Fetches updated width and height.
+        Rectangle r = new Rectangle (p, d);
         animate (r);
         parent.scrollRectToVisible (r);
     }
@@ -650,11 +668,12 @@ public class GraphNode extends JPanel
     }
 
     /**
-        Sets bounds to current preferred size and updates everything affected by the change.
+        Sets bounds to current preferred location & size. Updates everything affected by the change.
     **/
     public void animate ()
     {
-        Rectangle next = new Rectangle (getLocation (), getPreferredSize ());
+        Point p = getIdealLocation (getBoundsNode ());
+        Rectangle next = new Rectangle (p, getPreferredSize ());
         if (getBounds () != next) animate (next);
     }
 
@@ -1338,10 +1357,12 @@ public class GraphNode extends JPanel
 
             if (container.editor.editingNode != null) container.editor.stopCellEditing ();  // Edit could be in progress on another node title or on any tree, including our own.
             container.editor.addCellEditorListener (this);
+            if (isMinimized ()) panelTitle.setSize (title.getPreferredSize ());  // When minimized, panelTitle is zero-sized, but we need a proper width to set up editor.
             editingComponent = container.editor.getTitleEditorComponent (getEquationTree ().tree, node, this, open);
             panelTitle.add (editingComponent, BorderLayout.NORTH, 0);  // displaces this renderer from the layout manager's north slot
             setVisible (false);  // hide this renderer
 
+            GraphNode.this.setLocation (getIdealLocation (getBoundsNode()));
             GraphNode.this.setSize (GraphNode.this.getPreferredSize ());
             GraphNode.this.validate ();
             parent.scrollRectToVisible (GraphNode.this.getBounds ());
@@ -1795,10 +1816,16 @@ public class GraphNode extends JPanel
                     }
                     if (moved)
                     {
-                        bounds.setTruncated ((now.x - parent.offset.x) / em, 2, "x");
-                        bounds.setTruncated ((now.y - parent.offset.y) / em, 2, "y");
+                        Point p = now.getLocation ();
+                        offset (p, -1);
+                        bounds.setTruncated ((p.x - parent.offset.x) / em, 2, "x");
+                        bounds.setTruncated ((p.y - parent.offset.y) / em, 2, "y");
                     }
-                    if (bounds.size () > 0)
+                    if (bounds.isEmpty ())
+                    {
+                        takeFocusOnTitle ();
+                    }
+                    else
                     {
                         boolean multi =  moved  &&  ! selection.isEmpty ();
                         ChangeAnnotations ca = new ChangeAnnotations (np, metadata);
@@ -1833,9 +1860,10 @@ public class GraphNode extends JPanel
                                     bounds = metadata.childOrCreate ("gui", "bounds");
                                     if (compound.leadPath == null) compound.leadPath = np.getKeyPath ();
                                 }
-                                now = g.getBounds ();
-                                bounds.setTruncated ((now.x - parent.offset.x) / em, 2, "x");
-                                bounds.setTruncated ((now.y - parent.offset.y) / em, 2, "y");
+                                Point p = g.getLocation ();
+                                g.offset (p, -1);
+                                bounds.setTruncated ((p.x - parent.offset.x) / em, 2, "x");
+                                bounds.setTruncated ((p.y - parent.offset.y) / em, 2, "y");
                                 ca = new ChangeAnnotations (np, metadata);
                                 ca.graph = true;
                                 compound.addEdit (ca);
@@ -1870,12 +1898,41 @@ public class GraphNode extends JPanel
             Graphics2D g2 = (Graphics2D) g.create ();
             g2.setRenderingHint (RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            Shape border = new RoundRectangle2D.Double (x, y, width-1, height-1, t * 2, t * 2);
-
-            g2.setPaint (background);
-            g2.fill (border);
-
             GraphNode gn = (GraphNode) c;
+            boolean minimized = gn.isMinimized ();
+
+            Shape border;
+            if (minimized) border = new Rectangle2D.Double (x, y, width-1, height-1);  // Square border looks better when minimized.
+            else           border = new RoundRectangle2D.Double (x, y, width-1, height-1, t * 2, t * 2);
+
+            boolean selected = gn.title.selected;
+            boolean hasFocus = gn.title.hasFocus;
+            if (minimized  &&  (selected  ||  hasFocus)) // Because title doesn't show in minimized, so we need some way to indicate selected state.
+            {
+                if (EquationTreeCellRenderer.backgroundSelected == null)  // Use background color.
+                {
+                    g2.setPaint (EquationTreeCellRenderer.colorBackgroundSelected);
+                    g2.fill (border);
+                }
+                else  // Use background painter. Compare with EquationTreeCellRenderer.paint()
+                {
+                    if (hasFocus)
+                    {
+                        if (selected) EquationTreeCellRenderer.backgroundFocusedSelected.paint (g2, gn, width, height);
+                        else          EquationTreeCellRenderer.backgroundFocused        .paint (g2, gn, width, height);
+                    }
+                    else if (selected)  // and not focused
+                    {
+                        EquationTreeCellRenderer.backgroundSelected.paint (g2, gn, width, height);
+                    }
+                }
+            }
+            else  // Use standard background.
+            {
+                g2.setPaint (background);
+                g2.fill (border);
+            }
+
             g2.setPaint (EquationTreeCellRenderer.getForegroundFor (gn.node, false));
             g2.draw (border);
 
@@ -1902,9 +1959,17 @@ public class GraphNode extends JPanel
 
         public int getCursor (MouseEvent me)
         {
+            if (! PanelModel.instance.panelEquations.enableResize) return Cursor.MOVE_CURSOR;
+
+            Component c = me.getComponent ();
+            if (c instanceof GraphNode)  // This should always be true.
+            {
+                GraphNode gn = (GraphNode) c;
+                if (gn.isMinimized ()) return Cursor.MOVE_CURSOR;  // Don't allow resize on a minimized node.
+            }
+
             int x = me.getX ();
             int y = me.getY ();
-            Component c = me.getComponent ();
             int w = c.getWidth ();
             int h = c.getHeight ();
 
