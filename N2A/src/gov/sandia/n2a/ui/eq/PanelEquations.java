@@ -70,7 +70,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JSplitPane;
-import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
@@ -168,24 +167,21 @@ public class PanelEquations extends JPanel
     protected MVolatile                focusCache             = new MVolatile ();
 
     // Controls
-    protected JButton       buttonAddModel;
-    protected JButton       buttonAddPart;
-    protected JButton       buttonAddVariable;
-    protected JButton       buttonAddEquation;
-    protected JButton       buttonAddAnnotation;
-    protected JButton       buttonAddReference;
-    protected JButton       buttonMakePin;
-    protected JButton       buttonWatch;
-    protected JToggleButton buttonFilterInherited;
-    protected JToggleButton buttonFilterLocal;
-    protected JToggleButton buttonFilterParam;
-    protected JToggleButton buttonFilterRevoked;
-    protected JButton       buttonView;
-    protected JButton       buttonViewOptions;
-    public    JButton       buttonRun;
-    protected JButton       buttonStudy;
-    protected JButton       buttonExport;
-    protected JButton       buttonImport;
+    protected JButton buttonAddModel;
+    protected JButton buttonAddPart;
+    protected JButton buttonAddVariable;
+    protected JButton buttonAddEquation;
+    protected JButton buttonAddAnnotation;
+    protected JButton buttonAddReference;
+    protected JButton buttonMakePin;
+    protected JButton buttonWatch;
+    protected JButton buttonFilter;
+    protected JButton buttonView;
+    protected JButton buttonViewOptions;
+    public    JButton buttonRun;
+    protected JButton buttonStudy;
+    protected JButton buttonExport;
+    protected JButton buttonImport;
 
     protected JMenuItem  itemAddPart;
     protected JPopupMenu menuPopup;
@@ -193,6 +189,11 @@ public class PanelEquations extends JPanel
     protected JPopupMenu menuViewOptions;
     protected JMenuItem  itemMinimizeConnections;
     protected JMenuItem  itemMinimizeCompartments;
+    protected JPopupMenu menuFilter;
+    protected JMenuItem  itemFilterParam;
+    protected JMenuItem  itemFilterInherited;
+    protected JMenuItem  itemFilterLocal;
+    protected JMenuItem  itemFilterRevoked;
     protected long       menuCanceledAt;
 
     protected static ImageIcon iconViewNode   = ImageUtil.getImage ("viewGraph.png");
@@ -301,43 +302,21 @@ public class PanelEquations extends JPanel
         ImageIcon iconFilter       = ImageUtil.getImage ("filter.png");
         ImageIcon iconFilterFilled = ImageUtil.getImage ("filterFilled.png");
 
-        buttonFilterInherited = new JToggleButton (colorize (iconFilter, Color.blue));
-        buttonFilterInherited.setSelectedIcon (colorize (iconFilterFilled, Color.blue));
-        buttonFilterInherited.setMargin (new Insets (2, 2, 2, 2));
-        buttonFilterInherited.setFocusable (false);
-        buttonFilterInherited.setSelected (FilteredTreeModel.showInherited);
-        buttonFilterInherited.setToolTipText ("Show Inherited Equations");
-        buttonFilterInherited.addActionListener (listenerFilter);
-        buttonFilterInherited.setActionCommand ("Inherited");
-
-        buttonFilterLocal = new JToggleButton (iconFilter);  // black
-        buttonFilterLocal.setSelectedIcon (iconFilterFilled);
-        buttonFilterLocal.setMargin (new Insets (2, 2, 2, 2));
-        buttonFilterLocal.setFocusable (false);
-        buttonFilterLocal.setSelected (FilteredTreeModel.showLocal);
-        buttonFilterLocal.setToolTipText ("Show Local Equations");
-        buttonFilterLocal.addActionListener (listenerFilter);
-        buttonFilterLocal.setActionCommand ("Local");
-
-        Color darkGreen = new Color (0, 128, 0);
-        buttonFilterParam = new JToggleButton (colorize (iconFilter, darkGreen));
-        buttonFilterParam.setSelectedIcon (colorize (iconFilterFilled, darkGreen));
-        buttonFilterParam.setMargin (new Insets (2, 2, 2, 2));
-        buttonFilterParam.setFocusable (false);
-        buttonFilterParam.setSelected (FilteredTreeModel.showParam);
-        buttonFilterParam.setToolTipText ("Show Parameters Only (disable other filters)");
-        buttonFilterParam.addActionListener (listenerFilter);
-        buttonFilterParam.setActionCommand ("Param");
-
-        Color darkRed = new Color (192, 0, 0);
-        buttonFilterRevoked = new JToggleButton (colorize (iconFilter, darkRed));
-        buttonFilterRevoked.setSelectedIcon (colorize (iconFilterFilled, darkRed));
-        buttonFilterRevoked.setMargin (new Insets (2, 2, 2, 2));
-        buttonFilterRevoked.setFocusable (false);
-        buttonFilterRevoked.setSelected (FilteredTreeModel.showRevoked);
-        buttonFilterRevoked.setToolTipText ("Show Revoked Equations");
-        buttonFilterRevoked.addActionListener (listenerFilter);
-        buttonFilterRevoked.setActionCommand ("Revoked");
+        buttonFilter = new JButton (iconFilter);  // black
+        buttonFilter.setSelectedIcon (iconFilterFilled);
+        buttonFilter.setMargin (new Insets (2, 2, 2, 2));
+        buttonFilter.setFocusable (false);
+        buttonFilter.setToolTipText ("Equation Filter");
+        buttonFilter.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                if (System.currentTimeMillis () - menuCanceledAt > 500)  // A really ugly way to prevent the button from re-showing the menu if it was canceled by clicking the button.
+                {
+                    menuFilter.show (buttonFilter, 0, buttonFilter.getHeight ());
+                }
+            }
+        });
 
         buttonView = new JButton ();
         switch (view)
@@ -346,14 +325,14 @@ public class PanelEquations extends JPanel
             case BOTTOM: buttonView.setIcon (iconViewBottom); break;
             default:     buttonView.setIcon (iconViewNode);
         }
-        buttonView.setToolTipText ("View Equation Panel");
+        buttonView.setToolTipText ("Position of Equation Panel");
         buttonView.setMargin (new Insets (2, 2, 2, 2));
         buttonView.setFocusable (false);
         buttonView.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
             {
-                if (System.currentTimeMillis () - menuCanceledAt > 500)  // A really ugly way to prevent the button from re-showing the menu if it was canceled by clicking the button.
+                if (System.currentTimeMillis () - menuCanceledAt > 500)
                 {
                     menuView.show (buttonView, 0, buttonView.getHeight ());
                 }
@@ -414,10 +393,7 @@ public class PanelEquations extends JPanel
                 Box.createHorizontalStrut (15),
                 buttonWatch,
                 Box.createHorizontalStrut (15),
-                buttonFilterParam,
-                buttonFilterInherited,
-                buttonFilterLocal,
-                buttonFilterRevoked,
+                buttonFilter,
                 buttonView,
                 buttonViewOptions,
                 Box.createHorizontalStrut (15),
@@ -580,6 +556,42 @@ public class PanelEquations extends JPanel
         menuViewOptions.addPopupMenuListener (rememberCancelTime);
 
 
+        // Filter menu
+
+        itemFilterParam = new JCheckBoxMenuItem ("Parameters", FilteredTreeModel.showParam);
+        itemFilterParam.setToolTipText ("Show Parameters Only (disables other filters)");
+        itemFilterParam.addActionListener (listenerFilter);
+        itemFilterParam.setActionCommand ("Param");
+
+        itemFilterInherited = new JCheckBoxMenuItem ("Inherited", FilteredTreeModel.showInherited);
+        itemFilterInherited.setForeground (EquationTreeCellRenderer.colorInherit);
+        itemFilterInherited.setEnabled (! FilteredTreeModel.showParam);
+        itemFilterInherited.setToolTipText ("Show Inherited Equations");
+        itemFilterInherited.addActionListener (listenerFilter);
+        itemFilterInherited.setActionCommand ("Inherited");
+
+        itemFilterLocal = new JCheckBoxMenuItem ("Local", FilteredTreeModel.showLocal);
+        itemFilterLocal.setForeground (EquationTreeCellRenderer.colorOverride);
+        itemFilterLocal.setEnabled (! FilteredTreeModel.showParam);
+        itemFilterLocal.setToolTipText ("Show Local Equations");
+        itemFilterLocal.addActionListener (listenerFilter);
+        itemFilterLocal.setActionCommand ("Local");
+
+        itemFilterRevoked = new JCheckBoxMenuItem ("Revoked", FilteredTreeModel.showRevoked);
+        itemFilterRevoked.setForeground (EquationTreeCellRenderer.colorKill);
+        itemFilterRevoked.setEnabled (! FilteredTreeModel.showParam);
+        itemFilterRevoked.setToolTipText ("Show Revoked Equations");
+        itemFilterRevoked.addActionListener (listenerFilter);
+        itemFilterRevoked.setActionCommand ("Revoked");
+
+        menuFilter = new JPopupMenu ();
+        menuFilter.add (itemFilterParam);
+        menuFilter.add (itemFilterInherited);
+        menuFilter.add (itemFilterLocal);
+        menuFilter.add (itemFilterRevoked);
+        menuFilter.addPopupMenuListener (rememberCancelTime);
+
+
         // Load initial model
         EventQueue.invokeLater (new Runnable ()
         {
@@ -598,6 +610,9 @@ public class PanelEquations extends JPanel
         EquationTreeCellRenderer.staticUpdateUI ();
         EquationTreeCellEditor  .staticUpdateUI ();
         if (editor != null) editor.updateUI ();
+        if (itemFilterInherited != null) itemFilterInherited.setForeground (EquationTreeCellRenderer.colorInherit);
+        if (itemFilterLocal     != null) itemFilterLocal    .setForeground (EquationTreeCellRenderer.colorOverride);
+        if (itemFilterRevoked   != null) itemFilterRevoked  .setForeground (EquationTreeCellRenderer.colorKill);
         super.updateUI ();
     }
 
@@ -1480,15 +1495,19 @@ public class PanelEquations extends JPanel
         {
             panelEquationTree.tree.stopEditing ();
 
-            FilteredTreeModel.showInherited = buttonFilterInherited.isSelected ();
-            FilteredTreeModel.showLocal     = buttonFilterLocal    .isSelected ();
-            FilteredTreeModel.showParam     = buttonFilterParam    .isSelected ();
-            FilteredTreeModel.showRevoked   = buttonFilterRevoked  .isSelected ();
+            FilteredTreeModel.showParam     = itemFilterParam    .isSelected ();
+            FilteredTreeModel.showInherited = itemFilterInherited.isSelected ();
+            FilteredTreeModel.showLocal     = itemFilterLocal    .isSelected ();
+            FilteredTreeModel.showRevoked   = itemFilterRevoked  .isSelected ();
 
+            AppData.state.set (FilteredTreeModel.showParam,     "PanelModel", "filter", "param");
             AppData.state.set (FilteredTreeModel.showInherited, "PanelModel", "filter", "inherited");
             AppData.state.set (FilteredTreeModel.showLocal,     "PanelModel", "filter", "local");
-            AppData.state.set (FilteredTreeModel.showParam,     "PanelModel", "filter", "param");
             AppData.state.set (FilteredTreeModel.showRevoked,   "PanelModel", "filter", "revoked");
+
+            itemFilterInherited.setEnabled (! FilteredTreeModel.showParam);
+            itemFilterLocal    .setEnabled (! FilteredTreeModel.showParam);
+            itemFilterRevoked  .setEnabled (! FilteredTreeModel.showParam);
 
             if (e.getActionCommand ().equals ("Revoked"))
             {
