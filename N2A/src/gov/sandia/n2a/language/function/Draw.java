@@ -40,6 +40,7 @@ import com.jogamp.opengl.util.glsl.ShaderCode;
 import com.jogamp.opengl.util.glsl.ShaderProgram;
 import com.jogamp.opengl.util.glsl.ShaderState;
 
+import gov.sandia.n2a.backend.c.JobC;
 import gov.sandia.n2a.backend.c.VideoIn;
 import gov.sandia.n2a.backend.c.VideoOut;
 import gov.sandia.n2a.backend.internal.Simulator;
@@ -384,8 +385,8 @@ public class Draw extends Function
             GL2ES2 gl = drawable.getGL ().getGL2ES2 ();
             if (st == null)
             {
-                ShaderCode vp = ShaderCode.create (gl, GL2ES2.GL_VERTEX_SHADER,   this.getClass(), "", "", "Shader", "vp", null, true);
-                ShaderCode fp = ShaderCode.create (gl, GL2ES2.GL_FRAGMENT_SHADER, this.getClass(), "", "", "Shader", "fp", null, true);
+                ShaderCode vp = ShaderCode.create (gl, GL2ES2.GL_VERTEX_SHADER,   JobC.class, "runtime", "", "Shader", "vp", null, true);
+                ShaderCode fp = ShaderCode.create (gl, GL2ES2.GL_FRAGMENT_SHADER, JobC.class, "runtime", "", "Shader", "fp", null, true);
                 ShaderProgram sp = new ShaderProgram ();
                 vp.defaultShaderCustomization (gl, true, true);
                 fp.defaultShaderCustomization (gl, true, true);
@@ -592,7 +593,6 @@ public class Draw extends Function
 
     public static class Light
     {
-        public int     index;
         public boolean infinite;
         public float[] position     = {0, 0, 1};  // In world coordinates, not eye coordinates.
         public float[] direction    = {0, 0, -1}; // Ditto

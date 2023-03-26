@@ -504,7 +504,8 @@ public class JobC extends Thread
             "video.h", "Video.cc", "VideoFileFormatFFMPEG.cc",
             "NativeResource.cc", "NativeResource.h",
             "shared.h",
-            "OutputHolder.h", "OutputParser.h"  // Not needed by runtime, but provided as a utility for users.
+            "OutputHolder.h", "OutputParser.h",  // Not needed by runtime, but provided as a utility for users.
+            "Shader.vp", "Shader.fp"  // GPU code not compiled into runtime.
         );
     }
 

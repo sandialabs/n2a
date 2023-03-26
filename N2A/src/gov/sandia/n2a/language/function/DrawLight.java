@@ -47,7 +47,6 @@ public class DrawLight extends Draw
         if (evalKeyword (context, "on", true))
         {
             Light light = new Light ();
-            light.index = index;
             H.lights.put (index, light);
             light.extract (this, context);
         }
