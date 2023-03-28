@@ -1089,15 +1089,18 @@ public class JobC extends Thread
                 header.append ("#include <string>\n");
                 header.append ("\n");
 
-                CompilerFactory factory = BackendC.getFactory (env);
-                if (shared  &&  factory instanceof CompilerCL.Factory)
+                if (shared)
                 {
                     SHARED = "SHARED ";
                     header.append ("#undef SHARED\n");
-                    header.append ("#ifdef _USRDLL\n");
-                    header.append ("#  define SHARED __declspec(dllexport)\n");
+                    header.append ("#ifdef _MSC_VER\n");
+                    header.append ("#  ifdef _USRDLL\n");
+                    header.append ("#    define SHARED __declspec(dllexport)\n");
+                    header.append ("#  else\n");
+                    header.append ("#    define SHARED __declspec(dllimport)\n");
+                    header.append ("#  endif\n");
                     header.append ("#else\n");
-                    header.append ("#  define SHARED __declspec(dllimport)\n");
+                    header.append ("#  define SHARED\n");
                     header.append ("#endif\n");
                     header.append ("\n");
                 }
