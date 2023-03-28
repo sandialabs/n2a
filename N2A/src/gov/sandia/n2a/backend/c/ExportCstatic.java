@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.plugins.extpoints.ExportModel;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.PanelRun;
@@ -83,6 +84,7 @@ public class ExportCstatic implements ExportModel
             }
 
             // Cleanup
+            if (t.env instanceof Remote) t.env.deleteTree (t.jobDir);
             AppData.runs.clear (jobKey);
         }
         catch (Exception e)
