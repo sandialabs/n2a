@@ -11,6 +11,7 @@ import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.net.URL;
 
@@ -40,7 +41,7 @@ public abstract class SettingsBackend implements Settings, ChangeListener
 
     protected JScrollPane            scrollPane;
     protected DefaultListModel<Host> model  = new DefaultListModel<Host> ();
-    protected JList<Host>            list   = new JList<Host> (model);
+    protected JList<Host>            list;
     protected JPanel                 editor = new JPanel ();
 
     /**
@@ -77,6 +78,18 @@ public abstract class SettingsBackend implements Settings, ChangeListener
         scrollPane = new JScrollPane (view);
 
         for (Host h : Host.getHosts ()) model.addElement (h);
+
+        list = new JList<Host> (model)
+        {
+            // Enforce minimum size of list panel in BorderLayout.
+            public Dimension getPreferredSize ()
+            {
+                Dimension d = super.getPreferredSize ();
+                if (d.width  < 100) d.width  = 100;
+                if (d.height < 200) d.height = 200;
+                return d;
+            }
+        };
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         list.addListSelectionListener (new ListSelectionListener ()
         {
@@ -122,7 +135,7 @@ public abstract class SettingsBackend implements Settings, ChangeListener
         });
 
 
-        JPanel panelList = Lay.BL ("C", list, "pref=[100,200]");
+        JPanel panelList = Lay.BL ("C", list);
         panelList.setBorder (LineBorder.createBlackLineBorder ());
         panelList = (JPanel) Lay.eb (Lay.BL ("C", panelList), "5");
 
