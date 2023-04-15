@@ -964,11 +964,12 @@ public class PanelEquationGraph extends JScrollPane
             // Select from edge tips that are exactly the same distance from mouse pointer.
             // This can happen if they have exactly the same tip position. In this case,
             // we disambiguate by side.
-            // GraphEdge.ba should always be non-null in this case.
+            // GraphEdge.ba should always be non-null in this case. However, software crashed
+            // at least once on a null. It was not reproducible. Added guard just to be sure.
             for (GraphEdge e : found.keySet ())
             {
                 Vector2 m = v.subtract (e.tip);  // Vector from tip to mouse pointer.
-                if (m.dot (e.ba) > 0) return e;
+                if (e.ba != null  &&  m.dot (e.ba) > 0) return e;
             }
             return found.keySet ().iterator ().next ();
         }
