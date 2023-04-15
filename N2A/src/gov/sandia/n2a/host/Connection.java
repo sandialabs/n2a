@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -87,22 +87,27 @@ public class Connection implements Closeable, UserInteraction
         hostname = host.config.getOrDefault (host.name, "address");  // Value actually passed to ssh. Could be an alias at the ssh level.
         timeout  = host.config.getOrDefault (20,        "timeout") * 1000;
         password = host.config.get ("password");  // may be empty
-
-        // Retrieve username. Order of precedence (highest to lowest):
-        // 1) Directly specified in the UI, stored in host.config
-        // 2) Specified in ssh/config
-        // 3) Logged in user account for current JVM
-        // The code below processes these from lowest to highest precedence.
-        username = System.getProperty ("user.name");
-        try
-        {
-            HostConfigEntry entry = client.getHostConfigEntryResolver ().resolveEffectiveHost (hostname, 22, null, username, null, null);  // hostname and username are the only important entries for this query
-            if (entry != null) username = entry.getUsername ();
-        }
-        catch (IOException e) {}
-        username = host.config.getOrDefault (username, "username");  // Overrides all the above, if present.
+        username = getDefaultUsername (hostname);
+        username = host.config.getOrDefault (username, "username");  // Overrides the above, if present.
 
         home = host.config.getOrDefault ("/home/" + username, "home");
+    }
+
+    /**
+        Returns the username from ssh config, or if not in config, from system property.
+        The return value is never blank.
+    **/
+    public static String getDefaultUsername (String hostname)
+    {
+        String result = null;
+        try
+        {
+            HostConfigEntry entry = client.getHostConfigEntryResolver ().resolveEffectiveHost (hostname, 0, null, null, null, null);  // hostname is the only important value for this query
+            if (entry != null) result = entry.getUsername ();
+        }
+        catch (IOException e) {}
+        if (result == null  ||  result.isBlank ()) result = System.getProperty ("user.name");
+        return result;
     }
 
     /**
@@ -116,8 +121,13 @@ public class Connection implements Closeable, UserInteraction
         close ();
         try
         {
-            int port = host.config.getOrDefault (22, "port");
-            session = client.connect (username, hostname, port).verify (timeout).getSession ();
+            HostConfigEntry entry = client.getHostConfigEntryResolver ().resolveEffectiveHost (hostname, 0, null, null, null, null);
+            entry.setUsername (username);  // We fully determined username above, so just use it, regardless of whether there is a value in entry.
+            int port = entry.getPort ();
+            if (port <= 0) port = SshConstants.DEFAULT_PORT;
+            entry.setPort (host.config.getOrDefault (port, "port"));
+
+            session = client.connect (entry).verify (timeout).getSession ();
             session.setUserInteraction (this);
             if (session.getSessionHeartbeatType () == HeartbeatType.NONE)  // Does client get keepalive information from config file?
             {

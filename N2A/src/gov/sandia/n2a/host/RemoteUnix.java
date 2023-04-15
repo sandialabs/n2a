@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -72,10 +72,10 @@ public class RemoteUnix extends Unix implements Remote
     public class EditorPanel extends JPanel implements NameChangeListener, MessageListener
     {
         public MTextField     fieldAddress     = new MTextField (config, "address", name);
-        public MTextField     fieldUsername    = new MTextField (config, "username", System.getProperty ("user.name"));
+        public MTextField     fieldUsername    = new MTextField (config, "username", Connection.getDefaultUsername (name));
         public MPasswordField fieldPassword    = new MPasswordField (config, "password");
         public JLabel         labelWarning     = new JLabel ("<html>WARNING: Passoword is stored in plain text.<br>For more security, you can leave the field blank.<br>You will be prompted for a password once per session.<br>That password will be held only in volatile memory.</html>");
-        public MTextField     fieldHome        = new MTextField (config, "home", "/home/" + config.getOrDefault (System.getProperty ("user.name"), "username"));
+        public MTextField     fieldHome        = new MTextField (config, "home", "/home/" + config.getOrDefault (Connection.getDefaultUsername (name), "username"));
         public MTextField     fieldTimeout     = new MTextField (config, "timeout", "20");
         public MTextField     fieldMaxChannels = new MTextField (config, "maxChannels", "10");
         public JButton        buttonConnect    = new JButton ("Reset Connection");
@@ -207,6 +207,9 @@ public class RemoteUnix extends Unix implements Remote
         public void nameChanged (String newName)
         {
             fieldAddress.setDefault (name);
+            String defaultUsername = Connection.getDefaultUsername (name);
+            fieldUsername.setDefault (defaultUsername);
+            fieldHome.setDefault ("/home/" + config.getOrDefault (defaultUsername, "username"));
         }
 
         public void messageReceived ()
