@@ -2624,6 +2624,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     // Select the first blank text field
                     for (JTextField f : fields)
                     {
+                        if (f == null) continue;
                         String value = "";
                         if (f instanceof JPasswordField) value = new String (((JPasswordField) f).getPassword ());
                         else                             value = f.getText ();
@@ -2642,8 +2643,9 @@ public class SettingsRepo extends JScrollPane implements Settings
             //   Apply results
             for (int i = 0; i < items.length; i++)
             {
-                CredentialItem item = items[i];
                 JTextField f = fields[i];
+                if (f == null) continue;
+                CredentialItem item = items[i];
 
                 String value = "";
                 if (f instanceof JPasswordField) value = new String (((JPasswordField) f).getPassword ());
