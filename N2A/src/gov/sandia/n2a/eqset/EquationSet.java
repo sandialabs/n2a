@@ -4795,7 +4795,7 @@ public class EquationSet implements Comparable<EquationSet>
         if (p == null) return;
 
         // Look up metadata to determine polling period.
-        String pollString = p.metadata.getOrDefault ("0", "poll");  // Default is full poll every cycle. After determinePoll() finishes, the default will be no polling. This simplifies later processing.
+        String pollString = p.metadata.getOrDefault ("1s", "poll");  // Default is one full poll per second. After determinePoll() finishes, the default will be no polling. This simplifies later processing.
         double pollValue  = new UnitValue (pollString).get ();
         if (pollValue < 0)  // Don't do analysis if polling is explicitly suppressed.
         {
@@ -4883,7 +4883,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         if (needsPoll)
         {
-            if (p.metadata.child ("poll") == null) p.metadata.set ("0", "poll");  // If poll is not otherwise specified, then do full poll at every cycle.
+            if (p.metadata.child ("poll") == null) p.metadata.set ("1s", "poll");  // If poll is not otherwise specified, then do one full poll per second.
         }
         else
         {

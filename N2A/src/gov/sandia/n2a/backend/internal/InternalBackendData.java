@@ -1089,7 +1089,7 @@ public class InternalBackendData
             // Polling
             if (p != null  &&  p.metadata != null)
             {
-                String pollString = p.metadata.getOrDefault ("-1", "poll");
+                String pollString = p.metadata.getOrDefault ("-1", "poll");  // Assumes that EquationSet.determinePoll() has been run, so poll flag has been cleared if polling is not needed.
                 poll = new UnitValue (pollString).get ();
                 if (poll >= 0)
                 {

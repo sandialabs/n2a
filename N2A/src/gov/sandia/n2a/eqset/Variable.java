@@ -445,8 +445,6 @@ public class Variable implements Comparable<Variable>, Cloneable
         {
             // We want equations from the lower level to override any pre-existing equations in the upper level.
             // Why? Because the lower-level equations represent an elaboration of the model, and are thus more specific.
-            // Note that Internal executes contained populations after the upper-level equations, so the contained
-            // populations take precedence even without flattening.
             NavigableSet<EquationEntry> equations0 = equations;
             equations = new TreeSet<EquationEntry> ();
             for (EquationEntry e2 : v.equations) add (e2);  // First add the lower-level equations, so they take precedence.
