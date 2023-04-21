@@ -92,7 +92,7 @@ public class Schema2 extends Schema1
     public void write (MNode node, Writer writer, String indent) throws IOException
     {
         String key = node.key ();
-        if (key.startsWith ("\"")  ||  key.contains (":"))
+        if (key.startsWith ("\"")  ||  key.contains (":")  ||  key.isEmpty ())  // Could also trap if key starts with white space, but such cases are usually normalized by the UI.
         {
             key = "\"" + key.replace ("\"", "\"\"") + "\"";  // Using quote as its own escape, we avoid the need to escape a second code (such as both quote and backslash). This follows the example of YAML.
         }

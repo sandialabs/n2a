@@ -75,6 +75,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Utility function for printing node's key path relative to given root node.
+        The key path is a dot-separated list of keys.
     **/
     public String keyPathString (MNode root)
     {
