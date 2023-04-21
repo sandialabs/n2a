@@ -821,17 +821,15 @@ n2a::MNode &
 n2a::MVolatile::childGet (const String & key, bool create)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    try
-    {
-        return * children.at (key.c_str ());  // Throws out_of_range if key doesn't exist
-    }
-    catch (...)  // key was not found
+    auto it = children.find (key.c_str ());
+    if (it == children.end ())
     {
         if (! create) return none;
         MVolatile * result = new MVolatile (nullptr, key.c_str (), this);
         children[result->name.c_str ()] = result;
         return *result;
     }
+    return * it->second;
 }
 
 void
@@ -937,11 +935,8 @@ n2a::MNode &
 n2a::MPersistent::childGet (const String & key, bool create)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    try
-    {
-        return * children.at (key.c_str ());  // Throws out_of_range if key doesn't exist
-    }
-    catch (...)  // key was not found
+    auto it = children.find (key.c_str ());
+    if (it == children.end ())
     {
         if (! create) return none;
         markChanged ();
@@ -949,6 +944,7 @@ n2a::MPersistent::childGet (const String & key, bool create)
         children[result->name.c_str ()] = result;
         return *result;
     }
+    return * it->second;
 }
 
 void

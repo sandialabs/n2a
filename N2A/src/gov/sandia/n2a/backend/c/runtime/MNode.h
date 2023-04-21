@@ -7,7 +7,7 @@ can be compiled separately and added to a library. In the latter case, you can
 use this header file like any other, to bring in symbols so you can use MNode
 in an application.
 
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -573,7 +573,7 @@ namespace n2a
         friend MPersistent;
 
     protected:
-        String                            name;
+        String                                 name;
         char *                                 value;     ///< Our own local copy of string. We are responsible to manage this memory. We use char * rather than String so this value can be null, not merely empty.
         MNode *                                container;
         std::map<const char *, MNode *, Order> children;  // Children are always a subclass of MVolatile. As long as a child exists, we can simply hold a pointer to its name.
