@@ -518,7 +518,7 @@ public class Study
         {
             complete = getJobCount () - (incomplete == null ? 0 :incomplete.size ());
             status = "" + complete + "/" + count + " samples; ";
-            if (complete == 0)
+            if (complete <= 0)
             {
                 status += "Unknonw time remaining";
             }
