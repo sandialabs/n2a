@@ -61,6 +61,11 @@ public class AddPart extends UndoableView implements AddEditable
         {
             createSubtree.merge (data);
             name = data.key ();
+            if (name.isBlank ())
+            {
+                String inherit = data.get ("$inherit");
+                if (! inherit.isBlank ()) name = inherit.split (",")[0].trim ();
+            }
             if (name.isEmpty ()) name = uniqueName (parent, "p", 0, false);  // Even though this is actually generated, we don't plan to go directly into edit mode, so treat as if not generated.
             else                 name = uniqueName (parent, name, 2, true);
             nameIsGenerated = false;  // Because we don't go into edit mode on a drop or paste. If that changes, then always set nameIsGenerated to true.
@@ -90,6 +95,7 @@ public class AddPart extends UndoableView implements AddEditable
     public static String uniqueName (NodeBase parent, String prefix, int suffix, boolean allowEmptySuffix)
     {
         if (allowEmptySuffix  &&  parent.source.child (prefix) == null) return prefix;
+        if (prefix.contains (" ")  &&  ! prefix.endsWith (" ")) prefix += " ";
         while (true)
         {
             String result = prefix + suffix;
