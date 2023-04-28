@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -127,14 +127,10 @@ public class CompilerCL extends Compiler
             return ".exe";
         }
 
-        public String suffixLibraryStatic ()
+        public String suffixLibrary (boolean shared)
         {
+            if (shared) return ".dll";
             return ".lib";
-        }
-
-        public String suffixLibraryShared ()
-        {
-            return ".dll";
         }
 
         public String suffixLibraryWrapper ()
@@ -142,17 +138,22 @@ public class CompilerCL extends Compiler
             return ".lib";
         }
 
-        public String prefixLibraryStatic ()
+        public String suffixDebug ()
         {
-            return "";
+            return ".pdb";
         }
 
-        public String prefixLibraryShared ()
+        public String prefixLibrary (boolean shared)
         {
             return "";
         }
 
         public boolean wrapperRequired ()
+        {
+            return true;
+        }
+
+        public boolean debugRequired ()
         {
             return true;
         }
@@ -277,8 +278,9 @@ public class CompilerCL extends Compiler
 
         // All remaining items are passed to linker
         command.add ("/link");
-        if (shared) command.add ("/dll");
+        if (shared)    command.add ("/dll");
         if (profiling) command.add ("/profile");
+        if (debug)     command.add ("/debug");
         for (Path object : objects)
         {
             command.add (object.toString ());
@@ -321,6 +323,7 @@ public class CompilerCL extends Compiler
             command.add (parent.resolve ("lib").toString ());
         }
         command.add ("/nologo");
+        if (debug) command.add ("/debug");
         for (Path object : objects)
         {
             command.add (object.toString ());

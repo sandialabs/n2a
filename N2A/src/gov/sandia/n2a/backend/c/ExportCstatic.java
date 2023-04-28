@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -62,24 +62,35 @@ public class ExportCstatic implements ExportModel
             // (per host key in model), it will be copied to a local directory.
             CompilerFactory factory = BackendC.getFactory (t.env);  // to get suffixes
             Path   parent      = destination.getParent ();
-            String suffix      = shared ? factory.suffixLibraryShared () : factory.suffixLibraryStatic ();
-            Path   libraryFrom = t.jobDir.resolve (stem + suffix);
-            Path   libraryTo   = parent  .resolve (stem + suffix);
+            String prefix      = factory.prefixLibrary (shared);
+            String suffix      = factory.suffixLibrary (shared);
+            Path   libraryFrom = t.jobDir.resolve (prefix + stem + suffix);
+            Path   libraryTo   = parent  .resolve (prefix + stem + suffix);
             Path   headerFrom  = t.jobDir.resolve (stem + ".h");
             Path   headerTo    = parent  .resolve (stem + ".h");
             Files.move (libraryFrom, libraryTo, StandardCopyOption.REPLACE_EXISTING);
             Files.move (headerFrom,  headerTo,  StandardCopyOption.REPLACE_EXISTING);
-            if (shared  &&  factory.wrapperRequired ())
+            if (shared)
             {
-                String wrapper = factory.suffixLibraryWrapper ();
-                libraryFrom = t.jobDir.resolve (stem + wrapper);
-                libraryTo   = parent  .resolve (stem + wrapper);
-                Files.move (libraryFrom, libraryTo, StandardCopyOption.REPLACE_EXISTING);
+                if (factory.wrapperRequired ())
+                {
+                    String wrapper = factory.suffixLibraryWrapper ();
+                    libraryFrom = t.jobDir.resolve (stem + wrapper);
+                    libraryTo   = parent  .resolve (stem + wrapper);
+                    Files.move (libraryFrom, libraryTo, StandardCopyOption.REPLACE_EXISTING);
+                }
+                if (t.debug  &&  factory.debugRequired ())
+                {
+                    String debug = factory.suffixDebug ();
+                    Path from = t.jobDir.resolve (stem + debug);
+                    Path to   = parent  .resolve (stem + debug);
+                    Files.move (from, to, StandardCopyOption.REPLACE_EXISTING);
+                }
             }
             if (t.cli)
             {
                 Path from = t.jobDir.resolve ("params");
-                Path to   = parent  .resolve ("params");
+                Path to   = parent  .resolve (stem + ".params");
                 Files.move (from, to, StandardCopyOption.REPLACE_EXISTING);
             }
 

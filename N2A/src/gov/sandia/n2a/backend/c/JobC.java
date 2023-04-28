@@ -14,6 +14,7 @@ import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.Conversion;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
+import gov.sandia.n2a.host.Windows;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionMatrix;
 import gov.sandia.n2a.eqset.Variable;
@@ -285,8 +286,9 @@ public class JobC extends Thread
         else
         {
             // Plan: Detect the libraries, then estimate location of includes from that.
-            String prefix = factory.wrapperRequired () ? factory.prefixLibraryStatic ()  : factory.prefixLibraryShared ();
-            String suffix = factory.wrapperRequired () ? factory.suffixLibraryWrapper () : factory.suffixLibraryShared ();
+            boolean wrap = factory.wrapperRequired ();
+            String prefix = factory.prefixLibrary (! wrap);
+            String suffix = wrap ? factory.suffixLibraryWrapper () : factory.suffixLibrary (true);
             String libName = prefix + "avcodec" + suffix;  // Always use FFmpeg as a shared library.
             String ffmpegString = env.config.get ("backend", "c", "ffmpeg");
             if (ffmpegString.isBlank ())  // Search typical locations
@@ -379,9 +381,9 @@ public class JobC extends Thread
                 runtimes = new HashSet<String> ();
                 runtimeBuilt.put (env, runtimes);
             }
-            String runtimeName = runtimeName ();
             CompilerFactory factory = BackendC.getFactory (env);
-            Path runtimeLib = runtimeDir.resolve (factory.prefixLibraryShared () + runtimeName + factory.suffixLibraryShared ());
+            String runtimeName = factory.prefixLibrary (shared) + runtimeName () + factory.suffixLibrary (shared);
+            Path runtimeLib = runtimeDir.resolve (runtimeName);
             for (ProvideOperator pf : extensions)
             {
                 if (pf.rebuildRuntime (this))  // Returns true of a new plugin object file was built.
@@ -644,7 +646,7 @@ public class JobC extends Thread
         {
             c.addLibraryDir (runtimeDir);
             c.addLibrary (runtimeName ());
-            c.addDefine ("n2a_DLL");  // Has no effect unless compiling with CL.
+            if (env instanceof Windows) c.addDefine ("n2a_DLL");
         }
         else
         {
@@ -664,7 +666,7 @@ public class JobC extends Thread
         CompilerFactory factory = BackendC.getFactory (env);
         Path parent  = source.getParent ();
         Path object  = parent.resolve (libStem + ".o");
-        Path library = parent.resolve (libStem + (shared ? factory.suffixLibraryShared () : factory.suffixLibraryStatic ()));
+        Path library = parent.resolve (factory.prefixLibrary (shared) + libStem + factory.suffixLibrary (shared));
 
         // 1) Generate object file
         Compiler c = factory.make (localJobDir);

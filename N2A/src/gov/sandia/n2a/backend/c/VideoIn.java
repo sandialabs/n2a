@@ -67,8 +67,8 @@ public class VideoIn extends NativeResource implements Runnable
 
                 // Load JNI libs
                 CompilerFactory factory = BackendC.getFactory (localhost);
-                String prefix = factory.prefixLibraryShared ();
-                String suffix = factory.suffixLibraryShared ();
+                String prefix = factory.prefixLibrary (true);
+                String suffix = factory.suffixLibrary (true);
                 String runtimeName = prefix + t.runtimeName () + suffix;
                 Path runtimePath = t.runtimeDir.resolve (runtimeName).toAbsolutePath ();
 

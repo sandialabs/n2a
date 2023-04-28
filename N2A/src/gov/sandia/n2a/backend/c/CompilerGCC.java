@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -59,13 +59,9 @@ public class CompilerGCC extends Compiler
             return ".bin";
         }
 
-        public String suffixLibraryStatic ()
+        public String suffixLibrary (boolean shared)
         {
-            return ".a";
-        }
-
-        public String suffixLibraryShared ()
-        {
+            if (! shared) return ".a";
             if (host instanceof Windows) return ".dll";
             return ".so";
         }
@@ -76,13 +72,16 @@ public class CompilerGCC extends Compiler
             return "";
         }
 
-        public String prefixLibraryStatic ()
+        public String suffixDebug ()
         {
-            return "lib";
+            // A separate debug symbol file (.pdb) is not supported by GCC.
+            // However, it is supported by clang.
+            return "";
         }
 
-        public String prefixLibraryShared ()
+        public String prefixLibrary (boolean shared)
         {
+            if (! shared) return "lib";
             if (host instanceof Windows) return "";
             return "lib";
         }
@@ -94,6 +93,11 @@ public class CompilerGCC extends Compiler
             // the naming of the associated DLLs, so this choice makes it easier to find
             // resources like FFmpeg.
             return host instanceof Windows;
+        }
+
+        public boolean debugRequired ()
+        {
+            return false;
         }
 
         public boolean supportsUnicodeIdentifiers ()
@@ -121,8 +125,7 @@ public class CompilerGCC extends Compiler
         List<String> command = new ArrayList<String> ();
         command.add (gcc.toString ());
         command.add ("-c");
-        if (debug) command.add ("-g");
-        else       command.add (optimize);
+        addDebugCompile (command);
         if (profiling) command.add ("-pg");
         if (shared) command.add ("-fpic");  // Could use -fPIC, but that option is specifically to avoid size limitations in global offset table that don't apply to any processor we are interested in.
         for (String setting : settings) command.add (setting);
@@ -149,12 +152,21 @@ public class CompilerGCC extends Compiler
         return runCommand (command);
     }
 
+    public void addDebugCompile (List<String> command)
+    {
+        if (debug) command.add ("-g");
+        else       command.add (optimize);
+    }
+
+    public void addDebugLink (List<String> command)
+    {
+    }
+
     public Path compileLink () throws Exception
     {
         List<String> command = new ArrayList<String> ();
         command.add (gcc.toString ());
-        if (debug) command.add ("-g");
-        else       command.add (optimize);
+        addDebugCompile (command);
         if (profiling) command.add ("-pg");
         if (shared)
         {
@@ -205,6 +217,7 @@ public class CompilerGCC extends Compiler
         {
             command.add (gcc.toString ());
             command.add ("-shared");
+            addDebugLink (command);
             if (host instanceof Windows)  // GCC is capable of generating a wrapper library, but does not require one when linking with other code.
             {
                 // export-all-symbols -- This is the default unless there is an explicit export in the
@@ -236,8 +249,8 @@ public class CompilerGCC extends Compiler
             prefix        = prefix.substring (0, prefix.length () - 3);  // strip off "g++" or "gcc"
             Path   parent = gcc.getParent ();
             Path ar;
-            if (parent == null) ar = Paths.get (prefix + "ar");       // The usual case, where g++ is specified alone.
-            else                ar = parent.resolve (prefix + "ar");  // g++ is prefixed by at least one path element.
+            if (parent == null) ar = Paths.get (prefix + "gcc-ar");       // The usual case, where g++ is specified alone.
+            else                ar = parent.resolve (prefix + "gcc-ar");  // g++ is prefixed by at least one path element.
             command.add (ar.toString ());
             command.add ("rsc");  // operation=r (insert members, with replacement); modifier=s (create symbol table); modifier=c (expecting to create archive, so don't warn)
             command.add (host.quote (output));

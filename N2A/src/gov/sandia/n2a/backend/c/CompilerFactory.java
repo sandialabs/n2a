@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,11 +12,11 @@ public interface CompilerFactory
 {
     Compiler make (Path localJobDir);
     String   suffixBinary ();
-    String   suffixLibraryStatic ();
-    String   suffixLibraryShared ();
+    String   suffixLibrary (boolean shared);
     String   suffixLibraryWrapper ();
-    String   prefixLibraryStatic ();
-    String   prefixLibraryShared ();
+    String   suffixDebug ();
+    String   prefixLibrary (boolean shared);
     boolean  wrapperRequired ();             // Indicates that the shared library wrapper must be used for linking. If false, then compiler can link directly to the shared library, even if it is capable of generating a wrapper.
+    boolean  debugRequired ();               // Indicates that debug symbols are stored in a separate file, as opposed to embedded in the executable or shared library file.
     boolean  supportsUnicodeIdentifiers ();  // UFT-8 encoded characters can be inserted directly into identifiers
 }
