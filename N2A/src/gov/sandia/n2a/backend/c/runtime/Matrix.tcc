@@ -5,7 +5,7 @@ Copyright (c) 2001-2004 Dept. of Computer Science and Beckman Institute,
 Distributed under the UIUC/NCSA Open Source License.
 
 
-Copyright 2005-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -42,7 +42,42 @@ clear (MatrixAbstract<T> & A, const T scalar)
     }
 }
 
+template<class T>
+void
+identity (MatrixAbstract<T> & A)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            A(r,c) = (r == c) ? (T) 1 : (T) 0;
+        }
+    }
+}
+
+template<class T>
+void
+copy (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int ah = A.rows ();
+    int aw = A.columns ();
+    int bh = B.rows ();
+    int bw = B.columns ();
+    int h = std::min (ah, bh);
+    int w = std::min (aw, bw);
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            A(r,c) = B(r,c);
+        }
+    }
+}
+
 #ifndef n2a_FP
+
 template<class T>
 T
 norm (const MatrixAbstract<T> & A, T n)
@@ -111,6 +146,15 @@ norm (const MatrixAbstract<T> & A, T n)
         return (T) std::pow (result, (T) (1.0 / n));
     }
 }
+
+template<class T>
+MatrixAbstract<T> &
+normalize (MatrixAbstract<T> & A)
+{
+    A /= norm (A, 2);
+    return A;
+}
+
 #endif
 
 template<class T>
@@ -127,6 +171,23 @@ sumSquares (const MatrixAbstract<T> & A)
             T t = A(r,c);
             result += t * t;
         }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+cross (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int ah = A.rows ();
+    int bh = B.rows ();
+    int h = std::min (ah, bh);
+    Matrix<T> result (h, 1);
+    for (int i = 0; i < h; i++)
+    {
+        int j = (i + 1) % h;
+        int k = (i + 2) % h;
+        result[i] = A[j] * B[k] - A[k] * B[j];
     }
     return result;
 }
@@ -1595,5 +1656,18 @@ operator ~ (const Matrix<T> & A)
     return Matrix<T> (A.data, A.offset, A.columns_, A.rows_, A.strideC_, A.strideR_);
 }
 
+template<class T>
+Matrix<T>
+row (const Matrix<T> & A, int row)
+{
+    return Matrix<T> (A.data, A.offset + row * A.strideR_, 1, A.columns_, A.strideR_, A.strideC_);
+}
+
+template<class T>
+Matrix<T>
+column (const Matrix<T> & A, int column)
+{
+    return Matrix<T> (A.data, A.offset + column * A.strideC_, A.rows_, 1, A.strideR_, A.strideC_);
+}
 
 #endif

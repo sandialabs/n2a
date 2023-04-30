@@ -155,6 +155,17 @@ template<class T> SHARED T unitmap (const MatrixAbstract<T> & A, T row, T column
 template<int> SHARED int unitmap (const MatrixAbstract<int> & A, int row, int column = 0x1 << FP_MSB - 1);
 #endif
 
+template<class T> SHARED Matrix<T> glFrustum (T left, T right, T bottom, T top, T near, T far);
+template<class T> SHARED Matrix<T> glLookAt (const MatrixFixed<T,3,1> & eye, const MatrixFixed<T,3,1> & center, const MatrixFixed<T,3,1> & up);
+template<class T> SHARED Matrix<T> glOrtho (T left, T right, T bottom, T top, T near, T far);
+template<class T> SHARED Matrix<T> glPerspective (T fovy, T aspect, T near, T far);
+template<class T> SHARED Matrix<T> glRotate (T angle, const MatrixFixed<T,3,1> & axis);
+template<class T> SHARED Matrix<T> glRotate (T angle, T x, T y, T z);
+template<class T> SHARED Matrix<T> glScale (const MatrixFixed<T,3,1> & scales);
+template<class T> SHARED Matrix<T> glScale (T sx, T sy, T sz);
+template<class T> SHARED Matrix<T> glTranslate (const MatrixFixed<T,3,1> & position);
+template<class T> SHARED Matrix<T> glTranslate (T x, T y, T z);
+
 #ifndef N2A_SPINNAKER
 extern SHARED void signalHandler (int number);
 #endif

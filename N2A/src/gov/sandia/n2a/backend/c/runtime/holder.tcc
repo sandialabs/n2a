@@ -14,18 +14,67 @@ the U.S. Government retains certain rights in this software.
 #include "runtime.h"   // For Event::exponent
 #include "image.h"
 
+// In case windows.h is included...
+#define WIN32_LEAN_AND_MEAN
+
 #include <fstream>
 #include <stdlib.h>
 #include <time.h>
 #include <sys/stat.h>
 #ifdef _MSC_VER
 #  define stat _stat
-#  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
 #  undef min
 #  undef max
 #else
 #  include <dirent.h>
+#endif
+
+#ifdef HAVE_GL
+#  include "glcorearb.h"  // Extensions
+#  include <fstream>      // for loading shader programs
+#  include <sstream>      // ditto
+#  ifdef _WIN32
+#    include <windows.h>
+#    undef min
+#    undef max
+#    include "wglext.h"   // WGL -- Windows-specific functions for creating GL context
+#  endif
+#define GL_FUNCTIONS(X) \
+   X(PFNGLGENVERTEXARRAYSPROC,          glGenVertexArrays          ) \
+   X(PFNGLBINDVERTEXARRAYPROC,          glBindVertexArray          ) \
+   X(PFNGLGENBUFFERSPROC,               glGenBuffers               ) \
+   X(PFNGLBINDBUFFERPROC,               glBindBuffer               ) \
+   X(PFNGLBUFFERDATAPROC,               glBufferData               ) \
+   X(PFNGLVERTEXATTRIBPOINTERPROC,      glVertexAttribPointer      ) \
+   X(PFNGLENABLEVERTEXATTRIBARRAYPROC,  glEnableVertexAttribArray  ) \
+   X(PFNGLGENRENDERBUFFERSPROC,         glGenRenderbuffers         ) \
+   X(PFNGLBINDRENDERBUFFERPROC,         glBindRenderbuffer         ) \
+   X(PFNGLRENDERBUFFERSTORAGEPROC,      glRenderbufferStorage      ) \
+   X(PFNGLGENFRAMEBUFFERSPROC,          glGenFramebuffers          ) \
+   X(PFNGLBINDFRAMEBUFFERPROC,          glBindFramebuffer          ) \
+   X(PFNGLFRAMEBUFFERRENDERBUFFERPROC,  glFramebufferRenderbuffer  ) \
+   X(PFNGLDELETEFRAMEBUFFERSPROC,       glDeleteFramebuffers       ) \
+   X(PFNGLDELETERENDERBUFFERSPROC,      glDeleteRenderbuffers      ) \
+   X(PFNGLCREATESHADERPROC,             glCreateShader             ) \
+   X(PFNGLSHADERSOURCEPROC,             glShaderSource             ) \
+   X(PFNGLCOMPILESHADERPROC,            glCompileShader            ) \
+   X(PFNGLGETSHADERIVPROC,              glGetShaderiv              ) \
+   X(PFNGLGETSHADERINFOLOGPROC,         glGetShaderInfoLog         ) \
+   X(PFNGLCREATEPROGRAMPROC,            glCreateProgram            ) \
+   X(PFNGLATTACHSHADERPROC,             glAttachShader             ) \
+   X(PFNGLLINKPROGRAMPROC,              glLinkProgram              ) \
+   X(PFNGLUSEPROGRAMPROC,               glUseProgram               ) \
+   X(PFNGLUNIFORMMATRIX4FVPROC,         glUniformMatrix4fv         ) \
+   X(PFNGLGETUNIFORMLOCATIONPROC,       glGetUniformLocation       ) \
+   X(PFNGLGETATTRIBLOCATIONPROC,        glGetAttribLocation        ) \
+   X(PFNGLUNIFORM1IPROC,                glUniform1i                ) \
+   X(PFNGLUNIFORM3FVPROC,               glUniform3fv               ) \
+   X(PFNGLUNIFORM1FPROC,                glUniform1f                ) \
+   X(PFNGLUNIFORM4FVPROC,               glUniform4fv               )
+#  define X(type, name) static type name;
+   GL_FUNCTIONS(X)
+#  undef X
 #endif
 
 
@@ -649,8 +698,10 @@ imageInputHelper (const String & fileName, ImageInput<T> * oldHandle)
 
 template<class T>
 ImageOutput<T>::ImageOutput (const String & fileName)
-:   Holder (fileName),
-    canvas (n2a::RGBAChar)
+:   Holder         (fileName),
+    canvas         (n2a::RGBAChar),
+    nextProjection (4, 4),
+    nextView       (4, 4)
 {
     t          = (T) 0;
     frameCount = 0;
@@ -671,6 +722,23 @@ ImageOutput<T>::ImageOutput (const String & fileName)
     timeScale = 0;
     video     = 0;
 #   endif
+
+#   ifdef HAVE_GL
+#     ifdef _WIN32
+    window = 0;
+    dc     = 0;
+    rc     = 0;
+#     endif
+    program       = 0;
+    have3D        = false;
+    lastWidth     = -1;
+    lastHeight    = -1;
+    sphereStep    = -1;
+    projection.resize (4, 4);
+    view      .resize (4, 4);
+#   endif
+    clear    (nextProjection);
+    identity (nextView);
 }
 
 template<class T>
@@ -687,6 +755,19 @@ ImageOutput<T>::~ImageOutput ()
     }
 #   ifdef HAVE_FFMPEG
     if (video) delete video;
+#   endif
+
+    // Clean up GL resources
+#   ifdef HAVE_GL
+#     ifdef _WIN32
+    wglMakeCurrent (0, 0);
+    if (rc) wglDeleteContext (rc);  // This frees all GL resources
+    if (window)
+    {
+        ReleaseDC (window, dc);
+        DestroyWindow (window);
+    }
+#     endif
 #   endif
 }
 
@@ -755,6 +836,40 @@ ImageOutput<T>::open ()
 
 template<class T>
 void
+ImageOutput<T>::setClearColor (uint32_t color)
+{
+    clearColor = color << 8 | 0xFF;
+#   ifdef HAVE_GL
+    cv[0] = ((color & 0xFF0000) >> 16) / 255.0f;
+    cv[1] = ((color &   0xFF00) >>  8) / 255.0f;
+    cv[2] =  (color &     0xFF)        / 255.0f;
+    cv[3] = 1;
+#   endif
+}
+
+template<class T>
+void
+ImageOutput<T>::setClearColor (const Matrix<T> & color)
+{
+    bool hasAlpha = color.rows () > 3;
+
+    uint32_t r =  std::min (1.0f, std::max (0.0f, color[0])) * 255;
+    uint32_t g =  std::min (1.0f, std::max (0.0f, color[1])) * 255;
+    uint32_t b =  std::min (1.0f, std::max (0.0f, color[2])) * 255;
+    uint32_t a = 0xFF;
+    if (hasAlpha) std::min (1.0f, std::max (0.0f, color[3])) * 255;
+    clearColor = r << 24 | g << 16 | b << 8 | a;
+
+#   ifdef HAVE_GL
+    cv[0] = color[0];
+    cv[1] = color[1];
+    cv[2] = color[2];
+    cv[3] = hasAlpha ? color[3] : 1;
+#   endif
+}
+
+template<class T>
+void
 ImageOutput<T>::next (T now)
 {
     if (now > t)
@@ -765,7 +880,11 @@ ImageOutput<T>::next (T now)
     if (! haveData)
     {
         canvas.resize (width, height);
-        canvas.clear (clearColor << 8 | 0xFF);
+#       ifdef HAVE_GL
+        canvas.clear ();  // transparent black
+#       else
+        canvas.clear (clearColor);
+#       endif
         haveData = true;
     }
 }
@@ -803,15 +922,15 @@ ImageOutput<T>::drawDisc (T now, bool raw, const MatrixFixed<T,3,1> & center,   
     radius *= width;
     if (radius < 0.5) radius = 0.5;
     canvas.scanCircle (cs, radius, rgba);
-    return 1;
+    return 0;
 }
 
 template<class T>
 T
 #ifdef n2a_FP
-ImageOutput<T>::drawBlock (T now, bool raw, const MatrixFixed<T,3,1> & centerFP, T wFP, T hFP, int exponent, uint32_t color)
+ImageOutput<T>::drawSquare (T now, bool raw, const MatrixFixed<T,3,1> & centerFP, T wFP, T hFP, int exponent, uint32_t color)
 #else
-ImageOutput<T>::drawBlock (T now, bool raw, const MatrixFixed<T,3,1> & center,   T w,   T h,                 uint32_t color)
+ImageOutput<T>::drawSquare (T now, bool raw, const MatrixFixed<T,3,1> & center,   T w,   T h,                 uint32_t color)
 #endif
 {
     next (now);
@@ -841,7 +960,7 @@ ImageOutput<T>::drawBlock (T now, bool raw, const MatrixFixed<T,3,1> & center,  
     }
 
     canvas.drawFilledRectangle (corner0, corner1, rgba);
-    return 1;
+    return 0;
 }
 
 template<class T>
@@ -871,7 +990,7 @@ ImageOutput<T>::drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1,   c
     if (raw)
     {
         canvas.drawSegment (p1, p2, rgba);
-        return 1;
+        return 0;
     }
 
 #   ifdef n2a_FP
@@ -882,7 +1001,7 @@ ImageOutput<T>::drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1,   c
     n2a::Point ps2 = p2 * (T) width;
 #   endif
     canvas.drawSegment (ps1, ps2, rgba);
-    return 1;
+    return 0;
 }
 
 template<class T>
@@ -892,6 +1011,61 @@ ImageOutput<T>::writeImage  ()
     if (! haveData) return;
     haveData = hold;
     if (hold) return;  // Don't write every frame. hold is set false in dtor, so at least one frame will be written.
+
+#   ifdef HAVE_GL
+    int w = canvas.width;
+    int h = canvas.height;
+    if (have3D)  // Composite 2D and 3D outputs.
+    {
+        have3D = false;
+        uint32_t * pixelData = new uint32_t[w * h];
+        glReadPixels (0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixelData);  // always in bottom-up order
+        uint32_t * g   = pixelData + (h - 1) * w;  // beginning of last row, which is at the top on screen
+        uint32_t * c   = (uint32_t *) canvas.buffer->pixel (0, 0);
+        uint32_t * end = to + w * h;
+        while (c < end)
+        {
+            uint32_t * rowEnd = c + w;
+            while (c < rowEnd)
+            {
+#               if BYTE_ORDER == LITTLE_ENDIAN
+                alphaBlendOE (*c, *g);
+#               else
+                alphaBlend (*c, *g);
+#               endif
+                *c++ = *g++;
+            }
+            g -= 2 * w;
+        }
+        delete[] pixelData;
+    }
+    else  // Fill background with clear color, since this won't be provided by the 3D scene.
+    {
+#       if BYTE_ORDER == LITTLE_ENDIAN
+        uint32_t color = bswap (clearColor);
+#       else
+        uint32_t color = clearColor;
+#       endif
+        uint32_t temp;
+        uint32_t * c   = (uint32_t *) canvas.buffer->pixel (0, 0);
+        uint32_t * end = to + w * h;
+        while (c < end)
+        {
+            uint32_t * rowEnd = c + w;
+            while (c < rowEnd)
+            {
+                temp = color;
+#               if BYTE_ORDER == LITTLE_ENDIAN
+                alphaBlendOE (*c, temp);
+#               else
+                alphaBlend (*c, temp);
+#               endif
+                *c++ = temp;
+            }
+            g -= 2 * w;
+        }
+    }
+#   endif
 
     if (! opened) open ();
     if (! dirCreated)
@@ -939,6 +1113,678 @@ ImageOutput<T>::writeImage  ()
     }
     frameCount++;
 }
+
+#ifdef HAVE_GL
+
+template<class T>
+bool
+ImageOutput<T>::next3D (const Matrix<T> & model, const Material & material)
+{
+    // Plaform-specific create context...
+#   ifdef _WIN32
+
+    if (rc == 0)
+    {
+        window = CreateWindowExW
+        (
+            0, 0, 0, WS_OVERLAPPED,
+            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+            NULL, NULL, NULL, NULL
+        );
+        dc = GetDC (dummy);
+
+        PIXELFORMATDESCRIPTOR desc;
+        memset (&desc, 0, sizeof (desc));
+        desc.nSize    = sizeof (desc);
+        desc.nVersion = 1;
+        desc.dwFlags  = PFD_SUPPORT_OPENGL;  // for hardware support
+        int format = ChoosePixelFormat (dc, &desc);
+        if (! SetPixelFormat (dc, format, &desc)) return false;
+
+        rc = wglCreateContext (dc);
+    }
+    // There could be multiple contexts (one per output file), so need to make ours current every time.
+    // TODO: handle multiple threads
+    if (wglGetCurrentContext () != rc) wglMakeCurrent (dc, rc);
+
+    if (! extensionsBound)
+    {
+#       define X(type, name) name = (type) wglGetProcAddress (#name); if (! name) return false;
+        GL_FUNCTIONS(X)
+#       undef X
+        extensionsBound = true;
+    }
+
+#   else  // No menas of creating a GL context.
+
+    return false;
+
+#   endif  // Platform-specific create context.
+
+    // One-time setup per simulation
+    if (! program)
+    {
+        ifstream ifs ("../../backend/c/Shader.vp");  // TODO: need better way of locating runtime resources
+        stringstream vp;
+        vp << "#version 120" << endl;
+        vp << ifs.rdbuf ();
+        string vp_string = vp.str ();
+        const char * vp_char = vp_string.c_str ();
+
+        GLuint vshader = glCreateShader (GL_VERTEX_SHADER);
+        glShaderSource (vshader, 1, &vp_char, 0);
+        glCompileShader (vshader);
+
+        GLint info;
+        glGetShaderiv (vshader, GL_COMPILE_STATUS, &info);
+        if (! info)
+        {
+            char message[1024];
+            glGetShaderInfoLog (vshader, sizeof (message), NULL, message);
+            cerr << message << endl;
+            return false;
+        }
+
+        ifs.close ();
+        ifs.open ("../../backend/c/Shader.fp");
+        stringstream fp;
+        fp << "#version 120" << endl;
+        fp << ifs.rdbuf();
+        string fp_string = fp.str ();
+        const char * fp_char = fp_string.c_str ();
+
+        GLuint fshader = glCreateShader (GL_FRAGMENT_SHADER);
+        glShaderSource (fshader, 1, &fp_char, 0);
+        glCompileShader (fshader);
+
+        glGetShaderiv (fshader, GL_COMPILE_STATUS, &info);
+        if (! info)
+        {
+            char message[1024];
+            glGetShaderInfoLog (fshader, sizeof (message), NULL, message);
+            cerr << message << endl;
+            return false;
+        }
+
+        program = glCreateProgram ();
+        glAttachShader (program, fshader);
+        glAttachShader (program, vshader);
+        glLinkProgram (program);
+        glUseProgram (program);
+
+        // create Frame Buffer Object (FBO)
+        GLuint fbo;
+        glGenFramebuffers (1, &fbo);
+        glBindFramebuffer (GL_FRAMEBUFFER, fbo);
+        glGenRenderbuffers (1, &rboColor);
+        glGenRenderbuffers (1, &rboDepth);
+
+        GLuint vao;
+        glGenVertexArrays (1, &vao);
+        glBindVertexArray (vao);
+
+        locVertexPosition = glGetAttribLocation (program, "vertexPosition");
+        locVertexNormal   = glGetAttribLocation (program, "vertexNormal");
+
+        locMatrixModelView  = glGetUniformLocation (program, "modelViewMatrix");
+        locMatrixNormal     = glGetUniformLocation (program, "normalMatrix");
+        locMatrixProjection = glGetUniformLocation (program, "projectionMatrix");
+
+        for (int i = 0; i < 8; i++) locLights.push_back (new LightLocation (program, i));
+        locEnabled = glGetUniformLocation (program, "enabled");
+
+        Material::locAmbient   = glGetUniformLocation (program, "material.ambient");
+        Material::locDiffuse   = glGetUniformLocation (program, "material.diffuse");
+        Material::locEmission  = glGetUniformLocation (program, "material.emission");
+        Material::locSpecular  = glGetUniformLocation (program, "material.specular");
+        Material::locShininess = glGetUniformLocation (program, "material.shininess");
+
+        // setup global GL state
+        glEnable (GL_BLEND);
+        glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glEnable (GL_DEPTH_TEST);
+        //glEnable (GL_CULL_FACE);
+    }
+
+    if (! have3D)
+    {
+        int w = canvas.width;
+        int h = canvas.height;
+        bool haveProjection = norm (nextProjection, 1);
+        if (lastWidth != w  ||  lastHeight != h)
+        {
+            glBindRenderbuffer (GL_RENDERBUFFER, rboColor);
+            glRenderbufferStorage (GL_RENDERBUFFER, GL_RGBA8, w, h);
+            glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rboColor);
+
+            glBindRenderbuffer (GL_RENDERBUFFER, rboDepth);
+            glRenderbufferStorage (GL_RENDERBUFFER, GL_DEPTH_COMPONENT, w, h);
+            glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+
+            glViewport (0, 0, w, h);
+
+            if (! haveProjection)
+            {
+                // Create default projection.
+                float s = 50e-6f;
+                if (w <= h)
+                {
+                    float r = (float) h / w;
+                    projection = glOrtho (-s, s, -s*r, s*r, -s, s);
+                }
+                else
+                {
+                    float r = (float) w / h;
+                    projection = glOrtho (-s*r, s*r, -s, s, -s, s);
+                }
+            }
+
+            lastWidth  = canvas.width;
+            lastHeight = canvas.height;
+        }
+        if (haveProjection) copy (projection, nextProjection);
+        copy (view, nextView);
+
+        // clear buffer
+        glClearColor (cv[0], cv[1], cv[2], cv[3]);
+        glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // load uniforms
+        glUniformMatrix4fv (locMatrixProjection, 1, GL_FALSE, projection.base ());
+
+        if (lights.empty ()) lights.emplace (0);
+        int i = 0;
+        for (auto l : lights)
+        {
+            l->setUniform (*locLights[i++], view);
+            if (i >= 8) break;
+        }
+        glUniform1i (locEnabled, i);
+
+        have3D = true;
+    }
+
+    // Set up for current drawX() call.
+    // This involves setting a couple of uniform values.
+    Matrix<float> modelView = view * model;  // The transorm into eye space.
+    Matrix<float> normal = modelView;  // TODO: implement inversion, so we can create the inverse transpose of the modelView.
+    glUniformMatrix4fv (locMatrixModelView, 1, GL_FALSE, modelView.base ());
+    glUniformMatrix4fv (locMatrixNormal, 1, GL_FALSE, normal.base ());
+    material.setUniform (*this);
+
+    return true;
+}
+
+template<class T>
+T
+ImageOutput<T>::drawCube (T now, const Matrix<T> & model, const Material & material)
+{
+    next (now);
+    if (! next3D (model, material)) return 0;
+
+    // Set up vertex buffers, if needed.
+    std::map<String,GLuint>::iterator it = buffers.find ("cubeVertices");  // We really want contains() here, but don't want to depend on c++20.
+    getBuffer ("cubeVertices");
+    getBuffer ("cubeIndices");
+    if (it == buffers.end ())
+    {
+        std::vector<GLfloat> vertices (144); // six faces, four vertices per face, 6 floats per vertex
+        std::vector<GLuint>  indices  (36);  // six faces, 2 triangles per face, 3 vertices per triangle
+
+        // All vertices are specified in CCW order.
+
+        // Top face, y=1
+        GLfloat[3] n;
+        n[0] = 0;
+        n[1] = 1;
+        n[2] = 0;
+        put (vertices,  0.5f, 0.5f, -0.5f, n);
+        put (vertices, -0.5f, 0.5f, -0.5f, n);
+        put (vertices, -0.5f, 0.5f,  0.5f, n);
+        put (vertices,  0.5f, 0.5f,  0.5f, n);
+
+        // Bottom face, y=-1
+        n[1] = -1;
+        put (vertices,  0.5f, -0.5f,  0.5f, n);
+        put (vertices, -0.5f, -0.5f,  0.5f, n);
+        put (vertices, -0.5f, -0.5f, -0.5f, n);
+        put (vertices,  0.5f, -0.5f, -0.5f, n);
+
+        // Front face, z=1
+        n[1] = 0;
+        n[2] = 1;
+        put (vertices,  0.5f,  0.5f,  0.5f, n);
+        put (vertices, -0.5f,  0.5f,  0.5f, n);
+        put (vertices, -0.5f, -0.5f,  0.5f, n);
+        put (vertices,  0.5f, -0.5f,  0.5f, n);
+
+        // Back face, z=-1
+        n[2] = -1;
+        put (vertices,  0.5f, -0.5f,  -0.5f, n);
+        put (vertices, -0.5f, -0.5f,  -0.5f, n);
+        put (vertices, -0.5f,  0.5f,  -0.5f, n);
+        put (vertices,  0.5f,  0.5f,  -0.5f, n);
+
+        // Left face, x=-1
+        n[0] = -1;
+        n[2] = 0;
+        put (vertices, -0.5f,  0.5f,  0.5f, n);
+        put (vertices, -0.5f,  0.5f, -0.5f, n);
+        put (vertices, -0.5f, -0.5f, -0.5f, n);
+        put (vertices, -0.5f, -0.5f,  0.5f, n);
+
+        // Right face, x=1
+        n[0] = 1;
+        put (vertices, 0.5f,  0.5f, -0.5f, n);
+        put (vertices, 0.5f,  0.5f,  0.5f, n);
+        put (vertices, 0.5f, -0.5f,  0.5f, n);
+        put (vertices, 0.5f, -0.5f, -0.5f, n);
+
+        for (int v = 0; v < 24; v += 4)
+        {
+            // first triangle
+            indices.push_back (v + 0);
+            indices.push_back (v + 1);
+            indices.push_back (v + 2);
+            // second triangle
+            indices.push_back (v + 0);
+            indices.push_back (v + 2);
+            indices.push_back (v + 3);
+        }
+
+        glBufferData (GL_ARRAY_BUFFER,         vertices.size () * sizeof (GLfloat), &vertices[0], GL_STATIC_DRAW);
+        glBufferData (GL_ELEMENT_ARRAY_BUFFER, indices .size () * sizeof (GLuint),  &indices [0], GL_STATIC_DRAW);
+    }
+
+    glDrawElements (GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+    return 0;
+}
+
+template<class T>
+T
+ImageOutput<T>::drawCylinder (T now, const Material & material, const MatrixFixed<T,3,1> & p1, T r1, const MatrixFixed<T,3,1> & p2, T r2, int steps, int stepsCap)
+{
+    next (now);
+    if (! next3D (model, material)) return 0;
+
+    if (p1 == p2) return 0;
+    if (r2 < 0) r2 = r1;
+    if (r1 == 0  &&  r2 == 0) return 0;
+    if (steps < 3) steps = 3;
+    if (stepsCap < 0) stepsCap = steps / 4;  // Integer division, so 3/4==0, 4/4==1, etc.
+
+    std::map<String,GLuint>::iterator it = buffers.find ("cylinderVertices");
+    getBuffer ("cylinderVertices");
+    getBuffer ("cylinderIndices");
+    int count = 2 + steps * (2 + stepsCap);  // estimate of vertex count, based on rounded caps at both ends
+    std::vector<GLfloat> vertices (count);
+    std::vector<GLuint>  indices  (count * 3);
+
+    // Construct a local coordinate frame.
+    // This frame will be anchored first at one end (p1), then at the other (p2).
+    //   The z vector runs along axis of the cylinder.
+    //   Positive direction is toward p1 just because that's how all the
+    //   geometry code was developed before moving to flexible coordinates.
+    Matrix<float> fz = p1 - p2;
+    float length = norm (fz, 2);
+    fz /= length;
+    //   Create x vector along the axis that z has smallest extent.
+    //   This is an arbitrary choice, but it should be the best conitioned when computing cross product.
+    Matrix<float> fx (3, 1);
+    int dimension = 0;
+    for (int i = 1; i < 3; i++) if (abs (fz[i]) < abs (fz[dimension])) dimension = i;
+    fx[dimension] = 1;
+    //   Create y vector by cross product.
+    Matrix<float> fy = normalize (cross (fz, fx));
+    fx = normalize (cross (fy, fz));
+    Matrix<float> f (3, 4);
+    copy (column (f, 0), fx);
+    copy (column (f, 1), fy);
+    copy (column (f, 2), fz);
+    copy (column (f, 3), p1);
+
+    // Determine extra z component for sloped tube (r1 different from r2).
+    // Suppose r1 is longer than r2. A triangle is formed by the tip of r1,
+    // the tip of r2, and the projection of r1 onto the extension of r2.
+    // This triangle is similar to the triangle formed by the tip of r1,
+    // the tip of the normal added onto r1, and the slopeZ value we are
+    // computing. The ratio between the triangles sizes is
+    // 1 (for the normal) / (distance between p1 and p2).
+    // This also works when r1 is shorter than r2.
+    float slopeZ = (r2 - r1) / length;
+
+    float angleStep    = M_PI * 2 / steps;
+    float angleStep2   = M_PI     / steps;  // half of a regular step
+    float angleStepCap = M_PI / 2 / (stepsCap + 1);
+
+    int  rowsBegin = 0;     // Index of first vertex in first ring.
+    int  rowsEnd   = 0;     // Index of first vertex after last ring.
+    int  tip;               // Index of last vertex.
+    bool cone1     = false; // Close cone with vertex 0 and the ring that immediately follows it.
+    bool cone2     = false; // Close cone with vertex at rowBase1 and the ring the immediately precedes it.
+
+    // Cap 1
+    if (r1 > 0)
+    {
+        if (cap1 == 1)
+        {
+            cone1 = true;
+            rowsBegin = rowsEnd = 1 + steps;  // So we can have separate normals for the disc.
+            put (vertices, f, 0, 0, 0, 0, 0, 1);
+            for (int i = 0; i < steps; i++)
+            {
+                float a = i * angleStep;
+                float x = cos (a) * r1;
+                float y = sin (a) * r1;
+                put (vertices, f, x, y, 0, 0, 0, 1);
+            }
+        }
+        else if (cap1 == 2)
+        {
+            cone1 = true;
+            rowsBegin = 1;
+            rowsEnd   = 1 + stepsCap * steps;
+            put (vertices, f, 0, 0, r1, 0, 0, 1);
+            for (int s = stepsCap; s > 0; s--)
+            {
+                float a = s * angleStepCap;
+                float z = sin (a) * r1;
+                float r = cos (a) * r1;
+                for (int i = 0; i < steps; i++)
+                {
+                    a = i * angleStep;
+                    float x = cos (a) * r;
+                    float y = sin (a) * r;
+                    float l = sqrt (x * x + y * y + z * z);
+                    put (vertices, f, x, y, z, x/l, y/l, z/l);
+                }
+            }
+        }
+    }
+
+    // Row 1
+    rowsEnd += steps;
+    for (int i = 0; i < steps; i++)
+    {
+        float a = i * angleStep;
+        float c = cos (a);
+        float s = sin (a);
+        float nc = c;
+        float ns = s;
+        float l = sqrt (1 + slopeZ * slopeZ);  // 1 comes from c*c+s*s
+        if (r1 == 0)  // Advance by half a step to get the average norm.
+        {
+            nc = cos (a + angleStep2);
+            ns = sin (a + angleStep2);
+            l *= 1000;  // Make the tip normal a lot smaller than the other two. This trick makes smoother shading on the cone.
+        }
+        put (vertices, f, c*r1, s*r1, 0, nc/l, ns/l, slopeZ/l);
+    }
+
+    // Move frame to end point
+    copy (column (f, 3), p2);
+
+    // Row 2
+    rowsEnd += steps;
+    for (int i = 0; i < steps; i++)
+    {
+        float a = i * angleStep;
+        float c = cos (a);
+        float s = sin (a);
+        float nc = c;
+        float ns = s;
+        float l = sqrt (1 + slopeZ * slopeZ);
+        if (r2 == 0)
+        {
+            nc = cos (a - angleStep2);
+            ns = sin (a - angleStep2);
+            l *= 1000;
+        }
+        put (vertices, f, c*r2, s*r2, 0, nc/l, ns/l, slopeZ/l);
+    }
+
+    // Cap 2
+    tip = rowsEnd;
+    if (r2 > 0)
+    {
+        if (cap2 == 1)
+        {
+            cone2 = true;
+            tip += steps;
+            for (int i = 0; i < steps; i++)
+            {
+                float a = i * angleStep;
+                float x = cos (a) * r2;
+                float y = sin (a) * r2;
+                put (vertices, f, x, y, 0, 0, 0, -1);
+            }
+            put (vertices, f, 0, 0, 0, 0, 0, -1);
+        }
+        else if (cap2 == 2)
+        {
+            cone2 = true;
+            rowsEnd += stepsCap * steps;
+            tip = rowsEnd;
+            for (int s = 1; s <= stepsCap; s++)
+            {
+                float a = s * angleStepCap;
+                float z = -sin (a) * r2;
+                float r =  cos (a) * r2;
+                for (int i = 0; i < steps; i++)
+                {
+                    a = i * angleStep;
+                    float x = cos (a) * r;
+                    float y = sin (a) * r;
+                    float l = sqrt (x * x + y * y + z * z);
+                    put (vertices, f, x, y, z, x/l, y/l, z/l);
+                }
+            }
+            put (vertices, f, 0, 0, -r2, 0, 0, -1);
+        }
+    }
+
+    // Connect vertices into triangles
+    if (cone1)
+    {
+        for (int i = 0; i < steps; i++)
+        {
+            int j = (i + 1) % steps;
+            indices.push_back (0);
+            indices.push_back (i + 1);
+            indices.push_back (j + 1);
+        }
+    }
+    if (r1 == 0)
+    {
+        for (int i = 0; i < steps; i++)
+        {
+            int i1 = rowsBegin + i;               // first vertex in row 1
+            int j1 = rowsBegin + (i + 1) % steps; // second vertex in row 1
+            int i2 = i1 + steps;                  // first vertex in row 2
+            int j2 = j1 + steps;                  // second vertex in row 2
+
+            // Only generate the lower triangle
+            indices.push_back (i1);
+            indices.push_back (i2);
+            indices.push_back (j2);
+        }
+        rowsBegin += steps;
+    }
+    else if (r2 == 0)
+    {
+        rowsEnd -= steps;
+        int base = rowsEnd - steps;
+        for (int i = 0; i < steps; i++)
+        {
+            int i1 = base + i;
+            int j1 = base + (i + 1) % steps;
+            int j2 = j1 + steps;
+
+            // Only generate the upper triangle
+            indices.push_back (i1);
+            indices.push_back (j2);
+            indices.push_back (j1);
+        }
+    }
+    for (int base = rowsBegin; base < rowsEnd - steps; base += steps)
+    {
+        for (int i = 0; i < steps; i++)
+        {
+            int i1 = base + i;
+            int j1 = base + (i + 1) % steps;
+            int i2 = i1 + steps;
+            int j2 = j1 + steps;
+
+            indices.push_back (i1);
+            indices.push_back (i2);
+            indices.push_back (j2);
+
+            indices.push_back (i1);
+            indices.push_back (j2);
+            indices.push_back (j1);
+        }
+    }
+    if (cone2)
+    {
+        int ring = tip - steps;
+        for (int i = 0; i < steps; i++)
+        {
+            int j = (i + 1) % steps;
+            indices.push_back (tip);
+            indices.push_back (ring + j);
+            indices.push_back (ring + i);
+        }
+    }
+
+    count = indices.size ();
+    glBufferData (GL_ARRAY_BUFFER,         vertices.size () * sizeof (GLfloat), &vertices[0], GL_STATIC_DRAW);
+    glBufferData (GL_ELEMENT_ARRAY_BUFFER, count            * sizeof (GLuint),  &indices [0], GL_STATIC_DRAW);
+
+    glDrawElements (GL_TRIANGLES, count, GL_UNSIGNED_INT, 0);
+    return 0;
+}
+
+template<class T>
+T
+ImageOutput<T>::drawPlane (T now, const Matrix<T> & model, const Material & material)
+{
+    next (now);
+    if (! next3D (model, material)) return 0;
+
+    // Set up vertex buffers, if needed.
+    std::map<String,GLuint>::iterator it = buffers.find ("planeVertices");
+    getBuffer ("planeVertices");
+    getBuffer ("planeIndices");
+    if (it == buffers.end ())
+    {
+        std::vector<GLfloat> vertices (24); // four vertices, 6 floats per vertex
+        std::vector<GLuint>  indices  (6);  // 2 triangles, 3 vertices per triangle
+
+        float[] n = new float[3];
+        n[0] = 0;
+        n[1] = 0;
+        n[2] = 1;
+        put (vertices,  0.5f,  0.5f, 0, n);
+        put (vertices, -0.5f,  0.5f, 0, n);
+        put (vertices, -0.5f, -0.5f, 0, n);
+        put (vertices,  0.5f, -0.5f, 0, n);
+
+        // first triangle
+        indices.push_back (0);
+        indices.push_back (1);
+        indices.push_back (2);
+
+        // second triangle
+        indices.push_back (0);
+        indices.push_back (2);
+        indices.push_back (3);
+
+        glBufferData (GL_ARRAY_BUFFER,         vertices.size () * sizeof (GLfloat), &vertices[0], GL_STATIC_DRAW);
+        glBufferData (GL_ELEMENT_ARRAY_BUFFER, indices .size () * sizeof (GLuint),  &indices [0], GL_STATIC_DRAW);
+    }
+
+    glDrawElements (GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    return 0;
+}
+
+template<class T>
+T
+ImageOutput<T>::drawSphere (T now, const Matrix<T> & model, const Material & material, int steps)
+{
+    next (now);
+    if (! next3D (model, material)) return 0;
+
+    if (steps > 10) steps = 10;  // defensive limit. ~20 million faces (20 * 4^10)
+
+    getBuffer ("sphereVertices");
+    char name[16];
+    if (sphereStep >= step)
+    {
+        sprintf (name, "sphereIndices%i", step);
+        getBuffer ();
+    }
+    else
+    {
+        if (sphereStep < 0)
+        {
+            sphereStep = 0;
+            icosphere (sphereVertices, sphereIndices);
+            getBuffer ("sphereIndices0");
+            glBufferData (GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size () * sizeof (GLuint), &sphereIndices[0], GL_STATIC_DRAW);
+        }
+        while (sphereStep < step)
+        {
+            sphereStep++;
+            icosphereSubdivide (sphereVertices, sphereIndices);
+            sprintf (name, "sphereIndices%i", sphereStep);
+            glBufferData (GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size () * sizeof (GLuint), &sphereIndices[0], GL_STATIC_DRAW);
+        }
+        glBufferData (GL_ARRAY_BUFFER, sphereVertices.size () * sizeof (GLfloat), &sphereVertices[0], GL_STATIC_DRAW);  // This only needs to be uploaded once, since it each step encompasses all the previous ones.
+    }
+
+    int count = 60 * pow (4, step);  // 20 triangles in base icosphere * 3 vertices per triangle * 4^subdivisions
+    glDrawElements (GL_TRIANGLES, count, GL_UNSIGNED_INT, 0);
+    return 0;
+}
+
+template<class T>
+void
+ImageOutput<T>::getBuffer (String name, bool vertices)
+{
+    std::map<String,GLuint>::iterator it = buffers.find (name);
+    bool found =  it != buffers.end ();
+
+    GLuint result;
+    if (found)
+    {
+        result = it.second;
+    }
+    else
+    {
+        glGenBuffers (1, &result);
+        buffers[name] = result;
+    }
+
+    if (vertices)
+    {
+        glBindBuffer (GL_ARRAY_BUFFER, result);
+        if (found) return result;
+
+        glVertexAttribPointer (locVertexPosition, 3, GL_FLOAT, GL_FALSE, 6 * sizeof (GLfloat), 0);
+        glEnableVertexAttribArray (locVertexPosition);
+
+        glVertexAttribPointer (locVertexNormal, 3, GL_FLOAT, GL_FALSE, 6 * sizeof (GLfloat), (void *) (3 * sizeof (GLfloat)));
+        glEnableVertexAttribArray (locVertexNormal);
+    }
+    else  // indices
+    {
+        glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, result);
+    }
+
+    return result;
+}
+
+#endif  // HAVE_GL
 
 template<class T>
 ImageOutput<T> *

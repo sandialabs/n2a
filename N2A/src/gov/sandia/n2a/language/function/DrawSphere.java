@@ -60,7 +60,7 @@ public class DrawSphere extends Draw implements Draw.Shape
         if (operands.length > 2) r = ((Scalar) operands[2].eval (context)).value;
 
         int steps = evalKeyword (context, "steps", 1);
-        if (steps > 10) steps = 10;  // defensive limit. ~12 million faces (12 * 4^10)
+        if (steps > 10) steps = 10;  // defensive limit. ~20 million faces (20 * 4^10)
         MatrixDense model = (MatrixDense) evalKeyword (context, "model");
         Material m = new Material ();
         m.extract (this, context);

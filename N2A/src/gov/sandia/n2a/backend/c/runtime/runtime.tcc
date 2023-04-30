@@ -181,6 +181,164 @@ unitmap (const MatrixAbstract<T> & A, T row, T column)
     }
 }
 
+template<class T>
+Matrix<T>
+glFrustum (T left, T right, T bottom, T top, T near, T far)
+{
+    Matrix<T> result (4, 4);
+    clear (result);
+    result(0,0) =   2 * near / (right - left);
+    result(1,1) =   2 * near / (top   - bottom);
+    result(0,2) =  (right + left)   / (right - left);
+    result(1,2) =  (top   + bottom) / (top   - bottom);
+    result(2,2) = -(far   + near)   / (far   - near);
+    result(3,2) = -1;
+    result(2,3) = -2 * far * near / (far - near);
+    return result;
+}
+
+template<class T>
+Matrix<T>
+glLookAt (const MatrixFixed<T,3,1> & eye, const MatrixFixed<T,3,1> & center, const MatrixFixed<T,3,1> & up)
+{
+    // Create an orthonormal frame
+    Matrix<T> f = center - eye;
+    f /= norm (f, 2);
+    Matrix<T> u = up / norm (up, 2);
+    Matrix<T> s = cross (f, u);
+    s /= norm (s, 2);
+    u = cross (s, f);
+
+    Matrix<T> R (4, 4);
+    clear (R);
+    R(0,0) =  s[0];
+    R(0,1) =  s[1];
+    R(0,2) =  s[2];
+    R(1,0) =  u[0];
+    R(1,1) =  u[1];
+    R(1,2) =  u[2];
+    R(2,0) = -f[0];
+    R(2,1) = -f[1];
+    R(2,2) = -f[2];
+    R(3,3) = 1;
+
+    Matrix<T> Tr (4, 4);
+    identity (Tr);
+    Tr(0,3) = -eye[0];
+    Tr(1,3) = -eye[1];
+    Tr(2,3) = -eye[2];
+
+    return R * Tr;
+}
+
+template<class T>
+Matrix<T>
+glOrtho (T left, T right, T bottom, T top, T near, T far)
+{
+    Matrix<T> result (4, 4);
+    clear (result);
+    result(0,0) =  2 / (right - left);
+    result(1,1) =  2 / (top   - bottom);
+    result(2,2) = -2 / (far   - near);
+    result(0,3) = -(right + left)   / (right - left);
+    result(1,3) = -(top   + bottom) / (top   - bottom);
+    result(2,3) = -(far   + near)   / (far   - near);
+    result(3,3) = 1;
+
+    return result;
+}
+
+template<class T>
+Matrix<T>
+glPerspective (T fovy, T aspect, T near, T far)
+{
+    T f = 1 / tan (fovy / 2);
+
+    Matrix<T> result (4, 4);
+    clear (result);
+    result(0,0) = f / aspect;
+    result(1,1) = f;
+    result(2,2) = (far + near) / (near - far);
+    result(3,2) = -1;
+    result(2,3) = 2 * far * near / (near - far);
+    return result;
+}
+
+template<class T>
+Matrix<T>
+glRotate (T angle, const MatrixFixed<T,3,1> & axis)
+{
+    return glRotate (angle, axis[0], axis[1], axis[2]);
+}
+
+template<class T>
+Matrix<T>
+glRotate (T angle, T x, T y, T z)
+{
+    T degrees = M_PI / 180;
+    T c = cos (angle * degrees);
+    T s = sin (angle * degrees);
+    T c1 = 1 - c;
+
+    T l = sqrt (x * x + y * y + z * z);
+    x /= l;
+    y /= l;
+    z /= l;
+
+    Matrix<T> result (4, 4);
+    clear (result);
+    result(0,0) = x*x*c1+c;
+    result(1,0) = y*x*c1+z*s;
+    result(2,0) = x*z*c1-y*s;
+    result(0,1) = x*y*c1-z*s;
+    result(1,1) = y*y*c1+c;
+    result(2,1) = y*z*c1+x*s;
+    result(0,2) = x*z*c1+y*s;
+    result(1,2) = y*z*c1-x*s;
+    result(2,2) = z*z*c1+c;
+    result(3,3) = 1;
+
+    return result;
+}
+
+template<class T>
+Matrix<T>
+glScale (const MatrixFixed<T,3,1> & scales)
+{
+    return glScale (scales[0], scales[1], scales[2]);
+}
+
+template<class T>
+Matrix<T>
+glScale (T sx, T sy, T sz)
+{
+    Matrix<T> result (4, 4);
+    identity (result);
+    result(0,0) = sx;
+    result(1,1) = sy;
+    result(2,2) = sz;
+    return result;
+}
+
+template<class T>
+Matrix<T>
+glTranslate (const MatrixFixed<T,3,1> & position)
+{
+    return glTranslate (position[0], position[1], position[2]);
+}
+
+template<class T>
+Matrix<T>
+glTranslate (T x, T y, T z)
+{
+    Matrix<T> result (4, 4);
+    identity (result);
+    result(0,3) = x;
+    result(1,3) = y;
+    result(2,3) = z;
+    return result;
+}
+
 #ifdef n2a_FP
 
 template<>

@@ -398,6 +398,13 @@ public class Draw extends Function
                 st.bindAttribLocation (gl, 0, "vertexPosition");
                 st.bindAttribLocation (gl, 1, "vertexNormal");
                 st.useProgram (gl, true);
+
+                // TODO: for transparency: 1) sort by depth; 2) make emission purely additive, regardless of alpha
+                //gl.glEnable (GL.GL_BLEND);
+                //gl.glBlendFuncSeparate (GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA, GL.GL_ONE, GL.GL_ONE_MINUS_SRC_ALPHA);
+                // TODO: use multi-sampling to get smooth edges
+                gl.glEnable (GL.GL_DEPTH_TEST);
+                gl.glEnable (GL.GL_CULL_FACE);
             }
             if (buffers == null) buffers = new HashMap<String,GLArrayDataServer> ();
             if (objects == null) objects = new HashMap<String,Object> ();
@@ -405,8 +412,6 @@ public class Draw extends Function
             // Setup for current cycle
             if (! have3D)
             {
-                gl.glEnable (GL.GL_DEPTH_TEST);
-                //gl.glEnable (GL.GL_CULL_FACE);
                 float[] cv = clearColor.getRGBComponents (null);  // always RGBA
                 gl.glClearColor (cv[0], cv[1], cv[2], cv[3]);
                 gl.glClear (GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT);

@@ -1275,6 +1275,11 @@ namespace n2a
         to[3] = newA;
     }
 
+    /**
+        Works on machine word format rgba, just like get/setRGBA() on image.
+        On little-endian systems, memory format would be ABGR.
+        On big-endian, memory format would be RGBA.
+    **/
     inline static void
     alphaBlend (const uint32_t & from, uint32_t & to)
     {
@@ -1291,6 +1296,29 @@ namespace n2a
         uint32_t g = ((from &   0xFF0000) >> 16) * fromA + ((to &   0xFF0000) >> 16) * toA + 0x4000;
         uint32_t b = ((from &     0xFF00) >>  8) * fromA + ((to &     0xFF00) >>  8) * toA + 0x4000;
         to = (r & 0x7F8000) << 9 | (g & 0x7F8000) << 1 | (b & 0x7F8000) >> 7 | newA * 0xFF >> 15;
+    }
+
+    /**
+        Version of alphaBlend which assumes opposite endian.
+        On little-endian systems, memory format would be RGBA.
+        On big-endian, memory format would be ABGR.
+    **/
+    inline static void
+    alphaBlendOE (const uint32_t & from, uint32_t & to)
+    {
+        // Convert everything to fixed-point, with decimal at bit 15.
+        // This has the advantage of keeping everything within a 32-bit word.
+        uint32_t fromA = ((from & 0xFF000000) >> 9) / 0xFF;
+        if (! fromA) return;
+        uint32_t toA   = ((to   & 0xFF000000) >> 9) / 0xFF;
+        toA = toA * (0x8000 - fromA) >> 15;
+        uint32_t newA = fromA + toA;
+        fromA = (fromA << 15) / newA;
+        toA   = (toA   << 15) / newA;
+        uint32_t r =  (from &     0xFF)        * fromA +  (to &     0xFF)        * toA + 0x4000;
+        uint32_t g = ((from &   0xFF00) >>  8) * fromA + ((to &   0xFF00) >>  8) * toA + 0x4000;
+        uint32_t b = ((from & 0xFF0000) >> 16) * fromA + ((to & 0xFF0000) >> 16) * toA + 0x4000;
+        to = (r & 0x7F8000) >> 15 | (g & 0x7F8000) >> 7 | (b & 0x7F8000) << 1 | (newA * 0xFF & 0x7F8000) << 9;
     }
 }
 

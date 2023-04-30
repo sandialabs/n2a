@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,7 +15,10 @@ the U.S. Government retains certain rights in this software.
 #include "MNode.h"
 #include "canvas.h"
 #ifdef HAVE_FFMPEG
-# include "video.h"
+#  include "video.h"
+#endif
+#ifdef HAVE_GL
+#  include <GL/gl.h>  // Basic functions and types. According to Khronos, we're not supposed to include this when using glcorearb.h
 #endif
 
 #include <vector>
@@ -134,6 +137,74 @@ public:
 };
 template<class T> extern SHARED ImageInput<T> * imageInputHelper (const String & fileName, ImageInput<T> * oldHandle = 0);
 
+#ifdef HAVE_GL
+
+class LightLocation
+{
+public:
+    GLint infinite;
+    GLint position;
+    GLint direction;
+    GLint ambient;
+    GLint diffuse;
+    GLint specular;
+    GLint spotExponent;
+    GLint spotCutoff;
+    GLint attenuation0;
+    GLint attenuation1;
+    GLint attenuation2;
+
+    LightLocation (GLuint program, int index);
+};
+
+class Light
+{
+public:
+    bool  infinite;
+    float position[3];
+    float direction[3];
+    float ambient[3];
+    float diffuse[3];
+    float specular[3];
+    float spotExponent;
+    float spotCutoff;  // cos(cutoff) rather than raw angle
+    float attenuation0;
+    float attenuation1;
+    float attenuation2;
+
+    Light ();
+    void setUniform (const LightLocation & l, const Matrix<float> & view);
+};
+
+class Material
+{
+public:
+    float ambient[3];
+    float diffuse[4];
+    float emission[3];
+    float specular[3];
+    float shininess;
+
+    static GLint locAmbient;
+    static GLint locDiffuse;
+    static GLint locEmission;
+    static GLint locSpecular;
+    static GLint locShininess;
+
+    Material ();
+    void setUniform ();
+};
+
+void put       (std::vector<GLfloat> & vertices,                  float x, float y, float z, float[3] n);
+void put       (std::vector<GLfloat> & vertices, Matrix<float> f, float x, float y, float z, float nx, float ny, float nz);
+int  putUnique (std::vector<GLfloat> & vertices,                  float x, float y, float z);
+
+void icosphere          (std::vector<GLfloat> & vertices, std::vector<GLuint> & indices);
+void icosphereSubdivide (std::vector<GLfloat> & vertices, std::vector<GLuint> & indices);
+void split              (std::vector<GLfloat> & vertices, int v0, int v1);
+
+#endif
+
 template<class T>
 class SHARED ImageOutput : public Holder
 {
@@ -145,7 +216,7 @@ public:
 
     int      width;
     int      height;
-    uint32_t clearColor;
+    uint32_t clearColor;  // kept in sync with cv
 
     T                t;
     int              frameCount; // Number of frames actually written so far.
@@ -158,22 +229,67 @@ public:
     double           timeScale;  // Multiply simtime (t) by this value to get PTS. Zero (default value) means 24fps, regardless of simtime.
 #   endif
 
+#   ifdef HAVE_GL
+#     ifdef _WIN32
+    HWND   window;
+    HDC    dc;
+    HGLRC  rc;
+#     endif
+    bool                         extensionsBound;  // Indicates that extension function addresses have been bound.
+    GLuint                       program;
+    GLuint                       rboColor;
+    GLuint                       rboDepth;
+    GLint                        locVertexPosition;
+    GLint                        locVertexNormal;
+    GLint                        locMatrixModelView;
+    GLint                        locMatrixNormal;
+    GLint                        locMatrixProjection;
+    std::vector<LightLocation *> locLights;
+    GLint                        locEnabled;
+    bool                         have3D;
+    float                        cv[4];  // Color vector; kept in sync with clearColor
+    int                          lastWidth;
+    int                          lastHeight;
+    Matrix<float>                projection;
+    Matrix<float>                view;
+    std::map<int,Light *>        lights;
+    std::map<String,GLuint>      buffers;
+    int                          sphereStep;
+    std::vector<GLfloat>         sphereVertices;
+    std::vector<GLuint>          sphereIndices;
+#   endif
+    Matrix<float>                nextProjection;  // Initialized to 4x4, all zeros. If all zeros a start of 3D drawing, then we generate a default matrix based on current view size.
+    Matrix<float>                nextView;        // Initialized to 4x4 identity, which is also the default.
+
     ImageOutput (const String & fileName);
     virtual ~ImageOutput ();
     void open ();  // Subroutine of writeImage()
+
+    void setClearColor (uint32_t          color);
+    void setClearColor (const Matrix<T> & color);  // Converting to Matrix<T> lets us be agnostic about orientation, unless it is already Matrix<T> and there are gaps between columns (unlikely).
 
     void next (T now);
 #   ifdef n2a_FP
     // All pixel-valued arguments must agree on exponent. "now" is in time exponent.
     T drawDisc    (T now, bool raw, const MatrixFixed<T,3,1> & center, T radius,                               int exponent, uint32_t color);
-    T drawBlock   (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h,                               int exponent, uint32_t color);
+    T drawSquare  (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h,                               int exponent, uint32_t color);
     T drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1, const MatrixFixed<T,3,1> & p2, T thickness, int exponent, uint32_t color);
 #   else
     T drawDisc    (T now, bool raw, const MatrixFixed<T,3,1> & center, T radius,                               uint32_t color);
-    T drawBlock   (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h,                               uint32_t color);
+    T drawSquare  (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h,                               uint32_t color);
     T drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1, const MatrixFixed<T,3,1> & p2, T thickness, uint32_t color);
 #   endif
     void writeImage ();
+
+    // 3D drawing functions.
+#   ifdef HAVE_GL
+    bool next3D (const Matrix<T> & model, const Material & material);  // Additional setup work done by 3D draw functions. Does both one-time initialization and per-frame initialization, as needed.
+    T drawCube     (T now, const Matrix<T> & model, const Material & material);
+    T drawCylinder (T now,                          const Material & material, const MatrixFixed<T,3,1> & p1, T r1, const MatrixFixed<T,3,1> & p2, T r2 = -1, int steps = 6, int stepsCap = -1);
+    T drawPlane    (T now, const Matrix<T> & model, const Material & material);
+    T drawSphere   (T now, const Matrix<T> & model, const Material & material, int steps = 1);
+    GLuint getBuffer (String name, int size);
+#   endif
 };
 template<class T> extern SHARED ImageOutput<T> * imageOutputHelper (const String & fileName, ImageOutput<T> * oldHandle = 0);
 
