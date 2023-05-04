@@ -348,7 +348,6 @@ public class NodePart extends NodeContainer
         @param upFrom If this call came from child part, then reference to that part. Otherwise null.
         @param name The remaining name path to be resolved. Generally, this routine pops names off
         the front of this value and recursively travels the tree based on its directions.
-        @param stopAt If non-null, indicates a tree object where the search should terminate if found.
         @return The tree node, or null if the path does not resolve exactly.
     **/
     public NodeBase resolveName (NodeVariable from, NodePart upFrom, String name)
@@ -376,7 +375,7 @@ public class NodePart extends NodeContainer
             key = Variable.stripContextPrefix (key);
             if (! key.startsWith (ns)) continue;
             int keyLength = key.length ();
-            if (keyLength != nsLength  &&  key.charAt (nsLength) != '\'') continue;
+            if (keyLength > nsLength  &&  key.charAt (nsLength) != '\'') continue;
 
             if (n instanceof NodeVariable)
             {
@@ -403,7 +402,11 @@ public class NodePart extends NodeContainer
         // Treat undefined $variables as local. This will not include $up, because that case is eliminated above.
         if (nextName.isEmpty ()  &&  ns.startsWith ("$")) return new NodeVariable (null);  // Fake it, just enough to finish NodeVariable.findConnections().
 
-        if (parent == null) return null;
+        if (parent == null)
+        {
+            if (nextName.isEmpty ()  &&  ns.equals (source.key ())) return this;  // Current name matches this part in an imaginary container above the top level.
+            return null;
+        }
         return parent.resolveName (from, this, name);
     }
 

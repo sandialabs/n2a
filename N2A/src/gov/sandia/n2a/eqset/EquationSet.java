@@ -1403,7 +1403,15 @@ public class EquationSet implements Comparable<EquationSet>
         // Treat undefined $variables as local. This will never include $up, because that case is eliminated above.
         if (ns.startsWith ("$")) return true;  // Assert it is a variable, regardless. There is no legal way for this to be a part name, even if it contains a dot.
 
-        if (container == null) return false;
+        if (container == null)
+        {
+            if (pieces.length == 1  &&   ns.equals (name))  // Match current part as if it is the child of an imaginary container above the top-level.
+            {
+                result.endpoint = this;
+                return true;
+            }
+            return false;
+        }
         result.addResolution (container);
         return container.resolveConnectionBinding (query, result);
     }
