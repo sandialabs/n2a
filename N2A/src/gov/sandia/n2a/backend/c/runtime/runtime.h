@@ -49,7 +49,7 @@ template<> inline int modFloor (int a, int b)
     return result;
 }
 
-void n2a_srand (unsigned int seed);  // Hack to work around Microsoft C library behavior when in DLL.
+SHARED void n2a_srand (unsigned int seed);  // Hack to work around Microsoft C library behavior when in DLL.
 template<class T> SHARED T                  uniform ();
 template<class T> SHARED T                  uniform (T sigma);
 template<class T> SHARED T                  uniform (T lo, T hi, T step = (T) 1);
@@ -431,7 +431,11 @@ public:
     part class.
 
     <p>Lifetime management: An object of this class is responsible to destroy
-    all part instances it contains.
+    any part instances that are held on the dead list. If a simulation shuts
+    down normally, this will usually be all instances that exist. If the
+    simulation is terminated by a signal, some instances may still be held
+    in EventStep objects. In that case, EventStep is responsible to free its
+    contents. Those parts will not go through a proper death process.
 **/
 template<class T>
 class SHARED Population : public Simulatable<T>
@@ -542,7 +546,7 @@ public:
 
     Simulator ();
     ~Simulator ();
-    void clear ();
+    void clear ();  ///< Restores simulator to same condition as newly-constructed object.
 
     void init (WrapperBase<T> * wrapper); ///< init phase and event queue set up
     void run (T until = (T) INFINITY);    ///< Run until given time. This function can be called multiple times to step through simulation. Default value runs until queue is empty.
@@ -587,6 +591,10 @@ public:
     Equivalently, all queued parts must belong to exactly one EventStep.
     This class is heavier (more storage, more computation) than other events, as it is expected
     to live for the entire length of the simulation and repeatedly insert itself into the event queue.
+
+    <p>Lifetime management: When a simulation shuts down normally, all parts die and get
+    processed by their population object. If the simulation get terminated by a signal,
+    then this class is responsible for disposing any parts that are still alive.
 **/
 template<class T>
 class SHARED EventStep : public Event<T>
@@ -596,7 +604,7 @@ public:
     std::vector<VisitorStep<T> *> visitors;
 
     EventStep (T t, T dt);
-    virtual ~EventStep ();
+    virtual ~EventStep ();  ///< Frees any parts that have not yet died.
     virtual bool isStep () const;
 
     virtual void  run     ();
@@ -678,6 +686,7 @@ public:
     Part<T> * previous; ///< Points to the part immediately ahead of the current part.
 
     VisitorStep (EventStep<T> * event);
+    ~VisitorStep ();  ///< Free any parts still lingering in queue.
 
     virtual void visit   (std::function<void (Visitor<T> * visitor)> f);
     virtual void enqueue (Part<T> * newPart);  ///< Puts newPart on our local queue. Called by EventStep::enqueue(), which balances load across all threads.

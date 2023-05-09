@@ -19,6 +19,7 @@ the U.S. Government retains certain rights in this software.
 
 #include <vector>
 #include <map>
+#include <memory>
 #ifndef N2A_SPINNAKER
 # include <iostream>
 # include <sstream>
@@ -362,7 +363,7 @@ class SHARED MatrixSparse : public MatrixAbstract<T>
 {
 public:
     int rows_;
-    n2a::PointerStruct<std::vector<std::map<int,T>>> data;
+    std::shared_ptr<std::vector<std::map<int,T>>> data;
 
     MatrixSparse ();
     MatrixSparse (const int rows, const int columns);

@@ -1136,13 +1136,16 @@ public class JobC extends Thread
                 header.append ("  " + SHARED + "void " + ns_ + "finish ();\n");
                 header.append ("\n");
                 generateIOvector (digestedModel, SHARED, ns, header, vectorDefinitions);
-                if (csharp  &&  ! vectorDefinitions.isEmpty ())
+                if (! vectorDefinitions.isEmpty ())
                 {
                     header.append ("\n");
-                    header.append ("  " + SHARED + "void  " + ns + "_IOvectorDelete (" + ns + "::IOvector * self);\n");
-                    header.append ("  " + SHARED + "int   " + ns + "_IOvectorSize   (" + ns + "::IOvector * self);\n");
-                    header.append ("  " + SHARED + T +  " " + ns + "_IOvectorGet    (" + ns + "::IOvector * self, int i);\n");
-                    header.append ("  " + SHARED + "void  " + ns + "_IOvectorSet    (" + ns + "::IOvector * self, int i, " + T + " value);\n");
+                    header.append ("  " + SHARED + "void  " + ns_ + "IOvectorDelete (" + ns + "::IOvector * self);\n");
+                    if (csharp)
+                    {
+                        header.append ("  " + SHARED + "int   " + ns_ + "IOvectorSize   (" + ns + "::IOvector * self);\n");
+                        header.append ("  " + SHARED + T +  " " + ns_ + "IOvectorGet    (" + ns + "::IOvector * self, int i);\n");
+                        header.append ("  " + SHARED + "void  " + ns_ + "IOvectorSet    (" + ns + "::IOvector * self, int i, " + T + " value);\n");
+                    }
                 }
 
                 if (csharp)
@@ -1237,7 +1240,7 @@ public class JobC extends Thread
         result.append ("  " + SIMULATOR + "after = " + after + ";\n");
         result.append ("  initIO ();\n");
         result.append ("  wrapper = new Wrapper;\n");
-        result.append ("  " + SIMULATOR + "init (wrapper);\n");
+        result.append ("  " + SIMULATOR + "init (wrapper);\n");  // Simulator takes possession of wrapper, so it will be freed automatically.
         result.append ("}\n");
         result.append ("\n");
 
@@ -1252,7 +1255,7 @@ public class JobC extends Thread
         {
             result.append ("  " + SIMULATOR + "clear ();\n");
         }
-        result.append ("  delete wrapper;\n");
+        // The wrapper is freed when simulator is cleared. We could set wrapper to null here, but there is little need for that.
         if (cli)
         {
             result.append ("  delete params;\n");
@@ -1276,12 +1279,12 @@ public class JobC extends Thread
                 result.append ("\n");
                 result.append (vectorDefinitions.toString ());
 
+                result.append     ("void  " + ns + "IOvectorDelete (IOvector * self)                     {delete self;}\n");
                 if (csharp)
                 {
-                    result.append ("void  " + ns + "_IOvectorDelete (IOvector * self)                     {delete self;}\n");
-                    result.append ("int   " + ns + "_IOvectorSize   (IOvector * self)                     {return self->size ();}\n");
-                    result.append (T +  " " + ns + "_IOvectorGet    (IOvector * self, int i)              {return self->get (i);}\n");
-                    result.append ("void  " + ns + "_IOvectorSet    (IOvector * self, int i, " + T + " value) {self->set (i, value);}\n");
+                    result.append ("int   " + ns + "IOvectorSize   (IOvector * self)                     {return self->size ();}\n");
+                    result.append (T +  " " + ns + "IOvectorGet    (IOvector * self, int i)              {return self->get (i);}\n");
+                    result.append ("void  " + ns + "IOvectorSet    (IOvector * self, int i, " + T + " value) {self->set (i, value);}\n");
                 }
             }
         }

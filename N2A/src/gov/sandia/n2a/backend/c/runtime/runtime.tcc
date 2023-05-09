@@ -1457,17 +1457,10 @@ template<class T> SHARED Simulator<T> Simulator<T>::instance;
 template<class T>
 Simulator<T>::Simulator ()
 {
-    integrator = 0;
-    stop       = false;
-    after      = false;
-
-#   ifdef n2a_FP
-    EventStep<T> * event = new EventStep<T> (0, (1 << FP_MSB) / 10000);  // Works for exponentTime=0. For any other case, it is necessary for top-level part to call setPeriod().
-#   else
-    EventStep<T> * event = new EventStep<T> ((T) 0, (T) 1e-4);
-#   endif
-    currentEvent = event;
-    periods.push_back (event);
+    integrator   = 0;
+    stop         = false;
+    currentEvent = 0;
+    after        = false;
 }
 
 template<class T>
@@ -1480,20 +1473,46 @@ template<class T>
 void
 Simulator<T>::clear ()
 {
+    // Free all non-step events still in queue.
+    while (! queueEvent.empty ())
+    {
+        currentEvent = queueEvent.top ();
+        queueEvent.pop ();
+        if (! currentEvent->isStep ()) delete currentEvent;
+    }
+    currentEvent = 0;
+
+    queueResize.clear ();
+    std::queue<Population<T> *> ().swap (queueConnect);  // Necessary because queue lacks clear() function. Exchange contents with an empty queue. Then temporary queue object (now holding any content from queueConnect) is automagically disposed.
+    queueClearNew.clear ();
+
+    // Free all step events
     for (auto event : periods) delete event;
     periods.clear ();
+
     if (integrator) delete integrator;
     integrator = 0;
+
     for (auto it : holders) delete it;
     holders.clear ();
+
+    stop  = false;
+    after = false;
 }
 
 template<class T>
 void
 Simulator<T>::init (WrapperBase<T> * wrapper)
 {
+#   ifdef n2a_FP
+    EventStep<T> * event = new EventStep<T> (0, (1 << FP_MSB) / 10000);  // Works for exponentTime=0. For any other case, it is necessary for top-level part to call setPeriod().
+#   else
+    EventStep<T> * event = new EventStep<T> ((T) 0, (T) 1e-4);
+#   endif
+    currentEvent = event;
+    periods.push_back (event);
+
     // Init cycle
-    EventStep<T> * event = (EventStep<T> *) currentEvent;
     event->enqueue (wrapper);  // no need for wrapper->enterSimulation()
     wrapper->init ();
     updatePopulations ();
@@ -2020,6 +2039,18 @@ VisitorStep<T>::VisitorStep (EventStep<T> * event)
 {
     queue.next = 0;
     previous = 0;
+}
+
+template<class T>
+VisitorStep<T>::~VisitorStep ()
+{
+    Part<T> * p = queue.next;
+    while (p)
+    {
+        Part<T> * next = p->next;
+        delete p;
+        p = next;
+    }
 }
 
 template<class T>

@@ -415,6 +415,7 @@ namespace n2a
         static uint8_t * buildFloat2Char (); ///< Construct lutFloat2Char during static initialization.
         static float *   buildChar2Float (); ///< Construct lutChar2Float during static initialization.
     };
+    SHARED void freeLUT ();  ///< Free static lookup tables created by PixelFormat and PixelFormatPlanarYCbCr. Called just before program terminates to make memory debuggers like valgrind happy. Otherwise, completely unnecessary.
 
     /**
         Specifies the interface required by PixelBufferGroups.

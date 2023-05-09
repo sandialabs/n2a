@@ -5,7 +5,7 @@ Copyright (c) 2001-2004 Dept. of Computer Science and Beckman Institute,
 Distributed under the UIUC/NCSA Open Source License.
 
 
-Copyright 2005, 2009, 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -20,16 +20,16 @@ the U.S. Government retains certain rights in this software.
 
 template<class T>
 MatrixSparse<T>::MatrixSparse ()
+:   data (std::make_shared<std::vector<std::map<int,T>>> ())
 {
     rows_ = 0;
-    data.initialize ();
 }
 
 template<class T>
 MatrixSparse<T>::MatrixSparse (const int rows, const int columns)
+:   data (std::make_shared<std::vector<std::map<int,T>>> ())
 {
     rows_ = rows;
-    data.initialize ();
     data->resize (columns);
 }
 
@@ -47,7 +47,7 @@ MatrixSparse<T>::MatrixSparse (const MatrixAbstract<T> & that)
         int m = that.rows ();
         int n = that.columns ();
         rows_ = m;
-        data.initialize ();
+        data = std::make_shared<std::vector<std::map<int,T>>> ();
         data->resize (n);
         for (int c = 0; c < n; c++)
         {

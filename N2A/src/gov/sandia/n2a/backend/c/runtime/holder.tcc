@@ -1845,7 +1845,7 @@ Mfile<T>::getMatrix (const std::vector<String> & path)
 #endif
 {
     String key = join ("/", path);
-    MatrixAbstract<T> * A = matrices[key];
+    MatrixAbstract<T> * A = matrices[key];  // If key does not exist, then the c++ standard promises that the inserted value will be zero-initialized.
     if (A) return A;
 
     MatrixSparse<T> * S = new MatrixSparse<T>;

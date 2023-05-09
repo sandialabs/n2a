@@ -680,6 +680,19 @@ PixelFormat::buildChar2Float ()
   return result;
 }
 
+void
+freeLUT ()
+{
+    free (PixelFormat::lutFloat2Char);
+    free (PixelFormat::lutChar2Float);
+
+    free (PixelFormatPlanarYCbCr::lutYin);
+    free (PixelFormatPlanarYCbCr::lutUVin);
+    free (PixelFormatPlanarYCbCr::lutYout);
+    free (PixelFormatPlanarYCbCr::lutUVout);
+    free (PixelFormatPlanarYCbCr::lutGrayOut);
+}
+
 
 // class PixelFormatPalette ---------------------------------------------------
 
