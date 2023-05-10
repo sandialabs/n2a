@@ -9,7 +9,6 @@ package gov.sandia.n2a.ui.eq;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
-import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Insets;
@@ -40,7 +39,6 @@ import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.JViewport;
 import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
@@ -630,32 +628,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             NodeBase node = (NodeBase) o;
             return node.allowEdit ();
         }
-        else if (event instanceof MouseEvent)
-        {
-            MouseEvent me = (MouseEvent) event;
-            if (! SwingUtilities.isLeftMouseButton (me)) return false;
-            if (me.getClickCount () != 1) return false;
-            if (me.isControlDown ()) return false;  // On Macintosh, reserve ctrl-click for context menu.
-            if (focusTree == null) return false;
-
-            int x = me.getX ();
-            int y = me.getY ();
-            final TreePath path = focusTree.getPathForLocation (x, y);
-            if (path != null  &&  path.equals (lastPath))  // Second click on node, but not double-click.
-            {
-                // Initiate edit
-                EventQueue.invokeLater (new Runnable ()
-                {
-                    public void run ()
-                    {
-                        focusTree.startEditingAtPath (path);
-                    }
-                });
-            }
-        }
-        // We only get here during a mouse event.
-        // In that case, always return false, because we initiate editing indirectly.
-        return false;
+        return false;  // Never edit on click, only on keyboard action.
     }
 
     public boolean stopCellEditing ()

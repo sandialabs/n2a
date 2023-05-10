@@ -118,7 +118,6 @@ public class PanelEquationTree extends JScrollPane
         tree.setEditable (! container.locked);
         tree.setInvokesStopCellEditing (true);  // auto-save current edits, as much as possible
         tree.setDragEnabled (true);
-        tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
         tree.setRequestFocusEnabled (false);  // Don't request focus directly when clicked. Instead, let mouse listener do it.
         ToolTipManager.sharedInstance ().registerComponent (tree);
         tree.setTransferHandler (container.transferHandler);
@@ -417,25 +416,15 @@ public class PanelEquationTree extends JScrollPane
                         switchToTree ();
                         takeFocus ();
                     }
-                    else if (clicks == 2)  // Drill down on parts, or edit any other node type.
+                    else if (clicks == 2)  // Drill down on parts.
                     {
                         NodePart part = null;
                         if (path != null)
                         {
                             Object temp = path.getLastPathComponent ();
-                            if (temp instanceof NodePart)
-                            {
-                                part = (NodePart) temp;
-                                // and drill down
-                            }
-                            else  // any other node type
-                            {
-                                if (container.locked  &&  ! ((NodeBase) temp).showMultiLine ()) return;
-                                tree.setSelectionPath (path);
-                                tree.setEditable (true);
-                                tree.startEditingAtPath (path);
-                                return;
-                            }
+                            if (! (temp instanceof NodePart)) return;
+                            part = (NodePart) temp;
+                            // and drill down
                         }
                         if (part == null) part = root;  // Drill down without selecting a specific node.
                         container.drill (part);

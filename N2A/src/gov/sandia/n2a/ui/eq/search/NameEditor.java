@@ -1,5 +1,5 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -9,7 +9,6 @@ package gov.sandia.n2a.ui.eq.search;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
-import java.awt.EventQueue;
 import java.awt.Graphics;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
@@ -29,7 +28,6 @@ import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.JViewport;
 import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.event.TreeSelectionEvent;
@@ -202,37 +200,7 @@ public class NameEditor extends AbstractCellEditor implements TreeCellEditor, Tr
             if (! node.allowEdit ()) return false;
             return true;
         }
-        else if (event instanceof MouseEvent)
-        {
-            MouseEvent me = (MouseEvent) event;
-            int x = me.getX ();
-            int y = me.getY ();
-            int clicks = me.getClickCount ();
-            if (SwingUtilities.isLeftMouseButton (me))
-            {
-                if (clicks == 1)
-                {
-                    final TreePath path = tree.getPathForLocation (x, y);
-                    if (path != null  &&  path.equals (lastPath))  // Second click on node, but not double-click.
-                    {
-                        Object o = path.getLastPathComponent ();
-                        if (o instanceof NodeModel)
-                        {
-                            // Initiate edit
-                            EventQueue.invokeLater (new Runnable ()
-                            {
-                                public void run ()
-                                {
-                                    tree.startEditingAtPath (path);
-                                }
-                            });
-                        }
-                    }
-                }
-            }
-        }
-        // Always return false from this method. Instead, initiate editing indirectly.
-        return false;
+        return false;  // Never edit on click, only on keyboard action.
     }
 
     public boolean stopCellEditing ()
