@@ -1873,11 +1873,7 @@ public class ImportJob extends XMLutility
         if (doDependency) addDependency (part, ionChannel);
 
         String name = node.getNodeName ();
-        if (name.contains ("Population"))
-        {
-            part.set ("G1*population", "Gall");  // The default is Gdensity*surfaceArea
-            return;  // Population model obviates Potential model.
-        }
+        if (name.contains ("Population")) return;  // Population model obviates Potential model.
 
         String potential = "";
         if      (name.contains ("Nernst")) potential = "Potential Nernst";

@@ -2307,7 +2307,13 @@ public class ExportJob extends XMLutility
         {
             // Determine wrapper type
             String type = "channelPopulation";
-            if (! source.get ("Gall").contains ("population"))
+            Variable population = getEquations (source).find (new Variable ("population"));
+            if (population != null)
+            {
+                double value = ((Scalar) population.eval (context)).value;
+                if (value <= 0) population = null;
+            }
+            if (population == null)  // Has population been touched? If not, then use a density class.
             {
                 if (potential == null)
                 {
