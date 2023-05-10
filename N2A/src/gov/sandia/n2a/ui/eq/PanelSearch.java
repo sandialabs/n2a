@@ -126,7 +126,6 @@ public class PanelSearch extends JPanel
         tree.setEditable (true);
         tree.setInvokesStopCellEditing (true);  // auto-save current edits, as much as possible
         tree.setDragEnabled (true);
-        tree.setToggleClickCount (0);  // Disable expand/collapse on double-click
         tree.setRequestFocusEnabled (false);  // Don't request focus directly when clicked. Instead, let mouse listener do it.
         ToolTipManager.sharedInstance ().registerComponent (tree);
         tree.setCellRenderer (renderer);
