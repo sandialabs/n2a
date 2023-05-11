@@ -167,7 +167,7 @@ template<class T> SHARED Matrix<T> glTranslate (const MatrixFixed<T,3,1> & posit
 template<class T> SHARED Matrix<T> glTranslate (T x, T y, T z);
 
 #ifndef N2A_SPINNAKER
-extern SHARED void signalHandler (int number);
+SHARED void signalHandler (int number);
 #endif
 
 

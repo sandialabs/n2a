@@ -23,7 +23,7 @@ public class CompilerClang extends CompilerGCC
 
         public Compiler make (Path localJobDir)
         {
-            return new CompilerClang (host, localJobDir, gcc);
+            return new CompilerClang (host, localJobDir, gcc, Darwin);
         }
 
         public String suffixDebug ()
@@ -43,9 +43,9 @@ public class CompilerClang extends CompilerGCC
         }
     }
 
-    public CompilerClang (Host host, Path localJobDir, Path gcc)
+    public CompilerClang (Host host, Path localJobDir, Path gcc, boolean Darwin)
     {
-        super (host, localJobDir, gcc);
+        super (host, localJobDir, gcc, Darwin);
     }
 
     public void addDebugCompile (List<String> command)

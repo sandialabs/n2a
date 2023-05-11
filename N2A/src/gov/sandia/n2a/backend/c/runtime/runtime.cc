@@ -6,8 +6,6 @@ the U.S. Government retains certain rights in this software.
 
 
 #include "runtime.tcc"
-#include "MatrixFixed.tcc"
-#include "Matrix.tcc"
 
 #include <csignal>
 
@@ -16,8 +14,6 @@ using namespace std;
 
 
 // General functions ---------------------------------------------------------
-
-template class SHARED MatrixFixed<n2a_T,3,1>;
 
 template SHARED n2a_T uniform ();
 template SHARED n2a_T uniform (n2a_T sigma);

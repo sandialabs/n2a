@@ -147,7 +147,7 @@ namespace n2a
         Changes the stride and height of a dense raster in memory.  Used mainly as
         a utility function by PixelBuffer, but sometimes useful elsewhere.
     **/
-    extern SHARED void reshapeBuffer (Pointer & memory, int oldStride, int newStride, int newHeight, int pad = 0);
+    SHARED void reshapeBuffer (Pointer & memory, int oldStride, int newStride, int newHeight, int pad = 0);
 
     /**
         An interface for various classes that manage the storage of image data.

@@ -735,6 +735,13 @@ inline String join (const String & delimiter, const std::vector<String> & elemen
     return result;
 }
 
+// Oddly, we don't get an automatic conversion from char* to String when char* is on the left,
+// so we need this explicit operator.
+inline String operator+ (const char * A, const String & B)
+{
+    return String (A) + B;
+}
+
 inline bool operator== (const char * A, const String & B)
 {
     return B.compare (A) == 0;

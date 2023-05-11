@@ -22,9 +22,10 @@ public class CompilerGCC extends Compiler
 {
     public static class Factory implements CompilerFactory
     {
-        protected Host  host;
-        protected Path  gcc;
-        protected float version;  // major.minor without any sub-minor version
+        protected Host    host;
+        protected Path    gcc;
+        protected float   version;  // major.minor without any sub-minor version
+        protected boolean Darwin;   // Indicates the we should use a few quirky options specific to Mac.
 
         public Factory (Host host, Path gcc)
         {
@@ -47,11 +48,21 @@ public class CompilerGCC extends Compiler
                 }
             }
             catch (Exception e) {e.printStackTrace ();}
+
+            // Detect Mac
+            try (AnyProcess proc = host.build ("uname").start ();
+                 BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+            {
+                String line = reader.readLine ();
+                String[] pieces = line.split (" ");
+                if (pieces[0].equals ("Darwin")) Darwin = true;
+            }
+            catch (Exception e) {}
         }
 
         public Compiler make (Path localJobDir)
         {
-            return new CompilerGCC (host, localJobDir, gcc);
+            return new CompilerGCC (host, localJobDir, gcc, Darwin);
         }
 
         public String suffixBinary ()
@@ -109,11 +120,13 @@ public class CompilerGCC extends Compiler
     protected Path         gcc;
     protected List<String> settings = new ArrayList<String> ();
     protected String       optimize = "-O3";
+    protected boolean      Darwin;
 
-    public CompilerGCC (Host host, Path localJobDir, Path gcc)
+    public CompilerGCC (Host host, Path localJobDir, Path gcc, boolean Darwin)
     {
         super (host, localJobDir);
-        this.gcc = gcc;
+        this.gcc    = gcc;
+        this.Darwin = Darwin;
 
         settings.add ("-std=c++11");
         settings.add ("-ffunction-sections");
@@ -174,7 +187,8 @@ public class CompilerGCC extends Compiler
             command.add ("-shared");
         }
         for (String setting : settings) command.add (setting);
-        command.add ("-Wl,--gc-sections");
+        if (Darwin) command.add ("-Wl,-dead_strip");
+        else        command.add ("-Wl,--gc-sections");
 
         for (Entry<String,String> define : defines.entrySet ())
         {

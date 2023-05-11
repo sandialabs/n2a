@@ -21,7 +21,11 @@ the U.S. Government retains certain rights in this software.
 #  define LITTLE_ENDIAN 1234
 #  define BYTE_ORDER    LITTLE_ENDIAN
 #else
-#  include <endian.h>
+#  ifdef __APPLE__  // Because, of course, Apple does everything better.
+#    include <machine/endian.h>
+#  else
+#    include <endian.h>
+#  endif
 #endif
 
 
@@ -168,11 +172,7 @@ bswap (uint64_t * x, uint32_t count = 1)
 #else   // assembly sections are not available, so use generic routines
 
 
-#ifndef _MSC_VER
-
-#  include <byteswap.h>
-
-#else
+#ifdef _MSC_VER
 
 static inline uint16_t
 bswap_16 (uint16_t x)
@@ -191,6 +191,17 @@ bswap_64 (uint64_t x)
 {
   return (((uint64_t) bswap_32 (x & 0xFFFFFFFFull)) << 32) | (bswap_32 (x >> 32));
 }
+
+#elif defined(__APPLE__)
+
+#  include <libkern/OSByteOrder.h>
+#  define bswap_16 OSSwapInt16
+#  define bswap_32 OSSwapInt32
+#  define bswap_64 OSSwapInt64
+
+#else
+
+#  include <byteswap.h>
 
 #endif
 
