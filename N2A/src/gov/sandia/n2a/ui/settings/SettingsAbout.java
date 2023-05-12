@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -102,6 +102,7 @@ public class SettingsAbout extends JPanel implements Settings
         addLicense     (licenses, "JGit",          loadResource ("jgit"));
         addLicense     (licenses, "Apache SSHD",   loadResource ("apache-sshd"));
         addLicense     (licenses, "JavaEWAH",      loadResource ("JavaEWAH"));
+        addLicense     (licenses, "OpenGL",        loadResource ("opengl"));
         addLicense     (licenses, "JOGL",          loadResource ("JOGL"));
         addLicense     (licenses, "miniz",         loadResource ("miniz"));
         addLicense     (licenses, "pugixml",       loadResource ("pugixml"));

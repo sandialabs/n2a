@@ -1,7 +1,33 @@
 /*
-Copyright 2021-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
+*/
+
+/*
+This software depends on two external software packages: miniz and pugixml. To update them,
+download the following items:
+
+https://pugixml.org -- Get the release zip, unpack, and place the following files in runtime:
+    pugixml.cpp
+    pugixml.hpp
+    pugiconfig.hpp
+    LICENSE.md --> update gov/sandia/n2a/ui/settings/licenses/pugixml
+
+Uncomment the following defines in pugiconfig.hpp:
+    #define PUGIXML_COMPACT
+    #define PUGIXML_NO_XPATH
+    #define PUGIXML_NO_STL
+    #define PUGIXML_NO_EXCEPTIONS
+    #define PUGIXML_HEADER_ONLY
+
+https://github.com/richgel999/miniz -- Get the release zip, unpack, and place these files in runtime:
+    miniz.c
+    miniz.h
+    LICENSE --> update gov/sandia/n2a/ui/settings/licenses/miniz
+
+Uncomment the following define in miniz.h:
+    #define MINIZ_NO_ARCHIVE_WRITING_APIS
 */
 
 #include "spreadsheet.h"

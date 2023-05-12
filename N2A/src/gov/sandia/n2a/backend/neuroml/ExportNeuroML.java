@@ -1,7 +1,18 @@
 /*
-Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
+*/
+
+/*
+This class uses XML schema files (.xsd) from the LEMS and NeuroML distributions
+to determine order during export. The latest XSD for each of NeuroML and LEMS
+should be copied from their respective distributions:
+    https://github.com/NeuroML/NeuroML2/tree/master/Schemas/NeuroML2
+    https://github.com/LEMS/LEMS/blob/master/Schemas/LEMS
+and placed into this directory. Also update export() below to reference the latest
+files. Note that the software can work without these files, but the resulting XML
+may not be strictly correct.
 */
 
 package gov.sandia.n2a.backend.neuroml;
@@ -31,8 +42,8 @@ public class ExportNeuroML implements ExportModel
         if (PluginNeuroML.sequencer == null)
         {
             PluginNeuroML.sequencer = new Sequencer ();
-            PluginNeuroML.sequencer.loadXSD ("NeuroML_v2.1.xsd");
-            PluginNeuroML.sequencer.loadXSD ("LEMS_v0.7.4.xsd");
+            PluginNeuroML.sequencer.loadXSD ("NeuroML_v2.2.xsd");
+            PluginNeuroML.sequencer.loadXSD ("LEMS_v0.7.6.xsd");
         }
 
         ExportJob job = new ExportJob (PluginNeuroML.partMap, PluginNeuroML.sequencer);
