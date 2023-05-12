@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,6 +12,10 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MTextField;
 import gov.sandia.n2a.ui.settings.SettingsBackend;
 
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.event.ChangeEvent;
@@ -19,9 +23,10 @@ import javax.swing.event.ChangeListener;
 
 public class SettingsC extends SettingsBackend
 {
-    protected MTextField fieldCpp    = new MTextField (40);
-    protected MTextField fieldFFmpeg = new MTextField (40);
-    protected MTextField fieldJNI    = new MTextField (40);
+    protected MTextField fieldCpp      = new MTextField (40);
+    protected MTextField fieldFFmpeg   = new MTextField (40);
+    protected MTextField fieldJNI      = new MTextField (40);
+    protected JButton    buttonRebuild = new JButton ("Rebuild Runtime");
 
     public SettingsC ()
     {
@@ -65,6 +70,16 @@ public class SettingsC extends SettingsBackend
                 h.config.set ("", "backend", "c", "compilerChanged");
             }
         });
+
+        buttonRebuild.setToolTipText ("<html>In case the build system get out of sync, this will clean out all intermediate object files and start over.<br>Note, however, that this will not release a runtime library locked down by JNI on Windows. In that case, please restart the app.</html>");
+        buttonRebuild.addActionListener (new ActionListener ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                Host h = (Host) list.getSelectedValue ();
+                h.config.set ("", "backend", "c", "compilerChanged");
+            }
+        });
     }
 
     @Override
@@ -87,7 +102,8 @@ public class SettingsC extends SettingsBackend
         return Lay.BxL (
             Lay.FL (new JLabel ("Compiler path"), fieldCpp),
             Lay.FL (new JLabel ("Directory that contains FFmpeg libraries"), fieldFFmpeg),
-            Lay.FL (new JLabel ("Directory that contains jni_md.h"), fieldJNI)
+            Lay.FL (new JLabel ("Directory that contains jni_md.h"), fieldJNI),
+            Lay.FL (buttonRebuild)
         );
     }
 }

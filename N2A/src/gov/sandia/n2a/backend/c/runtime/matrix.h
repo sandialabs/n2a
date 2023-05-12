@@ -372,7 +372,7 @@ public:
 
     void        set         (const int row, const int column, const T value);  ///< If value is non-zero, creates element if not already there; if value is zero, removes element if it exists.
     virtual T   get         (const int row, const int column) const {return operator() (row, column);}
-    virtual T & operator () (const int row, const int column) const;
+    virtual T & operator () (const int row, const int column) const;           ///< If element does not exist, this returns a dummy element. Assigning to it will have no effect. Elements must be created with set().
     virtual int rows        () const;
     virtual int columns     () const;
 };

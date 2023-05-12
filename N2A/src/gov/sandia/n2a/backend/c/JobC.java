@@ -464,7 +464,19 @@ public class JobC extends Thread
             // Link the runtime objects into a single shared library.
             if (shared)
             {
+                boolean exists = true;
                 if (! Files.exists (runtimeLib))
+                {
+                    exists = false;
+                }
+                else if (factory.wrapperRequired ())
+                {
+                    String wrapperName = factory.prefixLibrary (shared) + runtimeName () + factory.suffixLibraryWrapper ();
+                    Path wrapperLib = runtimeDir.resolve (wrapperName);
+                    if (! Files.exists (wrapperLib)) exists = false;
+                }
+
+                if (! exists)
                 {
                     job.set ("Linking runtime library", "status");
                     Compiler c = factory.make (localJobDir);

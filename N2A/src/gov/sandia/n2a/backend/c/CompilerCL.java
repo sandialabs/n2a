@@ -201,19 +201,14 @@ public class CompilerCL extends Compiler
         else       command.add ("/O2");
         for (String setting : settings) command.add (setting);
 
-        String target = "/M";  // Always compile against multi-threaded runtime.
+        String target = "/MD";  // Always compile against multi-threaded DLL runtime.
+        if (debug) target += "d";
+        command.add (target);
         if (shared)
         {
             command.add ("/D_USRDLL");
             command.add ("/D_WINDLL");
-            target += "D";  // dll
         }
-        else
-        {
-            target += "T";  // static
-        }
-        if (debug) target += "d";
-        command.add (target);
 
         for (Entry<String,String> define : defines.entrySet ())
         {
@@ -244,19 +239,14 @@ public class CompilerCL extends Compiler
         else       command.add ("/O2");
         for (String setting : settings) command.add (setting);
 
-        String target = "/M";  // Always compile against multi-threaded runtime.
+        String target = "/MD";
+        if (debug) target += "d";
+        command.add (target);
         if (shared)
         {
             command.add ("/D_USRDLL");
             command.add ("/D_WINDLL");
-            target += "D";  // dll
         }
-        else
-        {
-            target += "T";  // static
-        }
-        if (debug) target += "d";
-        command.add (target);
 
         for (Entry<String,String> define : defines.entrySet ())
         {
