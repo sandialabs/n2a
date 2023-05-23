@@ -440,6 +440,12 @@ public class SshFileSystem extends FileSystem
                 if (status >= SftpConstants.SSH_FX_BAD_MESSAGE  &&  status <= SftpConstants.SSH_FX_CONNECTION_LOST) close ();
                 throw e;
             }
+            catch (RuntimeException e)  // Apache SSHD converts some IOExceptions to RuntimeExceptions, just to make life harder.
+            {
+                Throwable cause = e.getCause ();
+                if (cause instanceof IOException) throw (IOException) cause;
+                throw new IOException (e);
+            }
         }
 
         public synchronized void setStat (String path, Attributes attr) throws IOException
