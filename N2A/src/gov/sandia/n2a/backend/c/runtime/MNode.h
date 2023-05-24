@@ -15,11 +15,12 @@ the U.S. Government retains certain rights in this software.
 #ifndef n2a_mnode_h
 #define n2a_mnode_h
 
-#include "StringLite.h"  // Use our own string class, to be compatible with rest of runtime. Unfortunately, this means you need to have one extra header file to use MNode standalone.
+#include "StringLite.h"  // Use our own string class, to be compatible with rest of runtime. Unfortunately, this means you need to include one extra header file to use MNode standalone.
 #include <vector>
 #include <map>
 #include <set>
 #include <mutex>
+#include <memory>
 
 #ifdef _MSC_VER
 #  define strcasecmp _stricmp
@@ -397,68 +398,57 @@ namespace n2a
             using pointer           = MNode *;
             using reference         = MNode &;
 
-            MNode & container;
+            MNode &                              container;
             // We always pull a copy of the keys, rather than iterating directly on child nodes.
             // This allows the caller to delete nodes in the middle of iteration.
             // Dereferencing the iterator could return none.
-            std::vector<String> keys;
-            int                      count;  // number of keys; This a trade of space for time.
-            int                      i;  // position in keys
-            String              key;
+            std::shared_ptr<std::vector<String>> keys;
+            int                                  i;  // position in keys
 
-            Iterator (MNode & container, const std::vector<String> & keys)
+            Iterator (MNode & container)
             :   container (container),
-                keys (keys)
+                keys (std::make_shared<std::vector<String>> ())  // keys is initialized to empty
             {
-                count = keys.size ();
                 i = 0;
-                if (i < count) key = keys[i];
-            }
-
-            /// Special constructor just for end()
-            Iterator (MNode & container, int count)
-            :   container (container)
-                // keys is initialized to empty
-            {
-                this->count = 0;  // strictly speaking, we're faking the keys collection
-                i = count;
-                // There is no key to be had, so leave it blank.
             }
 
             reference operator* ()
             {
-                return container.childGet (key);
+                return container.childGet ((*keys)[i]);  // If iterator is past end of keys, this will crash.
             }
 
             pointer operator-> ()
             {
-                return & container.childGet (key);
+                return & container.childGet ((*keys)[i]);
             }
 
             Iterator & operator++ ()  // prefix increment
             {
                 i++;
-                if (i < count) key = keys[i];
                 return *this;
             }
 
             Iterator operator++ (int)  // postfix increment
             {
-                if (i < count) key = keys[i];
+                Iterator result = *this;  // Preserve a copy of the iterator at current position.
                 i++;
-                return *this;
+                return result;
             }
 
             friend bool operator== (const Iterator & a, const Iterator & b)
             {
                 if (&a.container != &b.container) return false;
-                return a.i == b.i;  // key could be different depending on combination of prefix and postfix increment. For simplicity, we only pay attention to current position.
-            }  // TODO: is this semicolon necessary?
+                bool aDone =  a.i >= a.keys->size ();
+                bool bDone =  b.i >= b.keys->size ();
+                if (aDone != bDone) return false;
+                if (aDone) return true;
+                return (*a.keys)[a.i] == (*b.keys)[b.i];
+            }
 
             friend bool operator!= (const Iterator & a, const Iterator & b)
             {
                 return ! (a == b);
-            };
+            }
         };
 
         virtual Iterator begin ();
@@ -553,16 +543,15 @@ namespace n2a
         virtual ~MVolatile ();  ///< frees memory used by children
         virtual uint32_t classID () const;
 
-        virtual String key          () const;
+        virtual String      key          () const;
         virtual MNode &     parent       () const;
         virtual void        clear        ();
         virtual int         size         ();
         virtual bool        data         ();
-        virtual String getOrDefault (const String & defaultValue);
+        virtual String      getOrDefault (const String & defaultValue);
         virtual void        set          (const char * value);  ///< copies the memory, on assumption that the caller could delete it
         virtual void        move         (const String & fromKey, const String & toKey);  ///< If you already hold a reference to the node named by fromKey, then that reference remains valid and its key is updated.
         virtual Iterator    begin        ();
-        virtual Iterator    end          ();
 
         // C++ name resolution
         using MNode::clear;
@@ -669,7 +658,6 @@ namespace n2a
         virtual void     set   (const char * value);
         virtual void     move  (const String & fromKey, const String & toKey);
         virtual Iterator begin ();
-        virtual Iterator end   ();
 
         String path ();  ///< subroutine of load() and save()
         /**
@@ -752,7 +740,6 @@ namespace n2a
         **/
         virtual void     move  (const String & fromKey, const String & toKey);
         virtual Iterator begin ();
-        virtual Iterator end   ();
 
         /**
             Generates a path for the MDoc, based only on the key.
@@ -823,7 +810,6 @@ namespace n2a
         virtual int      size  ();
         virtual bool     data  ();
         virtual Iterator begin ();
-        virtual Iterator end   ();
         virtual String   pathForDoc  (const String & key) const;
         virtual String   pathForFile (const String & key) const;
         void load ();

@@ -589,14 +589,13 @@ n2a::MNode::begin ()
 {
     // Same value as end(), so the iterator is already done before it gets started.
     // Obviously, this needs to be overridden in derived classes.
-    std::vector<String> empty;
-    return Iterator (*this, empty);
+    return Iterator (*this);
 }
 
 n2a::MNode::Iterator
 n2a::MNode::end ()
 {
-    return Iterator (*this, 0);
+    return Iterator (*this);
 }
 
 void
@@ -804,17 +803,10 @@ n2a::MNode::Iterator
 n2a::MVolatile::begin ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    std::vector<String> keys;
-    keys.reserve (children.size ());
-    for (auto c : children) keys.push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
-    return Iterator (*this, keys);
-}
-
-n2a::MNode::Iterator
-n2a::MVolatile::end ()
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    return Iterator (*this, children.size ());
+    Iterator result (*this);
+    result.keys->reserve (children.size ());
+    for (auto c : children) result.keys->push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
+    return result;
 }
 
 n2a::MNode &
@@ -1068,14 +1060,6 @@ n2a::MDoc::begin ()
     return MPersistent::begin ();
 }
 
-n2a::MNode::Iterator
-n2a::MDoc::end ()
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    if (needsRead) load ();
-    return MPersistent::end ();
-}
-
 String
 n2a::MDoc::path ()
 {
@@ -1256,17 +1240,10 @@ n2a::MNode::Iterator
 n2a::MDocGroup::begin ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    std::vector<String> keys;
-    keys.reserve (children.size ());
-    for (auto c : children) keys.push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
-    return Iterator (*this, keys);
-}
-
-n2a::MNode::Iterator
-n2a::MDocGroup::end ()
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    return Iterator (*this, children.size ());
+    Iterator result (*this);
+    result.keys->reserve (children.size ());
+    for (auto c : children) result.keys->push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
+    return result;
 }
 
 String
@@ -1394,14 +1371,6 @@ n2a::MDir::begin ()
     std::lock_guard<std::recursive_mutex> lock (mutex);
     load ();
     return MDocGroup::begin ();
-}
-
-n2a::MNode::Iterator
-n2a::MDir::end ()
-{
-    std::lock_guard<std::recursive_mutex> lock (mutex);
-    load ();
-    return MDocGroup::end ();
 }
 
 String
