@@ -20,3 +20,7 @@ Some things N2A is NOT:
 [Getting Started](https://github.com/frothga/n2a/wiki/Getting%20Started) -- Run a simple "Hello World" example: the Hodgkin-Huxley cable equations.
 
 [Contributing Code](https://github.com/frothga/n2a/wiki/Developer%20HowTo) -- How to set up a development environment, if you would like to volunteer on this project or simply wish to build from source.
+
+## Documentation ##
+
+The [wiki](https://github.com/sandialabs/n2a/wiki) contains language documentation plus several guides and other information about the software package.
