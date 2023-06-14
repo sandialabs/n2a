@@ -49,7 +49,7 @@ public class EquationEntry implements Comparable<EquationEntry>
         }
         catch (ParseException e)
         {
-            e.line += ifString;
+            e.line = expressionString + ifString;  // If thrown by parser, then line is currently set to expressionString. If thrown by Operator.getFrom(), then line is empty.
             throw e;
         }
 
@@ -62,7 +62,7 @@ public class EquationEntry implements Comparable<EquationEntry>
             }
             catch (ParseException e)
             {
-                e.line = expressionString + "@" + e.line;
+                e.line = expressionString + "@" + ifString;  // If thrown by parser, then line is currently set to ifString. If thrown by Operator.getFrom(), then line is empty.
                 e.column += expressionString.length () + 1;
                 throw e;
             }

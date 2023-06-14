@@ -18,6 +18,7 @@ import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Draw;
 import gov.sandia.n2a.language.function.DrawCube;
 import gov.sandia.n2a.language.function.DrawSquare;
+import gov.sandia.n2a.language.function.Equal;
 import gov.sandia.n2a.language.function.DrawCylinder;
 import gov.sandia.n2a.language.function.DrawDisc;
 import gov.sandia.n2a.language.function.DrawLight;
@@ -451,6 +452,7 @@ public class Operator implements Cloneable
         register (DrawSegment      .factory ());
         register (DrawSphere       .factory ());
         register (DrawSquare       .factory ());
+        register (Equal            .factory ());
         register (Event            .factory ());
         register (Exp              .factory ());
         register (Floor            .factory ());
@@ -568,7 +570,7 @@ public class Operator implements Cloneable
             if (node.jjtGetNumChildren () == 1) return getFrom ((SimpleNode) node.jjtGetChild (0));
             result = new Split ();  // Lists can exist elsewhere besides a $type split, but they should be processed out by getOperandsFrom(SimpleNode).
         }
-        else if (node instanceof ASTKeyword) throw new Error ("Keyword argument must appear inside a function call");
+        else if (node instanceof ASTKeyword) throw new ParseException ("Keyword argument must appear inside a function call", "", 0);
         else result = new Operator ();
         result.getOperandsFrom (node);
         return result;
