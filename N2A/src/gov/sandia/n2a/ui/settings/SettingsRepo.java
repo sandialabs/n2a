@@ -50,6 +50,7 @@ import java.util.EventObject;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -168,6 +169,7 @@ public class SettingsRepo extends JScrollPane implements Settings
     // coincide with AppData entries must reference exactly the same MDir instance.
     protected Map<String,MNode> existingModels     = AppData.models    .getContainerMap ();
     protected Map<String,MNode> existingReferences = AppData.references.getContainerMap ();
+    protected Map<String, Map<String,MNode>> existingOthers = new HashMap<String, Map<String,MNode>> ();
     protected boolean           needRebuild;     // need to re-collate AppData.models and AppData.references
     protected boolean           needSave = true; // need to flush repositories to disk for git status
     protected Path              reposDir           = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
@@ -179,6 +181,8 @@ public class SettingsRepo extends JScrollPane implements Settings
     public SettingsRepo ()
     {
         instance = this;
+        
+        AppData.others.forEach ((k, v) -> existingOthers.put (k, v.getContainerMap ()));
 
         setName ("Repositories");  // Necessary to fulfill Settings interface.
         JPanel panel = new JPanel ();
@@ -682,7 +686,8 @@ public class SettingsRepo extends JScrollPane implements Settings
         String pieces[] = path.split ("/");
         MDir source;
         if (pieces[0].equals ("models")) source = (MDir) AppData.models    .containerFor (pieces[1]);
-        else                             source = (MDir) AppData.references.containerFor (pieces[1]);
+        else if (pieces[0].equals ("references")) source = (MDir) AppData.references.containerFor (pieces[1]);
+        else source = (MDir) AppData.others.get (pieces[0]).containerFor (pieces[1]);
         String repoName = source.key ();
         String primary = AppData.state.get ("Repos", "primary");
         boolean sourceEditable =  AppData.repos.getBoolean (repoName, "editable")  ||  repoName.equals (primary);
@@ -716,10 +721,15 @@ public class SettingsRepo extends JScrollPane implements Settings
                         destination = (MDir) existingModels.get (key);
                         combo = AppData.models;
                     }
-                    else
+                    else if (pieces[0].equals ("references"))
                     {
                         destination = (MDir) existingReferences.get (key);
                         combo = AppData.references;
+                    }
+                    else
+                    {
+                        destination = (MDir) existingOthers.get (pieces[0]).get (key);
+                        combo = AppData.others.get (pieces[0]);
                     }
                     destination.take (source, pieces[1]);
                     combo.childDeleted (pieces[1]);  // Not actually deleted. This just forces an update of the children map.
@@ -776,6 +786,18 @@ public class SettingsRepo extends JScrollPane implements Settings
         }
         return result;
     }
+    
+    public MDir getOthers (String subfolder, String repoName)
+    {
+        Map<String,MNode> current = existingOthers.get (subfolder);
+        MDir result = (MDir) current.get (repoName);
+        if (result == null)
+        {
+            result = new MDir (repoName, reposDir.resolve (repoName).resolve (subfolder));
+            current.put (repoName, result);
+        }
+        return result;
+    }
 
     /**
         Rebuild the combo directories.
@@ -787,6 +809,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         List<MNode> modelContainers     = new ArrayList<MNode> ();
         List<MNode> referenceContainers = new ArrayList<MNode> ();
+        Map<String, List<MNode>> otherContainers = new HashMap<String, List<MNode>> ();
         String primary = AppData.state.get ("Repos", "primary");
         for (MNode repo : repoModel.repos)
         {
@@ -796,19 +819,24 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             MNode models     = getModels     (repoName);
             MNode references = getReferences (repoName);
+            Map<String, MNode> others = new HashMap<String, MNode> ();
+            existingOthers.forEach ((k,v) -> others.put(k, getOthers(k, repoName)));
             if (isPrimary)
             {
                 modelContainers    .add (0, models);
                 referenceContainers.add (0, references);
+                others.forEach ((k,v) -> otherContainers.get (k).add(0, v));
             }
             else
             {
                 modelContainers    .add (models);
                 referenceContainers.add (references);
+                others.forEach ((k,v) -> otherContainers.get (k).add(v));
             }
         }
         AppData.models    .init (modelContainers);     // Triggers change() call to PanelModel
         AppData.references.init (referenceContainers); // Triggers change() call to PanelReference
+        AppData.others.forEach ((k,v) -> v.init (otherContainers.get (k)));
         needRebuild = false;
     }
 
@@ -816,7 +844,11 @@ public class SettingsRepo extends JScrollPane implements Settings
     {
         MNode models     = getModels     (key);
         MNode references = getReferences (key);
-        return  models.size () == 0  &&  references.size () == 0;
+        Map<String, MNode> others = new HashMap<String, MNode> (); 
+        existingOthers.forEach ((k,v) -> others.put(k, getOthers(k, key)));
+        boolean empty = true; 
+        for(Entry<String, MNode> e: others.entrySet ()) empty = empty && (e.getValue ().size () == 0);
+        return  models.size () == 0  &&  references.size () == 0 && empty;
     }
 
     public void pull (GitWrapper gitRepo, String key)
@@ -829,8 +861,9 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 // TODO: Prevent repo rename while pull is in progress. Simple approach is to add check to TextCellEditor.isCellEditable()
                 gitRepo.pull ();
-                getModels     (key).reload ();
+                getModels     (key).reload (); 
                 getReferences (key).reload ();
+                existingOthers.forEach ((k,v) -> getOthers(k, key).reload ());
                 if (needRebuild)  // UI focus is still on settings panel.
                 {
                     if (gitRepo == gitModel.current)
@@ -1074,8 +1107,10 @@ public class SettingsRepo extends JScrollPane implements Settings
                     MDir references = getReferences (oldName);
                     existingModels    .remove (oldName);
                     existingReferences.remove (oldName);
+                    existingOthers.forEach ((k,v) -> v.remove (oldName));
                     existingModels    .put (newName, models);
                     existingReferences.put (newName, references);
+                    existingOthers.forEach ((k,v) -> v.put (newName, getOthers(k, oldName)));
 
                     gitRepos.get (row).close ();  // Shut down git under oldName
                     Path repoDir = reposDir.resolve (newName);
@@ -1145,6 +1180,9 @@ public class SettingsRepo extends JScrollPane implements Settings
             AppData.repos.set (1, name, "visible");  // Implicitly creates the repo node.
             existingModels    .put (name, new MDir (name, baseDir.resolve ("models")));
             existingReferences.put (name, new MDir (name, baseDir.resolve ("references")));
+            // Local variable temp must be final or effectively final to be used in the following forEach.
+            String temp = name;
+            existingOthers.forEach((k,v) -> v.put (temp, new MDir (temp, baseDir.resolve (k))));
             needRebuild = true;
 
             repoModel.repos   .add (row, AppData.repos.child (name));
@@ -1164,6 +1202,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             existingModels    .remove (name);
             existingReferences.remove (name);
+            existingOthers.forEach ((k,v) -> v.remove (name));
             gitRepos          .remove (row);
             repos             .remove (row);
             updateOrder ();
