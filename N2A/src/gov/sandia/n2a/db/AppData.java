@@ -34,6 +34,7 @@ public class AppData
     public static MDir   repos;
     public static MCombo models;
     public static MCombo references;
+    public static Map<String, MCombo> others;
 
     protected static boolean stop;
 
@@ -92,6 +93,7 @@ public class AppData
         }
         models     = new MCombo ("models",     modelContainers);
         references = new MCombo ("references", referenceContainers);
+        others     = new HashMap<String, MCombo> ();
 
         //convert (modelContainers);
         //convert (referenceContainers);
@@ -226,6 +228,7 @@ public class AppData
         runs.save ();
         repos.save ();
         state.save ();
+        others.forEach ((k, v) -> v.save ());
     }
 
     public static void quit ()
