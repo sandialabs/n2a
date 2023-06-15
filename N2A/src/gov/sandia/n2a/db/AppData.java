@@ -7,14 +7,20 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.db;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.ref.Cleaner;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -83,6 +89,7 @@ public class AppData
 
         List<MNode> modelContainers     = new ArrayList<MNode> ();
         List<MNode> referenceContainers = new ArrayList<MNode> ();
+        Map<String, List<MNode>> otherContainers = new HashMap<String, List<MNode>> ();
         for (String repoName : reposOrder)
         {
             MNode repo = repos.child (repoName);
@@ -90,10 +97,37 @@ public class AppData
             Path repoDir = reposDir.resolve (repoName);
             modelContainers    .add (new MDir (repoName, repoDir.resolve ("models")));
             referenceContainers.add (new MDir (repoName, repoDir.resolve ("references")));
+
+            Set<String> temp = null;
+            try (Stream<Path> stream = Files.list (repoDir))
+            {
+                temp = stream
+                    .filter (file -> Files.isDirectory (file))
+                    .map (Path::getFileName)
+                    .map (Path::toString)
+                    .filter (file -> !file.equals ("models"))
+                    .filter (file -> !file.equals ("references"))
+                    .filter (file -> !file.equals (".git"))
+                    .collect (Collectors.toSet ());
+            }
+            catch (IOException e)
+            {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            temp.forEach ((subfolder) ->
+            {
+                if(!otherContainers.containsKey (subfolder))
+                {
+                    otherContainers.put(subfolder, new ArrayList<MNode> ());
+                }
+                otherContainers.get (subfolder).add (new MDir (repoName, repoDir.resolve (subfolder)));
+            });
         }
         models     = new MCombo ("models",     modelContainers);
         references = new MCombo ("references", referenceContainers);
         others     = new HashMap<String, MCombo> ();
+        otherContainers.forEach ((k, v) -> others.put (k, new MCombo(k, v)));
 
         //convert (modelContainers);
         //convert (referenceContainers);
