@@ -110,9 +110,8 @@ public class AppData
                     .filter (file -> !file.equals (".git"))
                     .collect (Collectors.toSet ());
             }
-            catch (IOException e)
+            catch (Exception e)
             {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
             temp.forEach ((subfolder) ->
@@ -128,6 +127,9 @@ public class AppData
         references = new MCombo ("references", referenceContainers);
         others     = new HashMap<String, MCombo> ();
         otherContainers.forEach ((k, v) -> others.put (k, new MCombo(k, v)));
+        
+        others.put ("models", models);
+        others.put ("references", references);
 
         //convert (modelContainers);
         //convert (referenceContainers);
