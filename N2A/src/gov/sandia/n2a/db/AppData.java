@@ -33,13 +33,13 @@ import java.util.zip.ZipInputStream;
 **/
 public class AppData
 {
-    public static MNode  properties;
-    public static MDoc   state;
-    public static MDir   runs;
-    public static MDir   studies;
-    public static MDir   repos;
-    public static MCombo models;
-    public static MCombo references;
+    public static MNode               properties;
+    public static MDoc                state;
+    public static MDir                runs;
+    public static MDir                studies;
+    public static MDir                repos;
+    public static MCombo              models;
+    public static MCombo              references;
     public static Map<String, MCombo> others;
 
     protected static boolean stop;
