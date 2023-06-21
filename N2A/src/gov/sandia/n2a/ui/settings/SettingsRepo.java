@@ -167,12 +167,12 @@ public class SettingsRepo extends JScrollPane implements Settings
     // duplicate MDir instances. The goal is to maintain the guarantee of object identity.
     // These two collections may grow to be larger than the set in use by AppData, but entries that
     // coincide with AppData entries must reference exactly the same MDir instance.
-    protected Map<String,MNode> existingModels;
-    protected Map<String,MNode> existingReferences;
+    protected Map<String,MNode>              existingModels;
+    protected Map<String,MNode>              existingReferences;
     protected Map<String, Map<String,MNode>> existingOthers = new HashMap<String, Map<String,MNode>> ();
-    protected boolean           needRebuild;     // need to re-collate AppData.models and AppData.references
-    protected boolean           needSave = true; // need to flush repositories to disk for git status
-    protected Path              reposDir           = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
+    protected boolean                        needRebuild;     // need to re-collate AppData.models and AppData.references
+    protected boolean                        needSave = true; // need to flush repositories to disk for git status
+    protected Path                           reposDir           = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
 
     protected int                     timeout = 30;  // seconds; for git operations
     protected SshSessionFactory       sessionFactory;
