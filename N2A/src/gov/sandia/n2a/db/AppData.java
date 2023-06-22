@@ -8,19 +8,14 @@ package gov.sandia.n2a.db;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.ref.Cleaner;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -33,14 +28,14 @@ import java.util.zip.ZipInputStream;
 **/
 public class AppData
 {
-    public static MNode               properties;
-    public static MDoc                state;
-    public static MDir                runs;
-    public static MDir                studies;
-    public static MDir                repos;
-    public static MCombo              models;
-    public static MCombo              references;
-    public static Map<String, MCombo> others;
+    public static MNode     properties;
+    public static MDoc      state;
+    public static MDir      runs;
+    public static MDir      studies;
+    public static MDir      repos;
+    public static MCombo    models;
+    public static MCombo    references;
+    public static MVolatile documents;
 
     protected static boolean stop;
 
@@ -87,50 +82,40 @@ public class AppData
             state.set (primary, "Repos", "primary");
         }
 
-        List<MNode> modelContainers     = new ArrayList<MNode> ();
-        List<MNode> referenceContainers = new ArrayList<MNode> ();
-        Map<String, List<MNode>> otherContainers = new HashMap<String, List<MNode>> ();
+        Map<String, List<MNode>> containers = new HashMap<String, List<MNode>> ();
+        containers.put ("models", new ArrayList<>());
+        containers.put ("references", new ArrayList<>());
         for (String repoName : reposOrder)
         {
             MNode repo = repos.child (repoName);
             if (repo == null  ||  ! repo.getBoolean ("visible")  &&  ! repo.getBoolean ("editable")  &&  ! repoName.equals (primary)) continue;
             Path repoDir = reposDir.resolve (repoName);
-            modelContainers    .add (new MDir (repoName, repoDir.resolve ("models")));
-            referenceContainers.add (new MDir (repoName, repoDir.resolve ("references")));
-
-            Set<String> temp = null;
-            try (Stream<Path> stream = Files.list (repoDir))
+            
+            containers.get ("models").add (new MDir(repoName, repoDir.resolve ("models")));
+            containers.get ("references").add (new MDir(repoName, repoDir.resolve ("references")));
+            
+            File dir = new File(repoDir.toString ());
+            for(File subfolder : dir.listFiles ())
             {
-                temp = stream
-                    .filter (file -> Files.isDirectory (file))
-                    .map (Path::getFileName)
-                    .map (Path::toString)
-                    .filter (file -> !file.equals ("models"))
-                    .filter (file -> !file.equals ("references"))
-                    .filter (file -> !file.equals (".git"))
-                    .collect (Collectors.toSet ());
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-            }
-            temp.forEach ((subfolder) ->
-            {
-                if(!otherContainers.containsKey (subfolder))
+                // The check against "models" and "references" ensures that we do not create a second MDir when we already
+                // forcibly created those directories in line 96.
+                if(subfolder.isDirectory () && !subfolder.getName ().equals (".git") 
+                        && !subfolder.getName ().equals ("models") 
+                        && !subfolder.getName ().equals ("references"))
                 {
-                    otherContainers.put(subfolder, new ArrayList<MNode> ());
+                    if(!containers.containsKey (subfolder.getName ()))
+                    {
+                        containers.put (subfolder.getName (), new ArrayList<> ());
+                    }
+                    containers.get (subfolder.getName ()).add (new MDir(repoName, repoDir.resolve (subfolder.getName ())));
                 }
-                otherContainers.get (subfolder).add (new MDir (repoName, repoDir.resolve (subfolder)));
-            });
+            }
         }
-        models     = new MCombo ("models",     modelContainers);
-        references = new MCombo ("references", referenceContainers);
-        others     = new HashMap<String, MCombo> ();
-        otherContainers.forEach ((k, v) -> others.put (k, new MCombo(k, v)));
+        documents     = new MVolatile ();
+        containers.forEach ((k, v) -> documents.link (new MCombo(k, v)));
+        models     = (MCombo) documents.child("models");
+        references = (MCombo) documents.child("references");
         
-        others.put ("models", models);
-        others.put ("references", references);
-
         //convert (modelContainers);
         //convert (referenceContainers);
 
@@ -260,11 +245,11 @@ public class AppData
         // Sorted from most critical to least, in terms of how damaging a loss of information would be.
         models.save ();
         references.save ();
+        documents.forEach (c -> ((MCombo) c).save ());
         studies.save ();
         runs.save ();
         repos.save ();
         state.save ();
-        others.forEach ((k, v) -> v.save ());
     }
 
     public static void quit ()

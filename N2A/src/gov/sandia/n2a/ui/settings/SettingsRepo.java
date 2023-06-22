@@ -50,7 +50,6 @@ import java.util.EventObject;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -180,7 +179,7 @@ public class SettingsRepo extends JScrollPane implements Settings
     {
         instance = this;
         
-        AppData.others.forEach ((k, v) -> existing.put (k, v.getContainerMap ()));
+        AppData.documents.forEach (c -> existing.put (c.key (), ((MCombo) c).getContainerMap ()));
 
         setName ("Repositories");  // Necessary to fulfill Settings interface.
         JPanel panel = new JPanel ();
@@ -683,7 +682,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         // Determine which repo holds key
         String pieces[] = path.split ("/");
         MDir source;
-        source = (MDir) AppData.others.get (pieces[0]).containerFor (pieces[1]);
+        source = (MDir) ((MCombo) AppData.documents.child (pieces[0])).containerFor (pieces[1]);
         String repoName = source.key ();
         String primary = AppData.state.get ("Repos", "primary");
         boolean sourceEditable =  AppData.repos.getBoolean (repoName, "editable")  ||  repoName.equals (primary);
@@ -714,7 +713,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     MCombo combo;
                     
                     destination = (MDir) existing.get (pieces[0]).get (key);
-                    combo = AppData.others.get (pieces[0]);
+                    combo = (MCombo) AppData.documents.child (pieces[0]);
                     
                     destination.take (source, pieces[1]);
                     combo.childDeleted (pieces[1]);  // Not actually deleted. This just forces an update of the children map.
@@ -827,7 +826,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 });
             }
         }
-        AppData.others.forEach ((k,v) -> v.init (existingContainers.get (k))); // Triggers change() call to PanelModel and PanelReference)
+        AppData.documents.forEach (c -> ((MCombo) c).init (existingContainers.get (c.key ()))); // Triggers change() call to PanelModel and PanelReference)
         needRebuild = false;
     }
 
