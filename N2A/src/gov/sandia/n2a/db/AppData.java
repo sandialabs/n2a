@@ -7,9 +7,11 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.db;
 
 import java.io.BufferedReader;
-import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.ref.Cleaner;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -83,33 +85,26 @@ public class AppData
         }
 
         Map<String, List<MNode>> containers = new HashMap<String, List<MNode>> ();
-        containers.put ("models", new ArrayList<>());
-        containers.put ("references", new ArrayList<>());
         for (String repoName : reposOrder)
         {
             MNode repo = repos.child (repoName);
             if (repo == null  ||  ! repo.getBoolean ("visible")  &&  ! repo.getBoolean ("editable")  &&  ! repoName.equals (primary)) continue;
             Path repoDir = reposDir.resolve (repoName);
-            
-            containers.get ("models").add (new MDir(repoName, repoDir.resolve ("models")));
-            containers.get ("references").add (new MDir(repoName, repoDir.resolve ("references")));
-            
-            File dir = new File(repoDir.toString ());
-            for(File subfolder : dir.listFiles ())
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream (repoDir))
             {
-                // The check against "models" and "references" ensures that we do not create a second MDir when we already
-                // forcibly created those directories in line 96.
-                if(subfolder.isDirectory () && !subfolder.getName ().equals (".git") 
-                        && !subfolder.getName ().equals ("models") 
-                        && !subfolder.getName ().equals ("references"))
+                for (Path subfolder : stream)
                 {
-                    if(!containers.containsKey (subfolder.getName ()))
+                    String key = subfolder.getFileName ().toString ();
+                    if (key.startsWith (".")) continue;
+                    if (! Files.isDirectory (subfolder)) continue;
+                    if (! containers.containsKey (key))
                     {
-                        containers.put (subfolder.getName (), new ArrayList<> ());
+                        containers.put (key, new ArrayList<> ());
                     }
-                    containers.get (subfolder.getName ()).add (new MDir(repoName, repoDir.resolve (subfolder.getName ())));
+                    containers.get (key).add (new MDir(repoName, repoDir.resolve (key)));
                 }
             }
+            catch (IOException e) {}
         }
         documents     = new MVolatile ();
         containers.forEach ((k, v) -> documents.link (new MCombo(k, v)));
