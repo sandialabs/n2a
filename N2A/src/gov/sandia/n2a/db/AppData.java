@@ -243,8 +243,6 @@ public class AppData
     public synchronized static void save ()
     {
         // Sorted from most critical to least, in terms of how damaging a loss of information would be.
-        models.save ();
-        references.save ();
         documents.forEach (c -> ((MCombo) c).save ());
         studies.save ();
         runs.save ();
