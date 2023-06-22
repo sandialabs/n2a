@@ -748,28 +748,6 @@ public class SettingsRepo extends JScrollPane implements Settings
     {
         status ("<html><span style=\"color:green\">" + message + "</span></html>");
     }
-
-//    public MDir getModels (String repoName)
-//    {
-//        MDir result = (MDir) existingModels.get (repoName);
-//        if (result == null)
-//        {
-//            result = new MDir (repoName, reposDir.resolve (repoName).resolve ("models"));
-//            existingModels.put (repoName, result);
-//        }
-//        return result;
-//    }
-
-//    public MDir getReferences (String repoName)
-//    {
-//        MDir result = (MDir) existingReferences.get (repoName);
-//        if (result == null)
-//        {
-//            result = new MDir (repoName, reposDir.resolve (repoName).resolve ("references"));
-//            existingReferences.put (repoName, result);
-//        }
-//        return result;
-//    }
     
     public MDir getExisting (String subfolder, String repoName)
     {
