@@ -712,7 +712,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     MDir destination;
                     MCombo combo;
                     
-                    destination = (MDir) existing.get (pieces[0]).get (key);
+                    destination = (MDir) getExisting (pieces[0], key);
                     combo = (MCombo) AppData.documents.child (pieces[0]);
                     
                     destination.take (source, pieces[1]);
@@ -755,7 +755,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         MDir result = (MDir) current.get (repoName);
         if (result == null)
         {
-            result = new MDir (repoName, reposDir.resolve (repoName).resolve (subfolder));
+            result = new MDir (repoName, reposDir.resolve (repoName).resolve (subfolder));            
             current.put (repoName, result);
         }
         return result;
