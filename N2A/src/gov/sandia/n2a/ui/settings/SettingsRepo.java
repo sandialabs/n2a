@@ -1070,8 +1070,16 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (AppData.repos.child (newName) != null) return;
                     // Now we have a legitimate name change.
 
-                    existing.forEach ((k,v) -> v.remove (oldName));
-                    existing.forEach ((k,v) -> v.put (newName, getExisting(k, oldName)));
+//                    existing.forEach ((k,v) -> getExisting(k, oldName));                    
+//                    existing.forEach ((k,v) -> v.put (newName, getExisting(k, oldName)));
+                    for (Entry<String, Map<String, MNode>> e : existing.entrySet ())
+                    {
+                        String k = e.getKey ();
+                        Map<String, MNode> v = e.getValue ();
+                        MNode current = getExisting(k, oldName);
+                        v.remove (oldName);
+                        v.put (newName, current);                        
+                    }
 
                     gitRepos.get (row).close ();  // Shut down git under oldName
                     Path repoDir = reposDir.resolve (newName);
