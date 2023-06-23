@@ -97,11 +97,14 @@ public class AppData
                     String key = subfolder.getFileName ().toString ();
                     if (key.startsWith (".")) continue;
                     if (! Files.isDirectory (subfolder)) continue;
-                    if (! containers.containsKey (key))
+
+                    List<MNode> nodes = containers.get (key); 
+                    if (nodes == null)
                     {
-                        containers.put (key, new ArrayList<> ());
+                        nodes = new ArrayList<> ();
+                        containers.put (key, nodes);
                     }
-                    containers.get (key).add (new MDir(repoName, repoDir.resolve (key)));
+                    nodes.add (new MDir(repoName, repoDir.resolve (key)));
                 }
             }
             catch (IOException e) {}
