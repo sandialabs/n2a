@@ -1391,8 +1391,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         public MDir getDir ()
         {
             String repoName = git.gitDir.getParent ().getFileName ().toString ();
-            String[] pieces = repoName.split ("/");
-            return getExisting(pieces[0], repoName);
+            return getExisting(name, repoName);
         }
 
         /**
