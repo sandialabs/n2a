@@ -713,7 +713,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     MDir destination;
                     MCombo combo;
                     
-                    destination = (MDir) getExisting (pieces[0], key);
+                    destination = (MDir) getOrCreateFolder (key, pieces[0]);
                     combo = (MCombo) AppData.documents.child (pieces[0]);
                     
                     destination.take (source, pieces[1]);
@@ -750,7 +750,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         status ("<html><span style=\"color:green\">" + message + "</span></html>");
     }
     
-    public MDir getExisting (String subfolder, String repoName)
+    public MDir getOrCreateFolder (String repoName, String subfolder)
     {
         Map<String,MNode> current = existing.get (subfolder);
         MDir result = (MDir) current.get (repoName);
@@ -758,6 +758,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             result = new MDir (repoName, reposDir.resolve (repoName).resolve (subfolder));            
             current.put (repoName, result);
+            needRebuild = true;
         }
         return result;
     }
@@ -779,7 +780,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             if (! repo.getBoolean ("visible")  &&  ! repo.getBoolean ("editable")  &&  ! isPrimary) continue;
 
             Map<String, MNode> dirs = new HashMap<String, MNode> ();
-            existing.forEach ((k,v) -> dirs.put(k, getExisting(k, repoName)));
+            existing.forEach ((k,v) -> dirs.put(k, getOrCreateFolder(repoName, k)));
             for (Entry<String, MNode> e : dirs.entrySet ())
             {
                 String k = e.getKey ();
@@ -806,7 +807,22 @@ public class SettingsRepo extends JScrollPane implements Settings
                 }
             }
         }
-        existingContainers.forEach ((k, v) -> ((MCombo) AppData.documents.childOrCreate (k)).init(v)); // Triggers change() call to PanelModel and PanelReference)
+        for(Entry<String, List<MNode>> e : existingContainers.entrySet ())
+        {
+            String key = e.getKey ();
+            List<MNode> value = e.getValue ();
+            
+            MCombo node = (MCombo) AppData.documents.child (key);
+            if(node == null)
+            {
+                node = new MCombo(key, value);
+                AppData.documents.link (node);
+            }
+            else
+            {
+                node.init (value);
+            }
+        }
         needRebuild = false;
     }
 
@@ -814,8 +830,8 @@ public class SettingsRepo extends JScrollPane implements Settings
     {
         for(String k : existing.keySet ())
         {
-            MNode current = getExisting(k, key);
-            if (current.size () != 0) return false;
+            MNode current = existing.get (k).get (key);
+            if (current != null && current.size () != 0) return false;
         }
         return true;
     }
@@ -830,7 +846,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 // TODO: Prevent repo rename while pull is in progress. Simple approach is to add check to TextCellEditor.isCellEditable()
                 gitRepo.pull ();
-                existing.forEach ((k,v) -> getExisting(k, key).reload ());
+                existing.forEach ((k,v) -> getOrCreateFolder(key, k).reload ());
                 if (needRebuild)  // UI focus is still on settings panel.
                 {
                     if (gitRepo == gitModel.current)
@@ -1074,14 +1090,14 @@ public class SettingsRepo extends JScrollPane implements Settings
                     {
                         String k = e.getKey ();
                         Map<String, MNode> v = e.getValue ();
-                        MNode current = getExisting(k, oldName);
+                        MNode current = getOrCreateFolder(oldName, k);
                         v.remove (oldName);
                         v.put (newName, current);                        
                     }
 
                     gitRepos.get (row).close ();  // Shut down git under oldName
                     Path repoDir = reposDir.resolve (newName);
-                    existing.forEach ((k,v) -> getExisting(k, oldName).set (repoDir.resolve (k))); // Flushes write queue, so save thread won't interfere with the move.
+                    existing.forEach ((k,v) -> getOrCreateFolder(oldName, k).set (repoDir.resolve (k))); // Flushes write queue, so save thread won't interfere with the move.
                     AppData.repos.move (oldName, newName);
                     GitWrapper newWrapper = new GitWrapper (repoDir.resolve (".git"));
                     gitRepos.set (row, newWrapper);
@@ -1398,7 +1414,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         public MDir getDir ()
         {
             String repoName = git.gitDir.getParent ().getFileName ().toString ();
-            return getExisting(name, repoName);
+            return getOrCreateFolder(repoName, name);
         }
 
         /**
