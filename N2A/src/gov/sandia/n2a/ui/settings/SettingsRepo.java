@@ -1070,8 +1070,6 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (AppData.repos.child (newName) != null) return;
                     // Now we have a legitimate name change.
 
-//                    existing.forEach ((k,v) -> getExisting(k, oldName));                    
-//                    existing.forEach ((k,v) -> v.put (newName, getExisting(k, oldName)));
                     for (Entry<String, Map<String, MNode>> e : existing.entrySet ())
                     {
                         String k = e.getKey ();
