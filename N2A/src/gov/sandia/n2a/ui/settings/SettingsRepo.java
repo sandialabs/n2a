@@ -180,8 +180,8 @@ public class SettingsRepo extends JScrollPane implements Settings
     {
         instance = this;
         
-        AppData.documents.forEach (c -> existing.put (c.key (), ((MCombo) c).getContainerMap ()));
-
+        for (MNode c : AppData.documents) existing.put (c.key (), ((MCombo) c).getContainerMap ());
+        
         setName ("Repositories");  // Necessary to fulfill Settings interface.
         JPanel panel = new JPanel ();
         setViewportView (panel);
