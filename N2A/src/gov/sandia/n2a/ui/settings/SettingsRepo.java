@@ -780,9 +780,12 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             Map<String, MNode> dirs = new HashMap<String, MNode> ();
             existing.forEach ((k,v) -> dirs.put(k, getExisting(k, repoName)));
-            if (isPrimary)
+            for (Entry<String, MNode> e : dirs.entrySet ())
             {
-                dirs.forEach ((k,v) -> {
+                String k = e.getKey ();
+                MNode  v = e.getValue ();
+                if(isPrimary)
+                {
                     List<MNode> nodes = existingContainers.get (k);
                     if(nodes == null) 
                     {
@@ -790,11 +793,9 @@ public class SettingsRepo extends JScrollPane implements Settings
                         nodes = existingContainers.get(k);
                     }
                     nodes.add (0, v);
-                });
-            }
-            else
-            {
-                dirs.forEach ((k,v) -> {
+                }
+                else 
+                {
                     List<MNode> nodes = existingContainers.get (k);
                     if(nodes == null) 
                     {
@@ -802,7 +803,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                         nodes = existingContainers.get(k);
                     }
                     nodes.add (v);
-                });
+                }
             }
         }
         existingContainers.forEach ((k, v) -> ((MCombo) AppData.documents.childOrCreate (k)).init(v)); // Triggers change() call to PanelModel and PanelReference)
