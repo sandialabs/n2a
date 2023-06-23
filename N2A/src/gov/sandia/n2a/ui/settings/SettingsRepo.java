@@ -50,6 +50,7 @@ import java.util.EventObject;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -1136,9 +1137,13 @@ public class SettingsRepo extends JScrollPane implements Settings
             GitWrapper gitRepo = new GitWrapper (baseDir.resolve (".git"));
             gitRepo.setURL (URL);
             AppData.repos.set (1, name, "visible");  // Implicitly creates the repo node.
-            // Local variable temp must be final or effectively final to be used in the following forEach.
-            final String temp = name;
-            existing.forEach((k,v) -> v.put (temp, new MDir (temp, baseDir.resolve (k))));
+            for(Entry<String, Map<String, MNode>> e : existing.entrySet ())
+            {
+                String key = e.getKey ();
+                Map<String, MNode> value = e.getValue ();
+                value.put (name, new MDir (name, baseDir.resolve (key)));
+            }
+            
             needRebuild = true;
 
             repoModel.repos   .add (row, AppData.repos.child (name));
