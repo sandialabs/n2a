@@ -810,11 +810,12 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public boolean isEmpty (String key)
     {
-        ArrayList<MNode> dirs = new ArrayList<> ();
-        existing.forEach ((k,v) -> dirs.add(getExisting(k, key)));
-        boolean empty = true;
-        for(MNode e: dirs) empty = empty && (e.size () == 0);
-        return empty;
+        for(String k : existing.keySet ())
+        {
+            MNode current = getExisting(k, key);
+            if (current.size () != 0) return false;
+        }
+        return true;
     }
 
     public void pull (GitWrapper gitRepo, String key)
