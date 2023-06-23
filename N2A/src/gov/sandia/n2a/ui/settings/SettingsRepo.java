@@ -804,7 +804,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 });
             }
         }
-        AppData.documents.forEach (c -> ((MCombo) c).init (existingContainers.get (c.key ()))); // Triggers change() call to PanelModel and PanelReference)
+        existingContainers.forEach ((k, v) -> ((MCombo) AppData.documents.childOrCreate (k)).init(v)); // Triggers change() call to PanelModel and PanelReference)
         needRebuild = false;
     }
 
