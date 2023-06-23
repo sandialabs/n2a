@@ -1073,7 +1073,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
                     gitRepos.get (row).close ();  // Shut down git under oldName
                     Path repoDir = reposDir.resolve (newName);
-                    existing.forEach ((k,v) -> getExisting(k, oldName).set (k)); // Flushes write queue, so save thread won't interfere with the move.
+                    existing.forEach ((k,v) -> getExisting(k, oldName).set (repoDir.resolve (k))); // Flushes write queue, so save thread won't interfere with the move.
                     AppData.repos.move (oldName, newName);
                     GitWrapper newWrapper = new GitWrapper (repoDir.resolve (".git"));
                     gitRepos.set (row, newWrapper);
