@@ -170,7 +170,9 @@ public class MVolatile extends MNode
         if (source != null)
         {
             children.remove (fromKey);
-            ((MVolatile) source).name = toKey;  // If this cast ceases to be a safe assumption, then the M hierarchy needs re-design.
+            if      (source instanceof MVolatile) ((MVolatile) source).name = toKey;
+            else if (source instanceof MDocGroup) ((MDocGroup) source).name = toKey;
+            else if (source instanceof MCombo)    ((MCombo)    source).name = toKey;
             children.put (toKey, source);
         }
     }
