@@ -30,10 +30,14 @@ template class MatrixSparse<n2a_T>;
 // Most functions and operators are defined outside the matrix classes.
 // These must be individually instantiated.
 
-template SHARED void          clear      (      MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED void          clear      (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED void          identity   (const MatrixAbstract<n2a_T> & A);
+template SHARED void          copy       (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
 template SHARED n2a_T         sumSquares (const MatrixAbstract<n2a_T> & A);
+template SHARED Matrix<n2a_T> cross      (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
 template SHARED Matrix<n2a_T> visit      (const MatrixAbstract<n2a_T> & A, n2a_T (*function) (const n2a_T &));
 template SHARED Matrix<n2a_T> visit      (const MatrixAbstract<n2a_T> & A, n2a_T (*function) (const n2a_T));
+template SHARED bool          equal      (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
 
 template SHARED Matrix<n2a_T> operator == (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
 template SHARED Matrix<n2a_T> operator == (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
@@ -101,6 +105,11 @@ template SHARED Matrix<n2a_T> operator ~ (const Matrix<n2a_T> & A);
 template SHARED n2a_T norm (const MatrixAbstract<n2a_T> & A, n2a_T n);
 template SHARED n2a_T norm (const MatrixStrided<n2a_T>  & A, n2a_T n);
 #endif
+
+// We don't need a full set of MatrixFixed functions, because user code includes MatrixFixed.tcc
+// We only instantiate functions used within the runtime itself.
+template MatrixFixed<n2a_T,3,1> operator / (const MatrixFixed<n2a_T,3,1> & A, const n2a_T scalar);
+template MatrixFixed<n2a_T,3,1> operator - (const MatrixFixed<n2a_T,3,1> & A, const MatrixFixed<n2a_T,3,1> & B);
 
 
 // I/O library ---------------------------------------------------------------
@@ -260,16 +269,18 @@ Light::Light ()
 }
 
 void
-Light::setUniform (const LightLocation & l, const Matrix<float> view)
+Light::setUniform (const LightLocation & l, const Matrix<float> & view)
 {
     // Transform the position and direction vectors.
-    Matrix<float> P = view * position + column (view, 3);  // Ignore fourth row, since view should not have perspective scaling.
+    Matrix<float> P (position,  0, 3, 1, 1, 3);
+    Matrix<float> D (direction, 0, 3, 1, 1, 3);
+    P = view * P + column (view, 3);  // Ignore fourth row, since view should not have perspective scaling.
     Matrix<float> normal = view;  // TODO: create inverse transpose of view
-    Matrix<float> D = normal * direction;
+    D = normal * D;
 
     glUniform1i  (l.infinite,     infinite);
-    glUniform3fv (l.position,  1, P);
-    glUniform3fv (l.direction, 1, D);
+    glUniform3fv (l.position,  1, P.base ());
+    glUniform3fv (l.direction, 1, D.base ());
     glUniform3fv (l.ambient,   1, ambient);
     glUniform3fv (l.diffuse,   1, diffuse);
     glUniform3fv (l.specular,  1, specular);
@@ -279,6 +290,12 @@ Light::setUniform (const LightLocation & l, const Matrix<float> view)
     glUniform1f  (l.attenuation1, attenuation1);
     glUniform1f  (l.attenuation2, attenuation2);
 }
+
+GLint Material::locAmbient;
+GLint Material::locDiffuse;
+GLint Material::locEmission;
+GLint Material::locSpecular;
+GLint Material::locShininess;
 
 Material::Material ()
 :   ambient{0.2, 0.2, 0.2},
@@ -290,7 +307,7 @@ Material::Material ()
 }
 
 void
-Material::setUniform ()
+Material::setUniform () const
 {
     glUniform3fv (locAmbient,  1, ambient);
     glUniform4fv (locDiffuse,  1, diffuse);
@@ -300,7 +317,7 @@ Material::setUniform ()
 }
 
 void
-put (std::vector<GLfloat> & vertices, float x, float y, float z, float[3] n)
+put (std::vector<GLfloat> & vertices, float x, float y, float z, float n[3])
 {
     vertices.push_back (x);
     vertices.push_back (y);
@@ -339,7 +356,7 @@ putUnique (std::vector<GLfloat> & vertices, float x, float y, float z)
     int count = vertices.size ();
     for (int i = 0; i < count; i += 6)
     {
-        if (vertics[i] == x  &&  vertices[i+1] == y  &&  vertices[i+2] == z) return i / 6;
+        if (vertices[i] == x  &&  vertices[i+1] == y  &&  vertices[i+2] == z) return i / 6;
     }
 
     vertices.push_back (x);
@@ -415,7 +432,7 @@ icosphere (std::vector<GLfloat> & vertices, std::vector<GLuint> & indices)
 }
 
 void
-icosphereSubdivide (std::vector<GLfloat> & vertices, std::vector<GLuint> & indices);
+icosphereSubdivide (std::vector<GLfloat> & vertices, std::vector<GLuint> & indices)
 {
     int count = indices.size ();
     std::vector<GLuint> next (count * 4);

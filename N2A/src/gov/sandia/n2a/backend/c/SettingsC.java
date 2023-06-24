@@ -26,6 +26,7 @@ public class SettingsC extends SettingsBackend
     protected MTextField fieldCpp      = new MTextField (40);
     protected MTextField fieldFFmpeg   = new MTextField (40);
     protected MTextField fieldJNI      = new MTextField (40);
+    protected MTextField fieldGL       = new MTextField (40);
     protected JButton    buttonRebuild = new JButton ("Rebuild Runtime");
 
     public SettingsC ()
@@ -42,6 +43,7 @@ public class SettingsC extends SettingsBackend
                 h.objects.remove ("ffmpegLibDir");  // Changing compiler may affect our ability to see FFmpeg libraries.
                 h.objects.remove ("ffmpegIncDir");
                 h.objects.remove ("ffmpegBinDir");
+                h.objects.remove ("glLibs");        // ditto for OpenGL
                 h.config.set ("", "backend", "c", "compilerChanged");
                 // Once a DLL is loaded, the user needs to restart JVM to get an updated version.
                 // Therefore, no point in removing "ffmpegJNI" or "JNI".
@@ -71,12 +73,29 @@ public class SettingsC extends SettingsBackend
             }
         });
 
+        fieldGL.addChangeListener (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                Host h = (Host) list.getSelectedValue ();
+                h.objects.remove ("glLibs");
+                h.config.set ("", "backend", "c", "compilerChanged");
+            }
+        });
+
         buttonRebuild.setToolTipText ("<html>In case the build system get out of sync, this will clean out all intermediate object files and start over.<br>Note, however, that this will not release a runtime library locked down by JNI on Windows. In that case, please restart the app.</html>");
         buttonRebuild.addActionListener (new ActionListener ()
         {
             public void actionPerformed (ActionEvent e)
             {
                 Host h = (Host) list.getSelectedValue ();
+                h.objects.remove ("cxx");
+                h.objects.remove ("ffmpegLibDir");
+                h.objects.remove ("ffmpegIncDir");
+                h.objects.remove ("ffmpegBinDir");
+                h.objects.remove ("jniIncMdDir");
+                h.objects.remove ("jniIncDir");
+                h.objects.remove ("glLibs");
                 h.config.set ("", "backend", "c", "compilerChanged");
             }
         });
@@ -94,6 +113,7 @@ public class SettingsC extends SettingsBackend
         fieldCpp   .bind (parent, "cxx",    "g++");
         fieldFFmpeg.bind (parent, "ffmpeg", "");
         fieldJNI   .bind (parent, "jni_md", "");
+        fieldGL    .bind (parent, "gl",     "");
     }
 
     @Override
@@ -103,6 +123,7 @@ public class SettingsC extends SettingsBackend
             Lay.FL (new JLabel ("Compiler path"), fieldCpp),
             Lay.FL (new JLabel ("Directory that contains FFmpeg libraries"), fieldFFmpeg),
             Lay.FL (new JLabel ("Directory that contains jni_md.h"), fieldJNI),
+            Lay.FL (new JLabel ("OpenGL link library"), fieldGL),
             Lay.FL (buttonRebuild)
         );
     }

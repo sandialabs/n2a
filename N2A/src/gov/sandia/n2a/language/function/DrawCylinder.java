@@ -19,7 +19,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.linear.MatrixDense;
 
-public class DrawCylinder extends Draw implements Draw.Shape
+public class DrawCylinder extends Draw implements Draw.Shape3D
 {
     protected MatrixDense t; // temporary used by put(). For efficiency, we don't want to keep creating every time.
 
@@ -37,6 +37,12 @@ public class DrawCylinder extends Draw implements Draw.Shape
                 return new DrawCylinder ();
             }
         };
+    }
+
+    @Override
+    public boolean needModelMatrix ()
+    {
+        return false;
     }
 
     public Type eval (Instance context)

@@ -83,11 +83,13 @@ public class JobC extends Thread
     protected Path jobDir;     // local or remote
     public    Path runtimeDir; // local or remote
 
-    protected Path ffmpegLibDir;  // Where link libraries are found.
-    protected Path ffmpegIncDir;
-    protected Path ffmpegBinDir;  // If non-null, then shared library dir should be added to path.
-    protected Path jniIncDir;     // jni.h
-    protected Path jniIncMdDir;   // jni_md.h
+    protected Path        ffmpegLibDir;  // Where link libraries are found
+    protected Path        ffmpegIncDir;
+    protected Path        ffmpegBinDir;  // If non-null, then shared library dir should be added to path.
+    protected Path        jniIncDir;     // jni.h
+    protected Path        jniIncMdDir;   // jni_md.h
+    protected Set<String> glLibs;
+    protected Path        glLibDir;      // If non-null, then this should be added to the library dirs during linkage.
 
     protected boolean supportsUnicodeIdentifiers;
     public    String  T;
@@ -272,9 +274,33 @@ public class JobC extends Thread
         if (ps != System.err) ps.close ();
     }
 
+    public static boolean contains (Path dir, String prefix, String name, String suffix)
+    {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream (dir))
+        {
+            for (Path path : stream)
+            {
+                String fileName = path.getFileName ().toString ();
+                if (! fileName.startsWith (prefix)) continue;
+                if (! fileName.endsWith   (suffix)) continue;
+                // There is a potential for ambiguity here, if name contains part of the prefix
+                // or suffix, but that is unlikely in practice. 
+                if (fileName.contains (name)) return true;
+            }
+        }
+        catch (IOException e) {}
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
     public void detectExternalResources () throws Exception
     {
         CompilerFactory factory = BackendC.getFactory (env);
+
+        // for finding a shared library ...
+        boolean wrap = factory.wrapperRequired ();
+        String prefix = factory.prefixLibrary (! wrap);  // If wrap is required, the we must use the static prefix. Otherwise, use shared prefix.
+        String suffix = wrap ? factory.suffixLibraryWrapper () : factory.suffixLibrary (true);
 
         // FFmpeg
         if (env.objects.containsKey ("ffmpegLibDir"))
@@ -286,17 +312,13 @@ public class JobC extends Thread
         else
         {
             // Plan: Detect the libraries, then estimate location of includes from that.
-            boolean wrap = factory.wrapperRequired ();
-            String prefix = factory.prefixLibrary (! wrap);
-            String suffix = wrap ? factory.suffixLibraryWrapper () : factory.suffixLibrary (true);
-            String libName = prefix + "avcodec" + suffix;  // Always use FFmpeg as a shared library.
             String ffmpegString = env.config.get ("backend", "c", "ffmpeg");
             if (ffmpegString.isBlank ())  // Search typical locations
             {
                 for (String path : new String[] {"ffmpeg/lib", "ffmpeg/bin", "/usr/lib64", "/usr/lib", "/usr/local/lib64", "/usr/local/lib"})
                 {
                     ffmpegLibDir = runtimeDir.resolve (path);
-                    if (Files.exists (ffmpegLibDir.resolve (libName))) break;
+                    if (contains (ffmpegLibDir, prefix, "avcodec", suffix)) break;
                     ffmpegLibDir = null;
                 }
             }
@@ -305,7 +327,7 @@ public class JobC extends Thread
                 // Relative path is resolved w.r.t. the runtime dir. This makes it easy to
                 // stash ffmpeg as a subdir of runtime.
                 ffmpegLibDir = runtimeDir.resolve (ffmpegString);
-                if (! Files.exists (ffmpegLibDir.resolve (libName))) ffmpegLibDir = null;
+                if (! contains (ffmpegLibDir, prefix, "avcodec", suffix)) ffmpegLibDir = null;
             }
             if (ffmpegLibDir != null)
             {
@@ -357,6 +379,92 @@ public class JobC extends Thread
 
             env.objects.put ("jniIncMdDir", jniIncMdDir);
             env.objects.put ("jniIncDir",   jniIncDir);
+        }
+
+        // OpenGL
+        if (env.objects.containsKey ("glLibs"))
+        {
+            glLibs   = (Set<String>) env.objects.get ("glLibs");
+            glLibDir = (Path)        env.objects.get ("glLibDir");
+        }
+        else
+        {
+            String glString = env.config.get ("backend", "c", "gl");
+            if (glString.isBlank ())  // Search typical locations
+            {
+                if (env instanceof Windows)
+                {
+                    // Since OpenGL32.lib is part of the Windows API, it pretty much has to exist.
+                    // However, we still verify existence as a way to avoid an unsolvable build error.
+                    if (factory instanceof CompilerCL.Factory)  // link via Windows SDK
+                    {
+                        CompilerCL.Factory cl = (CompilerCL.Factory) factory;
+                        Path SDKlib = cl.SDKroot.resolve ("Lib").resolve (cl.SDKversion);
+                        Path um     = SDKlib.resolve ("um").resolve (cl.arch);
+                        if (Files.exists (um.resolve ("OpenGL32.lib")))
+                        {
+                            glLibs = new TreeSet<String> ();
+                            glLibs.add ("OpenGL32");
+                            glLibs.add ("gdi32");
+                            glLibs.add ("user32");
+                        }
+                    }
+                    else if (factory instanceof CompilerGCC.Factory)  // Unix-like library naming, but relative to compiler installation
+                    {
+                        // The library should be in a directory at the same level as the
+                        // bin directory that contains the compiler.
+                        // cygwin: lib/w32api/libopengl32.a
+                        // msys:   lib/libopengl32.a
+
+                        // Resolve gcc's actual location.
+                        Path gcc = ((CompilerGCC.Factory) factory).gcc;
+                        gcc = env.which (gcc);
+
+                        if (gcc != null  &&  gcc.getNameCount () > 2)
+                        {
+                            Path root = gcc.getParent ().getParent ();
+                            for (String path : new String[] {"lib", "lib/w32api"})
+                            {
+                                if (contains (root.resolve (path), prefix, "opengl32", suffix))
+                                {
+                                    glLibs = new TreeSet<String> ();
+                                    glLibs.add ("opengl32");
+                                    glLibs.add ("gdi32");
+                                    glLibs.add ("user32");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                else  // Unix-like system
+                {
+                    for (String path : new String[] {"/usr/lib64", "/usr/lib", "/usr/local/lib64", "/usr/local/lib"})
+                    {
+                        if (Files.exists (runtimeDir.resolve (path).resolve ("libEGL.so")))  // TODO: create lib names in a more intelligent way
+                        {
+                            glLibs = new TreeSet<String> ();
+                            glLibs.add ("EGL");
+                        }
+                    }
+                }
+            }
+            else  // User-specified
+            {
+                Path glLib = runtimeDir.resolve (glString);
+                if (Files.exists (glLib))
+                {
+                    glLibs = new TreeSet<String> ();
+                    String glLibName = glLib.getFileName ().toString ();
+                    if (glLibName.startsWith (prefix)) glLibName = glLibName.substring (suffix.length ());
+                    if (glLibName.endsWith (suffix)) glLibName = glLibName.substring (0, glLibName.length () - suffix.length ());
+                    glLibs.add (glLibName);
+                    glLibDir = glLib.getParent ();
+                }
+            }
+
+            env.objects.put ("glLibs",   glLibs);
+            env.objects.put ("glLibDir", glLibDir);
         }
     }
 
@@ -502,7 +610,7 @@ public class JobC extends Thread
     {
         job.set ("Unpacking runtime", "status");
 
-        return unpackRuntime
+        boolean changed = unpackRuntime
         (
             JobC.class, job, runtimeDir, "runtime/",
             "math.h", "fixedpoint.cc",
@@ -519,8 +627,14 @@ public class JobC extends Thread
             "NativeResource.cc", "NativeResource.h",
             "shared.h",
             "OutputHolder.h", "OutputParser.h",  // Not needed by runtime, but provided as a utility for users.
-            "Shader.vp", "Shader.fp"  // GPU code not compiled into runtime.
+            "Shader.vp", "Shader.fp",  // GPU code not compiled into runtime.
+            "glcorearb.h", "wglext.h"  // OpenGL headers provided by Khronos.
         );
+
+        Path KHR = runtimeDir.resolve ("KHR");
+        if (unpackRuntime (JobC.class, job, KHR, "runtime/KHR/", "khrplatform.h")) changed = true;
+
+        return changed;
     }
 
     public static boolean unpackRuntime (Class<?> from, MNode job, Path runtimeDir, String prefix, String... names) throws Exception
@@ -589,6 +703,10 @@ public class JobC extends Thread
             c.addInclude (jniIncDir);
             c.addDefine ("HAVE_JNI");
         }
+        if (glLibs != null)
+        {
+            c.addDefine ("HAVE_GL");
+        }
     }
 
     public void addRuntimeObjects (Compiler c) throws Exception
@@ -615,6 +733,11 @@ public class JobC extends Thread
         if (jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
         {
             c.addObject (runtimeDir.resolve (objectName ("NativeResource")));
+        }
+        if (glLibs != null)
+        {
+            for (String lib : glLibs) c.addLibrary (lib);
+            if (glLibDir != null) c.addLibraryDir (glLibDir);
         }
 
         for (ProvideOperator po : extensions)
@@ -5383,6 +5506,7 @@ public class JobC extends Thread
                 if (op instanceof Draw)
                 {
                     Draw d = (Draw) op;
+
                     // Use a slightly different logical structure here, because every draw() call
                     // should set its keyword parameters, even if the target has already been created.
                     if (! (d.operands[0] instanceof Constant)  &&  (v == null  ||  ! bed.defined.contains (v)))
@@ -5390,7 +5514,118 @@ public class JobC extends Thread
                         context.result.append (pad + "ImageOutput<" + T + "> * " + d.name + " = imageOutputHelper<" + T + "> (" + d.fileName + ");\n");
                         if (v != null) bed.defined.add (v);
                     }
-                    if (d.keywords != null) prepareDrawKeywords (d, context, pad);
+
+                    boolean do3D =  glLibs != null  &&  d instanceof Draw.Shape3D;
+                    boolean needModel = false;
+                    boolean modelSet  = false;
+                    if (do3D)
+                    {
+                        needModel = ((Draw.Shape3D) d).needModelMatrix ();
+
+                        // "material" and "model" are reserved local variables
+                        // prepareDrawKeywords() will assign specific values.
+
+                        if (! bed.defined.contains (BackendDataC.material))
+                        {
+                            bed.defined.add (BackendDataC.material);
+                            context.result.append (pad + "Material material;\n");
+                        }
+                        if (needModel)
+                        {
+                            if (! bed.defined.contains (BackendDataC.model))
+                            {
+                                bed.defined.add (BackendDataC.model);
+                                context.result.append (pad + "Matrix<" + T + ",4,4> model;\n");
+                            }
+                        }
+                    }
+
+                    if (d.keywords != null)
+                    {
+                        for (Entry<String,Operator> k : d.keywords.entrySet ())
+                        {
+                            String   key   = k.getKey ();
+                            Operator value = k.getValue ();
+                            switch (key)
+                            {
+                                case "clear":
+                                    context.result.append (pad + d.name + "->setClearColor (");
+                                    op.render (context);
+                                    context.result.append (");\n");
+                                    continue;  // Don't fall through to code that assigns value.
+
+                                case "width":
+                                    context.result.append (pad + d.name + "->width");
+                                    if (! d.keywords.containsKey ("height")) context.result.append (" = " + d.name + "->height");
+                                    break;
+                                case "height":
+                                    context.result.append (pad + d.name + "->height");
+                                    if (! d.keywords.containsKey ("width")) context.result.append (" = " + d.name + "->width");
+                                    break;
+
+                                case "timeScale":
+                                case "codec":
+                                    if (ffmpegLibDir == null) continue;  // "timeScale" and "codec" only apply to FFmpeg.
+                                case "hold":
+                                case "format":
+                                    context.result.append (pad + d.name + "->" + key);
+                                    break;
+
+                                case "view":
+                                case "projection":
+                                    if (glLibs == null) continue;
+                                    context.result.append (pad + d.name + "->next" + key.substring (0, 1).toUpperCase () + key.substring (1));
+                                    break;
+
+                                case "model":
+                                    if (! needModel) continue;
+                                    modelSet = true;
+                                    context.result.append (pad + "model");
+                                    break;
+
+                                case "diffuse":
+                                case "ambient":
+                                case "emission":
+                                case "specular":
+                                    if (! do3D) continue;
+                                    context.result.append (pad + "setColor (material." + key + ", ");
+                                    value.render (context);
+                                    context.result.append (", " + key.equals ("diffuse") + ");\n");
+                                    continue;
+
+                                case "shininess":
+                                    context.result.append (pad + "material.shininess");
+                                    break;
+
+                                default:  // "raw" and any invalid keywords
+                                    continue;
+                            }
+                            context.result.append (" = ");
+                            value.render (context);
+                            context.result.append (";\n");
+                        }
+                    }
+
+                    // Finish preparing model matrix.
+                    if (needModel)
+                    {
+                        if (d.operands.length > 1)  // Have position
+                        {
+                            context.result.append (pad + "model = glTranslate (");
+                            d.operands[1].render (context);
+                            context.result.append (")");
+                            if (modelSet) context.result.append (" * model");
+                            context.result.append (";\n");
+                        }
+                        else  // Don't have position
+                        {
+                            if (! modelSet)
+                            {
+                                context.result.append (pad + "identity (model);\n");
+                            }
+                        }
+                    }
+
                     return true;
                 }
                 return true;
@@ -5407,41 +5642,6 @@ public class JobC extends Thread
         if (add.operand1 instanceof Add) result.addAll (flattenAdd ((Add) add.operand1));
         else                             result.add (add.operand1);
         return result;
-    }
-
-    public void prepareDrawKeywords (Draw d, RendererC context, String pad)
-    {
-        for (Entry<String,Operator> k : d.keywords.entrySet ())
-        {
-            String   key = k.getKey ();
-            Operator op  = k.getValue ();
-            switch (key)
-            {
-                case "width":
-                    context.result.append (pad + d.name + "->width");
-                    if (! d.keywords.containsKey ("height")) context.result.append (" = " + d.name + "->height");
-                    break;
-                case "height":
-                    context.result.append (pad + d.name + "->height");
-                    if (! d.keywords.containsKey ("width")) context.result.append (" = " + d.name + "->width");
-                    break;
-                case "clear":
-                    context.result.append (pad + d.name + "->clearColor");
-                    break;
-                case "timeScale":
-                case "codec":
-                    if (ffmpegLibDir == null) continue;  // "timeScale" and "codec" only apply to FFmpeg.
-                case "hold":
-                case "format":
-                    context.result.append (pad + d.name + "->" + key);
-                    break;
-                default:  // "raw" and any invalid keywords
-                    continue;
-            }
-            context.result.append (" = ");
-            op.render (context);
-            context.result.append (";\n");
-        }
     }
 
     public String mangle (Variable v)

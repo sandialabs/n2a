@@ -29,7 +29,7 @@ MatrixAbstract<T>::~MatrixAbstract ()
 
 template<class T>
 void
-clear (MatrixAbstract<T> & A, const T scalar)
+clear (const MatrixAbstract<T> & A, const T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -44,7 +44,7 @@ clear (MatrixAbstract<T> & A, const T scalar)
 
 template<class T>
 void
-identity (MatrixAbstract<T> & A)
+identity (const MatrixAbstract<T> & A)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -59,7 +59,7 @@ identity (MatrixAbstract<T> & A)
 
 template<class T>
 void
-copy (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+copy (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 {
     int ah = A.rows ();
     int aw = A.columns ();
@@ -148,11 +148,10 @@ norm (const MatrixAbstract<T> & A, T n)
 }
 
 template<class T>
-MatrixAbstract<T> &
-normalize (MatrixAbstract<T> & A)
+Matrix<T>
+normalize (const MatrixAbstract<T> & A)
 {
-    A /= norm (A, 2);
-    return A;
+    return A / norm (A, (T) 2);
 }
 
 #endif
@@ -187,7 +186,7 @@ cross (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
     {
         int j = (i + 1) % h;
         int k = (i + 2) % h;
-        result[i] = A[j] * B[k] - A[k] * B[j];
+        result[i] = A(j,0) * B(k,0) - A(k,0) * B(j,0);
     }
     return result;
 }
@@ -204,6 +203,24 @@ Matrix<T>
 visit (const MatrixAbstract<T> & A, T (*function) (const T))
 {
     return visit (Matrix<T> (A), function);
+}
+
+template<class T>
+bool
+equal (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    if (B.rows () != h  ||  B.columns () != w) return false;
+
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            if (A(r,c) != B(r,c)) return false;
+        }
+    }
+    return true;
 }
 
 template<class T>

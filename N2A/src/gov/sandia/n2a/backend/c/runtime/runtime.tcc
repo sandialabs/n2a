@@ -16,12 +16,16 @@ the U.S. Government retains certain rights in this software.
 #include <climits>
 
 #ifdef _WIN32
-# define WIN32_LEAN_AND_MEAN
-# include <windows.h>
-# include <time.h>
-# undef min
-# undef max
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#  include <time.h>
+#  undef min
+#  undef max
 #endif
+
+// These seem to get defined under GCC, but we want to use them as parameter names.
+#undef near
+#undef far
 
 
 // General functions ---------------------------------------------------------
@@ -203,10 +207,10 @@ glLookAt (const MatrixFixed<T,3,1> & eye, const MatrixFixed<T,3,1> & center, con
 {
     // Create an orthonormal frame
     Matrix<T> f = center - eye;
-    f /= norm (f, 2);
-    Matrix<T> u = up / norm (up, 2);
+    f /= norm (f, (T) 2);
+    Matrix<T> u = up / norm (up, (T) 2);
     Matrix<T> s = cross (f, u);
-    s /= norm (s, 2);
+    s /= norm (s, (T) 2);
     u = cross (s, f);
 
     Matrix<T> R (4, 4);
@@ -431,7 +435,7 @@ grid (int i, int nx, int ny, int nz)
     return result;
 }
 
-template<class>
+template<>
 int
 pulse (int t, int width, int period, int rise, int fall)
 {
@@ -494,6 +498,14 @@ unitmap (const MatrixAbstract<int> & A, int row, int column)  // row and column 
                    + b  * ((int64_t) a1 * A(r,c+1) + (int64_t) a * A(r+1,c+1) >> FP_MSB) >> FP_MSB;
         }
     }
+}
+
+template<>
+Matrix<int>
+glLookAt (const MatrixFixed<int,3,1> & eye, const MatrixFixed<int,3,1> & center, const MatrixFixed<int,3,1> & up)
+{
+    // TODO: This function is not properly coded yet. This is just a quick hack to enable compile.
+    return Matrix<int> (4, 4);
 }
 
 #endif

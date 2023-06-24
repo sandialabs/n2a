@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -813,6 +813,46 @@ public abstract class Host
     public String combine (List<String> command)
     {
         return combine (command.toArray (new String[command.size ()]));
+    }
+
+    /**
+        Finds the absolute locates of an executable file by walking the search path
+        (typically specified by the PATH environment variable).
+        This default implementation is suitable for any localhost, but should be
+        overridden for remote hosts.
+        @return null if not found
+    **/
+    public Path which (Path command)
+    {
+        if (command.isAbsolute ()) return command;
+
+        Path exe = null;
+        if (this instanceof Windows)
+        {
+            String fileName = command.getFileName ().toString ();
+            if (! fileName.endsWith (".exe"))
+            {
+                exe = Paths.get (fileName + ".exe");
+                Path parent = command.getParent ();
+                if (parent != null) exe = parent.resolve (exe);
+            }
+        }
+
+        String PATH = System.getenv ("PATH");
+        String separator = System.getProperty ("path.separator");
+        for (String entry : PATH.split (separator))
+        {
+            Path dir = Paths.get (entry);
+            Path p = dir.resolve (command);
+            if (Files.exists (p)) return p;
+            if (exe != null)
+            {
+                p = dir.resolve (exe);
+                if (Files.exists (p)) return p;
+            }
+        }
+
+        return null;
     }
 
     public long getMemoryTotal ()

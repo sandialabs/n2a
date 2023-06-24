@@ -84,6 +84,13 @@ public class Draw extends Function
         Simplifies analysis code in EquationSet.addDrawDependencies.
     **/
     public interface Shape {}
+    public interface Shape3D extends Shape
+    {
+        public default boolean needModelMatrix ()
+        {
+            return true;
+        }
+    }
 
     public boolean isOutput ()
     {

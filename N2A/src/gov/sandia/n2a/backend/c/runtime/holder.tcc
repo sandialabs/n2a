@@ -13,9 +13,7 @@ the U.S. Government retains certain rights in this software.
 #include "holder.h"
 #include "runtime.h"   // For Event::exponent
 #include "image.h"
-
-// In case windows.h is included...
-#define WIN32_LEAN_AND_MEAN
+#include "myendian.h"
 
 #include <fstream>
 #include <stdlib.h>
@@ -23,23 +21,25 @@ the U.S. Government retains certain rights in this software.
 #include <sys/stat.h>
 #ifdef _MSC_VER
 #  define stat _stat
-#  include <windows.h>
-#  undef min
-#  undef max
 #else
 #  include <dirent.h>
 #endif
 
 #ifdef HAVE_GL
-#  include "glcorearb.h"  // Extensions
 #  include <fstream>      // for loading shader programs
 #  include <sstream>      // ditto
 #  ifdef _WIN32
-#    include <windows.h>
-#    undef min
-#    undef max
 #    include "wglext.h"   // WGL -- Windows-specific functions for creating GL context
 #  endif
+#define GL_FUNCTIONS1(X) \
+   X(PFNGLENABLEPROC,                   glEnable                   ) \
+   X(PFNGLDISABLEPROC,                  glDisable                  ) \
+   X(PFNGLBLENDFUNCPROC,                glBlendFunc                ) \
+   X(PFNGLVIEWPORTPROC,                 glViewport                 ) \
+   X(PFNGLCLEARCOLORPROC,               glClearColor               ) \
+   X(PFNGLCLEARPROC,                    glClear                    ) \
+   X(PFNGLDRAWELEMENTSPROC,             glDrawElements             ) \
+   X(PFNGLREADPIXELSPROC,               glReadPixels               )
 #define GL_FUNCTIONS(X) \
    X(PFNGLGENVERTEXARRAYSPROC,          glGenVertexArrays          ) \
    X(PFNGLBINDVERTEXARRAYPROC,          glBindVertexArray          ) \
@@ -73,6 +73,7 @@ the U.S. Government retains certain rights in this software.
    X(PFNGLUNIFORM1FPROC,                glUniform1f                ) \
    X(PFNGLUNIFORM4FVPROC,               glUniform4fv               )
 #  define X(type, name) static type name;
+   GL_FUNCTIONS1(X)
    GL_FUNCTIONS(X)
 #  undef X
 #endif
@@ -698,10 +699,8 @@ imageInputHelper (const String & fileName, ImageInput<T> * oldHandle)
 
 template<class T>
 ImageOutput<T>::ImageOutput (const String & fileName)
-:   Holder         (fileName),
-    canvas         (n2a::RGBAChar),
-    nextProjection (4, 4),
-    nextView       (4, 4)
+:   Holder (fileName),
+    canvas (n2a::RGBAChar)
 {
     t          = (T) 0;
     frameCount = 0;
@@ -734,11 +733,13 @@ ImageOutput<T>::ImageOutput (const String & fileName)
     lastWidth     = -1;
     lastHeight    = -1;
     sphereStep    = -1;
-    projection.resize (4, 4);
-    view      .resize (4, 4);
-#   endif
+    projection    .resize (4, 4);
+    view          .resize (4, 4);
+    nextProjection.resize (4, 4);
+    nextView      .resize (4, 4);
     clear    (nextProjection);
     identity (nextView);
+#   endif
 }
 
 template<class T>
@@ -834,16 +835,45 @@ ImageOutput<T>::open ()
     path += "/";  // Include slash in path, so we don't have to add it later. Forward slash works for all platforms.
 }
 
+void
+setColor (float target[], uint32_t color, bool withAlpha)
+{
+    target[0] = ((color & 0xFF0000) >> 16) / 255.0f;
+    target[1] = ((color &   0xFF00) >>  8) / 255.0f;
+    target[2] =  (color &     0xFF)        / 255.0f;
+    if (withAlpha) target[3] = 1;
+}
+
+template<class T>
+void
+setColor (float target[], const Matrix<T> & color, bool withAlpha)
+{
+    target[0] = color[0];
+    target[1] = color[1];
+    target[2] = color[2];
+    if (withAlpha) target[3] = color.rows () > 3 ? color[3] : 1;
+}
+
+#ifdef n2a_FP
+template<int>
+void
+setColor (float target[], const Matrix<int> & color, bool withAlpha)
+{
+    float conversion = pow (2.0f, FP_MSB);  // exponent=0
+    target[0] = color[0] / conversion;
+    target[1] = color[1] / conversion;
+    target[2] = color[2] / conversion;
+    if (withAlpha) target[3] = color.rows () > 3 ? color[3] / conversion : 1;
+}
+#endif
+
 template<class T>
 void
 ImageOutput<T>::setClearColor (uint32_t color)
 {
     clearColor = color << 8 | 0xFF;
 #   ifdef HAVE_GL
-    cv[0] = ((color & 0xFF0000) >> 16) / 255.0f;
-    cv[1] = ((color &   0xFF00) >>  8) / 255.0f;
-    cv[2] =  (color &     0xFF)        / 255.0f;
-    cv[3] = 1;
+    setColor (cv, color, true);
 #   endif
 }
 
@@ -853,11 +883,11 @@ ImageOutput<T>::setClearColor (const Matrix<T> & color)
 {
     bool hasAlpha = color.rows () > 3;
 
-    uint32_t r =  std::min (1.0f, std::max (0.0f, color[0])) * 255;
-    uint32_t g =  std::min (1.0f, std::max (0.0f, color[1])) * 255;
-    uint32_t b =  std::min (1.0f, std::max (0.0f, color[2])) * 255;
-    uint32_t a = 0xFF;
-    if (hasAlpha) std::min (1.0f, std::max (0.0f, color[3])) * 255;
+    uint32_t      r = std::min (1.0f, std::max (0.0f, color[0])) * 255;
+    uint32_t      g = std::min (1.0f, std::max (0.0f, color[1])) * 255;
+    uint32_t      b = std::min (1.0f, std::max (0.0f, color[2])) * 255;
+    uint32_t      a = 0xFF;
+    if (hasAlpha) a = std::min (1.0f, std::max (0.0f, color[3])) * 255;
     clearColor = r << 24 | g << 16 | b << 8 | a;
 
 #   ifdef HAVE_GL
@@ -1022,16 +1052,16 @@ ImageOutput<T>::writeImage  ()
         glReadPixels (0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixelData);  // always in bottom-up order
         uint32_t * g   = pixelData + (h - 1) * w;  // beginning of last row, which is at the top on screen
         uint32_t * c   = (uint32_t *) canvas.buffer->pixel (0, 0);
-        uint32_t * end = to + w * h;
+        uint32_t * end = c + w * h;
         while (c < end)
         {
             uint32_t * rowEnd = c + w;
             while (c < rowEnd)
             {
 #               if BYTE_ORDER == LITTLE_ENDIAN
-                alphaBlendOE (*c, *g);
+                n2a::alphaBlendOE (*c, *g);
 #               else
-                alphaBlend (*c, *g);
+                n2a::alphaBlend (*c, *g);
 #               endif
                 *c++ = *g++;
             }
@@ -1048,21 +1078,16 @@ ImageOutput<T>::writeImage  ()
 #       endif
         uint32_t temp;
         uint32_t * c   = (uint32_t *) canvas.buffer->pixel (0, 0);
-        uint32_t * end = to + w * h;
+        uint32_t * end = c + w * h;
         while (c < end)
         {
-            uint32_t * rowEnd = c + w;
-            while (c < rowEnd)
-            {
-                temp = color;
-#               if BYTE_ORDER == LITTLE_ENDIAN
-                alphaBlendOE (*c, temp);
-#               else
-                alphaBlend (*c, temp);
-#               endif
-                *c++ = temp;
-            }
-            g -= 2 * w;
+            temp = color;
+#           if BYTE_ORDER == LITTLE_ENDIAN
+            n2a::alphaBlendOE (*c, temp);
+#           else
+            n2a::alphaBlend (*c, temp);
+#           endif
+            *c++ = temp;
         }
     }
 #   endif
@@ -1118,7 +1143,7 @@ ImageOutput<T>::writeImage  ()
 
 template<class T>
 bool
-ImageOutput<T>::next3D (const Matrix<T> & model, const Material & material)
+ImageOutput<T>::next3D (const Matrix<T> * model, const Material & material)
 {
     // Plaform-specific create context...
 #   ifdef _WIN32
@@ -1131,7 +1156,7 @@ ImageOutput<T>::next3D (const Matrix<T> & model, const Material & material)
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             NULL, NULL, NULL, NULL
         );
-        dc = GetDC (dummy);
+        dc = GetDC (window);
 
         PIXELFORMATDESCRIPTOR desc;
         memset (&desc, 0, sizeof (desc));
@@ -1149,6 +1174,10 @@ ImageOutput<T>::next3D (const Matrix<T> & model, const Material & material)
 
     if (! extensionsBound)
     {
+        HMODULE module = LoadLibraryA ("opengl32.dll");
+#       define X(type, name) name = (type) GetProcAddress (module, #name); if (! name) return false;
+        GL_FUNCTIONS1(X)
+#       undef X
 #       define X(type, name) name = (type) wglGetProcAddress (#name); if (! name) return false;
         GL_FUNCTIONS(X)
 #       undef X
@@ -1164,11 +1193,11 @@ ImageOutput<T>::next3D (const Matrix<T> & model, const Material & material)
     // One-time setup per simulation
     if (! program)
     {
-        ifstream ifs ("../../backend/c/Shader.vp");  // TODO: need better way of locating runtime resources
-        stringstream vp;
-        vp << "#version 120" << endl;
+        std::ifstream ifs ("../../backend/c/Shader.vp");  // TODO: need better way of locating runtime resources
+        std::stringstream vp;
+        vp << "#version 120" << std::endl;
         vp << ifs.rdbuf ();
-        string vp_string = vp.str ();
+        std::string vp_string = vp.str ();
         const char * vp_char = vp_string.c_str ();
 
         GLuint vshader = glCreateShader (GL_VERTEX_SHADER);
@@ -1181,16 +1210,16 @@ ImageOutput<T>::next3D (const Matrix<T> & model, const Material & material)
         {
             char message[1024];
             glGetShaderInfoLog (vshader, sizeof (message), NULL, message);
-            cerr << message << endl;
+            std::cerr << message << std::endl;
             return false;
         }
 
         ifs.close ();
         ifs.open ("../../backend/c/Shader.fp");
-        stringstream fp;
-        fp << "#version 120" << endl;
+        std::stringstream fp;
+        fp << "#version 120" << std::endl;
         fp << ifs.rdbuf();
-        string fp_string = fp.str ();
+        std::string fp_string = fp.str ();
         const char * fp_char = fp_string.c_str ();
 
         GLuint fshader = glCreateShader (GL_FRAGMENT_SHADER);
@@ -1202,7 +1231,7 @@ ImageOutput<T>::next3D (const Matrix<T> & model, const Material & material)
         {
             char message[1024];
             glGetShaderInfoLog (fshader, sizeof (message), NULL, message);
-            cerr << message << endl;
+            std::cerr << message << std::endl;
             return false;
         }
 
@@ -1250,7 +1279,7 @@ ImageOutput<T>::next3D (const Matrix<T> & model, const Material & material)
     {
         int w = canvas.width;
         int h = canvas.height;
-        bool haveProjection = norm (nextProjection, 1);
+        bool haveProjection = norm (nextProjection, (T) 1);
         if (lastWidth != w  ||  lastHeight != h)
         {
             glBindRenderbuffer (GL_RENDERBUFFER, rboColor);
@@ -1292,40 +1321,54 @@ ImageOutput<T>::next3D (const Matrix<T> & model, const Material & material)
         // load uniforms
         glUniformMatrix4fv (locMatrixProjection, 1, GL_FALSE, projection.base ());
 
-        if (lights.empty ()) lights.emplace (0);
-        int i = 0;
-        for (auto l : lights)
+        if (lights.empty ())
         {
-            l->setUniform (*locLights[i++], view);
-            if (i >= 8) break;
+            Light l;  // default light values set by ctor
+            l.setUniform (*locLights[0], view);
+            glUniform1i (locEnabled, 1);
         }
-        glUniform1i (locEnabled, i);
+        else
+        {
+            int i = 0;
+            for (auto l : lights)
+            {
+                l.second->setUniform (*locLights[i++], view);
+                if (i >= 8) break;
+            }
+            glUniform1i (locEnabled, i);
+        }
 
         have3D = true;
     }
 
     // Set up for current drawX() call.
     // This involves setting a couple of uniform values.
-    Matrix<float> modelView = view * model;  // The transorm into eye space.
+    Matrix<float> modelView;  // The transorm into eye space.
+    if (! model) modelView = view;
+    else         modelView = view * *model;
     Matrix<float> normal = modelView;  // TODO: implement inversion, so we can create the inverse transpose of the modelView.
     glUniformMatrix4fv (locMatrixModelView, 1, GL_FALSE, modelView.base ());
     glUniformMatrix4fv (locMatrixNormal, 1, GL_FALSE, normal.base ());
-    material.setUniform (*this);
+    material.setUniform ();
 
     return true;
 }
 
 template<class T>
 T
-ImageOutput<T>::drawCube (T now, const Matrix<T> & model, const Material & material)
+#ifdef n2a_FP
+ImageOutput<T>::drawCube (T now, const Matrix<T> & model, int exponentP, const Material & material)
+#else
+ImageOutput<T>::drawCube (T now, const Matrix<T> & model,                const Material & material)
+#endif
 {
     next (now);
-    if (! next3D (model, material)) return 0;
+    if (! next3D (&model, material)) return 0;
 
     // Set up vertex buffers, if needed.
     std::map<String,GLuint>::iterator it = buffers.find ("cubeVertices");  // We really want contains() here, but don't want to depend on c++20.
-    getBuffer ("cubeVertices");
-    getBuffer ("cubeIndices");
+    getBuffer ("cubeVertices", true);
+    getBuffer ("cubeIndices",  false);
     if (it == buffers.end ())
     {
         std::vector<GLfloat> vertices (144); // six faces, four vertices per face, 6 floats per vertex
@@ -1334,7 +1377,7 @@ ImageOutput<T>::drawCube (T now, const Matrix<T> & model, const Material & mater
         // All vertices are specified in CCW order.
 
         // Top face, y=1
-        GLfloat[3] n;
+        float n[3];
         n[0] = 0;
         n[1] = 1;
         n[2] = 0;
@@ -1402,20 +1445,23 @@ ImageOutput<T>::drawCube (T now, const Matrix<T> & model, const Material & mater
 
 template<class T>
 T
-ImageOutput<T>::drawCylinder (T now, const Material & material, const MatrixFixed<T,3,1> & p1, T r1, const MatrixFixed<T,3,1> & p2, T r2, int steps, int stepsCap)
+#ifdef n2a_FP
+ImageOutput<T>::drawCylinder (T now, int exponentP, const Material & material, const MatrixFixed<T,3,1> & p1, T r1, int exponentR, const MatrixFixed<T,3,1> & p2, T r2, int cap1, int cap2, int steps, int stepsCap)
+#else
+ImageOutput<T>::drawCylinder (T now,                const Material & material, const MatrixFixed<T,3,1> & p1, T r1,                const MatrixFixed<T,3,1> & p2, T r2, int cap1, int cap2, int steps, int stepsCap)
+#endif
 {
     next (now);
-    if (! next3D (model, material)) return 0;
+    if (! next3D (nullptr, material)) return 0;
 
-    if (p1 == p2) return 0;
+    if (equal (p1, p2)) return 0;
     if (r2 < 0) r2 = r1;
     if (r1 == 0  &&  r2 == 0) return 0;
     if (steps < 3) steps = 3;
     if (stepsCap < 0) stepsCap = steps / 4;  // Integer division, so 3/4==0, 4/4==1, etc.
 
-    std::map<String,GLuint>::iterator it = buffers.find ("cylinderVertices");
-    getBuffer ("cylinderVertices");
-    getBuffer ("cylinderIndices");
+    getBuffer ("cylinderVertices", true);
+    getBuffer ("cylinderIndices",  false);
     int count = 2 + steps * (2 + stepsCap);  // estimate of vertex count, based on rounded caps at both ends
     std::vector<GLfloat> vertices (count);
     std::vector<GLuint>  indices  (count * 3);
@@ -1426,7 +1472,7 @@ ImageOutput<T>::drawCylinder (T now, const Material & material, const MatrixFixe
     //   Positive direction is toward p1 just because that's how all the
     //   geometry code was developed before moving to flexible coordinates.
     Matrix<float> fz = p1 - p2;
-    float length = norm (fz, 2);
+    float length = norm (fz, (T) 2);
     fz /= length;
     //   Create x vector along the axis that z has smallest extent.
     //   This is an arbitrary choice, but it should be the best conitioned when computing cross product.
@@ -1666,21 +1712,25 @@ ImageOutput<T>::drawCylinder (T now, const Material & material, const MatrixFixe
 
 template<class T>
 T
-ImageOutput<T>::drawPlane (T now, const Matrix<T> & model, const Material & material)
+#ifdef n2a_FP
+ImageOutput<T>::drawPlane (T now, const Matrix<T> & model, int exponentP, const Material & material)
+#else
+ImageOutput<T>::drawPlane (T now, const Matrix<T> & model,                const Material & material)
+#endif
 {
     next (now);
-    if (! next3D (model, material)) return 0;
+    if (! next3D (&model, material)) return 0;
 
     // Set up vertex buffers, if needed.
     std::map<String,GLuint>::iterator it = buffers.find ("planeVertices");
-    getBuffer ("planeVertices");
-    getBuffer ("planeIndices");
+    getBuffer ("planeVertices", true);
+    getBuffer ("planeIndices",  false);
     if (it == buffers.end ())
     {
         std::vector<GLfloat> vertices (24); // four vertices, 6 floats per vertex
         std::vector<GLuint>  indices  (6);  // 2 triangles, 3 vertices per triangle
 
-        float[] n = new float[3];
+        float n[3];
         n[0] = 0;
         n[1] = 0;
         n[2] = 1;
@@ -1709,19 +1759,23 @@ ImageOutput<T>::drawPlane (T now, const Matrix<T> & model, const Material & mate
 
 template<class T>
 T
-ImageOutput<T>::drawSphere (T now, const Matrix<T> & model, const Material & material, int steps)
+#ifdef n2a_FP
+ImageOutput<T>::drawSphere (T now, const Matrix<T> & model, int exponentP, const Material & material, int steps)
+#else
+ImageOutput<T>::drawSphere (T now, const Matrix<T> & model,                const Material & material, int steps)
+#endif
 {
     next (now);
-    if (! next3D (model, material)) return 0;
+    if (! next3D (&model, material)) return 0;
 
     if (steps > 10) steps = 10;  // defensive limit. ~20 million faces (20 * 4^10)
 
-    getBuffer ("sphereVertices");
+    getBuffer ("sphereVertices", true);
     char name[16];
-    if (sphereStep >= step)
+    if (sphereStep >= steps)
     {
-        sprintf (name, "sphereIndices%i", step);
-        getBuffer ();
+        sprintf (name, "sphereIndices%i", steps);
+        getBuffer (name, false);
     }
     else
     {
@@ -1729,10 +1783,10 @@ ImageOutput<T>::drawSphere (T now, const Matrix<T> & model, const Material & mat
         {
             sphereStep = 0;
             icosphere (sphereVertices, sphereIndices);
-            getBuffer ("sphereIndices0");
+            getBuffer ("sphereIndices0", false);
             glBufferData (GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size () * sizeof (GLuint), &sphereIndices[0], GL_STATIC_DRAW);
         }
-        while (sphereStep < step)
+        while (sphereStep < steps)
         {
             sphereStep++;
             icosphereSubdivide (sphereVertices, sphereIndices);
@@ -1742,13 +1796,13 @@ ImageOutput<T>::drawSphere (T now, const Matrix<T> & model, const Material & mat
         glBufferData (GL_ARRAY_BUFFER, sphereVertices.size () * sizeof (GLfloat), &sphereVertices[0], GL_STATIC_DRAW);  // This only needs to be uploaded once, since it each step encompasses all the previous ones.
     }
 
-    int count = 60 * pow (4, step);  // 20 triangles in base icosphere * 3 vertices per triangle * 4^subdivisions
+    int count = 60 * pow (4, steps);  // 20 triangles in base icosphere * 3 vertices per triangle * 4^subdivisions
     glDrawElements (GL_TRIANGLES, count, GL_UNSIGNED_INT, 0);
     return 0;
 }
 
 template<class T>
-void
+GLuint
 ImageOutput<T>::getBuffer (String name, bool vertices)
 {
     std::map<String,GLuint>::iterator it = buffers.find (name);
@@ -1757,7 +1811,7 @@ ImageOutput<T>::getBuffer (String name, bool vertices)
     GLuint result;
     if (found)
     {
-        result = it.second;
+        result = it->second;
     }
     else
     {
@@ -1813,7 +1867,12 @@ template<class T>
 Mfile<T>::~Mfile ()
 {
     if (doc) delete doc;
-    for (auto m : matrices) if (m.second) delete m.second;
+    for (auto m : matrices) if (m.second)
+    {
+        std::cerr << "deleting " << m.second << std::endl;
+        std::cerr << *m.second << std::endl;
+        delete m.second;
+    }
 }
 
 std::vector<String>

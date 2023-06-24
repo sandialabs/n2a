@@ -21,7 +21,7 @@ import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.linear.MatrixDense;
 
-public class DrawPlane extends Draw implements Draw.Shape
+public class DrawPlane extends Draw implements Draw.Shape3D
 {
     public static Factory factory ()
     {

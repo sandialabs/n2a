@@ -4,6 +4,15 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
+/*
+For 3D graphics support, this software depends on header files from the Khronos Group.
+Download the following files and place them in this directory:
+    https://www.khronos.org/registry/OpenGL/api/GL/glcorearb.h
+    https://www.khronos.org/registry/OpenGL/api/GL/wglext.h
+Store in subdirectory KHR:
+    https://www.khronos.org/registry/EGL/api/KHR/khrplatform.h
+*/
+
 
 #ifndef n2a_holder_h
 #define n2a_holder_h
@@ -17,8 +26,17 @@ the U.S. Government retains certain rights in this software.
 #ifdef HAVE_FFMPEG
 #  include "video.h"
 #endif
+
+// Control how Windows gets included.
+#ifdef _MSC_VER
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#  undef min
+#  undef max
+#endif
+
 #ifdef HAVE_GL
-#  include <GL/gl.h>  // Basic functions and types. According to Khronos, we're not supposed to include this when using glcorearb.h
+#  include "glcorearb.h"
 #endif
 
 #include <vector>
@@ -42,7 +60,7 @@ public:
     void   read  (const String & parmFileName);
     void   read  (std::istream & stream);
 
-    T      get   (const String & name, T defaultValue = 0) const;
+    T      get   (const String & name, T defaultValue = (T) 0) const;
     String get   (const String & name, const String & defaultValue = "") const;
 };
 
@@ -92,7 +110,7 @@ public:
     virtual bool next ();
 };
 
-extern SHARED int convert (String input, int exponent);
+SHARED int convert (String input, int exponent);
 
 template<class T>
 class SHARED MatrixInput : public Holder
@@ -104,12 +122,12 @@ public:
     virtual ~MatrixInput ();
 };
 #ifdef n2a_FP
-template<class T> extern SHARED MatrixInput<T> * matrixHelper (const String & fileName, int exponent, MatrixInput<T> * oldHandle = 0);
+template<class T> SHARED MatrixInput<T> * matrixHelper (const String & fileName, int exponent, MatrixInput<T> * oldHandle = 0);
 #else
-template<class T> extern SHARED MatrixInput<T> * matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle = 0);
+template<class T> SHARED MatrixInput<T> * matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle = 0);
 #endif
 
-template<class T> extern SHARED IteratorNonzero<T> * getIterator (MatrixAbstract<T> * A);  // Returns an object that iterates over nonzero elements of A.
+template<class T> SHARED IteratorNonzero<T> * getIterator (MatrixAbstract<T> * A);  // Returns an object that iterates over nonzero elements of A.
 
 template<class T>
 class SHARED ImageInput : public Holder
@@ -135,7 +153,7 @@ public:
     Matrix<T> get (String channelName, T now);  ///< @param now If positive, then desired PTS in seconds. If negative, then $t.
 #   endif
 };
-template<class T> extern SHARED ImageInput<T> * imageInputHelper (const String & fileName, ImageInput<T> * oldHandle = 0);
+template<class T> SHARED ImageInput<T> * imageInputHelper (const String & fileName, ImageInput<T> * oldHandle = 0);
 
 #ifdef HAVE_GL
 
@@ -192,17 +210,24 @@ public:
     static GLint locShininess;
 
     Material ();
-    void setUniform ();
+    void setUniform () const;
 };
 
-void put       (std::vector<GLfloat> & vertices,                  float x, float y, float z, float[3] n);
+void put       (std::vector<GLfloat> & vertices,                  float x, float y, float z, float n[3]);
 void put       (std::vector<GLfloat> & vertices, Matrix<float> f, float x, float y, float z, float nx, float ny, float nz);
 int  putUnique (std::vector<GLfloat> & vertices,                  float x, float y, float z);
 
 void icosphere          (std::vector<GLfloat> & vertices, std::vector<GLuint> & indices);
 void icosphereSubdivide (std::vector<GLfloat> & vertices, std::vector<GLuint> & indices);
-void split              (std::vector<GLfloat> & vertices, int v0, int v1);
+int  split              (std::vector<GLfloat> & vertices, int v0, int v1);
 
+#endif
+
+// Utility functions to set material colors. May also be useful in other contexts.
+                  SHARED void setColor (float target[], uint32_t            color, bool withAlpha);
+template<class T> SHARED void setColor (float target[], const Matrix<T>   & color, bool withAlpha);
+#ifdef n2a_FP
+template<int>     SHARED void setColor (float target[], const Matrix<int> & color, bool withAlpha);  // exponent = 0, which gives full range [0,1]
 #endif
 
 template<class T>
@@ -252,14 +277,14 @@ public:
     int                          lastHeight;
     Matrix<float>                projection;
     Matrix<float>                view;
+    Matrix<float>                nextProjection;  // Initialized to 4x4, all zeros. If all zeros at start of 3D drawing, then we generate a default matrix based on current view size.
+    Matrix<float>                nextView;        // Initialized to 4x4 identity, which is also the default.
     std::map<int,Light *>        lights;
     std::map<String,GLuint>      buffers;
     int                          sphereStep;
     std::vector<GLfloat>         sphereVertices;
     std::vector<GLuint>          sphereIndices;
 #   endif
-    Matrix<float>                nextProjection;  // Initialized to 4x4, all zeros. If all zeros a start of 3D drawing, then we generate a default matrix based on current view size.
-    Matrix<float>                nextView;        // Initialized to 4x4 identity, which is also the default.
 
     ImageOutput (const String & fileName);
     virtual ~ImageOutput ();
@@ -283,15 +308,22 @@ public:
 
     // 3D drawing functions.
 #   ifdef HAVE_GL
-    bool next3D (const Matrix<T> & model, const Material & material);  // Additional setup work done by 3D draw functions. Does both one-time initialization and per-frame initialization, as needed.
+    bool next3D (const Matrix<T> * model, const Material & material);  // Additional setup work done by 3D draw functions. Does both one-time initialization and per-frame initialization, as needed.
+    GLuint getBuffer (String name, bool vertices);  // vertices==true indicates that this is a vertex array; vertices==false indicates that this is an index array
+#     ifdef n2a_FP
+    T drawCube     (T now, const Matrix<T> & model, int exponentP, const Material & material);
+    T drawCylinder (T now,                          int exponentP, const Material & material, const MatrixFixed<T,3,1> & p1, T r1, int exponentR, const MatrixFixed<T,3,1> & p2, T r2 = -1, int cap1 = 0, int cap2 = 0, int steps = 6, int stepsCap = -1);
+    T drawPlane    (T now, const Matrix<T> & model, int exponentP, const Material & material);
+    T drawSphere   (T now, const Matrix<T> & model, int exponentP, const Material & material, int steps = 1);
+#     else
     T drawCube     (T now, const Matrix<T> & model, const Material & material);
-    T drawCylinder (T now,                          const Material & material, const MatrixFixed<T,3,1> & p1, T r1, const MatrixFixed<T,3,1> & p2, T r2 = -1, int steps = 6, int stepsCap = -1);
+    T drawCylinder (T now,                          const Material & material, const MatrixFixed<T,3,1> & p1, T r1, const MatrixFixed<T,3,1> & p2, T r2 = -1, int cap1 = 0, int cap2 = 0, int steps = 6, int stepsCap = -1);
     T drawPlane    (T now, const Matrix<T> & model, const Material & material);
     T drawSphere   (T now, const Matrix<T> & model, const Material & material, int steps = 1);
-    GLuint getBuffer (String name, int size);
+#     endif
 #   endif
 };
-template<class T> extern SHARED ImageOutput<T> * imageOutputHelper (const String & fileName, ImageOutput<T> * oldHandle = 0);
+template<class T> SHARED ImageOutput<T> * imageOutputHelper (const String & fileName, ImageOutput<T> * oldHandle = 0);
 
 template<class T>
 class SHARED Mfile : public Holder
@@ -309,9 +341,9 @@ public:
     MatrixAbstract<T> * getMatrix (const std::vector<String> & path);
 #   endif
 };
-template<class T> extern SHARED Mfile<T> * MfileHelper (const String & fileName, Mfile<T> * oldHandle = 0);
+template<class T> SHARED Mfile<T> * MfileHelper (const String & fileName, Mfile<T> * oldHandle = 0);
 
-extern SHARED std::vector<String> keyPath (const std::vector<String> & path);  ///< Converts any path elements with delimiters (/) into separate elements.
+SHARED std::vector<String> keyPath (const std::vector<String> & path);  ///< Converts any path elements with delimiters (/) into separate elements.
 template<typename... Args> std::vector<String> keyPath (Args... keys) {return keyPath ({keys...});}
 
 template<class T>
@@ -349,9 +381,9 @@ public:
     Matrix<T> get    (T row);
 };
 #ifdef n2a_FP
-template<class T> extern SHARED InputHolder<T> * inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle = 0);
+template<class T> SHARED InputHolder<T> * inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle = 0);
 #else
-template<class T> extern SHARED InputHolder<T> * inputHelper (const String & fileName,               InputHolder<T> * oldHandle = 0);
+template<class T> SHARED InputHolder<T> * inputHelper (const String & fileName,               InputHolder<T> * oldHandle = 0);
 #endif
 
 template<class T>
@@ -385,7 +417,7 @@ public:
     void writeTrace ();
     void writeModes ();
 };
-template<class T> extern SHARED OutputHolder<T> * outputHelper (const String & fileName, OutputHolder<T> * oldHandle = 0);
+template<class T> SHARED OutputHolder<T> * outputHelper (const String & fileName, OutputHolder<T> * oldHandle = 0);
 
 
 #endif

@@ -79,7 +79,7 @@ public class CompilerGCC extends Compiler
 
         public String suffixLibraryWrapper ()
         {
-            if (host instanceof Windows) return ".dll.a";
+            if (host instanceof Windows) return ".a";
             return "";
         }
 
@@ -234,13 +234,19 @@ public class CompilerGCC extends Compiler
             addDebugLink (command);
             if (host instanceof Windows)  // GCC is capable of generating a wrapper library, but does not require one when linking with other code.
             {
+                String stem = output.getFileName ().toString ();
+                if (stem.endsWith (".dll")) stem = stem.substring (0, stem.length () - 4);
+                Path wrapper = Paths.get (stem + ".a");
+                Path parent = output.getParent ();
+                if (parent != null) wrapper = parent.resolve (wrapper);
+
                 // export-all-symbols -- This is the default unless there is an explicit export in the
                 // code. When using JNI on Windows, there are explicit exports, so this is necessary.
                 // out-implib -- Output a static wrapper library. This isn't needed by GCC, but makes
                 // the output useful for MSVC.
                 // TODO: The linker can't handle spaces in the output path, even when quoted.
                 // This may be due to how GCC passes the parameters on to LD.
-                command.add ("-Wl,--export-all-symbols,--out-implib," + host.quote (output) + ".a");
+                command.add ("-Wl,--export-all-symbols,--out-implib," + host.quote (wrapper));
             }
             for (Path object : objects)
             {

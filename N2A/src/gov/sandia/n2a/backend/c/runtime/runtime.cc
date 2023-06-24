@@ -28,6 +28,17 @@ template SHARED n2a_T pulse (n2a_T t, n2a_T width, n2a_T period, n2a_T rise, n2a
 
 template SHARED n2a_T unitmap (const MatrixAbstract<n2a_T> & A, n2a_T row, n2a_T column);
 
+template SHARED Matrix<n2a_T> glFrustum (n2a_T left, n2a_T right, n2a_T bottom, n2a_T top, n2a_T near, n2a_T far);
+template SHARED Matrix<n2a_T> glLookAt (const MatrixFixed<n2a_T,3,1> & eye, const MatrixFixed<n2a_T,3,1> & center, const MatrixFixed<n2a_T,3,1> & up);
+template SHARED Matrix<n2a_T> glOrtho (n2a_T left, n2a_T right, n2a_T bottom, n2a_T top, n2a_T near, n2a_T far);
+template SHARED Matrix<n2a_T> glPerspective (n2a_T fovy, n2a_T aspect, n2a_T near, n2a_T far);
+template SHARED Matrix<n2a_T> glRotate (n2a_T angle, const MatrixFixed<n2a_T,3,1> & axis);
+template SHARED Matrix<n2a_T> glRotate (n2a_T angle, n2a_T x, n2a_T y, n2a_T z);
+template SHARED Matrix<n2a_T> glScale (const MatrixFixed<n2a_T,3,1> & scales);
+template SHARED Matrix<n2a_T> glScale (n2a_T sx, n2a_T sy, n2a_T sz);
+template SHARED Matrix<n2a_T> glTranslate (const MatrixFixed<n2a_T,3,1> & position);
+template SHARED Matrix<n2a_T> glTranslate (n2a_T x, n2a_T y, n2a_T z);
+
 template SHARED void removeMonitor (std::vector<Part<n2a_T> *> & partList, Part<n2a_T> * part);
 
 #ifndef N2A_SPINNAKER
@@ -62,7 +73,6 @@ void n2a_srand (unsigned int seed)
 
 // classes -------------------------------------------------------------------
 
-template class Parameters<n2a_T>;
 template class Simulatable<n2a_T>;
 template class Part<n2a_T>;
 template class PartTime<n2a_T>;

@@ -57,13 +57,14 @@ public:
 
 template<class T> class Matrix;
 
-template<class T> SHARED void      clear      (      MatrixAbstract<T> & A, const T scalar = (T) 0);      ///< Set all elements to given value.
-template<class T> SHARED void      identity   (      MatrixAbstract<T> & A);                              ///< Set diagonal to 1 and all other elements to 0. Does not have to be a square matrix.
-template<class T> SHARED void      copy       (      MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Copy overlap region from B into A.
+template<class T> SHARED void      clear      (const MatrixAbstract<T> & A, const T scalar = (T) 0);      ///< Set all elements to given value. const on A is a lie to allow transient matrix regions.
+template<class T> SHARED void      identity   (const MatrixAbstract<T> & A);                              ///< Set diagonal to 1 and all other elements to 0. Does not have to be a square matrix. const on A is a lie to allow transient matrix regions.
+template<class T> SHARED void      copy       (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Copy overlap region from B into A. const on A is a lie to allow transient matrix regions.
 template<class T> SHARED T         sumSquares (const MatrixAbstract<T> & A);                              ///< Equivalent to norm(A,2)^2, but without taking the square root.
 template<class T> SHARED Matrix<T> cross      (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
 template<class T> SHARED Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T &));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
 template<class T> SHARED Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T));     ///< Apply function() to each element, and return the results in a new Matrix of equal size.
+template<class T> SHARED bool      equal      (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Checks that matrices are exactly the same shape and have exactly the same element values.
 
 // Elementwise logical operators
 template<class T> SHARED Matrix<T> operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
@@ -127,8 +128,8 @@ template<class T> SHARED std::ostream & operator << (std::ostream & stream, cons
 #endif
 
 #ifndef n2a_FP
-template<class T> SHARED T                   norm      (const MatrixAbstract<T> & A, T n = (T) 2); ///< (sum_elements (element^n))^(1/n). Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm. n==0 is technically undefined, but we treat is as the count of non-zero elements.
-template<class T> SHARED MatrixAbstract<T> & normalize (      MatrixAbstract<T> & A);              ///< A /= norm (A, 2). Can be used in a chain of functions, or as in-place modification.
+template<class T> SHARED T         norm      (const MatrixAbstract<T> & A, T n = (T) 2); ///< (sum_elements (element^n))^(1/n). Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm. n==0 is technically undefined, but we treat is as the count of non-zero elements.
+template<class T> SHARED Matrix<T> normalize (const MatrixAbstract<T> & A);              ///< shortcut for A / norm (A, 2)
 #else
 SHARED Matrix<int> shift (const MatrixAbstract<int> & A, int shift);  // Defined in fixedpoint.cc
 #endif

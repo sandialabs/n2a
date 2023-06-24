@@ -24,6 +24,8 @@ import gov.sandia.n2a.language.function.Atan;
 import gov.sandia.n2a.language.function.Columns;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Draw;
+import gov.sandia.n2a.language.function.DrawCylinder;
+import gov.sandia.n2a.language.function.DrawSphere;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
@@ -236,9 +238,60 @@ public class RendererC extends Renderer
         }
         if (op instanceof Draw)
         {
-            if (op instanceof Draw.Shape)
+            Draw d = (Draw) op;
+            if (op instanceof Draw.Shape3D)
             {
-                Draw d = (Draw) op;
+                boolean needModel = ((Draw.Shape3D) d).needModelMatrix ();
+                int exponentP = Operator.MSB;
+                if (useExponent)
+                {
+                    // position and model matrix share same exponent
+                    Operator model = d.getKeyword ("model");
+                    if (model != null) exponentP = model.exponentNext;
+                    else if (d.operands.length > 1) exponentP = d.operands[1].exponentNext;
+                    // else model has been initialized to identity, presumably integer 1. Operator.MSB set above is suitable default.
+                }
+
+                result.append (d.name + "->" + op + " (" + job.SIMULATOR + "currentEvent->t");
+                if (needModel) result.append (", model");
+                if (useExponent) result.append (", " + exponentP);
+                result.append (", material");
+
+                if (d instanceof DrawCylinder)
+                {
+                    result.append (", ");
+                    d.operands[1].render (this);
+                    result.append (", ");
+                    d.operands[2].render (this);
+                    if (useExponent) result.append (", " + d.operands[2].exponentNext);
+                    result.append (", ");
+                    d.operands[3].render (this);
+                    result.append (", ");
+                    if (d.operands.length > 4) d.operands[4].render (this);
+                    else                       result.append ("-1");
+
+                    result.append (", ");
+                    Operator steps = d.getKeyword ("steps");
+                    if (steps == null) result.append ("6");
+                    else               steps.render (this);
+
+                    result.append (", ");
+                    Operator stepsCap = d.getKeyword ("stepsCap");
+                    if (stepsCap == null) result.append ("-1");
+                    else                  stepsCap.render (this);
+                }
+                else if (d instanceof DrawSphere)
+                {
+                    result.append (", ");
+                    Operator steps = d.getKeyword ("steps");
+                    if (steps == null) result.append ("1");
+                    else               steps.render (this);
+                }
+
+                result.append (")");
+            }
+            else if (op instanceof Draw.Shape)
+            {
                 int last = d.operands.length - 1;
                 result.append (d.name + "->" + op + " (" + job.SIMULATOR + "currentEvent->t, " + d.getKeywordFlag ("raw"));
                 for (int i = 1; i < last; i++)
