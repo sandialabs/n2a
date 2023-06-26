@@ -784,28 +784,23 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 String k = e.getKey ();
                 MNode  v = e.getValue ();
+                List<MNode> nodes = existingContainers.get (k);
+                if(nodes == null) 
+                {
+                    existingContainers.put (k, new ArrayList<MNode> ());
+                    nodes = existingContainers.get(k);
+                }
                 if(isPrimary)
                 {
-                    List<MNode> nodes = existingContainers.get (k);
-                    if(nodes == null) 
-                    {
-                        existingContainers.put (k, new ArrayList<MNode> ());
-                        nodes = existingContainers.get(k);
-                    }
-                    nodes.add (0, v);
+                    nodes.add (0, v);                    
                 }
                 else 
                 {
-                    List<MNode> nodes = existingContainers.get (k);
-                    if(nodes == null) 
-                    {
-                        existingContainers.put (k, new ArrayList<MNode> ());
-                        nodes = existingContainers.get(k);
-                    }
                     nodes.add (v);
                 }
             }
         }
+        // Iterate over each container and initialize the corresponding MCombo.
         existingContainers.forEach ((k, v) -> ((MCombo) AppData.documents.childOrCreate (k)).init(v)); // Triggers change() call to PanelModel and PanelReference)
         needRebuild = false;
     }
