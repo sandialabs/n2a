@@ -6,7 +6,7 @@ Distributed under the UIUC/NCSA Open Source License.  See the file LICENSE
 for details.
 
 
-Copyright 2005-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -606,7 +606,15 @@ Java_gov_sandia_n2a_backend_c_VideoIn_readNext (JNIEnv * env, jclass obj, jlong 
 {
     VideoIn & video = * (VideoIn *) handle;
     Image image;
-    video >> image;
+    try
+    {
+        video >> image;
+    }
+    catch (const char * message)
+    {
+        cerr << "Exception: " << message << endl;
+        return 0;  // TODO: should video be marked bad?
+    }
     if (! video.good ()) return 0;
 
     PixelFormat2BufferedImage * m = pixelFormat2BufferedImageMap;
@@ -717,7 +725,7 @@ VideoOutFileFFMPEG::open (const String & fileName, const String & formatName, co
 
     // Select container format
     const char * formatAddress = formatName.size () ? formatName.c_str () : 0;
-    const AVOutputFormat * format = av_guess_format
+    AVOutputFormat * format = av_guess_format
     (
         formatAddress,
         fileName.c_str (),
@@ -846,6 +854,7 @@ static PixelFormatMapping pixelFormatMap[] =
     // For efficiency, the first few entries in this list are the most likely formats.
     // After that, the rest follow the order in image.h
     {&YUV420,         AV_PIX_FMT_YUV420P},
+    {&YUV420,         AV_PIX_FMT_YUVJ420P},  // Deprecated, but needed for reverse lookup on older versions of FFMPEG library.
     {&YUV411,         AV_PIX_FMT_YUV411P},
     {&YUYV,           AV_PIX_FMT_YUYV422},
     {&UYVY,           AV_PIX_FMT_UYVY422},
@@ -864,7 +873,7 @@ static PixelFormatMapping pixelFormatMap[] =
     {&RGBxChar,       AV_PIX_FMT_RGB0},
     {&BGRAChar,       AV_PIX_FMT_BGRA},
     {&UYYVYY,         AV_PIX_FMT_UYYVYY411},
-    {0}
+    {0,               (AVPixelFormat) -1}
 };
 
 void
@@ -880,7 +889,6 @@ VideoOutFileFFMPEG::writeNext (const Image & image)
         if (codec->pix_fmts)  // options are available, so enumerate and find best match for image.format
         {
             best = codec->pix_fmts[0];
-            if (best == AV_PIX_FMT_YUVJ420P) best = AV_PIX_FMT_YUV420P;  // jpeg encoder gives incorrect format
 
             // Select AV_PIX_FMT associate with image.format
             PixelFormatMapping * m = pixelFormatMap;
@@ -890,10 +898,7 @@ VideoOutFileFFMPEG::writeNext (const Image & image)
                 m++;
             }
             enum AVPixelFormat target = m->av;
-            if (target < 0  &&  image.format->monochrome)
-            {
-                target = AV_PIX_FMT_GRAY8;
-            }
+            if (target == -1  &&  image.format->monochrome) target = AV_PIX_FMT_GRAY8;
 
             // See if AV_PIX_FMT is in supported list
             if (target >= 0)
@@ -1092,7 +1097,14 @@ static void writeNext (jlong handle, jdouble timestamp, jint width, jint height,
 
     Image image (cbuffer, width, height, *m->pf);
     image.timestamp = timestamp;
-    video << image;
+    try
+    {
+        video << image;
+    }
+    catch (const char * message)
+    {
+        cerr << "Exception: " << message << endl;
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL

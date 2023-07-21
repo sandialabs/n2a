@@ -483,15 +483,6 @@ public class Draw extends Function
             if (have3D)  // Composite 2D and 3D outputs.
             {
                 background = new AWTGLReadBufferUtil (drawable.getGLProfile (), true).readPixelsToBufferedImage (drawable.getGL (), 0, 0, w, h, true);
-                try
-                {
-                    ImageIO.write(background, "png", new File("/Users/frothga/gltest.png"));
-                }
-                catch (IOException e)
-                {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
                 g2 = background.createGraphics ();
             }
             else  // Fill background with clear color, since this won't be provided by the 3D scene.

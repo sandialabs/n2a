@@ -128,7 +128,8 @@ public class VideoIn extends NativeResource implements Runnable
         }
         catch (Throwable error)
         {
-            System.err.println ("Video JNI: " + error.getMessage ());
+            System.err.println ("Failed to load video JNI");
+            System.err.println ("  " + error.getClass ().getSimpleName () + ": " + error.getMessage ());
         }
     }
 
