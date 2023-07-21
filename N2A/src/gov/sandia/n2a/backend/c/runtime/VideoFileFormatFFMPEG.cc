@@ -725,7 +725,7 @@ VideoOutFileFFMPEG::open (const String & fileName, const String & formatName, co
 
     // Select container format
     const char * formatAddress = formatName.size () ? formatName.c_str () : 0;
-    AVOutputFormat * format = av_guess_format
+    AVOutputFormat * format = (AVOutputFormat *) av_guess_format
     (
         formatAddress,
         fileName.c_str (),
