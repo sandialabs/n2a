@@ -14,6 +14,7 @@ import java.beans.PropertyChangeListener;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNodeListener;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
@@ -72,7 +73,7 @@ public class PanelReference extends JPanel implements MNodeListener
             }
         });
 
-        AppData.references.addListener (this);
+        AppData.docs.childOrCreate ("references").addListener (this);
     }
 
     public void changed ()
@@ -82,7 +83,7 @@ public class PanelReference extends JPanel implements MNodeListener
         panelEntry.checkVisible ();
         MNode record = panelEntry.model.record;
         if (record == null) return;
-        if (AppData.references.isVisible (record))
+        if (((MCombo) AppData.docs.child ("references")).isVisible (record))
         {
             panelEntry.model.record = null;
             panelEntry.model.setRecord (record);
@@ -121,7 +122,7 @@ public class PanelReference extends JPanel implements MNodeListener
             if (contentOnly)
             {
                 panelEntry.model.record = null;  // Force rebuild of display
-                panelEntry.model.setRecord (AppData.references.child (newKey));
+                panelEntry.model.setRecord (AppData.docs.child ("references", newKey));
             }
             else
             {
@@ -130,7 +131,7 @@ public class PanelReference extends JPanel implements MNodeListener
         }
         if (contentOnly) return;  // nothing more to do
 
-        MNode oldDoc = AppData.models.child (oldKey);
+        MNode oldDoc = AppData.docs.child ("references", oldKey);
         if (oldDoc == null)  // deleted
         {
             panelEntry.checkVisible ();

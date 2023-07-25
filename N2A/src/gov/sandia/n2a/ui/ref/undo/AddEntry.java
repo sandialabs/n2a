@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -34,7 +34,7 @@ public class AddEntry extends Undoable
         keyAfter = pr.panelSearch.currentKey ();
 
         // Determine unique name in database
-        MNode references = AppData.references;
+        MNode references = AppData.docs.child ("references");
         MNode existing = references.child (id);
         if (existing == null)
         {
@@ -62,7 +62,7 @@ public class AddEntry extends Undoable
 
     public static void destroy (String id, boolean fromSearchPanel)
     {
-        AppData.references.clear (id);  // Triggers PanelReference.childDeleted(name), which removes doc from all 3 sub-panels.
+        AppData.docs.clear ("references", id);  // Triggers PanelReference.childDeleted(name), which removes doc from all 3 sub-panels.
 
         PanelReference pr = PanelReference.instance;
         if (fromSearchPanel)
@@ -90,7 +90,7 @@ public class AddEntry extends Undoable
         PanelReference pr = PanelReference.instance;
         pr.panelSearch.insertNextAt (index);
 
-        MNode doc = AppData.references.childOrCreate (id);  // Triggers PanelReference.childAdded(name), which updates the select and MRU panels, but not the entry panel.
+        MNode doc = AppData.docs.childOrCreate ("references", id);  // Triggers PanelReference.childAdded(name), which updates the select and MRU panels, but not the entry panel.
         doc.merge (saved);
 
         if (wasShowing) pr.panelEntry.model.setRecord (doc);

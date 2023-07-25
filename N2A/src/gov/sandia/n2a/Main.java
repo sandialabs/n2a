@@ -217,7 +217,7 @@ public class Main
         MDoc job = new MDoc (jobDir.resolve ("job"), jobKey);  // Make this appear as if it is from the jobs collection.
 
         String key = record.key ();
-        MNode doc = AppData.models.childOrEmpty (key);
+        MNode doc = AppData.docs.childOrEmpty ("models", key);
         record.mergeUnder (doc);
         MPart collated = new MPart (record);  // TODO: the only reason to collate here is to ensure that host and backend are correctly identified if they are inherited. Need a more efficient method, such as lazy collation in MPart.
         NodeJob.collectJobParameters (collated, key, job);
@@ -290,7 +290,7 @@ public class Main
     public static void studyHeadless (MNode record)
     {
         String key = record.key ();
-        MNode doc = AppData.models.childOrEmpty (key);
+        MNode doc = AppData.docs.childOrEmpty ("models", key);
         record.mergeUnder (doc);
         MPart collated = new MPart (record);
         if (! collated.containsKey ("study")) return;

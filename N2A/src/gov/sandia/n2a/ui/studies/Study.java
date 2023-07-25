@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -303,7 +303,7 @@ public class Study
                                 ps.delete ();                                 // Delete current selection.
 
                                 PanelEquations pe = PanelModel.instance.panelEquations;
-                                MNode doc = AppData.models.child (source.get ("$inherit"));
+                                MNode doc = AppData.docs.child ("models", source.get ("$inherit"));
                                 pe.load (doc);  // Usually this record will already be loaded, since the study was launched from there.
                                 pe.launchJob ();
                             }
@@ -321,7 +321,7 @@ public class Study
             if (iterator.usesRandom ()) initRandom ();
 
             String inherit = source.get ("$inherit");
-            MNode model = AppData.models.childOrEmpty (inherit);
+            MNode model = AppData.docs.childOrEmpty ("models", inherit);
             MNode modelCopy = new MVolatile ("", inherit);
             modelCopy.merge (model);  // "model" is never touched. We only use "modelCopy".
 

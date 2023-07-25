@@ -64,7 +64,7 @@ public class BackendNeuroML extends Backend
 
                 // Export the model to NeuroML
                 String inherit = job.get ("$inherit").replace ("\"", "");
-                MNode doc = AppData.models.child (inherit);  // doc is the NON-collated model. We ignore the collated model stored in the job dir, because ExportJob will do its own collation.
+                MNode doc = AppData.docs.child ("models", inherit);  // doc is the NON-collated model. We ignore the collated model stored in the job dir, because ExportJob will do its own collation.
 
                 Host env = Host.get (job);
                 Path jobDir = Host.getJobDir (env.getResourceDir (), job);

@@ -1003,7 +1003,7 @@ public class NodePart extends NodeContainer
 
             String stem = name;
             int suffix = 0;
-            MNode models = AppData.models;
+            MNode models = AppData.docs.child ("models");
             MNode existingDocument = models.child (name);
             while (existingDocument != null)
             {

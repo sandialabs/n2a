@@ -196,7 +196,7 @@ public class PartMap
         **/
         public void inheritContainers (PartMap partMap, String partName)
         {
-            String inherit = AppData.models.get (partName, "$inherit");
+            String inherit = AppData.docs.get ("models", partName, "$inherit");
             if (inherit.isEmpty ()) return;
             String pieces[] = inherit.split (",");
             for (String p : pieces)
@@ -305,7 +305,7 @@ public class PartMap
     **/
     public void build ()
     {
-        for (MNode c : AppData.models)
+        for (MNode c : AppData.docs.childOrEmpty ("models"))
         {
             if (c.child ("$meta", "backend", "lems", "part") == null) continue;  // Must directly declare a NeuroML part to be included.
             NameMap map = new NameMap (new MPart (c));  // Create map using fully-collated part, not just the immediate one.
@@ -334,7 +334,7 @@ public class PartMap
         if (map != null) return map;
 
         // Attempt to follow inheritance hierarchy.
-        MNode part = AppData.models.child (internalPartName);
+        MNode part = AppData.docs.child ("models", internalPartName);
         if (part != null) return exportMap (part);
 
         // Give up and return neutral map.
@@ -354,7 +354,7 @@ public class PartMap
         String inherit = part.get ("$inherit").replace ("\"", "");  // Assume single inheritance
         if (! inherit.isEmpty ())
         {
-            MNode parent = AppData.models.child (inherit);
+            MNode parent = AppData.docs.child ("models", inherit);
             if (parent != null) return exportMap (parent);
         }
         return new NameMap (key);

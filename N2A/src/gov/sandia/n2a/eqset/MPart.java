@@ -49,7 +49,7 @@ public class MPart extends MNode
     {
         protected MCombo initialValue ()
         {
-            return AppData.models;
+            return (MCombo) AppData.docs.childOrCreate ("models");
         }
     };
 
@@ -75,11 +75,11 @@ public class MPart extends MNode
     {
         List<MNode> containers = new ArrayList<MNode> (2);
         containers.add (snapshot);
-        containers.add (AppData.models);
+        containers.add (AppData.docs.childOrCreate ("models"));
         MCombo temp = new MCombo ("temp", containers);
         models.set (temp);
         MPart result = new MPart (temp.child (key));
-        models.set (AppData.models);
+        models.set ((MCombo) AppData.docs.child ("models"));
         temp.done ();
         return result;
     }

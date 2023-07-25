@@ -53,8 +53,9 @@ public class ChangeDoc extends Undoable
     public void rename (String A, String B)
     {
         // Update database
-        AppData.models.move (A, B);
-        MNode doc = AppData.models.child (B);
+        MNode models = AppData.docs.child ("models");
+        models.move (A, B);
+        MNode doc = models.child (B);
         String id = doc.get ("$meta", "id");
         if (! id.isEmpty ()) AppData.set (id, doc);
         if (AppData.state.get ("PanelModel", "lastUsed").equals (A)) AppData.state.set (B, "PanelModel", "lastUsed");

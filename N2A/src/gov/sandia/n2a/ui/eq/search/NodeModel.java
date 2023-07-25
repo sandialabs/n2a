@@ -1,5 +1,5 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,6 +14,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultTreeModel;
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
@@ -57,7 +58,7 @@ public class NodeModel extends NodeBase
         Color result = null;
         String colorName = "";
         MNode repo = null;
-        MNode mdir = AppData.models.containerFor (key);
+        MNode mdir = ((MCombo) AppData.docs.child ("models")).containerFor (key);
         if (mdir != null) repo = AppData.repos.child (mdir.key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.
         if (repo != null) colorName = repo.get ("color");
         if (! colorName.isEmpty ())
@@ -102,7 +103,7 @@ public class NodeModel extends NodeBase
 
     public TransferableNode createTransferable ()
     {
-        MNode doc = AppData.models.child (key);
+        MNode doc = AppData.docs.child ("models", key);
         Schema schema = Schema.latest ();
         schema.type = "Part";
         StringWriter writer = new StringWriter ();
@@ -123,7 +124,7 @@ public class NodeModel extends NodeBase
 
     public boolean allowEdit ()
     {
-        return AppData.models.isWriteable (key);
+        return ((MCombo) AppData.docs.child ("models")).isWriteable (key);
     }
 
     public void applyEdit (JTree tree)
@@ -148,7 +149,7 @@ public class NodeModel extends NodeBase
         // Make name unique
         String stem = input;
         int suffix = 0;
-        MNode models = AppData.models;
+        MNode models = AppData.docs.child ("models");
         MNode existingDocument = models.child (input);
         while (existingDocument != null)
         {
@@ -162,6 +163,6 @@ public class NodeModel extends NodeBase
 
     public void delete (JTree tree, boolean cancelled)
     {
-        MainFrame.instance.undoManager.apply (new DeleteDoc ((MDoc) AppData.models.child (key)));
+        MainFrame.instance.undoManager.apply (new DeleteDoc ((MDoc) AppData.docs.child ("models", key)));
     }
 }

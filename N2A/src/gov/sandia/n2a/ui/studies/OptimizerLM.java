@@ -84,7 +84,7 @@ public class OptimizerLM extends StudyIterator
         // Determine range limit and initial value for each variable
         MNode root = study.source.child ("variables");
         String inherit = study.source.get ("$inherit");
-        MNode model = AppData.models.childOrEmpty (inherit);
+        MNode model = AppData.docs.childOrEmpty ("models", inherit);
         for (int c = 0; c < n; c++)
         {
             MNode v = variables.get (c);

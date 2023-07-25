@@ -593,7 +593,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (i.isEmpty ()) continue;
             if (ancestors.add (i))
             {
-                MNode parent = AppData.models.child (i);
+                MNode parent = AppData.docs.child ("models", i);
                 if (parent != null) collectAncestors (parent, ancestors);
             }
         }
@@ -2434,7 +2434,7 @@ public class EquationSet implements Comparable<EquationSet>
     public void addGlobalConstants () throws Exception
     {
         String key = AppData.state.getOrDefault ("Constants", "General", "constants");
-        MNode constants = AppData.models.child (key);
+        MNode constants = AppData.docs.child ("models", key);
         if (constants == null) return;
         for (MNode c : constants)
         {

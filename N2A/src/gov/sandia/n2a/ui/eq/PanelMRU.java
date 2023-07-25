@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.ui.MainFrame;
@@ -59,7 +60,7 @@ public class PanelMRU extends JPanel
                 int index = list.getSelectedIndex ();
                 if (index >= 0)
                 {
-                    MNode doc = AppData.models.child (model.get (index));
+                    MNode doc = AppData.docs.child ("models", model.get (index));
                     PanelSearch.recordSelected (doc);
                 }
                 list.clearSelection ();
@@ -90,7 +91,7 @@ public class PanelMRU extends JPanel
                     TransferableNode xferNode = (TransferableNode) xferable.getTransferData (TransferableNode.nodeFlavor);
                     if (xferNode.newPartName == null) return th.importData (xfer);
 
-                    MNode doc = AppData.models.child (xferNode.newPartName);
+                    MNode doc = AppData.docs.child ("models", xferNode.newPartName);
                     if (doc == null) return th.importData (xfer);
 
                     JList.DropLocation dl = (JList.DropLocation) xfer.getDropLocation ();
@@ -120,7 +121,7 @@ public class PanelMRU extends JPanel
             protected Transferable createTransferable (JComponent comp)
             {
                 String key = list.getSelectedValue ();
-                MNode doc = AppData.models.child (key);
+                MNode doc = AppData.docs.child ("models", key);
 
                 Schema schema = Schema.latest ();
                 schema.type = "Part";
@@ -161,7 +162,7 @@ public class PanelMRU extends JPanel
         for (MNode n : AppData.state.childOrCreate ("PanelModel", "MRU"))
         {
             String name = n.get ();
-            MNode part = AppData.models.child (name);
+            MNode part = AppData.docs.child ("models", name);
             if (part != null) model.addElement (name);
         }
 
@@ -169,7 +170,7 @@ public class PanelMRU extends JPanel
         if (model.size () == 0)
         {
             String name = "Example Hodgkin-Huxley Cable";  // Hard-coded name must appear in "local" db.
-            MNode part = AppData.models.child (name);
+            MNode part = AppData.docs.child ("models", name);
             if (part != null)
             {
                 model.addElement (name);
@@ -297,7 +298,7 @@ public class PanelMRU extends JPanel
             setText (name);
 
             Color color;
-            if (AppData.models.isWriteable (name))
+            if (((MCombo) AppData.docs.child ("models")).isWriteable (name))
             {
                 color = selected ? colorSelectedOverride : colorOverride;
             }
@@ -305,7 +306,7 @@ public class PanelMRU extends JPanel
             {
                 color = null;
                 String colorName = "";
-                MNode mdir = AppData.models.containerFor (name);
+                MNode mdir = ((MCombo) AppData.docs.child ("models")).containerFor (name);
                 MNode repo = AppData.repos.child (mdir.key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.
                 if (repo != null) colorName = repo.get ("color");
                 if (! colorName.isEmpty ())

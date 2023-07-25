@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -41,9 +41,10 @@ public class ChangeEntry extends Undoable
 
     public static void rename (String A, String B)
     {
-        AppData.references.move (A, B);
+        MNode references = AppData.docs.child ("references");
+        references.move (A, B);
         PanelReference pr = PanelReference.instance;
-        MNode doc = AppData.references.child (B);
+        MNode doc = references.child (B);
         pr.panelEntry.model.setRecord (doc);  // lazy; only loads if not already loaded
         pr.panelEntry.model.fireTableRowsUpdated (0, 0);  // If we didn't rebuild in previous line, then we need to update display with changed data.
         pr.panelEntry.table.requestFocusInWindow ();  // likewise, focus only moves if it is not already on equation tree

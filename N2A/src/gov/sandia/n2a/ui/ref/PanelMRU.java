@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -45,7 +45,7 @@ public class PanelMRU extends JPanel
             public void mouseClicked (MouseEvent e)
             {
                 int index = list.getSelectedIndex ();
-                if (index >= 0) PanelSearch.recordSelected (AppData.references.child (model.get (index)));
+                if (index >= 0) PanelSearch.recordSelected (AppData.docs.child ("references", model.get (index)));
                 list.clearSelection ();
             }
         });
@@ -99,7 +99,7 @@ public class PanelMRU extends JPanel
             {
                 String key = list.getSelectedValue ();
                 if (key == null) return null;
-                MNode ref = AppData.references.child (key);
+                MNode ref = AppData.docs.child ("references", key);
                 MNode references = new MVolatile ();
                 references.set (ref, ref.key ());
 
@@ -137,7 +137,7 @@ public class PanelMRU extends JPanel
         for (MNode n : AppData.state.childOrCreate ("PanelReference", "MRU"))
         {
             String name = n.get ();
-            if (AppData.references.child (name) != null) model.add (index++, name);
+            if (AppData.docs.child ("references", name) != null) model.add (index++, name);
         }
     }
 

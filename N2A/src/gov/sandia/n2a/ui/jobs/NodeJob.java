@@ -696,7 +696,7 @@ public class NodeJob extends NodeBase
             return new MDoc (modelPath, key);
         }
         // No snapshot. Retrieve directly from database.
-        return new MPart (AppData.models.child (key));
+        return new MPart (AppData.docs.childOrEmpty ("models", key));
     }
 
     /**
@@ -740,7 +740,7 @@ public class NodeJob extends NodeBase
         {
             inherit = inherit.trim ().replace ("\"", "");
             if (snapshot.child (inherit) != null) continue;
-            MNode p = AppData.models.child (inherit);
+            MNode p = AppData.docs.child ("models", inherit);
             if (p == null) continue;
             snapshot.link (p);
             addInherits (p, snapshot);

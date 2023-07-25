@@ -88,6 +88,7 @@ import javax.swing.tree.TreePath;
 
 import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
@@ -599,7 +600,7 @@ public class PanelEquations extends JPanel
             {
                 MNode lastUsedNode = null;
                 String lastUsedKey = AppData.state.get ("PanelModel", "lastUsed");
-                if (! lastUsedKey.isEmpty ()) lastUsedNode = AppData.models.child (lastUsedKey);
+                if (! lastUsedKey.isEmpty ()) lastUsedNode = AppData.docs.child ("models", lastUsedKey);
                 if (lastUsedNode != null) load (lastUsedNode);
             }
         });
@@ -669,7 +670,7 @@ public class PanelEquations extends JPanel
 
     public void updateLock ()
     {
-        locked = ! AppData.models.isWriteable (record);
+        locked = ! ((MCombo) AppData.docs.child ("models")).isWriteable (record);
         // The following are safe to call, even when record is not fully loaded, and despite which panel is active.
         panelEquationTree.updateLock ();
         if (view == NODE) panelEquationGraph.updateLock ();
@@ -678,7 +679,7 @@ public class PanelEquations extends JPanel
     public void checkVisible ()
     {
         if (record == null) return;
-        if (AppData.models.isVisible (record))
+        if (((MCombo) AppData.docs.child ("models")).isVisible (record))
         {
             resetBreadcrumbs ();
             updateLock ();
@@ -701,7 +702,7 @@ public class PanelEquations extends JPanel
             {
                 saveFocus ();
                 record = null;  // Force rebuild of display
-                load (AppData.models.child (newKey));
+                load (AppData.docs.child ("models", newKey));
             }
             else
             {
@@ -710,7 +711,7 @@ public class PanelEquations extends JPanel
         }
         if (contentOnly) return;
 
-        MNode oldDoc = AppData.models.child (oldKey);
+        MNode oldDoc = AppData.docs.child ("models", oldKey);
         if (oldDoc == null)  // deleted
         {
             checkVisible ();
@@ -1983,7 +1984,7 @@ public class PanelEquations extends JPanel
                     // This is similar to PanelEquationTree.outsource ().
                     // The part may need to be fully imported if it does not already exist in the db.
                     String key = child.key ();
-                    if (AppData.models.child (key) == null)
+                    if (AppData.docs.child ("models", key) == null)
                     {
                         AddDoc a = new AddDoc (key, child);
                         a.setSilent ();
@@ -2716,7 +2717,7 @@ public class PanelEquations extends JPanel
             // Retrieve model
             int depth = path.size ();
             String key0 = path.get (0);
-            MNode doc = AppData.models.child (key0);
+            MNode doc = AppData.docs.child ("models", key0);
             if (doc != record)
             {
                 load (doc);

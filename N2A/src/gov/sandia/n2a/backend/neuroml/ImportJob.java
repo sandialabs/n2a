@@ -291,7 +291,7 @@ public class ImportJob extends XMLutility
             // Thus, if there is a match in the repo that is also tagged as a NeuroML/LEMS part,
             // we are probably a proxy.
             // TODO: map name to neuroml parts
-            if (AppData.models.child (inherit) != null)
+            if (AppData.docs.child ("models", inherit) != null)
             {
                 // Setting our inherit line supports analysis in genericPart().
                 component.set (inherit, "$inherit");
@@ -488,7 +488,7 @@ public class ImportJob extends XMLutility
                 if (proxy)
                 {
                     source.set (inherit, "$inherit");  // proxies only have single inheritance
-                    MNode parent = AppData.models.child (inherit);
+                    MNode parent = AppData.docs.child ("models", inherit);
                     if (parent == null)
                     {
                         source.set ("1", "$proxy");
@@ -1102,7 +1102,7 @@ public class ImportJob extends XMLutility
 
             // Ensure there is no name collision
             NameMap nameMap = partMap.importMap ("segment");
-            MNode parent = AppData.models.child (nameMap.internal);
+            MNode parent = AppData.docs.child ("models", nameMap.internal);
             String v = variable;
             int suffix = 2;
             while (parent.child (v) != null) v = variable + suffix++;
@@ -3132,7 +3132,7 @@ public class ImportJob extends XMLutility
             if (inherit.isEmpty ()) continue;
             MNode parent = models.child (modelName, inherit);
             if (parent == child) parent = null;  // Prevent infinite loop on proxies.
-            if (parent == null) parent = AppData.models.child (inherit);
+            if (parent == null) parent = AppData.docs.child ("models", inherit);
             if (parent == null) continue;
             result.add (parent);
             result.addAll (collectParents (parent));
@@ -3152,7 +3152,7 @@ public class ImportJob extends XMLutility
         if (result == part) result = null;  // Prevent infinite loop on proxies.
         if (result != null) return findBasePart (result);
 
-        return AppData.models.child (inherit);  // could be null
+        return AppData.docs.child ("models", inherit);  // could be null
     }
 
     /**
@@ -3162,7 +3162,7 @@ public class ImportJob extends XMLutility
     public NameMap exportMap (String name)
     {
         MNode base = models.child (modelName, name);
-        if (base == null) base = AppData.models.child (name);
+        if (base == null) base = AppData.docs.child ("models", name);
         else              base = findBasePart (base);
         if (base == null) return new NameMap (name);
         return partMap.exportMap (base);
@@ -3787,7 +3787,7 @@ public class ImportJob extends XMLutility
             String inherit = part.get ("$meta", "backend", "lems", "children", nodes).split (",")[0];  // No need to also check attachments, because kinetic scheme only works with children parts
             if (! inherit.isEmpty ())
             {
-                MNode parent = AppData.models.child (inherit);
+                MNode parent = AppData.docs.child ("models", inherit);
                 if (parent == null)  // Newly imported part, so we can modify it.
                 {
                     parent = models.childOrCreate (modelName, inherit);
@@ -3804,7 +3804,7 @@ public class ImportJob extends XMLutility
             inherit = part.get ("$meta", "backend", "lems", "children", edges).split (",")[0];
             if (! inherit.isEmpty ())
             {
-                MNode parent = AppData.models.child (inherit);
+                MNode parent = AppData.docs.child ("models", inherit);
                 if (parent == null)
                 {
                     parent = models.childOrCreate (modelName, inherit);

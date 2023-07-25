@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.ref;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
@@ -107,9 +108,9 @@ public class PanelSearch extends JPanel
             {
                 String key = list.getSelectedValue ();
                 if (key == null) return;
-                if (! AppData.references.isWriteable (key)) return;
+                if (! ((MCombo) AppData.docs.child ("references")).isWriteable (key)) return;
                 lastSelection = list.getSelectedIndex ();
-                MainFrame.instance.undoManager.apply (new DeleteEntry ((MDoc) AppData.references.child (key)));
+                MainFrame.instance.undoManager.apply (new DeleteEntry ((MDoc) AppData.docs.child ("references", key)));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -140,7 +141,7 @@ public class PanelSearch extends JPanel
                         String key = list.getSelectedValue ();
                         if (key != null)
                         {
-                            JPopupMenu menuRepo = SettingsRepo.instance.createTransferMenu ("references/" + key);
+                            JPopupMenu menuRepo = SettingsRepo.instance.createTransferMenu ("references", key);
                             menuRepo.show (list, me.getX (), me.getY ());
                         }
                     }
@@ -242,7 +243,7 @@ public class PanelSearch extends JPanel
             {
                 String key = list.getSelectedValue ();
                 if (key == null) return null;
-                MNode ref = AppData.references.child (key);
+                MNode ref = AppData.docs.child ("references", key);
                 MNode references = new MVolatile ();
                 references.set (ref, ref.key ());
 
@@ -344,7 +345,7 @@ public class PanelSearch extends JPanel
         int index = list.getSelectedIndex ();
         if (index >= 0)
         {
-            MNode doc = AppData.references.child (model.get (index));
+            MNode doc = AppData.docs.child ("references", model.get (index));
             PanelReference.instance.panelMRU.useDoc (doc);
             recordSelected (doc);
         }
@@ -461,7 +462,7 @@ public class PanelSearch extends JPanel
         public void run ()
         {
             List<String> results = new LinkedList<String> ();
-            for (MNode i : AppData.references)
+            for (MNode i : AppData.docs.childOrEmpty ("references"))
             {
                 if (stop) return;
                 String key = i.key ();
@@ -497,13 +498,14 @@ public class PanelSearch extends JPanel
 
         public Component getListCellRendererComponent (JList<? extends String> list, String key, int index, boolean isSelected, boolean cellHasFocus)
         {
-            MNode doc = AppData.references.child (key);
+            MCombo references = (MCombo) AppData.docs.child ("references");
+            MNode doc = references.child (key);
             String name = doc.get ("title");
             if (name.isEmpty ()) name = key;
             setText (name);
 
             Color color = Color.black;
-            if (! AppData.references.isWriteable (doc))
+            if (! references.isWriteable (doc))
             {
                 String colorName = "";
                 MNode repo = AppData.repos.child (doc.parent ().key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.

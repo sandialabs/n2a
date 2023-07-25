@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
@@ -110,7 +111,7 @@ public class PanelSearch extends JPanel
                 if (! (o instanceof NodeModel)) return null;
                 NodeModel node = (NodeModel) o;
 
-                MNode doc = AppData.models.child (node.key);
+                MNode doc = AppData.docs.child ("models", node.key);
                 if (doc == null) return null;
                 MPart source = new MPart (doc);
 
@@ -184,7 +185,7 @@ public class PanelSearch extends JPanel
             {
                 NodeModel n = getSelectedNodeModel ();
                 if (n == null  ||  ! n.allowEdit ()) return;
-                um.apply (new DeleteDoc ((MDoc) AppData.models.child (n.key)));
+                um.apply (new DeleteDoc ((MDoc) AppData.docs.child ("models", n.key)));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -226,7 +227,7 @@ public class PanelSearch extends JPanel
                         Object o = path.getLastPathComponent ();
                         if (o instanceof NodeModel)
                         {
-                            JPopupMenu menuRepo = SettingsRepo.instance.createTransferMenu ("models/" + ((NodeModel) o).key);
+                            JPopupMenu menuRepo = SettingsRepo.instance.createTransferMenu ("models", ((NodeModel) o).key);
                             menuRepo.show (tree, x, y);
                         }
                     }
@@ -298,8 +299,9 @@ public class PanelSearch extends JPanel
                             if (oldNode == null  ||  oldNode.getKeyPath ().size () < xferNode.selection.size ()) return false;
                             if (! (oldNode instanceof NodeModel)) return false;  // If oldeNode is a category, then the user is trying to move the entire category to a new place. For now, don't support this.
                             String key = ((NodeModel) oldNode).key;
-                            MNode doc = AppData.models.child (key);
-                            if (! AppData.models.isWriteable (doc)) return false;  // Must be able to change model in order to change category.
+                            MCombo models = (MCombo) AppData.docs.child ("models");
+                            MNode doc = models.child (key);
+                            if (! models.isWriteable (doc)) return false;  // Must be able to change model in order to change category.
                             String oldCategory = oldNode.getCategory ();
     
                             // Determine new category.
@@ -505,7 +507,7 @@ public class PanelSearch extends JPanel
         Object o = path.getLastPathComponent ();
         if (o instanceof NodeModel)
         {
-            MNode doc = AppData.models.child (o.toString ());
+            MNode doc = AppData.docs.child ("models", o.toString ());
             PanelModel.instance.panelMRU.useDoc (doc);
             recordSelected (doc);
         }
@@ -653,8 +655,9 @@ public class PanelSearch extends JPanel
     **/
     public void updateDoc (String oldKey, String newKey)
     {
-        MNode oldDoc = AppData.models.child (oldKey);
-        MNode newDoc = AppData.models.child (newKey);
+        MCombo models = (MCombo) AppData.docs.child ("models");
+        MNode oldDoc = models.child (oldKey);
+        MNode newDoc = models.child (newKey);
         Connector oldConnector = null;
         if (oldDoc != null) oldConnector = new Connector (oldDoc);
         Connector newConnector = new Connector (newDoc);
@@ -671,7 +674,7 @@ public class PanelSearch extends JPanel
             int last = lastSelection.size () - 1;
             if (lastSelection.get (last).equals (oldKey)) lastSelection.set (last, newKey);
         }
-        if (oldDoc == null  &&  ! AppData.models.isHiding (newKey))  // Simple name change (no hiding or unhiding)
+        if (oldDoc == null  &&  ! models.isHiding (newKey))  // Simple name change (no hiding or unhiding)
         {
             root.replaceDoc (oldKey, newKey, model);
         }
@@ -752,7 +755,7 @@ public class PanelSearch extends JPanel
     **/
     public String getCategory (String key)
     {
-        MNode doc = AppData.models.child (key);
+        MNode doc = AppData.docs.child ("models", key);
         if (doc == null) return "";
         String result = doc.get ("$meta", "gui", "category");
         if (! result.isEmpty ()) return result;
@@ -816,7 +819,7 @@ public class PanelSearch extends JPanel
         public void run ()
         {
             NodeBase newRoot = new NodeBase ();
-            for (MNode i : AppData.models)
+            for (MNode i : AppData.docs.childOrEmpty ("models"))
             {
                 if (stop) return;
                 String key = i.key ();
@@ -999,7 +1002,7 @@ public class PanelSearch extends JPanel
                 Integer d = ancestors.get (inherit);
                 if (d == null)
                 {
-                    MNode m = AppData.models.child (inherit);
+                    MNode m = AppData.docs.child ("models", inherit);
                     if (m != null) process (m, depth);
                 }
                 else if (d > depth)
@@ -1041,7 +1044,7 @@ public class PanelSearch extends JPanel
         public void build ()
         {
             handles = new HashMap<String,EndpointHandles> ();
-            MNode doc = AppData.models.child (key);
+            MNode doc = AppData.docs.child ("models", key);
             MPart part = new MPart (doc);
             for (MNode c : part)
             {
@@ -1171,7 +1174,7 @@ public class PanelSearch extends JPanel
         public void run ()
         {
             connectors = new HashMap<String,Connector> ();
-            for (MNode i : AppData.models)
+            for (MNode i : AppData.docs.childOrEmpty ("models"))
             {
                 Connector c = new Connector (i);
                 if (c.hasEndpoints ()) synchronized (connectors) {connectors.put (c.key, c);}

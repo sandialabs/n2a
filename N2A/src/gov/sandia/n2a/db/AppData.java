@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import gov.sandia.n2a.ui.settings.SettingsRepo;
+
 /**
     Manages all user data associated with the application.
     This singleton contains several MDir objects which wrap various categories
@@ -35,9 +37,9 @@ public class AppData
     public static MDir      runs;
     public static MDir      studies;
     public static MDir      repos;
-    public static MCombo    models;
-    public static MCombo    references;
-    public static MVolatile documents;
+    //public static MCombo    models;     // @deprecated Use documents.child("models") instead.
+    //public static MCombo    references; // @deprecated Use documents.child("references") instead.
+    public static MVolatile docs;  // Collection of MCombos. Key is the document type. Prime examples include "models" and "references".
 
     protected static boolean stop;
 
@@ -84,7 +86,7 @@ public class AppData
             state.set (primary, "Repos", "primary");
         }
 
-        Map<String, List<MNode>> containers = new HashMap<String, List<MNode>> ();
+        Map<String,List<MNode>> folderContainers = new HashMap<String,List<MNode>> ();
         for (String repoName : reposOrder)
         {
             MNode repo = repos.child (repoName);
@@ -92,28 +94,40 @@ public class AppData
             Path repoDir = reposDir.resolve (repoName);
             try (DirectoryStream<Path> stream = Files.newDirectoryStream (repoDir))
             {
-                for (Path subfolder : stream)
+                for (Path path : stream)
                 {
-                    String key = subfolder.getFileName ().toString ();
-                    if (key.startsWith (".")) continue;
-                    if (! Files.isDirectory (subfolder)) continue;
+                    if (! Files.isDirectory (path)) continue;
+                    String folderName = path.getFileName ().toString ();
+                    if (folderName.startsWith (".")) continue;
 
-                    List<MNode> nodes = containers.get (key); 
-                    if (nodes == null)
+                    List<MNode> containers = folderContainers.get (folderName); 
+                    if (containers == null)
                     {
-                        nodes = new ArrayList<> ();
-                        containers.put (key, nodes);
+                        containers = new ArrayList<MNode> ();
+                        folderContainers.put (folderName, containers);
                     }
-                    nodes.add (new MDir(repoName, repoDir.resolve (key)));
+                    containers.add (new MDir (repoName, path));
                 }
             }
             catch (IOException e) {}
         }
-        documents     = new MVolatile ();
-        containers.forEach ((k, v) -> documents.link (new MCombo(k, v)));
-        models     = (MCombo) documents.child("models");
-        references = (MCombo) documents.child("references");
-        
+        docs = new MVolatile ()
+        {
+            public MNode set (String value, String key)
+            {
+                // In theory, set() will only be called when we need to create a new folder.
+                // However, nothing stops client code from calling it directly, so we guard against existing value.
+                MNode result = child (key);
+                if (result == null)
+                {
+                    result = new MFolder (key, new ArrayList<MNode> ());
+                    link (result);
+                }
+                return result;
+            }
+        };
+        folderContainers.forEach ((k, v) -> docs.link (new MFolder (k, v)));
+
         //convert (modelContainers);
         //convert (referenceContainers);
 
@@ -136,6 +150,35 @@ public class AppData
         };
         saveThread.setDaemon (true);  // This thread should be killed gracefully by a call to quit() before the app shuts down. But if not, we don't want it to keep the VM alive.
         saveThread.start ();
+    }
+
+    public static class MFolder extends MCombo
+    {
+        public MFolder (String name, List<MNode> containers)
+        {
+            super (name, containers);
+        }
+
+        public synchronized MNode set (String value, String key)
+        {
+            load ();
+            MNode container = children.get (key);
+            if (containerIsWriteable (container)) return container.set (value, key);
+            // Here is where we deviate from MCombo.set().
+            // We need to ensure that "primary" is actually the primary repo, rather
+            // than just the first repo containing an instance of the folder.
+            String primaryName = state.get ("Repos", "primary");  // After initial startup, this should always be non-empty.
+            if (! primary.key ().equals (primaryName))
+            {
+                // SettingRepo.instance should be non-null by the time any code calls MFolder.set().
+                SettingsRepo s = SettingsRepo.instance;
+                boolean needRebuild = s.needRebuild;  // Avoid changing this flag, since we directly update ourselves.
+                primary = s.getOrCreateContainer (primaryName, key);
+                s.needRebuild = needRebuild;
+                containers.add (0, primary);
+            }
+            return primary.set (value, key);
+        }
     }
 
     public static void checkInitialDB ()
@@ -165,8 +208,8 @@ public class AppData
         modelContainers.add (baseModels);
         referenceContainers.add (localReferences);
         referenceContainers.add (baseReferences);
-        models    .init (modelContainers);
-        references.init (referenceContainers);
+        docs.link (new MFolder ("models",     modelContainers));
+        docs.link (new MFolder ("references", referenceContainers));
 
         try (ZipInputStream zip = new ZipInputStream (AppData.class.getResource ("initialDB.zip").openStream ()))
         {
@@ -227,7 +270,7 @@ public class AppData
         if (indexID == null)
         {
             indexID = new HashMap<String,String> ();
-            for (MNode n : models)
+            for (MNode n : docs.childOrEmpty ("models"))
             {
                 String nid = n.get ("$meta", "id");
                 if (! nid.isEmpty ()) indexID.put (nid, n.key ());
@@ -235,13 +278,13 @@ public class AppData
         }
         String name = indexID.get (id);
         if (name == null) return null;
-        return (MDoc) models.child (name);
+        return (MDoc) docs.child ("models", name);
     }
 
     public synchronized static void save ()
     {
         // Sorted from most critical to least, in terms of how damaging a loss of information would be.
-        documents.forEach (c -> ((MCombo) c).save ());
+        docs.forEach (c -> ((MCombo) c).save ());
         studies.save ();
         runs.save ();
         repos.save ();

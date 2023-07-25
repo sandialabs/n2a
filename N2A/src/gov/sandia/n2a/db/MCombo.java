@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -163,8 +163,7 @@ public class MCombo extends MNode implements MNodeListener
     {
         load ();
         MNode container = children.get (fromKey);
-        if (! containerIsWriteable (container)) return;
-        container.move (fromKey, toKey);  // Triggers childChanged() call from MDir, which updates our children collection.
+        if (containerIsWriteable (container)) container.move (fromKey, toKey);  // Triggers childChanged() call from MDir, which updates our children collection.
     }
 
     public synchronized void addListener (MNodeListener listener)
@@ -309,7 +308,11 @@ public class MCombo extends MNode implements MNodeListener
 
     public synchronized void save ()
     {
-        for (MNode c : containers) if (c instanceof MDir) ((MDir) c).save ();
+        for (MNode c : containers)
+        {
+            if      (c instanceof MDir)   ((MDir)   c).save ();
+            else if (c instanceof MCombo) ((MCombo) c).save ();
+        }
     }
 
     public synchronized void load ()

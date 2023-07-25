@@ -1111,7 +1111,7 @@ public class PanelRun extends JPanel
             }
             else
             {
-                doc   = AppData.models.childOrEmpty (key);
+                doc   = AppData.docs.childOrEmpty ("models", key);
                 model = new MDoc (localJobDir.resolve ("model"), key);
             }
 

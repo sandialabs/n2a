@@ -21,6 +21,7 @@ import javax.swing.LayoutFocusTraversalPolicy;
 import javax.swing.SwingUtilities;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNodeListener;
 import gov.sandia.n2a.plugins.ExtensionPoint;
@@ -269,7 +270,7 @@ public class PanelModel extends JPanel implements MNodeListener
             }
         });
 
-        AppData.models.addListener (this);
+        AppData.docs.childOrCreate ("models").addListener (this);
     }
 
     public void changed ()
@@ -278,7 +279,7 @@ public class PanelModel extends JPanel implements MNodeListener
         panelSearch.search ();
         MNode record = panelEquations.record;
         if (record == null) return;
-        if (AppData.models.isVisible (record))
+        if (((MCombo) AppData.docs.child ("models")).isVisible (record))
         {
             panelEquations.record = null;
             panelEquations.load (record);
@@ -291,7 +292,7 @@ public class PanelModel extends JPanel implements MNodeListener
 
     public void childAdded (String key)
     {
-        MNode doc = AppData.models.child (key);
+        MNode doc = AppData.docs.child ("models", key);
         panelMRU.insertDoc (doc);
         panelSearch.insertDoc (doc);
     }

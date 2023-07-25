@@ -3112,7 +3112,7 @@ public class ExportJob extends XMLutility
         for (String inherit : inherits)
         {
             inherit = inherit.replace ("\"", "");
-            MNode part = AppData.models.child (inherit);
+            MNode part = AppData.docs.child ("models", inherit);
             if (part == null) continue;
             if (! part.get ("$meta", "backend", "lems", "part").isEmpty ()) continue;  // Don't add base parts.
             addComponentType (part, part);
@@ -3730,7 +3730,7 @@ public class ExportJob extends XMLutility
                                 String query = "$up." + v.name;
                                 for (Attachment a : attachments)
                                 {
-                                    MNode doc = AppData.models.child (a.partName);
+                                    MNode doc = AppData.docs.child ("models", a.partName);
                                     if (doc == null) continue;
                                     MPart part = new MPart (doc);
                                     MNode node = part.child (query);
@@ -3861,7 +3861,7 @@ public class ExportJob extends XMLutility
             for (String i : inherits)
             {
                 i = i.replace ("\"", "").trim ();
-                MNode parent = AppData.models.child (i);
+                MNode parent = AppData.docs.child ("models", i);
                 if (parent != null)
                 {
                     // Load requirements

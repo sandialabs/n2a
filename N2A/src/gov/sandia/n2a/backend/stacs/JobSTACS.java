@@ -575,7 +575,7 @@ public class JobSTACS extends Thread
         {
             inherit = inherit.replace ("\"", "");
             if (inherit.isEmpty ()) continue;
-            MNode parent = AppData.models.child (inherit);
+            MNode parent = AppData.docs.child ("models", inherit);
             if (parent == null) continue;
             MNode result = findBasePart (parent);
             if (result != null) return result;

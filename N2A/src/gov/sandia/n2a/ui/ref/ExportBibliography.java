@@ -55,7 +55,7 @@ public abstract class ExportBibliography implements Export
             // Fill in reference records
             for (MNode r : references)
             {
-                MNode doc = AppData.references.child (r.key ());
+                MNode doc = AppData.docs.child ("references", r.key ());
                 if (doc == null) continue;
                 r.mergeUnder (doc);
 

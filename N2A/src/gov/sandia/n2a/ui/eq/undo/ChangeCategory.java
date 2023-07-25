@@ -57,7 +57,7 @@ public class ChangeCategory extends Undoable
 
     public void apply (String key, List<String> selectionBefore, String categoryAfter, List<String> selectionAfter)
     {
-        MNode doc = AppData.models.child (key);
+        MNode doc = AppData.docs.child ("models", key);
         if (doc == null) throw new CannotUndoException ();
 
         // Graph focus

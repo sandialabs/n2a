@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.ref;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.ExtensionPoint;
@@ -508,8 +509,9 @@ public class PanelEntry extends JPanel
 
     public void checkVisible ()
     {
-        if (AppData.references.isVisible (model.record)) model.updateLock ();
-        else                                             recordDeleted (model.record);
+        MCombo references = (MCombo) AppData.docs.child ("references");
+        if (references.isVisible (model.record)) model.updateLock ();
+        else                                     recordDeleted (model.record);
     }
 
     // See PanelEquations for similar code
@@ -713,7 +715,7 @@ public class PanelEntry extends JPanel
         public void updateLock ()
         {
             if (record == null) locked = true;
-            else                locked = ! AppData.references.isWriteable (record);
+            else                locked = ! ((MCombo) AppData.docs.child ("references")).isWriteable (record);
         }
 
         public void build ()
@@ -862,7 +864,7 @@ public class PanelEntry extends JPanel
                 {
                     if (newValue.isEmpty ()) return;  // not allowed
                     newValue = MDir.validFilenameFrom (newValue);
-                    if (AppData.references.child (newValue) != null) return;  // not allowed, because another entry with that id already exists
+                    if (AppData.docs.child ("references", newValue) != null) return;  // not allowed, because another entry with that id already exists
                     MainFrame.instance.undoManager.apply (new ChangeEntry (record.key (), newValue));
                 }
                 else
@@ -874,7 +876,7 @@ public class PanelEntry extends JPanel
 
         public void create (String docKey, int row, String name, String value, boolean nameIsGenerated)
         {
-            MNode doc = AppData.references.child (docKey);
+            MNode doc = AppData.docs.child ("references", docKey);
             setRecord (doc);
 
             keys.add (row, name);
@@ -894,7 +896,7 @@ public class PanelEntry extends JPanel
 
         public void destroy (String docKey, String name)
         {
-            MNode doc = AppData.references.child (docKey);
+            MNode doc = AppData.docs.child ("references", docKey);
             setRecord (doc);
 
             int row = keys.indexOf (name);
@@ -908,7 +910,7 @@ public class PanelEntry extends JPanel
 
         public void rename (String docKey, int exposedRow, String before, String after)
         {
-            MNode doc = AppData.references.child (docKey);
+            MNode doc = AppData.docs.child ("references", docKey);
             setRecord (doc);
             int rowBefore = keys.indexOf (before);
             int rowAfter  = keys.indexOf (after);
@@ -931,7 +933,7 @@ public class PanelEntry extends JPanel
 
         public void changeValue (String docKey, String name, String value)
         {
-            MNode doc = AppData.references.child (docKey);
+            MNode doc = AppData.docs.child ("references", docKey);
             setRecord (doc);
 
             // Update data

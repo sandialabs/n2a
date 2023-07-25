@@ -83,7 +83,7 @@ public class AddDoc extends Undoable
     **/
     public static String uniqueName (String name)
     {
-        MNode models = AppData.models;
+        MNode models = AppData.docs.childOrCreate ("models");
         MNode existing = models.child (name);
         if (existing == null) return name;
 
@@ -108,10 +108,10 @@ public class AddDoc extends Undoable
 
     public static void destroy (String name, List<String> pathAfter, boolean fromSearchPanel)
     {
-        MNode doc = AppData.models.child (name);
+        MNode doc = AppData.docs.child ("models", name);
         String id = doc.get ("$meta", "id");
         if (! id.isEmpty ()) AppData.set (id, null);
-        AppData.models.clear (name);  // Triggers PanelModel.childDeleted(name), which removes doc from all 3 sub-panels.
+        AppData.docs.clear ("models", name);  // Triggers PanelModel.childDeleted(name), which removes doc from all 3 sub-panels.
 
         PanelModel pm = PanelModel.instance;
         if (fromSearchPanel) pm.panelSearch.forceSelection (pathAfter);
@@ -129,7 +129,7 @@ public class AddDoc extends Undoable
         PanelModel pm = PanelModel.instance;
         pm.panelSearch.insertNextAt (pathAfter);  // Note that lastSelection will end up pointing to new entry, not pathAfter.
 
-        MDoc doc = (MDoc) AppData.models.childOrCreate (name);  // Triggers PanelModel.childAdded(name), which updates the select and MRU panels, but not the equation tree panel.
+        MDoc doc = (MDoc) AppData.docs.childOrCreate ("models", name);  // Triggers PanelModel.childAdded(name), which updates the select and MRU panels, but not the equation tree panel.
         doc.merge (saved);
         new MPart (doc).clearRedundantOverrides ();
         AppData.set (doc.get ("$meta", "id"), doc);

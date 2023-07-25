@@ -43,7 +43,7 @@ public class NodeInherit extends NodeBase
         for (int i = 0; i < names.length; i++)
         {
             String parentName = names[i].trim ().replace ("\"", "");
-            MNode  parent     = AppData.models.child (parentName);
+            MNode  parent     = AppData.docs.child ("models", parentName);
             if (parent == null)
             {
                 showID = true;
