@@ -7,8 +7,11 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.db;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.ref.Cleaner;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -27,13 +30,14 @@ import java.util.zip.ZipInputStream;
 **/
 public class AppData
 {
-    public static MNode  properties;
-    public static MDoc   state;
-    public static MDir   runs;
-    public static MDir   studies;
-    public static MDir   repos;
-    public static MCombo models;
-    public static MCombo references;
+    public static MNode     properties;
+    public static MDoc      state;
+    public static MDir      runs;
+    public static MDir      studies;
+    public static MDir      repos;
+    public static MCombo    models;
+    public static MCombo    references;
+    public static MVolatile documents;
 
     protected static boolean stop;
 
@@ -80,19 +84,36 @@ public class AppData
             state.set (primary, "Repos", "primary");
         }
 
-        List<MNode> modelContainers     = new ArrayList<MNode> ();
-        List<MNode> referenceContainers = new ArrayList<MNode> ();
+        Map<String, List<MNode>> containers = new HashMap<String, List<MNode>> ();
         for (String repoName : reposOrder)
         {
             MNode repo = repos.child (repoName);
             if (repo == null  ||  ! repo.getBoolean ("visible")  &&  ! repo.getBoolean ("editable")  &&  ! repoName.equals (primary)) continue;
             Path repoDir = reposDir.resolve (repoName);
-            modelContainers    .add (new MDir (repoName, repoDir.resolve ("models")));
-            referenceContainers.add (new MDir (repoName, repoDir.resolve ("references")));
-        }
-        models     = new MCombo ("models",     modelContainers);
-        references = new MCombo ("references", referenceContainers);
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream (repoDir))
+            {
+                for (Path subfolder : stream)
+                {
+                    String key = subfolder.getFileName ().toString ();
+                    if (key.startsWith (".")) continue;
+                    if (! Files.isDirectory (subfolder)) continue;
 
+                    List<MNode> nodes = containers.get (key); 
+                    if (nodes == null)
+                    {
+                        nodes = new ArrayList<> ();
+                        containers.put (key, nodes);
+                    }
+                    nodes.add (new MDir(repoName, repoDir.resolve (key)));
+                }
+            }
+            catch (IOException e) {}
+        }
+        documents     = new MVolatile ();
+        containers.forEach ((k, v) -> documents.link (new MCombo(k, v)));
+        models     = (MCombo) documents.child("models");
+        references = (MCombo) documents.child("references");
+        
         //convert (modelContainers);
         //convert (referenceContainers);
 
@@ -220,8 +241,7 @@ public class AppData
     public synchronized static void save ()
     {
         // Sorted from most critical to least, in terms of how damaging a loss of information would be.
-        models.save ();
-        references.save ();
+        documents.forEach (c -> ((MCombo) c).save ());
         studies.save ();
         runs.save ();
         repos.save ();
