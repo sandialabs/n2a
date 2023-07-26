@@ -37,8 +37,6 @@ public class AppData
     public static MDir      runs;
     public static MDir      studies;
     public static MDir      repos;
-    //public static MCombo    models;     // @deprecated Use documents.child("models") instead.
-    //public static MCombo    references; // @deprecated Use documents.child("references") instead.
     public static MVolatile docs;  // Collection of MCombos. Key is the document type. Prime examples include "models" and "references".
 
     protected static boolean stop;
@@ -172,8 +170,9 @@ public class AppData
             {
                 // SettingRepo.instance should be non-null by the time any code calls MFolder.set().
                 SettingsRepo s = SettingsRepo.instance;
+                String folderName = key ();  // Key of the MCombo, which is not the same as the parameter "key".
                 boolean needRebuild = s.needRebuild;  // Avoid changing this flag, since we directly update ourselves.
-                primary = s.getOrCreateContainer (primaryName, key);
+                primary = s.getOrCreateContainer (primaryName, folderName);
                 s.needRebuild = needRebuild;
                 containers.add (0, primary);
             }
