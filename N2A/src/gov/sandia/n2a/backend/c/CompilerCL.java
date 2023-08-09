@@ -201,7 +201,7 @@ public class CompilerCL extends Compiler
         else       command.add ("/O2");
         for (String setting : settings) command.add (setting);
 
-        String target = "/MD";  // Always compile against multi-threaded DLL runtime.
+        String target = "/MD";  // Always compile against multi-threaded DLL runtime, regardless of whether our target is executable or library, static or shared.
         if (debug) target += "d";
         command.add (target);
         if (shared)

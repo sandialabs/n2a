@@ -51,18 +51,6 @@ public class MVolatile extends MNode
         return parent;
     }
 
-    /**
-        @return The most distant ancestor that is still an MVolatile.
-        Typically used to locate the top-level MDoc from one of its descendants,
-        since MDir (the typical container of an MDoc) is not an MVolatile.
-    **/
-    public MNode rootVolatile ()
-    {
-        MVolatile result = this;
-        while (result.parent instanceof MVolatile) result = (MVolatile) result.parent;
-        return result;
-    }
-
     protected synchronized MNode getChild (String key)
     {
         if (children == null) return null;

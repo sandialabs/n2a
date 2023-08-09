@@ -15,7 +15,7 @@ the U.S. Government retains certain rights in this software.
 #ifndef n2a_mnode_h
 #define n2a_mnode_h
 
-#include "StringLite.h"  // Use our own string class, to be compatible with rest of runtime. Unfortunately, this means you need to include one extra header file to use MNode standalone.
+#include "StringLite.h"  // Use our own string class, to be compatible with rest of runtime. Unfortunately, this means you need to copy one extra header file to use MNode standalone.
 #include <vector>
 #include <map>
 #include <set>
@@ -829,7 +829,7 @@ namespace n2a
     class SHARED Schema
     {
     public:
-        int         version;  ///< Version 0 means unknown. Version -1 means no-care. Otherwise, version is always positive and increments by 1 with each significant change.
+        int    version;  ///< Version 0 means unknown. Version -1 means no-care. Otherwise, version is always positive and increments by 1 with each significant change.
         String type;
 
         Schema (int version, const String & type);

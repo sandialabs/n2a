@@ -857,6 +857,7 @@ public class JobC extends Thread
             }
             catch (Exception e) {e.printStackTrace ();}
         }
+        analyzeIOvectors (digestedModel);
         digestedModel.resolveLHS ();
         digestedModel.fillIntegratedVariables ();
         digestedModel.findIntegrated ();
@@ -1111,6 +1112,20 @@ public class JobC extends Thread
         }
     }
 
+    public void analyzeIOvectors (EquationSet s)
+    {
+        for (EquationSet p : s.parts)
+        {
+            analyzeIOvectors (p);
+            if (p.metadata.getFlag ("backend", "c", "vector")) s.metadata.set ("", "backend", "c", "vector", "part");
+        }
+
+        for (Variable v : s.variables)
+        {
+            if (v.getMetadata ().getFlag ("backend", "c", "vector")) s.metadata.set ("", "backend", "c", "vector", "variable");
+        }
+    }
+
     public void analyzeEvents (EquationSet s) throws Backend.AbortRun
     {
         BackendDataC bed = (BackendDataC) s.backendData;
@@ -1270,17 +1285,21 @@ public class JobC extends Thread
                 header.append ("  " + SHARED + "void " + ns_ + "run (" + T + " until);\n");
                 header.append ("  " + SHARED + "void " + ns_ + "finish ();\n");
                 header.append ("\n");
-                generateIOvector (digestedModel, SHARED, ns, header, vectorDefinitions);
-                if (! vectorDefinitions.isEmpty ())
+                if (digestedModel.metadata.getFlag ("backend", "c", "vector"))
                 {
-                    header.append ("\n");
-                    header.append ("  " + SHARED + "void  " + ns_ + "IOvectorDelete (" + ns + "::IOvector * self);\n");
+                    generateIOvector (digestedModel, SHARED, ns, "  ", 0, vectorDefinitions);
                     if (csharp)
                     {
+                        header.append ("  " + SHARED + ns + "::IOvector * " + ns_ + "IOvectorCreate (int keyCount, ...);  // All other args (keys) should be char *\n");
                         header.append ("  " + SHARED + "int   " + ns_ + "IOvectorSize   (" + ns + "::IOvector * self);\n");
                         header.append ("  " + SHARED + T +  " " + ns_ + "IOvectorGet    (" + ns + "::IOvector * self, int i);\n");
                         header.append ("  " + SHARED + "void  " + ns_ + "IOvectorSet    (" + ns + "::IOvector * self, int i, " + T + " value);\n");
                     }
+                    else
+                    {
+                        header.append ("  " + SHARED + "IOvector * " + "IOvectorCreate (const std::vector<std::string> & keys);\n");
+                    }
+                    header.append ("  " + SHARED + "void  " + ns_ + "IOvectorDelete (" + ns + "::IOvector * self);\n");
                 }
 
                 if (csharp)
@@ -1343,12 +1362,13 @@ public class JobC extends Thread
         result.append ("\n");
 
         // Init
+        String ns_ = ns;
         if (lib)
         {
-            if (csharp) ns += "_";
-            else        ns += "::";
+            if (csharp) ns_ += "_";
+            else        ns_ += "::";
         }
-        result.append ("void " + ns + "init (int argc, const char * argv[])\n");
+        result.append ("void " + ns_ + "init (int argc, const char * argv[])\n");
         result.append ("{\n");
         if (kokkos)
         {
@@ -1380,17 +1400,18 @@ public class JobC extends Thread
         result.append ("\n");
 
         // Finish
-        result.append ("void " + ns + "finish ()\n");
+        result.append ("void " + ns_ + "finish ()\n");
         result.append ("{\n");
         if (tls)
         {
-            result.append ("  delete Simulator<" + T + ">::instance;\n");
+            result.append ("  delete Simulator<" + T + ">::instance;\n");  // Calls Simulator::clear()
         }
         else
         {
             result.append ("  " + SIMULATOR + "clear ();\n");
         }
-        // The wrapper is freed when simulator is cleared. We could set wrapper to null here, but there is little need for that.
+        //   Simulator::clear() ensures that all instances have been moved onto the dead list of their respective population.
+        result.append ("  delete wrapper;\n");  // Destructs top-level population, which causes a chain of deletes that reaches all instances of all parts.
         if (cli)
         {
             result.append ("  delete params;\n");
@@ -1405,22 +1426,41 @@ public class JobC extends Thread
         // Main
         if (lib)
         {
-            result.append ("void " + ns + "run (" + T + " until)\n");
+            result.append ("void " + ns_ + "run (" + T + " until)\n");
             result.append ("{\n");
             result.append ("  " + SIMULATOR + "run (until);\n");
             result.append ("}\n");
             if (! vectorDefinitions.isEmpty ())
             {
                 result.append ("\n");
+                result.append (ns + "::IOvector * " + ns + "::IOvectorCreate (const std::vector<std::string> & keys)\n");
+                result.append ("{\n");
+                result.append ("  int keyCount = keys.size ();\n");
+                result.append ("  if (keyCount == 0) return 0;\n");
+                result.append ("  " + prefix (digestedModel) + "_Population & p0 = wrapper->" + mangle (digestedModel.name) + ";\n");
                 result.append (vectorDefinitions.toString ());
+                result.append ("  return 0;\n");
+                result.append ("}\n");
+                result.append ("\n");
 
-                result.append     ("void  " + ns + "IOvectorDelete (IOvector * self)                     {delete self;}\n");
                 if (csharp)
                 {
-                    result.append ("int   " + ns + "IOvectorSize   (IOvector * self)                     {return self->size ();}\n");
-                    result.append (T +  " " + ns + "IOvectorGet    (IOvector * self, int i)              {return self->get (i);}\n");
-                    result.append ("void  " + ns + "IOvectorSet    (IOvector * self, int i, " + T + " value) {self->set (i, value);}\n");
+                    result.append ("#include <cstdarg>\n");
+                    result.append (ns + "::IOvector * " + ns_ + "IOvectorCreate (int keyCount, ...)\n");
+                    result.append ("{\n");
+                    result.append ("  va_list args;\n");
+                    result.append ("  va_start (args, keyCount);\n");
+                    result.append ("  std::vector<std::string> keyPath (keyCount);\n");
+                    result.append ("  for (int i = 0; i < keyCount; i++) keyPath[i] = va_arg (args, char *);\n");
+                    result.append ("  va_end (args);\n");
+                    result.append ("  return IOvectorCreate (keyPath);\n");
+                    result.append ("}\n");
+
+                    result.append ("int   " + ns_ + "IOvectorSize   (IOvector * self)                     {return self->size ();}\n");
+                    result.append (T +  " " + ns_ + "IOvectorGet    (IOvector * self, int i)              {return self->get (i);}\n");
+                    result.append ("void  " + ns_ + "IOvectorSet    (IOvector * self, int i, " + T + " value) {self->set (i, value);}\n");
                 }
+                result.append     ("void  " + ns_ + "IOvectorDelete (IOvector * self)                     {delete self;}\n");
             }
         }
         else
@@ -1865,102 +1905,98 @@ public class JobC extends Thread
         }
     }
 
-    public void generateIOvector (EquationSet s, String SHARED, String ns, Writer header, StringBuilder vectorDefinitions) throws IOException
+    public void generateIOvector (EquationSet s, String SHARED, String ns, String pad, int keyPosition, StringBuilder result) throws IOException
     {
-        for (EquationSet p : s.parts) generateIOvector (p, SHARED, ns, header, vectorDefinitions);
+        BackendDataC bed = (BackendDataC) s.backendData;
 
-        // Determine if any IO vectors are present
-        boolean found = false;
-        for (Variable v : s.ordered)
+        // Variables
+        if (s.metadata.getFlag ("backend", "c", "vector", "variable"))
         {
-            if (! v.getMetadata ().getFlag ("backend", "c", "vector")) continue;
-            found = true;
-            break;
+            result.append (pad + "if (keyCount == " + (keyPosition + 1) + ")\n");  // On last position, so check variable name rather than population.
+            result.append (pad + "{\n");
+            for (Variable v : s.ordered)
+            {
+                if (! v.getMetadata ().getFlag ("backend", "c", "vector")) continue;
+                result.append (pad + "  if (keys[" + keyPosition + "] == \"" + v.nameString () + "\")\n");
+                result.append (pad + "  {\n");
+
+                // Emit a class definition for this specific population and variable.
+                String var = mangle (v.nameString ());
+                String className = "IOvectorSpecific";
+                result.append (pad + "    class " + className + ": public IOvector\n");
+                result.append (pad + "    {\n");
+                result.append (pad + "    public:\n");
+                result.append (pad + "      " + prefix (s) + "_Population * population;\n");
+                if (bed.singleton)
+                {
+                    result.append (pad + "      virtual int size ()\n");
+                    result.append (pad + "      {\n");
+                    result.append (pad + "        return 1;\n");
+                    result.append (pad + "      }\n");
+                    result.append (pad + "      virtual " + T + " get (int i)\n");
+                    result.append (pad + "      {\n");
+                    result.append (pad + "        return population->instance." + var + ";\n");
+                    result.append (pad + "      }\n");
+                    result.append (pad + "      virtual void set (int i, " + T + " value)\n");
+                    result.append (pad + "      {\n");
+                    result.append (pad + "        population->instance." + var + " = value;\n");
+                    result.append (pad + "      }\n");
+                }
+                else
+                {
+                    result.append (pad + "      virtual int size ()\n");
+                    result.append (pad + "      {\n");
+                    result.append (pad + "        return population->instances.size ();\n");  // This assumes dense population. We won't try to guard against null entries.
+                    result.append (pad + "      }\n");
+                    result.append (pad + "      virtual " + T + " get (int i)\n");
+                    result.append (pad + "      {\n");
+                    result.append (pad + "        return population->instances.at (i)->" + var + ";\n");
+                    result.append (pad + "      }\n");
+                    result.append (pad + "      virtual void set (int i, " + T + " value)\n");
+                    result.append (pad + "      {\n");
+                    result.append (pad + "        population->instances.at (i)->" + var + " = value;\n");
+                    result.append (pad + "      }\n");
+                }
+                result.append (pad + "    };\n");
+                result.append ("\n");
+
+                result.append (pad + "    " + className + " * result = new " + className + ";\n");
+                result.append (pad + "    result->population = &p" + keyPosition + ";\n");
+                result.append (pad + "    return result;\n");
+
+                result.append (pad + "  }\n");
+            }
+            result.append (pad + "}\n");
         }
-        if (! found) return;
 
-        // Determine name and any indices needed to identify part.
-        String pop  = "";
-        String args = "";
-        String f    = "";  // function body
-        EquationSet c = s;           // child
-        EquationSet p = s.container; // parent
-        int i = 1;  // For any level #, p# is the population of that part, and i# is the index into the population. Level 0 is the population of s.
-        while (p != null)
+        // Parts
+        if (s.metadata.getFlag ("backend", "c", "vector", "part"))
         {
-            String cpop  = prefix (c) + "_Population";
-            String cname = mangle (c.name);
-
-            if (pop.isEmpty ()) pop = cname;
-            else                pop = cname + "_" + pop;
-            if (p.isSingleton ())
+            int nextPosition = keyPosition + (bed.singleton ? 1 : 2);
+            result.append (pad + "if (keyCount > " + nextPosition + ")\n");  // Before last position, so process sub-populations
+            result.append (pad + "{\n");
+            if (bed.singleton)
             {
-                f = "  " + cpop + " & p" + (i-1) + " = p" + i + ".instance." + cname + ";\n" + f;
-            }
-            else  // Need to specify index into population
-            {
-                if (args.isEmpty ()) args = "int i" + i;
-                else                 args = "int i" + i + ", " + args;
-                f = "  " + cpop + " & p" + (i-1) + " = p" + i + ".instances[i" + i + "]->" + cname + ";\n" + f;
-            }
-
-            c = p;
-            p = p.container;
-            i++;
-        }
-        f = "  " + prefix (c) + "_Population & p" + (i-1) + " = wrapper->" + mangle (c.name) + ";\n" + f;
-
-        for (Variable v : s.ordered)
-        {
-            if (! v.getMetadata ().getFlag ("backend", "c", "vector")) continue;
-
-            // Emit a class definition for this specific population and variable.
-            String var  = mangle (v.nameString ());
-            String name = pop + var;
-            String className = "IOvector" + name;
-            vectorDefinitions.append ("class " + className + ": public IOvector\n");
-            vectorDefinitions.append ("{\n");
-            vectorDefinitions.append ("public:\n");
-            vectorDefinitions.append ("  " + prefix (s) + "_Population * population;\n");
-            if (! s.isSingleton ())
-            {
-                vectorDefinitions.append ("  virtual int size ()\n");
-                vectorDefinitions.append ("  {\n");
-                vectorDefinitions.append ("    return population->instances.size ();\n");  // This assumes dense population. We won't try to guard against null entries.
-                vectorDefinitions.append ("  }\n");
-            }
-            vectorDefinitions.append ("  virtual " + T + " get (int i)\n");
-            vectorDefinitions.append ("  {\n");
-            vectorDefinitions.append ("    return population->instances.at (i)->" + var + ";\n");
-            vectorDefinitions.append ("  }\n");
-
-            vectorDefinitions.append ("  virtual void set (int i, " + T + " value)\n");
-            vectorDefinitions.append ("  {\n");
-            vectorDefinitions.append ("    population->instances.at (i)->" + var + " = value;\n");
-            vectorDefinitions.append ("  }\n");
-            vectorDefinitions.append ("};\n");
-            vectorDefinitions.append ("\n");
-
-            // A complete copy of the get() function, including code to locate population, will be emitted for each variable.
-            // Since it's unlikely there will be more than one variable, this isn't too redundant.
-            if (csharp)
-            {
-                header.append ("  " + SHARED + ns + "::IOvector * " + ns + "_get" + name + " (" + args + ");\n");
-                vectorDefinitions.append ("IOvector * " + ns + "_get" + name + " (" + args + ")\n");
+                result.append (pad + "  " + prefix (s) + " & instance = p" + keyPosition + ".instance;\n");
             }
             else
             {
-                header.append ("  " + SHARED + "IOvector * " + "get" + name + " (" + args + ");\n");
-                vectorDefinitions.append ("IOvector * " + ns + "::get" + name + " (" + args + ")\n");
+                result.append (pad + "  int i = atoi (keys[" + keyPosition + "].c_str ());\n");
+                result.append (pad + "  " + prefix (s) + " & instance = * p" + keyPosition + ".instances[i];\n");
             }
-            vectorDefinitions.append ("{\n");
-            vectorDefinitions.append (f);
-            vectorDefinitions.append ("\n");
-            vectorDefinitions.append ("  " + className + " * result = new " + className + ";\n");
-            vectorDefinitions.append ("  result->population = &p0;\n");
-            vectorDefinitions.append ("  return result;\n");
-            vectorDefinitions.append ("}\n");
-            vectorDefinitions.append ("\n");
+            result.append (pad + "  std::string partName = keys[" + (nextPosition - 1) + "];\n");
+            String ifstring = "if";
+            for (EquationSet p : s.parts)
+            {
+                if (! p.metadata.getFlag ("backend", "c", "vector")) continue;
+                result.append (pad + "  " + ifstring + " (partName == \"" + p.name + "\")\n");
+                result.append (pad + "  {\n");
+                result.append (pad + "    " + prefix (p) + "_Population & p" + nextPosition + " = instance." + mangle (p.name) + ";\n");
+                generateIOvector (p, SHARED, ns, pad + "    ", nextPosition, result);
+                result.append (pad + "  }\n");
+                ifstring = "else if";
+            }
+            result.append (pad + "}\n");
         }
     }
 
@@ -2345,7 +2381,10 @@ public class JobC extends Thread
         {
             result.append ("  virtual void enterSimulation ();\n");
         }
-        result.append ("  virtual void leaveSimulation ();\n");
+        if (bed.localReference.size () > 0  ||  ! bed.singleton)
+        {
+            result.append ("  virtual void leaveSimulation ();\n");
+        }
         if (bed.refcount)
         {
             result.append ("  virtual bool isFree ();\n");
@@ -3615,6 +3654,7 @@ public class JobC extends Thread
         }
 
         // Unit leaveSimulation
+        if (bed.localReference.size () > 0  ||  ! bed.singleton)
         {
             result.append ("void " + ns + "leaveSimulation ()\n");
             result.append ("{\n");

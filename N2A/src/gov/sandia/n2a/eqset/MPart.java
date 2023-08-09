@@ -69,7 +69,7 @@ public class MPart extends MNode
 
     /**
         Constructs an MPart tree for the model with the given key,
-        using the given snapshot to override the main database.
+        using the given snapshot to override the main "models" database.
     **/
     public static MPart fromSnapshot (String key, MNode snapshot)
     {
@@ -79,6 +79,22 @@ public class MPart extends MNode
         MCombo temp = new MCombo ("temp", containers);
         models.set (temp);
         MPart result = new MPart (temp.child (key));
+        models.set ((MCombo) AppData.docs.child ("models"));
+        temp.done ();
+        return result;
+    }
+
+    /**
+        Constructs an MPart tree from the given document,
+        using its parent as the sole repo.
+    **/
+    public static MPart fromOther (MNode document)
+    {
+        List<MNode> containers = new ArrayList<MNode> (1);
+        containers.add (document.parent ());
+        MCombo temp = new MCombo ("temp", containers);
+        models.set (temp);
+        MPart result = new MPart (document);
         models.set ((MCombo) AppData.docs.child ("models"));
         temp.done ();
         return result;

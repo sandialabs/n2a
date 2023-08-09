@@ -705,11 +705,11 @@ n2a::MNode::childClear (const String & key)
 // class MVolatile -----------------------------------------------------------
 
 n2a::MVolatile::MVolatile (const char * value, const char * key, MNode * container)
-:   container (container)
+:   container (container),
+    name (key)  // If key is null, name is empty string.
 {
     if (value) this->value = strdup (value);
     else       this->value = nullptr;
-    if (key) name = key;  // Otherwise, name is blank
 }
 
 n2a::MVolatile::~MVolatile ()

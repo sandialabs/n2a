@@ -10,8 +10,10 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
-import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.plugins.extpoints.ExportModel;
+import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.MainTabbedPane;
+import gov.sandia.n2a.ui.jobs.NodeBase;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.PanelRun;
 
@@ -22,6 +24,8 @@ import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+
+import javax.swing.tree.TreePath;
 
 public class ExportCstatic implements ExportModel
 {
@@ -36,7 +40,7 @@ public class ExportCstatic implements ExportModel
     @Override
     public void export (MNode source, Path destination) throws Exception
     {
-        // Approach: Create a proper C job, then copy select resources to the destination.
+        // Approach: Create a proper C job, then copy specific resources to the destination.
 
         MDoc job = null;
         try
@@ -49,13 +53,27 @@ public class ExportCstatic implements ExportModel
             job.save ();
             NodeJob.saveSnapshot (source, job);
 
+            final MDoc finalJob = job;
+            MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
+            EventQueue.invokeLater (new Runnable ()
+            {
+                public void run ()
+                {
+                    mtp.setPreferredFocus (PanelRun.instance, PanelRun.instance.tree);
+                    mtp.selectTab ("Runs");
+                    NodeJob jobNode = PanelRun.instance.addNewRun (finalJob, true);
+                    Host h = Host.get (finalJob);
+                    h.monitor (jobNode);
+                }
+            });
+
             String stem = destination.getFileName ().toString ();
 
             JobC t = new JobC (job);
             t.lib     = true;  // library flag. Will build a library then return (model not executed).
             t.shared  = shared;
             t.libStem = stem;
-            t.run ();  // Process on current thread rather than starting a new one.
+            t.run ();  // Export is already on its own thread, so no need to start a new one for this.
 
             // Move library resources to destination
             // Notice that even though the export may be built on a remote host
@@ -95,8 +113,34 @@ public class ExportCstatic implements ExportModel
             }
 
             // Cleanup
-            if (t.env instanceof Remote) t.env.deleteTree (t.jobDir);
-            AppData.runs.clear (jobKey);
+            if (source.getFlag ("$meta", "backend", "c", "keepExportJob"))
+            {
+                Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
+                try {Host.stringToFile ("success", localJobDir.resolve ("finished"));}
+                catch (Exception f) {}
+                // Because the job is being monitored, its tree node should automatically get updated.
+                return;
+            }
+            EventQueue.invokeLater (new Runnable ()
+            {
+                public void run ()
+                {
+                    NodeJob jobNode;
+                    synchronized (PanelRun.jobNodes) {jobNode = PanelRun.jobNodes.get (jobKey);}
+                    if (jobNode == null) return;
+
+                    int tabIndex = mtp.getSelectedIndex ();
+                    String tabName = "";
+                    if (tabIndex >= 0) tabName = mtp.getTitleAt (tabIndex);
+                    PanelRun pr = PanelRun.instance;
+                    TreePath path = pr.tree.getLeadSelectionPath ();
+                    NodeBase selectedNode = (NodeBase) path.getLastPathComponent ();
+                    boolean wasShowing =  tabName.equals ("Runs")  &&  selectedNode != null  &&  selectedNode.isNodeAncestor (jobNode);
+
+                    pr.delete (jobNode);
+                    if (wasShowing) mtp.selectTab ("Models");
+                }
+            });
         }
         catch (Exception e)
         {
@@ -106,17 +150,6 @@ public class ExportCstatic implements ExportModel
                 Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
                 try {Host.stringToFile ("failure", localJobDir.resolve ("finished"));}
                 catch (Exception f) {}
-
-                final MDoc finalJob = job;
-                EventQueue.invokeLater (new Runnable ()
-                {
-                    public void run ()
-                    {
-                        NodeJob node = PanelRun.instance.addNewRun (finalJob, false);
-                        node.complete = 2;
-                        node.old = true;
-                    }
-                });
             }
 
             throw e;

@@ -81,7 +81,7 @@ public class NodeJob extends NodeBase
     public static final ImageIcon iconLingering = ImageUtil.getImage ("lingering.png");
     public static final ImageIcon iconStopped   = ImageUtil.getImage ("stop.gif");
 
-    protected static HashSet<String> forbiddenSuffixes = new HashSet<String> (Arrays.asList ("bin", "exe", "aplx", "lib", "dll", "a", "so", "o", "obj", "pdb", "columns", "mod"));
+    protected static HashSet<String> forbiddenSuffixes = new HashSet<String> (Arrays.asList ("bin", "exe", "aplx", "lib", "dll", "a", "so", "o", "obj", "pdb", "columns", "mod", "exp"));
     protected static HashSet<String> imageSuffixes     = new HashSet<String> (Arrays.asList (ImageIO.getReaderFileSuffixes ()));  // We don't expect to load image handling plugins after startup, so one-time initialization is fine.
     public    static HashSet<String> videoSuffixes     = new HashSet<String> (Arrays.asList ("mp4", "m4v", "mov", "qt", "avi", "flv", "mkv", "wmv", "asf", "webm", "h264", "mpeg", "mpg", "vob", "3gp"));  // Some typical video file suffixes. Others will be added from FFmpeg, if available.
 

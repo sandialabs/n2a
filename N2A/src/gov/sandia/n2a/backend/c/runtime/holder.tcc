@@ -1867,12 +1867,7 @@ template<class T>
 Mfile<T>::~Mfile ()
 {
     if (doc) delete doc;
-    for (auto m : matrices) if (m.second)
-    {
-        std::cerr << "deleting " << m.second << std::endl;
-        std::cerr << *m.second << std::endl;
-        delete m.second;
-    }
+    for (auto m : matrices) if (m.second) delete m.second;
 }
 
 std::vector<String>

@@ -1271,7 +1271,7 @@ public class PanelEquations extends JPanel
         public void actionPerformed (ActionEvent e)
         {
             if (record == null) return;
-            stopEditing ();
+            prepareForTabChange ();
 
             // Construct and customize a file chooser
             final JFileChooser fc = new JFileChooser (AppData.properties.get ("resourceDir"));

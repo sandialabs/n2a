@@ -2056,11 +2056,13 @@ VisitorStep<T>::VisitorStep (EventStep<T> * event)
 template<class T>
 VisitorStep<T>::~VisitorStep ()
 {
+    // Flush any lingering instances. These get moved to their respective population dead list.
+    // Note that singletons don't get moved to a dead list because they are a direct member of their population object.
     Part<T> * p = queue.next;
     while (p)
     {
         Part<T> * next = p->next;
-        delete p;
+        p->leaveSimulation ();
         p = next;
     }
 }
