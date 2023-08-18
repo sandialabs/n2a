@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.AppData.MFolder;
 import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
@@ -709,11 +710,17 @@ public class SettingsRepo extends JScrollPane implements Settings
             {
                 public void actionPerformed (ActionEvent event)
                 {
-                    MDir   destination = (MDir) getOrCreateContainer (key, folder);
-                    MCombo combo       = (MCombo) AppData.docs.child (folder);
+                    MDir destination = (MDir) getOrCreateContainer (key, folder);
+                    rebuild ();  // In case destination is newly created, it needs to be inserted into combo.
 
                     destination.take (source, docKey);
-                    combo.childDeleted (docKey);  // Not actually deleted. This just forces an update of the children map.
+                    MCombo combo = (MCombo) AppData.docs.child (folder);
+                    // rebuild() triggers multiple calls to PanelSearch.search(). One or more of those threads
+                    // will likely still be running at this point. A search thread locks docs then locks combo,
+                    // while a call to childDeleted() locks combo then lock docs. This creates a deadlock between
+                    // the EDT and the search thread. By first acquiring a lock on docs, we force the same order
+                    // as the search thread and thus avoid deadlock.
+                    synchronized (AppData.docs) {combo.childDeleted (docKey);}  // Not actually deleted. This just forces an update of the children map.
                 }
             });
         }
@@ -796,12 +803,12 @@ public class SettingsRepo extends JScrollPane implements Settings
             MCombo d = (MCombo) AppData.docs.child (folderName);
             if (d == null)
             {
-                d = new MCombo (folderName, containers);
+                d = new MFolder (folderName, containers);
                 AppData.docs.link (d);
             }
             else
             {
-                d.init (containers);
+                d.init (containers);  // Triggers changed() callback, which in turn triggers PanelSearch.search().
             }
             // Notice that the above code won't remove a folder from AppData.documents.
             // However, it will update the MCombo's container list to be empty.
@@ -1167,6 +1174,10 @@ public class SettingsRepo extends JScrollPane implements Settings
             repoModel.updateOrder ();
             repoModel.fireTableRowsInserted (row, row);
             repoTable.changeSelection (row, 4, false, false);
+
+            // No need to update "existing", because new repo has no folders.
+            // Similarly, there is no need to rebuild.
+            // However, these structures must be updated when files are added to repo.
 
             if (URL.isEmpty ()) repoTable.editCellAt (row, 4, null);
             else                pull (gitRepo, name);
