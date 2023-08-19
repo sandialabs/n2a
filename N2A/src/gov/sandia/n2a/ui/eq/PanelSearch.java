@@ -504,14 +504,14 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
         UndoManager um = MainFrame.instance.undoManager;
         UndoableEdit ue = um.editToBeUndone ();
         if (! (ue instanceof AddPart)) return;
-        AddPart ap = (AddPart) ue;
 
         // Ensure that the context is the same as when added.
+        AddPart ap = (AddPart) ue;
+        gov.sandia.n2a.ui.eq.tree.NodeBase createdNode = ap.getCreatedNode ();
+        if (createdNode == null  ||  ! lastConnection.equals (createdNode.getKeyPath ())) return;
         gov.sandia.n2a.ui.eq.tree.NodeBase part = gov.sandia.n2a.ui.eq.tree.NodeBase.locateNode (lastConnection);
         if (part == null) return;
-        gov.sandia.n2a.ui.eq.tree.NodeBase parent = part.getTrueParent ();
-        if (parent != PanelModel.instance.panelEquations.part) return;
-        if (! parent.getKeyPath ().equals (ap.path)) return;
+        if (part.getTrueParent () != PanelModel.instance.panelEquations.part) return;
 
         // Ensure that the added part inherits from one of the connection candidates.
         NodeInherit ni = (NodeInherit) part.child ("$inherit");

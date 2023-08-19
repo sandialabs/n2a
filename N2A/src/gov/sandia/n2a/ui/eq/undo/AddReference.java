@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import java.lang.ref.WeakReference;
 import java.util.List;
 
 import javax.swing.tree.TreeNode;
@@ -26,13 +27,13 @@ import gov.sandia.n2a.ui.ref.PanelReference;
 
 public class AddReference extends UndoableView implements AddEditable
 {
-    protected List<String> path;        // to parent of $ref node
-    protected int          index;       // where to insert among siblings
-    protected String       name;
-    protected String       value;
-    protected NodeBase     createdNode; // Used by caller to initiate editing. Only valid immediately after call to redo().
-    protected boolean      multi;
-    protected boolean      multiLast;
+    protected List<String>            path;        // to parent of $ref node
+    protected int                     index;       // where to insert among siblings
+    protected String                  name;
+    protected String                  value;
+    protected WeakReference<NodeBase> createdNode; // Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected boolean                 multi;
+    protected boolean                 multiLast;
 
     /**
         @param parent Must be the node that contains $ref, not the $ref node itself.
@@ -146,12 +147,14 @@ public class AddReference extends UndoableView implements AddEditable
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, value, multi);
+        NodeBase temp = create (path, index, name, value, multi);
+        createdNode = new WeakReference<NodeBase> (temp);
     }
 
     public NodeBase getCreatedNode ()
     {
-        return createdNode;
+        if (createdNode == null) return null;
+        return createdNode.get ();
     }
 
     public static NodeBase create (List<String> path, int index, String name, String value, boolean multi)

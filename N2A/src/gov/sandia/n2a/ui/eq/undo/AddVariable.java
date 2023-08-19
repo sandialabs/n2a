@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,14 +28,14 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class AddVariable extends UndoableView implements AddEditable
 {
-    protected List<String> path;         // to part that contains the variable node
-    protected int          index;        // where to insert among siblings
-    protected String       name;
-    protected MNode        createSubtree;
-    protected boolean      nameIsGenerated;
-    protected NodeBase     createdNode;  // Used by caller to initiate editing. Only valid immediately after call to redo().
-    protected boolean      multi;
-    protected boolean      multiLast;
+    protected List<String>            path;         // to part that contains the variable node
+    protected int                     index;        // where to insert among siblings
+    protected String                  name;
+    protected MNode                   createSubtree;
+    protected boolean                 nameIsGenerated;
+    protected WeakReference<NodeBase> createdNode;  // Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected boolean                 multi;
+    protected boolean                 multiLast;
 
     public AddVariable (NodePart parent, int index, MNode data)
     {
@@ -205,12 +206,14 @@ public class AddVariable extends UndoableView implements AddEditable
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi);
+        NodeBase temp = create (path, index, name, createSubtree, nameIsGenerated, multi);
+        createdNode = new WeakReference<NodeBase> (temp);
     }
 
     public NodeBase getCreatedNode ()
     {
-        return createdNode;
+        if (createdNode == null) return null;
+        return createdNode.get ();
     }
 
     public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated, boolean multi)

@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -34,18 +35,18 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class AddAnnotation extends UndoableView implements AddEditable
 {
-    protected List<String> path;            // to the container of the new node. Can be a variable, $meta (under a part), or annotation.
-    protected int          index;           // Where to insert among siblings. Unfiltered.
-    protected String       name;
-    protected String       prefix;          // Name path to first node that does not already exist at add location. If all nodes already exist (and this is merely a value set), then string is empty and undo() will not clear anything.
-    protected MNode        createSubtree;
-    protected boolean      nameIsGenerated;
-    protected NodeBase     createdNode;     // Used by caller to initiate editing. Only valid immediately after call to redo().
-    protected boolean      multi;           // Add to existing selection rather than blowing it away.
-    protected boolean      multiLast;       // Set selection during delete, but add to selection during create.
-    public    boolean      selectVariable;  // Select containing variable rather than specific metadata node. Implies the relevant node is directly under a variable.
-    protected boolean      touchesPin;
-    protected boolean      touchesCategory;
+    protected List<String>            path;            // to the container of the new node. Can be a variable, $meta (under a part), or annotation.
+    protected int                     index;           // Where to insert among siblings. Unfiltered.
+    protected String                  name;
+    protected String                  prefix;          // Name path to first node that does not already exist at add location. If all nodes already exist (and this is merely a value set), then string is empty and undo() will not clear anything.
+    protected MNode                   createSubtree;
+    protected boolean                 nameIsGenerated;
+    protected WeakReference<NodeBase> createdNode;     // Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected boolean                 multi;           // Add to existing selection rather than blowing it away.
+    protected boolean                 multiLast;       // Set selection during delete, but add to selection during create.
+    public    boolean                 selectVariable;  // Select containing variable rather than specific metadata node. Implies the relevant node is directly under a variable.
+    protected boolean                 touchesPin;
+    protected boolean                 touchesCategory;
 
     /**
         @param parent Direct container of the new node, even if not a $meta node.
@@ -281,12 +282,14 @@ public class AddAnnotation extends UndoableView implements AddEditable
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, selectVariable, touchesPin, touchesCategory);
+        NodeBase temp = create (path, index, name, createSubtree, nameIsGenerated, multi, selectVariable, touchesPin, touchesCategory);
+        createdNode = new WeakReference<NodeBase> (temp);
     }
 
     public NodeBase getCreatedNode ()
     {
-        return createdNode;
+        if (createdNode == null) return null;
+        return createdNode.get ();
     }
 
     public static NodeBase create (List<String> path, int index, String name, MNode createSubtree, boolean nameIsGenerated, boolean multi, boolean selectVariable, boolean touchesPin, boolean touchesCategory)

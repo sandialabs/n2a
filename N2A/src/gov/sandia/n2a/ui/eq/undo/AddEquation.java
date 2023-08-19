@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import java.lang.ref.WeakReference;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.TreeSet;
@@ -27,17 +28,17 @@ import gov.sandia.n2a.ui.eq.tree.NodeVariable;
 
 public class AddEquation extends UndoableView implements AddEditable
 {
-    protected List<String> path;  // to variable node
-    protected int          equationCount;  // of subsidiary nodes only; before adding this equation
-    protected int          index; // where to insert among siblings
-    protected String       name;  // includes the leading @
-    protected String       combinerBefore;
-    protected String       combinerAfter;
-    protected String       value;
-    protected NodeBase     createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
-    protected boolean      killedVariable;
-    protected boolean      multi;
-    protected boolean      multiLast;
+    protected List<String>            path;  // to variable node
+    protected int                     equationCount;  // of subsidiary nodes only; before adding this equation
+    protected int                     index; // where to insert among siblings
+    protected String                  name;  // includes the leading @
+    protected String                  combinerBefore;
+    protected String                  combinerAfter;
+    protected String                  value;
+    protected WeakReference<NodeBase> createdNode;  ///< Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected boolean                 killedVariable;
+    protected boolean                 multi;
+    protected boolean                 multiLast;
 
     public AddEquation (NodeVariable parent, int index, MNode data)
     {
@@ -175,12 +176,14 @@ public class AddEquation extends UndoableView implements AddEditable
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, equationCount, index, name, combinerAfter, value, multi);
+        NodeBase temp = create (path, equationCount, index, name, combinerAfter, value, multi);
+        createdNode = new WeakReference<NodeBase> (temp);
     }
 
     public NodeBase getCreatedNode ()
     {
-        return createdNode;
+        if (createdNode == null) return null;
+        return createdNode.get ();
     }
 
     public static NodeBase create (List<String> path, int equationCount, int index, String name, String combinerAfter, String value, boolean multi)

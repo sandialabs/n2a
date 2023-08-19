@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
+import java.lang.ref.WeakReference;
 import java.util.List;
 
 import javax.swing.tree.TreeNode;
@@ -24,14 +25,14 @@ import gov.sandia.n2a.ui.eq.tree.NodeContainer;
 
 public class AddAnnotations extends UndoableView implements AddEditable   // The added node is not actually editable, but sometimes there is a use in retrieving it anyway.
 {
-    protected List<String> path;  // to parent of $meta node
-    protected int          index; // Position within parent node
-    protected MVolatile    saved; // subtree under $meta
-    protected boolean      multi;
-    protected boolean      multiLast;
-    protected boolean      touchesPin;
-    protected boolean      touchesCategory;
-    protected NodeBase     createdNode;
+    protected List<String>            path;  // to parent of $meta node
+    protected int                     index; // Position within parent node
+    protected MVolatile               saved; // subtree under $meta
+    protected boolean                 multi;
+    protected boolean                 multiLast;
+    protected boolean                 touchesPin;
+    protected boolean                 touchesCategory;
+    protected WeakReference<NodeBase> createdNode;
 
     public AddAnnotations (NodeBase parent, int index, MNode metadata)
     {
@@ -100,12 +101,14 @@ public class AddAnnotations extends UndoableView implements AddEditable   // The
                 return new NodeAnnotations (part);
             }
         };
-        createdNode = create (path, index, saved, factory, multi, touchesPin, touchesCategory);
+        NodeBase temp = create (path, index, saved, factory, multi, touchesPin, touchesCategory);
+        createdNode = new WeakReference<NodeBase> (temp);
     }
 
     public NodeBase getCreatedNode ()
     {
-        return createdNode;
+        if (createdNode == null) return null;
+        return createdNode.get ();
     }
 
     public static NodeBase create (List<String> path, int index, MNode saved, NodeFactory factory, boolean multi, boolean touchesPin, boolean touchesCategory)

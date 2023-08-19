@@ -9,6 +9,7 @@ package gov.sandia.n2a.ui.eq.undo;
 import java.awt.Dimension;
 import java.awt.Point;
 import java.awt.geom.Point2D;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -35,16 +36,16 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class AddPart extends UndoableView implements AddEditable
 {
-    public    List<String> path;           // to containing part
-    protected int          index;          // Position in the unfiltered tree where the node should be inserted. -1 means add to end.
-    protected String       name;
-    protected MNode        createSubtree;
-    protected boolean      nameIsGenerated;
-    protected NodeBase     createdNode;    // Used by caller to initiate editing. Only valid immediately after call to redo().
-    protected boolean      multi;
-    protected boolean      multiLast;
-    public    boolean      multiShared;    // Do not adjust selection or focus at all. Our tree node is not visible because our parent is also the graph parent. Our graph node is visible, but focus should remain in tree.
-    protected boolean      touchesPin;
+    protected List<String>            path;           // to containing part
+    protected int                     index;          // Position in the unfiltered tree where the node should be inserted. -1 means add to end.
+    protected String                  name;
+    protected MNode                   createSubtree;
+    protected boolean                 nameIsGenerated;
+    protected WeakReference<NodeBase> createdNode;    // Used by caller to initiate editing. Only valid immediately after call to redo().
+    protected boolean                 multi;
+    protected boolean                 multiLast;
+    public    boolean                 multiShared;    // Do not adjust selection or focus at all. Our tree node is not visible because our parent is also the graph parent. Our graph node is visible, but focus should remain in tree.
+    protected boolean                 touchesPin;
 
     public AddPart (NodePart parent, int index, MNode data, Point2D.Double location)
     {
@@ -368,12 +369,14 @@ public class AddPart extends UndoableView implements AddEditable
     public void redo ()
     {
         super.redo ();
-        createdNode = create (path, index, name, createSubtree, nameIsGenerated, multi, multiLast, multiShared, touchesPin);
+        NodeBase temp = create (path, index, name, createSubtree, nameIsGenerated, multi, multiLast, multiShared, touchesPin);
+        createdNode = new WeakReference<NodeBase> (temp);
     }
 
     public NodeBase getCreatedNode ()
     {
-        return createdNode;
+        if (createdNode == null) return null;
+        return createdNode.get ();
     }
 
     public static NodeBase create (List<String> path, int index, String name, MNode newPart, boolean nameIsGenerated, boolean multi, boolean multiLast, boolean multiShared, boolean touchesPin)
