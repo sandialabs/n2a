@@ -23,10 +23,12 @@ import gov.sandia.n2a.ui.eq.search.NameEditor;
 import gov.sandia.n2a.ui.eq.search.NodeBase;
 import gov.sandia.n2a.ui.eq.search.NodeCategory;
 import gov.sandia.n2a.ui.eq.search.NodeModel;
+import gov.sandia.n2a.ui.eq.tree.NodeInherit;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.eq.undo.ChangeCategory;
+import gov.sandia.n2a.ui.eq.undo.ChangeInherit;
 import gov.sandia.n2a.ui.eq.undo.DeleteDoc;
 import gov.sandia.n2a.ui.settings.SettingsRepo;
 
@@ -74,14 +76,18 @@ import javax.swing.TransferHandler;
 import javax.swing.border.Border;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.event.TreeSelectionEvent;
+import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
+import javax.swing.undo.UndoableEdit;
 
 
 @SuppressWarnings("serial")
-public class PanelSearch extends JPanel
+public class PanelSearch extends JPanel implements TreeSelectionListener
 {
     protected SearchThread     threadSearch;
     protected JTextField       textQuery;
@@ -94,6 +100,7 @@ public class PanelSearch extends JPanel
     public    List<String>     lastSelection;
     public    List<String>     insertAt;           // Path to node that next insertion should precede. If null, insert at top of uncategorized nodes.
     protected String           lastQuery     = ""; // for purpose of caching expanded nodes
+    protected List<String>     lastConnection;     // Name of connection part last added by ConnectThread. Used to allow user to modify $inherit with simple click.
     protected List<String[]>   expandedNodes = new ArrayList<String[]> ();
 
     protected Map<String,Connector> connectors;
@@ -132,6 +139,7 @@ public class PanelSearch extends JPanel
         tree.setCellRenderer (renderer);
         tree.setCellEditor (nameEditor);
         tree.addTreeSelectionListener (nameEditor);
+        tree.addTreeSelectionListener (this);
         //tree.putClientProperty ("JTree.lineStyle", "None");  // Get rid of lines that connect children to parents. Also need to hide handles, but that is more difficult (no option in JTree).
 
         UndoManager um = MainFrame.instance.undoManager;
@@ -482,6 +490,51 @@ public class PanelSearch extends JPanel
         if (threadConnect != null) threadConnect.stop = true;
         threadConnect = new ConnectThread (query);
         threadConnect.start ();
+    }
+
+    public void valueChanged (TreeSelectionEvent e)
+    {
+        if (! e.isAddedPath ()) return;
+
+        // Ensure that we are currently showing a list of connection candidates.
+        if (! lastQuery.startsWith ("(connection")) return;
+        if (lastConnection == null) return;
+
+        // Ensure that we just added a part.
+        UndoManager um = MainFrame.instance.undoManager;
+        UndoableEdit ue = um.editToBeUndone ();
+        if (! (ue instanceof AddPart)) return;
+        AddPart ap = (AddPart) ue;
+
+        // Ensure that the context is the same as when added.
+        gov.sandia.n2a.ui.eq.tree.NodeBase part = gov.sandia.n2a.ui.eq.tree.NodeBase.locateNode (lastConnection);
+        if (part == null) return;
+        gov.sandia.n2a.ui.eq.tree.NodeBase parent = part.getTrueParent ();
+        if (parent != PanelModel.instance.panelEquations.part) return;
+        if (! parent.getKeyPath ().equals (ap.path)) return;
+
+        // Ensure that the added part inherits from one of the connection candidates.
+        NodeInherit ni = (NodeInherit) part.child ("$inherit");
+        if (ni == null) return;
+        String inherit = ni.source.get ();
+        boolean found = false;
+        Enumeration<TreeNode> children = root.children ();
+        while (children.hasMoreElements ())
+        {
+            TreeNode n = children.nextElement ();
+            if (n.toString ().equals (inherit))
+            {
+                found = true;
+                break;
+            }
+        }
+        if (! found) return;
+
+        // Create a transaction to change inherit to the newly-selected item.
+        NodeModel nm = (NodeModel) e.getNewLeadSelectionPath ().getLastPathComponent ();
+        ChangeInherit ci = new ChangeInherit (ni, nm.key);
+        ci.connection = true;
+        um.apply (ci);
     }
 
     public NodeBase getSelectedNode ()
@@ -946,12 +999,11 @@ public class PanelSearch extends JPanel
                 p = p.trim ().replace ("\"", "");
                 partNames.add (p);
             }
-            if (partNames.isEmpty ()) partNames = null;
         }
 
         public float score (EndpointTarget target)
         {
-            if (partNames.isEmpty ()) return 0;
+            if (partNames.isEmpty ()) return 0;  // All targets match. An expensive match on another endpoint will tend to get shifted onto this one.
             float result = Float.POSITIVE_INFINITY;
             for (String p : partNames)
             {
@@ -976,7 +1028,7 @@ public class PanelSearch extends JPanel
         Map<String,Integer> ancestors = new HashMap<String,Integer> ();
 
         /**
-            Takes a sub-part of model and interprets its $inherit line to form a set of ancestor parts.
+            Takes a sub-part of the model and interprets its $inherit line to form a set of ancestor parts.
             Ancestors are ranked by distance from the given child part. If an ancestor appears more than
             once, the closest occurrence determines the rank.
         **/
@@ -993,7 +1045,6 @@ public class PanelSearch extends JPanel
 
         public void process (MNode part, int depth)
         {
-            ancestors.put (part.key (), depth++);
             String[] inherits = part.get ("$inherit").split (",");
             for (String inherit : inherits)
             {
@@ -1003,13 +1054,23 @@ public class PanelSearch extends JPanel
                 if (d == null)
                 {
                     MNode m = AppData.docs.child ("models", inherit);
-                    if (m != null) process (m, depth);
+                    if (m != null)
+                    {
+                        ancestors.put (inherit, depth);
+                        process (m, depth + 1);
+                    }
                 }
-                else if (d > depth)
+                else if (d > depth)  // Ancestor is reached by a shorter path, so update with lower depth.
                 {
                     ancestors.put (inherit, depth);
                 }
             }
+        }
+
+        public void dump ()
+        {
+            System.out.println (node);
+            for (Entry<String,Integer> e : ancestors.entrySet ()) System.out.println ("  " + e.getKey () + " = " + e.getValue ());
         }
     }
 
@@ -1162,7 +1223,6 @@ public class PanelSearch extends JPanel
     }
 
     // Initialize connector index.
-    // TODO: also need incremental maintenance of connector index
     public class BuildConnectorIndex extends Thread
     {
         public BuildConnectorIndex ()
@@ -1200,6 +1260,7 @@ public class PanelSearch extends JPanel
 
             query = nodes;
             part = PanelModel.instance.panelEquations.part;
+            lastConnection = null;
         }
 
         @Override
@@ -1251,7 +1312,7 @@ public class PanelSearch extends JPanel
             int    count = 0;
             for (NodePart p : query)
             {
-                MNode bounds = p.source.child ("$meta", "bounds");
+                MNode bounds = p.source.child ("$meta", "gui", "bounds");
                 if (bounds == null) continue;
                 x += bounds.getDouble ("x");
                 y += bounds.getDouble ("y");
@@ -1283,6 +1344,7 @@ public class PanelSearch extends JPanel
 
                     AddPart ap = new AddPart (parent, parent.getChildCount (), data, c);
                     MainFrame.instance.undoManager.apply (ap);
+                    if (newRoot.getChildCount () > 1) lastConnection = ap.getCreatedNode ().getKeyPath ();
                 }
             });
         }

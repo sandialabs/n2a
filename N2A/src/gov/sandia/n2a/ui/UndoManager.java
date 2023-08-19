@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -57,5 +57,10 @@ public class UndoManager extends javax.swing.undo.UndoManager
             @return true if the item should be removed; false if it should remain
         **/
         public boolean remove (Undoable edit);
+    }
+
+    public UndoableEdit editToBeUndone ()
+    {
+        return super.editToBeUndone ();
     }
 }

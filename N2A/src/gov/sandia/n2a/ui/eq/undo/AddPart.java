@@ -35,7 +35,7 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 
 public class AddPart extends UndoableView implements AddEditable
 {
-    protected List<String> path;           // to containing part
+    public    List<String> path;           // to containing part
     protected int          index;          // Position in the unfiltered tree where the node should be inserted. -1 means add to end.
     protected String       name;
     protected MNode        createSubtree;
@@ -477,6 +477,15 @@ public class AddPart extends UndoableView implements AddEditable
             {
                 name = change.nameAfter;
                 nameIsGenerated = false;
+                return true;
+            }
+        }
+        else if (edit instanceof ChangeInherit)
+        {
+            ChangeInherit ci = (ChangeInherit) edit;
+            if (ci.connection)  // When this flag is true, PanelSearch promises that the transactions are related.
+            {
+                createSubtree.set (ci.valueAfter, "$inherit");
                 return true;
             }
         }

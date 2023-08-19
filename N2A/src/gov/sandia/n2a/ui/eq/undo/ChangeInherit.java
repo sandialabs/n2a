@@ -23,8 +23,9 @@ import gov.sandia.n2a.ui.eq.tree.NodePart;
 public class ChangeInherit extends UndoableView
 {
     protected List<String> path;
-    protected String valueBefore;
-    protected String valueAfter;
+    protected String       valueBefore;
+    protected String       valueAfter;
+    public    boolean      connection;  // Indicates that this object was created by the search panel to update a newly-created connection.
 
     /**
         @param container The direct container of the node being changed.

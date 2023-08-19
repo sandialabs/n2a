@@ -133,6 +133,9 @@ public class AddVariable extends UndoableView implements AddEditable
                     if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
                     else                       parent.graph.killEdge   (name);
                 }
+            }
+            if (createdNode.isBinding != wasBinding  ||  createdNode.isBinding)
+            {
                 if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }
         }
@@ -258,6 +261,9 @@ public class AddVariable extends UndoableView implements AddEditable
                     if (createdNode.isBinding) parent.graph.updateEdge (name, parent.connectionBindings.get (name));
                     else                       parent.graph.killEdge   (name);
                 }
+            }
+            if (createdNode.isBinding != wasBinding  ||  createdNode.isBinding)  // The second case allows for change in binding value.
+            {
                 MPart mparent = parent.source;
                 if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
             }

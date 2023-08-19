@@ -229,7 +229,9 @@ public class ChangeVariable extends UndoableView
             // Rebuild all edges on canvas, whether regular connection or pin.
             peg.reconnect ();
             peg.repaint ();
-
+        }
+        if (touchedBindings  ||  nodeAfter.isBinding)
+        {
             MPart mparent = parent.source;
             if (mparent.root () == mparent) PanelModel.instance.panelSearch.updateConnectors (mparent);
         }
