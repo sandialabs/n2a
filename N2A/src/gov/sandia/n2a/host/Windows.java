@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -68,18 +68,15 @@ public class Windows extends Host
     @Override
     public boolean isAlive (MNode job) throws Exception
     {
-        long pid = job.getOrDefault (0l, "pid");
-        if (pid == 0) return false;
-
         String jobDir = Paths.get (job.get ()).getParent ().toString ();
-        Process proc = new ProcessBuilder ("powershell", "get-process", "-Id", String.valueOf (pid), "|", "format-table", "Path").start ();
+        Process proc = new ProcessBuilder ("powershell", "get-ciminstance", "win32_process", "|", "select", "commandline", "|", "convertto-csv").start ();
         proc.getOutputStream ().close ();
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
             {
-                if (line.startsWith (jobDir)) return true;
+                if (line.contains (jobDir)) return true;
             }
         }
         return false;
@@ -95,30 +92,40 @@ public class Windows extends Host
         Path   resourceDir = getResourceDir ();
         String jobsDir     = resourceDir.resolve ("jobs").toString ();
 
-        Process proc = new ProcessBuilder ("powershell", "get-process", "|", "format-table", "Id,WorkingSet,Path").start ();
+        Process proc = new ProcessBuilder ("powershell", "get-ciminstance", "win32_process", "|", "select", "processid,workingsetsize,commandline", "|", "convertto-csv").start ();
+        proc.getOutputStream ().close ();
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
             while ((line = reader.readLine ()) != null)
             {
-                if (line.contains (jobsDir))
+                if (! line.contains (jobsDir)) continue;
+
+                ProcessInfo info = new ProcessInfo ();
+
+                String[] parts = line.split (",", 2);
+                info.pid = Long.valueOf (parts[0].replace ("\"", ""));
+
+                parts = parts[1].split (",", 2);
+                info.memory = Long.valueOf (parts[0].replace ("\"", ""));
+
+                int pos = parts[1].indexOf (jobsDir);
+                if (pos >= 0)
                 {
-                    ProcessInfo info = new ProcessInfo ();
-
-                    String[] parts = line.trim ().split (" ", 2);
-                    info.pid = Long.valueOf (parts[0]);
-
-                    parts = parts[1].trim ().split (" ", 2);
-                    info.memory = Long.valueOf (parts[0]);
-
-                    result.add (info);
-                    id2process.put (info.pid, info);
+                    String temp = parts[1].substring (pos + jobsDir.length () + 1);  // +1 because jobsDir does not end with slash
+                    pos = temp.indexOf ("\\");
+                    if (pos >= 0) info.jobKey = temp.substring (0, pos);
+                    else          info.jobKey = temp;
                 }
+
+                result.add (info);
+                id2process.put (info.pid, info);
             }
         }
 
         // Extra awkward work to get cpu utilization out of powershell
-        proc = new ProcessBuilder ("powershell", "get-counter", "\"\\process(*)\\id process\",\"\\process(*)\\% processor time\"").start ();
+        proc = new ProcessBuilder ("powershell", "get-counter", "\"\"\"\\process(*)\\id process\"\"\",\"\"\"\\process(*)\\% processor time\"\"\"").start ();  // Yes, we actually have to pass three quotes per each actual quote here. There may be better ways, but this works.
+        proc.getOutputStream ().close ();
         try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
         {
             String line;
@@ -130,7 +137,7 @@ public class Windows extends Host
                 pieces = pieces[1].split ("\\)", 2);
                 String name = pieces[0];
 
-                String line2 = reader.readLine ();
+                String line2 = reader.readLine ().trim ();
 
                 if (line.contains ("id process"))
                 {
@@ -144,17 +151,39 @@ public class Windows extends Host
                 else if (line.contains ("processor time"))
                 {
                     ProcessInfo info = name2process.get (name);
-                    if (info != null) info.cpu = Double.valueOf (line2);
+                    if (info != null) info.cpu = Double.valueOf (line2) / 100;
                 }
             }
         }
-        
+
+        // Consolidate multiple processes associated with the same job.
+        for (int i = result.size () - 1; i >= 0; i--)
+        {
+            ProcessInfo I = result.get (i);
+            for (int j = i - 1; j >= 0; j--)
+            {
+                ProcessInfo J = result.get (j);
+                if (I.jobKey != null  &&  J.jobKey != null  &&  I.jobKey.equals (J.jobKey))
+                {
+                    J.cpu    += I.cpu;
+                    J.memory += I.memory;
+                    result.remove (i);
+                    break;
+                }
+            }
+        }
+
         return result;
     }
 
     @Override
     public void submitJob (MNode job, boolean out2err, List<List<String>> commands, List<Path> libPath) throws Exception
     {
+        for (ProcessInfo pi : getActiveProcs ())
+        {
+            System.out.println (pi.jobKey + " " + pi.memory + " " + pi.cpu);
+        }
+
         Path jobDir = Paths.get (job.get ()).getParent ();
         Path script = jobDir.resolve ("n2a_job.bat");
         String out = out2err ? "err1" : "out";  // Windows cmd is too stupid to append two streams to the same file, so we have to use something different than "err" here.
@@ -213,20 +242,19 @@ public class Windows extends Host
             throw new Backend.AbortRun ("Failed to run job:\n" + stdErr);
         }
 
-        // Get PID of newly-started job
+        // Wait until process starts.
         String jobDirString = jobDir.toString ();
-        proc = new ProcessBuilder ("powershell", "get-process", "|", "format-table", "Id,Path").start ();
-        proc.getOutputStream ().close ();
-        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        long start = System.currentTimeMillis ();
+        while (System.currentTimeMillis () - start < 3000)  // Wait up to 3 seconds.
         {
-            String line;
-            while ((line = reader.readLine ()) != null)
+            proc = new ProcessBuilder ("powershell", "get-ciminstance", "win32_process", "|", "select", "commandline", "|", "convertto-csv").start ();
+            proc.getOutputStream ().close ();
+            try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
             {
-                if (line.contains (jobDirString))
+                String line;
+                while ((line = reader.readLine ()) != null)
                 {
-                    line = line.trim ().split (" ", 2)[0];
-                    job.set (Long.parseLong (line), "pid");
-                    return;
+                    if (line.contains (jobDirString)) return;
                 }
             }
         }
@@ -235,13 +263,26 @@ public class Windows extends Host
     @Override
     public void killJob (MNode job, boolean force) throws Exception
     {
-        long pid = job.getOrDefault (0l, "pid");
-        if (pid == 0) return;
-
-        if (force) new ProcessBuilder ("taskkill", "/PID", String.valueOf (pid), "/F").start ();
         // Windows does not provide a simple way to signal a non-GUI process.
         // Instead, the program is responsible to poll for the existence of the "finished" file
         // on a reasonable interval, say once per second. See Backend.kill()
+        if (! force) return;
+
+        Path jobDir = Paths.get (job.get ()).getParent ();
+        String jobDirString = jobDir.toString ();
+        Process proc = new ProcessBuilder ("powershell", "get-ciminstance", "win32_process", "|", "select", "processid,commandline", "|", "convertto-csv").start ();
+        proc.getOutputStream ().close ();
+        try (BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+        {
+            String line;
+            while ((line = reader.readLine ()) != null)
+            {
+                if (! line.contains (jobDirString)) continue;
+                String[] parts = line.split (",", 2);
+                String pid = parts[0].replace ("\"", "");
+                new ProcessBuilder ("taskkill", "/PID", pid, "/F").start ();
+            }
+        }
     }
 
     public void deleteTree (Path start)

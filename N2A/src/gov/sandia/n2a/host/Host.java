@@ -604,6 +604,7 @@ public abstract class Host
     public class ProcessInfo
     {
         public long   pid;
+        public String jobKey;     // unique ID of job directory
         public long   memory;     // bytes in use
         public double cpu = 1;    // number of cores in use
         public String state = ""; // for HPC jobs

@@ -129,7 +129,8 @@ class XyceBackend extends Backend
     @Override
     public double currentSimTime (MNode job)
     {
-        return getSimTimeFromOutput (job, "out", 1);
+        String out = getOutFileName (job);
+        return getSimTimeFromOutput (job, out, 1);
     }
 
     public void analyze (EquationSet s)

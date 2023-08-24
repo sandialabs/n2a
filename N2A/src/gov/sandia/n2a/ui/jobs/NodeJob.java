@@ -61,6 +61,7 @@ import javax.swing.tree.TreePath;
     host -- Name of system that will run the simulation. May contain a hierarchy of addtional keys.
     lineLength -- How many bytes back from current end of output file to start scanning for timestamp.
     pid -- OS identifier for the simulation process. Used to monitor or kill the job.
+    progress -- Name of output file used to monitor for current sim time.
     started -- Unix time when backend started working on the job.
     status -- Human-readable description of preparation work the backend is doing now.
               If missing or blank, then the job is actually executing.
@@ -272,16 +273,19 @@ public class NodeJob extends NodeBase
             job.clear ("host", "study");  // While we can't negate every unimportant thing, this is definitely one of them.
         }
 
-        // Only need the main backend key, since the backend will always open the model, and thus can access detailed keys directly.
+        // Only need a few select backend keys for job management. The backend will always open the model, and thus can access detailed keys directly.
         String temp = model.get ("$meta", "backend");
         if (! temp.isEmpty ()) job.set (temp, "backend");
+
+        temp = model.get ("$meta", "backend", "all", "progress");
+        if (! temp.isEmpty ()) job.set (temp, "progress");
 
         temp = model.get ("$meta", "duration");
         if (! temp.isEmpty ()) job.set (temp, "duration");
 
-        // Unlike everything above, "seed" is merely trivia.
-        // However, it is useful for reproducing a run, so is frequently displayed to user.
-        // To avoid constantly opening the model, we copy it over to the job record.
+        // "seed" is merely trivia. However, it is useful for reproducing a run,
+        // so is frequently displayed to user. To avoid constantly opening the
+        // model, we copy it over to the job record.
         temp = model.get ("$meta", "seed");
         if (! temp.isEmpty ()) job.set (temp, "seed");
     }
@@ -369,7 +373,7 @@ public class NodeJob extends NodeBase
             {
                 long now = System.currentTimeMillis ();
                 boolean waiting =  complete == 0  &&  (source.get ("queue").startsWith ("PEND")  ||  ! source.get ("status").isBlank ());
-                if (simulator.isAlive (source)  ||  waiting)
+                if (waiting  ||  simulator.isAlive (source))
                 {
                     if (currentSimTime > lastSimTime)  // Making progress
                     {

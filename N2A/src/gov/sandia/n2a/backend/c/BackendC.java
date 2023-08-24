@@ -8,7 +8,6 @@ package gov.sandia.n2a.backend.c;
 
 import java.nio.file.Path;
 
-import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -27,12 +26,6 @@ public class BackendC extends Backend
         Thread t = new JobC (job);
         t.setDaemon (true);
         t.start ();
-    }
-
-    @Override
-    public double currentSimTime (MNode job)
-    {
-        return InternalBackend.getSimTimeFromOutput (job, "out", 0);
     }
 
     /**

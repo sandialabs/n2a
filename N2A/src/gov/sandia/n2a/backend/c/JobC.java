@@ -204,7 +204,7 @@ public class JobC extends Thread
             digestedModel = new EquationSet (model);
             digestModel ();
             String duration = digestedModel.metadata.get ("duration");
-            if (! duration.isEmpty ()) job.set (duration, "duration");
+            if (! duration.isBlank ()) job.set (duration, "duration");
 
             seed = -1;
             if (digestedModel.usesRandom ())  // only record seed if actually used
@@ -1196,6 +1196,10 @@ public class JobC extends Thread
         result.append ("#include <vector>\n");
         result.append ("#include <unordered_set>\n");  // Only needed for polling. We could walk the tree and check if any parts need polling before emitting this line, but it's probably not worth the effort.
         result.append ("#include <csignal>\n");
+        if (env instanceof Windows)  // For hack to work around flaky batch processing. See main() below.
+        {
+            result.append ("#include <fstream>\n");
+        }
         result.append ("\n");
         generateClassList (digestedModel, result);
         result.append ("class Wrapper;\n");
@@ -1484,13 +1488,28 @@ public class JobC extends Thread
             result.append ("  catch (const char * message)\n");
             result.append ("  {\n");
             result.append ("    cerr << \"Exception: \" << message << endl;\n");
+            if (env instanceof Windows)  // Hack to work around flaky batch processing. See Windows.submitJob() for details.
+            {
+                result.append ("    ofstream ofs (\"finished\");\n");
+                result.append ("    ofs << \"failure\";\n");
+            }
             result.append ("    return 1;\n");
             result.append ("  }\n");
             result.append ("  catch (...)\n");
             result.append ("  {\n");
             result.append ("    cerr << \"Generic Exception\" << endl;\n");
+            if (env instanceof Windows)
+            {
+                result.append ("    ofstream ofs (\"finished\");\n");
+                result.append ("    ofs << \"failure\";\n");
+            }
             result.append ("    return 1;\n");
             result.append ("  }\n");
+            if (env instanceof Windows)
+            {
+                result.append ("  ofstream ofs (\"finished\");\n");
+                result.append ("  ofs << \"success\";\n");
+            }
             result.append ("  return 0;\n");
             result.append ("}\n");
         }
@@ -5590,7 +5609,7 @@ public class JobC extends Thread
                             {
                                 case "clear":
                                     context.result.append (pad + d.name + "->setClearColor (");
-                                    op.render (context);
+                                    value.render (context);
                                     context.result.append (");\n");
                                     continue;  // Don't fall through to code that assigns value.
 

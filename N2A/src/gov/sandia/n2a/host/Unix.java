@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -86,6 +86,15 @@ public class Unix extends Host
 
                     parts = parts[1].trim ().split (" ", 2);
                     info.memory = Long.valueOf (parts[0]);
+
+                    int pos = parts[1].indexOf (jobsDir);
+                    if (pos >= 0)
+                    {
+                        String temp = parts[1].substring (pos + jobsDir.length () + 1);  // +1 because jobsDir does not end with slash
+                        pos = temp.indexOf ("/");
+                        if (pos >= 0) info.jobKey = temp.substring (0, pos);
+                        else          info.jobKey = temp;
+                    }
 
                     result.add (info);
                 }

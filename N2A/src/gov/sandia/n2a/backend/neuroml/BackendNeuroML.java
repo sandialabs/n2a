@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
@@ -73,7 +72,8 @@ public class BackendNeuroML extends Backend
 
                 // Record metadata
                 if (! exportJob.duration.isEmpty ()) job.set (exportJob.duration, "duration");
-                if (exportJob.simulation != null)
+                String progress = job.get ("progress");  // The user can override defaultOutput with standard tag "progress".
+                if (exportJob.simulation != null  &&  progress.isBlank ())
                 {
                     List<String> outputFiles = exportJob.simulation.dumpColumns (jobDir);
                     String defaultOutput = "";
@@ -81,7 +81,7 @@ public class BackendNeuroML extends Backend
                     {
                         if (defaultOutput.isEmpty ()  ||  f.startsWith ("defaultOutput")) defaultOutput = f;
                     }
-                    if (! defaultOutput.isEmpty ()) job.set (defaultOutput, "defaultOutput");
+                    if (! defaultOutput.isEmpty ()) job.set (defaultOutput, "progress");
                 }
 
                 // Convert the model to target format using jnml
@@ -179,13 +179,5 @@ public class BackendNeuroML extends Backend
             PrintStream ps = err.get ();
             if (ps != System.err) ps.close ();
         }
-    }
-
-    @Override
-    public double currentSimTime (MNode job)
-    {
-        String defaultOutput = job.get ("defaultOutput");
-        if (defaultOutput.isEmpty ()) return 0;
-        return InternalBackend.getSimTimeFromOutput (job, defaultOutput, 0);
     }
 }

@@ -7,9 +7,11 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.plugins.extpoints;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -200,7 +202,54 @@ public abstract class Backend implements ExtensionPoint
     **/
     public double currentSimTime (MNode job)
     {
-        return getSimTimeFromOutput (job, "out", 0);
+        String out = getOutFileName (job);
+        return getSimTimeFromOutput (job, out, 0);
+    }
+
+    /**
+        Utility to determine what file to use for monitoring progress.
+        Selection follows this priority order:
+        1) User-specified file name in $meta.backend.all.progress (saved as "progess" in job node).
+        2) "out", but must have an associated "out.columns" file.
+        3) First file associated with a ".columns" file. Could pick largest instead,
+           based on assumption that size indicates more frequent rows, but this isn't
+           necessarily the case. The choice of any or first file is risky, but probably
+           not much worse than any other method.
+    **/
+    public static String getOutFileName (MNode job)
+    {
+        String progress = job.get ("progress");
+        if (! progress.isBlank ()) return progress;
+
+        try
+        {
+            // Check for "out"
+            Host env         = Host.get (job);
+            Path resourceDir = env.getResourceDir ();
+            Path jobDir      = Host.getJobDir (resourceDir, job);
+            Path out         = jobDir.resolve ("out");
+            if (Files.isReadable (out)  &&  Files.size (out) > 0)
+            {
+                job.set ("out", "progress");
+                return "out";
+            }
+
+            // Scan for a ".columns" file
+            try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (jobDir))
+            {
+                for (Path file : dirStream)
+                {
+                    String fileName = file.getFileName ().toString ();
+                    if (! fileName.endsWith (".columns")) continue;
+                    fileName = fileName.substring (0, fileName.length () - 8);
+                    job.set (fileName, "progress");
+                    return fileName;
+                }
+            }
+            catch (IOException e) {}
+        }
+        catch (Exception e) {}
+        return "out";
     }
 
     public static double getSimTimeFromOutput (MNode job, String outFileName, int timeColumn)
