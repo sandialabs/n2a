@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -188,12 +188,31 @@ public class Function extends Operator
     public Color evalKeyword (Instance context, String name, Color defaultValue)
     {
         Type result = evalKeyword (context, name);
-        if (result == null) return defaultValue;
-        String value = result.toString ();
-        if (! value.isBlank ())
+        if (result instanceof Matrix)
         {
-            try {return Color.decode (value);}
-            catch (NumberFormatException e) {}
+            Matrix C = (Matrix) result;
+            int count = C.rows ();
+            if (count == 1) count = C.columns ();
+            float r = (float) C.get (0);  // Assumes that C is backed by MatrixDense, where this will work for both vertical or horizontal orientation.
+            float g = (float) C.get (1);
+            float b = (float) C.get (2);
+            float a = 1;
+            if (count > 3) a = (float) C.get (3);
+            return new Color (r, g, b, a);
+        }
+        if (result instanceof Scalar)
+        {
+            int value = (int) ((Scalar) result).value;
+            return new Color (value);  // no alpha channel allowed
+        }
+        if (result instanceof Text)
+        {
+            String value = result.toString ();
+            if (! value.isBlank ())
+            {
+                try {return Color.decode (value);}
+                catch (NumberFormatException e) {}
+            }
         }
         return defaultValue;
     }

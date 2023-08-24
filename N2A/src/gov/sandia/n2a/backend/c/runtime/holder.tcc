@@ -711,7 +711,7 @@ ImageOutput<T>::ImageOutput (const String & fileName)
 
     width      = 1024;
     height     = 1024;
-    clearColor = 0;  // black
+    clearColor = 0xFF;  // opaque black
 
     // Register file formats.
     // It does no harm to call use() mutliple times.
@@ -881,7 +881,9 @@ template<class T>
 void
 ImageOutput<T>::setClearColor (const Matrix<T> & color)
 {
-    bool hasAlpha = color.rows () > 3;
+    int count = color.rows ();
+    if (count == 1) count = color.columns ();
+    bool hasAlpha = count > 3;
 
     uint32_t      r = std::min (1.0f, std::max (0.0f, color[0])) * 255;
     uint32_t      g = std::min (1.0f, std::max (0.0f, color[1])) * 255;
