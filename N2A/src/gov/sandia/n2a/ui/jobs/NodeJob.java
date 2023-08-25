@@ -693,7 +693,7 @@ public class NodeJob extends NodeBase
         if (Files.exists (snapshotPath))  // mini-repo snapshot
         {
             MNode snapshot = new MDoc (snapshotPath);  // Load the mini-repo
-            return MPart.fromSnapshot (key, snapshot);
+            return MPartSnapshot.from (key, snapshot);
         }
         if (Files.exists (modelPath))  // collated snapshot
         {

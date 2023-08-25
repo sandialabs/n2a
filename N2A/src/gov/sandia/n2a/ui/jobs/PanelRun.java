@@ -12,7 +12,6 @@ import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
-import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable.ParsedValue;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
@@ -1107,7 +1106,7 @@ public class PanelRun extends JPanel
             {
                 MNode snapshot = new MDoc (snapshotPath);
                 doc   = snapshot.child (key);
-                model = MPart.fromSnapshot (key, snapshot);
+                model = MPartSnapshot.from (key, snapshot);
             }
             else
             {

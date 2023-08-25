@@ -45,14 +45,6 @@ public class MPart extends MNode
     protected MPart container;
     protected NavigableMap<String,MPart> children;
 
-    protected static final ThreadLocal<MCombo> models = new ThreadLocal<MCombo> ()
-    {
-        protected MCombo initialValue ()
-        {
-            return (MCombo) AppData.docs.childOrCreate ("models");
-        }
-    };
-
     /**
         Collates a full model from the given source document.
     **/
@@ -67,45 +59,32 @@ public class MPart extends MNode
         expand ();
     }
 
-    /**
-        Constructs an MPart tree for the model with the given key,
-        using the given snapshot to override the main "models" database.
-    **/
-    public static MPart fromSnapshot (String key, MNode snapshot)
-    {
-        List<MNode> containers = new ArrayList<MNode> (2);
-        containers.add (snapshot);
-        containers.add (AppData.docs.childOrCreate ("models"));
-        MCombo temp = new MCombo ("temp", containers);
-        models.set (temp);
-        MPart result = new MPart (temp.child (key));
-        models.set ((MCombo) AppData.docs.child ("models"));
-        temp.done ();
-        return result;
-    }
-
-    /**
-        Constructs an MPart tree from the given document,
-        using its parent as the sole repo.
-    **/
-    public static MPart fromOther (MNode document)
-    {
-        List<MNode> containers = new ArrayList<MNode> (1);
-        containers.add (document.parent ());
-        MCombo temp = new MCombo ("temp", containers);
-        models.set (temp);
-        MPart result = new MPart (document);
-        models.set ((MCombo) AppData.docs.child ("models"));
-        temp.done ();
-        return result;
-    }
-
     protected MPart (MPart container, MPart inheritedFrom, MNode source)
     {
         this.container     = container;
         this.source        = source;
         original           = source;
         this.inheritedFrom = inheritedFrom;
+    }
+
+    /**
+        Allows different subclasses of MPart to supply their own choice of repo.
+        This embeds the choice of repo in the class itself, rather than a member
+        variable. Works together with construct().
+    **/
+    protected MNode getRepo ()
+    {
+        return AppData.docs.childOrCreate ("models");
+    }
+
+    /**
+        Enables a subclass of MPart to continue creating instances of itself for
+        all children, rather than reverting to the base class. Works together
+        with getRepo().
+    **/
+    protected MPart construct (MPart container, MPart inheritedFrom, MNode source)
+    {
+        return new MPart (container, inheritedFrom, source);
     }
 
     /**
@@ -161,8 +140,8 @@ public class MPart extends MNode
     **/
     protected synchronized void inherit (LinkedList<MNode> visited, MPart root, MNode from)
     {
-        MCombo models = MPart.models.get ();
-        boolean maintainable =  from == root  &&  root.isFromTopDocument ()  &&  models.isWriteable (((MPart) root.root ()).source);
+        MNode models = getRepo ();
+        boolean maintainable =  from == root  &&  root.isFromTopDocument ()  &&  (! (models instanceof MCombo)  ||  ((MCombo) models).isWriteable (((MPart) root.root ()).source));
         boolean changedName = false;  // Indicates that at least one name changed due to ID resolution. This lets us delay updating the field until all names are processed.
         boolean changedID   = false;
 
@@ -275,7 +254,7 @@ public class MPart extends MNode
             MPart c = children.get (key);
             if (c == null)
             {
-                c = new MPart (this, from, n);
+                c = construct (this, from, n);
                 children.put (key, c);
                 c.underrideChildren (from, n);
             }
@@ -557,7 +536,7 @@ public class MPart extends MNode
         // We don't have the child, so by construction it is not in any source document.
         override ();  // ensures that source is a member of the top-level document tree
         MNode s = source.set (value, index);
-        result = new MPart (this, null, s);
+        result = construct (this, null, s);
         if (children == null) children = new TreeMap<String,MPart> (comparator);
         children.put (index, result);
         if (index.equals ("$inherit"))  // We've created an $inherit line, so load the inherited equations.
@@ -587,7 +566,7 @@ public class MPart extends MNode
         {
             String parentName = parentNames[i];
             parentName = parentName.trim ().replace ("\"", "");
-            MNode parentSource = models.get ().child (parentName);
+            MNode parentSource = getRepo ().child (parentName);
             if (parentSource == null) newIDs.add ("");
             else                      newIDs.add (parentSource.get ("$meta", "id"));
         }
@@ -695,7 +674,7 @@ public class MPart extends MNode
         {
             MNode toDoc = source.childOrCreate (toIndex);
             toDoc.merge (fromDoc);
-            MPart c = new MPart (this, null, toDoc);
+            MPart c = construct (this, null, toDoc);
             children.put (toIndex, c);
             c.underrideChildren (null, toDoc);  // The sub-tree is empty, so all injected nodes are new. They don't really underride anything.
             c.expand ();
