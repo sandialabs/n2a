@@ -1,5 +1,5 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,6 +25,8 @@ import javax.swing.undo.CannotUndoException;
 @SuppressWarnings("serial")
 public class NTextField extends JTextField
 {
+    protected javax.swing.undo.UndoManager undoManager = new javax.swing.undo.UndoManager ();
+
     public NTextField ()
     {
         this (null, null, 0);
@@ -50,9 +52,7 @@ public class NTextField extends JTextField
         super (doc, text, columns);
 
         setTransferHandler (new SafeTextTransferHandler ());
-
-        javax.swing.undo.UndoManager um = new javax.swing.undo.UndoManager ();
-        getDocument ().addUndoableEditListener (um);
+        getDocument ().addUndoableEditListener (undoManager);
 
         InputMap inputMap = getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("control Z"),           "Undo");  // For Windows and Linux
@@ -68,7 +68,11 @@ public class NTextField extends JTextField
         {
             public void actionPerformed (ActionEvent evt)
             {
-                try {um.undo ();}
+                try
+                {
+                    if (undoManager.canUndo ()) undoManager.undo ();
+                    else                        MainFrame.instance.undoManager.undo ();
+                }
                 catch (CannotUndoException e) {}
             }
         });
@@ -76,7 +80,11 @@ public class NTextField extends JTextField
         {
             public void actionPerformed (ActionEvent evt)
             {
-                try {um.redo();}
+                try
+                {
+                    if (undoManager.canRedo ()) undoManager.redo();
+                    else                        MainFrame.instance.undoManager.redo ();
+                }
                 catch (CannotRedoException e) {}
             }
         });
@@ -86,5 +94,11 @@ public class NTextField extends JTextField
             {
             }
         });
+    }
+
+    public void setText (String text)
+    {
+        super.setText (text);
+        if (undoManager != null) undoManager.discardAllEdits ();  // When text is set programmatically, user effectively starts a new edit session.
     }
 }
