@@ -1222,12 +1222,13 @@ public class PanelRun extends JPanel
 
             // Ensure that we don't try to delete something twice.
             NodeBase node = (NodeBase) path.getLastPathComponent ();
-            if (node.markDelete)
+            if (node.markDelete == 1  ||  node.markDelete == 3)  // Already marked
             {
                 paths[i] = null;
                 continue;
             }
-            node.markDelete = true;
+            if      (node.markDelete == 0) node.markDelete = 1;  // Mark for regular delete
+            else if (node.markDelete == 2) node.markDelete = 3;  // Mark for local-only delete
             if (nextSelection == node) nextSelection = null;  // Current focus is a node that will be deleted. This is almost always the case, except when jobs are deleted by the Studies panel.
 
             // In some cases (such as ctrl-click), the rows may not be in ascending order.
@@ -1297,7 +1298,7 @@ public class PanelRun extends JPanel
                                 // If the job is still running, downgrade the delete request to a kill request.
                                 // The user will have to hit delete again, once the job dies.
                                 job.stop ();
-                                job.markDelete = false;
+                                job.markDelete = 0;
                                 EventQueue.invokeLater (new Runnable ()
                                 {
                                     public void run ()
@@ -1384,7 +1385,7 @@ public class PanelRun extends JPanel
                 {
                     if (nodeBase instanceof NodeJob)
                     {
-                        if (env instanceof Remote)
+                        if (env instanceof Remote  &&  nodeBase.markDelete == 1)
                         {
                             Path remoteJobDir = Host.getJobDir (env.getResourceDir (), job);
                             env.deleteTree (remoteJobDir);
@@ -1396,7 +1397,7 @@ public class PanelRun extends JPanel
                         NodeFile nf = (NodeFile) nodeBase;
                         String fileName = nf.path.getFileName ().toString ();
 
-                        if (env instanceof Remote)
+                        if (env instanceof Remote  &&  nodeBase.markDelete == 1)
                         {
                             Path remoteJobDir = Host.getJobDir (env.getResourceDir (), job);
                             Path remoteFile = remoteJobDir.resolve (fileName);
@@ -1429,7 +1430,11 @@ public class PanelRun extends JPanel
                         }
                     });
                 }
-                catch (Exception e) {e.printStackTrace ();}
+                catch (Exception e)
+                {
+                    nodeBase.markDelete = 2;
+                    e.printStackTrace ();
+                }
             }
         }
     }
