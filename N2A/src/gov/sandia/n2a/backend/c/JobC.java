@@ -176,7 +176,15 @@ public class JobC extends Thread
             cli    = model.getFlag ("$meta", "backend", "c", "cli");
             tls    = model.getFlag ("$meta", "backend", "c", "tls");
             csharp = model.getFlag ("$meta", "backend", "c", "sharp");
-            if (! lib  &&  model.data ("$meta", "backend", "c", "shared")) shared = model.getFlag ("$meta", "backend", "c", "shared");
+            if (! lib)
+            {
+                if (model.data ("$meta", "backend", "c", "shared")) shared = model.getFlag ("$meta", "backend", "c", "shared");
+                if (tls  &&  shared)
+                {
+                    tls = false;
+                    Backend.err.get ().println ("WARNING: TLS is incompatible with separate shared-object runtime. Ignoring this feature.");
+                }
+            }
 
             String e = model.get ("$meta", "backend", "all", "event");
             switch (e)

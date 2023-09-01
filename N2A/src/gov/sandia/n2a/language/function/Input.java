@@ -114,7 +114,7 @@ public class Input extends Function
         public double[]            currentValues = empty;
         public double              nextLine      = Double.NaN; // Initial condition is no line available.
         public double[]            nextValues    = empty;
-        public Matrix              A;                          // Matrix value returned if in whole-row mode (column parameter < 0)
+        public Matrix              A;                          // vector returned if in whole-row mode (column parameter < 0)
         public double              Alast         = Double.NaN; // Line number when A was last generated.
         public Map<String,Integer> columnMap     = new TreeMap<String,Integer> ();
         public List<String>        headers       = new ArrayList<String> ();  // The inverse of columnMap

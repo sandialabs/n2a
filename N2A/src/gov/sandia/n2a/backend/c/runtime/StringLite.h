@@ -23,8 +23,10 @@ the U.S. Government retains certain rights in this software.
 // memchr(), which is of course the logical thing to do. However, GCC barfs
 // up warnings when our scan limit exceeds the known (to it) size of the string.
 // We don't want to see this scary and useless warning.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstringop-overread"
+#ifdef __GNUC__
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wstringop-overread"
+#endif
 
 
 /**
@@ -790,5 +792,8 @@ namespace std
     };
 }
 
-#pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  pragma GCC diagnostic pop
+#endif
+
 #endif
