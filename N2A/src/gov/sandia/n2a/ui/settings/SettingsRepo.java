@@ -417,6 +417,12 @@ public class SettingsRepo extends JScrollPane implements Settings
                 if (to == gitTable  ||  to == repoTable  ||  to == fieldAuthor  ||  to == fieldMessage  ||  to == SettingsRepo.this) return;  // Loss is still within current tab, so ignore.
                 if (e.isTemporary ()  ||  repoTable.isEditing ()) return;  // The shift to the editing component appears as a loss of focus.
 
+                if (gitModel.current != null)
+                {
+                    gitModel.current.setAuthor (fieldAuthor .getText ());
+                    gitModel.current.message  = fieldMessage.getText ();
+                }
+
                 repoModel.clearStatus ();
                 needSave = true;
                 rebuild ();
