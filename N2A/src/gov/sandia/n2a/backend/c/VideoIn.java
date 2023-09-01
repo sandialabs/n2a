@@ -15,6 +15,9 @@ import java.awt.image.DataBufferShort;
 import java.awt.image.DataBufferUShort;
 import java.awt.image.Raster;
 import java.awt.image.SampleModel;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,6 +25,7 @@ import java.util.Arrays;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.linear.MatrixDense;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 
 public class VideoIn extends NativeResource implements Runnable
@@ -63,7 +67,21 @@ public class VideoIn extends NativeResource implements Runnable
                 t.T              = "float";
                 t.env            = localhost;
                 t.detectExternalResources ();
+
+                PrintStream ps = Backend.err.get ();
+                ByteArrayOutputStream baos = new ByteArrayOutputStream ()
+                {
+                    public void flush() throws IOException
+                    {
+                        SettingsC.instance.setMessage (toString ("UTF-8"));
+                    }
+                };
+                try {Backend.err.set (new PrintStream (baos, true, "UTF-8"));}
+                catch (Exception e) {}
+                Backend.err.get ().println ("Checking C runtime");
                 t.rebuildRuntime ();  // also synchronized on localhost
+                Backend.err.set (ps);
+                SettingsC.instance.setMessage (baos.toString ("UTF-8"));
 
                 // Load JNI libs
                 CompilerFactory factory = BackendC.getFactory (localhost);
@@ -106,12 +124,17 @@ public class VideoIn extends NativeResource implements Runnable
                         System.load (swresamplePath.toAbsolutePath ().toString ());
                         System.load (avcodecPath   .toAbsolutePath ().toString ());
                         System.load (avformatPath  .toAbsolutePath ().toString ());
+                        SettingsC.instance.addMessage ("Found FFmpeg libraries\n");
                     }
                     catch (Throwable error)
                     {
-                    	System.err.println ("Unable to find FFmpeg libraries");
+                        SettingsC.instance.addMessage ("Unable to find FFmpeg libraries\n");
                     	haveFFmpeg = false;
                     }
+                }
+                else
+                {
+                    SettingsC.instance.addMessage ("FFmpeg is not available. Check path above.\n");
                 }
                 System.load (runtimePath.toAbsolutePath ().toString ());
                 localhost.objects.put ("JNI", true);  // Partial success. May be able to do image processing.
@@ -123,13 +146,18 @@ public class VideoIn extends NativeResource implements Runnable
                     NodeJob.videoSuffixes.addAll (Arrays.asList (suffixes));
                     NodeJob.videoSuffixes.remove ("");
                     localhost.objects.put ("ffmpegJNI", true);
+                    SettingsC.instance.addMessage ("Call to FFmpeg succeeded\n");
+                }
+                else
+                {
+                    SettingsC.instance.addMessage ("Limited support for image sequences\n");
                 }
             }
         }
         catch (Throwable error)
         {
-            System.err.println ("Failed to load video JNI");
-            System.err.println ("  " + error.getClass ().getSimpleName () + ": " + error.getMessage ());
+            SettingsC.instance.addMessage ("Failed to load video JNI\n");
+            SettingsC.instance.addMessage ("  " + error.getClass ().getSimpleName () + ": " + error.getMessage () + "\n");
         }
     }
 

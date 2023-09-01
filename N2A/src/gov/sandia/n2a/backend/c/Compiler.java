@@ -108,7 +108,8 @@ public abstract class Compiler
     public Path runCommand (List<String> command) throws Exception
     {
         // Useful for debugging. The dumped command can be used directly in a terminal to diagnose stalled builds.
-        System.out.println (String.join (" ", command));
+        PrintStream ps = Backend.err.get ();
+        ps.println (String.join (" ", command));
 
         // Remove empty strings from command. This is a convenience to the caller,
         // allowing arguments to be conditionally omitted with the ternary operator.
@@ -130,7 +131,6 @@ public abstract class Compiler
 
             if (p.exitValue () != 0)
             {
-                PrintStream ps = Backend.err.get ();
                 ps.println ("Failed to compile:");
                 ps.print (Host.streamToString (Files.newInputStream (err)));
                 ps.print (Host.streamToString (Files.newInputStream (out)));
@@ -142,7 +142,6 @@ public abstract class Compiler
             String errString = Host.streamToString (Files.newInputStream (err));
             if (! errString.isEmpty ())
             {
-                PrintStream ps = Backend.err.get ();
                 ps.println ("Compiler says:");
                 ps.println (errString);
             }
