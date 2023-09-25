@@ -280,11 +280,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
 
     /**
         Indicates whether this node is defined.
-        Works in conjunction with size() to provide information similar to the MUMPS function "DATA".
+        Works in conjunction with isEmpty() to provide information similar to the MUMPS function "DATA".
         Since get() returns "" for undefined nodes, this is the only way to determine whether a node
         is actually defined to "" or is undefined. "Undefined" is not the same as non-existent,
-        because and undefined node can have children. Only a child() call on a parent can confirm
-        the complete non-existence of a node.
+        because and undefined node can have children. A child() call on the parent can confirm the
+        complete non-existence of a node. Alternately, if the node does not exist, then data()
+        returns false and isEmpty() returns true.
     **/
     public boolean data ()
     {
