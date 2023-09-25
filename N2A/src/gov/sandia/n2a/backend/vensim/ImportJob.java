@@ -242,7 +242,7 @@ public class ImportJob
                             mapping = true;
                             continue;
                         }
-                        if (value.equals ("GET_XLS_SUBSCRIPT"))
+                        if (value.equals ("GET XLS SUBSCRIPT"))
                         {
                             Bracket xls = (Bracket) token;
                             sr.spreadsheet = xls;
@@ -329,17 +329,17 @@ public class ImportJob
                 case "==":
                 case ":=":
                     // Trap simulation control variables
-                    if (name.equals ("FINAL_TIME"))
+                    if (name.equals ("FINAL TIME"))
                     {
                         model.set ("$t<" + value + convertUnit (unit), "$p");
                         break;
                     }
-                    if (name.equals ("TIME_STEP"))
+                    if (name.equals ("TIME STEP"))
                     {
                         model.set (value + convertUnit (unit), "$t'");
                         break;
                     }
-                    if (name.equals ("SAVEPER")  ||  name.equals ("INITIAL_TIME")) break;
+                    if (name.equals ("SAVEPER")  ||  name.equals ("INITIAL TIME")) break;
 
                     MNode node;
                     if (LHS.get (0).type == Node.SUBSCRIPT)
@@ -871,7 +871,7 @@ public class ImportJob
             this.subscripts = subscripts;
 
             name = "";
-            for (SubscriptRange sr : subscripts) name += "_X_" + sr.part.name;
+            for (SubscriptRange sr : subscripts) name += " X " + sr.part.name;
             name = name.substring (3);
 
             part = model.childOrCreate (name);
@@ -1086,15 +1086,16 @@ public class ImportJob
             Node a = RHS.get (0);
             if (a instanceof Bracket)
             {
-                String result = a.render (subscriptPart, ":", key);
-                if (result.isEmpty ()) subscriptPart.part.clear (key);
-                else                   subscriptPart.addCondition (key, result, condition);
+                String result = a.render (subscriptPart, true, key);
+                MNode node = subscriptPart.part.childOrEmpty (key);
+                if (result.isEmpty ()  &&  node.isEmpty ()) subscriptPart.part.clear (key);
+                else                                        subscriptPart.addCondition (key, result, condition);
                 return;
             }
         }
 
-        String result = ":";
-        for (Node t : RHS) result += t.render (subscriptPart, "", key);
+        String result = "";
+        for (Node t : RHS) result += t.render (subscriptPart, false, key);
         subscriptPart.addCondition (key, result, condition);
     }
 
@@ -1109,7 +1110,6 @@ public class ImportJob
     public class Node
     {
         String value;
-        String raw;  // for identifiers only, the original value before converting to a valid identifier
         int    type;
 
         static final int OPERATOR   = 1;
@@ -1126,9 +1126,10 @@ public class ImportJob
             this.value = value;
         }
 
-        public String render (SubscriptPart subscriptPart, String combiner, String key)
+        public String render (SubscriptPart subscriptPart, boolean topLevel, String key)
         {
             if (type == STRING) return "\"" + value + "\"";
+            if (type == OPERATOR  &&  value.equals ("=")) return "==";  // Special case for comparison operator.
             return value;
         }
 
@@ -1159,10 +1160,10 @@ public class ImportJob
             super (EXPRESSION, value);
         }
 
-        public String render (SubscriptPart subscriptPart, String combiner, String key)
+        public String render (SubscriptPart subscriptPart, boolean topLevel, String key)
         {
             String result = "";
-            for (Node op : operands) result += op.render (subscriptPart, "", key);
+            for (Node op : operands) result += op.render (subscriptPart, false, key);
             return result;
         }
 
@@ -1241,43 +1242,42 @@ public class ImportJob
             return first;
         }
 
-        public String render (SubscriptPart subscriptPart, String combiner, String key)
+        public String render (SubscriptPart subscriptPart, boolean topLevel, String key)
         {
-            String  result   = combiner;
-            boolean topLevel = ! combiner.isEmpty ();
-            MNode   part     = subscriptPart.part;
-            MNode   node     = part.childOrCreate (key);
+            String  result = "";
+            MNode   part   = subscriptPart.part;
+            MNode   node   = part.childOrCreate (key);
 
             if (type == FUNCTION)
             {
                 Lookup lookup = lookups.get (value);
                 if (lookup != null)
                 {
-                    return result + "lookup(" + operands.get (0).render (subscriptPart, "", key) + "," + value + ")";
+                    return result + "lookup(" + operands.get (0).render (subscriptPart, false, key) + "," + value + ")";
                 }
 
                 String keyPrime = key + "'";
                 switch (value)
                 {
-                    case "LOOKUP_AREA":
+                    case "LOOKUP AREA":
                         // TODO: extend Lookup class to take another scalar parameter. Also needs to handle units per Vensim documentation.
                         break;
-                    case "LOOKUP_BACKWARD":
-                        return result + "lookup(" + operands.get (1).render (subscriptPart, "", key) + "," + operands.get (0).value + ",\"backward\")";
-                    case "LOOKUP_EXTRAPOLATE":
-                        return result + "lookup(" + operands.get (1).render (subscriptPart, "", key) + "," + operands.get (0).value + ")";
-                    case "LOOKUP_FORWARD":
-                        return result + "lookup(" + operands.get (1).render (subscriptPart, "", key) + "," + operands.get (0).value + ",\"forward\")";
-                    case "LOOKUP_INVERT":
-                        return result + "lookup(" + operands.get (1).render (subscriptPart, "", key) + "," + operands.get (0).value + ",\"invert\")";
-                    case "LOOKUP_SLOPE":
-                        return result + "lookup(" + operands.get (1).render (subscriptPart, "", key) + "," + operands.get (0).value + ",\"slope=" + operands.get(2).value + "\")";
-                    case "WITH_LOOKUP":
+                    case "LOOKUP BACKWARD":
+                        return result + "lookup(" + operands.get (1).render (subscriptPart, false, key) + "," + operands.get (0).value + ",\"backward\")";
+                    case "LOOKUP EXTRAPOLATE":
+                        return result + "lookup(" + operands.get (1).render (subscriptPart, false, key) + "," + operands.get (0).value + ")";
+                    case "LOOKUP FORWARD":
+                        return result + "lookup(" + operands.get (1).render (subscriptPart, false, key) + "," + operands.get (0).value + ",\"forward\")";
+                    case "LOOKUP INVERT":
+                        return result + "lookup(" + operands.get (1).render (subscriptPart, false, key) + "," + operands.get (0).value + ",\"invert\")";
+                    case "LOOKUP SLOPE":
+                        return result + "lookup(" + operands.get (1).render (subscriptPart, false, key) + "," + operands.get (0).value + ",\"slope=" + operands.get(2).value + "\")";
+                    case "WITH LOOKUP":
                     {
                         Bracket b = (Bracket) operands.get (1);
-                        String keyAux = uniqueKey (part, key + "_LOOKUP");
+                        String keyAux = uniqueKey (part, key + " LOOKUP");
                         lookup = new Lookup (keyAux, b.operands);
-                        return result + "lookup(" + operands.get (0).render (subscriptPart, "", key) + "," + keyAux + ")";
+                        return result + "lookup(" + operands.get (0).render (subscriptPart, false, key) + "," + keyAux + ")";
                     }
                     case "ABS":
                     case "COS":
@@ -1297,8 +1297,8 @@ public class ImportJob
                         Node a = operands.get (0);
                         Node b = operands.get (1);
                         operands.clear ();
-                        a.render (subscriptPart, "", key);
-                        b.render (subscriptPart, "", key);
+                        a.render (subscriptPart, false, key);
+                        b.render (subscriptPart, false, key);
 
                         result += "(";
                         value = "log";
@@ -1312,8 +1312,8 @@ public class ImportJob
                     }
                     case "ZIDZ":
                     {
-                        String a = operands.get (0).render (subscriptPart, "", key);
-                        String b = operands.get (1).render (subscriptPart, "", key);
+                        String a = operands.get (0).render (subscriptPart, false, key);
+                        String b = operands.get (1).render (subscriptPart, false, key);
                         if (topLevel)
                         {
                             node.set ("0",                       "@");
@@ -1321,53 +1321,53 @@ public class ImportJob
                             return result;
                         }
                         // Create auxiliary variable
-                        String keyAux = uniqueKey (part, key + "_ZIDZ");
-                        part.set (":",                       keyAux);
+                        String keyAux = uniqueKey (part, key + " ZIDZ");
+                        part.set ("",                        keyAux);
                         part.set ("0",                       keyAux, "@");
                         part.set ("(" + a + ")/(" + b + ")", keyAux, "@" + b);
                         return keyAux;
                     }
-                    case "IF_THEN_ELSE":
+                    case "IF THEN ELSE":
                     {
-                        String a = operands.get (0).render (subscriptPart, "", key);
-                        String b = operands.get (1).render (subscriptPart, "", key);
-                        String c = operands.get (2).render (subscriptPart, "", key);
+                        String a = operands.get (0).render (subscriptPart, false, key);
+                        String b = operands.get (1).render (subscriptPart, false, key);
+                        String c = operands.get (2).render (subscriptPart, false, key);
                         if (topLevel)
                         {
                             node.set (c, "@");
                             node.set (b, "@" + a);
                             return result;
                         }
-                        String keyAux = uniqueKey (part, key + "_IF");
-                        part.set (":", keyAux);
-                        part.set (c,   keyAux, "@");
-                        part.set (b,   keyAux, "@" + a);
+                        String keyAux = uniqueKey (part, key + " IF");
+                        part.set ("", keyAux);
+                        part.set (c,  keyAux, "@");
+                        part.set (b,  keyAux, "@" + a);
                         return keyAux;
                     }
                     case "PULSE":
                     {
-                        String a = operands.get (0).render (subscriptPart, "", key);
-                        String b = operands.get (1).render (subscriptPart, "", key);
-                        result = ":($t+$t'/2)>(" + a + ")&&($t+$t'/2)<((" + a + ")+(" + b + "))";
+                        String a = operands.get (0).render (subscriptPart, false, key);
+                        String b = operands.get (1).render (subscriptPart, false, key);
+                        result = "($t+$t'/2)>(" + a + ")&&($t+$t'/2)<((" + a + ")+(" + b + "))";
                         if (topLevel) return result;
-                        String keyAux = uniqueKey (part, key + "_PULSE");
+                        String keyAux = uniqueKey (part, key + " PULSE");
                         part.set (result, keyAux);
                         return keyAux;
                     }
                     case "STEP":
                     {
-                        String a = operands.get (0).render (subscriptPart, "", key);
-                        String b = operands.get (1).render (subscriptPart, "", key);
-                        result = ":(($t+$t'/2)>" + b + ")*(" + a + ")";
+                        String a = operands.get (0).render (subscriptPart, false, key);
+                        String b = operands.get (1).render (subscriptPart, false, key);
+                        result = "(($t+$t'/2)>" + b + ")*(" + a + ")";
                         if (topLevel) return result;
-                        String keyAux = uniqueKey (part, key + "_STEP");
+                        String keyAux = uniqueKey (part, key + " STEP");
                         part.set (result, keyAux);
                         return keyAux;
                     }
                     case "INTEG":
                     {
-                        String rate = operands.get (0).render (subscriptPart, "", key);
-                        String init = operands.get (1).render (subscriptPart, "", key);
+                        String rate = operands.get (0).render (subscriptPart, false, key);
+                        String init = operands.get (1).render (subscriptPart, false, key);
                         if (init.equals ("0")) result = "";  // default initial condition is 0
                         else                   result = init + "@$init";
                         if (! rate.equals ("0")) part.set (rate, keyPrime);
@@ -1375,22 +1375,22 @@ public class ImportJob
                     }
                     case "INITIAL":
                     {
-                        String variable = operands.get (0).render (subscriptPart, "", key);
+                        String variable = operands.get (0).render (subscriptPart, false, key);
                         return variable + "@$init";
                     }
                     case "SMOOTH":
                     case "SMOOTHI":
                     {
-                        String input = operands.get (0).render (subscriptPart, "", key);
-                        String delay = operands.get (1).render (subscriptPart, "", key);
+                        String input = operands.get (0).render (subscriptPart, false, key);
+                        String delay = operands.get (1).render (subscriptPart, false, key);
                         String init  = input;
-                        if (operands.size () >= 3) init = operands.get (2).render (subscriptPart, "", key);
+                        if (operands.size () >= 3) init = operands.get (2).render (subscriptPart, false, key);
                         if (topLevel)
                         {
                             part.set ("((" + input + ")-" + key + ")/(" + delay + ")", keyPrime);
                             return init + "@$init";
                         }
-                        String keyAux = uniqueKey (part, key + "_SMOOTH");
+                        String keyAux = uniqueKey (part, key + " SMOOTH");
                         String keyAuxPrime = keyAux + "'";
                         part.set (init + "@$init",                                    keyAux);
                         part.set ("((" + input + ")-" + keyAux + ")/(" + delay + ")", keyAuxPrime);
@@ -1398,37 +1398,37 @@ public class ImportJob
                     }
                     case "DELAY3":
                     {
-                        String input = operands.get (0).render (subscriptPart, "", key);
-                        String delay = operands.get (1).render (subscriptPart, "", key);
+                        String input = operands.get (0).render (subscriptPart, false, key);
+                        String delay = operands.get (1).render (subscriptPart, false, key);
                         String init  = input;
-                        if (operands.size () >= 3) init = operands.get (2).render (subscriptPart, "", key);
+                        if (operands.size () >= 3) init = operands.get (2).render (subscriptPart, false, key);
                         if (topLevel)
                         {
-                            part.set (":(" + delay + ")/3",              key + "_DL");
-                            part.set (key + "_DL*(" + init + ")@$init",  key + "_LV3");
-                            part.set (key + "_DL*(" + init + ")@$init",  key + "_LV2");
-                            part.set (key + "_DL*(" + init + ")@$init",  key + "_LV1");
-                            part.set (":" + key + "_LV2/" + key + "_DL", key + "_RT2");
-                            part.set (":" + key + "_LV1/" + key + "_DL", key + "_RT1");
-                            part.set (key + "_RT2-" + key,               key + "_LV3'");
-                            part.set (key + "_RT1-" + key + "_RT2",      key + "_LV2'");
-                            part.set ("(" + input + ")-" + key + "_RT1", key + "_LV1'");
-                            return ":" + key + "_LV3/" + key + "_DL";
+                            part.set ("(" + delay + ")/3",               key + " DL");
+                            part.set (key + " DL*(" + init + ")@$init",  key + " LV3");
+                            part.set (key + " DL*(" + init + ")@$init",  key + " LV2");
+                            part.set (key + " DL*(" + init + ")@$init",  key + " LV1");
+                            part.set (key + " LV2/" + key + " DL",       key + " RT2");
+                            part.set (key + " LV1/" + key + " DL",       key + " RT1");
+                            part.set (key + " RT2-" + key,               key + " LV3'");
+                            part.set (key + " RT1-" + key + " RT2",      key + " LV2'");
+                            part.set ("(" + input + ")-" + key + " RT1", key + " LV1'");
+                            return key + " LV3/" + key + " DL";
                         }
-                        String keyAux = uniqueKey (part, key + "_DELAY3");
-                        part.set (":" + keyAux + "_LV3/" + keyAux + "_DL", keyAux);
-                        part.set (":(" + delay + ")/3",                    keyAux + "_DL");
-                        part.set (keyAux + "_DL*(" + init + ")@$init",     keyAux + "_LV3");
-                        part.set (keyAux + "_DL*(" + init + ")@$init",     keyAux + "_LV2");
-                        part.set (keyAux + "_DL*(" + init + ")@$init",     keyAux + "_LV1");
-                        part.set (":" + keyAux + "_LV2/" + keyAux + "_DL", keyAux + "_RT2");
-                        part.set (":" + keyAux + "_LV1/" + keyAux + "_DL", keyAux + "_RT1");
-                        part.set (keyAux + "_RT2-" + keyAux,               keyAux + "_LV3'");
-                        part.set (keyAux + "_RT1-" + keyAux + "_RT2",      keyAux + "_LV2'");
-                        part.set ("(" + input + ")-" + keyAux + "_RT1",    keyAux + "_LV1'");
+                        String keyAux = uniqueKey (part, key + " DELAY3");
+                        part.set (keyAux + " LV3/" + keyAux + " DL",    keyAux);
+                        part.set ("(" + delay + ")/3",                  keyAux + " DL");
+                        part.set (keyAux + " DL*(" + init + ")@$init",  keyAux + " LV3");
+                        part.set (keyAux + " DL*(" + init + ")@$init",  keyAux + " LV2");
+                        part.set (keyAux + " DL*(" + init + ")@$init",  keyAux + " LV1");
+                        part.set (keyAux + " LV2/" + keyAux + " DL",    keyAux + " RT2");
+                        part.set (keyAux + " LV1/" + keyAux + " DL",    keyAux + " RT1");
+                        part.set (keyAux + " RT2-" + keyAux,            keyAux + " LV3'");
+                        part.set (keyAux + " RT1-" + keyAux + " RT2",   keyAux + " LV2'");
+                        part.set ("(" + input + ")-" + keyAux + " RT1", keyAux + " LV1'");
                         return keyAux;
                     }
-                    case "GET_XLS_CONSTANTS":
+                    case "GET XLS CONSTANTS":
                     {
                         String fileName  = operands.get (0).value;
                         String sheetName = operands.get (1).value;
@@ -1503,7 +1503,7 @@ public class ImportJob
                         if      (value.equals ("PROD")) reduction = "*";
                         else if (value.equals ("VMAX")) reduction = ">";
                         else if (value.equals ("VMIN")) reduction = "<";
-                        for (Node o : operands) reduction += o.render (sp, "", key);
+                        for (Node o : operands) reduction += o.render (sp, false, key);
                         sp.part.set (reduction, key);
 
                         return result;
@@ -1535,7 +1535,7 @@ public class ImportJob
                     SubscriptPart sp = sv.getPart ();
 
                     if (topLevel) result = "";
-                    else          result = key = uniqueKey (part, key + "_SUM");
+                    else          result = key = uniqueKey (part, key + " SUM");
                     String reduction = value;  // Don't use actual reduction like "+", because the subscripts should be strictly individual IDs, not ranges.
                     String condition = sv.condition (this);
                     if (! condition.isEmpty ()) reduction += "@" + condition;
@@ -1595,7 +1595,7 @@ public class ImportJob
                                 String condition = B.conditionSubrange (A);
 
                                 if (topLevel) result = "";
-                                else          result = key = uniqueKey (part, key + "_SUM");
+                                else          result = key = uniqueKey (part, key + " SUM");
                                 sp.addCondition ("A." + key, "B." + value, condition);
                                 sp.part.set ("0", "$p", "@$connect");
                                 sp.part.set ("1", "$p", "@$connect&&(" + condition + ")");
@@ -1612,7 +1612,7 @@ public class ImportJob
 
             // Fallback
             String temp = "";
-            for (Node op : operands) temp += "," + op.render (subscriptPart, "", key);
+            for (Node op : operands) temp += "," + op.render (subscriptPart, false, key);
             temp = temp.substring (1);
             return result + value + LB + temp + RB;
         }
