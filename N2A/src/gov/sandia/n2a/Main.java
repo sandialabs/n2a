@@ -139,8 +139,10 @@ public class Main
         {
             public void run ()
             {
+                SettingsLookAndFeel.rescaling = true;
                 SettingsLookAndFeel.instance.load ();  // Note that SettingsLookAndFeel is instantiated when the plugin system is initialized above.
                 new MainFrame ();
+                SettingsLookAndFeel.rescaling = false;
                 setUncaughtExceptionHandler (MainFrame.instance);
             }
         });

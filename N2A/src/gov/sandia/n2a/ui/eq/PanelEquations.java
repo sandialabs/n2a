@@ -425,7 +425,7 @@ public class PanelEquations extends JPanel
         else              split = new JSplitPane (JSplitPane.VERTICAL_SPLIT);
         split.setOneTouchExpandable(true);
         split.setResizeWeight (1);
-        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (30.0, "PanelModel", "view", view) * SettingsLookAndFeel.em));  // Assumes initial window height is 60em
+        setSplit ();
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
@@ -615,6 +615,15 @@ public class PanelEquations extends JPanel
         if (itemFilterLocal     != null) itemFilterLocal    .setForeground (EquationTreeCellRenderer.colorOverride);
         if (itemFilterRevoked   != null) itemFilterRevoked  .setForeground (EquationTreeCellRenderer.colorKill);
         super.updateUI ();
+        setSplit ();
+    }
+
+    public void setSplit ()
+    {
+        if (split == null) return;
+        float em = SettingsLookAndFeel.em;
+        // Default assumes initial window size is 90em by 60em. This takes 1/2 the vertical space or 1/3 the horizontal space.
+        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (30.0, "PanelModel", "view", view) * em));
     }
 
     public void load (MNode doc)

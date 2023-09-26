@@ -96,6 +96,7 @@ public class PanelRun extends JPanel
 
     protected NodeBase         root;
     protected DefaultTreeModel model;
+    protected JSplitPane       split;
     public    JTree            tree;
     protected JScrollPane      treePane;
 
@@ -499,7 +500,6 @@ public class PanelRun extends JPanel
         buttonExport.setToolTipText ("Export CSV");
         buttonExport.addActionListener (listenerExport);
 
-        JSplitPane split;
         Lay.BLtg
         (
             this,
@@ -530,18 +530,31 @@ public class PanelRun extends JPanel
         );
         setFocusCycleRoot (true);
 
-        float em = SettingsLookAndFeel.em;
-        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (19.0, "PanelRun", "divider") * em));
+        setSplit ();
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
             {
+                if (SettingsLookAndFeel.rescaling) return;  // Don't record change if we are handling a change in screen resolution.
                 Object o = e.getNewValue ();
                 if (! (o instanceof Integer)) return;
                 float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
                 AppData.state.setTruncated (value, 2, "PanelRun", "divider");
             }
         });
+    }
+
+    public void updateUI ()
+    {
+        super.updateUI ();
+        setSplit ();
+    }
+
+    public void setSplit ()
+    {
+        if (split == null) return;
+        float em = SettingsLookAndFeel.em;
+        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (19.0, "PanelRun", "divider") * em));
     }
 
     // See PanelEquations for similar code

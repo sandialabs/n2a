@@ -47,13 +47,12 @@ public class PanelReference extends JPanel implements MNodeListener
 
         // Determine the split positions.
 
-        FontMetrics fm = panelSearch.list.getFontMetrics (panelSearch.list.getFont ());
-        float em = SettingsLookAndFeel.em;
-        splitMRU.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (fm.getHeight () * 4 / em, "PanelReference", "dividerMRU") * em));
+        setSplits ();
         splitMRU.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
             {
+                if (SettingsLookAndFeel.rescaling) return;  // Don't record change if we are handling a change in screen resolution.
                 Object o = e.getNewValue ();
                 if (! (o instanceof Integer)) return;
                 float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
@@ -61,11 +60,11 @@ public class PanelReference extends JPanel implements MNodeListener
             }
         });
 
-        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (30.0, "PanelReference", "divider") * em));
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
             {
+                if (SettingsLookAndFeel.rescaling) return;  // Don't record change if we are handling a change in screen resolution.
                 Object o = e.getNewValue ();
                 if (! (o instanceof Integer)) return;
                 float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
@@ -74,6 +73,21 @@ public class PanelReference extends JPanel implements MNodeListener
         });
 
         AppData.docs.childOrCreate ("references").addListener (this);
+    }
+
+    public void updateUI ()
+    {
+        super.updateUI ();
+        setSplits ();
+    }
+
+    public void setSplits ()
+    {
+        if (split == null) return;
+        FontMetrics fm = panelSearch.list.getFontMetrics (panelSearch.list.getFont ());
+        float em = SettingsLookAndFeel.em;
+        splitMRU.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (fm.getHeight () * 4 / em, "PanelReference", "dividerMRU") * em));
+        split   .setDividerLocation ((int) Math.round (AppData.state.getOrDefault (30.0,                     "PanelReference", "divider"   ) * em));
     }
 
     public void changed ()

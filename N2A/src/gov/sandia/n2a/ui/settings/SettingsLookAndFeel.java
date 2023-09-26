@@ -14,6 +14,7 @@ import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
 import java.awt.Component;
+import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Toolkit;
@@ -48,11 +49,14 @@ import javax.swing.plaf.metal.OceanTheme;
 public class SettingsLookAndFeel extends JPanel implements Settings
 {
     public static SettingsLookAndFeel instance;
-    public static float               em = 13;  // Size of M in current JTree font. Used to scale UI items such as nodes in equation graph.
+    public static float               em = 13;   // Size of M in current JTree font. Used to scale UI items such as nodes in equation graph. Static for convenience, as we could access it through instance.
+    public static boolean             rescaling; // True only while we are processing a screen resolution change. Suppresses recording updated size/position info for various UI elements.
 
     protected Map<String, Laf> catalog = new HashMap<String, Laf> ();
     protected ButtonGroup      group   = new ButtonGroup ();
     protected ActionListener   menuListener;
+    protected int              dpi;     // Last collected screen dpi value. If zero, then dpi has not yet been collected for the first time.
+    protected double           inches;  // Calculated width of screen. Used only to update dpi after startup.
     protected Laf              currentLaf;
     protected float            fontScale = 1;
     protected JTextField       fieldFontScale;
@@ -82,8 +86,17 @@ public class SettingsLookAndFeel extends JPanel implements Settings
                 AppData.state.set (fontScale, "FontScale");
 
                 // Rescale UI elements
-                int dpi = Toolkit.getDefaultToolkit ().getScreenResolution ();
-                float uiScale = dpi / 96f;
+                Toolkit tk = Toolkit.getDefaultToolkit ();
+                if (dpi == 0)  // startup
+                {
+                    dpi    = tk.getScreenResolution ();
+                    inches = tk.getScreenSize ().getWidth () / dpi;
+                }
+                else  // getScreenResolution() does not change after startup, so need to update dpi another way.
+                {
+                    dpi = (int) Math.round (tk.getScreenSize ().getWidth () / inches);
+                }
+                float uiScale = dpi / 96f;  // 96 is standard Windows desktop dpi, and probably the scale at which Swing was originally designed.
                 float applyScale = fontScale * uiScale;
 
                 //   Set scaled fonts.
@@ -118,7 +131,28 @@ public class SettingsLookAndFeel extends JPanel implements Settings
             {
                 e.printStackTrace ();
             }
-            updateEm ();
+
+            // Update em
+            // Takes into account the font scaling we just did above.
+            Font font = UIManager.getFont ("Tree.font");
+            FontMetrics fm;
+            if (MainFrame.instance == null)
+            {
+                // Application is still booting, so create a temporary hidden window.
+                JFrame temp = new JFrame ();
+                temp.setExtendedState (JFrame.ICONIFIED);
+                temp.setVisible (true);  // Create graphics context.
+                fm = temp.getGraphics ().getFontMetrics (font);
+                temp.dispose ();  // At this moment, this is the last window. However, the app does not exit because our main thread is still running.
+            }
+            else
+            {
+                fm = MainFrame.instance.getGraphics ().getFontMetrics (font);
+            }
+            em = fm.stringWidth ("M");
+
+            // Call updateUI() on GUI tree.
+            if (MainFrame.instance != null) MainFrame.instance.setDimensions ();  // JFrame does not have updateUI(), so we directly update its shape.
             for (Window w : Window.getWindows ()) SwingUtilities.updateComponentTreeUI (w);  // Don't call w.pack(). It creates a mess, such as oversizing the main window.
         }
 
@@ -225,24 +259,21 @@ public class SettingsLookAndFeel extends JPanel implements Settings
         group.setSelected (laf.item.getModel (), true);
     }
 
-    public static void updateEm ()
+    public boolean checkRescale ()
     {
-        Font font = UIManager.getFont ("Tree.font");
-        FontMetrics fm;
-        if (MainFrame.instance == null)
+        if (rescaling) return true;
+        int newDPI = (int) Math.round (Toolkit.getDefaultToolkit ().getScreenSize ().getWidth () / inches);
+        if (dpi == newDPI) return false;
+        rescaling = true;
+        EventQueue.invokeLater (new Runnable ()
         {
-            // Application is still booting, so create a temporary hidden window.
-            JFrame temp = new JFrame ();
-            temp.setExtendedState (JFrame.ICONIFIED);
-            temp.setVisible (true);  // Create graphics context.
-            fm = temp.getGraphics ().getFontMetrics (font);
-            temp.dispose ();  // At this moment, this is the last window. However, the app does not exit because our main thread is still running.
-        }
-        else
-        {
-            fm = MainFrame.instance.getGraphics ().getFontMetrics (font);
-        }
-        em = fm.stringWidth ("M");
+            public void run ()
+            {
+                if (currentLaf != null) currentLaf.apply ();
+                rescaling = false;
+            }
+        });
+        return true;
     }
 
     @Override

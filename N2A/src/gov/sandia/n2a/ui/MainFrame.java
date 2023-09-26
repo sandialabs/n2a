@@ -17,6 +17,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.studies.PanelStudy;
 
+import java.awt.Dimension;
 import java.awt.Image;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
@@ -77,38 +78,34 @@ public class MainFrame extends JFrame
             "C", tabs
         );
 
+        setDimensions ();
         MNode winProps = AppData.state.childOrCreate ("WinLayout");
-        float em = SettingsLookAndFeel.em;
-        int w = (int) Math.round (winProps.getOrDefault (90.0, "width")  * em);
-        int h = (int) Math.round (winProps.getOrDefault (60.0, "height") * em);
-        int x = (int) Math.round (winProps.getOrDefault (-1.0, "x")      * em);
-        int y = (int) Math.round (winProps.getOrDefault (-1.0, "y")      * em);
-        if (w >= 0  &&  h >= 0) setSize (w, h);
-        if (x >= 0  &&  y >= 0) setLocation (x, y);
-        else                    setLocationRelativeTo (null);
         setExtendedState (winProps.getOrDefault (NORMAL, "state"));
         setVisible (true);
 
+        // The main window could be resized or moved in response to user interaction or
+        // to a change in screen resolution. In the latter case, it seems AWT/Swing is
+        // trying to keep the window at the same amount of screen area. In theory, the
+        // em-based size/position of the window should not change, so we don't need to
+        // record a new value. However, we do need to update the size of em itself.
         addComponentListener (new ComponentAdapter ()
         {
             public void componentResized (ComponentEvent e)
             {
-                if (getExtendedState () == NORMAL)
-                {
-                    float em = SettingsLookAndFeel.em;
-                    AppData.state.setTruncated (getWidth ()  / em, 2, "WinLayout", "width");
-                    AppData.state.setTruncated (getHeight () / em, 2, "WinLayout", "height");
-                }
+                if (SettingsLookAndFeel.instance.checkRescale ()) return;
+                if (getExtendedState () != NORMAL) return;
+                float em = SettingsLookAndFeel.em;
+                AppData.state.setTruncated (getWidth ()  / em, 2, "WinLayout", "width");
+                AppData.state.setTruncated (getHeight () / em, 2, "WinLayout", "height");
             }
 
             public void componentMoved (ComponentEvent e)
             {
-                if (getExtendedState () == NORMAL)
-                {
-                    float em = SettingsLookAndFeel.em;
-                    AppData.state.setTruncated (getX () / em, 2, "WinLayout", "x");
-                    AppData.state.setTruncated (getY () / em, 2, "WinLayout", "y");
-                }
+                if (SettingsLookAndFeel.instance.checkRescale ()) return;
+                if (getExtendedState () != NORMAL) return;
+                float em = SettingsLookAndFeel.em;
+                AppData.state.setTruncated (getX () / em, 2, "WinLayout", "x");
+                AppData.state.setTruncated (getY () / em, 2, "WinLayout", "y");
             }
         });
 
@@ -166,5 +163,59 @@ public class MainFrame extends JFrame
         });
 
         ToolTipManager.sharedInstance ().setDismissDelay (20000);
+    }
+
+    public void setDimensions ()
+    {
+        MNode winProps = AppData.state.childOrCreate ("WinLayout");
+        float em = SettingsLookAndFeel.em;
+        int w = (int) Math.round (winProps.getOrDefault (90.0, "width")  * em);
+        int h = (int) Math.round (winProps.getOrDefault (60.0, "height") * em);
+        int x;
+        int y;
+        if (SettingsLookAndFeel.rescaling)  // Screen resolution has changed (or we just started up) so shift position.
+        {
+            x = (int) Math.round (winProps.getOrDefault (-1.0, "x") * em);
+            y = (int) Math.round (winProps.getOrDefault (-1.0, "y") * em);
+        }
+        else  // L&F or font scale changed, so don't move window.
+        {
+            x = getX ();
+            y = getY ();
+            // Need to record (x,y), in case em changed. We won't get a componentMoved() message unless (x,y) actually changes.
+            AppData.state.setTruncated (x / em, 2, "WinLayout", "x");
+            AppData.state.setTruncated (y / em, 2, "WinLayout", "y");
+        }
+
+        // Avoid rescaling past edge of screen.
+        Dimension screen = Toolkit.getDefaultToolkit ().getScreenSize ();
+        if (w >= 0  &&  x >= 0  &&  x + w > screen.width)
+        {
+            if (w <= screen.width)
+            {
+                x = screen.width - w;
+            }
+            else
+            {
+                w = screen.width;
+                x = 0;
+            }
+        }
+        if (h >= 0  &&  y >= 0  &&  y + h > screen.height)
+        {
+            if (h <= screen.height)
+            {
+                y = screen.height - h;
+            }
+            else
+            {
+                h = screen.height;
+                y = 0;
+            }
+        }
+
+        if (w >= 0  &&  h >= 0) setSize (w, h);
+        if (x >= 0  &&  y >= 0) setLocation (x, y);
+        else                    setLocationRelativeTo (null);
     }
 }

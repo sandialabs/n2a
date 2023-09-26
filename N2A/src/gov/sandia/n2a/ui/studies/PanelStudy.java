@@ -68,6 +68,7 @@ public class PanelStudy extends JPanel
 {
     public static PanelStudy instance;  ///< Technically, this class is a singleton, because only one would normally be created.
 
+    protected JSplitPane              split;
     protected DefaultListModel<Study> model = new DefaultListModel<Study> ();
     public    JList<Study>            list  = new JList<Study> (model);
     protected JScrollPane             listPane;
@@ -181,7 +182,6 @@ public class PanelStudy extends JPanel
             "C", Lay.sp (tabbedResults)
         );
 
-        JSplitPane split;
         Lay.BLtg
         (
             this,
@@ -193,18 +193,31 @@ public class PanelStudy extends JPanel
         );
         setFocusCycleRoot (true);
 
-        float em = SettingsLookAndFeel.em;
-        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (19.0, "PanelStudy", "divider") * em));
+        setSplit ();
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
             {
+                if (SettingsLookAndFeel.rescaling) return;  // Don't record change if we are handling a change in screen resolution.
                 Object o = e.getNewValue ();
                 if (! (o instanceof Integer)) return;
                 float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
                 AppData.state.setTruncated (value, 2, "PanelStudy", "divider");
             }
         });
+    }
+
+    public void updateUI ()
+    {
+        super.updateUI ();
+        setSplit ();
+    }
+
+    public void setSplit ()
+    {
+        if (split == null) return;
+        float em = SettingsLookAndFeel.em;
+        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (19.0, "PanelStudy", "divider") * em));
     }
 
     /**
