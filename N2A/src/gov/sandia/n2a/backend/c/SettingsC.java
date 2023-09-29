@@ -8,6 +8,7 @@ package gov.sandia.n2a.backend.c;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.Windows;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MTextField;
 import gov.sandia.n2a.ui.settings.SettingsBackend;
@@ -58,7 +59,7 @@ public class SettingsC extends SettingsBackend
                 // Once a DLL is loaded, the user needs to restart JVM to get an updated version.
                 // Therefore, no point in removing "ffmpegJNI" or "JNI".
                 h.config.set ("", "backend", "c", "compilerChanged");
-                if (h.name.equals ("localhost")) textMessages.setText ("");
+                clearMessage (h);
             }
         });
 
@@ -71,7 +72,7 @@ public class SettingsC extends SettingsBackend
                 h.objects.remove ("ffmpegIncDir");
                 h.objects.remove ("ffmpegBinDir");
                 h.config.set ("", "backend", "c", "compilerChanged");  // Not exactly true, but sufficient to force rebuild.
-                if (h.name.equals ("localhost")) textMessages.setText ("");
+                clearMessage (h);
             }
         });
 
@@ -83,7 +84,7 @@ public class SettingsC extends SettingsBackend
                 h.objects.remove ("jniIncMdDir");
                 h.objects.remove ("jniIncDir");
                 h.config.set ("", "backend", "c", "compilerChanged");
-                if (h.name.equals ("localhost")) textMessages.setText ("");
+                clearMessage (h);
             }
         });
 
@@ -94,7 +95,7 @@ public class SettingsC extends SettingsBackend
                 Host h = (Host) list.getSelectedValue ();
                 h.objects.remove ("glLibs");
                 h.config.set ("", "backend", "c", "compilerChanged");
-                if (h.name.equals ("localhost")) textMessages.setText ("");
+                clearMessage (h);
             }
         });
 
@@ -112,7 +113,7 @@ public class SettingsC extends SettingsBackend
                 h.objects.remove ("jniIncDir");
                 h.objects.remove ("glLibs");
                 h.config.set ("", "backend", "c", "compilerChanged");
-                if (h.name.equals ("localhost")) textMessages.setText ("");
+                clearMessage (h);
             }
         });
 
@@ -128,6 +129,11 @@ public class SettingsC extends SettingsBackend
             }
         };
         textMessages.setEditable (false);
+    }
+
+    protected void clearMessage (Host h)
+    {
+        if (h.name.equals ("localhost")) textMessages.setText (h instanceof Windows ? "Restart needed" : "");
     }
 
     @Override
