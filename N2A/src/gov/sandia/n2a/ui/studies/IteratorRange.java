@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,12 +14,18 @@ public class IteratorRange extends IteratorIndexed
 {
     protected double lo;
     protected double hi;
-    protected double step = 1;
+    protected double step       = 1;
+    protected String rangeUnits = "";
 
     public IteratorRange (String[] keys, String range)
     {
         super (keys);
-        String[] pieces = range.split (",");
+
+        String[] pieces = range.split ("]", 2);
+        if (pieces.length == 2) rangeUnits = pieces[1];
+        range = pieces[0];
+
+        pieces = range.split (",");
         hi = new UnitValue (pieces[0]).get ();
         if (pieces.length > 1)
         {
@@ -41,6 +47,6 @@ public class IteratorRange extends IteratorIndexed
     public void assign (MNode model)
     {
         if (inner != null) inner.assign (model);
-        model.set (Scalar.print (lo + step * index), keyPath);
+        model.set (Scalar.print (lo + step * index) + rangeUnits, keyPath);
     }
 }

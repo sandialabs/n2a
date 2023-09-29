@@ -484,22 +484,14 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             boolean isFalse =  text.isEmpty ()  ||  text.equals ("0");
             flagEditor.setSelected (! isFalse);
         }
-        else if (param.contains (","))  // Dropdown list with fixed set of options.
-        {
-            editingComponent = choiceEditor;
-            choiceEditor.removeAllItems ();
-            String[] pieces = param.split (",");
-            for (String c : pieces) choiceEditor.addItem (c);
-            choiceEditor.setSelectedItem (text);
-        }
-        else if (param.startsWith ("["))  // Numeric range
+        else if (param.startsWith ("["))  // Numeric range. (Takes precedence over comma-separated list.)
         {
             editingComponent = rangeEditor;
 
             String[] pieces = param.substring (1).split ("]", 2);
             rangeUnits = "";
             if (pieces.length == 2) rangeUnits = pieces[1];
-            pieces = pieces[0].split (":");
+            pieces = pieces[0].split (",");
             rangeLo = Double.valueOf (pieces[0]);
             rangeHi = Double.valueOf (pieces[1]);
             rangeStepSize = 1;
@@ -511,6 +503,14 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
             c = Math.max (c, 0);
             c = Math.min (c, steps);
             rangeEditor.setValues (c, 1, 0, steps + 1);
+        }
+        else if (param.contains (","))  // Dropdown list with fixed set of options.
+        {
+            editingComponent = choiceEditor;
+            choiceEditor.removeAllItems ();
+            String[] pieces = param.split (",");
+            for (String c : pieces) choiceEditor.addItem (c);
+            choiceEditor.setSelectedItem (text);
         }
         else  // Plain text
         {

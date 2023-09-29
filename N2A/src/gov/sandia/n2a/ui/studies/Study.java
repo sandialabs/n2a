@@ -98,9 +98,7 @@ public class Study
                 }
                 else if (value.startsWith ("["))
                 {
-                    value = value.substring (1);
-                    value = value.split ("]", 2)[0];
-                    it = new IteratorRange (keys, value);
+                    it = new IteratorRange (keys, value.substring (1));
                 }
                 else if (value.startsWith ("uniform")  ||  value.startsWith ("gaussian"))
                 {
