@@ -905,11 +905,14 @@ public class JobC extends Thread
 
     public void tagCommandLineParameters (EquationSet s, Writer params) throws IOException
     {
+        MNode nodeCLI = s.metadata.child ("backend", "c", "cli");
+        if (nodeCLI != null  &&  ! nodeCLI.getFlag ()) return;  // Suppress this part or all its children.
+
         for (Variable v : s.variables)
         {
             // Must be a simple constant tagged "param"
             if (v.metadata == null) continue;  // This can happen for $variables that are added at compile time.
-            MNode nodeCLI = v.metadata.child ("backend", "c", "cli");
+            nodeCLI = v.metadata.child ("backend", "c", "cli");
             if (nodeCLI == null)  // Without CLI flag, base decision on param flag.
             {
                 if (! v.metadata.getFlag ("param")) continue;
@@ -935,6 +938,8 @@ public class JobC extends Thread
             String                  comment = v.metadata.get ("notes");
             if (comment.isBlank ()) comment = v.metadata.get ("note");
             if (comment.isBlank ()) comment = v.metadata.get ("description");
+            int pos = comment.indexOf ('\n');
+            if (pos >= 0) comment = comment.substring (0, pos);
 
             params.append (v.fullName () + "=" + defaultValue);
             if (! hint.isBlank ()) params.append (";" + hint);
@@ -1917,6 +1922,10 @@ public class JobC extends Thread
             boolean time   = smooth  ||  i.getKeywordFlag ("time");
             if (time)   result.append ("  " + i.name + "->time = true;\n");
             if (smooth) result.append ("  " + i.name + "->smooth = true;\n");
+            // TODO: need a way to know epsilon at this stage. Currently, we rely on individual part instances to set epsilon based on their own dt.
+            // Several different instances may disagree on epsilon.
+            // We could make a compile-time estimate of the smallest dt, and use dt/1000 just once here.
+            // This is similar to the current approach for estimating time exponent for fixed-point.
         }
         for (Output o : mainOutput)
         {
@@ -3757,6 +3766,7 @@ public class JobC extends Thread
             }
 
             // Initialize static objects
+            context.initialized.clear ();
             for (Variable v : bed.localInit)  // non-optimized list, so hopefully all variables are covered
             {
                 for (EquationEntry e : v.equations)
@@ -5377,23 +5387,19 @@ public class JobC extends Thread
                 if (op instanceof Input)
                 {
                     Input i = (Input) op;
-                    if (i.operands[0] instanceof Constant)
+                    if (   i.operands[0] instanceof Constant
+                        && i.usesTime ()  &&  ! context.global  &&  ! T.contains ("int")  // In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
+                        && ! context.initialized.contains (i.name))
                     {
-                        if (i.usesTime ()  &&  ! context.global  &&  ! T.contains ("int"))  // Note: In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
-                        {
-                            // TODO: This is a bad way to set time epsilon, but not sure if there is a better one.
-                            // The main problem is that several different instances may all do the same initialization,
-                            // and they may disagree on epsilon, perhaps even by several orders of magnitude.
-                            // We could make a compile-time estimate of the smallest dt, and use dt/1000 everywhere.
-                            // This is similar to the current approach for estimating time exponent for fixed-point.
+                        // See comments in generateMainInitializers()
+                        context.initialized.add (i.name);
 
-                            // Read $t' as an lvalue, to ensure we get any newly-set frequency.
-                            // However, can't do this if $t' is a constant. In that case, no variable exists.
-                            boolean lvalue = ! bed.dt.hasAttribute ("constant");
-                            context.result.append (pad + i.name + "->epsilon = " + resolve (bed.dt.reference, context, lvalue) + " / 1000.0");
-                            if (T.equals ("float")) context.result.append ("f");
-                            context.result.append (";\n");
-                        }
+                        // Read $t' as an lvalue, to ensure we get any newly-set frequency.
+                        // However, can't do this if $t' is a constant. In that case, no variable exists.
+                        boolean lvalue = ! bed.dt.hasAttribute ("constant");
+                        context.result.append (pad + i.name + "->epsilon = " + resolve (bed.dt.reference, context, lvalue) + " / 1000.0");
+                        if (T.equals ("float")) context.result.append ("f");
+                        context.result.append (";\n");
                     }
                     return true;
                 }
