@@ -1,11 +1,11 @@
 /*
-Copyright 2009-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2009-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 
-#include "math.h"
+#include "mymath.h"
 #include "image.h"
 
 using namespace n2a;

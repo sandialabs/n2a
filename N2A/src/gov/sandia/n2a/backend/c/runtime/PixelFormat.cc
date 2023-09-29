@@ -12,7 +12,7 @@ the U.S. Government retains certain rights in this software.
 */
 
 
-#include "math.h"
+#include "mymath.h"
 #include "image.h"
 #include "myendian.h"
 

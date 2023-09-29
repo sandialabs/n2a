@@ -9,7 +9,7 @@ the U.S. Government retains certain rights in this software.
 #define n2a_runtime_tcc
 
 
-#include "math.h"
+#include "mymath.h"
 #include "runtime.h"
 #include "matrix.h"
 

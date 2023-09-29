@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -24,7 +24,6 @@ the U.S. Government retains certain rights in this software.
 // up warnings when our scan limit exceeds the known (to it) size of the string.
 // We don't want to see this scary and useless warning.
 #ifdef __GNUC__
-#  pragma GCC diagnostic push
 #  pragma GCC diagnostic ignored "-Wstringop-overread"
 #endif
 
@@ -44,7 +43,7 @@ public:
     size_type capacity_; // size of currently-allocated memory block
 
     static const size_type npos    = static_cast<size_type> (-1);
-    static const size_type maxSize = 0x1000000;  // 16Mb. This is suitable for most systems.
+    static const size_type maxSize = 0x1000000;  // 16MiB. This is suitable for most systems.
 
     String ()
     {
@@ -139,7 +138,7 @@ public:
         }
         else
         {
-            top = memory;
+            top = memory;  // Notice that "memory" could be null here, in which case top is also null.
         }
         if (top) *top = 0;
         return *this;
@@ -791,9 +790,5 @@ namespace std
         }
     };
 }
-
-#ifdef __GNUC__
-#  pragma GCC diagnostic pop
-#endif
 
 #endif

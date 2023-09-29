@@ -6,7 +6,7 @@ Distributed under the UIUC/NCSA Open Source License.  See the file LICENSE
 for details.
 
 
-Copyright 2005-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,7 +17,7 @@ the U.S. Government retains certain rights in this software.
 
 
 #include "image.h"
-#include "StringLite.h"
+#include "mystring.h"
 #include "NativeResource.h"
 
 #include "shared.h"

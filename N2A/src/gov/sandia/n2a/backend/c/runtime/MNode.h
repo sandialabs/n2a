@@ -15,7 +15,7 @@ the U.S. Government retains certain rights in this software.
 #ifndef n2a_mnode_h
 #define n2a_mnode_h
 
-#include "StringLite.h"  // Use our own string class, to be compatible with rest of runtime. Unfortunately, this means you need to copy one extra header file to use MNode standalone.
+#include "mystring.h"  // Use our own string class, to be compatible with rest of runtime. Unfortunately, this means you need to copy one extra header file to use MNode standalone.
 #include <vector>
 #include <map>
 #include <set>

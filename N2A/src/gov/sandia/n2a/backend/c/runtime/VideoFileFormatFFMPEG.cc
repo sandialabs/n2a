@@ -18,7 +18,7 @@ the U.S. Government retains certain rights in this software.
 #define __STDC_CONSTANT_MACROS
 #define __STDC_LIMIT_MACROS
 
-#include "math.h"
+#include "mymath.h"
 #include "video.h"
 
 #include <time.h>

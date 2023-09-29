@@ -11,7 +11,7 @@ the U.S. Government retains certain rights in this software.
 
 #include "nosys.h"
 #include "holder.h"
-#include "StringLite.h"
+#include "mystring.h"
 #include "KDTree.h"
 
 #include <functional>

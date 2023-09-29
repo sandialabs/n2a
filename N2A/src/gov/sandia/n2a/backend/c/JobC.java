@@ -621,9 +621,9 @@ public class JobC extends Thread
         boolean changed = unpackRuntime
         (
             JobC.class, job, runtimeDir, "runtime/",
-            "math.h", "fixedpoint.cc",
+            "mymath.h", "fixedpoint.cc",
             "holder.cc", "holder.h", "holder.tcc",
-            "KDTree.h", "StringLite.h",
+            "KDTree.h", "mystring.h",
             "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
             "MNode.h", "MNode.cc",
             "nosys.h",

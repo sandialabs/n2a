@@ -6,13 +6,13 @@
  for details.
 
 
- Copyright 2005-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+ Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
  Under the terms of Contract DE-NA0003525 with NTESS,
  the U.S. Government retains certain rights in this software.
  */
 
 #undef n2a_FP  // Prevent fixed-point symbolic constants from replacing regular floating-point values.
-#include "math.h"
+#include "mymath.h"
 #include "canvas.h"
 #include "Matrix.tcc"
 #include "MatrixFixed.tcc"

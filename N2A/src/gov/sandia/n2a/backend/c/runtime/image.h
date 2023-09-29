@@ -18,7 +18,7 @@ the U.S. Government retains certain rights in this software.
 
 #include "matrix.h"
 #include "pointer.h"
-#include "StringLite.h"
+#include "mystring.h"
 
 #include <iostream>
 #include <vector>

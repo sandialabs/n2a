@@ -19,7 +19,7 @@ Store in subdirectory KHR:
 
 
 #include "nosys.h"
-#include "StringLite.h"
+#include "mystring.h"
 #include "matrix.h"
 #include "MNode.h"
 #include "canvas.h"

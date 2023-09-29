@@ -9,7 +9,7 @@ the U.S. Government retains certain rights in this software.
 #define n2a_holder_tcc
 
 
-#include "math.h"
+#include "mymath.h"
 #include "holder.h"
 #include "runtime.h"   // For Event::exponent
 #include "image.h"

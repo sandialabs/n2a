@@ -15,9 +15,9 @@ the U.S. Government retains certain rights in this software.
 #define n2a_matrix_tcc
 
 
-#include "math.h"
+#include "mymath.h"
 #include "matrix.h"
-#include "StringLite.h"
+#include "mystring.h"
 
 
 // class MatrixAbstract<T> --------------------------------------------------
