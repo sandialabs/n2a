@@ -503,9 +503,9 @@ public:
         this->value  = 0;
 
         columns = (*A->data).size () - ac;
-        if (this->column < columns)
+        if (columns > 0)
         {
-            int actualColumn = this->column + ac;
+            int actualColumn = ac;
             it  = (*A->data)[actualColumn].begin ();
             end = (*A->data)[actualColumn].end ();
         }
