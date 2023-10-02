@@ -612,6 +612,33 @@ public:
     }
 
     /**
+        Replace all occurrences of a with b.
+    **/
+    String replace_all (const String & a, const String & b)
+    {
+        String result;
+        size_t count = size ();  // Of source string (ourself).
+        size_t countA = a.size ();  // To be completely defensive, we should guard against countA==0. But nobody will ever pass that under normal circumstances.
+        size_t countB = b.size ();
+        if (countA >= countB) result.reserve (count);
+        else                  result.reserve (count + countB - countA);  // This formula assumes just one replacement. It's not worth counting replacements ahead of time.
+        size_t i = 0;  // Current position in source string (ourself).
+        while (i < count)
+        {
+            size_t next = find (a, i);
+            if (next == npos)
+            {
+                result.append (memory + i, count - i);
+                break;
+            }
+            result.append (memory + i, next - i);
+            result.append (b.memory, countB);
+            i = next + countA;
+        }
+        return result;
+    }
+
+    /**
         Returns a new string where all characters are lower-case versions of this string.
         Used for case-insensitive comparison.
     **/

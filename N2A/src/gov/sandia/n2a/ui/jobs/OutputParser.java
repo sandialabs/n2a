@@ -28,7 +28,7 @@ public class OutputParser
 {
     public List<Column> columns = new ArrayList<Column> ();
     public boolean      raw = true;  // Indicates that all column names are empty, likely the result of output() in raw mode. Will be changed to false if any non-empty column name is found.
-    public String       delimiter = " ";
+    public char         delimiter = ' ';
     public boolean      delimiterSet;
     public boolean      isXycePRN;
     public Column       time;
@@ -77,30 +77,75 @@ public class OutputParser
             	if (line.length () == 0) continue;
             	if (line.startsWith ("End of")) continue;
 
+                char chars[] = line.toCharArray ();
                 if (! delimiterSet)
                 {
-                    if      (line.contains ("\t")) delimiter = "\t"; // highest precedence
-                    else if (line.contains (","))  delimiter = ",";
-                    // space character is lowest precedence
-                    delimiterSet =  ! delimiter.equals (" ")  ||  ! line.isBlank ();
+                    // Scan for first delimiter character that is not inside a quote.
+                    boolean inQuote = false;
+                    for (char c : chars)
+                    {
+                        if (c == '\"')
+                        {
+                            inQuote = ! inQuote;
+                            continue;
+                        }
+                        if (inQuote) continue;
+                        if (c == '\t')
+                        {
+                            delimiter = c;
+                            break;
+                        }
+                        if (c == ',') delimiter = c;
+                        // space character is lowest precedence
+                    }
+                    delimiterSet =  delimiter != ' '  ||  ! line.isBlank ();
                 }
-                String[] parts = line.split (delimiter, -1);  // -1 means that trailing delimiters will produce additional columns. Internal and C backends do not produce trailing delimiters, but other simulators might.
+
+                // Break line into delimited strings, possibly quoted.
+                List<String> parts = new ArrayList<String> (columns.size ());
+                boolean inQuote = false;
+                StringBuilder token = new StringBuilder ();
+                for (int i = 0; i < chars.length; i++)
+                {
+                    char c = chars[i];
+                    if (c == '\"')
+                    {
+                        if (inQuote  &&  i < chars.length - 1  &&  chars[i+1] == '\"')
+                        {
+                            token.append (c);
+                            i++;
+                            continue;
+                        }
+                        inQuote = ! inQuote;
+                        continue;
+                    }
+                    if (c == delimiter  &&  ! inQuote)
+                    {
+                        parts.add (token.toString ());
+                        token.setLength (0);
+                        continue;
+                    }
+                    token.append (c);
+                }
+                if (! token.isEmpty ()) parts.add (token.toString ());
+
+                int partsSize = parts.size ();
                 int lastSize = columns.size ();
-                while (columns.size () < parts.length)
+                while (columns.size () < partsSize)
                 {
                 	Column c = new Column ();
                 	c.startRow = rows;
                 	columns.add (c);
                 }
 
-                char fc = parts[0].charAt (0);  // first character. There should always be something in first column, because we put either "$t" or current timestamp there.
+                char fc = chars[0];  // first character. There should always be something in first column, because we put either "$t" or current timestamp there.
                 if (fc == '-'  ||  fc == '+'  ||  fc == '.'  ||  fc >= '0'  &&  fc <= '9')  // number
                 {
                     int p = isXycePRN ? 1 : 0;  // skip parsing Index column, since we don't use it
-                    for (; p < parts.length; p++)
+                    for (; p < partsSize; p++)
                     {
                         Column c = columns.get (p);
-                        String part = parts[p];
+                        String part = parts.get (p);
                         float value = defaultValue;
                         if (! part.isEmpty ())
                         {
@@ -128,10 +173,10 @@ public class OutputParser
                 else  // column header
                 {
                     raw = false;
-                    isXycePRN = parts[0].equals ("Index");
-                    for (int p = lastSize; p < parts.length; p++)
+                    isXycePRN = parts.get (0).equals ("Index");
+                    for (int p = lastSize; p < partsSize; p++)
                     {
-                        columns.get (p).header = parts[p];
+                        columns.get (p).header = parts.get (p);
                     }
                 }
             }

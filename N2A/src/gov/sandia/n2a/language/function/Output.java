@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -299,7 +299,16 @@ public class Output extends Function
                     for (; i < count; i++)
                     {
                         out.print ("\t");
-                        out.print (headers[i].replaceAll (" ", "_"));
+                        String h = headers[i];
+                        if (h.contains ("\t")  ||  h.contains (" ")  ||  h.contains (",")  ||  h.contains ("\""))  // Delimiters are forbidden inside naked headers, so quote.
+                        {
+                            h = h.replaceAll ("\"", "\"\"");  // Replace " with "". At least MS Excel is known to convert "" back to " on reading a CSV.
+                            out.print ("\"" + h + "\"");
+                        }
+                        else
+                        {
+                            out.print (h);
+                        }
                     }
                     out.println ();
                 }

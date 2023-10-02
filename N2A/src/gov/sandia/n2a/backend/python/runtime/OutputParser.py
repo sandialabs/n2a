@@ -120,46 +120,64 @@ class OutputParser:
 
             # Determine delimiter
             if not self.delimiterSet:
-                if   '\t' in line: self.delimiter = '\t'  # highest precedence
-                elif ','  in line: self.delimiter = ','
-                # space character is lowest precedence
+                # Scan for first delimiter character that is not inside a quote.
+                inQuote = False
+                for c in line:
+                    if c == '\"':
+                        inQuote = not inQuote
+                        continue
+                    if inQuote: continue
+                    if c == '\t':
+                        self.delimiter = c
+                        break
+                    if c == ',': self.delimiter = c
+                    # space character is lowest precedence
                 self.delimiterSet = self.delimiter != ' ' or line.strip()
 
-            c = 0  # Column index
-            start = 0  # Current position for column scan.
+            index = 0  # Column index
             l = line[0]
             isHeader = (l < "0"  or  l > "9")  and  l != "+"  and  l != "-"  # any character other than the start of a float
             if isHeader: self.raw = False
-            while True:
-                pos = line.find(self.delimiter, start)
-                if pos == -1:
-                    value = line[start:]
-                    start = -1
-                else:
-                    value = line[start:pos]
-                    start = pos + 1
+            i = 0;
+            lineSize = len(line);
+            while i < lineSize:
+                token = ''
+                inQuote = False
+                while i < lineSize:
+                    c = line[i]
+                    if c == '\"':
+                        if inQuote  and  i < lineSize - 1  and  line[i+1] == '\"':
+                            token += c
+                            i += 2
+                            continue
+                        inQuote = not inQuote
+                        i += 1
+                        continue
+                    if c == self.delimiter  and  not inQuote: break
+                    token += c
+                    i += 1
 
                 # Notice that c can never be greater than column count, because we always fill in columns as we go.
                 if isHeader:
-                    if c == len(self.columns):
-                        self.columns.append(Column(value))
+                    if index == len(self.columns):
+                        self.columns.append(Column(token))
                 else:
-                    if c == len(self.columns): self.columns.append(Column(""))
-                    column = self.columns[c]
-                    if value == "":
+                    if index == len(self.columns): self.columns.append(Column(""))
+                    column = self.columns[index]
+                    if token == "":
                         column.value = self.defaultValue
                     else:
-                        column.textWidth = max(column.textWidth, len(value))
-                        column.value = float(value)
+                        column.textWidth = max(column.textWidth, len(token))
+                        column.value = float(token)
 
-                c += 1
-                if start == -1: break
+                index += 1
+                i += 1
 
             if isHeader:
                 self.isXycePRN =  self.columns[0].header == "Index"
             else:
                 self.rows += 1
-                return c
+                return index
         return 0
 
     def parse(self, fileName, defaultValue = 0.0):

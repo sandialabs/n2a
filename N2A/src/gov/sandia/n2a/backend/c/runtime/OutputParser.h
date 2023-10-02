@@ -3,7 +3,7 @@ A utility class for reading simulation output files.
 Primarily for those who wish to write C++ code to analyze these data.
 This is a pure header implementation. No need to build/link extra libraries.
 
-Copyright 2020-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -201,58 +201,79 @@ namespace n2a
 
                 if (! delimiterSet)
                 {
-                    if      (line.find_first_of ('\t') != std::string::npos) delimiter = '\t'; // highest precedence
-                    else if (line.find_first_of (',' ) != std::string::npos) delimiter = ',';
-                    // space character is lowest precedence
+                    // Scan for first delimiter character that is not inside a quote.
+                    bool inQuote = false;
+                    for (char c : line)
+                    {
+                        if (c == '\"')
+                        {
+                            inQuote = ! inQuote;
+                            continue;
+                        }
+                        if (inQuote) continue;
+                        if (c == '\t')
+                        {
+                            delimiter = c;
+                            break;
+                        }
+                        if (c == ',') delimiter = c;
+                        // space character is lowest precedence
+                    }
                     delimiterSet =  delimiter != ' '  ||  line.find_first_not_of (' ') != std::string::npos;
                 }
 
-                int c = 0;  // Column index
-                std::string::size_type start = 0;  // Current position for column scan.
                 char l = line[0];
                 bool isHeader = (l < '0'  ||  l > '9')  &&  l != '+'  &&  l != '-';
                 if (isHeader) raw = false;
-                while (true)
+
+                int index = 0;  // Column index
+                std::string::size_type lineSize = line.size ();
+                std::string token;
+                for (std::string::size_type i = 0; i < lineSize; i++)
                 {
-                    std::string::size_type length;
-                    std::string::size_type next;
-                    std::string::size_type pos = line.find_first_of (delimiter, start);
-                    if (pos == std::string::npos)
+                    // Scan for next delimiter, handling quotes as needed.
+                    token.clear ();
+                    bool inQuote = false;
+                    for (; i < lineSize; i++)
                     {
-                        length = std::string::npos;
-                        next   = std::string::npos;
-                    }
-                    else
-                    {
-                        length = pos - start;
-                        next   = pos + 1;
+                        char c = line[i];
+                        if (c == '\"')
+                        {
+                            if (inQuote  &&  i < lineSize - 1  &&  line[i+1] == '\"')
+                            {
+                                token += c;
+                                i++;
+                                continue;
+                            }
+                            inQuote = ! inQuote;
+                            continue;
+                        }
+                        if (c == delimiter  &&  ! inQuote) break;
+                        token += c;
                     }
 
                     // Notice that c can never be greater than column count,
                     // because we always fill in columns as we go.
                     if (isHeader)
                     {
-                        if (c == columns.size ()) columns.push_back (new Column (line.substr (start, length)));
+                        if (index == columns.size ()) columns.push_back (new Column (token));
                     }
                     else
                     {
-                        if (c == columns.size ()) columns.push_back (new Column (""));
-                        Column * column = columns[c];
-                        if (length == 0)
+                        if (index == columns.size ()) columns.push_back (new Column (""));
+                        Column * column = columns[index];
+                        if (token.empty ())
                         {
                             column->value = defaultValue;
                         }
                         else
                         {
-                            column->textWidth = std::max (column->textWidth, (int) length);
-                            std::string text = line.substr (start, length);
-                            column->value = atof (text.c_str ());
+                            column->textWidth = std::max ((std::string::size_type) column->textWidth, token.size ());
+                            column->value = atof (token.c_str ());
                         }
                     }
 
-                    c++;
-                    if (next == std::string::npos) break;
-                    start = next;
+                    index++;
                 }
 
                 if (isHeader)
@@ -262,7 +283,7 @@ namespace n2a
                 else
                 {
                     rows++;
-                    return c;
+                    return index;
                 }
             }
         }

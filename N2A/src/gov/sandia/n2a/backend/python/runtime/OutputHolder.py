@@ -1,5 +1,6 @@
 import sys
 import math
+import re
 
 class OutputHolder:
     """ Full implementation of the N2A output file format.
@@ -91,7 +92,12 @@ class OutputHolder:
                     i = i + 1
                 while i < count:
                     self.out.write('\t')
-                    self.out.write(headers[i].replace(' ', '_'))
+                    if re.search(r'[ \t,"]', headers[i]):  # Check for reserved characters
+                        self.out.write('"')
+                        self.out.write(headers[i].replace('"', '""'))
+                        self.out.write('"')
+                    else:
+                        self.out.write(headers[i])
                     i = i + 1
                 self.out.write('\n')
             self.columnsPrevious = count

@@ -1994,14 +1994,41 @@ InputHolder<T>::getRow (T row)
             {
                 if (! delimiterSet)
                 {
-                    if      (line.find_first_of ('\t') != String::npos) delimiter = '\t'; // highest precedence
-                    else if (line.find_first_of (',' ) != String::npos) delimiter = ',';
-                    // space character is lowest precedence
+                    // Scan for first delimiter character that is not inside a quote.
+                    bool inQuote = false;
+                    for (char c : line)
+                    {
+                        if (c == '\"')
+                        {
+                            inQuote = ! inQuote;
+                            continue;
+                        }
+                        if (inQuote) continue;
+                        if (c == '\t')
+                        {
+                            delimiter = c;
+                            break;
+                        }
+                        if (c == ',') delimiter = c;
+                        // space character is lowest precedence
+                    }
                     delimiterSet =  delimiter != ' '  ||  line.find_first_not_of (' ') != String::npos;
                 }
 
+                // Count columns
+                // This is not as simple as counting delimiters, because we must skip over quotes.
                 int tempCount = 1;
-                for (auto it : line) if (it == delimiter) tempCount++;
+                bool inQuote = false;
+                for (char c : line)
+                {
+                    if (c == '\"')
+                    {
+                        inQuote = ! inQuote;
+                        continue;
+                    }
+                    if (inQuote) continue;
+                    if (c == delimiter) tempCount++;
+                }
                 columnCount = std::max (columnCount, tempCount);
 
                 // Decide whether this is a header row or a value row
@@ -2010,21 +2037,34 @@ InputHolder<T>::getRow (T row)
                 {
                     // Add any column headers. Generally, these will only be new headers as of this cycle.
                     int index = 0;
-                    int i = 0;
-                    int end = line.size ();
-                    while (i < end)
+                    int lineSize = line.size ();
+                    inQuote = false;
+                    String token;
+                    token.reserve (lineSize / tempCount);
+                    for (int i = 0; i < lineSize; i++)
                     {
-                        int j;
-                        j = line.find_first_of (delimiter, i);
-                        if (j == String::npos) j = end;
-                        String header = line.substr (i, j - i);
-                        header.trim ();
-                        int last = header.size () - 1;
-                        if (header[0] == '"'  &&  header[last] == '"') header = header.substr (1, last - 1);
-                        if (j > i) columnMap.emplace (header, index);
-                        i = j + 1;
-                        index++;
+                        char c = line[i];
+                        if (c == '\"')
+                        {
+                            if (inQuote  &&  i < lineSize - 1  &&  line[i+1] == '\"')
+                            {
+                                token += c;
+                                i++;
+                                continue;
+                            }
+                            inQuote = ! inQuote;
+                            continue;
+                        }
+                        if (c == delimiter  &&  ! inQuote)
+                        {
+                            if (! token.empty ()) columnMap.emplace (token, index);
+                            index++;  // Regardless of whether token is empty or not, we progress to the next column position.
+                            token.clear ();
+                            continue;
+                        }
+                        token += c;
                     }
+                    if (! token.empty ()) columnMap.emplace (token, index);
 
                     // Make column count accessible to other code before first row of data is read.
                     if (! A)
@@ -2667,8 +2707,16 @@ OutputHolder<T>::writeTrace ()
             {
                 (*out) << "\t";
                 String header (headers[i]);  // deep copy
-                header.replace_all (' ', '_');
-                (*out) << header;
+                if (header.find_first_of (" \t\",") != String::npos)
+                {
+                    (*out) << "\"";
+                    (*out) << header.replace_all ("\"", "\"\"");
+                    (*out) << "\"";
+                }
+                else
+                {
+                    (*out) << header;
+                }
             }
             (*out) << std::endl;
         }

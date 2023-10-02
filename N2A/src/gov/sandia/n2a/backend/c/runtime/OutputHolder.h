@@ -4,7 +4,7 @@ This code is not used by the C runtime. Instead, it is a simplified version
 for use by those who wish to write C++ code compatible with OutputParser.
 This is a pure header implementation. No need to build/link extra libraries.
 
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,6 +14,7 @@ the U.S. Government retains certain rights in this software.
 #define output_holder_h
 
 
+#include <string>
 #include <map>
 #include <unordered_map>
 #include <vector>
@@ -46,13 +47,29 @@ inline std::string trim (const std::string & source)
     return source.substr (begin, end - begin + 1);
 }
 
-inline void replace_all (std::string & target, char find, char replace)
+/// Replace all occurances of a with b.
+inline std::string replace_all (const std::string & target, const std::string & a, const std::string & b)
 {
-    int count = target.size ();
-    for (int i = 0; i < count; i++)
+    std::string result;
+    int count  = target.size ();
+    int countA = a     .size ();
+    int countB = b     .size ();
+    if (countA >= countB) result.reserve (count);
+    else                  result.reserve (count + countB - countA);  // This formula assumes just one replacement. It's not worth counting replacements ahead of time.
+    int i = 0;  // Current position in target.
+    while (i < count)
     {
-        if (target[i] == find) target[i] = replace;
+        int next = target.find (a, i);
+        if (next == std::string::npos)
+        {
+            result += target.substr (i, count - i);
+            break;
+        }
+        result += target.substr (i, next - i);
+        result += b;
+        i = next + countA;
     }
+    return result;
 }
 
 class OutputHolder
@@ -239,8 +256,16 @@ public:
                 {
                     (*out) << "\t";
                     std::string header (headers[i]);  // deep copy
-                    replace_all (header, ' ', '_');
-                    (*out) << header;
+                    if (header.find_first_of (" \t\",") != std::string::npos)
+                    {
+                        (*out) << "\"";
+                        (*out) << replace_all (header, "\"", "\"\"");
+                        (*out) << "\"";
+                    }
+                    else
+                    {
+                        (*out) << header;
+                    }
                 }
                 (*out) << std::endl;
             }

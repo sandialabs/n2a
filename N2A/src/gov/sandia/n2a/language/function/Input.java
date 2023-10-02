@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -123,7 +123,7 @@ public class Input extends Function
         public boolean             smooth;                     // mode flag. When true, time must also be true. Does not change the behavior of Holder, just stored here for convenience.
         public int                 timeColumn;                 // We assume column 0, unless a header overrides this.
         public boolean             timeColumnSet;              // Indicates that a header appeared in the file, so timeColumn has been evaluated.
-        public String              delimiter = " ";            // Regular expression for separator character. Allows switch between comma and space/tab.
+        public char                delimiter = ' ';            // Regular expression for separator character. Allows switch between comma and space/tab.
         public boolean             delimiterSet;               // Indicates that check for CSV has been performed. Avoids constant re-checking.
         public double              epsilon;
 
@@ -169,26 +169,71 @@ public class Input extends Function
                     String line = stream.readLine ();
                     if (line != null  &&  ! line.isEmpty ())
                     {
+                        char chars[] = line.toCharArray ();
                         if (! delimiterSet)
                         {
-                            if      (line.contains ("\t")) delimiter = "\t"; // highest precedence
-                            else if (line.contains (","))  delimiter = ",";
-                            // space character is lowest precedence
-                            delimiterSet =  ! delimiter.equals (" ")  ||  ! line.trim ().isEmpty ();
+                            // Scan for first delimiter character that is not inside a quote.
+                            boolean inQuote = false;
+                            for (char c : chars)
+                            {
+                                if (c == '\"')
+                                {
+                                    inQuote = ! inQuote;
+                                    continue;
+                                }
+                                if (inQuote) continue;
+                                if (c == '\t')
+                                {
+                                    delimiter = c;
+                                    break;
+                                }
+                                if (c == ',') delimiter = c;
+                                // space character is lowest precedence
+                            }
+                            delimiterSet =  delimiter != ' '  ||  ! line.trim ().isEmpty ();
                         }
-                        String[] columns = line.split (delimiter, -1);  // -1 means that trailing delimiters will produce additional columns. We assume that every delimiter is placed intentionally to indicate a column.
-                        columnCount = Math.max (columnCount, columns.length);
+
+                        // Break line into delimited strings, possibly quoted.
+                        List<String> columns = new ArrayList<String> ();
+                        boolean inQuote = false;
+                        StringBuilder token = new StringBuilder ();
+                        for (int i = 0; i < chars.length; i++)
+                        {
+                            char c = chars[i];
+                            if (c == '\"')
+                            {
+                                if (inQuote  &&  i < chars.length - 1  &&  chars[i+1] == '\"')
+                                {
+                                    token.append (c);
+                                    i++;
+                                    continue;
+                                }
+                                inQuote = ! inQuote;
+                                continue;
+                            }
+                            if (c == delimiter  &&  ! inQuote)
+                            {
+                                columns.add (token.toString ());
+                                token.setLength (0);
+                                continue;
+                            }
+                            token.append (c);
+                        }
+                        if (! token.isEmpty ()) columns.add (token.toString ());
+
+                        int currentColumnCount = columns.size ();
+                        columnCount = Math.max (columnCount, currentColumnCount);
 
                         // Decide whether this is a header row or a value row
                         // This approach assumes that columns never start with white-space.
-                        if (! columns[0].isEmpty ())
+                        if (! columns.get (0).isEmpty ())
                         {
-                            char firstCharacter = columns[0].charAt (0);
+                            char firstCharacter = chars[0];
                             if (firstCharacter < '-'  ||  firstCharacter == '/'  ||  firstCharacter > '9')  // not a number, so must be column header
                             {
-                                for (int i = 0; i < columns.length; i++)
+                                for (int i = 0; i < currentColumnCount; i++)
                                 {
-                                    String header = columns[i].trim ().replace ("\"", "");
+                                    String header = columns.get (i).trim ();
                                     if (! header.isEmpty ())
                                     {
                                         columnMap.put (header, i);
@@ -238,9 +283,9 @@ public class Input extends Function
                         }
 
                         nextValues = new double[columnCount];
-                        for (int i = 0; i < columns.length; i++)
+                        for (int i = 0; i < currentColumnCount; i++)
                         {
-                            String c = columns[i];
+                            String c = columns.get (i);
                             if (c.isEmpty ()) continue;  // and use default value of 0 that the array element was initialized with
 
                             // General case
