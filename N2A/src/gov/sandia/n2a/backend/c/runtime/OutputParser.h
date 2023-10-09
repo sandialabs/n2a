@@ -252,7 +252,7 @@ namespace n2a
                         token += c;
                     }
 
-                    // Notice that c can never be greater than column count,
+                    // Notice that index can never be greater than column count,
                     // because we always fill in columns as we go.
                     if (isHeader)
                     {

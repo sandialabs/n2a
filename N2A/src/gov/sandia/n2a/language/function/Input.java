@@ -238,7 +238,8 @@ public class Input extends Function
                                     {
                                         columnMap.put (header, i);
                                         while (headers.size () < i) headers.add ("");
-                                        headers.add (header);
+                                        if (headers.size () <= i) headers.add (header);
+                                        else                      headers.set (i, header);  // Replace an existing, possibly blank, header.
                                     }
                                 }
 

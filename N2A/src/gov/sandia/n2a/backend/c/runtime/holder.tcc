@@ -1990,34 +1990,16 @@ InputHolder<T>::getRow (T row)
         {
             String line;
             getline (*in, line);
-            if (! line.empty ())
+            if (line.empty ()) continue;
+            if (line[line.size () - 1] == '\r')  // Hack to handle CRLF line ending when c runtime fails to recognize it.
             {
-                if (! delimiterSet)
-                {
-                    // Scan for first delimiter character that is not inside a quote.
-                    bool inQuote = false;
-                    for (char c : line)
-                    {
-                        if (c == '\"')
-                        {
-                            inQuote = ! inQuote;
-                            continue;
-                        }
-                        if (inQuote) continue;
-                        if (c == '\t')
-                        {
-                            delimiter = c;
-                            break;
-                        }
-                        if (c == ',') delimiter = c;
-                        // space character is lowest precedence
-                    }
-                    delimiterSet =  delimiter != ' '  ||  line.find_first_not_of (' ') != String::npos;
-                }
+                line.resize (line.size () - 1);
+                if (line.empty ()) continue;
+            }
 
-                // Count columns
-                // This is not as simple as counting delimiters, because we must skip over quotes.
-                int tempCount = 1;
+            if (! delimiterSet)
+            {
+                // Scan for first delimiter character that is not inside a quote.
                 bool inQuote = false;
                 for (char c : line)
                 {
@@ -2027,206 +2009,228 @@ InputHolder<T>::getRow (T row)
                         continue;
                     }
                     if (inQuote) continue;
-                    if (c == delimiter) tempCount++;
+                    if (c == '\t')
+                    {
+                        delimiter = c;
+                        break;
+                    }
+                    if (c == ',') delimiter = c;
+                    // space character is lowest precedence
                 }
-                columnCount = std::max (columnCount, tempCount);
+                delimiterSet =  delimiter != ' '  ||  line.find_first_not_of (' ') != String::npos;
+            }
 
-                // Decide whether this is a header row or a value row
-                char firstCharacter = line[0];
-                if (firstCharacter < '-'  ||  firstCharacter == '/'  ||  firstCharacter > '9')  // not a number, so must be column header
+            // Count columns
+            // This is not as simple as counting delimiters, because we must skip over quotes.
+            int tempCount = 1;
+            bool inQuote = false;
+            for (char c : line)
+            {
+                if (c == '\"')
                 {
-                    // Add any column headers. Generally, these will only be new headers as of this cycle.
-                    int index = 0;
-                    int lineSize = line.size ();
-                    inQuote = false;
-                    String token;
-                    token.reserve (lineSize / tempCount);
-                    for (int i = 0; i < lineSize; i++)
-                    {
-                        char c = line[i];
-                        if (c == '\"')
-                        {
-                            if (inQuote  &&  i < lineSize - 1  &&  line[i+1] == '\"')
-                            {
-                                token += c;
-                                i++;
-                                continue;
-                            }
-                            inQuote = ! inQuote;
-                            continue;
-                        }
-                        if (c == delimiter  &&  ! inQuote)
-                        {
-                            if (! token.empty ()) columnMap.emplace (token, index);
-                            index++;  // Regardless of whether token is empty or not, we progress to the next column position.
-                            token.clear ();
-                            continue;
-                        }
-                        token += c;
-                    }
-                    if (! token.empty ()) columnMap.emplace (token, index);
-
-                    // Make column count accessible to other code before first row of data is read.
-                    if (! A)
-                    {
-                        if (time) currentLine = -INFINITY;
-                        if (currentCount != columnCount)
-                        {
-                            delete[] currentValues;
-                            currentValues = new T[columnCount];
-                            currentCount = columnCount;
-                            memset (&currentValues[0], 0, columnCount * sizeof (T));
-                        }
-                    }
-
-                    // Select time column
-                    if (time  &&  ! timeColumnSet)
-                    {
-                        int timeMatch = 0;
-                        for (auto it : columnMap)
-                        {
-                            int potentialMatch = 0;
-                            String header = it.first.toLowerCase ();
-                            if      (header == "t"   ) potentialMatch = 2;
-                            else if (header == "date") potentialMatch = 2;
-                            else if (header == "time") potentialMatch = 3;
-                            else if (header == "$t"  ) potentialMatch = 4;
-                            else if (header.find ("time") != String::npos) potentialMatch = 1;
-                            if (potentialMatch > timeMatch)
-                            {
-                                timeMatch = potentialMatch;
-                                timeColumn = it.second;
-                            }
-                        }
-                        timeColumnSet = true;
-                    }
-
-                    continue;  // back to top of outer while loop, skipping any other processing below
+                    inQuote = ! inQuote;
+                    continue;
                 }
+                if (inQuote) continue;
+                if (c == delimiter) tempCount++;
+            }
+            columnCount = std::max (columnCount, tempCount);
 
-                if (nextCount < columnCount)
-                {
-                    if (nextValues) delete[] nextValues;
-                    nextValues = new T[columnCount];
-                    nextCount = columnCount;
-                }
+            // Decide whether this is a header row or a value row
+            char firstCharacter = line[0];
+            if (firstCharacter < '-'  ||  firstCharacter == '/'  ||  firstCharacter > '9')  // not a number, so must be column header
+            {
+                // Add any column headers. Generally, these will only be new headers as of this cycle.
                 int index = 0;
-                int i = 0;
-                for (; index < tempCount; index++)
+                int lineSize = line.size ();
+                inQuote = false;
+                String token;
+                token.reserve (lineSize / tempCount);
+                for (int i = 0; i < lineSize; i++)
                 {
-                    int j;
-                    j = line.find_first_of (delimiter, i);
-                    if (j == String::npos) j = line.size ();
-                    if (j == i)
+                    char c = line[i];
+                    if (c == '\"')
                     {
-                        nextValues[index] = 0;
-                    }
-                    else  // j > i
-                    {
-                        String field = line.substr (i, j - i);
-
-                        // Special case for ISO 8601 formatted date
-                        // Convert date to Unix time. Dates before epoch will be negative.
-                        bool valid = false;
-                        if (index == timeColumn)
+                        if (inQuote  &&  i < lineSize - 1  &&  line[i+1] == '\"')
                         {
-                            int year   = 1970;  // will be adjusted below for mktime()
-                            int month  = 1;     // ditto
-                            int day    = 1;
-                            int hour   = 0;
-                            int minute = 0;
-                            int second = 0;
+                            token += c;
+                            i++;
+                            continue;
+                        }
+                        inQuote = ! inQuote;
+                        continue;
+                    }
+                    if (c == delimiter  &&  ! inQuote)
+                    {
+                        if (! token.empty ()) columnMap.emplace (token, index);
+                        index++;  // Regardless of whether token is empty or not, we progress to the next column position.
+                        token.clear ();
+                        continue;
+                    }
+                    token += c;
+                }
+                if (! token.empty ()) columnMap.emplace (token, index);
 
-                            int length = field.size ();
-                            if (length == 4)
+                // Make column count accessible to other code before first row of data is read.
+                if (! A)
+                {
+                    if (time) currentLine = -INFINITY;
+                    if (currentCount != columnCount)
+                    {
+                        delete[] currentValues;
+                        currentValues = new T[columnCount];
+                        currentCount = columnCount;
+                        memset (&currentValues[0], 0, columnCount * sizeof (T));
+                    }
+                }
+
+                // Select time column
+                if (time  &&  ! timeColumnSet)
+                {
+                    int timeMatch = 0;
+                    for (auto it : columnMap)
+                    {
+                        int potentialMatch = 0;
+                        String header = it.first.toLowerCase ();
+                        if      (header == "t"   ) potentialMatch = 2;
+                        else if (header == "date") potentialMatch = 2;
+                        else if (header == "time") potentialMatch = 3;
+                        else if (header == "$t"  ) potentialMatch = 4;
+                        else if (header.find ("time") != String::npos) potentialMatch = 1;
+                        if (potentialMatch > timeMatch)
+                        {
+                            timeMatch = potentialMatch;
+                            timeColumn = it.second;
+                        }
+                    }
+                    timeColumnSet = true;
+                }
+
+                continue;  // back to top of outer while loop, skipping any other processing below
+            }
+
+            if (nextCount < columnCount)
+            {
+                if (nextValues) delete[] nextValues;
+                nextValues = new T[columnCount];
+                nextCount = columnCount;
+            }
+            int index = 0;
+            int i = 0;
+            for (; index < tempCount; index++)
+            {
+                int j;
+                j = line.find_first_of (delimiter, i);
+                if (j == String::npos) j = line.size ();
+                if (j == i)
+                {
+                    nextValues[index] = 0;
+                }
+                else  // j > i
+                {
+                    String field = line.substr (i, j - i);
+
+                    // Special case for ISO 8601 formatted date
+                    // Convert date to Unix time. Dates before epoch will be negative.
+                    bool valid = false;
+                    if (index == timeColumn)
+                    {
+                        int year   = 1970;  // will be adjusted below for mktime()
+                        int month  = 1;     // ditto
+                        int day    = 1;
+                        int hour   = 0;
+                        int minute = 0;
+                        int second = 0;
+
+                        int length = field.size ();
+                        if (length == 4)
+                        {
+                            year  = atoi (field.c_str ());
+                            valid =  year < 3000  &&  year > 1000;
+                        }
+                        else if (length >= 7  &&  field[4] == '-')
+                        {
+                            valid = true;
+                            year  = atoi (field.substr (0, 4).c_str ());
+                            month = atoi (field.substr (5, 2).c_str ());
+                            if (length >= 10  &&  field[7] == '-')
                             {
-                                year  = atoi (field.c_str ());
-                                valid =  year < 3000  &&  year > 1000;
-                            }
-                            else if (length >= 7  &&  field[4] == '-')
-                            {
-                                valid = true;
-                                year  = atoi (field.substr (0, 4).c_str ());
-                                month = atoi (field.substr (5, 2).c_str ());
-                                if (length >= 10  &&  field[7] == '-')
+                                day = atoi (field.substr (8, 2).c_str ());
+                                if (length >= 13  &&  field[10] == 'T')
                                 {
-                                    day = atoi (field.substr (8, 2).c_str ());
-                                    if (length >= 13  &&  field[10] == 'T')
+                                    hour = atoi (field.substr (11, 2).c_str ());
+                                    if (length >= 16  &&  field[13] == ':')
                                     {
-                                        hour = atoi (field.substr (11, 2).c_str ());
-                                        if (length >= 16  &&  field[13] == ':')
+                                        minute = atoi (field.substr (14, 2).c_str ());
+                                        if (length >= 19  &&  field[16] == ':')
                                         {
-                                            minute = atoi (field.substr (14, 2).c_str ());
-                                            if (length >= 19  &&  field[16] == ':')
-                                            {
-                                                second = atoi (field.substr (17, 2).c_str ());
-                                            }
+                                            second = atoi (field.substr (17, 2).c_str ());
                                         }
                                     }
                                 }
                             }
-
-                            if (valid)
-                            {
-                                month -= 1;
-                                year  -= 1900;
-
-                                struct tm date;
-                                date.tm_isdst = 0;  // time is strictly UTC, with no DST
-                                // ignoring tm_wday and tm_yday, as mktime() doesn't do anything with them
-
-                                // Hack to adjust for mktime() that can't handle dates before posix epoch (1970/1/1).
-                                // This simple hack only works for years after ~1900.
-                                // Solution comes from https://bugs.php.net/bug.php?id=17123
-                                // Alternate solution would be to implement a simple mktime() right here.
-                                // Since we don't care about DST or timezones, all it has to do is handle Gregorion leap-years.
-                                time_t offset = 0;
-                                if (year <= 70)  // Yes, that includes 1970 itself.
-                                {
-                                    // The referenced post suggested 56 years, which apparently makes week days align correctly.
-                                    year += 56;
-                                    date.tm_year = 70 + 56;
-                                    date.tm_mon  = 0;
-                                    date.tm_mday = 1;
-                                    date.tm_hour = 0;
-                                    date.tm_min  = 0;
-                                    date.tm_sec  = 0;
-                                    offset = mktime (&date);
-                                }
-
-                                date.tm_year = year;
-                                date.tm_mon  = month;
-                                date.tm_mday = day;
-                                date.tm_hour = hour;
-                                date.tm_min  = minute;
-                                date.tm_sec  = second;
-
-                                nextValues[index] = mktime (&date) - offset;  // Unix time; an integer, so exponent=MSB
-#                               ifdef n2a_FP
-                                // Need to put value in expected exponent.
-                                int shift = FP_MSB - (time ? Event<T>::exponent : exponent);
-                                if (shift >= 0) nextValues[index] <<= shift;
-                                else            nextValues[index] >>= -shift;
-#                               endif
-                            }
                         }
 
-                        if (! valid)  // Not a date, so general case ...
+                        if (valid)
                         {
+                            month -= 1;
+                            year  -= 1900;
+
+                            struct tm date;
+                            date.tm_isdst = 0;  // time is strictly UTC, with no DST
+                            // ignoring tm_wday and tm_yday, as mktime() doesn't do anything with them
+
+                            // Hack to adjust for mktime() that can't handle dates before posix epoch (1970/1/1).
+                            // This simple hack only works for years after ~1900.
+                            // Solution comes from https://bugs.php.net/bug.php?id=17123
+                            // Alternate solution would be to implement a simple mktime() right here.
+                            // Since we don't care about DST or timezones, all it has to do is handle Gregorion leap-years.
+                            time_t offset = 0;
+                            if (year <= 70)  // Yes, that includes 1970 itself.
+                            {
+                                // The referenced post suggested 56 years, which apparently makes week days align correctly.
+                                year += 56;
+                                date.tm_year = 70 + 56;
+                                date.tm_mon  = 0;
+                                date.tm_mday = 1;
+                                date.tm_hour = 0;
+                                date.tm_min  = 0;
+                                date.tm_sec  = 0;
+                                offset = mktime (&date);
+                            }
+
+                            date.tm_year = year;
+                            date.tm_mon  = month;
+                            date.tm_mday = day;
+                            date.tm_hour = hour;
+                            date.tm_min  = minute;
+                            date.tm_sec  = second;
+
+                            nextValues[index] = mktime (&date) - offset;  // Unix time; an integer, so exponent=MSB
 #                           ifdef n2a_FP
-                            nextValues[index] = convert (field, time  &&  index == timeColumn ? Event<T>::exponent : exponent);
-#                           else
-                            nextValues[index] = (T) atof (field.c_str ());
+                            // Need to put value in expected exponent.
+                            int shift = FP_MSB - (time ? Event<T>::exponent : exponent);
+                            if (shift >= 0) nextValues[index] <<= shift;
+                            else            nextValues[index] >>= -shift;
 #                           endif
                         }
                     }
-                    i = j + 1;
-                }
-                for (; index < columnCount; index++) nextValues[index] = 0;
 
-                if (time) nextLine = nextValues[timeColumn];
-                else      nextLine = currentLine + 1;
+                    if (! valid)  // Not a date, so general case ...
+                    {
+#                       ifdef n2a_FP
+                        nextValues[index] = convert (field, time  &&  index == timeColumn ? Event<T>::exponent : exponent);
+#                       else
+                        nextValues[index] = (T) atof (field.c_str ());
+#                       endif
+                    }
+                }
+                i = j + 1;
             }
+            for (; index < columnCount; index++) nextValues[index] = 0;
+
+            if (time) nextLine = nextValues[timeColumn];
+            else      nextLine = currentLine + 1;
         }
 
         // Determine if we have the requested data
