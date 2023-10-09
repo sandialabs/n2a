@@ -134,7 +134,7 @@ public class VideoIn extends NativeResource implements Runnable
                 }
                 else
                 {
-                    SettingsC.instance.addMessage ("FFmpeg is not available. Check path above.\n");
+                    SettingsC.instance.addMessage ("FFmpeg is not available. Is the path correct?\n");
                 }
                 System.load (runtimePath.toAbsolutePath ().toString ());
                 localhost.objects.put ("JNI", true);  // Partial success. May be able to do image processing.
