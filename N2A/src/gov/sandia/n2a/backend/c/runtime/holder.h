@@ -336,15 +336,15 @@ public:
     virtual ~Mfile ();
 
 #   ifdef n2a_FP
-    MatrixAbstract<T> * getMatrix (const std::vector<String> & path, int exponent);
+    MatrixAbstract<T> * getMatrix (const char * delimiter, const std::vector<String> & path, int exponent);
 #   else
-    MatrixAbstract<T> * getMatrix (const std::vector<String> & path);
+    MatrixAbstract<T> * getMatrix (const char * delimiter, const std::vector<String> & path);
 #   endif
 };
 template<class T> SHARED Mfile<T> * MfileHelper (const String & fileName, Mfile<T> * oldHandle = 0);
 
-SHARED std::vector<String> keyPath (const std::vector<String> & path);  ///< Converts any path elements with delimiters (/) into separate elements.
-template<typename... Args> std::vector<String> keyPath (Args... keys) {return keyPath ({keys...});}
+SHARED std::vector<String> keyPath (const char * delimiter, const std::vector<String> & path);  ///< Converts any path elements with delimiters into separate elements.
+template<typename... Args> std::vector<String> keyPath (const char * delimiter, Args... keys) {return keyPath (delimiter, {keys...});}
 
 template<class T>
 class SHARED InputHolder : public Holder

@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -64,7 +64,7 @@ public class Mmatrix extends Mfile
 
         String path = ((Text) operands[0].eval (context)).value;
         Holder H = Holder.get (simulator, path);
-        return H.getMatrix (Holder.keyPath (context, operands));
+        return H.getMatrix (context, this);
     }
 
     public String toString ()

@@ -3467,6 +3467,7 @@ public class JobC extends Thread
                             {
                                 Mmatrix m = (Mmatrix) e;
                                 result.append (m.name + "->getMatrix (");
+                                result.append ("\"" + m.getDelimiter () + "\", ");
                                 context.keyPath (m);  // All the keys must be constant.
                                 if (context.useExponent)
                                 {

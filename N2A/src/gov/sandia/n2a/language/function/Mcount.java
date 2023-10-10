@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -54,7 +54,7 @@ public class Mcount extends Mfile
 
         String path = ((Text) operands[0].eval (context)).value;
         Holder H = Holder.get (simulator, path);
-        String[] keyPath = Holder.keyPath (context, operands);
+        String[] keyPath = Holder.keyPath (context, this);
         return new Scalar (H.doc.childOrEmpty (keyPath).size ());
     }
 

@@ -476,6 +476,7 @@ public class RendererC extends Renderer
             Mmatrix m = (Mmatrix) op;
             if (! (m.parent instanceof Variable)  ||  ! ((Variable) m.parent).hasAttribute ("MatrixPointer")) result.append ("*");  // Dereference the returned value, since variable is not a pointer.
             result.append (m.name + "->getMatrix (");
+            result.append ("\"" + m.getDelimiter () + "\", ");
             keyPath (m);
             if (useExponent)
             {
@@ -791,14 +792,17 @@ public class RendererC extends Renderer
 
     public void keyPath (Mfile m)
     {
-        if (m.operands.length <= 1) return;
-
         result.append ("keyPath (");
-        m.operands[1].render (this);
-        for (int i = 2; i < m.operands.length; i++)
+        result.append ("\"" + m.getDelimiter () + "\"");
+        if (m.operands.length > 1)  // operands[0] is path to M file
         {
             result.append (", ");
-            m.operands[i].render (this);
+            m.operands[1].render (this);
+            for (int i = 2; i < m.operands.length; i++)
+            {
+                result.append (", ");
+                m.operands[i].render (this);
+            }
         }
         result.append (")");
     }

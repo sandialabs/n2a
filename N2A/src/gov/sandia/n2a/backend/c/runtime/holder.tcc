@@ -1873,7 +1873,7 @@ Mfile<T>::~Mfile ()
 }
 
 std::vector<String>
-keyPath (const std::vector<String> & path)
+keyPath (const char * delimiter, const std::vector<String> & path)
 {
     std::vector<String> result;
     result.reserve (path.size ());  // assuming there are no delimiters
@@ -1883,7 +1883,7 @@ keyPath (const std::vector<String> & path)
         size_t count = e.size ();
         while (pos < count)
         {
-            size_t next = e.find_first_of ("/", pos);
+            size_t next = e.find_first_of (delimiter, pos);
             if (next != pos) result.push_back (e.substr (pos, next).c_str ());
             if (next == String::npos) break;  // Need this in case npos is max int. In that case, adding 1 will overflow.
             pos = next + 1;
@@ -1895,17 +1895,17 @@ keyPath (const std::vector<String> & path)
 template<class T>
 MatrixAbstract<T> *
 #ifdef n2a_FP
-Mfile<T>::getMatrix (const std::vector<String> & path, int exponent)
+Mfile<T>::getMatrix (const char * delimiter, const std::vector<String> & path, int exponent)
 #else
-Mfile<T>::getMatrix (const std::vector<String> & path)
+Mfile<T>::getMatrix (const char * delimiter, const std::vector<String> & path)
 #endif
 {
-    String key = join ("/", path);
+    String key = join (delimiter, path);
     MatrixAbstract<T> * A = matrices[key];  // If key does not exist, then the c++ standard promises that the inserted value will be zero-initialized.
     if (A) return A;
 
     MatrixSparse<T> * S = new MatrixSparse<T>;
-    n2a::MNode & m = doc->child (path);
+    n2a::MNode & m = doc->child (keyPath (delimiter, path));
     for (auto & row : m)
     {
         int r = atoi (row.key ().c_str ());

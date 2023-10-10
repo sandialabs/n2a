@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.db.MDoc;
@@ -42,6 +43,13 @@ public class Mfile extends Function
         unit = AbstractUnit.ONE;
     }
 
+    public String getDelimiter ()
+    {
+        Operator op = getKeyword ("delimiter");
+        if (op == null) return ".";
+        return op.getString ();
+    }
+
     public static class Holder
     {
         protected MNode              doc;
@@ -66,9 +74,10 @@ public class Mfile extends Function
             return result;
         }
 
-        public Matrix getMatrix (String... keyPath)
+        public Matrix getMatrix (Instance context, Mfile mf)
         {
-            String key = String.join ("/", keyPath);
+            String[] keyPath = keyPath (context, mf);
+            String key = String.join (mf.getDelimiter (), keyPath);
             Matrix A = matrices.get (key);
             if (A != null) return A;
 
@@ -87,13 +96,14 @@ public class Mfile extends Function
             return S;
         }
 
-        public static String[] keyPath (Instance context, Operator[] operands)
+        public static String[] keyPath (Instance context, Mfile m)
         {
+            String delimiter = Pattern.quote (m.getDelimiter ());
             List<String> keys = new ArrayList<String> ();
-            for (int i = 1; i < operands.length; i++)
+            for (int i = 1; i < m.operands.length; i++)
             {
-                String key = operands[i].eval (context).toString ();
-                String[] pieces = key.split ("/");
+                String key = m.operands[i].eval (context).toString ();
+                String[] pieces = key.split (delimiter);
                 for (String p : pieces) if (! p.isEmpty ()) keys.add (p);
             }
             return keys.toArray (new String[keys.size ()]);
