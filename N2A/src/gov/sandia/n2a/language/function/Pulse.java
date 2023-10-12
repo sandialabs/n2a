@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -95,11 +95,11 @@ public class Pulse extends Function
         if (operands.length > 4) fall   = ((Scalar) operands[4].eval (context)).value;
 
         if (t < 0) return new Scalar (0);
-        if (period != 0) t %= period;
+        if (period > 0) t %= period;
         if (t < rise) return new Scalar (t / rise);
-        t -= rise;
+        if (rise > 0) t -= rise;
         if (t < width) return new Scalar (1);
-        t -= width;
+        if (width > 0) t -= width;
         if (t < fall) return new Scalar (1.0 - t / fall);
         return new Scalar (0);
     }

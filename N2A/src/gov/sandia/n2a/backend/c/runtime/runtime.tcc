@@ -124,15 +124,11 @@ T
 pulse (T t, T width, T period, T rise, T fall)
 {
     if (t < 0) return 0;
-#   ifdef n2a_FP
-    if (period != 0) t = t % period;
-#   else
-    if (period != 0) t = std::fmod (t, period);
-#   endif
+    if (period > 0) t = std::fmod (t, period);
     if (t < rise) return t / rise;
-    t -= rise;
+    if (rise > 0) t -= rise;
     if (t < width) return 1;
-    t -= width;
+    if (width > 0) t -= width;
     if (t < fall) return (T) 1 - t / fall;
     return 0;
 }
@@ -440,11 +436,11 @@ int
 pulse (int t, int width, int period, int rise, int fall)
 {
     if (t < 0) return 0;
-    if (period != 0) t %= period;
+    if (period > 0) t %= period;
     if (t < rise) return ((int64_t) t << FP_MSB) / rise;
-    t -= rise;
-    if (t < width) return 1 << FP_MSB;
-    t -= width;
+    if (rise > 0) t -= rise;
+    if (t < width  ||  std::isinf (width)) return 1 << FP_MSB;
+    if (width > 0) t -= width;
     if (t < fall) return (1 << FP_MSB) - (int) (((int64_t) t << FP_MSB) / fall);
     return 0;
 }
