@@ -1884,8 +1884,12 @@ keyPath (const char * delimiter, const std::vector<String> & path)
         while (pos < count)
         {
             size_t next = e.find_first_of (delimiter, pos);
-            if (next != pos) result.push_back (e.substr (pos, next).c_str ());
-            if (next == String::npos) break;  // Need this in case npos is max int. In that case, adding 1 will overflow.
+            if (next == String::npos)  // This is actually the most common case.
+            {
+                result.push_back (e.substr (pos).c_str ());
+                break;
+            }
+            if (next != pos) result.push_back (e.substr (pos, next-pos).c_str ());  // The test is necessary to skip multiple delimiters with nothing between them.
             pos = next + 1;
         }
     }
