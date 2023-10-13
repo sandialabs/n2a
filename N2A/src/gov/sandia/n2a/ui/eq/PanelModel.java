@@ -250,10 +250,8 @@ public class PanelModel extends JPanel implements MNodeListener
             public void propertyChange (PropertyChangeEvent e)
             {
                 if (SettingsLookAndFeel.rescaling) return;  // Don't record change if we are handling a change in screen resolution.
-                Object o = e.getNewValue ();
-                if (! (o instanceof Integer)) return;
-                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
-                AppData.state.setTruncated (value, 2, "PanelModel", "dividerMRU");
+                float value = (Integer) e.getNewValue ();
+                AppData.state.setTruncated (value / SettingsLookAndFeel.em, 2, "PanelModel", "dividerMRU");
             }
         });
 
@@ -262,10 +260,8 @@ public class PanelModel extends JPanel implements MNodeListener
             public void propertyChange (PropertyChangeEvent e)
             {
                 if (SettingsLookAndFeel.rescaling) return;
-                Object o = e.getNewValue ();
-                if (! (o instanceof Integer)) return;
-                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
-                AppData.state.setTruncated (value, 2, "PanelModel", "divider");
+                float value = (Integer) e.getNewValue ();
+                AppData.state.setTruncated (value / SettingsLookAndFeel.em, 2, "PanelModel", "divider");
             }
         });
 
@@ -275,12 +271,11 @@ public class PanelModel extends JPanel implements MNodeListener
     public void updateUI ()
     {
         super.updateUI ();
-        setSplits ();
+        if (split != null) setSplits ();
     }
 
     public void setSplits ()
     {
-        if (split == null) return;
         FontMetrics fm = panelSearch.tree.getFontMetrics (panelSearch.tree.getFont ());
         float em = SettingsLookAndFeel.em;
         splitMRU.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (fm.getHeight () * 4                             / em, "PanelModel", "dividerMRU") * em));

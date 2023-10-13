@@ -53,10 +53,8 @@ public class PanelReference extends JPanel implements MNodeListener
             public void propertyChange (PropertyChangeEvent e)
             {
                 if (SettingsLookAndFeel.rescaling) return;  // Don't record change if we are handling a change in screen resolution.
-                Object o = e.getNewValue ();
-                if (! (o instanceof Integer)) return;
-                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
-                AppData.state.setTruncated (value, 2, "PanelReference", "dividerMRU");
+                float value = (Integer) e.getNewValue ();
+                AppData.state.setTruncated (value / SettingsLookAndFeel.em, 2, "PanelReference", "dividerMRU");
             }
         });
 
@@ -64,11 +62,9 @@ public class PanelReference extends JPanel implements MNodeListener
         {
             public void propertyChange (PropertyChangeEvent e)
             {
-                if (SettingsLookAndFeel.rescaling) return;  // Don't record change if we are handling a change in screen resolution.
-                Object o = e.getNewValue ();
-                if (! (o instanceof Integer)) return;
-                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
-                AppData.state.setTruncated (value, 2, "PanelReference", "divider");
+                if (SettingsLookAndFeel.rescaling) return;
+                float value = (Integer) e.getNewValue ();
+                AppData.state.setTruncated (value / SettingsLookAndFeel.em, 2, "PanelReference", "divider");
             }
         });
 
@@ -78,12 +74,11 @@ public class PanelReference extends JPanel implements MNodeListener
     public void updateUI ()
     {
         super.updateUI ();
-        setSplits ();
+        if (split != null) setSplits ();
     }
 
     public void setSplits ()
     {
-        if (split == null) return;
         FontMetrics fm = panelSearch.list.getFontMetrics (panelSearch.list.getFont ());
         float em = SettingsLookAndFeel.em;
         splitMRU.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (fm.getHeight () * 4 / em, "PanelReference", "dividerMRU") * em));

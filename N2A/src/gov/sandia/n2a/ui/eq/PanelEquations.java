@@ -421,19 +421,16 @@ public class PanelEquations extends JPanel
 
         panelEquationTree = new PanelEquationTree (this, false);
 
-        if (view == SIDE) split = new JSplitPane (JSplitPane.HORIZONTAL_SPLIT);
-        else              split = new JSplitPane (JSplitPane.VERTICAL_SPLIT);
-        split.setOneTouchExpandable(true);
-        split.setResizeWeight (1);
+        split = new JSplitPane (view == SIDE ? JSplitPane.HORIZONTAL_SPLIT : JSplitPane.VERTICAL_SPLIT);
+        split.setOneTouchExpandable (true);
         setSplit ();
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
             public void propertyChange (PropertyChangeEvent e)
             {
-                Object o = e.getNewValue ();
-                if (! (o instanceof Integer)) return;
-                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
-                AppData.state.setTruncated (value, 2, "PanelModel", "view", view);
+                if (SettingsLookAndFeel.rescaling) return;
+                int value = (Integer) e.getNewValue ();
+                AppData.state.setTruncated (value / SettingsLookAndFeel.em, 2, "PanelModel", "view", view);
             }
         });
 
@@ -615,15 +612,13 @@ public class PanelEquations extends JPanel
         if (itemFilterLocal     != null) itemFilterLocal    .setForeground (EquationTreeCellRenderer.colorOverride);
         if (itemFilterRevoked   != null) itemFilterRevoked  .setForeground (EquationTreeCellRenderer.colorKill);
         super.updateUI ();
-        setSplit ();
+        if (split != null) setSplit ();
     }
 
     public void setSplit ()
     {
-        if (split == null) return;
         float em = SettingsLookAndFeel.em;
-        // Default assumes initial window size is 90em by 60em. This takes 1/2 the vertical space or 1/3 the horizontal space.
-        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (30.0, "PanelModel", "view", view) * em));
+        split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (30.0, "PanelModel", "view", view) * em));  // Default assumes initial window is 90em by 60em.
     }
 
     public void load (MNode doc)

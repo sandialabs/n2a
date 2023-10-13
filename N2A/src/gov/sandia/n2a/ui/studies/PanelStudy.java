@@ -199,10 +199,8 @@ public class PanelStudy extends JPanel
             public void propertyChange (PropertyChangeEvent e)
             {
                 if (SettingsLookAndFeel.rescaling) return;  // Don't record change if we are handling a change in screen resolution.
-                Object o = e.getNewValue ();
-                if (! (o instanceof Integer)) return;
-                float value = ((Integer) o).floatValue () / SettingsLookAndFeel.em;
-                AppData.state.setTruncated (value, 2, "PanelStudy", "divider");
+                float value = (Integer) e.getNewValue ();
+                AppData.state.setTruncated (value / SettingsLookAndFeel.em, 2, "PanelStudy", "divider");
             }
         });
     }
@@ -210,12 +208,11 @@ public class PanelStudy extends JPanel
     public void updateUI ()
     {
         super.updateUI ();
-        setSplit ();
+        if (split != null) setSplit ();
     }
 
     public void setSplit ()
     {
-        if (split == null) return;
         float em = SettingsLookAndFeel.em;
         split.setDividerLocation ((int) Math.round (AppData.state.getOrDefault (19.0, "PanelStudy", "divider") * em));
     }
