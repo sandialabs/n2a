@@ -88,7 +88,8 @@ public class AddDoc extends Undoable
         if (existing == null) return name;
 
         String result = name;
-        name += " ";
+        name = AddPart.stripSuffix (name);
+        if (! name.endsWith (" ")) name += " ";
         int suffix = 2;
         while (true)
         {

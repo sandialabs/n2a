@@ -96,6 +96,7 @@ public class AddPart extends UndoableView implements AddEditable
     public static String uniqueName (NodeBase parent, String prefix, int suffix, boolean allowEmptySuffix)
     {
         if (allowEmptySuffix  &&  parent.source.child (prefix) == null) return prefix;
+        prefix = stripSuffix (prefix);
         if (prefix.contains (" ")  &&  ! prefix.endsWith (" ")) prefix += " ";
         while (true)
         {
@@ -103,6 +104,20 @@ public class AddPart extends UndoableView implements AddEditable
             if (parent.source.child (result) == null) return result;
             suffix++;
         }
+    }
+
+    /**
+        Remove any digits from the end of the name, leaving only the alpha prefix.
+        Since name is an identifier, it will not begin with a digit.
+        This function is useful for creating unique names without lengthening the counter at the end.
+    **/
+    public static String stripSuffix (String name)
+    {
+        int last = name.length () - 1;
+        int i = last;
+        while (Character.isDigit (name.charAt (i))) i--;
+        if (i == last) return name;
+        return name.substring (0, i+1);
     }
 
     /**
@@ -216,18 +231,20 @@ public class AddPart extends UndoableView implements AddEditable
             bounds.setTruncated (location.x + bounds.getDouble ("x"), 2, "x");
             bounds.setTruncated (location.y + bounds.getDouble ("y"), 2, "y");
 
-            String key = p.key ();
-            String name = key;
+            String oldName = p.key ();
+            String newName = oldName;
+            String prefix  = stripSuffix (oldName);
+            if (prefix.contains (" ")  &&  ! prefix.endsWith (" ")) prefix += " ";
             int suffix = 2;
-            while (parent.child (name) != null) name = key + suffix++;
-            if (! name.equals (key))  // If the name changed, ensure no self-collision as well.
+            while (parent.child (newName) != null) newName = prefix + suffix++;
+            if (! newName.equals (oldName))  // If the name changed, ensure no self-collision as well.
             {
-                while (data.child (name) != null) name = key + suffix++;
+                while (data.child (newName) != null) newName = prefix + suffix++;
             }
-            if (! name.equals (key))
+            if (! newName.equals (oldName))
             {
-                nameChanges.put (key, name);
-                data.move (key, name);
+                nameChanges.put (oldName, newName);
+                data.move (oldName, newName);
             }
         }
 
