@@ -97,6 +97,7 @@ import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
+import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -113,6 +114,7 @@ import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
+import gov.sandia.n2a.ui.eq.tree.NodeIO;
 import gov.sandia.n2a.ui.eq.tree.NodeInherit;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 import gov.sandia.n2a.ui.eq.tree.NodeVariable;
@@ -471,6 +473,9 @@ public class PanelEquations extends JPanel
         JMenuItem itemMakePin = new JMenuItem ("Make Pin", ImageUtil.getImage ("pin.png"));
         itemMakePin.addActionListener (listenerMakePin);
 
+        JMenuItem itemTopic = new JMenuItem ("Set Topic", ImageUtil.getImage ("topic-16.png"));
+        itemTopic.addActionListener (listenerTopic);
+
         JMenuItem itemWatch = new JMenuItem ("Watch", ImageUtil.getImage ("watch.png"));
         itemWatch.addActionListener (listenerWatch);
 
@@ -480,8 +485,9 @@ public class PanelEquations extends JPanel
         menuPopup.add (itemAddEquation);
         menuPopup.add (itemAddAnnotation);
         menuPopup.add (itemAddReference);
-        menuPopup.add (itemMakePin);
         menuPopup.addSeparator ();
+        menuPopup.add (itemMakePin);
+        menuPopup.add (itemTopic);
         menuPopup.add (itemWatch);
 
 
@@ -1022,7 +1028,7 @@ public class PanelEquations extends JPanel
                     }
                 }
             }
-            if (context == null  ||  context == part) return;  // Only process graph nodes, not parent node.
+            if (context == null  ||  context == part  ||  context instanceof NodeIO) return;  // Only process graph nodes, not parent node or IO pin blocks.
 
             // Bind part to an IO pin
             UndoManager um = MainFrame.instance.undoManager;
@@ -1065,6 +1071,71 @@ public class PanelEquations extends JPanel
                     um.apply (new ChangeAnnotations (part, metadata));
                 }
             }
+        }
+    };
+
+    ActionListener listenerTopic = new ActionListener ()
+    {
+        public void actionPerformed (ActionEvent e)
+        {
+            // Determine context
+            NodePart   context = null;
+            Component  invoker = menuPopup.getInvoker ();
+            GraphPanel gp      = panelEquationGraph.graphPanel;
+            GraphNode  gn      = null;
+            GraphEdge  ge      = null;
+            if (invoker instanceof JTree)
+            {
+                context = (NodePart) ((JTree) invoker).getModel ().getRoot ();
+                gn = context.graph;
+            }
+            else if (invoker instanceof GraphNode  ||  invoker instanceof GraphNode.TitleRenderer)
+            {
+                gn = PanelModel.getGraphNode (invoker);
+                context = gn.node;
+            }
+            else if (invoker == gp)
+            {
+                gn = gp.findNodeAt (gp.popupLocation, true);
+                if (gn == null)
+                {
+                    ge = gp.findTopicAt (gp.popupLocation);
+                    if (ge != null) gn = ge.nodeFrom;
+                }
+                if (gn != null) context = gn.node;
+            }
+            if (context == null  ||  context == part  ||  context instanceof NodeIO) return;  // Only process graph nodes, not parent node.
+
+            if (ge == null)  // Determine edge from graph node.
+            {
+                if (context.source.child ("$meta", "gui", "pin") == null) return;  // no pin associated with this part, so nothing to do
+                if (gn.edgesOut.size () == 1)  // The topic must be on this edge.
+                {
+                    ge = gn.edgesOut.get (0);
+                }
+                else  // Presumably a connection, so scan for unconnected reference.
+                {
+                    String key = null;
+                    for (MNode c : context.source)
+                    {
+                        if (Operator.containsConnect (c.get ()))
+                        {
+                            key = c.key ();
+                            break;
+                        }
+                    }
+                    // Now find the matching out edge.
+                    for (GraphEdge eo : gn.edgesOut)
+                    {
+                        if (eo.alias.equals (key))
+                        {
+                            ge = eo;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (ge != null) gp.showPinTopicDialog (ge);
         }
     };
 

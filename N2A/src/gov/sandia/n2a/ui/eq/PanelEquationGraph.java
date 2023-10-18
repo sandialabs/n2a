@@ -1416,6 +1416,53 @@ public class PanelEquationGraph extends JScrollPane
             um.endCompoundEdit ();
         }
 
+        public void showPinTopicDialog (GraphEdge e)
+        {
+            JTextField editor = new NTextField (e.topic, Math.max (10, e.topic.length ()));
+
+            ActionMap actionMap = editor.getActionMap ();
+            actionMap.put ("Cancel", new AbstractAction ("Cancel")
+            {
+                public void actionPerformed (ActionEvent ae)
+                {
+                    remove (editor);
+                    repaint (editor.getBounds ());
+                }
+            });
+
+            editor.addActionListener (new ActionListener ()
+            {
+                public void actionPerformed (ActionEvent ae)
+                {
+                    remove (editor);
+                    repaint (editor.getBounds ());
+                    applyPinTopicChange (e, editor.getText ());
+                }
+            });
+
+            editor.addFocusListener (new FocusListener ()
+            {
+                public void focusGained (FocusEvent fe)
+                {
+                }
+
+                public void focusLost (FocusEvent fe)
+                {
+                    if (editor.getParent () == graphPanel)
+                    {
+                        remove (editor);
+                        repaint (editor.getBounds ());
+                        applyPinTopicChange (e, editor.getText ());
+                    }
+                }
+            });
+
+            editor.setLocation (e.textBox.getLocation ());
+            add (editor);
+            setComponentZOrder (editor, 0);
+            editor.requestFocusInWindow ();
+        }
+
         public void applyPinTopicChange (GraphEdge e, String topic)
         {
             NodePart part = e.nodeFrom.node;
@@ -1654,50 +1701,7 @@ public class PanelEquationGraph extends JScrollPane
                     return;
                 }
 
-                // Show dialog to get new topic.
-                JTextField editor = new NTextField (e.topic, Math.max (10, e.topic.length ()));
-
-                ActionMap actionMap = editor.getActionMap ();
-                actionMap.put ("Cancel", new AbstractAction ("Cancel")
-                {
-                    public void actionPerformed (ActionEvent ae)
-                    {
-                        graphPanel.remove (editor);
-                        graphPanel.repaint (editor.getBounds ());
-                    }
-                });
-
-                editor.addActionListener (new ActionListener ()
-                {
-                    public void actionPerformed (ActionEvent ae)
-                    {
-                        graphPanel.remove (editor);
-                        graphPanel.repaint (editor.getBounds ());
-                        graphPanel.applyPinTopicChange (e, editor.getText ());
-                    }
-                });
-
-                editor.addFocusListener (new FocusListener ()
-                {
-                    public void focusGained (FocusEvent fe)
-                    {
-                    }
-
-                    public void focusLost (FocusEvent fe)
-                    {
-                        if (editor.getParent () == graphPanel)
-                        {
-                            graphPanel.remove (editor);
-                            graphPanel.repaint (editor.getBounds ());
-                            graphPanel.applyPinTopicChange (e, editor.getText ());
-                        }
-                    }
-                });
-
-                editor.setLocation (e.textBox.getLocation ());
-                graphPanel.add (editor);
-                graphPanel.setComponentZOrder (editor, 0);
-                editor.requestFocusInWindow ();
+                graphPanel.showPinTopicDialog (e);
             }
         }
 
