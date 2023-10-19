@@ -397,21 +397,6 @@ public class NodeVariable extends NodeContainer
     }
 
     @Override
-    public void copy (MNode result)
-    {
-        MNode n = result.childOrCreate (source.key ());
-        if (source.data ()) n.set (source.get ());
-        Enumeration<?> cf = childrenFiltered ();
-        while (cf.hasMoreElements ())
-        {
-            NodeBase child = (NodeBase) cf.nextElement ();
-            if      (child instanceof NodeAnnotation) child.copy (n.childOrCreate ("$meta"));
-            else if (child instanceof NodeReference)  child.copy (n.childOrCreate ("$ref"));
-            else     child.copy (n);
-        }
-    }
-
-    @Override
     public NodeBase containerFor (String type)
     {
         if (isBinding  &&  ! type.equals ("Annotation")) return ((NodeBase) parent).containerFor (type);

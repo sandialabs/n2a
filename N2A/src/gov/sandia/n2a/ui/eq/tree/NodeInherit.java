@@ -91,12 +91,6 @@ public class NodeInherit extends NodeBase
     }
 
     @Override
-    public void copy (MNode result)
-    {
-        result.set (source, source.key ());
-    }
-
-    @Override
     public void applyEdit (JTree tree)
     {
         String input = (String) getUserObject ();

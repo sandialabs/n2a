@@ -179,15 +179,6 @@ public class NodeAnnotation extends NodeContainer
     }
 
     @Override
-    public void copy (MNode result)
-    {
-        // There may be a deep tree of annotations under this node.
-        // However, if this one is visible (implied by receiving this call),
-        // then all the children are visible as well.
-        result.set (source, source.key ());
-    }
-
-    @Override
     public NodeBase containerFor (String type)
     {
         if (type.equals ("Annotation")) return this;

@@ -2194,8 +2194,9 @@ public class PanelEquations extends JPanel
             MVolatile copy = new MVolatile ();
             for (NodeBase n : export)
             {
-                n.copy (copy);
-                copy.set (n.getTypeName (), n.source.key (), "$clip");  // Embed a hint about node type.
+                MNode c = copy.childOrCreate (n.source.key ());
+                c.merge (n.source);  // Merge entire collated tree under this node. This is necessary in case the paste goes into a different context. During paste, MPart.merge() will remove duplicates of inherited values.
+                c.set (n.getTypeName (), "$clip");  // Embed a hint about node type.
             }
             if (parent == null)  // This is the entire document.
             {

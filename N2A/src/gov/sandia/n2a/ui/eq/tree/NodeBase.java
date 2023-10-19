@@ -375,17 +375,6 @@ public class NodeBase extends DefaultMutableTreeNode
         return c.getSimpleName ().substring (4);  // remove "Node"
     }
 
-    /**
-        Assemble the visible subtree, starting at this node, and return it as a child of the given MNode.
-    **/
-    public void copy (MNode result)
-    {
-        MNode n = result.childOrCreate (source.key ());
-        if (source.data ()) n.set (source.get ());
-        Enumeration<?> cf = childrenFiltered ();
-        while (cf.hasMoreElements ()) ((NodeBase) cf.nextElement ()).copy (n);
-    }
-
     // Structure maintenance -------------------------------------------------
 
     public PanelEquationTree getTree ()
