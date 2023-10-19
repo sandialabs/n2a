@@ -999,6 +999,8 @@ public class PanelEquations extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
+            if (locked) return;
+
             // Determine context
             NodePart context = null;
             String   pin     = null;
@@ -1079,6 +1081,8 @@ public class PanelEquations extends JPanel
     {
         public void actionPerformed (ActionEvent e)
         {
+            if (locked) return;
+
             // Determine context
             NodePart   context = null;
             Component  invoker = menuPopup.getInvoker ();
@@ -2170,7 +2174,7 @@ public class PanelEquations extends JPanel
             }
             else if (comp instanceof GraphNode.TitleRenderer)
             {
-                GraphNode gn = (GraphNode) comp.getParent ().getParent ();
+                GraphNode gn = PanelModel.getGraphNode (comp);
                 parent = part;
                 export.add (gn.node);
 
