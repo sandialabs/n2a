@@ -425,6 +425,7 @@ public class PanelEquations extends JPanel
 
         split = new JSplitPane (view == SIDE ? JSplitPane.HORIZONTAL_SPLIT : JSplitPane.VERTICAL_SPLIT);
         split.setOneTouchExpandable (true);
+        split.setResizeWeight (1);
         setSplit ();
         split.addPropertyChangeListener (JSplitPane.DIVIDER_LOCATION_PROPERTY, new PropertyChangeListener ()
         {
@@ -1499,8 +1500,7 @@ public class PanelEquations extends JPanel
             // Rearrange UI components
             if (lastView == NODE)  // next view will be a split
             {
-                split.add (panelGraph,        JSplitPane.LEFT);  // removes panelGraph from current parent (this panel)
-                split.add (panelEquationTree, JSplitPane.RIGHT);
+                remove (panelGraph);
                 add (split, BorderLayout.CENTER);
                 panelParent.setOpen (false);
                 panelParent.clear ();  // release current root, since this panel won't be used for editing
@@ -1511,13 +1511,12 @@ public class PanelEquations extends JPanel
                 add (panelGraph, BorderLayout.CENTER);
                 panelEquationTree.clear ();  // release root, as above
             }
-            if      (view == SIDE)   split.setOrientation (JSplitPane.HORIZONTAL_SPLIT);
-            else if (view == BOTTOM) split.setOrientation (JSplitPane.VERTICAL_SPLIT);
             if (view != NODE)
             {
-                int dividerLocation = (int) Math.round (AppData.state.getDouble ("PanelModel", "view", view) * SettingsLookAndFeel.em);
-                if (dividerLocation == 0) dividerLocation = MainFrame.instance.getHeight () / 2;
-                split.setDividerLocation (dividerLocation);
+                split.setOrientation (view == SIDE ? JSplitPane.HORIZONTAL_SPLIT : JSplitPane.VERTICAL_SPLIT);
+                split.add (panelGraph,        JSplitPane.LEFT);
+                split.add (panelEquationTree, JSplitPane.RIGHT);
+                setSplit ();
             }
             itemMinimizeConnections .setEnabled (view != NODE);
             itemMinimizeCompartments.setEnabled (view != NODE);
