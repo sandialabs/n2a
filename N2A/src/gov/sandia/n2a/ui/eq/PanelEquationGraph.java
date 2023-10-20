@@ -1663,6 +1663,7 @@ public class PanelEquationGraph extends JScrollPane
                 }
                 Point p = me.getPoint ();
 
+                // Edit pin name
                 GraphNode g = graphPanel.findNodeAt (p, true);  // Only a click in the pin zone will return non-null here. If it were in the graph node proper, the click would have been routed there instead.
                 if (g != null  &&  (g == graphPanel.pinIn  ||  g == graphPanel.pinOut))
                 {
@@ -1696,13 +1697,13 @@ public class PanelEquationGraph extends JScrollPane
                     return;
                 }
 
+                // Edit pin topic
                 GraphEdge e = graphPanel.findTopicAt (p);
                 if (e == null)
                 {
                     container.drillUp ();
                     return;
                 }
-
                 graphPanel.showPinTopicDialog (e);
             }
         }

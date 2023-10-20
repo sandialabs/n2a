@@ -1377,16 +1377,25 @@ public class GraphNode extends JPanel
 
         public void mouseClicked (MouseEvent me)
         {
+            // See mouse listener on title renderer for similar code.
+            if (side != null)  // This is a pin IO block.
+            {
+                // Shift focus to $meta.gui.pin.side in parent part.
+                container.switchFocus (false, false);  // Select the parent tree.
+                NodeBase metadata = container.part.child ("$meta");
+                if (metadata != null)
+                {
+                    metadata = AddAnnotation.findClosest (metadata, "gui", "pin", side);
+                    container.getParentEquationTree ().tree.setSelectionPath (new TreePath (metadata.getPath ()));
+                }
+                return;  // Don't allow edit or drill-down.
+            }
+
             if (SwingUtilities.isLeftMouseButton (me))
             {
-                if (me.getClickCount () == 2)
+                if (me.getClickCount () == 2)  // Drill down
                 {
-                    // Drill down
-                    PanelEquations pe = PanelModel.instance.panelEquations;
-                    pe.saveFocus ();
-                    FocusCacheEntry fce = pe.createFocus (pe.part);
-                    fce.subpart = node.source.key ();
-                    pe.loadPart (node);
+                    container.drill (node);
                 }
             }
         }
