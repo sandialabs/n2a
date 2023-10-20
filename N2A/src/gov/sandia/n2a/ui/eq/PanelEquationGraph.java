@@ -496,6 +496,8 @@ public class PanelEquationGraph extends JScrollPane
 
         public void clearParts ()
         {
+            for (GraphEdge e : edges) e.clearBound ();
+
             // Disconnect graph nodes from tree nodes
             for (Component c : getComponents ())
             {
@@ -562,7 +564,7 @@ public class PanelEquationGraph extends JScrollPane
 
             if (container.part.pinIn != null  ||  container.part.pinOut != null)
             {
-                Rectangle tightBounds = new Rectangle (0, 0, -1, -1);  // Needed for placing pins. layout.bounds includes (0,0) so it is not tight enough a fit round the components.
+                Rectangle tightBounds = new Rectangle (0, 0, -1, -1);  // Needed for placing pins. layout.bounds includes (0,0) so it is not tight enough a fit around the components.
                 for (Component c : getComponents ()) tightBounds = tightBounds.union (c.getBounds ());
                 int y = tightBounds.y + tightBounds.height / 2;
                 int gap = (int) Math.round (8 * em);
