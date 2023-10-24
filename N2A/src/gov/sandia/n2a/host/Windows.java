@@ -179,11 +179,6 @@ public class Windows extends Host
     @Override
     public void submitJob (MNode job, boolean out2err, List<List<String>> commands, List<Path> libPath) throws Exception
     {
-        for (ProcessInfo pi : getActiveProcs ())
-        {
-            System.out.println (pi.jobKey + " " + pi.memory + " " + pi.cpu);
-        }
-
         Path jobDir = Paths.get (job.get ()).getParent ();
         Path script = jobDir.resolve ("n2a_job.bat");
         String out = out2err ? "err1" : "out";  // Windows cmd is too stupid to append two streams to the same file, so we have to use something different than "err" here.
