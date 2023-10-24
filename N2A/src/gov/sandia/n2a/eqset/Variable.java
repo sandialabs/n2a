@@ -750,7 +750,14 @@ public class Variable implements Comparable<Variable>, Cloneable
             // Determine if self is constant.
             boolean constant = equations.isEmpty ();
             boolean replaced = false;
-            double value = 0;
+            double value = 0;  // Default value suitable for ADD and REPLACE
+            switch (assignment)
+            {
+                case MULTIPLY: value = 1;                        break;
+                case DIVIDE:   value = 1;                        break;
+                case MIN:      value = Double.POSITIVE_INFINITY; break;
+                case MAX:      value = Double.NEGATIVE_INFINITY; break;
+            }
             if (! constant  &&  equations.size () == 1)
             {
                 EquationEntry e = equations.first ();

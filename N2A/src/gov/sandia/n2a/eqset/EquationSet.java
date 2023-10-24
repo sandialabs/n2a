@@ -683,13 +683,14 @@ public class EquationSet implements Comparable<EquationSet>
     {
         EquationSet LCA = findLCA (that);
         EquationSet p = this;
+        if (! p.isSingleton ()) return false;
+        if (p == LCA) return true;
         while (true)
         {
-            if (! isSingleton ()) return false;
-            if (p == LCA) break;
             p = p.container;
+            if (p == LCA) return true;
+            if (! p.isSingleton ()) return false;
         }
-        return true;
     }
 
     public boolean isConnection ()
@@ -2379,6 +2380,7 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Marks variables with "externalRead" and "externalWrite", as needed.
         Determines whether an external write should be evaluated in the local or global context.
+        Removes constant values from $n and $index if they were created by addSpecials when nature of $n was unknown.
         Depends on results of:
             resolveLHS(), resolveRHS() -- Establishes references and dependencies between variables.
             flatten() -- Changes references and dependencies. In some cases, folds expressions together so dependencies go away.
@@ -2422,6 +2424,24 @@ public class EquationSet implements Comparable<EquationSet>
                 v.addAttribute ("reference");
                 vr.addAttribute ("externalWrite");
                 vr.removeAttribute ("temporary");
+                vr.removeAttribute ("constant");
+                EquationSet vrc = vr.container;
+                if (vr.name.equals ("$n")  &&  vr.order == 0  &&  vrc.source.child ("$n") == null)  // was created by addSpecials()
+                {
+                    vr.equations.clear ();  // The correct action is not to assign at all.
+
+                    // vr.container may have been misclassified as a singleton.
+                    // As a consequence, $index may be misconfigured.
+                    // See addSpecials() for the alternate ways to set up $index.
+                    Variable index = vrc.find (new Variable ("$index"));
+                    if (index != null  &&  ! index.equations.isEmpty ())
+                    {
+                        index.equations.clear ();
+                        index.addAttribute ("initOnly");
+                        index.removeAttribute ("constant");
+                        if (vrc.connected) index.addUser (vrc);
+                    }
+                }
                 if (externalizer.allGlobal  &&  ! v.hasAttribute ("local")  &&  vr.hasAttribute ("global"))
                 {
                     v.addAttribute ("global");
@@ -2486,6 +2506,11 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
 
+        // Like all $ variables, $t and $t' do not resolve up the part hierarchy.
+        // Thus they must be defined locally to be visible at all.
+        // $t is a global property.
+        // $t' is instance-specific, but is initialized based on container part.
+
         v = new Variable ("$t");
         if (add (v))
         {
@@ -2531,6 +2556,8 @@ public class EquationSet implements Comparable<EquationSet>
         if (connectionBindings == null  ||  connected)  // Either a compartment, or a connection that also happens to be the endpoint of another connection.
         {
             boolean singleton = isSingleton ();
+            // isSingleton() may be wrong until resolveLHS() has run, as that is the only way to know
+            // if external writes modify $n. The configuration below will be corrected in findExternal().
 
             v = new Variable ("$index");
             if (add (v))
