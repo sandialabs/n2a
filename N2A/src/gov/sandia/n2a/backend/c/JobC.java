@@ -4488,7 +4488,6 @@ public class JobC extends Thread
             result.append ("{\n");
 
             // $project is evaluated similar to $p. The result is not stored.
-            s.setConnect (1);
 
             result.append ("  switch (i)\n");
             result.append ("  {\n");
@@ -4550,8 +4549,6 @@ public class JobC extends Thread
             }
             result.append ("  }\n");
             result.append ("}\n");
-
-            s.setConnect (0);
         }
 
         // Unit mapIndex
@@ -4659,7 +4656,6 @@ public class JobC extends Thread
             bed.defined.clear ();
             result.append (T + " " + ns + "getP ()\n");
             result.append ("{\n");
-            s.setConnect (1);
             if (! bed.p.hasAttribute ("constant"))
             {
                 // Assemble a minimal set of expressions to evaluate $p
@@ -4677,7 +4673,6 @@ public class JobC extends Thread
                 }
             }
             result.append ("  return " + resolve (bed.p.reference, context, false) + ";\n");
-            s.setConnect (0);
             result.append ("}\n");
             result.append ("\n");
         }
