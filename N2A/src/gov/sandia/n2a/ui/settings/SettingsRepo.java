@@ -19,6 +19,7 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.eq.search.NodeModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import java.awt.Color;
 import java.awt.Component;
@@ -1293,25 +1294,12 @@ public class SettingsRepo extends JScrollPane implements Settings
     {
         public Component getTableCellRendererComponent (JTable table, Object text, boolean isSelected, boolean hasFocus, int row, int column)
         {
-            setText (text.toString ());
-
+            String name = text.toString ();
+            setText (name);
             setOpaque (true);
-            if (isSelected) setBackground (table.getSelectionBackground ());
-            else            setBackground (table.getBackground ());
-
-            String primary = AppData.state.get ("Repos", "primary");
-            if (text.equals (primary)  ||  AppData.repos.getBoolean (text, "editable"))
-            {
-                setForeground (Color.black);
-            }
-            else
-            {
-                Color color = repoModel.getColor (row);
-                if (color.equals (Color.black)) color = Color.blue;
-                setForeground (color);
-            }
-
             setFont (table.getFont ());
+            setBackground (isSelected ? table.getSelectionBackground () : table.getBackground ());
+            setForeground (NodeModel.getColor (name, isSelected ? table.getSelectionForeground () : table.getForeground ()));
 
             return this;
         }

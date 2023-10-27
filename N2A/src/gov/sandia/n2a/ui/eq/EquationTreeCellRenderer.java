@@ -34,6 +34,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.plaf.basic.BasicGraphicsUtils;
 import javax.swing.tree.TreeCellRenderer;
 
+import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
 
@@ -65,6 +66,8 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
     public static Color  colorSelectedKill     = Color.red;
     public static String colorHighlight;  // Color name, so it can be used in HTML.
     public static String leftArrow = "🡰";
+
+    public static final float lightThreshold = 0.5f;  // The dividing value between foreground brightnesses considered "dark" and those considered "light".
 
     protected static Icon    iconClosed;
     protected static Icon    iconOpen;
@@ -99,8 +102,8 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
     {
         // Check colors to see if text is dark or light.
         Color fg = UIManager.getColor ("Tree.textForeground");
-        float[] hsb = Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), null);
-        if (hsb[2] > 0.5)  // Light text
+        float[] hsl = Utility.HSLfromColor (fg);
+        if (hsl[2] > lightThreshold)  // Light text
         {
             colorInherit  = new Color (0xC0C0FF);  // light blue
             colorOverride = Color.white;
@@ -116,8 +119,8 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         }
 
         fg = UIManager.getColor ("Tree.selectionForeground");
-        Color.RGBtoHSB (fg.getRed (), fg.getGreen (), fg.getBlue (), hsb);
-        if (hsb[2] > 0.5)  // Light text
+        hsl = Utility.HSLfromColor (fg);
+        if (hsl[2] > lightThreshold)
         {
             colorSelectedInherit  = new Color (0xC0C0FF);
             colorSelectedOverride = Color.white;
@@ -148,6 +151,7 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
 
         if (colorBackground != null)
         {
+            float[] hsb = new float[3];
             Color.RGBtoHSB (colorBackground.getRed (), colorBackground.getGreen (), colorBackground.getBlue (), hsb);
             hsb[0] = 0.12f;
             hsb[1] = Math.max (0.3f, hsb[1]);

@@ -9,14 +9,9 @@ package gov.sandia.n2a.ui.eq.tree;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
-import java.awt.Image;
 import java.awt.Point;
 import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
@@ -37,6 +32,7 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.GraphNode;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
@@ -55,7 +51,6 @@ import gov.sandia.n2a.ui.eq.undo.ChangeReferences;
 import gov.sandia.n2a.ui.eq.undo.ChangeVariable;
 import gov.sandia.n2a.ui.images.ImageUtil;
 
-import javax.imageio.ImageIO;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JTree;
@@ -113,35 +108,9 @@ public class NodePart extends NodeContainer
     **/
     public void setIcon ()
     {
-        iconCustom   = null;
         iconCustom16 = null;
-        String base64 = source.get ("$meta", "gui", "icon");
-        if (base64.isEmpty ()) return;
-
-        byte[] bytes = Base64.getDecoder ().decode (base64);
-        try
-        {
-            BufferedImage image = ImageIO.read (new ByteArrayInputStream (bytes));
-            iconCustom = new ImageIcon (image);
-
-            // Create scaled instance, if needed.
-            double w = image.getWidth ();
-            double h = image.getHeight ();
-            if (w > 16)
-            {
-                h *= 16 / w;
-                w  = 16;
-            }
-            if (h > 16)
-            {
-                w *= 16 / h;
-                h  = 16;
-            }
-            int width  = (int) Math.round (w);
-            int height = (int) Math.round (h);
-            iconCustom16 = new ImageIcon (image.getScaledInstance (width, height, Image.SCALE_SMOOTH));
-        }
-        catch (IOException e) {}
+        iconCustom   = Utility.extractIcon (source);
+        if (iconCustom != null) iconCustom16 = Utility.rescale (iconCustom, 16, 16);
     }
 
     @Override

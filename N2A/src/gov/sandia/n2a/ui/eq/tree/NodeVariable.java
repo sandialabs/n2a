@@ -6,13 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.tree;
 
-import java.awt.AlphaComposite;
-import java.awt.Composite;
 import java.awt.FontMetrics;
-import java.awt.Graphics2D;
-import java.awt.Image;
 import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -28,6 +23,7 @@ import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.undo.AddAnnotation;
@@ -52,28 +48,11 @@ public class NodeVariable extends NodeContainer
 {
     protected static ImageIcon iconVariable = ImageUtil.getImage ("delta.png");
     public    static ImageIcon iconBinding  = ImageUtil.getImage ("connect.gif");
-    protected static ImageIcon iconWatch    = ImageUtil.getImage ("watch.png");  // gets modified in static section below
+    protected static ImageIcon iconWatch    = Utility.overlay (iconVariable, ImageUtil.getImage ("watch.png"), 1, 0.5f);
 
     public    boolean       isBinding;
     protected List<Integer> highlightLHS;
     protected List<Integer> highlightRHS;
-
-    static
-    {
-        Image delta = iconVariable.getImage ();
-        Image eye   = iconWatch.getImage ();
-        int w = iconVariable.getIconWidth ();
-        int h = iconVariable.getIconHeight ();
-        BufferedImage combined = new BufferedImage (w, h, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = combined.createGraphics ();
-        Composite c = g.getComposite ();
-        g.setComposite (AlphaComposite.getInstance (AlphaComposite.SRC_OVER, 0.5f));
-        g.drawImage (eye, 0, 0, null);
-        g.setComposite (c);
-        g.drawImage (delta, 0, 0, null);
-        g.dispose ();
-        iconWatch = new ImageIcon (combined);
-    }
 
     public NodeVariable (MPart source)
     {

@@ -20,6 +20,7 @@ import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.EquationTreeCellRenderer;
 import gov.sandia.n2a.ui.eq.TransferableNode;
 import gov.sandia.n2a.ui.eq.undo.ChangeDoc;
@@ -30,7 +31,10 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 public class NodeModel extends NodeBase
 {
     public           String    key;
-    protected static ImageIcon icon = ImageUtil.getImage ("document.png");
+    protected static ImageIcon overlayLocked      = ImageUtil.getImage ("locked-16.png");
+    protected static ImageIcon iconDocument       = ImageUtil.getImage ("file_obj.gif");
+    protected static ImageIcon iconDocumentLocked = Utility.overlay (overlayLocked, iconDocument);
+    // TODO: Find a way to load custom icons without loading entire DB into memory. Perhaps build an icon cache on a background thread (in PanelSearch).
 
     public NodeModel (String key)
     {
@@ -47,33 +51,37 @@ public class NodeModel extends NodeBase
     @Override
     public Icon getIcon (boolean expanded)
     {
-        return icon;
+        if (allowEdit ()) return iconDocument;
+        return iconDocumentLocked;
     }
 
     @Override
     public Color getColor (boolean selected)
     {
-        if (allowEdit ()) return super.getColor (selected);
-
-        Color result = null;
-        String colorName = "";
-        MNode repo = null;
+        String repoName = "";
         MNode mdir = ((MCombo) AppData.docs.child ("models")).containerFor (key);
-        if (mdir != null) repo = AppData.repos.child (mdir.key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.
-        if (repo != null) colorName = repo.get ("color");
-        if (! colorName.isEmpty ())
-        {
-            try
-            {
-                result = Color.decode (colorName);
-                if (result.equals (Color.black)) result = null;  // Treat black as always default. Thus, the user can't explicitly set black, but they can set extremely dark (R=G=B=1).
-            }
-            catch (NumberFormatException e) {}
-        }
-        if (result != null) return result;
+        if (mdir != null) repoName = mdir.key ();
+        Color fg = selected ? EquationTreeCellRenderer.colorSelectedOverride : EquationTreeCellRenderer.colorOverride;
+        return getColor (repoName, fg);
+    }
 
-        if (selected) return EquationTreeCellRenderer.colorSelectedInherit;
-        return               EquationTreeCellRenderer.colorInherit;
+    public static Color getColor (String repoName, Color fg)
+    {
+        Color c = null;
+        try {c = Color.decode (AppData.repos.get (repoName, "color"));}
+        catch (NumberFormatException e) {}
+        if (c != null)
+        {
+            float[] hsl = Utility.HSLfromColor (fg);
+            boolean lightLF = hsl[2] > EquationTreeCellRenderer.lightThreshold;
+            hsl = Utility.HSLfromColor (c);
+            boolean lightUser = hsl[2] > EquationTreeCellRenderer.lightThreshold;
+
+            if (lightUser == lightLF) return c;
+            hsl[2] = 1 - hsl[2];
+            return Utility.HSLtoColor (hsl);
+        }
+        return fg;
     }
 
     @Override
