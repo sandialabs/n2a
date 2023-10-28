@@ -9,7 +9,6 @@ package gov.sandia.n2a.db;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -60,13 +59,6 @@ public class MCombo extends MNode implements MNodeListener
     {
         if (name == null) return "";
         return name;
-    }
-
-    public synchronized Map<String,MNode> getContainerMap ()
-    {
-        Map<String,MNode> result = new TreeMap<String,MNode> ();
-        for (MNode c : containers) result.put (c.key (), c);
-        return result;
     }
 
     public boolean containerIsWriteable (MNode container)

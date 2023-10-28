@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.settings;
 
 import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.db.AppData.MFolder;
 import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
@@ -53,7 +52,6 @@ import java.util.EventObject;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -166,14 +164,9 @@ public class SettingsRepo extends JScrollPane implements Settings
     protected JLabel         labelProgress = new JLabel ();
     protected PanelDiff      panelDiff;
 
-    // The job of existing is to ensure that rebuild() does not create duplicate MDir instances.
-    // The goal is to maintain the guarantee of object identity.
-    // This collection may grow to be larger than the set in use by AppData, but entries that
-    // coincide with AppData entries must reference exactly the same MDir instance.
-    public    Map<String,Map<String,MNode>> existing = new HashMap<String,Map<String,MNode>> ();
-    public    boolean                       needRebuild;     // need to re-collate AppData.models and AppData.references
-    protected boolean                       needSave = true; // need to flush repositories to disk for git status
-    protected Path                          reposDir = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
+    public    boolean needRebuild;     // need to re-collate AppData.models and AppData.references
+    protected boolean needSave = true; // need to flush repositories to disk for git status
+    protected Path    reposDir = Paths.get (AppData.properties.get ("resourceDir")).resolve ("repos");
 
     protected int                     timeout = 30;  // seconds; for git operations
     protected SshSessionFactory       sessionFactory;
@@ -182,8 +175,6 @@ public class SettingsRepo extends JScrollPane implements Settings
     public SettingsRepo ()
     {
         instance = this;
-
-        for (MNode c : AppData.docs) existing.put (c.key (), ((MCombo) c).getContainerMap ());
 
         setName ("Repositories");  // Necessary to fulfill Settings interface.
         JPanel panel = new JPanel ();
@@ -762,18 +753,18 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public MDir getOrCreateContainer (String repoName, String folderName)
     {
-        Map<String,MNode> containerMap = existing.get (folderName);
+        MVolatile containerMap = (MVolatile) AppData.existing.child (folderName);
         if (containerMap == null)
         {
-            containerMap = new HashMap<String,MNode> ();
-            existing.put (folderName, containerMap);
+            containerMap = new MVolatile (folderName);
+            AppData.existing.link (containerMap);
             needRebuild = true;
         }
-        MDir result = (MDir) containerMap.get (repoName);
+        MDir result = (MDir) containerMap.child (repoName);
         if (result == null)
         {
             result = new MDir (repoName, reposDir.resolve (repoName).resolve (folderName));            
-            containerMap.put (repoName, result);
+            containerMap.link (result);
             needRebuild = true;
         }
         return result;
@@ -786,40 +777,7 @@ public class SettingsRepo extends JScrollPane implements Settings
     public void rebuild ()
     {
         if (! needRebuild) return;
-
-        String primary = AppData.state.get ("Repos", "primary");
-        for (Entry<String,Map<String,MNode>> e : existing.entrySet ())
-        {
-            String            folderName   = e.getKey ();
-            Map<String,MNode> containerMap = e.getValue ();
-
-            List<MNode> containers = new ArrayList<MNode> ();
-            for (MNode repo : repoModel.repos)
-            {
-                String repoName = repo.key ();
-                MNode container = containerMap.get (repoName);
-                if (container == null) continue;
-
-                boolean isPrimary = repoName.equals (primary);
-                if (! repo.getBoolean ("visible")  &&  ! repo.getBoolean ("editable")  &&  ! isPrimary) continue;
-
-                if (isPrimary) containers.add (0, container); 
-                else           containers.add (container);
-            }
-
-            MCombo d = (MCombo) AppData.docs.child (folderName);
-            if (d == null)
-            {
-                d = new MFolder (folderName, containers);
-                AppData.docs.link (d);
-            }
-            else
-            {
-                d.init (containers);  // Triggers changed() callback, which in turn triggers PanelSearch.search().
-            }
-            // Notice that the above code won't remove a folder from AppData.documents.
-            // However, it will update the MCombo's container list to be empty.
-        }
+        AppData.buildDocs ();
         needRebuild = false;
     }
 
@@ -827,9 +785,9 @@ public class SettingsRepo extends JScrollPane implements Settings
     {
         // Scan "existing" for any non-empty folders in the given repo.
         // Alternately, could scan repo directory on disk, but this allows for unwritten data.
-        for (Map<String,MNode> containerMap : existing.values ())
+        for (MNode e : AppData.existing)
         {
-            MNode container = containerMap.get (repoName);
+            MNode container = e.child (repoName);
             if (container != null  &&  container.size () != 0) return false;
         }
         return true;
@@ -1051,9 +1009,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                         MainFrame.instance.undoManager.discardAllEdits ();
                         needRebuild = true;
                         fireTableCellUpdated (oldRow, 0);  // Primary
-                        fireTableCellUpdated (oldRow, 4);  // Name, which may be rendered in a new color
                         fireTableCellUpdated (row,    0);
-                        fireTableCellUpdated (row,    4);
                     }
                     return true;
                 case 1:
@@ -1064,7 +1020,6 @@ public class SettingsRepo extends JScrollPane implements Settings
                     MainFrame.instance.undoManager.discardAllEdits ();  // TODO: It would be better to only purge edits related to the specific repo.
                     needRebuild = true;
                     fireTableCellUpdated (row, 1);
-                    fireTableCellUpdated (row, 4);
                     return true;
                 case 2:
                     int visible = repo.getInt ("visible");
@@ -1104,13 +1059,12 @@ public class SettingsRepo extends JScrollPane implements Settings
 
                     gitRepos.get (row).close ();  // Shut down git under oldName
                     Path repoDir = reposDir.resolve (newName);
-                    for (Entry<String,Map<String,MNode>> e : existing.entrySet ())
+                    for (MNode e : AppData.existing)
                     {
-                        String            folderName   = e.getKey ();
-                        Map<String,MNode> containerMap = e.getValue ();
-                        MDir container = (MDir) containerMap.remove (oldName);
+                        String folderName = e.key ();
+                        MDir container = (MDir) e.child (oldName);
                         if (container == null) continue;
-                        containerMap.put (newName, container);
+                        e.move (oldName, newName);  // MVolatile.move() also changes key of MDir
                         container.set (repoDir.resolve (folderName)); // Flushes write queue, so save thread won't interfere with the move.
                     }
                     AppData.repos.move (oldName, newName);
@@ -1176,10 +1130,10 @@ public class SettingsRepo extends JScrollPane implements Settings
             gitRepo.setURL (URL);
             AppData.repos.set (1, name, "visible");  // Implicitly creates the repo node.
 
-            repoModel.repos   .add (row, AppData.repos.child (name));
-            repoModel.gitRepos.add (row, gitRepo);
-            repoModel.updateOrder ();
-            repoModel.fireTableRowsInserted (row, row);
+            repos   .add (row, AppData.repos.child (name));
+            gitRepos.add (row, gitRepo);
+            updateOrder ();
+            fireTableRowsInserted (row, row);
             repoTable.changeSelection (row, 4, false, false);
 
             // No need to update "existing", because new repo has no folders.
@@ -1195,7 +1149,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             GitWrapper wrapper = gitRepos.get (row);
             String     name    = repos   .get (row).key ();
 
-            existing.forEach ((k,v) -> v.remove (name));
+            for (MNode e : AppData.existing) e.clear (name);
             gitRepos.remove (row);
             repos   .remove (row);
             updateOrder ();

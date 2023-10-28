@@ -37,7 +37,8 @@ public class AppData
     public static MDir      runs;
     public static MDir      studies;
     public static MDir      repos;
-    public static MVolatile docs;  // Collection of MCombos. Key is the document type. Prime examples include "models" and "references".
+    public static MVolatile docs;     // Collection of MCombos. Key is the document type, aka folder. Prime examples include "models" and "references".
+    public static MVolatile existing; // Collection of all MDirs under repos, including those not currently active in docs. Organized by folder name first, then repo name. Purpose is to ensure object identity of every repo and document.
 
     protected static boolean stop;
 
@@ -84,11 +85,9 @@ public class AppData
             state.set (primary, "Repos", "primary");
         }
 
-        Map<String,List<MNode>> folderContainers = new HashMap<String,List<MNode>> ();
+        existing = new MVolatile ();
         for (String repoName : reposOrder)
         {
-            MNode repo = repos.child (repoName);
-            if (repo == null  ||  ! repo.getBoolean ("visible")  &&  ! repo.getBoolean ("editable")  &&  ! repoName.equals (primary)) continue;
             Path repoDir = reposDir.resolve (repoName);
             try (DirectoryStream<Path> stream = Files.newDirectoryStream (repoDir))
             {
@@ -98,17 +97,18 @@ public class AppData
                     String folderName = path.getFileName ().toString ();
                     if (folderName.startsWith (".")) continue;
 
-                    List<MNode> containers = folderContainers.get (folderName); 
-                    if (containers == null)
+                    MVolatile folder = (MVolatile) existing.child (folderName);
+                    if (folder == null)
                     {
-                        containers = new ArrayList<MNode> ();
-                        folderContainers.put (folderName, containers);
+                        folder = new MVolatile (folderName);
+                        existing.link (folder);
                     }
-                    containers.add (new MDir (repoName, path));
+                    folder.link (new MDir (repoName, path));
                 }
             }
             catch (IOException e) {}
         }
+
         docs = new MVolatile ()
         {
             public MNode set (String value, String key)
@@ -124,10 +124,7 @@ public class AppData
                 return result;
             }
         };
-        folderContainers.forEach ((k, v) -> docs.link (new MFolder (k, v)));
-
-        //convert (modelContainers);
-        //convert (referenceContainers);
+        buildDocs ();
 
         Thread saveThread = new Thread ("Save AppData")
         {
@@ -175,8 +172,42 @@ public class AppData
                 primary = s.getOrCreateContainer (primaryName, folderName);
                 s.needRebuild = needRebuild;
                 containers.add (0, primary);
+                primary.addListener (this);
             }
             return primary.set (value, key);
+        }
+    }
+
+    public static void buildDocs ()
+    {
+        String primary = state.get ("Repos", "primary");
+
+        String reposOrderString = state.get ("Repos", "order");
+        String[] reposOrder = reposOrderString.split (",");
+
+        for (MNode e : existing)
+        {
+            String folderName = e.key ();
+
+            List<MNode> containers = new ArrayList<MNode> ();
+            for (String repoName : reposOrder)
+            {
+                MNode container = e.child (repoName);
+                if (container == null) continue;
+
+                boolean isPrimary = repoName.equals (primary);
+                MNode repo = repos.child (repoName);
+                if (! isPrimary  &&  ! repo.getBoolean ("editable")  &&  ! repo.getBoolean ("visible")) continue;
+
+                if (isPrimary) containers.add (0, container); 
+                else           containers.add (container);
+            }
+
+            MCombo d = (MCombo) docs.child (folderName);
+            if (d == null) docs.link (new MFolder (folderName, containers));
+            else           d.init (containers);  // Triggers changed() callback, which in turn triggers PanelSearch.search().
+            // Notice that the above code won't remove a folder from docs.
+            // However, it will update the MCombo's container list to be empty.
         }
     }
 
@@ -184,9 +215,10 @@ public class AppData
     {
         if (repos.size () > 0) return;
 
-        repos.set (1, "local", "visible");
-        repos.set (1, "local", "editable");
-        repos.set (1, "base",  "visible");
+        repos.set (1,         "local", "visible");
+        repos.set (1,         "local", "editable");
+        repos.set (1,         "base",  "visible");
+        repos.set ("#0000FF", "base",  "color");
         state.set ("local,base", "Repos", "order");
         state.set ("local",      "Repos", "primary");
         state.set ("",           "Repos", "needUpstream");
@@ -200,6 +232,15 @@ public class AppData
         MDir baseReferences  = new MDir ("base",  baseDir .resolve ("references"));
         MDir localModels     = new MDir ("local", localDir.resolve ("models"));
         MDir localReferences = new MDir ("local", localDir.resolve ("references"));
+
+        MVolatile existingModels     = new MVolatile ("models");
+        MVolatile existingReferences = new MVolatile ("references");
+        existingModels.link (baseModels);
+        existingModels.link (localModels);
+        existingReferences.link (baseReferences);
+        existingReferences.link (localReferences);
+        existing.link (existingModels);
+        existing.link (existingReferences);
 
         List<MNode> modelContainers     = new ArrayList<MNode> ();
         List<MNode> referenceContainers = new ArrayList<MNode> ();
