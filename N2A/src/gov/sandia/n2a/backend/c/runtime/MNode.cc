@@ -1702,7 +1702,7 @@ n2a::Schema2::write (MNode & node, std::ostream & writer, const String & indent)
     {
         writer << indent << key << ":";
         const String & value = node.get ();
-        if (value.find_first_of ('\n') == String::npos)
+        if (value.find_first_of ('\n') == String::npos  &&  ! value.starts_with ("|"))
         {
             writer << value << std::endl;
         }

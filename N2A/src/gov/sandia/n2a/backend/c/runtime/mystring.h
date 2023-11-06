@@ -543,6 +543,20 @@ public:
         return npos;
     }
 
+    bool starts_with (const String & that) const
+    {
+        int lengthA =      top -      memory;
+        int lengthB = that.top - that.memory;
+        if (lengthB > lengthA) return false;
+        if (memory == 0) return true;  // both are empty
+
+        char * a   = memory;
+        char * b   = that.memory;
+        char * end = memory + lengthB;
+        while (a < end) if (*a++ != *b++) return false;
+        return true;
+    }
+
     bool ends_with (const String & that) const
     {
         int lengthA =      top -      memory;
