@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,7 +25,11 @@ public class JobPython extends Thread
     **/
     public boolean unpackRuntime () throws Exception
     {
-        return JobC.unpackRuntime (JobPython.class, null, runtimeDir, "runtime/", "OutputHolder.py", "OutputParser.py", "runtime.py");
+        boolean changed = false;
+        Path n2aDir = runtimeDir.resolve ("n2a");
+        if (JobC.unpackRuntime (JobPython.class, null, runtimeDir, "runtime/",     "setup.py")) changed = true;
+        if (JobC.unpackRuntime (JobPython.class, null, n2aDir,     "runtime/n2a/", "__init__.py", "MNode.py", "OutputHolder.py", "OutputParser.py", "runtime.py")) changed = true;
+        return changed;
     }
 
     public String mangle (Variable v)
