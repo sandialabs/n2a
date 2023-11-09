@@ -277,12 +277,14 @@ n2a::MNode::childOrCreate (const std::vector<String> & keys)
     return *result;
 }
 
-n2a::MNode &
-n2a::MNode::childAt (int index)
+std::vector<String>
+n2a::MNode::childKeys ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    for (auto & c : *this) if (index-- == 0) return c;
-    return none;
+    std::vector<String> result;
+    result.reserve (size ());
+    for (auto & c : *this) result.push_back (c.key ());
+    return result;
 }
 
 void

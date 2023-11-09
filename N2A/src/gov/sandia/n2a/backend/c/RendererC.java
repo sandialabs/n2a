@@ -42,6 +42,7 @@ import gov.sandia.n2a.language.function.Mmatrix;
 import gov.sandia.n2a.language.function.Mnumber;
 import gov.sandia.n2a.language.function.Mstring;
 import gov.sandia.n2a.language.function.Min;
+import gov.sandia.n2a.language.function.Mkey;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Pulse;
@@ -467,8 +468,30 @@ public class RendererC extends Renderer
         {
             Mcount m = (Mcount) op;
             result.append (m.name + "->doc->child (");
-            keyPath (m);
+            keyPath (m, 1);
             result.append (").size ()");
+            return true;
+        }
+        if (op instanceof Mkey)
+        {
+            Mkey m = (Mkey) op;
+            if (m.number)
+            {
+                if (useExponent) result.append ("convert (");
+                else             result.append ("atof (");
+            }
+            result.append (m.name + "->getChildKey (");
+            result.append ("\"" + m.getDelimiter () + "\", ");
+            keyPath (m, 2);
+            result.append (", ");
+            m.operands[1].render (this);
+            result.append (")");
+            if (m.number)
+            {
+                if (useExponent) result.append (", " + m.exponentNext);
+                else             result.append (".c_str ()");
+                result.append (")");
+            }
             return true;
         }
         if (op instanceof Mmatrix)
@@ -477,7 +500,7 @@ public class RendererC extends Renderer
             if (! (m.parent instanceof Variable)  ||  ! ((Variable) m.parent).hasAttribute ("MatrixPointer")) result.append ("*");  // Dereference the returned value, since variable is not a pointer.
             result.append (m.name + "->getMatrix (");
             result.append ("\"" + m.getDelimiter () + "\", ");
-            keyPath (m);
+            keyPath (m, 1);
             if (useExponent)
             {
                 if (m.operands.length > 1) result.append (", ");
@@ -498,7 +521,7 @@ public class RendererC extends Renderer
             {
                 result.append ("(" + job.T + ") " + m.name + "->doc->getDouble (");
             }
-            keyPath (m);
+            keyPath (m, 1);
             result.append (")");
             if (useExponent) result.append (", " + m.exponentNext + ")");
             return true;
@@ -507,7 +530,7 @@ public class RendererC extends Renderer
         {
             Mstring m = (Mstring) op;
             result.append (m.name + "->doc->get (");
-            keyPath (m);
+            keyPath (m, 1);
             result.append (")");
             return true;
         }
@@ -790,15 +813,15 @@ public class RendererC extends Renderer
         result.append (")");
     }
 
-    public void keyPath (Mfile m)
+    public void keyPath (Mfile m, int start)
     {
         result.append ("keyPath (");
         result.append ("\"" + m.getDelimiter () + "\"");
-        if (m.operands.length > 1)  // operands[0] is path to M file
+        if (m.operands.length > start)  // operands[0] is path to M file
         {
             result.append (", ");
-            m.operands[1].render (this);
-            for (int i = 2; i < m.operands.length; i++)
+            m.operands[start].render (this);
+            for (int i = start + 1; i < m.operands.length; i++)
             {
                 result.append (", ");
                 m.operands[i].render (this);

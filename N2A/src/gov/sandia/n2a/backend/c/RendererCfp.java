@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -30,6 +30,7 @@ import gov.sandia.n2a.language.function.Floor;
 import gov.sandia.n2a.language.function.Grid;
 import gov.sandia.n2a.language.function.HyperbolicTangent;
 import gov.sandia.n2a.language.function.Log;
+import gov.sandia.n2a.language.function.Mkey;
 import gov.sandia.n2a.language.function.Mmatrix;
 import gov.sandia.n2a.language.function.Mnumber;
 import gov.sandia.n2a.language.function.Norm;
@@ -65,6 +66,7 @@ public class RendererCfp extends RendererC
         operatorsWithExponent.add (Exp       .class);
         operatorsWithExponent.add (Grid      .class);
         operatorsWithExponent.add (Log       .class);
+        operatorsWithExponent.add (Mkey      .class);
         operatorsWithExponent.add (Mmatrix   .class);
         operatorsWithExponent.add (Mnumber   .class);
         operatorsWithExponent.add (Norm      .class);

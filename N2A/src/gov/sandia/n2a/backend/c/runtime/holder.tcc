@@ -1869,7 +1869,8 @@ template<class T>
 Mfile<T>::~Mfile ()
 {
     if (doc) delete doc;
-    for (auto m : matrices) if (m.second) delete m.second;
+    for (auto m : matrices)  if (m.second) delete m.second;
+    for (auto k : childKeys) if (k.second) delete k.second;
 }
 
 std::vector<String>
@@ -1904,7 +1905,7 @@ Mfile<T>::getMatrix (const char * delimiter, const std::vector<String> & path, i
 Mfile<T>::getMatrix (const char * delimiter, const std::vector<String> & path)
 #endif
 {
-    String key = join (delimiter, path);
+    String key = join (delimiter, path);  // This skips any kind of normalization, so not 100% correct. Not sure if it's worth the extra compute to split and rejoin the keys.
     MatrixAbstract<T> * A = matrices[key];  // If key does not exist, then the c++ standard promises that the inserted value will be zero-initialized.
     if (A) return A;
 
@@ -1926,6 +1927,30 @@ Mfile<T>::getMatrix (const char * delimiter, const std::vector<String> & path)
     }
     matrices[key] = S;
     return S;
+}
+
+template<class T>
+String
+Mfile<T>::getChildKey (const char * delimiter, const std::vector<String> & path, const int index)
+{
+    std::cerr << "getChildKey " << index << std::endl;
+
+    if (index < 0) return "";
+    String key = join (delimiter, path);
+    std::cerr << "  key " << key << std::endl;
+    std::vector<String> * list = childKeys[key];
+    std::cerr << "  list " << list << std::endl;
+    if (! list)
+    {
+        std::cerr << "  building" << std::endl;
+        n2a::MNode & m = doc->child (keyPath (delimiter, path));
+        std::cerr << "  m " << m.key () << " " << m.childKeys ().size () << std::endl;
+        list = new std::vector<String> (m.childKeys ());
+        childKeys[key] = list;
+    }
+    std::cerr << "  size " << list->size () << std::endl;
+    if (index >= list->size ()) return "";
+    return (*list)[index];
 }
 
 template<class T>

@@ -36,6 +36,7 @@ import gov.sandia.n2a.language.function.Log;
 import gov.sandia.n2a.language.function.Max;
 import gov.sandia.n2a.language.function.Mcount;
 import gov.sandia.n2a.language.function.Min;
+import gov.sandia.n2a.language.function.Mkey;
 import gov.sandia.n2a.language.function.Mmatrix;
 import gov.sandia.n2a.language.function.Mnumber;
 import gov.sandia.n2a.language.function.Mstring;
@@ -210,6 +211,13 @@ public class Operator implements Cloneable
     public boolean isMatrixInput ()
     {
         return false;
+    }
+
+    public String container ()
+    {
+        if (parent == null) return "";
+        if (parent instanceof Variable) return ((Variable) parent).fullName ();
+        return ((Operator) parent).container ();
     }
 
     public void visit (Visitor visitor)
@@ -471,6 +479,7 @@ public class Operator implements Cloneable
         register (Max              .factory ());
         register (Min              .factory ());
         register (Mcount           .factory ());
+        register (Mkey             .factory ());
         register (Mmatrix          .factory ());
         register (Mnumber          .factory ());
         register (Mstring          .factory ());

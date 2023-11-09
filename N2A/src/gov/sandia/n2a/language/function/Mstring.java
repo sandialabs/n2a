@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import gov.sandia.n2a.backend.internal.Simulator;
-import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
@@ -31,17 +30,6 @@ public class Mstring extends Mfile
         };
     }
 
-    public void determineExponent (ExponentContext context)
-    {
-        // Leave as unknown
-    }
-
-    public void determineExponentNext ()
-    {
-        // We don't have an exponent.
-        // Furthermore, all our operands are strings, so no point in passing the exponent down.
-    }
-
     public Type getType ()
     {
         return new Text ();
@@ -54,7 +42,7 @@ public class Mstring extends Mfile
 
         String path = ((Text) operands[0].eval (context)).value;
         Holder H = Holder.get (simulator, path);
-        return new Text (H.doc.get (Holder.keyPath (context, this)));
+        return new Text (H.doc.get (Holder.keyPath (context, this, 1)));
     }
 
     public String toString ()

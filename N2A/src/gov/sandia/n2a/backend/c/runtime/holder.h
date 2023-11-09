@@ -329,8 +329,9 @@ template<class T>
 class SHARED Mfile : public Holder
 {
 public:
-    n2a::MDoc *                          doc;
-    std::map<String,MatrixAbstract<T> *> matrices;  // Could use unordered_map. Generally, there will be very few entries (like 1), so not sure which will cost the least.
+    n2a::MDoc *                           doc;
+    std::map<String,MatrixAbstract<T>*>   matrices;  // Could use unordered_map. Generally, there will be very few entries (like 1), so not sure which will cost the least.
+    std::map<String,std::vector<String>*> childKeys;
 
     Mfile (const String & fileName);
     virtual ~Mfile ();
@@ -340,6 +341,7 @@ public:
 #   else
     MatrixAbstract<T> * getMatrix (const char * delimiter, const std::vector<String> & path);
 #   endif
+    String getChildKey (const char * delimiter, const std::vector<String> & path, const int index);
 };
 template<class T> SHARED Mfile<T> * MfileHelper (const String & fileName, Mfile<T> * oldHandle = 0);
 

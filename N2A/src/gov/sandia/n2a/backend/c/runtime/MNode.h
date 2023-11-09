@@ -127,11 +127,9 @@ namespace n2a
         template<typename... Args> MNode & childOrCreate (Args... keys) {return childOrCreate ({keys...});}
 
         /**
-            Convenience method for retrieving node at an ordinal position without knowing the specific key.
-            Children are traversed in the usual key order.
-            If index is out of range, then result is null.
+            Returns a list of child keys, in M order.
         **/
-        MNode & childAt (int index);
+        std::vector<String> childKeys ();
 
         /**
             Remove all children.

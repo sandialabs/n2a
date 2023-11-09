@@ -212,14 +212,15 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     }
 
     /**
-        Convenience method for retrieving node at an ordinal position without knowing the specific key.
-        Children are traversed in the usual key order.
-        If index is out of range, then result is null.
+        Returns a list of child keys, in M order.
+        If there are no children, the list will be empty.
+        That is, return value is always non-null.
     **/
-    public synchronized MNode childAt (int index)
+    public synchronized List<String> childKeys ()
     {
-        for (MNode c : this) if (index-- == 0) return c;
-        return null;
+        List<String> result = new ArrayList<String> (size ());
+        for (MNode c : this) result.add (c.key ());
+        return result;
     }
 
     /**
