@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -78,7 +78,7 @@ public class Instance extends Type
                         InternalBackendData bed = (InternalBackendData) result.equations.backendData;
                         if (! bed.singleton)
                         {
-                            Backend.err.get ().println ("ERROR: Ambiguous reference to " + result.equations.prefix ());
+                            Backend.err.get ().println ("ERROR: " + result.equations.prefix () + " is not a singleton, so a direct reference to its members is ambiguous.");
                             throw new Backend.AbortRun ();
                         }
                         result = (Instance) result.valuesObject[bed.instances];

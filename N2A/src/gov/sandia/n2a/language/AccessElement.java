@@ -175,10 +175,20 @@ public class AccessElement extends Function implements NonzeroIterable
     public Type eval (Instance instance)
     {
         Matrix A = (Matrix) operands[0].eval (instance);
-        double row = ((Scalar) operands[1].eval (instance)).value;
-        double column = 0;
-        if (operands.length > 2) column = ((Scalar) operands[2].eval (instance)).value;
-        return new Scalar (A.get (row, column, Matrix.INTERPOLATE));  // This access function does bounds check.
+        try
+        {
+            double row = ((Scalar) operands[1].eval (instance)).value;
+            double column = 0;
+            if (operands.length > 2) column = ((Scalar) operands[2].eval (instance)).value;
+            return new Scalar (A.get (row, column, Matrix.INTERPOLATE));  // This access function does bounds check.
+        }
+        catch (ClassCastException e)
+        {
+            String message = "Matrix indices must be numbers";
+            String v = container ();
+            if (! v.isEmpty ()) message += ": " + v;
+            throw new EvaluationException (message);
+        }
     }
 
     public Operator operandA ()
