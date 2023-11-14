@@ -28,7 +28,7 @@ public class Schema2 extends Schema1
             String line = reader.line.trim ();
             StringBuilder prefix = new StringBuilder ();
             String value = null;
-            boolean escape = line.charAt (0) == '"';
+            boolean escape =  ! line.isEmpty ()  &&  line.charAt (0) == '"';
             int i = escape ? 1 : 0;
             int last = line.length () - 1;
             for (; i <= last; i++)
