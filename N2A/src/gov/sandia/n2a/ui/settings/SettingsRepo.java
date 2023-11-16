@@ -777,8 +777,8 @@ public class SettingsRepo extends JScrollPane implements Settings
     public void rebuild ()
     {
         if (! needRebuild) return;
-        AppData.buildDocs ();
         needRebuild = false;
+        AppData.buildDocs ();
     }
 
     public boolean isEmpty (String repoName)
@@ -796,7 +796,6 @@ public class SettingsRepo extends JScrollPane implements Settings
     public void pull (GitWrapper gitRepo, String key)
     {
         MainFrame.instance.undoManager.discardAllEdits ();  // TODO: purge only edits related to the current repo.
-        needRebuild = true;
         Thread thread = new Thread ()
         {
             public void run ()
@@ -821,7 +820,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                 catch (IOException e) {}
                 // TODO: purge folders that no longer exist?
 
-                if (needRebuild)  // UI focus is still on settings panel.
+                if (isShowing ())  // UI focus is still on settings panel.
                 {
                     if (gitRepo == gitModel.current)
                     {
@@ -829,10 +828,11 @@ public class SettingsRepo extends JScrollPane implements Settings
                         gitModel.refreshTrack (false);
                     }
                 }
-                else  // UI focus has shifted away from settings panel, and rebuild() may have been done before pull finished.
+                else  // UI focus has shifted away from settings panel.
                 {
-                    // Force another rebuild, to ensure that new files are visible to user.
-                    needRebuild = true;
+                    // Now we have a problem. The user may be in the middle of editing something whose underlying value has changed.
+                    // The cleanest (but still quite dirty) way to handle this is to trash current edits and replace contents.
+                    // rebuild() will send events to the UI, which should in turn handle any ongoing edit.
                     rebuild ();
                 }
             }
