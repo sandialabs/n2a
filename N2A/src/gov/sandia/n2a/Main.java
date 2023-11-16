@@ -116,7 +116,7 @@ public class Main
             {
                 try
                 {
-                    JobC jobC = new JobC (null);
+                    JobC jobC = new JobC (new MVolatile ());
                     jobC.runtimeDir = resourceDir.resolve ("backend").resolve ("c");
                     jobC.unpackRuntime ();
 
@@ -126,6 +126,7 @@ public class Main
                 }
                 catch (Exception e)
                 {
+                    e.printStackTrace ();
                     System.err.println ("Failed to unpack runtime resources.");
                 }
 
