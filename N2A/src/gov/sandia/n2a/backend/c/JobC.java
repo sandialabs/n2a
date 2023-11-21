@@ -47,6 +47,7 @@ import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.ui.eq.tree.NodePart;
+import gov.sandia.n2a.ui.eq.undo.AddPart;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 
 import java.io.BufferedWriter;
@@ -901,6 +902,7 @@ public class JobC extends Thread
         digestedModel.findConnectionMatrix ();
         analyzeEvents (digestedModel);
         analyze (digestedModel);
+        analyzeNames (digestedModel);
     }
 
     public void tagCommandLineParameters (EquationSet s, Writer params) throws IOException
@@ -1177,6 +1179,55 @@ public class JobC extends Thread
             }
         };
         for (Variable v : s.variables) v.transform (t);
+    }
+
+    public void analyzeNames (EquationSet s)
+    {
+        // Determine if there is a name conflict.
+        // Check source document for names, as it immediately covers all cases
+        // (sub-part, variable, connection alias).
+        // This approach still works for flattened parts, because anything brought
+        // up from lower parts/ gets extended naming that should guarantee no conflicts
+        // with part name.
+        if (s.source.child (s.name) != null)
+        {
+            // Determine replacement name.
+            String replacement;
+            String prefix = AddPart.stripSuffix (s.name);
+            int suffix = 2;
+            while (true)
+            {
+                replacement = prefix + suffix;
+                if (s.source.child (replacement) == null) break;
+                suffix++;
+            }
+
+            // Apply replacement name.
+            // We need to check all possible types of named objects within class.
+            EquationSet p = s.findPart (s.name);
+            if (p != null)
+            {
+                p.name = replacement;
+            }
+            else
+            {
+                ConnectionBinding c = s.findConnection (s.name);
+                if (c != null)
+                {
+                    c.alias = replacement;
+                }
+                else
+                {
+                    Variable v = s.find (new Variable (s.name, -1));
+                    if (v != null) v.name = replacement;
+                }
+            }
+        }
+
+        // Process sub-parts.
+        // Notice that this includes any newly-renamed part.
+        // Thus we fix any conflict created by the new name.
+        for (EquationSet p : s.parts) analyzeNames (p);
     }
 
     public void generateCode (Path source) throws Exception
