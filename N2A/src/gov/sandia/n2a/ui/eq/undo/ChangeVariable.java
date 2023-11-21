@@ -40,7 +40,8 @@ public class ChangeVariable extends UndoableView
     protected String       valueBefore;
     protected String       valueAfter;
     protected MNode        savedTree;   // The entire subtree from the top document. If not from top document, then at least a single node for the variable itself.
-    protected boolean      killed;
+    protected boolean      killedBefore;
+    protected boolean      killedAfter;
     protected boolean      multi;
 
     /**
@@ -59,7 +60,9 @@ public class ChangeVariable extends UndoableView
         savedTree = new MVolatile ();
         if (node.source.isFromTopDocument ()) savedTree.merge (node.source.getSource ());
 
-        killed = node.source.getFlag ("$kill");
+        killedBefore = node.source.getFlag ("$kill");
+        NodeVariable nodeAfter = (NodeVariable) parent.child (nameAfter);
+        if (nodeAfter != null) killedAfter = nodeAfter.source.getFlag ("$kill");
     }
 
     public void setMulti (boolean value)
@@ -71,17 +74,17 @@ public class ChangeVariable extends UndoableView
     {
         super.undo ();
         savedTree.set (valueBefore);
-        apply (nameAfter, nameBefore, killed, multi);
+        apply (nameAfter, nameBefore, killedAfter, killedBefore, multi);
     }
 
     public void redo ()
     {
         super.redo ();
         savedTree.set (valueAfter);
-        apply (nameBefore, nameAfter, false, multi);
+        apply (nameBefore, nameAfter, killedBefore, false, multi);  // Because the user is taking a specific action to set a variable, the resulting node is always not killed.
     }
 
-    public void apply (String nameBefore, String nameAfter, boolean killed, boolean multi)
+    public void apply (String nameBefore, String nameAfter, boolean killedBefore, boolean killedAfter, boolean multi)
     {
         NodePart parent = (NodePart) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
@@ -101,7 +104,7 @@ public class ChangeVariable extends UndoableView
             nodeAfter = nodeBefore;
             MPart mchild = nodeAfter.source;
             mchild.set (savedTree.get ());  // Same as valueAfter. Sub-tree is not relevant here.
-            updateRevokation (mchild, killed);
+            updateRevokation (mchild, killedAfter);
         }
         else
         {
@@ -110,9 +113,10 @@ public class ChangeVariable extends UndoableView
             mparent.clear (nameBefore);
             mparent.clear (nameAfter);  // Removes any reference changes in target node.
             mparent.set (savedTree, nameAfter);
-            MPart newPart = (MPart) mparent.child (nameAfter);
             MPart oldPart = (MPart) mparent.child (nameBefore);
-            updateRevokation (newPart, killed);
+            MPart newPart = (MPart) mparent.child (nameAfter);
+            if (oldPart != null) updateRevokation (oldPart, killedBefore);
+            updateRevokation (newPart, killedAfter);
 
             // Update GUI
             nodeAfter = (NodeVariable) parent.child (nameAfter);
@@ -392,7 +396,7 @@ public class ChangeVariable extends UndoableView
         /**
             Follow the name path to see if any part of it resolves to the renamed object.
             If so, construct a replacement string.
-            @return The replacement string, or null if the name does no intersect with the
+            @return The replacement string, or null if the name does not intersect with the
             renamed object.
         **/
         public String resolve (NodePart part, String name)

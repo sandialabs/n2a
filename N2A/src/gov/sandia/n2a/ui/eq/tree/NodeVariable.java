@@ -153,6 +153,7 @@ public class NodeVariable extends NodeContainer
         String value = source.get ().trim ();
         if (parent.connectionBindings != null) parent.connectionBindings.remove (name);  // Will add back later if we turn out to be a connection binding.
 
+        if (value.isBlank ()  ||  source.getFlag ("$kill")) return;  // Must not be revoked.
         NodeBase referent = null;
         if (Operator.containsConnect (value))  // As a simple heuristic, we let "connect()" override any other considerations.
         {
@@ -161,7 +162,6 @@ public class NodeVariable extends NodeContainer
         else
         {
             // Constraints on form
-            if (value.isBlank ()  ||  source.getFlag ("$kill")) return;  // Must not be revoked.
             if (name.contains ("$")  ||  name.contains ("\\.")  ||  name.endsWith ("'")) return;  // LHS must be a simple identifier.
             if (! NodePart.isIdentifierPath (value)) return;  // RHS must be a valid part name path (not a derivative, no combiner, no expression, no condition).
             if (children != null)  // Must be single line.
@@ -649,9 +649,7 @@ public class NodeVariable extends NodeContainer
             {
                 if (canInject)  // Inject into/over an existing variable.
                 {
-                    // Remove this variable, regardless of what we do to nodeAfter.
                     if (! added) um.addEdit (new CompoundEdit ());  // If newly added, then DeleteVariable will neutralize the previous AddVariable, so no need for compound edit.
-                    um.apply (new DeleteVariable (this, added));
 
                     // Decide what change (if any) to apply to nodeAfter.
                     if (expressionAfter)
@@ -661,15 +659,20 @@ public class NodeVariable extends NodeContainer
                         {
                             if (piecesAfter.condition.equals (piecesDest.condition))  // Directly overwrite the target, since they share the same name and condition.
                             {
-                                um.apply (new ChangeVariable (nva, nameAfter, valueAfter));
+                                // Same as default action.
+                                um.endCompoundEdit ();  // And compound is deleted.
+                                um.apply (new ChangeVariable (this, nameAfter, valueAfter));
+                                return;
                             }
                             else  // Inject new equation and change target into a multiconditional variable.
                             {
+                                um.apply (new DeleteVariable (this, added));
                                 um.apply (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
                             }
                         }
                         else
                         {
+                            um.apply (new DeleteVariable (this, added));
                             if (equationMatch == null)  // Add new equation to an existing multiconditional.
                             {
                                 um.apply (new AddEquation (nva, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
