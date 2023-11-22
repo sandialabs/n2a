@@ -2255,7 +2255,7 @@ public class EquationSet implements Comparable<EquationSet>
                 if (couldNeedMerge)  // An external reference whose first resolution step is this container.
                 {
                     Variable v2 = find (v);
-                    if (v2 != null)  // There is a matching variable, so must merge. The match could be (and often is) the direct target of the reference.
+                    if (v2 != null)  // There is a matching variable, so must merge. The match is often the direct target of the reference.
                     {
                         // Since this is an external reference, some other variable depends on v as an external writer.
                         // This user must be redirected appropriately.
@@ -2291,6 +2291,13 @@ public class EquationSet implements Comparable<EquationSet>
 
                 public boolean visit (Operator op)
                 {
+                    // Processes AccessVariable operations in the equations of a variable, to fix up its
+                    // resolution path. The origin variable may exist anywhere in the model.
+                    // When the origin variable is known to be under "child", the av operators are unfiltered.
+                    // When the origin variable is a user of a variable under "child", it could exist
+                    // anywhere in the model. In that case we filter for only those operators in its equations
+                    // that actually target the variable under "child". This case is intended to capture descending
+                    // references that pass through "child".
                     if (! (op instanceof AccessVariable)) return true;
                     AccessVariable av = (AccessVariable) op;
                     if (target != null  &&  av.reference.variable != target) return true;
@@ -2327,9 +2334,23 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     for (Variable v : current.variables)
                     {
-                        if (v.reference.variable != v) adjustResolution (v.reference.resolution);
+                        // Process v's own resolution path.
+                        if (v.reference.variable != v)
+                        {
+                            adjustResolution (v.reference.resolution);
+
+                            // Handle the special case where v used $up to climb the tree.
+                            String pieces[] = v.name.split ("\\.");
+                            int up = 0;
+                            while (pieces[up].equals ("$up")) up++;
+                            if (up > v.reference.resolution.size ()) v.name = v.name.substring (4);
+                        }
+
+                        // Process the resolutions of AccessVariable operators in v's equations.
                         target = null;
                         v.visit (this);
+
+                        // Process resolution paths of variables (anywhere in the model) that use v.
                         if (v.usedBy == null) continue;
                         target = v;
                         for (Object o : v.usedBy)
