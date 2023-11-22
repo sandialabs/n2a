@@ -1306,6 +1306,7 @@ n2a::MDocGroup::childClear (const String & key)
 void
 n2a::MDocGroup::unload (n2a::MDoc * doc)
 {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     String key = doc->key ();
     std::map<String, MDoc *>::iterator it = children.find (key);
     if (it == children.end ()) return;

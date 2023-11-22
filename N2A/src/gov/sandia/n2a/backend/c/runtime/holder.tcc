@@ -2469,12 +2469,12 @@ OutputHolder<T>::~OutputHolder ()
         try
         {
             writeTrace ();
+            out->flush ();
         }
         catch (...)
         {
             std::cerr << "WARNING: final trace values might have been lost" << std::endl;
         }
-        out->flush ();
         if (out != &std::cout) delete out;
 
         try

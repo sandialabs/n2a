@@ -3794,22 +3794,22 @@ public class JobC extends Thread
             }
             if (! bed.localFlagType.isEmpty ())
             {
-                // It's OK to set flags here, before the equations are executed, because
-                // $live will be factored out by EquationSet.simplify() below.
-                if (bed.liveFlag >= 0)
+                if (bed.liveFlag >= 0)  // Need to set $live
                 {
-                    if (bed.newborn >= 0)
+                    // It's OK to set $live here, before the equations are executed, because
+                    // the actual equations will have $live factored out by EquationSet.simplify() below.
+                    if (bed.newborn >= 0)  // Must work around the fact that "flags" has already been initialized by Population::add().
                     {
                         result.append ("  flags |= (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ";\n");
                     }
-                    else
+                    else  // "flags" has not yet been initialized
                     {
                         result.append ("  flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ";\n");
                     }
                 }
-                else
+                else  // No need to set $live, just ensure that "flags" is initialized.
                 {
-                    if (bed.newborn < 0)
+                    if (bed.newborn < 0)  // "flags" has not yet been initialized
                     {
                         result.append ("  flags = 0;\n");
                     }
