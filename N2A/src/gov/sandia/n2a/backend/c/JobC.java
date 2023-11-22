@@ -230,7 +230,8 @@ public class JobC extends Thread
             if (lib)
             {
                 makeLibrary (source);
-                job.clear ("status");
+                try {Host.stringToFile ("success", localJobDir.resolve ("finished"));}
+                catch (Exception f) {}
             }
             else
             {
@@ -256,8 +257,8 @@ public class JobC extends Thread
                 if (libPath.isEmpty ()) libPath = null;
 
                 env.submitJob (job, env.clobbersOut (), commands, libPath);
-                job.clear ("status");
             }
+            job.clear ("status");
         }
         catch (Exception e)
         {

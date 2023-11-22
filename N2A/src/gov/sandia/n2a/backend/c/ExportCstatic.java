@@ -113,14 +113,7 @@ public class ExportCstatic implements ExportModel
             }
 
             // Cleanup
-            if (source.getFlag ("$meta", "backend", "c", "keepExportJob"))
-            {
-                Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);
-                try {Host.stringToFile ("success", localJobDir.resolve ("finished"));}
-                catch (Exception f) {}
-                // Because the job is being monitored, its tree node should automatically get updated.
-                return;
-            }
+            if (source.getFlag ("$meta", "backend", "c", "keepExportJob")) return;
             EventQueue.invokeLater (new Runnable ()
             {
                 public void run ()
@@ -137,6 +130,7 @@ public class ExportCstatic implements ExportModel
                     NodeBase selectedNode = (NodeBase) path.getLastPathComponent ();
                     boolean wasShowing =  tabName.equals ("Runs")  &&  selectedNode != null  &&  selectedNode.isNodeAncestor (jobNode);
 
+                    jobNode.complete = 1;  // Fix race condition between job monitor thread and this thread.
                     pr.delete (jobNode);
                     if (wasShowing) mtp.selectTab ("Models");
                 }
@@ -144,7 +138,6 @@ public class ExportCstatic implements ExportModel
         }
         catch (Exception e)
         {
-            // Add job to UI so the user can diagnose C build problems.
             if (job != null)
             {
                 Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), job);

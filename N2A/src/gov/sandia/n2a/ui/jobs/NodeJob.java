@@ -93,6 +93,7 @@ public class NodeJob extends NodeBase
     protected Date    dateFinished    = null;
     protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
     protected double  lastSimTime     = 0;  // Even if expectedSimTime is unknown, we can still compare this to check for progress.
+    protected String  lastStatus      = "";
     protected long    lastMonitored   = 0;
     protected long    lastActive      = 0;
     protected long    died            = 0;  // Marks time when process died. Enables us to wait a little bit for "finished" to be written.
@@ -372,13 +373,15 @@ public class NodeJob extends NodeBase
             else
             {
                 long now = System.currentTimeMillis ();
-                boolean waiting =  complete == 0  &&  (source.get ("queue").startsWith ("PEND")  ||  ! source.get ("status").isBlank ());
+                String status = source.get ("status");
+                boolean waiting =  complete == 0  &&  (source.get ("queue").startsWith ("PEND")  ||  ! status.isBlank ());
                 if (waiting  ||  simulator.isAlive (source))
                 {
-                    if (currentSimTime > lastSimTime)  // Making progress
+                    if (currentSimTime > lastSimTime  ||  ! status.equals (lastStatus))  // Making progress
                     {
                         lastActive  = now;
                         lastSimTime = currentSimTime;
+                        lastStatus  = status;
                     }
                 }
                 else  // Process is dead.
