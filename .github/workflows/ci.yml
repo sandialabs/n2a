@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ '8', '11', '16', '17', '19' ]
+        java: [ '16', '17', '19' ]
         runs-on: [ubuntu-latest, macos-latest, windows-latest]
 
     name: Test on Java ${{ matrix.Java }} on ${{ matrix.runs-on }}
@@ -39,7 +39,6 @@ jobs:
       run: |
         pwd
         ls -alt
-        mvn dependency:tree
         
         # ...
         
@@ -48,6 +47,5 @@ jobs:
       run: |
         pwd
         dir
-        mvn dependency:tree
     
         # ...
