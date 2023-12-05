@@ -276,7 +276,7 @@ Spreadsheet<T>::Spreadsheet (const String & fileName)
 template<class T>
 Spreadsheet<T>::~Spreadsheet ()
 {
-    for (auto s : wb) delete s.second;
+    for (auto & s : wb) delete s.second;
 }
 
 template<class T>

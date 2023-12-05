@@ -476,7 +476,7 @@ public:
     virtual bool isStep () const;  ///< Always returns false, except for instances of EventStep. Used as a poor-man's RTTI in the class More.
 
     virtual void run () = 0;  ///< Does all the work of a simulation cycle. This may be adapted to the specifics of the event type.
-    virtual void visit (std::function<void (Visitor<T> * visitor)> f) = 0;  ///< Applies function to each part associated with this event. May visit multiple parts in parallel using separate threads.
+    virtual void visit (const std::function<void (Visitor<T> * visitor)> & f) = 0;  ///< Applies function to each part associated with this event. May visit multiple parts in parallel using separate threads.
 };
 
 template<class T>
@@ -607,7 +607,7 @@ public:
     virtual bool isStep () const;
 
     virtual void  run     ();
-    virtual void  visit   (std::function<void (Visitor<T> * visitor)> f);
+    virtual void  visit   (const std::function<void (Visitor<T> * visitor)> & f);
     void          requeue ();  ///< Subroutine of run(). If our load of instances is non-empty, then get back in the simulation queue.
     void          enqueue (Part<T> * part);
 };
@@ -629,7 +629,7 @@ public:
     Part<T> * target;
 
     virtual void run   ();
-    virtual void visit (std::function<void (Visitor<T> * visitor)> f);
+    virtual void visit (const std::function<void (Visitor<T> * visitor)> & f);
 };
 
 template<class T>
@@ -646,7 +646,7 @@ public:
     std::vector<Part<T> *> * targets;
 
     virtual void run   ();
-    virtual void visit (std::function<void (Visitor<T> * visitor)> f);
+    virtual void visit (const std::function<void (Visitor<T> * visitor)> & f);
     void setLatch ();
 };
 
@@ -671,7 +671,7 @@ public:
 
     Visitor (Event<T> * event, Part<T> * part = 0);
 
-    virtual void visit (std::function<void (Visitor<T> * visitor)> f); ///< Applies function to each instance on our local queue. Steps "part" through the list and calls f(this) each time.
+    virtual void visit (const std::function<void (Visitor<T> * visitor)> & f); ///< Applies function to each instance on our local queue. Steps "part" through the list and calls f(this) each time.
 };
 
 /**
@@ -687,7 +687,7 @@ public:
     VisitorStep (EventStep<T> * event);
     ~VisitorStep ();  ///< Free any parts still lingering in queue.
 
-    virtual void visit   (std::function<void (Visitor<T> * visitor)> f);
+    virtual void visit   (const std::function<void (Visitor<T> * visitor)> & f);
     virtual void enqueue (Part<T> * newPart);  ///< Puts newPart on our local queue. Called by EventStep::enqueue(), which balances load across all threads.
 };
 
@@ -697,7 +697,7 @@ class SHARED VisitorSpikeMulti : public Visitor<T>
 public:
     VisitorSpikeMulti (EventSpikeMulti<T> * event);
 
-    virtual void visit (std::function<void (Visitor<T> * visitor)> f);
+    virtual void visit (const std::function<void (Visitor<T> * visitor)> & f);
 };
 
 // TODO: This implementation using std::map is quite inefficient in both memory and time.

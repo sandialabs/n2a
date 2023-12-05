@@ -1889,7 +1889,7 @@ EventStep<T>::run ()
 
 template<class T>
 void
-EventStep<T>::visit (std::function<void (Visitor<T> * visitor)> f)
+EventStep<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 {
     visitors[0]->visit (f);
 }
@@ -1938,7 +1938,7 @@ EventSpikeSingle<T>::run ()
 
 template<class T>
 void
-EventSpikeSingle<T>::visit (std::function<void (Visitor<T> * visitor)> f)
+EventSpikeSingle<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 {
     Visitor<T> v (this, target);
     f (&v);
@@ -1981,7 +1981,7 @@ EventSpikeMulti<T>::run ()
 
 template<class T>
 void
-EventSpikeMulti<T>::visit (std::function<void (Visitor<T> * visitor)> f)
+EventSpikeMulti<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 {
     VisitorSpikeMulti<T> v (this);
     v.visit (f);
@@ -2033,7 +2033,7 @@ Visitor<T>::Visitor (Event<T> * event, Part<T> * part)
 
 template<class T>
 void
-Visitor<T>::visit (std::function<void (Visitor<T> * visitor)> f)
+Visitor<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 {
     f (this);
 }
@@ -2065,7 +2065,7 @@ VisitorStep<T>::~VisitorStep ()
 
 template<class T>
 void
-VisitorStep<T>::visit (std::function<void (Visitor<T> * visitor)> f)
+VisitorStep<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 {
     previous = &queue;
     while (previous->next)
@@ -2098,7 +2098,7 @@ VisitorSpikeMulti<T>::VisitorSpikeMulti (EventSpikeMulti<T> * event)
 
 template<class T>
 void
-VisitorSpikeMulti<T>::visit (std::function<void (Visitor<T> * visitor)> f)
+VisitorSpikeMulti<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 {
     EventSpikeMulti<T> * e = (EventSpikeMulti<T> *) this->event;
     for (auto target : *e->targets)

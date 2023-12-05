@@ -513,7 +513,7 @@ n2a::MNode::mergeUnder (MNode & that)
     {
         String key = thatChild.key ();
         MNode & c = childGet (key);
-        if (&c == &none) set (thatChild, {key});
+        if (&c == &none) set (thatChild, {std::move (key)});
         else             c.mergeUnder (thatChild);
     }
 }
@@ -1165,7 +1165,7 @@ n2a::MDocGroup::MDocGroup (const char * key)
 n2a::MDocGroup::~MDocGroup ()
 {
     for (MDoc * doc: writeQueue) doc->save ();
-    for (auto c : children) delete c.second;
+    for (auto & c : children) delete c.second;
 }
 
 uint32_t
@@ -1190,7 +1190,7 @@ void
 n2a::MDocGroup::clear ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    for (auto c : children) delete c.second;
+    for (auto & c : children) delete c.second;
     children.clear ();
     writeQueue.clear ();
 }
@@ -1244,7 +1244,7 @@ n2a::MDocGroup::begin ()
     std::lock_guard<std::recursive_mutex> lock (mutex);
     Iterator result (*this);
     result.keys->reserve (children.size ());
-    for (auto c : children) result.keys->push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
+    for (auto & c : children) result.keys->push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
     return result;
 }
 
@@ -1444,7 +1444,7 @@ n2a::MDir::load ()
         const String & key = doc->key ();
         newChildren[key] = children[key];
     }
-    children = newChildren;
+    children = std::move (newChildren);
 
     loaded = true;
 }
@@ -1669,7 +1669,7 @@ n2a::Schema2::read (MNode & node, LineReader & reader, int whitespaces)
         {
             reader.getNextLine ();
         }
-        MNode & child = node.set (hasValue ? value.c_str () : nullptr, {key});  // Create a child with the given value
+        MNode & child = node.set (hasValue ? value.c_str () : nullptr, {std::move (key)});  // Create a child with the given value
         if (reader.whitespaces > whitespaces) read (child, reader, reader.whitespaces);  // Recursively populate child. When this call returns, reader.whitespaces <= whitespaces in this function, because that is what ends the recursion.
         if (reader.whitespaces < whitespaces) return;  // end recursion
     }

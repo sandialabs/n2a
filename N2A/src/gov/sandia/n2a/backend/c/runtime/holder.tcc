@@ -1869,8 +1869,8 @@ template<class T>
 Mfile<T>::~Mfile ()
 {
     if (doc) delete doc;
-    for (auto m : matrices)  if (m.second) delete m.second;
-    for (auto k : childKeys) if (k.second) delete k.second;
+    for (auto & m : matrices)  if (m.second) delete m.second;
+    for (auto & k : childKeys) if (k.second) delete k.second;
 }
 
 std::vector<String>
@@ -2721,7 +2721,7 @@ OutputHolder<T>::writeTrace ()
         if (! raw)
         {
             std::vector<String> headers (count);
-            for (auto it : columnMap) headers[it.second] = it.first;
+            for (auto & it : columnMap) headers[it.second] = it.first;
 
             (*out) << headers[0];  // Should be $t
             int i = 1;
@@ -2770,12 +2770,12 @@ OutputHolder<T>::writeModes ()
 {
     std::ofstream mo (columnFileName.c_str ());
     mo << "N2A.schema=3\n";
-    for (auto it : columnMap)
+    for (auto & it : columnMap)
     {
         int i = it.second;
         mo << i << ":" << it.first << "\n";
         auto mode = columnMode[i];
-        for (auto nv : *mode) mo << " " << nv.first << ":" << nv.second << "\n";
+        for (auto & nv : *mode) mo << " " << nv.first << ":" << nv.second << "\n";
     }
     // mo should automatically flush and close here
 }
