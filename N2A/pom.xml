@@ -74,7 +74,8 @@
                     <execution>
                         <id>javacc</id>
                         <goals>
-                            <goal>jjtree-javacc</goal>
+							<!-- Should use jjtree-javac here, but that goal does not handle outputDirectory correctly. -->
+                            <goal>jjtree</goal>
                             <goal>javacc</goal>
                         </goals>
                         <configuration>
@@ -87,7 +88,7 @@
                     <dependency>
                         <groupId>net.java.dev.javacc</groupId>
                         <artifactId>javacc</artifactId>
-                        <version>7.0.12</version>
+                        <version>7.0.13</version>
                     </dependency>
                 </dependencies>
             </plugin>
@@ -109,7 +110,7 @@
         								<artifactId>javacc-maven-plugin</artifactId>
         								<versionRange>[3.0.3,)</versionRange>
         								<goals>
-        									<goal>jjtree-javacc</goal>
+        									<goal>jjtree</goal>
         									<goal>javacc</goal>
         								</goals>
         							</pluginExecutionFilter>
