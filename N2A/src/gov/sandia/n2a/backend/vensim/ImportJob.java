@@ -150,10 +150,10 @@ public class ImportJob
         }
 
         // Process subscript ranges
-        for (SubscriptRange sr : subscriptRanges.values ()) sr.expand ();
+        for (SubscriptRange    sr : subscriptRanges   .values ()) sr.expand ();
         for (SubscriptVariable sv : subscriptVariables.values ()) sv.resolve ();  // May add new subscript ranges.
-        for (SubscriptRange sr : subscriptRanges.values ()) sr.determineSubrange ();
-        for (SubscriptRange sr : subscriptRanges.values ()) sr.collapseSubrange ();
+        for (SubscriptRange    sr : subscriptRanges   .values ()) sr.determineSubrange ();
+        for (SubscriptRange    sr : subscriptRanges   .values ()) sr.collapseSubrange ();
         boolean changed = true;
         while (changed)
         {
@@ -181,7 +181,7 @@ public class ImportJob
 
         public Equation (String group, String expression, String unit, String notes)
         {
-            this.unit  = unit;
+            this.unit  = convertUnit (unit);
             this.notes = notes;
 
             List<Node> tokens = lex (expression);
@@ -205,6 +205,13 @@ public class ImportJob
 
             parse (LHS);
             parse (RHS);
+
+            // Special case for constants. Append unit.
+            if (RHS.size () == 1)
+            {
+                Node n = RHS.get (0);
+                if (n.type == Node.NUMBER) n.value += this.unit;
+            }
         }
 
         public boolean processSubscript ()
@@ -313,6 +320,9 @@ public class ImportJob
             return true;
         }
 
+        /**
+            The primary function that converts the Vensim model into an MNode tree.
+        **/
         public void process ()
         {
             String name  = concatenate (LHS);
@@ -331,12 +341,12 @@ public class ImportJob
                     // Trap simulation control variables
                     if (name.equals ("FINAL TIME"))
                     {
-                        model.set ("$t<" + value + convertUnit (unit), "$p");
+                        model.set ("$t<" + value, "$p");
                         break;
                     }
                     if (name.equals ("TIME STEP"))
                     {
-                        model.set (value + convertUnit (unit), "$t'");
+                        model.set (value, "$t'");
                         break;
                     }
                     if (name.equals ("SAVEPER")  ||  name.equals ("INITIAL TIME")) break;
@@ -360,6 +370,33 @@ public class ImportJob
                     break;
             }
         }
+
+        public String concatenate (List<Node> tokens)
+        {
+            String result = "";
+            for (Node t : tokens) result += t.toString ();
+            return result;
+        }
+
+        public void render (List<Node> RHS, SubscriptPart subscriptPart, String key, String condition)
+        {
+            if (RHS.size () == 1)
+            {
+                Node a = RHS.get (0);
+                if (a instanceof Bracket)
+                {
+                    String result = a.render (subscriptPart, true, key);
+                    MNode node = subscriptPart.part.childOrEmpty (key);
+                    if (result.isEmpty ()  &&  node.isEmpty ()) subscriptPart.part.clear (key);
+                    else                                        subscriptPart.addCondition (key, result, condition);
+                    return;
+                }
+            }
+
+            String result = "";
+            for (Node t : RHS) result += t.render (subscriptPart, false, key);
+            subscriptPart.addCondition (key, result, condition);
+        }
     }
 
     public class PrettyPrinter extends Renderer
@@ -371,9 +408,7 @@ public class ImportJob
                 Constant c = (Constant) op;
                 if (c.value instanceof Scalar)
                 {
-                    UnitValue uv = c.unitValue;
-                    result.append (Scalar.print (uv.value));
-                    if (uv.unit != null) result.append (UnitValue.UCUM.format (uv.unit));
+                    result.append (c.unitValue.toString ());
                     return true;
                 }
             }
@@ -1070,33 +1105,6 @@ public class ImportJob
         {
             model.set (A, name);
         }
-    }
-
-    public String concatenate (List<Node> tokens)
-    {
-        String result = "";
-        for (Node t : tokens) result += t.toString ();
-        return result;
-    }
-
-    public void render (List<Node> RHS, SubscriptPart subscriptPart, String key, String condition)
-    {
-        if (RHS.size () == 1)
-        {
-            Node a = RHS.get (0);
-            if (a instanceof Bracket)
-            {
-                String result = a.render (subscriptPart, true, key);
-                MNode node = subscriptPart.part.childOrEmpty (key);
-                if (result.isEmpty ()  &&  node.isEmpty ()) subscriptPart.part.clear (key);
-                else                                        subscriptPart.addCondition (key, result, condition);
-                return;
-            }
-        }
-
-        String result = "";
-        for (Node t : RHS) result += t.render (subscriptPart, false, key);
-        subscriptPart.addCondition (key, result, condition);
     }
 
     public static String uniqueKey (MNode parent, String key)
@@ -1861,6 +1869,28 @@ public class ImportJob
         {
             for (String f : m.from) unit = unit.replace (f, m.to);
         }
-        return unit.trim ();
+
+        try
+        {
+            return UnitValue.safeUnit (UnitValue.UCUM.parse (unit));
+        }
+        catch (Exception e) {}
+
+        // Hack for complex units.
+        // The assumption is that the unit consists of an arbitrary unit over time.
+        // Since we don't process arbitrary units, we throw that part away and keep time.
+        int pos = unit.indexOf ('/');
+        if (pos >= 0)
+        {
+            unit = unit.substring (pos);  // includes the slash
+            try
+            {
+                return UnitValue.safeUnit (UnitValue.UCUM.parse (unit));
+            }
+            catch (Exception e) {}
+        }
+
+        // At this point, the unit is beyond hope.
+        return "";
     }
 }
