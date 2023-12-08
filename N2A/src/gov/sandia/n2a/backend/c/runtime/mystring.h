@@ -765,7 +765,7 @@ inline String join (const String & delimiter, const std::vector<String> & elemen
     int count = elements.size ();
     if (count == 0) return "";
     int total = (count - 1) * delimiter.size ();
-    for (auto e : elements) total += e.size ();
+    for (auto & e : elements) total += e.size ();
     String result;
     result.reserve (total);
     result = elements[0];

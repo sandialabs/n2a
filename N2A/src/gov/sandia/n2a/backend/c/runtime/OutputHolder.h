@@ -244,7 +244,7 @@ public:
             if (! raw)
             {
                 std::vector<std::string> headers (count);
-                for (auto it : columnMap) headers[it.second] = it.first;
+                for (auto & it : columnMap) headers[it.second] = it.first;
 
                 (*out) << headers[0];  // Should be $t
                 int i = 1;
@@ -290,12 +290,12 @@ public:
     {
         std::ofstream mo (columnFileName.c_str ());
         mo << "N2A.schema=3\n";
-        for (auto it : columnMap)
+        for (auto & it : columnMap)
         {
             int i = it.second;
             mo << i << ":" << it.first << "\n";
             auto mode = columnMode[i];
-            for (auto nv : *mode) mo << " " << nv.first << ":" << nv.second << "\n";
+            for (auto & nv : *mode) mo << " " << nv.first << ":" << nv.second << "\n";
         }
         // mo should automatically flush and close here
     }
