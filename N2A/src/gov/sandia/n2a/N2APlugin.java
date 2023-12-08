@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -98,18 +98,18 @@ public class N2APlugin extends Plugin
             Windows.factory (),
             RemoteUnix.factory (),
             RemoteSlurm.factory (),
-            RemoteLSF.factory ()
+            RemoteLSF.factory (),
+            new ExportNative (),
+            gov.sandia.n2a.ui.ref.PanelSearch.exportBibTeX,
+            new ImportNative (),
+            new ImportBibTeX (),
+            new ImportEndNote (),
+            new ImportPubMed (),
+            new ImportRIS ()
         );
         if (! AppData.properties.getBoolean ("headless"))
         {
             Collections.addAll (result,
-                new ExportNative (),
-                gov.sandia.n2a.ui.ref.PanelSearch.exportBibTeX,
-                new ImportNative (),
-                new ImportBibTeX (),
-                new ImportEndNote (),
-                new ImportPubMed (),
-                new ImportRIS (),
                 new ActivityModel (),
                 new ActivityRun (),
                 new ActivityReference (),

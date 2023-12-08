@@ -96,7 +96,7 @@ public class NodeInherit extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddInherit");
+            boolean canceled = MainFrame.undoManager.getPresentationName ().equals ("AddInherit");
             delete (canceled);
             return;
         }
@@ -121,7 +121,7 @@ public class NodeInherit extends NodeBase
             return;
         }
 
-        MainFrame.instance.undoManager.apply (new ChangeInherit (this, value));
+        MainFrame.undoManager.apply (new ChangeInherit (this, value));
     }
 
     @Override

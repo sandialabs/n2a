@@ -601,6 +601,11 @@ public abstract class Host
         return false;
     }
 
+    public String shellSuffix ()
+    {
+        return "";
+    }
+
     public class ProcessInfo
     {
         public long   pid;

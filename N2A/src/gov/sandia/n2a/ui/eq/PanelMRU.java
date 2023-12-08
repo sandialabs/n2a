@@ -144,7 +144,7 @@ public class PanelMRU extends JPanel
             protected void exportDone (JComponent source, Transferable data, int action)
             {
                 list.clearSelection ();
-                MainFrame.instance.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
+                MainFrame.undoManager.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
             }
         });
 

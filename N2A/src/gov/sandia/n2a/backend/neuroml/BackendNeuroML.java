@@ -68,7 +68,7 @@ public class BackendNeuroML extends Backend
                 Host env = Host.get (job);
                 Path jobDir = Host.getJobDir (env.getResourceDir (), job);
                 Path modelPath = jobDir.resolve ("model.nml");
-                ExportJob exportJob = PluginNeuroML.exporter.export (doc, modelPath, true);
+                ExportJob exportJob = PluginNeuroML.exporter.process (doc, modelPath, true);
 
                 // Record metadata
                 if (! exportJob.duration.isEmpty ()) job.set (exportJob.duration, "duration");

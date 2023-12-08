@@ -1,5 +1,5 @@
 /*
-Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,7 +21,7 @@ import gov.sandia.n2a.ui.ref.undo.AddEntry;
 public abstract class ImportBibliography implements Import
 {
     @Override
-    public void process (Path path)
+    public void process (Path path, String name)
     {
         try (BufferedReader reader = Files.newBufferedReader (path))
         {
@@ -31,7 +31,7 @@ public abstract class ImportBibliography implements Import
             for (MNode n : data)  // data can contain several entries
             {
                 String key = MDir.validFilenameFrom (n.key ());
-                MainFrame.instance.undoManager.apply (new AddEntry (key, n));
+                MainFrame.undoManager.apply (new AddEntry (key, n));
             }
         }
         catch (IOException e)

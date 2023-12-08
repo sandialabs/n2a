@@ -532,7 +532,7 @@ public class NodeVariable extends NodeContainer
     public void applyEdit (JTree tree)
     {
         String input = toString ();
-        UndoManager um = MainFrame.instance.undoManager;
+        UndoManager um = MainFrame.undoManager;
         boolean added = um.getPresentationName ().equals ("AddVariable noname");
         if (input.isEmpty ())
         {

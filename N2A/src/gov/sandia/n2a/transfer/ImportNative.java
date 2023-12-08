@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -26,13 +26,19 @@ public class ImportNative implements ImportModel
     }
 
     @Override
-    public void process (Path source)
+    public void process (Path source, String name)
     {
+        if (name == null)
+        {
+            name = source.getFileName ().toString ();
+            if (name.endsWith (".n2a")) name = name.substring (0, name.length () - 4);
+        }
+
         try (BufferedReader reader = Files.newBufferedReader (source))
         {
             MVolatile doc = new MVolatile ();
             Schema.readAll (doc, reader);
-            MainFrame.instance.undoManager.apply (new AddDoc (source.getFileName ().toString (), doc));
+            MainFrame.undoManager.apply (new AddDoc (name, doc));
         }
         catch (IOException e)
         {

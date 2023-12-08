@@ -172,6 +172,13 @@ public class ExportJob extends XMLutility
 
         if (! errors.isEmpty ())
         {
+            if (AppData.properties.getFlag ("headless"))
+            {
+                System.err.println ("Export completed with warnings");
+                System.err.println (errors);
+                return;
+            }
+
             JTextArea textArea = new JTextArea (errors);
             JScrollPane scrollPane = new JScrollPane (textArea);
             scrollPane.setPreferredSize (new java.awt.Dimension (640, 480));

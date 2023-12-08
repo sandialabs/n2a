@@ -106,7 +106,7 @@ public class PanelMRU extends JPanel
                 // Note that the output is a BibTeX entry, not the usual N2A schema.
                 try (StringWriter writer = new StringWriter ())
                 {
-                    PanelSearch.exportBibTeX.export (references, writer);
+                    PanelSearch.exportBibTeX.process (references, writer);
                     writer.close ();
                     return new TransferableReference (writer.toString (), key);
                 }

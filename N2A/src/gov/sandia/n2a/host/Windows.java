@@ -280,6 +280,12 @@ public class Windows extends Host
         }
     }
 
+    @Override
+    public String shellSuffix ()
+    {
+        return ".bat";
+    }
+
     public void deleteTree (Path start)
     {
         // Hack to deal with file locks held by NIO.

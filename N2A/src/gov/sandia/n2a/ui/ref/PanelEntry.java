@@ -43,9 +43,7 @@ import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.io.StringReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -64,7 +62,6 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -223,7 +220,7 @@ public class PanelEntry extends JPanel
         {
             public void actionPerformed (ActionEvent evt)
             {
-                try {MainFrame.instance.undoManager.undo ();}
+                try {MainFrame.undoManager.undo ();}
                 catch (CannotUndoException e) {}
                 catch (CannotRedoException e) {}
             }
@@ -232,7 +229,7 @@ public class PanelEntry extends JPanel
         {
             public void actionPerformed (ActionEvent evt)
             {
-                try {MainFrame.instance.undoManager.redo();}
+                try {MainFrame.undoManager.redo();}
                 catch (CannotUndoException e) {}
                 catch (CannotRedoException e) {}
             }
@@ -255,7 +252,7 @@ public class PanelEntry extends JPanel
             }
         });
 
-        gov.sandia.n2a.ui.UndoManager um = MainFrame.instance.undoManager;
+        gov.sandia.n2a.ui.UndoManager um = MainFrame.undoManager;
         table.setTransferHandler (new TransferHandler ()
         {
             public boolean canImport (TransferSupport xfer)
@@ -408,7 +405,7 @@ public class PanelEntry extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                MainFrame.instance.undoManager.apply (new AddEntry ());
+                MainFrame.undoManager.apply (new AddEntry ());
             }
         });
 
@@ -477,14 +474,14 @@ public class PanelEntry extends JPanel
     {
         if (model.record == null)
         {
-            MainFrame.instance.undoManager.apply (new AddEntry ());
+            MainFrame.undoManager.apply (new AddEntry ());
         }
         else if (! model.locked)
         {
             int row = table.getSelectedRow ();
             if (row < 0) row = model.keys.size ();
             if (row < 3) row = 3;  // keep id, form and title at the top
-            MainFrame.instance.undoManager.apply (new AddTag (model.record, row));
+            MainFrame.undoManager.apply (new AddTag (model.record, row));
         }
     }
 
@@ -494,7 +491,7 @@ public class PanelEntry extends JPanel
         int row = table.getSelectedRow ();
         if (row < 3) return;  // Protect id, form and title
         String tag = model.keys.get (row);
-        MainFrame.instance.undoManager.apply (new DeleteTag (model.record, tag));
+        MainFrame.undoManager.apply (new DeleteTag (model.record, tag));
     }
 
     /**
@@ -564,39 +561,27 @@ public class PanelEntry extends JPanel
 
             // Display chooser and collect result
             int result = fc.showSaveDialog (MainFrame.instance);
+            if (result != JFileChooser.APPROVE_OPTION) return;
 
             // Do export
-            if (result == JFileChooser.APPROVE_OPTION)
+            Path path = fc.getSelectedFile ().toPath ();
+            ExporterFilter filter = (ExporterFilter) fc.getFileFilter ();
+            Thread t = new Thread ()
             {
-                Path path = fc.getSelectedFile ().toPath ();
-                ExporterFilter filter = (ExporterFilter) fc.getFileFilter ();
-                try
+                public void run ()
                 {
-                    filter.exporter.export (model.record, path);
-                }
-                catch (Exception error)
-                {
-                    File crashdump = new File (AppData.properties.get ("resourceDir"), "crashdump");
                     try
                     {
-                        PrintStream err = new PrintStream (crashdump);
-                        error.printStackTrace (err);
-                        err.close ();
+                        filter.exporter.process (model.record, path);
                     }
-                    catch (FileNotFoundException fnfe) {}
-
-                    JOptionPane.showMessageDialog
-                    (
-                        MainFrame.instance,
-                        "<html><body><p style='width:300px'>"
-                        + error.getMessage () + " Exception has been recorded in "
-                        + crashdump.getAbsolutePath ()
-                        + "</p></body></html>",
-                        "Export Failed",
-                        JOptionPane.WARNING_MESSAGE
-                    );
+                    catch (Exception error)
+                    {
+                        PanelModel.fileImportExportException ("Export", error);
+                    }
                 }
-            }
+            };
+            t.setDaemon (true);
+            t.start ();
         }
     };
 
@@ -644,13 +629,26 @@ public class PanelEntry extends JPanel
 
             // Display chooser and collect result
             int result = fc.showOpenDialog (MainFrame.instance);
+            if (result != JFileChooser.APPROVE_OPTION) return;
 
             // Do import
-            if (result == JFileChooser.APPROVE_OPTION)
+            Thread t = new Thread ()
             {
-                Path path = fc.getSelectedFile ().toPath ();
-                PanelModel.importFile (path);  // This works for references too.
-            }
+                public void run ()
+                {
+                    try
+                    {
+                        Path path = fc.getSelectedFile ().toPath ();
+                        PanelModel.importFile (path);  // This works for references too.
+                    }
+                    catch (Exception error)
+                    {
+                        PanelModel.fileImportExportException ("Import", error);
+                    }
+                }
+            };
+            t.setDaemon (true);
+            t.start ();
         }
     };
 
@@ -846,7 +844,7 @@ public class PanelEntry extends JPanel
                 if (newValue.equals (tag)) return;  // nothing to do
                 if (newValue.isEmpty ())  // tag is deleted. Most likely it was a new tag the user changed their mind about, but could also be an old tag.
                 {
-                    MainFrame.instance.undoManager.apply (new DeleteTag (record, tag));
+                    MainFrame.undoManager.apply (new DeleteTag (record, tag));
                     return;
                 }
                 if (record.child (newValue) != null) return;  // not allowed, because another tag with that name already exists
@@ -854,7 +852,7 @@ public class PanelEntry extends JPanel
 
                 int exposedRow = keys.indexOf (newValue);   // If non-negative, then we are about to overwrite a standard tag that isn't currently defined.
                 if (isStandardTag (tag)) exposedRow = row;  // About to expose a standard tag (which will become undefined).
-                MainFrame.instance.undoManager.apply (new RenameTag (record, exposedRow, tag, newValue));
+                MainFrame.undoManager.apply (new RenameTag (record, exposedRow, tag, newValue));
             }
             else if (column == 1)  // value change
             {
@@ -865,11 +863,11 @@ public class PanelEntry extends JPanel
                     if (newValue.isEmpty ()) return;  // not allowed
                     newValue = MDir.validFilenameFrom (newValue);
                     if (AppData.docs.child ("references", newValue) != null) return;  // not allowed, because another entry with that id already exists
-                    MainFrame.instance.undoManager.apply (new ChangeEntry (record.key (), newValue));
+                    MainFrame.undoManager.apply (new ChangeEntry (record.key (), newValue));
                 }
                 else
                 {
-                    MainFrame.instance.undoManager.apply (new ChangeTag (record, tag, newValue));
+                    MainFrame.undoManager.apply (new ChangeTag (record, tag, newValue));
                 }
             }
         }

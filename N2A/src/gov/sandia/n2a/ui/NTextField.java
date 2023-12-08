@@ -71,7 +71,7 @@ public class NTextField extends JTextField
                 try
                 {
                     if (undoManager.canUndo ()) undoManager.undo ();
-                    else                        MainFrame.instance.undoManager.undo ();
+                    else                        MainFrame.undoManager.undo ();
                 }
                 catch (CannotUndoException e) {}
             }
@@ -83,7 +83,7 @@ public class NTextField extends JTextField
                 try
                 {
                     if (undoManager.canRedo ()) undoManager.redo();
-                    else                        MainFrame.instance.undoManager.redo ();
+                    else                        MainFrame.undoManager.redo ();
                 }
                 catch (CannotRedoException e) {}
             }

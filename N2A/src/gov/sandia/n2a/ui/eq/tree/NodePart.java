@@ -618,7 +618,7 @@ public class NodePart extends NodeContainer
                 if (u.candidates.size () == 0) continue;
                 NodePart toPart = u.candidates.get (0);
                 NodeVariable v = (NodeVariable) fromPart.child (u.alias);  // This must exist.
-                MainFrame.instance.undoManager.apply (new ChangeVariable (v, u.alias, toPart.source.key ()));
+                MainFrame.undoManager.apply (new ChangeVariable (v, u.alias, toPart.source.key ()));
                 toPart.connectionTarget = true;
             }
         }
@@ -958,7 +958,7 @@ public class NodePart extends NodeContainer
             return;
         }
 
-        UndoManager um = MainFrame.instance.undoManager;
+        UndoManager um = MainFrame.undoManager;
         if (isTrueRoot ())  // Edits to root cause a rename of the document on disk
         {
             if (name.isEmpty ())

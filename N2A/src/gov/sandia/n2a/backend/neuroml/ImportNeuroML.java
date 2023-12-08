@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -27,7 +27,7 @@ public class ImportNeuroML implements ImportModel
     }
 
     @Override
-    public void process (Path source)
+    public void process (Path source, String name)
     {
         if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMap ();
 
@@ -38,12 +38,16 @@ public class ImportNeuroML implements ImportModel
         MNode mainModel = job.models.child (job.modelName);
         job.models.clear (job.modelName);
 
-        UndoManager um = MainFrame.instance.undoManager;
+        UndoManager um = MainFrame.undoManager;
         um.addEdit (new CompoundEdit ());
         while (job.models.size () > 0) addModel (job.models.iterator ().next (), job.models, um);
         // Save the best for last. That is, ensure that the main model is the one selected in the UI
         // after all add operations are completed.
-        if (mainModel != null) um.apply (new AddDoc (job.modelName, mainModel));
+        if (mainModel != null)
+        {
+            if (name == null) name = job.modelName;
+            um.apply (new AddDoc (name, mainModel));
+        }
         um.endCompoundEdit ();
     }
 

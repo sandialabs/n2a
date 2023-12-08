@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -62,6 +62,7 @@ public class PluginC extends Plugin
 	{
         List<ExtensionPoint> result = new ArrayList<ExtensionPoint> ();
         result.add (new BackendC ());
+        result.add (new ExportCbinary ());
         result.add (new ExportCstatic ());
         result.add (new ExportCshared ());
         if (! AppData.properties.getBoolean ("headless"))

@@ -20,7 +20,7 @@ import gov.sandia.n2a.plugins.extpoints.Export;
 public abstract class ExportBibliography implements Export
 {
     @Override
-    public void export (MNode document, Path destination) throws Exception
+    public void process (MNode document, Path destination) throws Exception
     {
         MNode references = new MVolatile ();
         if (document.child ("$meta") == null  &&  document.child ("form") != null)  // document is a reference.
@@ -68,11 +68,18 @@ public abstract class ExportBibliography implements Export
             }
         }
 
+        String name = destination.getFileName ().toString ();
+        int pos = name.lastIndexOf ('.');
+        if (pos > 0) name = name.substring (0, pos);
+        name += suffix ();
+        destination = destination.getParent ().resolve (name);
+
         try (Writer writer = Files.newBufferedWriter (destination))
         {
-            export (references, writer);
+            process (references, writer);
         }
     }
 
-    public abstract void export (MNode references, Writer writer) throws IOException;
+    public abstract void process (MNode references, Writer writer) throws IOException;
+    public abstract String suffix ();
 }

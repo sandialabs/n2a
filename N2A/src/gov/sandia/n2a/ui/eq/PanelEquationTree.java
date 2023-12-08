@@ -912,7 +912,7 @@ public class PanelEquationTree extends JScrollPane
         }
 
         // Create transaction
-        UndoManager um = MainFrame.instance.undoManager;
+        UndoManager um = MainFrame.undoManager;
         CompoundEditView compound = null;
         int count = selection.size ();
         boolean multi = count > 1;
@@ -957,7 +957,7 @@ public class PanelEquationTree extends JScrollPane
 
         if (clearOthers) findExistingWatches (container.root, variables);
 
-        UndoManager um = MainFrame.instance.undoManager;
+        UndoManager um = MainFrame.undoManager;
         CompoundEditView compound = null;
         boolean multi = variables.size () > 1;
         if (multi) um.addEdit (compound = new CompoundEditView (CompoundEditView.CLEAR_TREE));
@@ -1043,7 +1043,7 @@ public class PanelEquationTree extends JScrollPane
                 NodeBase nodeAfter = (NodeBase) model.getChild (parent, indexAfter);
                 indexBefore = parent.getIndex (nodeBefore);
                 indexAfter  = parent.getIndex (nodeAfter);
-                MainFrame.instance.undoManager.apply (new ChangeOrder ((NodePart) parent, indexBefore, indexAfter));
+                MainFrame.undoManager.apply (new ChangeOrder ((NodePart) parent, indexBefore, indexAfter));
             }
         }
     }
@@ -1071,7 +1071,7 @@ public class PanelEquationTree extends JScrollPane
         data.clear ("$meta", "gui", "bounds");
 
         // Create transaction
-        UndoManager um = MainFrame.instance.undoManager;
+        UndoManager um = MainFrame.undoManager;
         um.addEdit (new CompoundEdit ());
         AddDoc a = new AddDoc (part.source.key (), data);
         a.setSilent ();  // Necessary so that focus stays on part. Outsource ctor examines focus.

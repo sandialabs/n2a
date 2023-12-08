@@ -477,7 +477,7 @@ public class NodeBase extends DefaultMutableTreeNode
     public NodeBase add (String type, JTree tree, MNode data, Point2D.Double location)
     {
         Undoable u = makeAdd (type, tree, data, location);
-        if (u != null) MainFrame.instance.undoManager.apply (u);
+        if (u != null) MainFrame.undoManager.apply (u);
         if (u instanceof AddEditable) return ((AddEditable) u).getCreatedNode ();
         return null;
     }
@@ -500,7 +500,7 @@ public class NodeBase extends DefaultMutableTreeNode
     public void delete (boolean canceled)
     {
         Undoable u = makeDelete (canceled);
-        if (u != null) MainFrame.instance.undoManager.apply (u);
+        if (u != null) MainFrame.undoManager.apply (u);
     }
 
     public Undoable makeDelete (boolean canceled)

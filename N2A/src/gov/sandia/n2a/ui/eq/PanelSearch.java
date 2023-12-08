@@ -142,7 +142,7 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
         tree.addTreeSelectionListener (this);
         //tree.putClientProperty ("JTree.lineStyle", "None");  // Get rid of lines that connect children to parents. Also need to hide handles, but that is more difficult (no option in JTree).
 
-        UndoManager um = MainFrame.instance.undoManager;
+        UndoManager um = MainFrame.undoManager;
 
         InputMap inputMap = tree.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
@@ -280,9 +280,23 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
                     {
                         @SuppressWarnings("unchecked")
                         List<File> files = (List<File>) xferable.getTransferData (DataFlavor.javaFileListFlavor);
+                        Exception error = null;
                         um.addEdit (new CompoundEdit ());  // in case there is more than one file
-                        for (File file : files) PanelModel.importFile (file.toPath ());
+                        // Ideally this would be on a separate thread, but since we are modifying a compound edit,
+                        // we need to stay on EDT.
+                        for (File file : files)
+                        {
+                            try
+                            {
+                                PanelModel.importFile (file.toPath ());
+                            }
+                            catch (Exception e)
+                            {
+                                error = e;
+                            }
+                        }
                         um.endCompoundEdit ();
+                        if (error != null) PanelModel.fileImportExportException ("Import", error);
                         return true;
                     }
                     else if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))
@@ -501,7 +515,7 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
         if (lastConnection == null) return;
 
         // Ensure that we just added a part.
-        UndoManager um = MainFrame.instance.undoManager;
+        UndoManager um = MainFrame.undoManager;
         UndoableEdit ue = um.editToBeUndone ();
         if (! (ue instanceof AddPart)) return;
 
@@ -1343,7 +1357,7 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
                     }
 
                     AddPart ap = new AddPart (parent, parent.getChildCount (), data, c);
-                    MainFrame.instance.undoManager.apply (ap);
+                    MainFrame.undoManager.apply (ap);
                     if (newRoot.getChildCount () > 1) lastConnection = ap.getCreatedNode ().getKeyPath ();
                 }
             });

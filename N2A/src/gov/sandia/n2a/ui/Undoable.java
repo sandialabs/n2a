@@ -1,5 +1,5 @@
 /*
-Copyright 2016,2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,7 +16,7 @@ public class Undoable implements UndoableEdit
 {
     protected boolean   hasBeenDone = false;  // In the original AbstractUndoableEdit class, this was initialized true. We set it false and expect the caller to run redo() during creation of this object.
     protected boolean   alive       = true;
-    public    Component tab         = MainFrame.instance.tabs.getSelectedComponent ();
+    public    Component tab         = MainFrame.instance == null ? null : MainFrame.instance.tabs.getSelectedComponent ();
 
     public void die ()
     {

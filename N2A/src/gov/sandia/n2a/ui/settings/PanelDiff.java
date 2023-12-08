@@ -1,5 +1,5 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -69,7 +69,7 @@ public class PanelDiff extends JTree
             {
                 if (lastDelta.deleted)  // Force document to be restored in full, rather than allowing targeted undelete.
                 {
-                    MainFrame.instance.undoManager.apply (container.new RevertDelta (lastDelta));
+                    MainFrame.undoManager.apply (container.new RevertDelta (lastDelta));
                     return;
                 }
 
@@ -90,11 +90,11 @@ public class PanelDiff extends JTree
                 // Guard against deleting entire document. Such changes must be relegated to RevertDelta.
                 if (lastDelta.untracked  &&  p == root)
                 {
-                    MainFrame.instance.undoManager.apply (container.new RevertDelta (lastDelta));
+                    MainFrame.undoManager.apply (container.new RevertDelta (lastDelta));
                     return;
                 }
 
-                if (n != null) MainFrame.instance.undoManager.apply (new RevertDiff (n));
+                if (n != null) MainFrame.undoManager.apply (new RevertDiff (n));
             }
         });
 

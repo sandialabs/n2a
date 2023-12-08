@@ -16,10 +16,15 @@ import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
+import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Export;
+import gov.sandia.n2a.plugins.extpoints.ExportModel;
+import gov.sandia.n2a.plugins.extpoints.ShutdownHook;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.PanelEquations;
+import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
 import gov.sandia.n2a.ui.jobs.OutputParser.Column;
@@ -41,6 +46,7 @@ import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 import javax.swing.JFrame;
@@ -56,26 +62,32 @@ public class Main
         ArrayList<Path>   pluginDirs       = new ArrayList<Path> ();
         MNode record = new MVolatile ();
         String headless = "";
+        String format = null;
+        Path path = null;
         for (String arg : args)
         {
             if      (arg.startsWith ("-plugin="    )) pluginClassNames.add            (arg.substring (8));
             else if (arg.startsWith ("-pluginDir=" )) pluginDirs      .add (Paths.get (arg.substring (11)).toAbsolutePath ());
             else if (arg.startsWith ("-param="     )) processParamFile (arg.substring (7), record);
-            else if (arg.startsWith ("-install"    )) headless = "install";
-            else if (arg.startsWith ("-csv"        )) record.set (true, "$meta", "csv");
-            else if (arg.startsWith ("-run="))
-            {
-                MNode temp = new MVolatile ("", arg.substring (5));
-                temp.merge (record);
-                record = temp;
-                headless = "run";
-            }
-            else if (arg.startsWith ("-study="))
+            else if (arg.equals     ("-install"    )) headless = "install";
+            else if (arg.equals     ("-csv"        )) record.set (true, "$meta", "csv");
+            else if (arg.equals     ("-run"        )) headless = "run";
+            else if (arg.equals     ("-study"      )) headless = "study";
+            else if (arg.startsWith ("-export"     )) headless = "export";
+            else if (arg.startsWith ("-import"     )) headless = "import";
+            else if (arg.startsWith ("-model="     ))
             {
                 MNode temp = new MVolatile ("", arg.substring (7));
                 temp.merge (record);
                 record = temp;
-                headless = "study";
+            }
+            else if (arg.startsWith ("-file="))
+            {
+                path = Paths.get (arg.substring (6));
+            }
+            else if (arg.startsWith ("-format="))
+            {
+                format = arg.substring (8);
             }
             else if (! arg.startsWith ("-"))
             {
@@ -110,28 +122,47 @@ public class Main
 
         if (! headless.isEmpty ())
         {
-            if      (headless.equals ("run"    )) runHeadless   (record);
-            else if (headless.equals ("study"  )) studyHeadless (record);
-            else if (headless.equals ("install"))
+            switch (headless)
             {
-                try
-                {
-                    JobC jobC = new JobC (new MVolatile ());
-                    jobC.runtimeDir = resourceDir.resolve ("backend").resolve ("c");
-                    jobC.unpackRuntime ();
+                case "run":
+                    runHeadless (record);
+                    break;
+                case "study":
+                    studyHeadless (record);
+                    break;
+                case "import":
+                    String name = record.key ();
+                    if (name.isBlank ()) name = null;
+                    importHeadless (path, format, name);
+                    break;
+                case "export":
+                    exportHeadless (record, format, path);
+                    break;
+                case "install":
+                    try
+                    {
+                        JobC jobC = new JobC (new MVolatile ());
+                        jobC.runtimeDir = resourceDir.resolve ("backend").resolve ("c");
+                        jobC.unpackRuntime ();
 
-                    JobPython jobPython = new JobPython ();
-                    jobPython.runtimeDir = resourceDir.resolve ("backend").resolve ("python");
-                    jobPython.unpackRuntime ();
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace ();
-                    System.err.println ("Failed to unpack runtime resources.");
-                }
-
-                AppData.quit ();  // Flush new DB data.
+                        JobPython jobPython = new JobPython ();
+                        jobPython.runtimeDir = resourceDir.resolve ("backend").resolve ("python");
+                        jobPython.unpackRuntime ();
+                    }
+                    catch (Exception e)
+                    {
+                        e.printStackTrace ();
+                        System.err.println ("Failed to unpack runtime resources.");
+                    }
+                    break;
             }
+
+            // Save all data and exit.
+            // See MainFrame window close listener
+            AppData.quit ();
+            List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (ShutdownHook.class);
+            for (ExtensionPoint exp : exps) ((ShutdownHook) exp).shutdown ();
+            Host.quit ();  // Close down any ssh sessions.
             return;
         }
 
@@ -298,7 +329,7 @@ public class Main
         MPart collated = new MPart (record);
         if (! collated.containsKey ("study")) return;
 
-        // Start host monitor threads (see PanelRun constructor for non-headless procedure)
+        // Start host monitor threads (see PanelRun constructor for GUI procedure)
         Host.restartAssignmentThread ();
         for (Host h : Host.getHosts ()) h.restartMonitorThread ();
 
@@ -352,10 +383,75 @@ public class Main
                 e.printStackTrace ();
             }
         }
+    }
 
-        // See MainFrame window close listener
-        AppData.quit (); // Save any modified data, particularly the study record.
-        Host.quit ();    // Close down any ssh sessions.
+    public static void importHeadless (Path path, String format, String name)
+    {
+        if (path == null)
+        {
+            System.err.println ("Import requires at least the path to the source file.");
+            return;
+        }
+        if (! path.isAbsolute ()) path = Paths.get (System.getProperty ("user.dir")).resolve (path);
+
+        try
+        {
+            PanelModel.importFile (path, format, name);
+        }
+        catch (Exception e)
+        {
+            System.err.println ("Import failed");
+            e.printStackTrace();
+        }
+    }
+
+    public static void exportHeadless (MNode record, String format, Path path)
+    {
+        // See PanelEquations.listenerExport(). The code here is highly stripped down because we're not dealing with a GUI.
+        String key = record.key ();
+        MNode doc = AppData.docs.childOrEmpty ("models", key);
+        record.mergeUnder (doc);
+
+        if (format == null) format = "";
+        if (path == null)
+        {
+            path = Paths.get (System.getProperty ("user.dir"));
+            path = path.resolve (key);  // The exporter will add an appropriate suffix to this.
+        }
+        else if (! path.isAbsolute ())
+        {
+            path = Paths.get (System.getProperty ("user.dir")).resolve (path);
+        }
+
+        Export exporter = null;
+        Export n2a      = null;
+        List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Export.class);
+        for (ExtensionPoint exp : exps)
+        {
+            if (! (exp instanceof ExportModel)) continue;
+            Export em = ((ExportModel) exp);
+            String name = em.getName ();
+            if (name.contains ("N2A")) n2a = em;
+            if (name.equalsIgnoreCase (format))         exporter = em;
+            if (exporter == null  &&  em.accept (path)) exporter = em;  // Suffix match
+        }
+        if (exporter == null) exporter = n2a;
+        if (exporter == null)
+        {
+            System.err.println ("No matching export method");
+            return;
+        }
+
+        try
+        {
+            Files.createDirectories (path.getParent ());
+            exporter.process (record, path);
+        }
+        catch (Exception e)
+        {
+            System.err.println ("Export failed");
+            e.printStackTrace ();
+        }
     }
 
     public static void setUncaughtExceptionHandler (final JFrame parent)

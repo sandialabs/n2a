@@ -42,10 +42,10 @@ import javax.swing.undo.CannotUndoException;
 @SuppressWarnings("serial")
 public class MainFrame extends JFrame
 {
-    public static MainFrame instance;
+    public static MainFrame   instance;
+    public static UndoManager undoManager = new UndoManager ();
 
     public MainTabbedPane tabs;
-    public UndoManager    undoManager;
 
     public MainFrame ()
     {
@@ -71,7 +71,6 @@ public class MainFrame extends JFrame
         setIconImages (icons);
         // TODO: make icon appear on Mac. This requires accessing the "dock", which is an arbitrarily different concept than "tray" on every other desktop system, even though it does the same thing.
 
-        undoManager = new UndoManager ();
         tabs = new MainTabbedPane ();
 
         Lay.BLtg (this,

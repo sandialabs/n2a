@@ -29,10 +29,6 @@ public class AddEntry extends Undoable
     {
         this.saved = saved;
 
-        PanelReference pr = PanelReference.instance;
-        fromSearchPanel = pr.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on the entry panel
-        keyAfter = pr.panelSearch.currentKey ();
-
         // Determine unique name in database
         MNode references = AppData.docs.child ("references");
         MNode existing = references.child (id);
@@ -52,6 +48,11 @@ public class AddEntry extends Undoable
                 suffix++;
             }
         }
+
+        PanelReference pr = PanelReference.instance;
+        if (pr == null) return;  // We are running headless.
+        fromSearchPanel = pr.panelSearch.list.isFocusOwner ();  // Otherwise, assume focus is on the entry panel
+        keyAfter = pr.panelSearch.currentKey ();
     }
 
     public void undo ()
@@ -77,9 +78,10 @@ public class AddEntry extends Undoable
     {
         super.redo ();
         int index = 0;
-        if (! keyAfter.isEmpty ())
+        PanelReference pr = PanelReference.instance;  // If null, then we are running headless.
+        if (pr != null  &&  ! keyAfter.isEmpty ())
         {
-            index = PanelReference.instance.panelSearch.indexOf (keyAfter);
+            index = pr.panelSearch.indexOf (keyAfter);
             if (index < 0) index = 0;
         }
         create (id, saved, index, fromSearchPanel, wasShowing, wasShowing);
@@ -88,11 +90,12 @@ public class AddEntry extends Undoable
     public static void create (String id, MNode saved, int index, boolean fromSearchPanel, boolean wasShowing, boolean willEdit)
     {
         PanelReference pr = PanelReference.instance;
-        pr.panelSearch.insertNextAt (index);
+        if (pr != null) pr.panelSearch.insertNextAt (index);
 
         MNode doc = AppData.docs.childOrCreate ("references", id);  // Triggers PanelReference.childAdded(name), which updates the select and MRU panels, but not the entry panel.
         doc.merge (saved);
 
+        if (pr == null) return;
         if (wasShowing) pr.panelEntry.model.setRecord (doc);
         if (willEdit  ||  ! fromSearchPanel)
         {

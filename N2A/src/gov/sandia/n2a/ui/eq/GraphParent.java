@@ -276,7 +276,7 @@ public class GraphParent extends JPanel
                     float em = SettingsLookAndFeel.em;
                     if (now.width  != old.width ) boundsParent.setTruncated (now.width  / em, 2, "width");
                     if (now.height != old.height) boundsParent.setTruncated (now.height / em, 2, "height");
-                    if (boundsParent.size () > 0) MainFrame.instance.undoManager.apply (new ChangeAnnotations (part, metadata));
+                    if (boundsParent.size () > 0) MainFrame.undoManager.apply (new ChangeAnnotations (part, metadata));
                 }
             }
 

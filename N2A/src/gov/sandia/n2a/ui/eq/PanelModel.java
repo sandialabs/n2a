@@ -13,7 +13,12 @@ import java.awt.EventQueue;
 import java.awt.FontMetrics;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintStream;
 import java.nio.file.Path;
+
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.JTree;
@@ -27,6 +32,7 @@ import gov.sandia.n2a.db.MNodeListener;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Import;
+import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.PanelEquations.BreadcrumbRenderer;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 
@@ -320,19 +326,62 @@ public class PanelModel extends JPanel implements MNodeListener
         panelEquations.updateDoc (oldKey, newKey);
     }
 
-    public static void importFile (Path path)
+    public static void importFile (Path path) throws Exception
+    {
+        importFile (path, null, null);
+    }
+
+    public static void importFile (Path path, String format, String name) throws Exception
     {
         Import bestImporter = null;
         float  bestP        = 0;
         for (ExtensionPoint exp : PluginManager.getExtensionsForPoint (Import.class))
         {
-            float P = ((Import) exp).matches (path);
+            Import imp = (Import) exp;
+            if (format != null  &&  imp.getName ().equalsIgnoreCase (format))
+            {
+                bestImporter = imp;
+                break;
+            }
+            float P = imp.matches (path);
             if (P > bestP)
             {
                 bestP        = P;
                 bestImporter = (Import) exp;
             }
         }
-        if (bestImporter != null) bestImporter.process (path);
+        if (bestImporter != null) bestImporter.process (path, name);
+    }
+
+    /**
+        Report an import error to the user via UI and crashdump file.
+    **/
+    public static void fileImportExportException (String direction, Exception error)
+    {
+        File crashdump = new File (AppData.properties.get ("resourceDir"), "crashdump");
+        try
+        {
+            PrintStream err = new PrintStream (crashdump);
+            error.printStackTrace (err);
+            err.close ();
+        }
+        catch (FileNotFoundException fnfe) {}
+
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                JOptionPane.showMessageDialog
+                (
+                    MainFrame.instance,
+                    "<html><body><p style='width:300px'>"
+                    + error.getMessage () + " Exception has been recorded in "
+                    + crashdump.getAbsolutePath ()
+                    + "</p></body></html>",
+                    direction + " Failed",
+                    JOptionPane.WARNING_MESSAGE
+                );
+            }
+        });
     }
 }

@@ -126,7 +126,7 @@ public class Unix extends Host
         }
 
         Path jobDir = Host.getJobDir (resourceDir, job);
-        Path script = jobDir.resolve ("n2a_job");
+        Path script = jobDir.resolve ("n2a_job.sh");
         String out = out2err ? "err" : "out";
         String combined = "";  // The last assembled command-line. Used to find PID for single-command jobs (the usual case).
         try (BufferedWriter writer = Files.newBufferedWriter (script))
@@ -223,6 +223,12 @@ public class Unix extends Host
         command.add (force ? "-9" : "-15");
         for (long l : pids) command.add (String.valueOf (l));
         try (AnyProcess proc = build (command).start ();) {}
+    }
+
+    @Override
+    public String shellSuffix ()
+    {
+        return ".sh";
     }
 
     @Override

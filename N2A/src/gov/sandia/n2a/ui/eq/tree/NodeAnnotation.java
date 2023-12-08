@@ -216,7 +216,7 @@ public class NodeAnnotation extends NodeContainer
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddAnnotation");
+            boolean canceled = MainFrame.undoManager.getPresentationName ().equals ("AddAnnotation");
             delete (canceled);
             return;
         }
@@ -268,7 +268,7 @@ public class NodeAnnotation extends NodeContainer
             return;
         }
 
-        MainFrame.instance.undoManager.apply (new ChangeAnnotation (this, name, value));
+        MainFrame.undoManager.apply (new ChangeAnnotation (this, name, value));
     }
 
     @Override

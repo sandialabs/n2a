@@ -518,7 +518,7 @@ public class GraphNode extends JPanel
         ChangeAnnotations ca = new ChangeAnnotations (np, metadata);
         ca.graph = true;
 
-        UndoManager um = MainFrame.instance.undoManager;
+        UndoManager um = MainFrame.undoManager;
         if (selection.isEmpty ())
         {
             um.apply (ca);
@@ -1082,7 +1082,7 @@ public class GraphNode extends JPanel
                     selection.remove (container.panelEquationGraph.graphPanel.pinOut);
                     container.panelEquationGraph.clearSelection ();  // In case pinIn or pinOut were selected. After delete, nothing should be selected.
 
-                    UndoManager um = MainFrame.instance.undoManager;
+                    UndoManager um = MainFrame.undoManager;
                     if (selection.isEmpty ())
                     {
                         um.apply (new DeletePart (node, false));
@@ -1681,7 +1681,7 @@ public class GraphNode extends JPanel
             }
             else if (SwingUtilities.isLeftMouseButton (me))
             {
-                UndoManager um = MainFrame.instance.undoManager;
+                UndoManager um = MainFrame.undoManager;
                 if (connect)
                 {
                     if (edge == null)  // extend selection, because mouse never left the node boundary

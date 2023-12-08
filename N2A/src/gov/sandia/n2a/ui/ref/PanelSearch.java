@@ -99,7 +99,7 @@ public class PanelSearch extends JPanel
         {
             public void actionPerformed (ActionEvent e)
             {
-                MainFrame.instance.undoManager.apply (new AddEntry ());
+                MainFrame.undoManager.apply (new AddEntry ());
             }
         });
         actionMap.put ("delete", new AbstractAction ()
@@ -110,7 +110,7 @@ public class PanelSearch extends JPanel
                 if (key == null) return;
                 if (! ((MCombo) AppData.docs.child ("references")).isWriteable (key)) return;
                 lastSelection = list.getSelectedIndex ();
-                MainFrame.instance.undoManager.apply (new DeleteEntry ((MDoc) AppData.docs.child ("references", key)));
+                MainFrame.undoManager.apply (new DeleteEntry ((MDoc) AppData.docs.child ("references", key)));
             }
         });
         actionMap.put ("select", new AbstractAction ()
@@ -166,7 +166,7 @@ public class PanelSearch extends JPanel
             }
         });
 
-        UndoManager um = MainFrame.instance.undoManager;
+        UndoManager um = MainFrame.undoManager;
         transferHandler = new TransferHandler ()
         {
             public boolean canImport (TransferSupport xfer)
@@ -188,9 +188,23 @@ public class PanelSearch extends JPanel
                     {
                         @SuppressWarnings("unchecked")
                         List<File> files = (List<File>) xferable.getTransferData (DataFlavor.javaFileListFlavor);
+                        Exception error = null;
                         um.addEdit (new CompoundEdit ());  // in case there is more than one file
-                        for (File file : files) PanelModel.importFile (file.toPath ());
+                        // Ideally this would be on a separate thread, but since we are modifying a compound edit,
+                        // we need to stay on EDT.
+                        for (File file : files)
+                        {
+                            try
+                            {
+                                PanelModel.importFile (file.toPath ());
+                            }
+                            catch (Exception e)
+                            {
+                                error = e;
+                            }
+                        }
                         um.endCompoundEdit ();
+                        if (error != null) PanelModel.fileImportExportException ("Import", error);
                         return true;
                     }
                     else if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))
@@ -250,7 +264,7 @@ public class PanelSearch extends JPanel
                 // Note that the output is a BibTeX entry, not the usual N2A schema.
                 try (StringWriter writer = new StringWriter ())
                 {
-                    exportBibTeX.export (references, writer);
+                    exportBibTeX.process (references, writer);
                     writer.close ();
                     return new TransferableReference (writer.toString (), key);
                 }

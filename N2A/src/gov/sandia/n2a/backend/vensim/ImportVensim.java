@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -24,11 +24,15 @@ public class ImportVensim implements ImportModel
     }
 
     @Override
-    public void process (Path source)
+    public void process (Path source, String name)
     {
         ImportJob job = new ImportJob ();
         job.process (source);
-        if (job.model.size () > 0) MainFrame.instance.undoManager.apply (new AddDoc (job.modelName, job.model));
+        if (job.model.size () > 0)
+        {
+            if (name == null) name = job.modelName;
+            MainFrame.undoManager.apply (new AddDoc (name, job.model));
+        }
     }
 
     @Override

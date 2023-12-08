@@ -166,11 +166,11 @@ public class NodeModel extends NodeBase
             existingDocument = models.child (input);
         }
 
-        MainFrame.instance.undoManager.apply (new ChangeDoc (key, input));
+        MainFrame.undoManager.apply (new ChangeDoc (key, input));
     }
 
     public void delete (JTree tree, boolean cancelled)
     {
-        MainFrame.instance.undoManager.apply (new DeleteDoc ((MDoc) AppData.docs.child ("models", key)));
+        MainFrame.undoManager.apply (new DeleteDoc ((MDoc) AppData.docs.child ("models", key)));
     }
 }

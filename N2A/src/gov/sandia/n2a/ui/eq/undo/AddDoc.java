@@ -42,7 +42,13 @@ public class AddDoc extends Undoable
         this.name  = uniqueName (MDir.validFilenameFrom (name));
         this.saved = saved;
 
-        PanelModel pm   = PanelModel.instance;
+        // Insert ID, if given doc does not already have one.
+        MNode id = saved.childOrCreate ("$meta", "id");
+        String idString = id.get ();
+        if (idString.isEmpty ()  ||  AppData.getModel (idString) != null) id.set (generateID ());
+
+        PanelModel pm = PanelModel.instance;
+        if (pm == null) return;  // We are running headless.
         JTree      tree = pm.panelSearch.tree;
         fromSearchPanel = tree.isFocusOwner ();  // Otherwise, assume focus is on equation tree
         if (fromSearchPanel)  // Otherwise, pathAfter is null and new entry will appear at top of uncategorized entries.
@@ -64,11 +70,6 @@ public class AddDoc extends Undoable
                 if (! category.isEmpty ()) saved.set (category, "$meta", "gui", "category");
             }
         }
-
-        // Insert ID, if given doc does not already have one.
-        MNode id = saved.childOrCreate ("$meta", "id");
-        String idString = id.get ();
-        if (idString.isEmpty ()  ||  AppData.getModel (idString) != null) id.set (generateID ());
     }
 
     public void setSilent ()
@@ -127,13 +128,14 @@ public class AddDoc extends Undoable
 
     public static void create (String name, MNode saved, List<String> pathAfter, boolean fromSearchPanel, boolean wasShowing)
     {
-        PanelModel pm = PanelModel.instance;
-        pm.panelSearch.insertNextAt (pathAfter);  // Note that lastSelection will end up pointing to new entry, not pathAfter.
+        PanelModel pm = PanelModel.instance;  // If null, then we are running headless.
+        if (pm != null) pm.panelSearch.insertNextAt (pathAfter);  // Note that lastSelection will end up pointing to new entry, not pathAfter.
 
         MDoc doc = (MDoc) AppData.docs.childOrCreate ("models", name);  // Triggers PanelModel.childAdded(name), which updates the select and MRU panels, but not the equation tree panel.
         doc.merge (saved);
         new MPart (doc).clearRedundantOverrides ();
         AppData.set (doc.get ("$meta", "id"), doc);
+        if (pm == null) return;
         if (doc.get ("$meta", "gui", "category").contains (",")) pm.panelSearch.search ();  // update for multiple categories
 
         if (wasShowing) pm.panelEquations.load (doc);  // Takes focus

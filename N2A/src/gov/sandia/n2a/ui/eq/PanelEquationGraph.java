@@ -1131,7 +1131,7 @@ public class PanelEquationGraph extends JScrollPane
                 {
                     metadata.set (action, "gui", "arrow");
                 }
-                MainFrame.instance.undoManager.apply (new ChangeAnnotations (n, metadata));
+                MainFrame.undoManager.apply (new ChangeAnnotations (n, metadata));
             }
         };
 
@@ -1163,7 +1163,7 @@ public class PanelEquationGraph extends JScrollPane
                     location = new Point (g.pinInBounds.x, g.pinInBounds.y + index * lineHeight);
                 }
 
-                UndoManager um = MainFrame.instance.undoManager;
+                UndoManager um = MainFrame.undoManager;
                 switch (e.getActionCommand ())
                 {
                     case "Color":
@@ -1332,7 +1332,7 @@ public class PanelEquationGraph extends JScrollPane
             for (MNode p : pinData) if (newKey.equals (p.key ())) return;   // Abort change if any key matches. If the name has not changed, this includes its own value.
 
             // Apply change
-            UndoManager um = MainFrame.instance.undoManager;
+            UndoManager um = MainFrame.undoManager;
             um.addEdit (new CompoundEdit ());
             if (pinSide.equals ("in"))
             {
@@ -1469,7 +1469,7 @@ public class PanelEquationGraph extends JScrollPane
         {
             NodePart part = e.nodeFrom.node;
             if (topic.equals (part.source.get ("$meta", "gui", "pin", "topic"))) return;
-            UndoManager um = MainFrame.instance.undoManager;
+            UndoManager um = MainFrame.undoManager;
             if (topic.isEmpty ())  // reset to default
             {
                 DeleteAnnotation da = DeleteAnnotation.withName (part, "$meta", "gui", "pin", "topic");
@@ -1638,7 +1638,7 @@ public class PanelEquationGraph extends JScrollPane
 
         public void exportDone (JComponent source, Transferable data, int action)
         {
-            MainFrame.instance.undoManager.endCompoundEdit ();
+            MainFrame.undoManager.endCompoundEdit ();
         }
     }
 
@@ -1970,7 +1970,7 @@ public class PanelEquationGraph extends JScrollPane
             {
                 edge.tipDrag = false;  // For those cases where edge will continue to be used, rather than evaporate or be replaced.
 
-                UndoManager um = MainFrame.instance.undoManager;
+                UndoManager um = MainFrame.undoManager;
                 um.addEdit (new CompoundEdit ());  // Everything is done inside a compound, even if it is a single edit.
 
                 GraphNode nodeFrom = edge.nodeFrom;
@@ -2456,7 +2456,7 @@ public class PanelEquationGraph extends JScrollPane
 
                     MNode metadata = new MVolatile ();
                     for (int i = 0; i < count; i++) metadata.set (i, "gui", "pin", pinSide, pinOrder.get (i).key (), "order");
-                    MainFrame.instance.undoManager.apply (new ChangeAnnotations (container.part, metadata));
+                    MainFrame.undoManager.apply (new ChangeAnnotations (container.part, metadata));
                 }
             }
         }

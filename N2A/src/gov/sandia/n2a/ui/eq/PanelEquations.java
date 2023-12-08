@@ -39,9 +39,7 @@ import java.beans.PropertyChangeListener;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.nio.file.Files;
@@ -66,7 +64,6 @@ import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JSplitPane;
@@ -246,7 +243,7 @@ public class PanelEquations extends JPanel
             {
                 stopEditing ();
                 AddDoc add = new AddDoc ();
-                MainFrame.instance.undoManager.apply (add);
+                MainFrame.undoManager.apply (add);
             }
         });
 
@@ -954,7 +951,7 @@ public class PanelEquations extends JPanel
             if (record == null)
             {
                 AddDoc add = new AddDoc ();
-                MainFrame.instance.undoManager.apply (add);
+                MainFrame.undoManager.apply (add);
                 // After load(doc), active is null.
                 // PanelEquationTree focusGained() will set active, but won't be called before the test below.
                 active = getParentEquationTree ();
@@ -1034,7 +1031,7 @@ public class PanelEquations extends JPanel
             if (context == null  ||  context == part  ||  context instanceof NodeIO) return;  // Only process graph nodes, not parent node or IO pin blocks.
 
             // Bind part to an IO pin
-            UndoManager um = MainFrame.instance.undoManager;
+            UndoManager um = MainFrame.undoManager;
             if (pin == null)
             {
                 if (context.source.child ("$meta", "gui", "pin") == null)
@@ -1338,7 +1335,7 @@ public class PanelEquations extends JPanel
             @Override
             public boolean accept (File f)
             {
-                return true;
+                return exporter.accept (f.toPath ());
             }
 
             @Override
@@ -1371,53 +1368,27 @@ public class PanelEquations extends JPanel
 
             // Display chooser and collect result
             int result = fc.showSaveDialog (MainFrame.instance);
+            if (result != JFileChooser.APPROVE_OPTION) return;
 
             // Do export
-            if (result == JFileChooser.APPROVE_OPTION)
+            Path path = fc.getSelectedFile ().toPath ();
+            Export exporter = ((ExporterFilter) fc.getFileFilter ()).exporter;
+            Thread t = new Thread ()
             {
-                Path path = fc.getSelectedFile ().toPath ();
-                Export exporter = ((ExporterFilter) fc.getFileFilter ()).exporter;
-                Thread t = new Thread ()
+                public void run ()
                 {
-                    public void run ()
+                    try
                     {
-                        try
-                        {
-                            exporter.export (record, path);
-                        }
-                        catch (Exception error)
-                        {
-                            File crashdump = new File (AppData.properties.get ("resourceDir"), "crashdump");
-                            try
-                            {
-                                PrintStream err = new PrintStream (crashdump);
-                                error.printStackTrace (err);
-                                err.close ();
-                            }
-                            catch (FileNotFoundException fnfe) {}
-
-                            EventQueue.invokeLater (new Runnable ()
-                            {
-                                public void run ()
-                                {
-                                    JOptionPane.showMessageDialog
-                                    (
-                                        MainFrame.instance,
-                                        "<html><body><p style='width:300px'>"
-                                        + error.getMessage () + " Exception has been recorded in "
-                                        + crashdump.getAbsolutePath ()
-                                        + "</p></body></html>",
-                                        "Export Failed",
-                                        JOptionPane.WARNING_MESSAGE
-                                    );
-                                }
-                            });
-                        }
+                        exporter.process (record, path);
                     }
-                };
-                t.setDaemon (true);
-                t.start ();
-            }
+                    catch (Exception error)
+                    {
+                        PanelModel.fileImportExportException ("Export", error);
+                    }
+                }
+            };
+            t.setDaemon (true);
+            t.start ();
         }
     };
 
@@ -1464,13 +1435,26 @@ public class PanelEquations extends JPanel
 
             // Display chooser and collect result
             int result = fc.showOpenDialog (MainFrame.instance);
+            if (result != JFileChooser.APPROVE_OPTION) return;
 
             // Do import
-            if (result == JFileChooser.APPROVE_OPTION)
+            Thread t = new Thread ()
             {
-                Path path = fc.getSelectedFile ().toPath ();
-                PanelModel.importFile (path);
-            }
+                public void run ()
+                {
+                    try
+                    {
+                        Path path = fc.getSelectedFile ().toPath ();
+                        PanelModel.importFile (path);
+                    }
+                    catch (Exception error)
+                    {
+                        PanelModel.fileImportExportException ("Import", error);
+                    }
+                }
+            };
+            t.setDaemon (true);
+            t.start ();
         }
     };
 
@@ -1750,7 +1734,7 @@ public class PanelEquations extends JPanel
             }
 
             // Handle internal DnD as a node reordering.
-            UndoManager um = MainFrame.instance.undoManager;
+            UndoManager um = MainFrame.undoManager;
             if (xferNode != null  &&  xferNode.panel == PanelEquations.this  &&  xfer.isDrop ())
             {
                 if (path == null) return false;
@@ -2232,7 +2216,7 @@ public class PanelEquations extends JPanel
             // as one of the conditions below for early-out.) We close the compound edit here
             // without adding anything further to it. We may create a compound delete below,
             // but it will be a separate action.
-            UndoManager um = MainFrame.instance.undoManager;
+            UndoManager um = MainFrame.undoManager;
             um.endCompoundEdit ();  // This is safe, even if there is no compound edit in progress.
 
             TransferableNode tn = (TransferableNode) data;

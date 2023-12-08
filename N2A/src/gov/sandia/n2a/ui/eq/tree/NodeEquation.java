@@ -156,7 +156,7 @@ public class NodeEquation extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            boolean canceled = MainFrame.instance.undoManager.getPresentationName ().startsWith ("AddEquation");
+            boolean canceled = MainFrame.undoManager.getPresentationName ().startsWith ("AddEquation");
             delete (canceled);
             return;
         }
@@ -190,7 +190,7 @@ public class NodeEquation extends NodeBase
         piecesBefore.combiner = parent.source.get ();  // The fact that we are modifying an existing equation node indicates that the variable (parent) should only contain a combiner.
         if (piecesAfter.combiner.isEmpty ()) piecesAfter.combiner = piecesBefore.combiner;
 
-        MainFrame.instance.undoManager.apply (new ChangeEquation (parent, piecesBefore.condition, piecesBefore.combiner, piecesBefore.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
+        MainFrame.undoManager.apply (new ChangeEquation (parent, piecesBefore.condition, piecesBefore.combiner, piecesBefore.expression, piecesAfter.condition, piecesAfter.combiner, piecesAfter.expression));
     }
 
     @Override
@@ -200,7 +200,7 @@ public class NodeEquation extends NodeBase
         if (canceled)  // Our delete is expected to neutralize an add. (But we still verify below that the add exists.)
         {
             // Hack to ensure unkill on variable gets reversed properly.
-            String last = MainFrame.instance.undoManager.getPresentationName ();
+            String last = MainFrame.undoManager.getPresentationName ();
             result.killedVariable = last.equals ("AddEquation killed");
         }
         return result;

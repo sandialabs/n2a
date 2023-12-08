@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -54,10 +54,10 @@ public class PluginNeuroML extends Plugin
 	{
         List<ExtensionPoint> result = new ArrayList<ExtensionPoint> ();
         result.add (new BackendNeuroML ());
+        result.add (exporter);
+        result.add (new ImportNeuroML ());
         if (! AppData.properties.getBoolean ("headless"))
         {
-            result.add (exporter);
-            result.add (new ImportNeuroML ());
             result.add (new SettingsNeuroML ());
         }
         return result.toArray (new ExtensionPoint[result.size ()]);

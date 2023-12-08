@@ -109,7 +109,7 @@ public class NodeReference extends NodeBase
         String input = (String) getUserObject ();
         if (input.isEmpty ())
         {
-            boolean canceled = MainFrame.instance.undoManager.getPresentationName ().equals ("AddReference");
+            boolean canceled = MainFrame.undoManager.getPresentationName ().equals ("AddReference");
             delete (canceled);
             return;
         }
@@ -145,7 +145,7 @@ public class NodeReference extends NodeBase
             return;
         }
 
-        MainFrame.instance.undoManager.apply (new ChangeReference (parent, oldName, oldValue, name, value));
+        MainFrame.undoManager.apply (new ChangeReference (parent, oldName, oldValue, name, value));
     }
 
     @Override

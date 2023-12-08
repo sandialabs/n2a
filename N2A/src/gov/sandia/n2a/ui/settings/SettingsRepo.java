@@ -795,7 +795,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
     public void pull (GitWrapper gitRepo, String key)
     {
-        MainFrame.instance.undoManager.discardAllEdits ();  // TODO: purge only edits related to the current repo.
+        MainFrame.undoManager.discardAllEdits ();  // TODO: purge only edits related to the current repo.
         Thread thread = new Thread ()
         {
             public void run ()
@@ -1006,7 +1006,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                         int oldRow = primaryRow;
                         primaryRow = row;
                         AppData.state.set (newKey, "Repos", "primary");
-                        MainFrame.instance.undoManager.discardAllEdits ();
+                        MainFrame.undoManager.discardAllEdits ();
                         needRebuild = true;
                         fireTableCellUpdated (oldRow, 0);  // Primary
                         fireTableCellUpdated (row,    0);
@@ -1017,7 +1017,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (editable == 0) editable = 1;
                     else               editable = 0;
                     repo.set (editable, "editable");
-                    MainFrame.instance.undoManager.discardAllEdits ();  // TODO: It would be better to only purge edits related to the specific repo.
+                    MainFrame.undoManager.discardAllEdits ();  // TODO: It would be better to only purge edits related to the specific repo.
                     needRebuild = true;
                     fireTableCellUpdated (row, 1);
                     return true;
@@ -1026,7 +1026,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                     if (visible == 0) visible = 1;
                     else              visible = 0;
                     repo.set (visible, "visible");
-                    MainFrame.instance.undoManager.discardAllEdits ();
+                    MainFrame.undoManager.discardAllEdits ();
                     needRebuild = true;
                     fireTableCellUpdated (row, 2);
                     return true;
@@ -1217,12 +1217,12 @@ public class SettingsRepo extends JScrollPane implements Settings
                 if (! newPrimary.equals (primary))
                 {
                     AppData.state.set (newPrimary, "Repos", "primary");
-                    MainFrame.instance.undoManager.discardAllEdits ();
+                    MainFrame.undoManager.discardAllEdits ();
                 }
             }
             else
             {
-                MainFrame.instance.undoManager.discardAllEdits ();
+                MainFrame.undoManager.discardAllEdits ();
             }
         }
     }
@@ -2264,7 +2264,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             if (row < 0  ||  row >= deltas.size ()) return;
             Delta delta = deltas.get (row);
             if (delta.untracked) return;
-            MainFrame.instance.undoManager.apply (new RevertDelta (delta));
+            MainFrame.undoManager.apply (new RevertDelta (delta));
         }
 
         public int indexOf (String name)
@@ -2317,7 +2317,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             deltas = newDeltas;
             refreshTable ();
 
-            MainFrame.instance.undoManager.discardAllEdits ();  // TODO: purge only edits related to the current repo.
+            MainFrame.undoManager.discardAllEdits ();  // TODO: purge only edits related to the current repo.
 
             Thread thread = new Thread ()
             {
