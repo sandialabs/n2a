@@ -65,7 +65,7 @@ public class AddPart extends UndoableView implements AddEditable
             if (name.isBlank ())
             {
                 String inherit = data.get ("$inherit");
-                if (! inherit.isBlank ()) name = inherit.split (",")[0].trim ();
+                if (! inherit.isBlank ()) name = NodePart.validIdentifierFrom (inherit.split (",")[0].trim ());
             }
             if (name.isEmpty ()) name = uniqueName (parent, "p", 0, false);  // Even though this is actually generated, we don't plan to go directly into edit mode, so treat as if not generated.
             else                 name = uniqueName (parent, name, 2, true);

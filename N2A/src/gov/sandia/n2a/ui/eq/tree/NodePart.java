@@ -70,7 +70,7 @@ public class NodePart extends NodeContainer
     public    Map<String,NodePart>        connectionBindings;  // non-null if this is a connection
     public    Set<NodePart>               transitConnections;  // connections which pass up through this node to a peer node to begin descent
     protected List<UnsatisfiedConnection> unsatisfiedConnections;
-    protected boolean                     connectionTarget;    // Some other part connects to us.
+    protected boolean                     connectionTarget;    // Some other part connects to us. Used only by suggestConnections().
     public    GraphNode                   graph;
     public    PanelEquationTree           pet;                 // If non-null, this part is the root of a currently-displayed tree. If null, then no tree operations are necessary.
     protected NodePart                    trueParent;
@@ -439,6 +439,18 @@ public class NodePart extends NodeContainer
         return ancestors;
     }
 
+    public class UnsatisfiedConnection
+    {
+        String         alias;
+        List<String>   classes = new ArrayList<String> ();  // Parts (or their children) that could satisfy this endpoint.
+        List<NodePart> candidates;
+
+        public UnsatisfiedConnection (String alias)
+        {
+            this.alias = alias;
+        }
+    }
+
     public List<UnsatisfiedConnection> getUnsatisfiedConnections ()
     {
         if (unsatisfiedConnections != null) return unsatisfiedConnections;
@@ -505,17 +517,13 @@ public class NodePart extends NodeContainer
                 for (NodePart toPart : toParts)
                 {
                     // Is toPart a descendant of any of the classes acceptable to the connection?
-                    boolean match = false;
                     Set<String> ancestors = toPart.getAncestors ();
                     for (String c : u.classes)
                     {
-                        if (ancestors.contains (c))
-                        {
-                            match = true;
-                            break;
-                        }
+                        if (! ancestors.contains (c)) continue;
+                        u.candidates.add (toPart);
+                        break;
                     }
-                    if (match) u.candidates.add (toPart);
                 }
             }
 
@@ -600,11 +608,11 @@ public class NodePart extends NodeContainer
             }
 
             // If all endpoints go to nodes that are already connected, then don't connect at all.
-            // (Instead, assume that user is started a new constellation, and simply inserted the connection object first.)
+            // (Instead, assume that user is starting a new constellation, and simply inserted the connection object first.)
             boolean targetsFull = true;
             for (UnsatisfiedConnection u : unsatisfied)
             {
-                if (u.candidates.size () != 1  ||  ! u.candidates.get (0).connectionTarget)
+                if (u.candidates.isEmpty ()  ||  ! u.candidates.get (0).connectionTarget)
                 {
                     targetsFull = false;
                     break;
@@ -1037,17 +1045,5 @@ public class NodePart extends NodeContainer
         if (pet != null) return pet;
         if (parent == null) return null;  // True root, or no tree operations required. If this were instead a fake root that needs tree operations, then pet would be non-null.
         return ((NodeBase) parent).getTree ();
-    }
-
-    public class UnsatisfiedConnection
-    {
-        String         alias;
-        List<String>   classes = new ArrayList<String> ();  // Parts (or their children) that could satisfy this endpoint.
-        List<NodePart> candidates;
-
-        public UnsatisfiedConnection (String alias)
-        {
-            this.alias = alias;
-        }
     }
 }
