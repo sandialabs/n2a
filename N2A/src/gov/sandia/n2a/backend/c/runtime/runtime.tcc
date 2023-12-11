@@ -1456,9 +1456,7 @@ Population<T>::getIterator (int i, bool poll)
 
 // class Simulator -----------------------------------------------------------
 
-#ifdef n2a_TLS
-template<class T> thread_local Simulator<T> * Simulator<T>::instance = 0;
-#else
+#ifndef n2a_TLS
 template<class T> SHARED Simulator<T> Simulator<T>::instance;
 #endif
 

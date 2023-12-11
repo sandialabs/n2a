@@ -519,7 +519,7 @@ class priorityQueue : public std::priority_queue<Event<T> *,std::vector<Event<T>
 **/
 template<class T>
 #ifdef n2a_TLS
-class Simulator   // TLS is incompatible with shared runtime library. Can only be used within an exported (and fully self-contained) model DLL.
+class Simulator   // TLS is incompatible with shared runtime library. Can only be used within a fully self-contained model DLL.
 #else
 class SHARED Simulator
 #endif
@@ -561,6 +561,12 @@ public:
 
     Holder * getHolder (const String & fileName, Holder * oldHandle);
 };
+#ifdef n2a_TLS
+// Normally, this template would defined in runtime.tcc
+// However, unless it is defined in every module, TLS fails under GCC.
+// Not sure if this is a bug in GCC or just my misunderstanding of how C++ works.
+template<class T> thread_local Simulator<T> * Simulator<T>::instance;
+#endif
 
 template<class T>
 class SHARED Integrator

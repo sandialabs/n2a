@@ -177,8 +177,11 @@ public class JobC extends Thread
             cli    = model.getFlag ("$meta", "backend", "c", "cli");
             tls    = model.getFlag ("$meta", "backend", "c", "tls");
             csharp = model.getFlag ("$meta", "backend", "c", "sharp");
-            if (! lib)
+            if (! lib)  // Model is output as a regular executable/binary. (When "lib" is true, model is output as linkable code.)
             {
+                // For an executable, "shared" means that it links to a shared library containing the runtime code.
+                // The other case, static, means that all the library code is included in the executable image.
+                // "lib" is only set true by ExportC* classes. In that case, they set "shared" based on file dialog.
                 if (model.data ("$meta", "backend", "c", "shared")) shared = model.getFlag ("$meta", "backend", "c", "shared");
                 if (tls  &&  shared)
                 {
@@ -1406,11 +1409,6 @@ public class JobC extends Thread
         result.append ("using namespace n2a;\n");
         result.append ("using namespace std;\n");
         result.append ("\n");
-        if (tls)
-        {
-            // Hack to make GCC 11.x happy. Should do no harm. Should also not be necessary.
-            result.append ("template<class T> thread_local Simulator<T> * Simulator<T>::instance;\n");
-        }
         if (cli)
         {
             if (tls) result.append ("thread_local ");
@@ -1536,9 +1534,10 @@ public class JobC extends Thread
         {
             result.append ("int main (int argc, const char * argv[])\n");
             result.append ("{\n");
-            result.append ("  signal (SIGFPE,  signalHandler);\n");
-            result.append ("  signal (SIGINT,  signalHandler);\n");
-            result.append ("  signal (SIGTERM, signalHandler);\n");
+            result.append ("  signal (SIGFPE,  signalHandler);\n");  // For error reporting
+            result.append ("  signal (SIGSEGV, signalHandler);\n");  // ditto
+            result.append ("  signal (SIGINT,  signalHandler);\n");  // For graceful shutdown
+            result.append ("  signal (SIGTERM, signalHandler);\n");  // ditto
             result.append ("\n");
             if (seed >= 0)
             {
