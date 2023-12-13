@@ -57,7 +57,7 @@ public class InternalBackend extends Backend
         return  s != null  &&  s.isAlive ();
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("removal")
     @Override
     public void kill (MNode job, boolean force)
     {
