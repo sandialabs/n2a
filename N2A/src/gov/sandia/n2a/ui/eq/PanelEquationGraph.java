@@ -89,7 +89,7 @@ public class PanelEquationGraph extends JScrollPane
     protected ColoredBorder  border;
     protected NodeBase       lastHighlightTarget;
 
-    protected static Color background = new Color (0xF0F0F0);  // light gray
+    protected static Color background;
 
     public PanelEquationGraph (PanelEquations container)
     {
@@ -367,6 +367,8 @@ public class PanelEquationGraph extends JScrollPane
         protected GraphMouseListener mouseListener;
         protected List<GraphEdge>    edges  = new ArrayList<GraphEdge> (); // Note that GraphNodes are stored directly as Swing components.
         public    Point              offset = new Point ();                // Offset from persistent coordinates to viewport coordinates. Add this to a stored (x,y) value to get non-negative coordinates that can be painted.
+        protected GraphNode          focus;                                // Set by paint() for use by GraphNode.paintComponent()
+        protected GraphEdge          likelyTip;                            // ditto
         protected JPopupMenu         arrowMenu;
         protected GraphEdge          arrowEdge;                            // Most recent edge when arrowMenu was activated.
         protected Point              popupLocation;
@@ -451,6 +453,7 @@ public class PanelEquationGraph extends JScrollPane
             if (zoom == 0) zoom = 1;  // Workaround. Superclass calls updateUI() before our constructor runs.
             scaleFonts ();
             if (layout != null) layout.UIupdated = true;
+            GraphEdge.updateUI ();
         }
 
         public void scaleFonts ()
@@ -1754,9 +1757,17 @@ public class PanelEquationGraph extends JScrollPane
         public void mouseMoved (MouseEvent me)
         {
             if (container.locked) return;
+
             GraphEdge e = graphPanel.findTipAt (me.getPoint ());
             if (e == null) setCursor (Cursor.getDefaultCursor ());
             else           setCursor (Cursor.getPredefinedCursor (Cursor.MOVE_CURSOR));
+
+            GraphEdge f = graphPanel.likelyTip;
+            if (f == e) return;
+            graphPanel.likelyTip = e;
+
+            if (e != null) graphPanel.repaint (e.bounds);
+            if (f != null) graphPanel.repaint (f.bounds);
         }
 
         public void mousePressed (MouseEvent me)

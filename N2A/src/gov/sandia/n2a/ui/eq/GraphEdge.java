@@ -9,7 +9,6 @@ package gov.sandia.n2a.ui.eq;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.FontMetrics;
-import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -74,9 +73,22 @@ public class GraphEdge
     protected static float  strokeThicknessScaled;
     protected static int    padNameBetweenScaled; // px
 
+    // Color
+    protected static Color colorForeground;  // Normal color of lines and text
+    protected static Color colorActive;      // Color of edges touching the lead selection
+    protected static Color colorDrag;        // Color of edge that is either currently being dragged or would be if drag started now.
+
     static
     {
         rescale (1);
+    }
+
+    public static void updateUI ()
+    {
+        // TODO: base these on canvas background color
+        colorForeground = Color.black;
+        colorActive     = Color.blue;
+        colorDrag       = new Color (0, 0xC0, 0);
     }
 
     public GraphEdge (GraphNode nodeFrom, NodePart partTo, String alias)
@@ -701,22 +713,25 @@ public class GraphEdge
         g gets disposed by the caller immediately after all GraphEdges are done drawing, so any
         changes we make to g are safe.
     **/
-    public void paintComponent (Graphics g)
+    public void paintComponent (Graphics2D g2)
     {
-        Graphics2D g2 = (Graphics2D) g;
+        Color color = colorForeground;
+        if (nodeFrom.parent.focus == nodeFrom  ||  nodeFrom.parent.focus == nodeTo) color = colorActive;
+        if (nodeFrom.parent.likelyTip == this)                                      color = colorDrag;
 
-        g2.setColor (Color.black);
+        g2.setColor (color);
         if (line != null) g2.draw (line);
         if (head != null)
         {
             if (! headFill) g2.setColor (PanelEquationGraph.background);
             g2.fill (head);
-            g2.setColor (Color.black);
+            g2.setColor (color);
             g2.draw (head);
         }
 
         if (! text.isEmpty ()  &&  label != null)
         {
+            // TODO: base matte and text foreground color on canvas background
             g2.setColor (new Color (0xD0FFFFFF, true));
             g2.fill (textBox);
             g2.setColor (Color.black);

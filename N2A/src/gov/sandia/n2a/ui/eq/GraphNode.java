@@ -666,6 +666,14 @@ public class GraphNode extends JPanel
         parent.repaint (paintRegion);
     }
 
+    public void repaintEdges ()
+    {
+        Rectangle paintRegion = new Rectangle (0, 0, -1, -1);
+        for (GraphEdge ge : edgesIn ) paintRegion = paintRegion.union (ge.bounds);
+        for (GraphEdge ge : edgesOut) paintRegion = paintRegion.union (ge.bounds);
+        parent.repaint (paintRegion);
+    }
+
     /**
         Sets bounds to current preferred location & size. Updates everything affected by the change.
     **/
@@ -1265,6 +1273,13 @@ public class GraphNode extends JPanel
                     getTreeCellRendererComponent (getEquationTree ().tree, node, true, open, false, -2, true);
                     restoreFocus ();  // does repaint
                     container.updateHighlights (node);
+
+                    if (parent.focus != GraphNode.this)
+                    {
+                        repaintEdges ();
+                        if (parent.focus != null) parent.focus.repaintEdges ();
+                        parent.focus = GraphNode.this;
+                    }
                 }
 
                 public void focusLost (FocusEvent e)
@@ -1278,6 +1293,12 @@ public class GraphNode extends JPanel
 
                     getTreeCellRendererComponent (getEquationTree ().tree, node, GraphNode.this.selected, open, false, -2, false);
                     GraphNode.this.repaint ();
+
+                    if (parent.focus == GraphNode.this)
+                    {
+                        parent.focus = null;
+                        repaintEdges ();
+                    }
                 }
             });
         }
