@@ -38,6 +38,9 @@ template SHARED Matrix<n2a_T> glScale (const MatrixFixed<n2a_T,3,1> & scales);
 template SHARED Matrix<n2a_T> glScale (n2a_T sx, n2a_T sy, n2a_T sz);
 template SHARED Matrix<n2a_T> glTranslate (const MatrixFixed<n2a_T,3,1> & position);
 template SHARED Matrix<n2a_T> glTranslate (n2a_T x, n2a_T y, n2a_T z);
+#ifdef n2a_FP
+template SHARED Matrix<float> glOrtho (float left, float right, float bottom, float top, float near, float far);
+#endif
 
 template SHARED void removeMonitor (std::vector<Part<n2a_T> *> & partList, Part<n2a_T> * part);
 

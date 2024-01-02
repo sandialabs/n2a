@@ -544,9 +544,9 @@ ImageInput<T>::~ImageInput ()
 template<class T>
 Matrix<T>
 #ifdef n2a_FP
-ImageInput<T>::get (String channelName, T now, int exponent)
+ImageInput<T>::get (String channelName, T now, bool step, int exponent)
 #else
-ImageInput<T>::get (String channelName, T now)
+ImageInput<T>::get (String channelName, T now, bool step)
 #endif
 {
     // Fetch next image, if needed.
@@ -556,7 +556,7 @@ ImageInput<T>::get (String channelName, T now)
     if (pattern.size ())
 #   endif
     {
-        if (std::signbit (now))  // Negative "now" (including negative zero) indicates single step per simulation cycle.
+        if (step)  // Single step per simulation cycle. "now" contains $t, just to determine when next cycle starts.
         {
             if (now != t)
             {
@@ -580,7 +580,7 @@ ImageInput<T>::get (String channelName, T now)
                 }
             }
         }
-        else  // Positive "now" (including positive zero) indicates time or frame number.
+        else  // "now" is PTS or frame number, depending on whether this is a video or image sequence.
         {
             if (now >= t)
             {
@@ -662,10 +662,10 @@ ImageInput<T>::get (String channelName, T now)
 
 #       ifdef n2a_FP
         // Convert buffer to int.
-        float conversion = pow (2.0f, PP_MSB - exponent);
+        float conversion = pow (2.0f, FP_MSB - exponent);
         int count = image.width * image.height * 3;
         Pointer q (count * sizeof (T));
-        float * from = (float *) p
+        float * from = (float *) p;
         T *     to   = (T *)     q;
         T *     end  = to + count;
         while (to < end) *to++ = (T) (*from++ * conversion);
@@ -855,11 +855,11 @@ setColor (float target[], const Matrix<T> & color, bool withAlpha)
 }
 
 #ifdef n2a_FP
-template<int>
+template<>
 void
 setColor (float target[], const Matrix<int> & color, bool withAlpha)
 {
-    float conversion = pow (2.0f, FP_MSB);  // exponent=0
+    float conversion = powf (2, FP_MSB);  // exponent=0
     target[0] = color[0] / conversion;
     target[1] = color[1] / conversion;
     target[2] = color[2] / conversion;
@@ -900,6 +900,31 @@ ImageOutput<T>::setClearColor (const Matrix<T> & color)
 #   endif
 }
 
+#ifdef n2a_FP
+template<>
+void
+ImageOutput<int>::setClearColor (const Matrix<int> & color)
+{
+    int count = color.rows ();
+    if (count == 1) count = color.columns ();
+    bool hasAlpha = count > 3;
+
+    uint32_t      r = std::min (0xFF, std::max (0, color[0] >> FP_MSB - 8));
+    uint32_t      g = std::min (0xFF, std::max (0, color[1] >> FP_MSB - 8));
+    uint32_t      b = std::min (0xFF, std::max (0, color[2] >> FP_MSB - 8));
+    uint32_t      a = 0xFF;
+    if (hasAlpha) a = std::min (0xFF, std::max (0, color[3] >> FP_MSB - 8));
+    clearColor = r << 24 | g << 16 | b << 8 | a;
+
+#   ifdef HAVE_GL
+    cv[0] = r / 255.0f;
+    cv[1] = g / 255.0f;
+    cv[2] = b / 255.0f;
+    cv[3] = hasAlpha ? a / 255.0f : 1;
+#   endif
+}
+#endif
+
 template<class T>
 void
 ImageOutput<T>::next (T now)
@@ -932,7 +957,7 @@ ImageOutput<T>::drawDisc (T now, bool raw, const MatrixFixed<T,3,1> & center,   
     next (now);
 
 #   ifdef n2a_FP
-    double conversion = pow (2.0f, FP_MSB - exponent);
+    double conversion = pow (2.0, FP_MSB - exponent);
     MatrixFixed<double,3,1> center = centerFP;
     center /= conversion;
     double radius = radiusFP / conversion;
@@ -968,7 +993,7 @@ ImageOutput<T>::drawSquare (T now, bool raw, const MatrixFixed<T,3,1> & center, 
     next (now);
 
 #   ifdef n2a_FP
-    double conversion = pow (2.0f, FP_MSB - exponent);
+    double conversion = pow (2.0, FP_MSB - exponent);
     n2a::Point center = centerFP;
     center /= conversion;
     double w = wFP / conversion;
@@ -1006,7 +1031,7 @@ ImageOutput<T>::drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1,   c
     next (now);
 
 #   ifdef n2a_FP
-    double conversion = pow (2.0f, FP_MSB - exponent);
+    double conversion = pow (2.0, FP_MSB - exponent);
     n2a::Point p1 = p1FP;
     n2a::Point p2 = p2FP;
     p1 /= conversion;
@@ -1145,7 +1170,7 @@ ImageOutput<T>::writeImage  ()
 
 template<class T>
 bool
-ImageOutput<T>::next3D (const Matrix<T> * model, const Material & material)
+ImageOutput<T>::next3D (const Matrix<float> * model, const Material & material)
 {
     // Plaform-specific create context...
 #   ifdef _WIN32
@@ -1186,7 +1211,7 @@ ImageOutput<T>::next3D (const Matrix<T> * model, const Material & material)
         extensionsBound = true;
     }
 
-#   else  // No menas of creating a GL context.
+#   else  // No way to create a GL context.
 
     return false;
 
@@ -1281,7 +1306,7 @@ ImageOutput<T>::next3D (const Matrix<T> * model, const Material & material)
     {
         int w = canvas.width;
         int h = canvas.height;
-        bool haveProjection = norm (nextProjection, (T) 1);
+        bool haveProjection = norm (nextProjection, 0.0f);
         if (lastWidth != w  ||  lastHeight != h)
         {
             glBindRenderbuffer (GL_RENDERBUFFER, rboColor);
@@ -1359,11 +1384,13 @@ ImageOutput<T>::next3D (const Matrix<T> * model, const Material & material)
 template<class T>
 T
 #ifdef n2a_FP
-ImageOutput<T>::drawCube (T now, const Matrix<T> & model, int exponentP, const Material & material)
-#else
-ImageOutput<T>::drawCube (T now, const Matrix<T> & model,                const Material & material)
-#endif
+ImageOutput<T>::drawCube (T now, const Material & material, const Matrix<float> & model, int exponentP)
 {
+    const_cast<Matrix<float> &> (model) /= powf (2, FP_MSB - exponentP);
+#else
+ImageOutput<T>::drawCube (T now, const Material & material, const Matrix<float> & model)
+{
+#endif
     next (now);
     if (! next3D (&model, material)) return 0;
 
@@ -1448,11 +1475,18 @@ ImageOutput<T>::drawCube (T now, const Matrix<T> & model,                const M
 template<class T>
 T
 #ifdef n2a_FP
-ImageOutput<T>::drawCylinder (T now, int exponentP, const Material & material, const MatrixFixed<T,3,1> & p1, T r1, int exponentR, const MatrixFixed<T,3,1> & p2, T r2, int cap1, int cap2, int steps, int stepsCap)
-#else
-ImageOutput<T>::drawCylinder (T now,                const Material & material, const MatrixFixed<T,3,1> & p1, T r1,                const MatrixFixed<T,3,1> & p2, T r2, int cap1, int cap2, int steps, int stepsCap)
-#endif
+ImageOutput<T>::drawCylinder (T now, const Material & material, const MatrixFixed<float,3,1> & p1, int exponentP, float r1, int exponentR, const MatrixFixed<float,3,1> & p2, float r2, int cap1, int cap2, int steps, int stepsCap)
 {
+    float scaleP = powf (2, FP_MSB - exponentP);
+    float scaleR = powf (2, FP_MSB - exponentR);
+    const_cast<MatrixFixed<float,3,1> &> (p1) /= scaleP;
+    const_cast<MatrixFixed<float,3,1> &> (p2) /= scaleP;
+    r1 /= scaleR;
+    r2 /= scaleR;
+#else
+ImageOutput<T>::drawCylinder (T now, const Material & material, const MatrixFixed<float,3,1> & p1,                float r1,                const MatrixFixed<float,3,1> & p2, float r2, int cap1, int cap2, int steps, int stepsCap)
+{
+#endif
     next (now);
     if (! next3D (nullptr, material)) return 0;
 
@@ -1474,7 +1508,7 @@ ImageOutput<T>::drawCylinder (T now,                const Material & material, c
     //   Positive direction is toward p1 just because that's how all the
     //   geometry code was developed before moving to flexible coordinates.
     Matrix<float> fz = p1 - p2;
-    float length = norm (fz, (T) 2);
+    float length = norm (fz, 2.0f);
     fz /= length;
     //   Create x vector along the axis that z has smallest extent.
     //   This is an arbitrary choice, but it should be the best conitioned when computing cross product.
@@ -1715,11 +1749,13 @@ ImageOutput<T>::drawCylinder (T now,                const Material & material, c
 template<class T>
 T
 #ifdef n2a_FP
-ImageOutput<T>::drawPlane (T now, const Matrix<T> & model, int exponentP, const Material & material)
-#else
-ImageOutput<T>::drawPlane (T now, const Matrix<T> & model,                const Material & material)
-#endif
+ImageOutput<T>::drawPlane (T now, const Material & material, const Matrix<float> & model, int exponentP)
 {
+    const_cast<Matrix<float> &> (model) /= powf (2, FP_MSB - exponentP);
+#else
+ImageOutput<T>::drawPlane (T now, const Material & material, const Matrix<float> & model)
+{
+#endif
     next (now);
     if (! next3D (&model, material)) return 0;
 
@@ -1762,11 +1798,13 @@ ImageOutput<T>::drawPlane (T now, const Matrix<T> & model,                const 
 template<class T>
 T
 #ifdef n2a_FP
-ImageOutput<T>::drawSphere (T now, const Matrix<T> & model, int exponentP, const Material & material, int steps)
-#else
-ImageOutput<T>::drawSphere (T now, const Matrix<T> & model,                const Material & material, int steps)
-#endif
+ImageOutput<T>::drawSphere (T now, const Material & material, const Matrix<float> & model, int exponentP, int steps)
 {
+    const_cast<Matrix<float> &> (model) /= powf (2, FP_MSB - exponentP);
+#else
+ImageOutput<T>::drawSphere (T now, const Material & material, const Matrix<float> & model,                int steps)
+{
+#endif
     next (now);
     if (! next3D (&model, material)) return 0;
 

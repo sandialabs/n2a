@@ -504,6 +504,14 @@ glLookAt (const MatrixFixed<int,3,1> & eye, const MatrixFixed<int,3,1> & center,
     return Matrix<int> (4, 4);
 }
 
+template<>
+Matrix<int>
+glOrtho (int left, int right, int bottom, int top, int near, int far)
+{
+    // TODO: This function is not properly coded yet. This is just a quick hack to enable compile.
+    return Matrix<int> (4, 4);
+}
+
 #endif
 
 

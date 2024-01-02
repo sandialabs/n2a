@@ -35,6 +35,7 @@ import gov.sandia.n2a.language.function.Mmatrix;
 import gov.sandia.n2a.language.function.Mnumber;
 import gov.sandia.n2a.language.function.Norm;
 import gov.sandia.n2a.language.function.Output;
+import gov.sandia.n2a.language.function.ReadImage;
 import gov.sandia.n2a.language.function.ReadMatrix;
 import gov.sandia.n2a.language.function.Round;
 import gov.sandia.n2a.language.function.Signum;
@@ -72,6 +73,7 @@ public class RendererCfp extends RendererC
         operatorsWithExponent.add (Norm      .class);
         operatorsWithExponent.add (Output    .class);
         operatorsWithExponent.add (Power     .class);
+        operatorsWithExponent.add (ReadImage .class);
         operatorsWithExponent.add (ReadMatrix.class);
         operatorsWithExponent.add (SquareRoot.class);
         operatorsWithExponent.add (SumSquares.class);

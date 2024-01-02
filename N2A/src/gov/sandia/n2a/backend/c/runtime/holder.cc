@@ -102,14 +102,29 @@ template SHARED Matrix<n2a_T> operator - (const n2a_T scalar,             const 
 template SHARED Matrix<n2a_T> operator ~ (const Matrix<n2a_T> & A);
 
 #ifndef n2a_FP
+// For fixed-point norm(), use the extended form that passes exponents.
 template SHARED n2a_T norm (const MatrixAbstract<n2a_T> & A, n2a_T n);
 template SHARED n2a_T norm (const MatrixStrided<n2a_T>  & A, n2a_T n);
 #endif
 
 // We don't need a full set of MatrixFixed functions, because user code includes MatrixFixed.tcc
 // We only instantiate functions used within the runtime itself.
-template MatrixFixed<n2a_T,3,1> operator / (const MatrixFixed<n2a_T,3,1> & A, const n2a_T scalar);
-template MatrixFixed<n2a_T,3,1> operator - (const MatrixFixed<n2a_T,3,1> & A, const MatrixFixed<n2a_T,3,1> & B);
+template SHARED MatrixFixed<n2a_T,3,1> operator / (const MatrixFixed<n2a_T,3,1> & A, const n2a_T scalar);
+template SHARED MatrixFixed<n2a_T,3,1> operator - (const MatrixFixed<n2a_T,3,1> & A, const MatrixFixed<n2a_T,3,1> & B);
+
+// If we are using OpenGL in a fixed-point build, then we need to instantiate some floating-point matrix support.
+#if defined(n2a_FP) && defined(HAVE_GL)
+
+template class MatrixAbstract<float>;
+template class MatrixStrided<float>;
+template class Matrix<float>;
+template class MatrixFixed<float,3,1>;
+
+template SHARED float         norm       (const MatrixStrided<float>  & A, float n);
+template SHARED Matrix<float> normalize  (const MatrixAbstract<float> & A);
+template SHARED Matrix<float> operator * (const MatrixStrided<float>  & A, const MatrixAbstract<float> & B);
+
+#endif
 
 
 // I/O library ---------------------------------------------------------------

@@ -148,9 +148,9 @@ public:
     ~ImageInput ();
 
 #   ifdef n2a_FP
-    Matrix<T> get (String channelName, T now, int exponent);
+    Matrix<T> get (String channelName, T now, bool step, int exponent);
 #   else
-    Matrix<T> get (String channelName, T now);  ///< @param now If positive, then desired PTS in seconds. If negative, then $t.
+    Matrix<T> get (String channelName, T now, bool step);  ///< @param step Indicates one frame step per cycle. If true, then "now" is $t. If false, then "now" is desired PTS in seconds.
 #   endif
 };
 template<class T> SHARED ImageInput<T> * imageInputHelper (const String & fileName, ImageInput<T> * oldHandle = 0);
@@ -308,18 +308,18 @@ public:
 
     // 3D drawing functions.
 #   ifdef HAVE_GL
-    bool next3D (const Matrix<T> * model, const Material & material);  // Additional setup work done by 3D draw functions. Does both one-time initialization and per-frame initialization, as needed.
+    bool next3D (const Matrix<float> * model, const Material & material);  // Additional setup work done by 3D draw functions. Does both one-time initialization and per-frame initialization, as needed.
     GLuint getBuffer (String name, bool vertices);  // vertices==true indicates that this is a vertex array; vertices==false indicates that this is an index array
 #     ifdef n2a_FP
-    T drawCube     (T now, const Matrix<T> & model, int exponentP, const Material & material);
-    T drawCylinder (T now,                          int exponentP, const Material & material, const MatrixFixed<T,3,1> & p1, T r1, int exponentR, const MatrixFixed<T,3,1> & p2, T r2 = -1, int cap1 = 0, int cap2 = 0, int steps = 6, int stepsCap = -1);
-    T drawPlane    (T now, const Matrix<T> & model, int exponentP, const Material & material);
-    T drawSphere   (T now, const Matrix<T> & model, int exponentP, const Material & material, int steps = 1);
+    T drawCube     (T now, const Material & material, const Matrix<float> & model,       int exponentP);
+    T drawCylinder (T now, const Material & material, const MatrixFixed<float,3,1> & p1, int exponentP, float r1, int exponentR, const MatrixFixed<float,3,1> & p2, float r2 = -1, int cap1 = 0, int cap2 = 0, int steps = 6, int stepsCap = -1);
+    T drawPlane    (T now, const Material & material, const Matrix<float> & model,       int exponentP);
+    T drawSphere   (T now, const Material & material, const Matrix<float> & model,       int exponentP, int steps = 1);
 #     else
-    T drawCube     (T now, const Matrix<T> & model, const Material & material);
-    T drawCylinder (T now,                          const Material & material, const MatrixFixed<T,3,1> & p1, T r1, const MatrixFixed<T,3,1> & p2, T r2 = -1, int cap1 = 0, int cap2 = 0, int steps = 6, int stepsCap = -1);
-    T drawPlane    (T now, const Matrix<T> & model, const Material & material);
-    T drawSphere   (T now, const Matrix<T> & model, const Material & material, int steps = 1);
+    T drawCube     (T now, const Material & material, const Matrix<float> & model);
+    T drawCylinder (T now, const Material & material, const MatrixFixed<float,3,1> & p1, float r1, const MatrixFixed<float,3,1> & p2, float r2 = -1, int cap1 = 0, int cap2 = 0, int steps = 6, int stepsCap = -1);
+    T drawPlane    (T now, const Material & material, const Matrix<float> & model);
+    T drawSphere   (T now, const Material & material, const Matrix<float> & model, int steps = 1);
 #     endif
 #   endif
 };

@@ -76,8 +76,6 @@ copy (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
     }
 }
 
-#ifndef n2a_FP
-
 template<class T>
 T
 norm (const MatrixAbstract<T> & A, T n)
@@ -153,8 +151,6 @@ normalize (const MatrixAbstract<T> & A)
 {
     return A / norm (A, (T) 2);
 }
-
-#endif
 
 template<class T>
 T
@@ -1003,7 +999,6 @@ clear (MatrixStrided<T> & A, const T scalar)
     }
 }
 
-#ifndef n2a_FP
 template<class T>
 T
 norm (const MatrixStrided<T> & A, T n)
@@ -1092,7 +1087,6 @@ norm (const MatrixStrided<T> & A, T n)
         return (T) std::pow (result, (T) (1.0 / n));
     }
 }
-#endif
 
 template<class T>
 Matrix<T>
@@ -1615,25 +1609,9 @@ Matrix<T>::Matrix (const int rows, const int columns)
 }
 
 template<class T>
-Matrix<T>::Matrix (const MatrixAbstract<T> & that)
+Matrix<T>::Matrix (const Matrix<T> & that)
 {
-    if (that.classID () & MatrixID)
-    {
-        this->operator = ((const Matrix<T> &) that);
-        return;
-    }
-
-    int h = that.rows ();
-    int w = that.columns ();
-    resize (h, w);
-    T * i = (T *) this->data;
-    for (int c = 0; c < w; c++)
-    {
-        for (int r = 0; r < h; r++)
-        {
-            *i++ = that(r,c);
-        }
-    }
+    this->operator = (that);
 }
 
 template<class T>

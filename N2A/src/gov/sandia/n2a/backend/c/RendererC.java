@@ -256,23 +256,39 @@ public class RendererC extends Renderer
                     // else model has been initialized to identity, presumably integer 1. Operator.MSB set above is suitable default.
                 }
 
-                result.append (d.name + "->" + op + " (" + job.SIMULATOR + "currentEvent->t");
-                if (needModel) result.append (", model");
-                if (useExponent) result.append (", " + exponentP);
-                result.append (", material");
+                result.append (d.name + "->" + op + " (" + job.SIMULATOR + "currentEvent->t, material");
+                if (needModel)  // Currently, everything but DrawCylinder
+                {
+                    result.append (", model");
+                    if (useExponent) result.append (", " + exponentP);
+                }
 
                 if (d instanceof DrawCylinder)
                 {
                     result.append (", ");
-                    d.operands[1].render (this);
+                    d.operands[1].render (this);  // p1
+                    if (useExponent) result.append (", " + exponentP);
+
                     result.append (", ");
-                    d.operands[2].render (this);
-                    if (useExponent) result.append (", " + d.operands[2].exponentNext);
+                    d.operands[2].render (this);  // r1
+                    if (useExponent) result.append (", " + d.operands[2].exponentNext);  // exponentR
+
                     result.append (", ");
-                    d.operands[3].render (this);
+                    d.operands[3].render (this);  // p2
+
                     result.append (", ");
-                    if (d.operands.length > 4) d.operands[4].render (this);
+                    if (d.operands.length > 4) d.operands[4].render (this);  // r2
                     else                       result.append ("-1");
+
+                    result.append (", ");
+                    Operator cap1 = d.getKeyword ("cap1");
+                    if (cap1 == null) result.append ("0");
+                    else              cap1.render (this);
+
+                    result.append (", ");
+                    Operator cap2 = d.getKeyword ("cap2");
+                    if (cap2 == null) result.append ("0");
+                    else              cap2.render (this);
 
                     result.append (", ");
                     Operator steps = d.getKeyword ("steps");
@@ -652,8 +668,17 @@ public class RendererC extends Renderer
             if (r.operands.length < 1) result.append ("\"Y\"");
             else                       r.operands[1].render (this);
             result.append (", ");
-            if (r.operands.length < 2) result.append ("-" + job.SIMULATOR + "currentEvent->t");
-            else                       r.operands[2].render (this);
+            if (r.operands.length < 2)
+            {
+                result.append (job.SIMULATOR + "currentEvent->t");
+                result.append (", true");
+            }
+            else
+            {
+                r.operands[2].render (this);
+                result.append (", false");
+            }
+            if (useExponent) result.append (", " + r.exponentNext);
             result.append (")");
             return true;
         }

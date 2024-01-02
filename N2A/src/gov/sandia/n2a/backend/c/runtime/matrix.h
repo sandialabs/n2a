@@ -60,7 +60,9 @@ template<class T> class Matrix;
 template<class T> SHARED void      clear      (const MatrixAbstract<T> & A, const T scalar = (T) 0);      ///< Set all elements to given value. const on A is a lie to allow transient matrix regions.
 template<class T> SHARED void      identity   (const MatrixAbstract<T> & A);                              ///< Set diagonal to 1 and all other elements to 0. Does not have to be a square matrix. const on A is a lie to allow transient matrix regions.
 template<class T> SHARED void      copy       (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Copy overlap region from B into A. const on A is a lie to allow transient matrix regions.
+template<class T> SHARED T         norm       (const MatrixAbstract<T> & A, T n = (T) 2);                 ///< (sum_elements (element^n))^(1/n). Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm. n==0 is technically undefined, but we treat is as the count of non-zero elements.
 template<class T> SHARED T         sumSquares (const MatrixAbstract<T> & A);                              ///< Equivalent to norm(A,2)^2, but without taking the square root.
+template<class T> SHARED Matrix<T> normalize  (const MatrixAbstract<T> & A);                              ///< shortcut for A / norm (A, 2)
 template<class T> SHARED Matrix<T> cross      (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
 template<class T> SHARED Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T &));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
 template<class T> SHARED Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T));     ///< Apply function() to each element, and return the results in a new Matrix of equal size.
@@ -127,10 +129,7 @@ template<class T>        Matrix<T> max (const T scalar,              const Matri
 template<class T> SHARED std::ostream & operator << (std::ostream & stream, const MatrixAbstract<T> & A);  ///< Print human readable matrix to stream.
 #endif
 
-#ifndef n2a_FP
-template<class T> SHARED T         norm      (const MatrixAbstract<T> & A, T n = (T) 2); ///< (sum_elements (element^n))^(1/n). Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm. n==0 is technically undefined, but we treat is as the count of non-zero elements.
-template<class T> SHARED Matrix<T> normalize (const MatrixAbstract<T> & A);              ///< shortcut for A / norm (A, 2)
-#else
+#ifdef n2a_FP
 SHARED Matrix<int> shift (const MatrixAbstract<int> & A, int shift);  // Defined in fixedpoint.cc
 #endif
 
@@ -159,6 +158,7 @@ public:
 };
 
 template<class T> SHARED void      clear (      MatrixStrided<T> & A, const T scalar = (T) 0);
+template<class T> SHARED T         norm  (const MatrixStrided<T> & A, T n);  // For fixed-point, used alternate function declared below.
 template<class T> SHARED Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T &));
 template<class T> SHARED Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T));
 
@@ -176,9 +176,7 @@ template<class T> SHARED Matrix<T> operator - (const MatrixStrided<T> & A, const
 template<class T> SHARED Matrix<T> operator - (const MatrixStrided<T> & A, const T scalar);
 template<class T> SHARED Matrix<T> operator - (const T scalar,             const MatrixStrided<T> & A);
 
-#ifndef n2a_FP
-template<class T> SHARED T norm  (const MatrixStrided<T> & A, T n);
-#else
+#ifdef n2a_FP
 // Fixed-point operations on MatrixStrided<int>
 // These are not templates. Their implementations are in fixedpoint.cc
 SHARED int         norm                (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult);  // exponentN=15
@@ -208,9 +206,25 @@ public:
 
     Matrix ();
     Matrix (const int rows, const int columns = 1);
-    Matrix (const MatrixAbstract<T> & that);
+    Matrix (const Matrix<T> & that);
     Matrix (const n2a::Pointer & that, const int offset, const int rows, const int columns, const int strideR, const int strideC);
     virtual uint32_t classID () const;
+
+    template<class T2>
+    Matrix (const MatrixAbstract<T2> & that)
+    {
+        int h = that.rows ();
+        int w = that.columns ();
+        resize (h, w);
+        T * i = (T *) this->data;
+        for (int c = 0; c < w; c++)
+        {
+            for (int r = 0; r < h; r++)
+            {
+                *i++ = (T) that(r,c);
+            }
+        }
+    }
 
     void resize (const int rows, const int columns = 1);  ///< Subroutine of constructors.
 
@@ -254,6 +268,8 @@ template<class T> SHARED Matrix<T> operator ~ (const Matrix<T> & A);
 template<class T> SHARED Matrix<T> row        (const Matrix<T> & A, int row);
 template<class T> SHARED Matrix<T> column     (const Matrix<T> & A, int column);
 
+// MatrixFixed and its associated functions are not SHARED, because there's no
+// way to predict which instantiations will be used by which modules.
 template<class T, int R, int C>
 class MatrixFixed : public MatrixStrided<T>
 {
