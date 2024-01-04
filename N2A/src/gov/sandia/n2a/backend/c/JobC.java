@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -30,6 +30,8 @@ import gov.sandia.n2a.language.Transformer;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Draw;
+import gov.sandia.n2a.language.function.Draw3D;
+import gov.sandia.n2a.language.function.DrawLight;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Mfile;
@@ -94,6 +96,7 @@ public class JobC extends Thread
 
     protected boolean supportsUnicodeIdentifiers;
     public    String  T;
+    public    boolean fixedPoint;
     protected String  SIMULATOR;
     protected long    seed;
     protected boolean during;
@@ -164,6 +167,7 @@ public class JobC extends Thread
                     T = "int";
                     Backend.err.get ().println ("WARNING: For now, only supported integer type is 'int', which is assumed to be signed 32-bit.");
                 }
+                fixedPoint = true;
             }
             else if (! T.equals ("double")  &&  ! T.equals ("float"))
             {
@@ -543,7 +547,7 @@ public class JobC extends Thread
             sources.add ("holder");
             sources.add ("MNode");
             sources.add ("profiling");
-            if (T.contains ("int")) sources.add ("fixedpoint");
+            if (fixedPoint) sources.add ("fixedpoint");
             sources.add ("CanvasImage");
             sources.add ("Image");
             sources.add ("ImageFileFormat");
@@ -573,7 +577,7 @@ public class JobC extends Thread
                 if (gprof ) c.setProfiling ();
                 addIncludes (c);
                 c.addDefine ("n2a_T", T);
-                if (T.contains ("int")) c.addDefine ("n2a_FP");
+                if (fixedPoint) c.addDefine ("n2a_FP");
                 if (tls) c.addDefine ("n2a_TLS");
                 c.addSource (runtimeDir.resolve (stem + ".cc"));
                 c.setOutput (object);
@@ -727,7 +731,7 @@ public class JobC extends Thread
         c.addObject (runtimeDir.resolve (objectName ("runtime")));
         c.addObject (runtimeDir.resolve (objectName ("holder")));
         c.addObject (runtimeDir.resolve (objectName ("MNode")));
-        if (T.contains ("int")) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
+        if (fixedPoint) c.addObject (runtimeDir.resolve (objectName ("fixedpoint")));
         c.addObject (runtimeDir.resolve (objectName ("CanvasImage")));
         c.addObject (runtimeDir.resolve (objectName ("Image")));
         c.addObject (runtimeDir.resolve (objectName ("ImageFileFormat")));
@@ -786,7 +790,7 @@ public class JobC extends Thread
             if (include != null) c.addInclude (include.getParent ());
         }
         c.addDefine ("n2a_T", T);
-        if (T.contains ("int")) c.addDefine ("n2a_FP");
+        if (fixedPoint) c.addDefine ("n2a_FP");
         if (tls) c.addDefine ("n2a_TLS");
         c.setOutput (binary);
         c.addSource (source);
@@ -829,7 +833,7 @@ public class JobC extends Thread
             c.addInclude (include.getParent ());
         }
         c.addDefine ("n2a_T", T);
-        if (T.contains ("int")) c.addDefine ("n2a_FP");
+        if (fixedPoint) c.addDefine ("n2a_FP");
         if (tls) c.addDefine ("n2a_TLS");
         c.setOutput (object);
         c.addSource (source);
@@ -902,7 +906,7 @@ public class JobC extends Thread
         digestedModel.determineTypes ();
         digestedModel.determineDuration ();
         digestedModel.assignParents ();
-        if (T.contains ("int")) digestedModel.determineExponents ();
+        if (fixedPoint) digestedModel.determineExponents ();
         digestedModel.findConnectionMatrix ();
         analyzeEvents (digestedModel);
         analyze (digestedModel);
@@ -961,7 +965,7 @@ public class JobC extends Thread
     **/
     public void addImplicitDependencies (EquationSet s)
     {
-        if (T.contains ("int"))
+        if (fixedPoint)
         {
             // Force top-level model to keep $t', so it can retrieve time exponent.
             Variable dt = s.find (new Variable ("$t", 1));
@@ -1000,7 +1004,7 @@ public class JobC extends Thread
                 if (op instanceof Input)
                 {
                     Input i = (Input) op;
-                    if (i.usesTime ()  &&  ! from.hasAttribute ("global")  &&  ! T.contains ("int"))
+                    if (i.usesTime ()  &&  ! from.hasAttribute ("global")  &&  ! fixedPoint)
                     {
                         from.addDependencyOn (dt);  // So that time epsilon can be determined from dt when initializing input.
                     }
@@ -1240,8 +1244,8 @@ public class JobC extends Thread
 
         StringBuilder result = new StringBuilder ();
         RendererC context;
-        if (T.contains ("int")) context = new RendererCfp (this, result);
-        else                    context = new RendererC   (this, result);
+        if (fixedPoint) context = new RendererCfp (this, result);
+        else            context = new RendererC   (this, result);
         BackendDataC bed = (BackendDataC) digestedModel.backendData;
 
         SIMULATOR = "Simulator<" + T + ">::instance" + (tls ? "->" : ".");
@@ -1446,7 +1450,7 @@ public class JobC extends Thread
             result.append ("  params = new Parameters<" + T + ">;\n");
             result.append ("  params->parse (argc, argv);\n");
         }
-        if (T.contains ("int"))
+        if (fixedPoint)
         {
             Variable dt = digestedModel.find (new Variable ("$t", 1));
             result.append ("  Event<int>::exponent = " + dt.exponent + ";\n");
@@ -1956,7 +1960,7 @@ public class JobC extends Thread
         for (ReadMatrix r : mainMatrix)
         {
             result.append ("  " + r.name + " = matrixHelper<" + T + "> (\"" + r.operands[0].getString () + "\"");
-            if (T.contains ("int")) result.append (", " + r.exponent);
+            if (fixedPoint) result.append (", " + r.exponent);
             result.append (");\n");
         }
         for (Mfile m : mainMfile)
@@ -1966,7 +1970,7 @@ public class JobC extends Thread
         for (Input i : mainInput)
         {
             result.append ("  " + i.name + " = inputHelper<" + T + "> (\"" + i.operands[0].getString () + "\"");
-            if (T.contains ("int")) result.append (", " + i.exponent);
+            if (fixedPoint) result.append (", " + i.exponent);
             result.append (");\n");
 
             boolean smooth =             i.getKeywordFlag ("smooth");
@@ -2781,7 +2785,7 @@ public class JobC extends Thread
                 result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
             }
             s.simplify ("$init", bed.globalInit);
-            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.globalInit);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.globalInit);
             EquationSet.determineOrderInit (bed.globalInit);
             for (Variable v : bed.globalInit)
             {
@@ -2835,7 +2839,7 @@ public class JobC extends Thread
                 // raw result = exponentDerivative+exponentTime-MSB
                 // shift = raw-exponentVariable = exponentDerivative+exponentTime-MSB-exponentVariable
                 int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
-                if (shift != 0  &&  T.contains ("int"))
+                if (shift != 0  &&  fixedPoint)
                 {
                     result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
                 }
@@ -2851,7 +2855,7 @@ public class JobC extends Thread
             {
                 result.append ("    " + resolve (v.reference, context, false) + " += ");
                 int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
-                if (shift != 0  &&  T.contains ("int"))
+                if (shift != 0  &&  fixedPoint)
                 {
                     result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
                 }
@@ -2879,7 +2883,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.globalUpdate);
-            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.globalUpdate);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.globalUpdate);
             for (Variable v : bed.globalUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -3054,7 +3058,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.globalDerivativeUpdate);  // This is unlikely to make any difference. Just being thorough before call to multiconditional().
-            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.globalDerivativeUpdate);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.globalDerivativeUpdate);
             for (Variable v : bed.globalDerivativeUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -3145,7 +3149,7 @@ public class JobC extends Thread
             for (Variable v : bed.globalDerivative)
             {
                 result.append ("  stackDerivative->" + mangle (v) + " += ");
-                if (T.contains ("int"))
+                if (fixedPoint)
                 {
                     result.append ("(int) ((int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ");\n");
                 }
@@ -3162,7 +3166,7 @@ public class JobC extends Thread
             result.append ("{\n");
             for (Variable v : bed.globalDerivative)
             {
-                if (T.contains ("int"))
+                if (fixedPoint)
                 {
                     result.append ("  " + mangle (v) + " = (int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ";\n");
                 }
@@ -3208,7 +3212,7 @@ public class JobC extends Thread
                     result.append ("  {\n");
                     result.append ("    poll = true;\n");
                     result.append ("    pollDeadline = " + SIMULATOR + "currentEvent->t + ");
-                    if (T.contains ("int"))
+                    if (fixedPoint)
                     {
                         Variable dt = digestedModel.find (new Variable ("$t", 1));
                         result.append (context.print (bed.poll, dt.exponent));
@@ -3236,7 +3240,7 @@ public class JobC extends Thread
                 result.append ("      " + T + " p = c->getP ();\n");
                 result.append ("      if (p <= 0) continue;\n");
                 result.append ("      if (p < 1  &&  p < uniform<" + T + "> ()");
-                if (T.contains ("int")) result.append (" >> 16");
+                if (fixedPoint) result.append (" >> 16");
                 result.append (") continue;\n");
                 result.append ("      if (poll  &&  pollSorted.count (c)) continue;\n");
                 result.append ("\n");
@@ -3834,7 +3838,7 @@ public class JobC extends Thread
                 result.append ("  lastT = " + SIMULATOR + "currentEvent->t;\n");
             }
             s.simplify ("$init", bed.localInit);
-            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.localInit);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.localInit);
             EquationSet.determineOrderInit (bed.localInit);
             if (bed.localInit.contains (bed.dt))
             {
@@ -3940,7 +3944,7 @@ public class JobC extends Thread
                     {
                         result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + ");
                         int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
-                        if (shift != 0  &&  T.contains ("int"))
+                        if (shift != 0  &&  fixedPoint)
                         {
                             if (v.type instanceof Matrix)
                             {
@@ -3964,7 +3968,7 @@ public class JobC extends Thread
                 {
                     result.append (pad + "  " + resolve (v.reference, context, false) + " += ");
                     int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
-                    if (shift != 0  &&  T.contains ("int"))
+                    if (shift != 0  &&  fixedPoint)
                     {
                         if (v.type instanceof Matrix)
                         {
@@ -4008,7 +4012,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.localUpdate);
-            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.localUpdate);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.localUpdate);
             for (Variable v : bed.localUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -4203,7 +4207,7 @@ public class JobC extends Thread
                         for (Variable t : s.ordered) if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null) list.add (t);
                         list.add (bed.p);
                         s.simplify ("$live", list, bed.p);
-                        if (T.contains ("int")) EquationSet.determineExponentsSimplified (list);
+                        if (fixedPoint) EquationSet.determineExponentsSimplified (list);
                         for (Variable v : list)
                         {
                             multiconditional (v, context, "  ");
@@ -4274,7 +4278,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.localDerivativeUpdate);
-            if (T.contains ("int")) EquationSet.determineExponentsSimplified (bed.localDerivativeUpdate);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.localDerivativeUpdate);
             for (Variable v : bed.localDerivativeUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -4411,7 +4415,7 @@ public class JobC extends Thread
             for (Variable v : bed.localDerivative)
             {
                 result.append ("  stackDerivative->" + mangle (v) + " += ");
-                if (T.contains ("int"))
+                if (fixedPoint)
                 {
                     result.append ("(int) ((int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ");\n");
                 }
@@ -4435,7 +4439,7 @@ public class JobC extends Thread
             result.append ("{\n");
             for (Variable v : bed.localDerivative)
             {
-                if (T.contains ("int"))
+                if (fixedPoint)
                 {
                     result.append ("  " + mangle (v) + " = (int64_t) " + mangle (v) + " * scalar >> " + (Operator.MSB - 1) + ";\n");
                 }
@@ -4580,7 +4584,7 @@ public class JobC extends Thread
                         }
                         list.add (project);
                         s.simplify ("$connect", list, project);
-                        if (T.contains ("int")) EquationSet.determineExponentsSimplified (list);
+                        if (fixedPoint) EquationSet.determineExponentsSimplified (list);
                         for (Variable v : list)
                         {
                             multiconditional (v, context, "      ");
@@ -4717,7 +4721,7 @@ public class JobC extends Thread
                 }
                 list.add (bed.p);
                 s.simplify ("$connect", list, bed.p);
-                if (T.contains ("int")) EquationSet.determineExponentsSimplified (list);
+                if (fixedPoint) EquationSet.determineExponentsSimplified (list);
                 for (Variable v : list)
                 {
                     multiconditional (v, context, "  ");
@@ -4745,7 +4749,7 @@ public class JobC extends Thread
                 for (Variable t : s.ordered) if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null) list.add (t);
                 list.add (bed.xyz);
                 s.simplify ("$live", list, bed.xyz);  // evaluate in $live phase, because endpoints already exist when connection is evaluated.
-                if (T.contains ("int")) EquationSet.determineExponentsSimplified (list);
+                if (fixedPoint) EquationSet.determineExponentsSimplified (list);
                 for (Variable v : list)
                 {
                     multiconditional (v, context, "    ");
@@ -4803,7 +4807,7 @@ public class JobC extends Thread
                             // Note that other trigger types don't need this because they set the auxiliary variable,
                             // so the next test in the same cycle will no longer see change.
                             result.append ("      if (after == 0) return false;\n");
-                            if (T.contains ("int"))
+                            if (fixedPoint)
                             {
                                 result.append ("      " + T + " moduloTime = " + SIMULATOR + "currentEvent->t;\n");  // No need for modulo arithmetic. Rather, int time should be wrapped elsewhere.
                             }
@@ -4896,7 +4900,7 @@ public class JobC extends Thread
                             // raw = exponentV + exponentV - MSB
                             // shift = raw - exponentV = exponentV - MSB
                             int shift = v.exponent - Operator.MSB;
-                            if (shift != 0  &&  T.contains ("int"))
+                            if (shift != 0  &&  fixedPoint)
                             {
                                 result.append (" = (int64_t) " + current + " * " + buffered + RendererC.printShift (shift) + ";\n");
                             }
@@ -5141,7 +5145,7 @@ public class JobC extends Thread
         StringBuilder result = context.result;
 
         // Is delay close enough to a time-quantum?
-        if (T.contains ("int"))
+        if (fixedPoint)
         {
             result.append (pad + "int step = (delay + event->dt / 2) / event->dt;\n");
             result.append (pad + "int quantizedTime = step * event->dt;\n");
@@ -5162,7 +5166,7 @@ public class JobC extends Thread
         {
             result.append (pad + "  spike = new " + eventSpike + ";\n");
         }
-        if (T.contains ("int"))
+        if (fixedPoint)
         {
             result.append (pad + "  delay = quantizedTime;\n");
         }
@@ -5347,7 +5351,7 @@ public class JobC extends Thread
                     // raw exponent = exponentV + exponentExpression - MSB
                     // shift = raw - exponentV = expnentExpression - MSB
                     shift = e.expression.exponentNext - Operator.MSB;
-                    if (shift != 0  &&  T.contains ("int"))
+                    if (shift != 0  &&  fixedPoint)
                     {
                         if (shift < 0) result.append (" = (int64_t) " + LHS + " * ");
                         else           result.append (" = "           + LHS + " * ");
@@ -5361,7 +5365,7 @@ public class JobC extends Thread
                     // raw = exponentV - exponentExpression + MSB
                     // shift = raw - exponentV = MSB - exponentExpression
                     shift = Operator.MSB - e.expression.exponentNext;
-                    if (shift != 0  &&  T.contains ("int"))
+                    if (shift != 0  &&  fixedPoint)
                     {
                         if (shift > 0) result.append (" = ((int64_t) " + LHS + RendererC.printShift (shift) + ") / ");
                         else           result.append (" = "            + LHS                                +  " / ");
@@ -5388,7 +5392,7 @@ public class JobC extends Thread
             {
                 result.append (")");
             }
-            if (shift != 0  &&  T.contains ("int"))
+            if (shift != 0  &&  fixedPoint)
             {
                 result.append (RendererC.printShift (shift));
             }
@@ -5435,7 +5439,7 @@ public class JobC extends Thread
                 {
                     Input i = (Input) op;
                     if (   i.operands[0] instanceof Constant
-                        && i.usesTime ()  &&  ! context.global  &&  ! T.contains ("int")  // In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
+                        && i.usesTime ()  &&  ! context.global  &&  ! fixedPoint  // In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
                         && ! context.initialized.contains (i.name))
                     {
                         // See comments in generateMainInitializers()
@@ -5541,7 +5545,7 @@ public class JobC extends Thread
                             bed.defined.add (v);
                         }
                         context.result.append (pad + "MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (" + r.fileName);
-                        if (T.contains ("int")) context.result.append (", " + r.exponent);
+                        if (fixedPoint) context.result.append (", " + r.exponent);
                         context.result.append (");\n");
                     }
                     return true;
@@ -5571,7 +5575,7 @@ public class JobC extends Thread
                             bed.defined.add (v);
                         }
                         context.result.append (pad + "InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (" + i.fileName);
-                        if (T.contains ("int")) context.result.append (", " + i.exponent);
+                        if (fixedPoint) context.result.append (", " + i.exponent);
                         context.result.append (");\n");
 
                         boolean smooth =             i.getKeywordFlag ("smooth");
@@ -5580,7 +5584,7 @@ public class JobC extends Thread
                         {
                             if (time)   context.result.append (pad + i.name + "->time = true;\n");
                             if (smooth) context.result.append (pad + i.name + "->smooth = true;\n");
-                            if (! context.global  &&  ! T.contains ("int"))
+                            if (! context.global  &&  ! fixedPoint)
                             {
                                 boolean lvalue = ! bed.dt.hasAttribute ("constant");
                                 context.result.append (pad + i.name + "->epsilon = " + resolve (bed.dt.reference, context, lvalue) + " / 1000.0");
@@ -5635,29 +5639,63 @@ public class JobC extends Thread
                         if (v != null) bed.defined.add (v);
                     }
 
-                    boolean do3D =  glLibs != null  &&  d instanceof Draw.Shape3D;
-                    boolean needModel = false;
+                    boolean light     = d instanceof DrawLight;
+                    boolean material  = d instanceof Draw3D;
+                    boolean gl        = glLibs != null;
+                    boolean ffmpeg    = ffmpegLibDir != null;
+                    boolean do3D      = gl  &&  (material  ||  light);
+                    boolean needModel = material  &&  ((Draw3D) d).needModelMatrix ();
                     boolean modelSet  = false;
+                    int     index     = 0;
+
                     if (do3D)
                     {
-                        needModel = ((Draw.Shape3D) d).needModelMatrix ();
-
-                        // "material" and "model" are reserved local variables
-                        // prepareDrawKeywords() will assign specific values.
-
-                        if (! bed.defined.contains (BackendDataC.material))
+                        // "light", "material" and "model" are reserved local variables
+                        // The keyword section below will assign specific values.
+                        if (light)
                         {
-                            bed.defined.add (BackendDataC.material);
-                            context.result.append (pad + "Material material;\n");
+                            if (! bed.defined.contains ("light"))
+                            {
+                                bed.defined.add ("light");
+                                context.result.append (pad + "Light * light;\n");
+                            }
+
+                            if (d.operands.length > 1) index = (int) d.operands[1].getDouble ();
+
+                            boolean on = true;
+                            Operator kon = d.getKeyword ("on");
+                            if (kon != null) on = kon.getDouble () != 0;
+                            if (on)
+                            {
+                                context.result.append (pad + "light = " + d.name + "->addLight (" + index + ");\n");
+                            }
+                            else
+                            {
+                                context.result.append (pad + d.name + "->removeLight (" + index + ");\n");
+                            }
+                        }
+                        else  // material must be true
+                        {
+                            if (! bed.defined.contains ("material"))
+                            {
+                                bed.defined.add ("material");
+                                context.result.append (pad + "Material material;\n");
+                            }
                         }
                         if (needModel)
                         {
-                            if (! bed.defined.contains (BackendDataC.model))
+                            if (! bed.defined.contains ("model"))
                             {
-                                bed.defined.add (BackendDataC.model);
-                                context.result.append (pad + "Matrix<" + T + ",4,4> model;\n");
+                                bed.defined.add ("model");
+                                context.result.append (pad + "Matrix<" + T + ",4,4> model;\n");  // model is built in type T, then converted to float on call to draw routine
                             }
                         }
+                    }
+                    else
+                    {
+                        // For simplicity of testing later.
+                        light = false;
+                        material = false;
                     }
 
                     if (d.keywords != null)
@@ -5666,84 +5704,120 @@ public class JobC extends Thread
                         {
                             String   key   = k.getKey ();
                             Operator value = k.getValue ();
+                            boolean  convertToFloat = false;
                             switch (key)
                             {
-                                case "clear":
-                                    context.result.append (pad + d.name + "->setClearColor (");
-                                    value.render (context);
-                                    context.result.append (");\n");
-                                    continue;  // Don't fall through to code that assigns value.
+                                // A standard assignment comes after this switch statement.
+                                // If a case ends with "break", it falls through to the standard assignment.
+                                // If a case ends with "continue", it skips the standard assignment.
 
-                                case "width":
+                                // Scalars that are explicitly floating-point, regardless of T.
+                                case "spotExponent":
+                                case "spotCutoff":
+                                case "attenuation0":
+                                case "attenuation1":
+                                case "attenuation2":
+                                    if (! light) continue;
+                                    context.result.append (pad + "light->" + key);
+                                    convertToFloat = true;
+                                    break;
+                                case "shininess":
+                                    if (! material) continue;
+                                    context.result.append (pad + "material.shininess");
+                                    convertToFloat = true;
+                                    break;
+                                case "timeScale":
+                                    if (! ffmpeg) continue;  // "timeScale" only applies to FFmpeg.
+                                    context.result.append (pad + d.name + "->timeScale");
+                                    convertToFloat = true;
+                                    break;
+
+                                case "codec":  // string
+                                    if (! ffmpeg) continue;  // "codec" only applies to FFmpeg.
+                                case "hold":  // boolean
+                                case "format":  // string
+                                    context.result.append (pad + d.name + "->" + key);
+                                    break;
+
+                                case "width":  // int (pixels)
                                     context.result.append (pad + d.name + "->width");
                                     if (! d.keywords.containsKey ("height")) context.result.append (" = " + d.name + "->height");
                                     break;
-                                case "height":
+                                case "height":  // int (pixels)
                                     context.result.append (pad + d.name + "->height");
                                     if (! d.keywords.containsKey ("width")) context.result.append (" = " + d.name + "->width");
                                     break;
 
-                                case "timeScale":
-                                case "codec":
-                                    if (ffmpegLibDir == null) continue;  // "timeScale" and "codec" only apply to FFmpeg.
-                                case "hold":
-                                case "format":
-                                    context.result.append (pad + d.name + "->" + key);
-                                    break;
+                                // Vectors that require conversion to float
+                                case "position":
+                                case "direction":
+                                    if (! light) continue;
+                                    context.result.append (pad + "setVector (light->" + key + ", ");
+                                    value.render (context);
+                                    if (fixedPoint) context.result.append (", " + value.exponent);
+                                    context.result.append (");\n");
+                                    continue;
 
+                                // Matrices that require conversion to float
                                 case "view":
                                 case "projection":
-                                    if (glLibs == null) continue;
-                                    context.result.append (pad + d.name + "->next" + key.substring (0, 1).toUpperCase () + key.substring (1));
-                                    break;
+                                    if (! gl) continue;
+                                    String name = d.name + "->next" + key.substring (0, 1).toUpperCase () + key.substring (1);
+                                    context.result.append (pad + name + " = ");
+                                    value.render (context);
+                                    context.result.append (";\n");
+                                    if (fixedPoint) context.result.append (pad + name + " /= powf (2, FP_MSB - " + value.exponent + ");\n");
+                                    continue;
 
+                                // The model matrix will get coerced to float in the call to draw.
+                                // If this is fixed point, we will also pass the exponent.
+                                // All that happens later. For now, just assign the matrix.
                                 case "model":
                                     if (! needModel) continue;
                                     modelSet = true;
                                     context.result.append (pad + "model");
                                     break;
 
+                                case "clear":
+                                    context.result.append (pad + d.name + "->setClearColor (");
+                                    value.render (context);
+                                    context.result.append (");\n");
+                                    continue;
+
+                                case "specular":
+                                    if (light) continue;
                                 case "diffuse":
                                 case "ambient":
                                 case "emission":
-                                case "specular":
-                                    if (! do3D) continue;
-                                    context.result.append (pad + "setColor (material." + key + ", ");
-                                    value.render (context);
-                                    context.result.append (", " + key.equals ("diffuse") + ");\n");
+                                    if (light)
+                                    {
+                                        context.result.append (pad + "setVector (light->" + key + ", ");
+                                        value.render (context);
+                                        context.result.append (");\n");
+                                    }
+                                    else if (material)
+                                    {
+                                        context.result.append (pad + "setColor (material." + key + ", ");
+                                        value.render (context);
+                                        context.result.append (", " + key.equals ("diffuse") + ");\n");
+                                    }
                                     continue;
-
-                                case "shininess":
-                                    context.result.append (pad + "material.shininess");
-                                    break;
 
                                 default:  // "raw" and any invalid keywords
                                     continue;
                             }
                             context.result.append (" = ");
+                            if (fixedPoint  &&  convertToFloat) context.result.append ("(");
                             value.render (context);
+                            if (fixedPoint  &&  convertToFloat) context.result.append (") / powf (2, FP_MSB - " + value.exponent + ")");
                             context.result.append (";\n");
                         }
                     }
 
                     // Finish preparing model matrix.
-                    if (needModel)
+                    if (needModel  &&  ! modelSet)
                     {
-                        if (d.operands.length > 1)  // Have position
-                        {
-                            context.result.append (pad + "model = glTranslate (");
-                            d.operands[1].render (context);
-                            context.result.append (")");
-                            if (modelSet) context.result.append (" * model");
-                            context.result.append (";\n");
-                        }
-                        else  // Don't have position
-                        {
-                            if (! modelSet)
-                            {
-                                context.result.append (pad + "identity (model);\n");
-                            }
-                        }
+                        context.result.append (pad + "identity (model);\n");
                     }
 
                     return true;

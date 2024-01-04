@@ -1,10 +1,12 @@
 /*
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
+
+import java.util.Map.Entry;
 
 import com.jogamp.opengl.GL;
 import com.jogamp.opengl.GL2ES2;
@@ -13,13 +15,14 @@ import com.jogamp.opengl.util.GLArrayDataServer;
 import com.jogamp.opengl.util.glsl.ShaderState;
 
 import gov.sandia.n2a.backend.internal.Simulator;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.linear.MatrixDense;
 
-public class DrawCylinder extends Draw implements Draw.Shape3D
+public class DrawCylinder extends Draw3D
 {
     protected MatrixDense t; // temporary used by put(). For efficiency, we don't want to keep creating every time.
 
@@ -37,6 +40,48 @@ public class DrawCylinder extends Draw implements Draw.Shape3D
                 return new DrawCylinder ();
             }
         };
+    }
+
+    public Operator simplify (Variable from, boolean evalOnly)
+    {
+        for (int i = 0; i < operands.length; i++)
+        {
+            operands[i] = operands[i].simplify (from, evalOnly);
+        }
+        if (keywords != null)
+        {
+            for (Entry<String,Operator> k : keywords.entrySet ())
+            {
+                k.setValue (k.getValue ().simplify (from, evalOnly));
+            }
+        }
+        return this;
+    }
+
+    public void determineExponentNext ()
+    {
+        super.determineExponentNext ();
+
+        Operator p1 = operands[1];
+        Operator r1 = operands[2];
+        Operator p2 = operands[3];
+        Operator r2 = r1;
+        if (operands.length > 4) r2 = operands[4];
+
+        int exponent = (p1.exponent + p2.exponent) / 2;
+        p1.exponentNext = exponent;
+        p1.determineExponentNext ();
+        p2.exponentNext = exponent;
+        p2.determineExponentNext ();
+
+        exponent = (r1.exponent + r2.exponent) / 2;
+        r1.exponentNext = exponent;
+        r1.determineExponentNext ();
+        if (r2 != r1)
+        {
+            r2.exponentNext = exponent;
+            r2.determineExponentNext ();
+        }
     }
 
     @Override

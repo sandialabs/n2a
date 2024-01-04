@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -44,10 +44,9 @@ public class Function extends Operator
             SimpleNode n = (SimpleNode) list.jjtGetChild (i);
             if (n instanceof ASTKeyword)
             {
-                Operator op = Operator.getFrom ((SimpleNode) n.jjtGetChild (0));
-                op.parent = this;
-                if (keywords == null) keywords = new HashMap<String,Operator> ();
-                keywords.put (n.jjtGetValue ().toString (), op);
+                Operator op   = Operator.getFrom ((SimpleNode) n.jjtGetChild (0));
+                String   name = n.jjtGetValue ().toString ();
+                addKeyword (name, op);
             }
             else
             {
@@ -57,6 +56,13 @@ public class Function extends Operator
             }
         }
         operands = positional.toArray (new Operator[positional.size ()]);
+    }
+
+    public void addKeyword (String name, Operator op)
+    {
+        op.parent = this;
+        if (keywords == null) keywords = new HashMap<String,Operator> ();
+        keywords.put (name, op);
     }
 
     public Operator getKeyword (String name)

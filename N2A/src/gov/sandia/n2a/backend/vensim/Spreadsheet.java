@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -77,7 +77,7 @@ public class Spreadsheet extends Function implements NonzeroIterable
     {
         for (int i = 0; i < operands.length; i++) operands[i].determineExponent (context);
 
-        if (getKeyword ("info") == null)  // normal mode
+        if (getKeyword ("info") == null)  // normal mode. This includes "prefix" mode, but in that case we return a string, so don't care about exponent.
         {
             int centerNew   = MSB / 2;
             int exponentNew = getExponentHint (0) + MSB - centerNew;

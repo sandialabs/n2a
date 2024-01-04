@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,6 +25,8 @@ import gov.sandia.n2a.language.UnsupportedFunctionException;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Draw;
+import gov.sandia.n2a.language.function.Draw2D;
+import gov.sandia.n2a.language.function.Draw3D;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
 import gov.sandia.n2a.language.function.Gaussian;
@@ -4161,7 +4163,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             public boolean visit (Operator op)
             {
-                if (op instanceof Draw.Shape)
+                if (op instanceof Draw2D  ||  op instanceof Draw3D)
                 {
                     drawX.add (v);
                     return false;

@@ -1,5 +1,5 @@
 /*
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,11 +17,10 @@ import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.linear.MatrixDense;
 
-public class DrawPlane extends Draw implements Draw.Shape3D
+public class DrawPlane extends Draw3D
 {
     public static Factory factory ()
     {
@@ -50,9 +49,6 @@ public class DrawPlane extends Draw implements Draw.Shape3D
         double now;
         if (simulator.currentEvent == null) now = 0;
         else                                now = (float) simulator.currentEvent.t;
-
-        Matrix p = null;
-        if (operands.length > 1) p = (Matrix) operands[1].eval (context);
 
         MatrixDense model = (MatrixDense) evalKeyword (context, "model");
         Material m = new Material ();
@@ -103,7 +99,6 @@ public class DrawPlane extends Draw implements Draw.Shape3D
         PMVMatrix pv = H.pv;
         pv.glMatrixMode (PMVMatrix.GL_MODELVIEW);
         pv.glPushMatrix ();
-        if (p != null) pv.glMultMatrixf (getMatrix (glTranslate.make (p)), 0);
         if (model != null)  pv.glMultMatrixf (getMatrix (model), 0);
         st.uniform (gl, new GLUniformData ("modelViewMatrix", 4, 4, pv.glGetMvMatrixf ()));
         st.uniform (gl, new GLUniformData ("normalMatrix",    4, 4, pv.glGetMvitMatrixf ()));

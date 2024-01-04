@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -697,6 +697,17 @@ imageInputHelper (const String & fileName, ImageInput<T> * oldHandle)
 
 // class ImageOutput ---------------------------------------------------------
 
+#ifndef n2a_FP
+// The fixed-point version of this function is implemented directly in holder.cc
+// because it is not templated.
+template<class T>
+void
+setVector (float target[], const Matrix<T> & value)
+{
+    for (int i = 0; i < 3; i++) target[i] = (float) value[i];
+}
+#endif
+
 template<class T>
 ImageOutput<T>::ImageOutput (const String & fileName)
 :   Holder (fileName),
@@ -909,11 +920,14 @@ ImageOutput<int>::setClearColor (const Matrix<int> & color)
     if (count == 1) count = color.columns ();
     bool hasAlpha = count > 3;
 
-    uint32_t      r = std::min (0xFF, std::max (0, color[0] >> FP_MSB - 8));
-    uint32_t      g = std::min (0xFF, std::max (0, color[1] >> FP_MSB - 8));
-    uint32_t      b = std::min (0xFF, std::max (0, color[2] >> FP_MSB - 8));
+    // Values in the fixed-point matrix are in the range [0,1]. The MSB contains power 0.
+    // However, the range for integer colors is [0,255]. Thus, we need to multiply by 255
+    // before downshifting.
+    uint32_t      r = std::min (0xFF, std::max (0, (int) ((int64_t) color[0] * 0xFF >> FP_MSB)));
+    uint32_t      g = std::min (0xFF, std::max (0, (int) ((int64_t) color[1] * 0xFF >> FP_MSB)));
+    uint32_t      b = std::min (0xFF, std::max (0, (int) ((int64_t) color[2] * 0xFF >> FP_MSB)));
     uint32_t      a = 0xFF;
-    if (hasAlpha) a = std::min (0xFF, std::max (0, color[3] >> FP_MSB - 8));
+    if (hasAlpha) a = std::min (0xFF, std::max (0, (int) ((int64_t) color[3] * 0xFF >> FP_MSB)));
     clearColor = r << 24 | g << 16 | b << 8 | a;
 
 #   ifdef HAVE_GL
@@ -1167,6 +1181,30 @@ ImageOutput<T>::writeImage  ()
 }
 
 #ifdef HAVE_GL
+
+template<class T>
+Light *
+ImageOutput<T>::addLight (int index)
+{
+    Light * result = lights[index];
+    if (! result)
+    {
+        result = new Light;
+        lights[index] = result;
+    }
+    result->clear ();
+    return result;
+}
+
+template<class T>
+void
+ImageOutput<T>::removeLight (int index)
+{
+    auto & it = lights.find (index);
+    if (it == lights.end ()) return;
+    delete it->second;
+    lights.erase (it);
+}
 
 template<class T>
 bool

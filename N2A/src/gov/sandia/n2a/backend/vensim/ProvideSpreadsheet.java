@@ -1,5 +1,5 @@
 /*
-Copyright 2021-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -102,7 +102,7 @@ public class ProvideSpreadsheet implements ProvideOperator
             c.addInclude (runtimeDir);
             c.addInclude (job.runtimeDir);  // C runtime
             c.addDefine ("n2a_T", job.T);
-            if (job.T.contains ("int")) c.addDefine ("n2a_FP");
+            if (job.fixedPoint) c.addDefine ("n2a_FP");
             if (job.tls) c.addDefine ("n2a_TLS");
             c.setOutput (object);
             c.addSource (runtimeDir.resolve ("spreadsheet.cc"));
@@ -139,8 +139,10 @@ public class ProvideSpreadsheet implements ProvideOperator
         Spreadsheet s = (Spreadsheet) op;
         StringBuilder result = context.result;
 
+        Operator prefix = s.getKeyword ("prefix");
+        Operator info   = s.getKeyword ("info");
+
         String call = "get";
-        Operator info = s.getKeyword ("info");
         if (info != null)
         {
             String p = info.getString ().trim ();
@@ -154,6 +156,7 @@ public class ProvideSpreadsheet implements ProvideOperator
         }
 
         int shift = s.exponent - s.exponentNext;
+        if (prefix != null) shift = 0;  // force no shift for string result
         if (context.useExponent  &&  shift != 0) result.append ("(");
 
         result.append (s.name + "->" + call + " (");
@@ -164,7 +167,6 @@ public class ProvideSpreadsheet implements ProvideOperator
         }
         if (call.equals ("get"))
         {
-            Operator prefix = s.getKeyword ("prefix");
             if (prefix != null)
             {
                 result.append (", ");
@@ -240,7 +242,7 @@ public class ProvideSpreadsheet implements ProvideOperator
             {
                 Spreadsheet s = (Spreadsheet) op;
                 context.result.append ("  " + s.name + " = spreadsheetHelper<" + job.T + "> (\"" + s.operands[0].getString () + "\"");
-                if (job.T.contains ("int")) context.result.append (", " + s.exponent);
+                if (job.fixedPoint) context.result.append (", " + s.exponent);
                 context.result.append (");\n");
             }
         }
@@ -261,7 +263,7 @@ public class ProvideSpreadsheet implements ProvideOperator
         {
             JobC job = context.job;
             context.result.append (pad + "Spreadsheet<" + job.T + "> * " + s.name + " = spreadsheetHelper<" + job.T + "> (" + s.fileName);
-            if (job.T.contains ("int")) context.result.append (", " + s.exponent);
+            if (job.fixedPoint) context.result.append (", " + s.exponent);
             context.result.append (");\n");
         }
         return true;

@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -175,7 +175,7 @@ public:
     LightLocation (GLuint program, int index);
 };
 
-class Light
+class SHARED Light
 {
 public:
     bool  infinite;
@@ -190,11 +190,11 @@ public:
     float attenuation1;
     float attenuation2;
 
-    Light ();
+    void clear ();  // Reset all values to default.
     void setUniform (const LightLocation & l, const Matrix<float> & view);
 };
 
-class Material
+class SHARED Material
 {
 public:
     float ambient[3];
@@ -220,6 +220,12 @@ int  putUnique (std::vector<GLfloat> & vertices,                  float x, float
 void icosphere          (std::vector<GLfloat> & vertices, std::vector<GLuint> & indices);
 void icosphereSubdivide (std::vector<GLfloat> & vertices, std::vector<GLuint> & indices);
 int  split              (std::vector<GLfloat> & vertices, int v0, int v1);
+
+#ifdef n2a_FP
+                  SHARED void setVector (float target[], const Matrix<int> & value, int exponent);
+#else
+template<class T> SHARED void setVector (float target[], const Matrix<T>   & value);
+#endif
 
 #endif
 
@@ -308,6 +314,8 @@ public:
 
     // 3D drawing functions.
 #   ifdef HAVE_GL
+    Light * addLight    (int index);
+    void    removeLight (int index);
     bool next3D (const Matrix<float> * model, const Material & material);  // Additional setup work done by 3D draw functions. Does both one-time initialization and per-frame initialization, as needed.
     GLuint getBuffer (String name, bool vertices);  // vertices==true indicates that this is a vertex array; vertices==false indicates that this is an index array
 #     ifdef n2a_FP

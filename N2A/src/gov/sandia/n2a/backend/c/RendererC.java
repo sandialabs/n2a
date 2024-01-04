@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -26,6 +26,8 @@ import gov.sandia.n2a.language.function.Atan;
 import gov.sandia.n2a.language.function.Columns;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Draw;
+import gov.sandia.n2a.language.function.Draw2D;
+import gov.sandia.n2a.language.function.Draw3D;
 import gov.sandia.n2a.language.function.DrawCylinder;
 import gov.sandia.n2a.language.function.DrawSphere;
 import gov.sandia.n2a.language.function.Event;
@@ -243,9 +245,9 @@ public class RendererC extends Renderer
         if (op instanceof Draw)
         {
             Draw d = (Draw) op;
-            if (op instanceof Draw.Shape3D)
+            if (op instanceof Draw3D)
             {
-                boolean needModel = ((Draw.Shape3D) d).needModelMatrix ();
+                boolean needModel = ((Draw3D) d).needModelMatrix ();
                 int exponentP = Operator.MSB;
                 if (useExponent)
                 {
@@ -310,7 +312,7 @@ public class RendererC extends Renderer
 
                 result.append (")");
             }
-            else if (op instanceof Draw.Shape)
+            else if (op instanceof Draw2D)
             {
                 int last = d.operands.length - 1;
                 result.append (d.name + "->" + op + " (" + job.SIMULATOR + "currentEvent->t, " + d.getKeywordFlag ("raw"));
@@ -807,7 +809,7 @@ public class RendererC extends Renderer
         {
             // It's ugly to put casts in front of everything. The way to do better is to determine
             // if the result of the expression is an integer. That's more analysis than it's worth.
-            if (! job.T.contains ("int")) result.append ("(" + job.T + ") ");
+            if (! job.fixedPoint) result.append ("(" + job.T + ") ");
             a.render (this);
         }
     }

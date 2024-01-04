@@ -1,5 +1,5 @@
 /*
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,14 +17,15 @@ import com.jogamp.opengl.util.PMVMatrix;
 import com.jogamp.opengl.util.glsl.ShaderState;
 
 import gov.sandia.n2a.backend.internal.Simulator;
+import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.operator.Multiply;
 import gov.sandia.n2a.language.type.Instance;
-import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.linear.MatrixDense;
 
-public class DrawSphere extends Draw implements Draw.Shape3D
+public class DrawSphere extends Draw3D
 {
     public static Factory factory ()
     {
@@ -42,6 +43,67 @@ public class DrawSphere extends Draw implements Draw.Shape3D
         };
     }
 
+    public Operator simplify (Variable from, boolean evalOnly)
+    {
+        if (operands.length < 2) return super.simplify (from, evalOnly);
+
+        // Positional parameters are present, so fold them into model matrix.
+        Operator center = operands[1];
+        glTranslate t = new glTranslate ();
+        t.operands = new Operator[1];
+        t.operands[0] = center;
+        center.parent = t;
+
+        glScale s = null;
+        if (operands.length > 2)
+        {
+            Operator radius = operands[2];
+            s = new glScale ();
+            s.operands = new Operator[1];
+            s.operands[0] = radius;
+            radius.parent = s;
+        }
+
+        Operator model = getKeyword ("model");
+        if (s != null)
+        {
+            if (model == null)
+            {
+                model = s;
+            }
+            else
+            {
+                Multiply m = new Multiply ();
+                m.operand0 = model;
+                m.operand1 = s;
+                s.parent = m;
+                model.parent = m;
+                model = m;
+            }
+        }
+
+        if (model == null)
+        {
+            addKeyword ("model", t);
+        }
+        else
+        {
+            Multiply m = new Multiply ();
+            m.operand0 = t;
+            m.operand1 = model;
+            t.parent = m;
+            model.parent = m;
+            addKeyword ("model", m);
+        }
+
+        Operator[] nextOperands = new Operator[1];
+        nextOperands[0] = operands[0];
+        operands = nextOperands;
+
+        from.changed = true;
+        return this;
+    }
+
     public Type eval (Instance context)
     {
         Simulator simulator = Simulator.instance.get ();
@@ -53,11 +115,6 @@ public class DrawSphere extends Draw implements Draw.Shape3D
         double now;
         if (simulator.currentEvent == null) now = 0;
         else                                now = (float) simulator.currentEvent.t;
-
-        Matrix p = null;
-        double r = 1;
-        if (operands.length > 1) p =  (Matrix) operands[1].eval (context);
-        if (operands.length > 2) r = ((Scalar) operands[2].eval (context)).value;
 
         int steps = evalKeyword (context, "steps", 1);
         if (steps > 10) steps = 10;  // defensive limit. ~20 million faces (20 * 4^10)
@@ -101,9 +158,7 @@ public class DrawSphere extends Draw implements Draw.Shape3D
         PMVMatrix pv = H.pv;
         pv.glMatrixMode (PMVMatrix.GL_MODELVIEW);
         pv.glPushMatrix ();
-        if (p != null) pv.glMultMatrixf (getMatrix (glTranslate.make (p)), 0);
-        if (r != 1) pv.glMultMatrixf (getMatrix (glScale.make (new MatrixDense (3, 1, r))), 0);
-        if (model != null)  pv.glMultMatrixf (getMatrix (model), 0);
+        if (model != null) pv.glMultMatrixf (getMatrix (model), 0);
         st.uniform (gl, new GLUniformData ("modelViewMatrix", 4, 4, pv.glGetMvMatrixf ()));
         st.uniform (gl, new GLUniformData ("normalMatrix",    4, 4, pv.glGetMvitMatrixf ()));
         pv.glPopMatrix ();

@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -79,19 +79,6 @@ public class Draw extends Function
         };
     }
 
-    /**
-        Marks a drawX() that actually has output, as distinct from generic draw().
-        Simplifies analysis code in EquationSet.addDrawDependencies.
-    **/
-    public interface Shape {}
-    public interface Shape3D extends Shape
-    {
-        public default boolean needModelMatrix ()
-        {
-            return true;
-        }
-    }
-
     public boolean isOutput ()
     {
         return true;
@@ -124,30 +111,40 @@ public class Draw extends Function
         op0.exponentNext = op0.exponent;
         op0.determineExponentNext ();
 
-        // Last arg is color, which is always a raw integer.
-        int last = operands.length - 1;
-        Operator c = operands[last];
-        c.exponentNext = MSB;
-        c.determineExponentNext ();
-
-        // All pixel-valued operands must agree on exponent.
-        if (last > 1)
-        {
-            int avg = 0;
-            for (int i = 1; i < last; i++) avg += operands[i].exponent;
-            avg /= last - 1;
-            for (int i = 1; i < last; i++)
-            {
-                Operator op = operands[i];
-                op.exponentNext = avg;
-                op.determineExponentNext ();
-            }
-        }
-
         if (keywords == null) return;
-        for (Operator op : keywords.values ())
+        for (String name : keywords.keySet ())
         {
-            op.exponentNext = MSB;  // Currently, all keyword args have integer (or boolean) values.
+            Operator op = keywords.get (name);
+            switch (name)
+            {
+                case "timeScale":
+                case "view":
+                case "projection":
+                case "model":
+                case "position":
+                case "direction":
+                case "shininess":
+                case "spotExponent":
+                case "spotCutoff":
+                case "attenuation0":
+                case "attenuation1":
+                case "attenuation2":
+                    // All of these parameters either need to have an exponent passed or need to be converted
+                    // to float when the attributes are applied to the holder object.
+                    op.exponentNext = op.exponent;
+                    break;
+                case "clear":
+                case "diffuse":
+                case "ambient":
+                case "emission":
+                case "specular":
+                    // exponent depends on whether color is an integer or a matrix
+                    if (op.getType () instanceof Matrix) op.exponentNext = 0;
+                    else                                 op.exponentNext = MSB;
+                    break;
+                default:
+                    op.exponentNext = MSB;  // Suitable for integer or boolean values.
+            }
             op.determineExponentNext ();
         }
     }

@@ -1,5 +1,5 @@
 /*
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -32,6 +32,15 @@ public class DrawLight extends Draw
         };
     }
 
+    public void determineExponentNext ()
+    {
+        super.determineExponentNext ();
+
+        Operator index = operands[1];
+        index.exponentNext = MSB;
+        index.determineExponentNext ();
+    }
+
     public Type eval (Instance context)
     {
         Simulator simulator = Simulator.instance.get ();
@@ -42,7 +51,8 @@ public class DrawLight extends Draw
 
         // Lights function much like generic draw. They stage info until start of next cycle.
 
-        int index = (int) ((Scalar) operands[1].eval (context)).value;
+        int index = 0;
+        if (operands.length > 1) index = (int) ((Scalar) operands[1].eval (context)).value;
         if (H.lights == null) H.lights = new TreeMap<Integer,Light> ();
         if (evalKeyword (context, "on", true))
         {

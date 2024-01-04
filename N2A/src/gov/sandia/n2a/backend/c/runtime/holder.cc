@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -268,14 +268,25 @@ LightLocation::LightLocation (GLuint program, int index)
     attenuation2 = glGetUniformLocation (program, buffer);
 }
 
-Light::Light ()
-:   position {0, 0, 1},
-    direction{0, 0, -1},
-    ambient  {0, 0, 0},
-    diffuse  {1, 1, 1},
-    specular {1, 1, 1}
+void
+Light::clear ()
 {
     infinite = false;
+    position [0] = 0;
+    position [1] = 0;
+    position [2] = 1;
+    direction[0] = 0;
+    direction[1] = 0;
+    direction[2] = -1;
+    ambient  [0] = 0;
+    ambient  [1] = 0;
+    ambient  [2] = 0;
+    diffuse  [0] = 1;
+    diffuse  [1] = 1;
+    diffuse  [2] = 1;
+    specular [0] = 1;
+    specular [1] = 1;
+    specular [2] = 1;
     spotExponent = 0;
     spotCutoff   = -1;
     attenuation0 = 1;
@@ -500,5 +511,13 @@ split (std::vector<GLfloat> & vertices, int v0, int v1)
     return putUnique (vertices, x, y, z);
 }
 
+#ifdef n2a_FP
+void
+setVector (float target[], const Matrix<int> & value, int exponent)
+{
+    float conversion = powf (2, FP_MSB - exponent);
+    for (int i = 0; i < 3; i++) target[i] = value[i] / conversion;
+}
+#endif
 
 #endif
