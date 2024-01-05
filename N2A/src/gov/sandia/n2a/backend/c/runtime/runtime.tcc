@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -23,7 +23,6 @@ the U.S. Government retains certain rights in this software.
 #  undef max
 #endif
 
-// These seem to get defined under GCC, but we want to use them as parameter names.
 #undef near
 #undef far
 
@@ -199,6 +198,23 @@ glFrustum (T left, T right, T bottom, T top, T near, T far)
 
 template<class T>
 Matrix<T>
+glOrtho (T left, T right, T bottom, T top, T near, T far)
+{
+    Matrix<T> result (4, 4);
+    clear (result);
+    result(0,0) =  2 / (right - left);
+    result(1,1) =  2 / (top   - bottom);
+    result(2,2) = -2 / (far   - near);
+    result(0,3) = -(right + left)   / (right - left);
+    result(1,3) = -(top   + bottom) / (top   - bottom);
+    result(2,3) = -(far   + near)   / (far   - near);
+    result(3,3) = 1;
+
+    return result;
+}
+
+template<class T>
+Matrix<T>
 glLookAt (const MatrixFixed<T,3,1> & eye, const MatrixFixed<T,3,1> & center, const MatrixFixed<T,3,1> & up)
 {
     // Create an orthonormal frame
@@ -233,25 +249,9 @@ glLookAt (const MatrixFixed<T,3,1> & eye, const MatrixFixed<T,3,1> & center, con
 
 template<class T>
 Matrix<T>
-glOrtho (T left, T right, T bottom, T top, T near, T far)
-{
-    Matrix<T> result (4, 4);
-    clear (result);
-    result(0,0) =  2 / (right - left);
-    result(1,1) =  2 / (top   - bottom);
-    result(2,2) = -2 / (far   - near);
-    result(0,3) = -(right + left)   / (right - left);
-    result(1,3) = -(top   + bottom) / (top   - bottom);
-    result(2,3) = -(far   + near)   / (far   - near);
-    result(3,3) = 1;
-
-    return result;
-}
-
-template<class T>
-Matrix<T>
 glPerspective (T fovy, T aspect, T near, T far)
 {
+    fovy *= M_PI / 180;  // Convert from degrees to radians.
     T f = 1 / tan (fovy / 2);
 
     Matrix<T> result (4, 4);
@@ -313,10 +313,11 @@ Matrix<T>
 glScale (T sx, T sy, T sz)
 {
     Matrix<T> result (4, 4);
-    identity (result);
+    clear (result);
     result(0,0) = sx;
     result(1,1) = sy;
     result(2,2) = sz;
+    result(3,3) = (T) 1;
     return result;
 }
 
@@ -494,22 +495,6 @@ unitmap (const MatrixAbstract<int> & A, int row, int column)  // row and column 
                    + b  * ((int64_t) a1 * A(r,c+1) + (int64_t) a * A(r+1,c+1) >> FP_MSB) >> FP_MSB;
         }
     }
-}
-
-template<>
-Matrix<int>
-glLookAt (const MatrixFixed<int,3,1> & eye, const MatrixFixed<int,3,1> & center, const MatrixFixed<int,3,1> & up)
-{
-    // TODO: This function is not properly coded yet. This is just a quick hack to enable compile.
-    return Matrix<int> (4, 4);
-}
-
-template<>
-Matrix<int>
-glOrtho (int left, int right, int bottom, int top, int near, int far)
-{
-    // TODO: This function is not properly coded yet. This is just a quick hack to enable compile.
-    return Matrix<int> (4, 4);
 }
 
 #endif

@@ -5,7 +5,7 @@ Copyright (c) 2001-2004 Dept. of Computer Science and Beckman Institute,
 Distributed under the UIUC/NCSA Open Source License.
 
 
-Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -179,17 +179,20 @@ template<class T> SHARED Matrix<T> operator - (const T scalar,             const
 #ifdef n2a_FP
 // Fixed-point operations on MatrixStrided<int>
 // These are not templates. Their implementations are in fixedpoint.cc
+SHARED void        identity            (const MatrixStrided<int> & A, int one);  // "one" is passed explicitly, already scaled with the right exponent
 SHARED int         norm                (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult);  // exponentN=15
+SHARED Matrix<int> normalize           (const MatrixStrided<int> & A, int exponentA);  // result has exponent=0
+SHARED Matrix<int> cross               (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);
 
 SHARED Matrix<int> visit               (const MatrixStrided<int> & A, int (*function) (int, int),      int exponent1);
 SHARED Matrix<int> visit               (const MatrixStrided<int> & A, int (*function) (int, int, int), int exponent1, int exponent2);
 
 SHARED Matrix<int> multiplyElementwise (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);  // Don't know the exponent of B, so missing elements in B produce a 0 in the result.
-SHARED Matrix<int> multiply            (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);
+SHARED Matrix<int> multiply            (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);  // "shift" is always down-shift, and is always positive or zero
 SHARED Matrix<int> multiply            (const MatrixStrided<int> & A, int b,                        int shift);
 
 SHARED Matrix<int> divide              (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);  // Don't know the exponent of B, so missing elements in B produce a 0 in the result.
-SHARED Matrix<int> divide              (const MatrixStrided<int> & A, int b,                        int shift);
+SHARED Matrix<int> divide              (const MatrixStrided<int> & A, int b,                        int shift);  // "shift" is always up-shift, and is always positive or zero
 SHARED Matrix<int> divide              (int a,                        const MatrixStrided<int> & B, int shift);
 #endif
 

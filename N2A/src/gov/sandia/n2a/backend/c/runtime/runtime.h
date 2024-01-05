@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -154,9 +154,20 @@ template<class T> SHARED T unitmap (const MatrixAbstract<T> & A, T row, T column
 template<int> SHARED int unitmap (const MatrixAbstract<int> & A, int row, int column = 0x1 << FP_MSB - 1);
 #endif
 
+#ifdef n2a_FP
+SHARED Matrix<int> glFrustum (int left, int right, int bottom, int top, int near, int far, int exponent);
+SHARED Matrix<int> glOrtho (int left, int right, int bottom, int top, int near, int far, int exponent);
+SHARED Matrix<int> glLookAt (const MatrixFixed<int,3,1> & eye, const MatrixFixed<int,3,1> & center, const MatrixFixed<int,3,1> & up, int exponent);
+SHARED Matrix<int> glPerspective (int fovy, int aspect, int near, int far, int exponent);
+SHARED Matrix<int> glRotate2 (int angle, const MatrixFixed<int,3,1> & axis, int exponent);
+SHARED Matrix<int> glRotate (int angle, int x, int y, int z, int exponent);
+SHARED Matrix<int> glScale (const MatrixFixed<int,3,1> & scales, int exponent);
+SHARED Matrix<int> glScale (int sx, int sy, int sz, int exponent);
+SHARED Matrix<int> glTranslate (const MatrixFixed<int,3,1> & position, int exponent);
+SHARED Matrix<int> glTranslate (int x, int y, int z, int exponent);
+#else
 template<class T> SHARED Matrix<T> glFrustum (T left, T right, T bottom, T top, T near, T far);
 template<class T> SHARED Matrix<T> glLookAt (const MatrixFixed<T,3,1> & eye, const MatrixFixed<T,3,1> & center, const MatrixFixed<T,3,1> & up);
-template<class T> SHARED Matrix<T> glOrtho (T left, T right, T bottom, T top, T near, T far);
 template<class T> SHARED Matrix<T> glPerspective (T fovy, T aspect, T near, T far);
 template<class T> SHARED Matrix<T> glRotate (T angle, const MatrixFixed<T,3,1> & axis);
 template<class T> SHARED Matrix<T> glRotate (T angle, T x, T y, T z);
@@ -164,6 +175,8 @@ template<class T> SHARED Matrix<T> glScale (const MatrixFixed<T,3,1> & scales);
 template<class T> SHARED Matrix<T> glScale (T sx, T sy, T sz);
 template<class T> SHARED Matrix<T> glTranslate (const MatrixFixed<T,3,1> & position);
 template<class T> SHARED Matrix<T> glTranslate (T x, T y, T z);
+#endif
+template<class T> SHARED Matrix<T> glOrtho (T left, T right, T bottom, T top, T near, T far);  // Always declared, regardless of numeric type. Used by ImageOutput.next3D().
 
 #ifndef N2A_SPINNAKER
 SHARED void signalHandler (int number);

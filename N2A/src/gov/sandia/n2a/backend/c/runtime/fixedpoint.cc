@@ -1,13 +1,49 @@
 /*
-Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 
+#include "runtime.h"
 #include "mymath.h"
 #include "Matrix.tcc"
 
+#undef near
+#undef far
+
+
+/**
+    Breaks for shifts less than -2*MSB
+    Could add an extra guard here, or be careful in calling code.
+    Current approach is to minimize cases in favor of compactness and efficiency.
+**/
+inline int
+multiplyRound (int a, int b, int shift)
+{
+    int64_t temp = (int64_t) a * b;
+    if (shift < 0) return (temp + ((int64_t) 1 << -shift - 1)) >> -shift;
+    if (shift > 0) return  temp                                <<  shift;
+    return temp;
+}
+
+// See comments on multiplyRound()
+inline int
+multiplyCeil (int a, int b, int shift)
+{
+    int64_t temp = (int64_t) a * b;
+    if (shift < 0) return (temp + ~(0xFFFFFFFFFFFFFFFF << -shift)) >> -shift;   // The constant here is a 64-bit unsigned integer, all 1s.
+    if (shift > 0) return  temp                                    <<  shift;
+    return temp;
+}
+
+int
+shift (int64_t a, int shift)
+{
+    if (shift < 0) return a >> -shift;
+    if (shift > 0) return a <<  shift;
+    return a;
+}
 
 Matrix<int>
 shift (const MatrixAbstract<int> & A, int shift)
@@ -15,6 +51,128 @@ shift (const MatrixAbstract<int> & A, int shift)
     if (shift > 0) return A * (0x1 << shift);
     if (shift < 0) return A / (0x1 << -shift);
     return A;
+}
+
+void
+identity (const MatrixStrided<int> & A, int one)
+{
+    int h = A.rows ();
+    int w = A.columns ();
+    for (int c = 0; c < w; c++)
+    {
+        for (int r = 0; r < h; r++)
+        {
+            A(r,c) = (r == c) ? one : 0;
+        }
+    }
+}
+
+int
+norm (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult)
+{
+    const int exponentN = 15;
+
+    int * a   = A.base ();
+    int * end = a + A.rows () * A.columns ();  // Assumes MatrixFixed, so that elements are dense in memory.
+    int result = 0;
+
+    if (n == INFINITY)
+    {
+        while (a < end) result = std::max (std::abs (*a++), result);
+        int shift = exponentA - exponentResult;
+        if (shift > 0) return result <<  shift;
+        if (shift < 0) return result >> -shift;
+        return result;
+    }
+    if (n == 0)
+    {
+        while (a < end) if (*a++) result++;
+        int shift = FP_MSB - exponentResult;
+        if (shift > 0) return result <<  shift;
+        if (shift < 0) return result >> -shift;
+        return result;
+    }
+    if (n == 0x1 << exponentN)
+    {
+        while (a < end) result += std::abs (*a++);
+        int shift = exponentA - exponentResult;
+        if (shift > 0) return result <<  shift;
+        if (shift < 0) return result >> -shift;
+        return result;
+    }
+
+    // Fully general form
+    // "result" will hold the sum, and exponentA will hold exponentSum when done.
+    int root;  // exponent=15
+    if (n == 0x2 << exponentN)
+    {
+        root = 0x4000;  // 0.5
+        exponentA = exponentA * 2 - FP_MSB;  // raw result of squaring elements of A
+        register uint64_t sum = 0;
+        while (a < end)
+        {
+            int t = *a++;
+            sum += (int64_t) t * t;
+        }
+        while (sum > INFINITY)
+        {
+            sum >>= 1;
+            exponentA++;
+        }
+        result = sum;  // truncate to 32 bits
+    }
+    else
+    {
+        // for root:
+        // raw division = exponentOne-exponentN+MSB = MSB-MSB/2+MSB
+        // want exponentN, so shift = raw-exponentN = (MSB-MSB/2+MSB)-MSB/2 = MSB
+        root = (0x1 << FP_MSB) / n;
+
+        // for exponentSum:
+        // assume center of A = MSB/2
+        // center power of A = centerA = exponentA - MSB/2
+        // center power of one term = centerTerm = centerA*n
+        // want center of term at MSB/2, so exponentSum = centerTerm+MSB/2 = (exponentA-MSB/2)*n+MSB/2 = exponentA*n+(1-n)*MSB/2
+        int exponentSum = ((exponentA - FP_MSB2) * n >> exponentN) + FP_MSB2;
+
+        while (a < end) result += pow (std::abs (*a++), n, exponentA, exponentSum);
+        exponentA = exponentSum;
+    }
+    return pow (result, root, exponentA, exponentResult);
+}
+
+Matrix<int>
+normalize (const MatrixStrided<int> & A, int exponentA)
+{
+    // Calculate 2-norm of A
+    // Allow for magnitude of "scale" to be larger than the magnitude of individual elements.
+    int count = norm (A, 0, exponentA, FP_MSB);  // Number of nonzero elements
+    int bits = 0;
+    while (count >>= 1) bits++;
+    int exponentScale = exponentA + bits;
+    int scale = norm (A, 0x2 << 15, exponentA, exponentScale);  // 2-norm
+
+    // Divide A
+    // Goal is for result to be at exponent=0
+    // See comments on Divide in RendererCfp
+    int shift = exponentA - exponentScale + FP_MSB;
+    return divide (A, scale, shift);
+}
+
+Matrix<int>
+cross (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift)
+{
+    int ah = A.rows ();
+    int bh = B.rows ();
+    int h = std::min (ah, bh);
+    Matrix<int> result (h, 1);
+    for (int i = 0; i < h; i++)
+    {
+        int j = (i + 1) % h;
+        int k = (i + 2) % h;
+        result[i] = (int64_t) A(j,0) * B(k,0) - (int64_t) A(k,0) * B(j,0) >> shift;
+    }
+    return result;
 }
 
 Matrix<int>
@@ -302,28 +460,208 @@ divide (int scalar, const MatrixStrided<int> & A, int shift)
     return result;
 }
 
-/**
-    Breaks for shifts less than -2*MSB
-    Could add an extra guard here, or be careful in calling code.
-    Current approach is to minimize cases in favor of compactness and efficiency.
-**/
-inline int
-multiplyRound (int a, int b, int shift)
+Matrix<int>
+glFrustum (int left, int right, int bottom, int top, int near, int far, int exponent)
 {
-    int64_t temp = (int64_t) a * b;
-    if (shift < 0) return (temp + ((int64_t) 1 << -shift - 1)) >> -shift;
-    if (shift > 0) return  temp                                <<  shift;
-    return temp;
+    Matrix<int> result (4, 4);
+    clear (result);
+
+    // After division, raw = exponent - exponent + MSB = MSB
+    // Goal is to shift back to original exponent. shift = raw - exponent = MSB - exponent
+    int shift = FP_MSB - exponent;
+    result(0,0) = (  (int64_t) 2 * near       << shift) / (right - left);
+    result(1,1) = (  (int64_t) 2 * near       << shift) / (top   - bottom);
+    result(0,2) = (  (int64_t) right + left   << shift) / (right - left);
+    result(1,2) = (  (int64_t) top   + bottom << shift) / (top   - bottom);
+    result(2,2) = (-((int64_t) far   + near)  << shift) / (far   - near);
+    // shift = MSB - exponent
+    result(3,2) = -1 << shift;
+    // raw = (exponent + exponent - MSB) - exponent + MSB = exponent
+    // shift = raw - exponent = 0
+    result(2,3) = (int64_t) -2 * far * near / (far - near);
+
+    return result;
 }
 
-// See comments on multiplyRound()
-inline int
-multiplyCeil (int a, int b, int shift)
+Matrix<int>
+glOrtho (int left, int right, int bottom, int top, int near, int far, int exponent)
 {
-    int64_t temp = (int64_t) a * b;
-    if (shift < 0) return (temp + ~(0xFFFFFFFFFFFFFFFF << -shift)) >> -shift;   // The constant here is a 64-bit unsigned integer, all 1s.
-    if (shift > 0) return  temp                                    <<  shift;
-    return temp;
+    Matrix<int> result (4, 4);
+    clear (result);
+
+    // raw = MSB - exponent + MSB = 2*MSB - exponent
+    // shift = raw - exponent = 2*MSB - 2*exponent
+    int shift = 2 * (FP_MSB - exponent);
+    result(0,0) = ((int64_t)  2 << shift) / (right - left);
+    result(1,1) = ((int64_t)  2 << shift) / (top   - bottom);
+    result(2,2) = ((int64_t) -2 << shift) / (far   - near);
+    // raw = exponent - exponent + MSB = MSB
+    // shift = raw - exponent = MSB - exponent
+    shift = FP_MSB - exponent;
+    result(0,3) = (-((int64_t) right + left  ) << shift) / (right - left);
+    result(1,3) = (-((int64_t) top   + bottom) << shift) / (top   - bottom);
+    result(2,3) = (-((int64_t) far   + near  ) << shift) / (far   - near);
+    // shift = MSB - exponent
+    result(3,3) = 1 << shift;
+
+    return result;
+}
+
+Matrix<int>
+glLookAt (const MatrixFixed<int,3,1> & eye, const MatrixFixed<int,3,1> & center, const MatrixFixed<int,3,1> & up, int exponent)
+{
+    // Create an orthonormal frame
+    Matrix<int> f = center - eye;
+    f = normalize (f, exponent);              // f exponent=0
+    Matrix<int> u = normalize (up, exponent); // u exponent=0
+    Matrix<int> s = cross (f, u, FP_MSB);     // s exponent=0; but s is not necessarily unit length
+    s = normalize (s, 0);
+    u = cross (s, f, FP_MSB);
+
+    Matrix<int> R (4, 4);  // R exponent=0
+    clear (R);
+    R(0,0) =  s[0];
+    R(0,1) =  s[1];
+    R(0,2) =  s[2];
+    R(1,0) =  u[0];
+    R(1,1) =  u[1];
+    R(1,2) =  u[2];
+    R(2,0) = -f[0];
+    R(2,1) = -f[1];
+    R(2,2) = -f[2];
+    R(3,3) = 1 << FP_MSB;
+
+    Matrix<int> Tr (4, 4);  // Tr has the exponent passed to this function
+    identity (Tr, 1 << FP_MSB - exponent);
+    Tr(0,3) = -eye[0];
+    Tr(1,3) = -eye[1];
+    Tr(2,3) = -eye[2];
+
+    // raw = 0 + exponent - MSB
+    // goal = exponent
+    // shift = raw - goal = -MSB
+    return multiply (R, Tr, FP_MSB);
+}
+
+Matrix<int>
+glPerspective (int fovy, int aspect, int near, int far, int exponent)
+{
+    // raw = (exponent + 1 - MSB) - MSB + MSB = exponent + 1 - MSB
+    // goal = 1, same as M_PI
+    // shift = raw - goal = exponent - MSB
+    int shift = exponent - FP_MSB;
+    fovy = ::shift ((int64_t) fovy * M_PI / 180, shift);
+    // raw = MSB - 3 + MSB = 2*MSB - 3
+    // goal = exponent
+    // shift = raw - goal = 2*MSB - 3 - exponent
+    shift = 2 * FP_MSB - 3 - exponent;
+    int f = ((int64_t) 1 << shift) / tan (fovy / 2, 1, 3);  // tan() goes to infinity, but 8 (2^3) should be sufficient for almost all cases.
+
+    Matrix<int> result (4, 4);
+    clear (result);
+
+    // raw = exponent - exponent + MSB = MSB
+    // goal = exponent
+    // shift = raw - goal = MSB - exponent
+    shift = FP_MSB - exponent;
+    result(0,0) = ((int64_t) f          << shift) / aspect;
+    result(1,1) = f;
+    result(2,2) = ((int64_t) far + near << shift) / (near - far);
+    result(3,2) = -1 << FP_MSB - exponent;
+    // raw = (exponent + exponent - MSB) - exponent + MSB = exponent
+    result(2,3) = (int64_t) 2 * far * near / (near - far);
+
+    return result;
+}
+
+Matrix<int>
+glRotate (int angle, const MatrixFixed<int,3,1> & axis, int exponent)
+{
+    return glRotate (angle, axis[0], axis[1], axis[2], exponent);
+}
+
+Matrix<int>
+glRotate (int angle, int x, int y, int z, int exponent)
+{
+    // raw = (exponent + 1 - MSB) - MSB + MSB = exponent + 1 - MSB
+    // goal = 1, same as M_PI
+    // shift = raw - goal = exponent - MSB
+    int shift = exponent - FP_MSB;
+    angle = ::shift ((int64_t) angle * M_PI / 180, shift);
+    // c, s and c1 all have exponent 1
+    int c = cos (angle, 1);
+    int s = sin (angle, 1);
+    int c1 = (1 << FP_MSB - 1) - c;
+
+    // normalize([x y z])
+    // raw = exponent + exponent - MSB
+    // result = exponent + 2 bits of headroom for additions
+    int l = sqrt ((int64_t) x * x + (int64_t) y * y + (int64_t) z * z, 2 * exponent - FP_MSB, exponent + 2);
+    // raw = exponent - (exponent + 2) + MSB = MSB - 2
+    // goal = 0
+    shift = FP_MSB - 2;
+    x = ((int64_t) x << shift) / l;
+    y = ((int64_t) y << shift) / l;
+    z = ((int64_t) z << shift) / l;
+
+    // exponentResult=0
+    Matrix<int> result (4, 4);
+    clear (result);
+
+    // raw = (0 + 0 - MSB) + 1 - MSB = -2*MSB + 1
+    // goal = 1 to match c
+    // shift = -2 * MSB, applied in two stages
+    // Then we need one bit upshift to match exponentResult
+    result(0,0) = (((int64_t) x * x >> FP_MSB) * c1 >> FP_MSB) + c << 1;
+    result(1,1) = (((int64_t) y * y >> FP_MSB) * c1 >> FP_MSB) + c << 1;
+    result(2,2) = (((int64_t) z * z >> FP_MSB) * c1 >> FP_MSB) + c << 1;
+    result(3,3) = 1 << FP_MSB;
+    // For second term:
+    // raw = 0 + 1 - MSB
+    // goal = 1
+    result(1,0) = (((int64_t) y * x >> FP_MSB) * c1 >> FP_MSB) + ((int64_t) z * s >> FP_MSB) << 1;
+    result(2,0) = (((int64_t) x * z >> FP_MSB) * c1 >> FP_MSB) - ((int64_t) y * s >> FP_MSB) << 1;
+    result(0,1) = (((int64_t) x * y >> FP_MSB) * c1 >> FP_MSB) - ((int64_t) z * s >> FP_MSB) << 1;
+    result(2,1) = (((int64_t) y * z >> FP_MSB) * c1 >> FP_MSB) + ((int64_t) x * s >> FP_MSB) << 1;
+    result(0,2) = (((int64_t) x * z >> FP_MSB) * c1 >> FP_MSB) + ((int64_t) y * s >> FP_MSB) << 1;
+    result(1,2) = (((int64_t) y * z >> FP_MSB) * c1 >> FP_MSB) - ((int64_t) x * s >> FP_MSB) << 1;
+
+    return result;
+}
+
+Matrix<int>
+glScale (const MatrixFixed<int,3,1> & scales, int exponent)
+{
+    return glScale (scales[0], scales[1], scales[2], exponent);
+}
+
+Matrix<int>
+glScale (int sx, int sy, int sz, int exponent)
+{
+    Matrix<int> result (4, 4);
+    clear (result);
+    result(0,0) = sx;
+    result(1,1) = sy;
+    result(2,2) = sz;
+    result(3,3) = 1 << FP_MSB - exponent;
+    return result;
+}
+
+Matrix<int>
+glTranslate (const MatrixFixed<int,3,1> & position, int exponent)
+{
+    return glTranslate (position[0], position[1], position[2], exponent);
+}
+
+Matrix<int>
+glTranslate (int x, int y, int z, int exponent)
+{
+    Matrix<int> result (4, 4);
+    identity (result, 1 << FP_MSB - exponent);
+    result(0,3) = x;
+    result(1,3) = y;
+    result(2,3) = z;
+    return result;
 }
 
 // exponentResult = 1, to accommodate [-pi, pi]
@@ -716,80 +1054,6 @@ modFloor (int a, int b, int exponentA, int exponentB)
 }
 
 int
-norm (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult)
-{
-    const int exponentN = 15;
-
-    int * a   = A.base ();
-    int * end = a + A.rows () * A.columns ();  // Assumes MatrixFixed, so that elements are dense in memory.
-    int result = 0;
-
-    if (n == INFINITY)
-    {
-        while (a < end) result = std::max (std::abs (*a++), result);
-        int shift = exponentA - exponentResult;
-        if (shift > 0) return result <<  shift;
-        if (shift < 0) return result >> -shift;
-        return result;
-    }
-    if (n == 0)
-    {
-        while (a < end) if (*a++) result++;
-        int shift = FP_MSB - exponentResult;
-        if (shift > 0) return result <<  shift;
-        if (shift < 0) return result >> -shift;
-        return result;
-    }
-    if (n == 0x1 << exponentN)
-    {
-        while (a < end) result += std::abs (*a++);
-        int shift = exponentA - exponentResult;
-        if (shift > 0) return result <<  shift;
-        if (shift < 0) return result >> -shift;
-        return result;
-    }
-
-    // Fully general form
-    // "result" will hold the sum, and exponentA will hold exponentSum when done.
-    int root;  // exponent=15
-    if (n == 0x2 << exponentN)
-    {
-        root = 0x4000;  // 0.5
-        exponentA = exponentA * 2 - FP_MSB;  // raw result of squaring elements of A
-        register uint64_t sum = 0;
-        while (a < end)
-        {
-            int t = *a++;
-            sum += (int64_t) t * t;
-        }
-        while (sum > INFINITY)
-        {
-            sum >>= 1;
-            exponentA++;
-        }
-        result = sum;  // truncate to 32 bits
-    }
-    else
-    {
-        // for root:
-        // raw division = exponentOne-exponentN+MSB = MSB-MSB/2+MSB
-        // want exponentN, so shift = raw-exponentN = (MSB-MSB/2+MSB)-MSB/2 = MSB
-        root = (0x1 << FP_MSB) / n;
-
-        // for exponentSum:
-        // assume center of A = MSB/2
-        // center power of A = centerA = exponentA - MSB/2
-        // center power of one term = centerTerm = centerA*n
-        // want center of term at MSB/2, so exponentSum = centerTerm+MSB/2 = (exponentA-MSB/2)*n+MSB/2 = exponentA*n+(1-n)*MSB/2
-        int exponentSum = ((exponentA - FP_MSB2) * n >> exponentN) + FP_MSB2;
-
-        while (a < end) result += pow (std::abs (*a++), n, exponentA, exponentSum);
-        exponentA = exponentSum;
-    }
-    return pow (result, root, exponentA, exponentResult);
-}
-
-int
 pow (int a, int b, int exponentA, int exponentResult)
 {
     // exponentB = 15
@@ -931,7 +1195,7 @@ sqrt (int a, int exponentA, int exponentResult)
     int exponentRaw = exponent0 / 2 + FP_MSB;  // exponent of raw result at MSB
 
     uint32_t bit;
-    if (m & 0xFFFF0000) bit = 1 << 30;
+    if (m & 0xFFFE0000) bit = 1 << 30;
     else                bit = 1 << 16;  // For efficiency, don't scan upper bits if they're empty.
     while (bit > m) bit >>= 2;  // Locate starting position, at or below msb of m.
 
@@ -965,6 +1229,64 @@ sqrt (int a, int exponentA, int exponentResult)
     }
     if (shift < 0) result >>= -shift;
     return result;
+}
+
+// The 64-bit version of sqrt() can also handle 32-bit inputs.
+// Not sure if we need both. There are some tradeoffs in efficiency
+// between having two implementations or one heavier-weight one.
+// IE: if the 64-bit version is needed, then it should be used for
+// everything rather than also using the 32-bit version. That would
+// save space on an embedded system like SpiNNaker.
+int
+sqrt (int64_t a, int exponentA, int exponentResult)
+{
+    if (a < 0) return NAN;
+
+    uint64_t m = a;  // "m" for mantissa
+    int exponent0 = exponentA - FP_MSB;  // exponent at bit position 0
+    if (exponent0 % 2)  // Odd, so leave remainder inside sqrt()
+    {
+        m <<= 1;  // equivalent to "2m" in the comments above
+        exponent0--;
+    }
+    int exponentRaw = exponent0 / 2 + FP_MSB;  // exponent of raw result at MSB
+
+    uint64_t bit;
+    if      (m & 0xFFFFFFFF80000000) bit = (int64_t) 1 << 60;
+    else if (m &         0x7FFE0000) bit = 1 << 30;
+    else                             bit = 1 << 16;  // For efficiency, don't scan upper bits if they're empty.
+    while (bit > m) bit >>= 2;  // Locate starting position, at or below msb of m.
+
+    uint64_t result = 0;
+    while (bit)
+    {
+        uint64_t temp = result + bit;
+        result >>= 1;
+        if (m >= temp)
+        {
+            m -= temp;
+            result += bit;
+        }
+        bit >>= 2;
+    }
+
+    // At this point, the exponent of the raw result is same as exponentA.
+    // If the requested exponent of the result requires it, compute more precision.
+    int shift = exponentRaw - exponentResult;
+    while (shift > 0)
+    {
+        m <<= 2;
+        result <<= 1;
+        shift--;
+        uint64_t temp = (result << 1) + 1;
+        if (m >= temp)
+        {
+            m -= temp;
+            result++;
+        }
+    }
+    if (shift < 0) result >>= -shift;
+    return result;  // truncate to 32 bits
 }
 
 int

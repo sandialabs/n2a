@@ -1,5 +1,5 @@
 /*
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -31,6 +31,13 @@ public class glTranslate extends Function
                 return new glTranslate ();
             }
         };
+    }
+
+    // Function.determineExponent() is sufficient.
+
+    public void determineExponentNext ()
+    {
+        glFrustum.determineExponentNext (this);
     }
 
     public Type getType ()

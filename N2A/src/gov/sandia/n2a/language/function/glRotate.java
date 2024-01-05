@@ -1,11 +1,12 @@
 /*
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -31,6 +32,32 @@ public class glRotate extends Function
                 return new glRotate ();
             }
         };
+    }
+
+    public void determineExponent (ExponentContext context)
+    {
+        for (Operator op : operands) op.determineExponent (context);
+        updateExponent (context, 0, MSB - 1);  // A pure rotation matrix only needs to represent 1.
+        // No relevant keyword arguments.
+    }
+
+    public void determineExponentNext ()
+    {
+        exponentNext = exponent;  // exponent is assigned 0 above
+
+        // Determine average exponent of operands, then force them to agree.
+        int avg = 0;
+        for (Operator op : operands)
+        {
+            if (op.getType () instanceof Matrix) avg += op.exponent * 3;
+            else                                 avg += op.exponent;
+        }
+        avg /= 4;
+        for (Operator op : operands)
+        {
+            op.exponentNext = avg;
+            op.determineExponentNext ();
+        }
     }
 
     public Type getType ()

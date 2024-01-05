@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -43,6 +43,13 @@ import gov.sandia.n2a.language.function.Sine;
 import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.SumSquares;
 import gov.sandia.n2a.language.function.Tangent;
+import gov.sandia.n2a.language.function.glFrustum;
+import gov.sandia.n2a.language.function.glLookAt;
+import gov.sandia.n2a.language.function.glOrtho;
+import gov.sandia.n2a.language.function.glPerspective;
+import gov.sandia.n2a.language.function.glRotate;
+import gov.sandia.n2a.language.function.glScale;
+import gov.sandia.n2a.language.function.glTranslate;
 import gov.sandia.n2a.language.operator.AND;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Divide;
@@ -489,6 +496,21 @@ public class RendererCfp extends RendererC
             }
             return true;
         }
+        if (op instanceof glFrustum  ||  op instanceof glLookAt  ||  op instanceof glOrtho  ||  op instanceof glPerspective  ||  op instanceof glRotate  ||  op instanceof glScale  ||  op instanceof glTranslate)
+        {
+            Function g = (Function) op;
+            int shift = op.exponent - op.exponentNext;
+            if (shift != 0) result.append ("shift (");
+            result.append (g + " (");
+            g.operands[0].render (this);
+            for (int i = 1; i < g.operands.length; i++)
+            {
+                result.append (", ");
+                g.operands[i].render (this);
+            }
+            result.append (", " + g.operands[0].exponentNext + ")");  // Since operands are all forced to have the same exponent.
+            if (shift != 0) result.append (", " + shift + ")");
+        }
         if (op instanceof HyperbolicTangent)
         {
             HyperbolicTangent ht = (HyperbolicTangent) op;
@@ -618,6 +640,7 @@ public class RendererCfp extends RendererC
             return  v.assignment != Variable.MULTIPLY  &&  v.assignment != Variable.DIVIDE;
         }
         if (op.parent instanceof BuildMatrix) return true;  // Assignment to element of matrix
+        if (op.parent instanceof SquareRoot) return true;
         if (op.parent instanceof Multiply  ||  op.parent instanceof Divide)
         {
             OperatorBinary p = (OperatorBinary) op.parent;

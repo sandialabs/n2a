@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -70,6 +70,7 @@ namespace n2a
 #ifdef n2a_FP
 
 #include "nosys.h"
+#include <stdint.h>
 
 #undef M_LOG2E
 #undef M_E
@@ -111,7 +112,7 @@ namespace std
 
 SHARED int atan2    (int y, int x);                                                    // returns angle in [-pi,pi], exponentResult=1; exponentA must match exponentB, but it may be arbitrary.
 SHARED int ceil     (int a,        int exponentA,                int exponentResult);  // Only needed for matrices. For scalars, an immediate implementation is emitted.
-SHARED int cos      (int a,        int exponentA);
+SHARED int cos      (int a,        int exponentA);                                     // exponentResult=1
 SHARED int exp      (int a,                                      int exponentResult);  // exponentA=7
 SHARED int floor    (int a,        int exponentA,                int exponentResult);  // Only needed for matrices.
 SHARED int log      (int a,        int exponentA,                int exponentResult);
@@ -120,8 +121,9 @@ SHARED int modFloor (int a, int b, int exponentA, int exponentB);               
 SHARED int pow      (int a, int b, int exponentA,                int exponentResult);  // exponentB=15
 SHARED int round    (int a,        int exponentA,                int exponentResult);  // Only needed for matrices.
 SHARED int sgn      (int a,                                      int exponentResult);  // Only needed for matrices.
-SHARED int sin      (int a,        int exponentA);
+SHARED int sin      (int a,        int exponentA);                                     // exponentResult=1
 SHARED int sqrt     (int a,        int exponentA,                int exponentResult);
+SHARED int sqrt     (int64_t a,    int exponentA,                int exponentResult);  // 64-bit version of sqrt(). exponentA still refers to power in bit position FP_MSB, not any bit in the upper half of a.
 SHARED int tan      (int a,        int exponentA,                int exponentResult);
 SHARED int tanh     (int a,        int exponentA);                                     // exponentResult=0
 

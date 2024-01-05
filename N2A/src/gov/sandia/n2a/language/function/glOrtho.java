@@ -1,11 +1,12 @@
 /*
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
@@ -30,6 +31,16 @@ public class glOrtho extends Function
                 return new glOrtho ();
             }
         };
+    }
+
+    public void determineExponent (ExponentContext context)
+    {
+        glFrustum.determineExponent (this, context);
+    }
+
+    public void determineExponentNext ()
+    {
+        glFrustum.determineExponentNext (this);
     }
 
     public Type getType ()
