@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -87,8 +87,8 @@ public class GraphEdge
     {
         // TODO: base these on canvas background color
         colorForeground = Color.black;
-        colorActive     = Color.blue;
-        colorDrag       = new Color (0, 0xC0, 0);
+        colorActive     = new Color (0xC0, 0xC0, 0);  // yellow
+        colorDrag       = new Color (0, 0xC0, 0);  // green
     }
 
     public GraphEdge (GraphNode nodeFrom, NodePart partTo, String alias)
@@ -716,8 +716,8 @@ public class GraphEdge
     public void paintComponent (Graphics2D g2)
     {
         Color color = colorForeground;
-        if (nodeFrom.parent.focus == nodeFrom  ||  nodeFrom.parent.focus == nodeTo) color = colorActive;
-        if (nodeFrom.parent.likelyTip == this)                                      color = colorDrag;
+        if (nodeFrom.parent.focus == nodeFrom  ||  nodeFrom.parent.focus == nodeTo  &&  nodeTo != null) color = colorActive;
+        if (nodeFrom.parent.likelyTip == this)                                                          color = colorDrag;
 
         g2.setColor (color);
         if (line != null) g2.draw (line);
