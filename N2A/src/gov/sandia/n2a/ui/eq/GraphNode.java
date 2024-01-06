@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1082,37 +1082,7 @@ public class GraphNode extends JPanel
             {
                 public void actionPerformed (ActionEvent e)
                 {
-                    // Compare this implementation with NodePart.delete(). Here we specifically handle graph nodes.
-
-                    List<GraphNode> selection = parent.getSelection ();
-                    selection.remove (GraphNode.this);
-                    selection.remove (container.panelEquationGraph.graphPanel.pinIn);
-                    selection.remove (container.panelEquationGraph.graphPanel.pinOut);
-                    container.panelEquationGraph.clearSelection ();  // In case pinIn or pinOut were selected. After delete, nothing should be selected.
-
-                    UndoManager um = MainFrame.undoManager;
-                    if (selection.isEmpty ())
-                    {
-                        um.apply (new DeletePart (node, false));
-                    }
-                    else
-                    {
-                        selection.add (GraphNode.this);  // Now at end of list, which is where we want it.
-                        CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
-                        compound.leadPath = node.getKeyPath ();
-                        um.addEdit (compound);
-                        int last = selection.size () - 1;
-                        int i = 0;
-                        for (GraphNode g : selection)
-                        {
-                            DeletePart d = new DeletePart (g.node, false);
-                            d.setMulti (true);
-                            if (i++ == last) d.setMultiLast (true);
-                            um.apply (d);
-                        }
-                        um.endCompoundEdit ();
-                        // No need to focus the lead, because all nodes are gone. Instead, rely on behavior of multiLast to focus another node.
-                    }
+                    delete ();
                 }
             });
             actionMap.put ("startEditing", new AbstractAction ()
@@ -1380,6 +1350,44 @@ public class GraphNode extends JPanel
         public void editingCanceled (ChangeEvent e)
         {
             completeEditing (true);
+        }
+
+        /**
+            Handle keyboard action delete.
+            Removes this graph node, along with any others that are currently selected.
+            This is a separate function so it can also be called by the transfer handler for cut operations.
+        **/
+        public void delete ()
+        {
+            List<GraphNode> selection = parent.getSelection ();
+            selection.remove (GraphNode.this);
+            selection.remove (container.panelEquationGraph.graphPanel.pinIn);
+            selection.remove (container.panelEquationGraph.graphPanel.pinOut);
+            container.panelEquationGraph.clearSelection ();  // In case pinIn or pinOut were selected. After delete, nothing should be selected.
+
+            UndoManager um = MainFrame.undoManager;
+            if (selection.isEmpty ())
+            {
+                um.apply (new DeletePart (node, false));
+            }
+            else
+            {
+                selection.add (GraphNode.this);  // Now at end of list, which is where we want it.
+                CompoundEditView compound = new CompoundEditView (CompoundEditView.CLEAR_GRAPH);
+                compound.leadPath = node.getKeyPath ();
+                um.addEdit (compound);
+                int last = selection.size () - 1;
+                int i = 0;
+                for (GraphNode g : selection)
+                {
+                    DeletePart d = new DeletePart (g.node, false);
+                    d.setMulti (true);
+                    if (i++ == last) d.setMultiLast (true);
+                    um.apply (d);
+                }
+                um.endCompoundEdit ();
+                // No need to focus the lead, because all nodes are gone. Instead, rely on behavior of multiLast to focus another node.
+            }
         }
     }
 

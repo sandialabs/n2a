@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1141,17 +1141,6 @@ public class PanelEquations extends JPanel
         }
     };
 
-    ActionListener listenerDelete = new ActionListener ()
-    {
-        public void actionPerformed (ActionEvent e)
-        {
-            if (locked) return;
-            if (active == null) return;
-            stopEditing ();  // It may seem odd to save a cell just before destroying it, but this gives cleaner UI painting.
-            active.deleteSelected ();
-        }
-    };
-
     ActionListener listenerWatch = new ActionListener ()
     {
         public void actionPerformed (ActionEvent e)
@@ -2226,27 +2215,18 @@ public class PanelEquations extends JPanel
             // If we add true DnD gestures, which change the tree contents before exportDone() is called, then
             // tn.sources should be stored as key paths instead of nodes.
 
-            CompoundEditView compound = null;
-            boolean fromTree = comp instanceof JTree;
-            int count = tn.sources.size ();
-            boolean multi = count > 1;
-            if (multi) um.addEdit (compound = new CompoundEditView (fromTree ? CompoundEditView.CLEAR_TREE : CompoundEditView.CLEAR_GRAPH));
-            int i = 0;
-            for (NodeBase n : tn.sources)
+            // At this point, all we've done is copy nodes, so the selection in either the graph or equation tree
+            // remains valid. Thus we can forward to delete operation to the respective GUI object instead of
+            // re-implementing it here.
+
+            if (comp instanceof GraphNode.TitleRenderer)
             {
-                i++;
-                Undoable u = n.makeDelete (false);
-                if (u == null) continue;
-                if (u instanceof UndoableView)
-                {
-                    UndoableView uv = (UndoableView) u;
-                    uv.setMulti (multi);
-                    if (multi  &&  i == count) uv.setMultiLast (true);
-                }
-                if (multi  &&  i == count) compound.leadPath = n.getKeyPath ();
-                um.apply (u);
+                ((GraphNode.TitleRenderer) comp).delete ();
             }
-            um.endCompoundEdit ();
+            else if (comp instanceof JTree)
+            {
+                ((PanelEquationTree) comp.getParent ().getParent ()).deleteSelected ();
+            }
         }
     }
 
