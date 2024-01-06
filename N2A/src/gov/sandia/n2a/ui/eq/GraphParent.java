@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -153,8 +153,9 @@ public class GraphParent extends JPanel
 
     public void updateGUI ()
     {
-        MNode boundsParent = part.source.child ("$meta", "gui", "bounds", "parent");
-        if (boundsParent != null) setOpen (boundsParent.getBoolean ());
+        boolean open = false;
+        if (container.view == PanelEquations.NODE) open = part.source.getOrDefault (false, "$meta", "gui", "bounds", "parent");
+        setOpen (open);
         animate ();
     }
 
