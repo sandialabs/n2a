@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -104,7 +104,7 @@ public class AddEquation extends UndoableView implements AddEditable
     public static void destroy (List<String> path, int equationCount, boolean canceled, String name, String combinerBefore, boolean killedVariable, boolean setSelection)
     {
         // Retrieve created node
-        NodeBase parent = NodeBase.locateNode (path);
+        NodeVariable parent = (NodeVariable) NodeBase.locateNode (path);
         if (parent == null) throw new CannotUndoException ();
         NodeBase createdNode = parent.child (name);
 
@@ -163,6 +163,7 @@ public class AddEquation extends UndoableView implements AddEditable
         if (parentChanged)  // Update tabs among this variable's siblings
         {
             parent.setUserObject ();
+            parent.findHighlights (null, null);  // Clear highlights, and hope a change of selection will regenerate them.
             NodeBase grandparent = (NodeBase) parent.getParent ();
             grandparent.invalidateColumns (model);
         }
@@ -188,7 +189,7 @@ public class AddEquation extends UndoableView implements AddEditable
 
     public static NodeBase create (List<String> path, int equationCount, int index, String name, String combinerAfter, String value, boolean multi)
     {
-        NodeBase parent = NodeBase.locateNode (path);
+        NodeVariable parent = (NodeVariable) NodeBase.locateNode (path);
         if (parent == null) throw new CannotRedoException ();
 
         PanelEquationTree pet = parent.getTree ();
@@ -225,6 +226,7 @@ public class AddEquation extends UndoableView implements AddEditable
         if (parentChanged)
         {
             parent.setUserObject ();
+            parent.findHighlights (null, null);
             NodeBase grandparent = (NodeBase) parent.getParent ();
             grandparent.invalidateColumns (model);
         }
