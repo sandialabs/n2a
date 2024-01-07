@@ -2284,7 +2284,7 @@ public class PanelEquations extends JPanel
             Font baseFont = UIManager.getFont ("Tree.font");
             label.setFont (baseFont.deriveFont (Font.BOLD));
             label.setText (text);
-            label.setIcon (null);
+            iconHolder.setIcon (null);
             setFocusable (false);
             setTransferHandler (transferHandler);
             ToolTipManager.sharedInstance ().registerComponent (this);
@@ -2552,7 +2552,7 @@ public class PanelEquations extends JPanel
             if (part == null)
             {
                 text = noModel;
-                label.setIcon (null);
+                iconHolder.setIcon (null);
                 setFocusable (false);
             }
             else

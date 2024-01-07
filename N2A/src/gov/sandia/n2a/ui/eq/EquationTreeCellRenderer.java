@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -91,7 +91,7 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
         setOpaque (false);
 
         add (iconHolder);
-        add (Box.createHorizontalStrut (label.getIconTextGap ()));
+        add (Box.createHorizontalStrut (iconHolder.getIconTextGap ()));
         add (label);
 
         labels.add (label);
@@ -357,10 +357,13 @@ public class EquationTreeCellRenderer extends JPanel implements TreeCellRenderer
     public Dimension getPreferredSize ()
     {
         // Hack to force new cells to full height, even though they contain no text.
-        boolean empty = label.getText ().isEmpty ();
-        if (empty) label.setText ("M");
+        boolean emptyText = label.getText ().isEmpty ();
+        boolean emptyIcon = iconHolder.getIcon () == null;
+        if (emptyText) label.setText ("M");
+        if (emptyIcon) iconHolder.setIcon (iconLeaf);
         Dimension result = super.getPreferredSize ();
-        if (empty) label.setText ("");
+        if (emptyText) label.setText ("");
+        if (emptyIcon) iconHolder.setIcon (null);
 
         result.width += 3;  // per DefaultTreeCellEditor
         return result;
