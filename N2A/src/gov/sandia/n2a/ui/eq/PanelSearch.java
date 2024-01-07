@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -156,6 +156,7 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
         ActionMap actionMap = tree.getActionMap ();
         Action selectPrevious = actionMap.get ("selectPrevious");
         Action selectParent   = actionMap.get ("selectParent");
+        Action selectChild    = actionMap.get ("selectChild");
         actionMap.put ("selectPrevious", new AbstractAction ()
         {
             public void actionPerformed (ActionEvent e)
@@ -178,6 +179,21 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
                     textQuery.requestFocusInWindow ();
                 }
                 selectParent.actionPerformed (e);
+            }
+        });
+        actionMap.put ("selectChild", new AbstractAction ()
+        {
+            public void actionPerformed (ActionEvent e)
+            {
+                NodeModel n = getSelectedNodeModel ();
+                if (n == null)
+                {
+                    selectChild.actionPerformed (e);
+                }
+                else
+                {
+                    selectCurrent ();
+                }
             }
         });
         actionMap.put ("add", new AbstractAction ()
