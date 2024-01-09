@@ -6,7 +6,7 @@ Distributed under the UIUC/NCSA Open Source License.  See the file LICENSE
 for details.
 
 
-Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -306,10 +306,17 @@ VideoInFileFFMPEG::seekTime (double timestamp)
             {
                 av_packet_unref (packet);
                 state = av_read_frame (fc, packet);
+                if (state == AVERROR_EOF) break;
                 if (state < 0) return;
                 if (packet->stream_index != stream->index) continue;
                 if (packet->flags & AV_PKT_FLAG_KEY) break;  // found a key frame in our selected stream
                 if (++nonkey > 1000) hasKeyframes = false;  // The arbitrary limit of 1000 is used by ffmpeg itself in seek_frame_generic().
+            }
+            if (state == AVERROR_EOF)
+            {
+                if (startOfFile) return;  // Can't seek any earlier. return with active error condition.
+                expectedSkew += framePeriod;
+                continue;  // Error will get cleared during next seek.
             }
 
             // Since we already read the packet, we need to send it to the codec.
