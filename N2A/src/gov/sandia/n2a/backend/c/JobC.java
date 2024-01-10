@@ -5383,15 +5383,14 @@ public class JobC extends Thread
             }
 
             boolean cli = e.variable.hasAttribute ("cli");
+            boolean minmax = e.variable.assignment == Variable.MAX  ||  e.variable.assignment == Variable.MIN;
             if (cli) result.append ("params->get (\"" + e.variable.fullName () + "\", ");
 
-            e.expression.render (context);
+            if (minmax) context.renderType (e.expression);
+            else        e.expression.render (context);
 
             if (cli) result.append (")");
-            if (e.variable.assignment == Variable.MAX  ||  e.variable.assignment == Variable.MIN)
-            {
-                result.append (")");
-            }
+            if (minmax) result.append (")");
             if (shift != 0  &&  fixedPoint)
             {
                 result.append (RendererC.printShift (shift));
