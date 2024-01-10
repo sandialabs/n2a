@@ -2052,18 +2052,35 @@ public class PanelEquations extends JPanel
                         }
                         else
                         {
-                            String inherit = ni.source.get ();
-                            ChangeInherit c = new ChangeInherit (ni, key + "," + inherit);
+                            ArrayList<String> inherits = new ArrayList<String> (Arrays.asList (ni.source.get ().split (",")));
+                            for (int j = inherits.size () - 1; j >= 0; j--)
+                            {
+                                String inherit = inherits.get (j).trim ().replace ("\"", "");
+                                if (inherit.equals (key)) inherits.remove (j);
+                                else                      inherits.set (j, inherit);
+                            }
+                            String inherit = key;
+                            for (int j = 0; j < inherits.size (); j++) inherit += "," + inherits.get (j);
+                            ChangeInherit c = new ChangeInherit (ni, inherit);
                             um.apply (c);
                         }
 
                         // Suppress mixin flag in top-level part.
                         // This way, we don't transform a part into a mixin just by adding a mixin.
-                        if (target.source.root () == target.source)
+                        if (target.source.root () == target.source  &&  target.source.getFlag ("$meta", "gui", "mixin"))
                         {
-                            NodeAnnotation m = (NodeAnnotation) NodeBase.locateNode (Arrays.asList ("","$meta", "gui", "mixin"));
-                            ChangeAnnotation ca = new ChangeAnnotation (m, "mixin", "0");
-                            um.apply (ca);
+                            NodeAnnotation a = (NodeAnnotation) NodeBase.locateNode (Arrays.asList ("", "$meta", "gui"));
+                            if (a.toString ().equals ("gui.mixin"))
+                            {
+                                ChangeAnnotation ca = new ChangeAnnotation (a, "gui.mixin", "0");
+                                um.apply (ca);
+                            }
+                            else
+                            {
+                                a = (NodeAnnotation) a.child ("mixin");
+                                ChangeAnnotation ca = new ChangeAnnotation (a, "mixin", "0");
+                                um.apply (ca);
+                            }
                         }
                     }
                     else  // Regular or dropin
