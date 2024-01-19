@@ -261,7 +261,6 @@ public class JobC extends Thread
                 List<Path> libPath = new ArrayList<Path> ();
                 if (shared) libPath.add (runtimeDir);
                 if (ffmpegBinDir != null) libPath.add (ffmpegBinDir);  // This could be redundant with existing system path.
-                if (libPath.isEmpty ()) libPath = null;
 
                 env.submitJob (job, env.clobbersOut (), commands, libPath);
             }

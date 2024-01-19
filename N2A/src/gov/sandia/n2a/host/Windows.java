@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -186,7 +186,7 @@ public class Windows extends Host
         {
             writer.append ("cd " + jobDir + "\r\n");
 
-            if (libPath != null)
+            if (libPath != null  &&  ! libPath.isEmpty ())
             {
                 StringBuilder pathString = new StringBuilder ();
                 pathString.append ("set PATH=");
