@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -122,21 +122,22 @@ public class Main
 
         if (! headless.isEmpty ())
         {
+            int exitCode = 0;
             switch (headless)
             {
                 case "run":
-                    runHeadless (record);
+                    exitCode = runHeadless (record);
                     break;
                 case "study":
-                    studyHeadless (record);
+                    exitCode = studyHeadless (record);
                     break;
                 case "import":
                     String name = record.key ();
                     if (name.isBlank ()) name = null;
-                    importHeadless (path, format, name);
+                    exitCode = importHeadless (path, format, name);
                     break;
                 case "export":
-                    exportHeadless (record, format, path);
+                    exitCode = exportHeadless (record, format, path);
                     break;
                 case "install":
                     try
@@ -153,6 +154,7 @@ public class Main
                     {
                         e.printStackTrace ();
                         System.err.println ("Failed to unpack runtime resources.");
+                        exitCode = 1;
                     }
                     break;
             }
@@ -163,6 +165,7 @@ public class Main
             List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (ShutdownHook.class);
             for (ExtensionPoint exp : exps) ((ShutdownHook) exp).shutdown ();
             Host.quit ();  // Close down any ssh sessions.
+            if (exitCode != 0) System.exit (exitCode);
             return;
         }
 
@@ -242,7 +245,7 @@ public class Main
         for everything, including load balancing, directory and file management.
         Jobs can run remotely, but there is no support for retrieving results.
     **/
-    public static void runHeadless (MNode record)
+    public static int runHeadless (MNode record)
     {
         // See PanelEquations.launchJob()
 
@@ -251,7 +254,12 @@ public class Main
         MDoc job = new MDoc (jobDir.resolve ("job"), jobKey);  // Make this appear as if it is from the jobs collection.
 
         String key = record.key ();
-        MNode doc = AppData.docs.childOrEmpty ("models", key);
+        MNode doc = AppData.docs.child ("models", key);
+        if (doc == null)
+        {
+            System.err.println ("Model does not exit");
+            return 1;
+        }
         record.mergeUnder (doc);
         MPart collated = new MPart (record);  // TODO: the only reason to collate here is to ensure that host and backend are correctly identified if they are inherited. Need a more efficient method, such as lazy collation in MPart.
         NodeJob.collectJobParameters (collated, key, job);
@@ -283,7 +291,7 @@ public class Main
 
         // Extract results requested in ASV
         MNode ASV = record.child ("$meta", "dakota", "ASV");
-        if (ASV == null) return;  // nothing more to do
+        if (ASV == null) return 0;  // nothing more to do
         OutputParser output = new OutputParser ();
         output.parse (jobDir.resolve ("out"));
         try (BufferedWriter writer = Files.newBufferedWriter (jobDir.resolve ("results")))
@@ -298,6 +306,8 @@ public class Main
             }
         }
         catch (IOException e) {}
+
+        return 0;
     }
 
     @SuppressWarnings("serial")
@@ -321,13 +331,22 @@ public class Main
         Run a study from the command line.
         Unlike runHeadless(), this function uses all the usual job management machinery.
     **/
-    public static void studyHeadless (MNode record)
+    public static int studyHeadless (MNode record)
     {
         String key = record.key ();
-        MNode doc = AppData.docs.childOrEmpty ("models", key);
+        MNode doc = AppData.docs.child ("models", key);
+        if (doc == null)
+        {
+            System.err.println ("Model does not exist");
+            return 1;
+        }
         record.mergeUnder (doc);
         MPart collated = new MPart (record);
-        if (! collated.containsKey ("study")) return;
+        if (! collated.containsKey ("study"))
+        {
+            System.err.println ("Model not tagged as a study");
+            return 1;
+        }
 
         // Start host monitor threads (see PanelRun constructor for GUI procedure)
         Host.restartAssignmentThread ();
@@ -339,58 +358,60 @@ public class Main
         study.waitForCompletion ();
 
         // Output CSV files, if requested.
-        if (record.getFlag ("$meta", "csv"))
+        if (! record.getFlag ("$meta", "csv")) return 0;
+        Path studyDir = study.getDir ();
+        try (BufferedWriter parms = Files.newBufferedWriter (studyDir.resolve ("study.csv")))
         {
-            Path studyDir = study.getDir ();
-            try (BufferedWriter parms = Files.newBufferedWriter (studyDir.resolve ("study.csv")))
-            {
-                SampleTableModel samples = new SampleTableModel ();
-                samples.update (study);
-                int rows = samples.getRowCount ();
-                int cols = samples.getColumnCount ();
-                int lastCol = cols - 1;
+            SampleTableModel samples = new SampleTableModel ();
+            samples.update (study);
+            int rows = samples.getRowCount ();
+            int cols = samples.getColumnCount ();
+            int lastCol = cols - 1;
 
-                // Header for study.csv file
-                for (int c = 1; c < cols; c++)  // first column is job status, so skip it
+            // Header for study.csv file
+            for (int c = 1; c < cols; c++)  // first column is job status, so skip it
+            {
+                parms.write (samples.getColumnName (c));
+                if (c < lastCol) parms.write (",");
+            }
+            parms.newLine ();
+
+            // Rows for study.csv file, along with converted output of each job.
+            for (int r = 0; r < rows; r++)
+            {
+                for (int c = 1; c < cols; c++)
                 {
-                    parms.write (samples.getColumnName (c));
+                    parms.write (samples.getValueAt (r, c).toString ());
                     if (c < lastCol) parms.write (",");
                 }
                 parms.newLine ();
 
-                // Rows for study.csv file, along with converted output of each job.
-                for (int r = 0; r < rows; r++)
+                NodeJob jobNode = study.getJob (r);
+                Path jobDir = Host.getJobDir (Host.getLocalResourceDir (), jobNode.getSource ());
+                try
                 {
-                    for (int c = 1; c < cols; c++)
-                    {
-                        parms.write (samples.getValueAt (r, c).toString ());
-                        if (c < lastCol) parms.write (",");
-                    }
-                    parms.newLine ();
-
-                    NodeJob jobNode = study.getJob (r);
-                    Path jobDir = Host.getJobDir (Host.getLocalResourceDir (), jobNode.getSource ());
-                    try
-                    {
-                        Table table = new Table (jobDir.resolve ("out"), false);
-                        table.dumpCSV (studyDir.resolve (r + ".csv"));
-                    }
-                    catch (IOException e) {}
+                    Table table = new Table (jobDir.resolve ("out"), false);
+                    table.dumpCSV (studyDir.resolve (r + ".csv"));
                 }
-            }
-            catch (IOException e)
-            {
-                e.printStackTrace ();
+                catch (IOException e) {}
             }
         }
+        catch (IOException e)
+        {
+            System.err.println ("Conversion to CSV failed");
+            e.printStackTrace ();
+            return 1;
+        }
+
+        return 0;
     }
 
-    public static void importHeadless (Path path, String format, String name)
+    public static int importHeadless (Path path, String format, String name)
     {
         if (path == null)
         {
             System.err.println ("Import requires at least the path to the source file.");
-            return;
+            return 1;
         }
         if (! path.isAbsolute ()) path = Paths.get (System.getProperty ("user.dir")).resolve (path);
 
@@ -402,14 +423,22 @@ public class Main
         {
             System.err.println ("Import failed");
             e.printStackTrace();
+            return 1;
         }
+
+        return 0;
     }
 
-    public static void exportHeadless (MNode record, String format, Path path)
+    public static int exportHeadless (MNode record, String format, Path path)
     {
         // See PanelEquations.listenerExport(). The code here is highly stripped down because we're not dealing with a GUI.
         String key = record.key ();
-        MNode doc = AppData.docs.childOrEmpty ("models", key);
+        MNode doc = AppData.docs.child ("models", key);
+        if (doc == null)
+        {
+            System.err.println ("Model does not exist");
+            return 1;
+        }
         record.mergeUnder (doc);
 
         if (format == null) format = "";
@@ -439,7 +468,7 @@ public class Main
         if (exporter == null)
         {
             System.err.println ("No matching export method");
-            return;
+            return 1;
         }
 
         try
@@ -451,7 +480,10 @@ public class Main
         {
             System.err.println ("Export failed");
             e.printStackTrace ();
+            return 1;
         }
+
+        return 0;
     }
 
     public static void setUncaughtExceptionHandler (final JFrame parent)
