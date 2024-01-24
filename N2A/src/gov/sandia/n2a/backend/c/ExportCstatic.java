@@ -19,6 +19,8 @@ import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.PanelRun;
 
 import java.awt.EventQueue;
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -82,6 +84,17 @@ public class ExportCstatic implements ExportModel
             t.shared  = shared;
             t.libStem = stem;
             t.run ();  // Export is already on its own thread, so no need to start a new one for this.
+
+            // No exception is thrown by t.run().
+            // If anything goes wrong, it shows up in the "finished" file.
+            String line = "";
+            Path finished = t.localJobDir.resolve ("finished");
+            try (BufferedReader reader = Files.newBufferedReader (finished))
+            {
+                line = reader.readLine ();
+            }
+            catch (IOException e) {}
+            if (! line.isEmpty ()) throw new Exception ("Compile failed. See 'err' file for details.");
 
             // Move resources to destination
             // Notice that even though the export may be built on a remote host
