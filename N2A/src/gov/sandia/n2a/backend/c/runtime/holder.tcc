@@ -136,7 +136,7 @@ Parameters<T>::get (const String & name, T defaultValue) const
     const String & value = it->second;
 
 #   ifdef n2a_FP
-    return (T) atoi (value.c_str ());
+    return (T) atoi (value.c_str ());  // TODO: Use atof() instead, then convert to suitable fixed-point format.
 #   else
     return (T) atof (value.c_str ());
 #   endif
@@ -2160,6 +2160,7 @@ InputHolder<T>::getRow (T row)
                     }
                     if (c == delimiter  &&  ! inQuote)
                     {
+                        token.trim ();
                         if (! token.empty ()) columnMap.emplace (token, index);
                         index++;  // Regardless of whether token is empty or not, we progress to the next column position.
                         token.clear ();
@@ -2167,6 +2168,7 @@ InputHolder<T>::getRow (T row)
                     }
                     token += c;
                 }
+                token.trim ();
                 if (! token.empty ()) columnMap.emplace (token, index);
 
                 // Make column count accessible to other code before first row of data is read.
@@ -2228,7 +2230,7 @@ InputHolder<T>::getRow (T row)
                 {
                     String field = line.substr (i, j - i);
 
-                    // Special case for ISO 8601 formatted date
+                    // Special case for formatted date
                     // Convert date to Unix time. Dates before epoch will be negative.
                     bool valid = false;
                     if (index == timeColumn)
@@ -2240,6 +2242,7 @@ InputHolder<T>::getRow (T row)
                         int minute = 0;
                         int second = 0;
 
+                        // ISO 8601 and its prefixes
                         int length = field.size ();
                         if (length == 4)
                         {
@@ -2265,6 +2268,23 @@ InputHolder<T>::getRow (T row)
                                             second = atoi (field.substr (17, 2).c_str ());
                                         }
                                     }
+                                }
+                            }
+                        }
+                        else  // Conventional dates
+                        {
+                            int pos1 = field.find_first_of ('/');
+                            if (pos1 != String::npos)
+                            {
+                                month = atoi (field.substr (0, pos1).c_str ());
+                                pos1++;
+                                int pos2 = field.find_first_of ('/', pos1);
+                                if (pos2 != String::npos)
+                                {
+                                    valid = true;
+                                    day  = atoi (field.substr (pos1, pos2-pos1).c_str ());
+                                    year = atoi (field.substr (pos2+1).c_str ());
+                                    // TODO: add keyword parameter for correct date format, such as "mdy" or "ymd". Implement by shuffling fields.
                                 }
                             }
                         }

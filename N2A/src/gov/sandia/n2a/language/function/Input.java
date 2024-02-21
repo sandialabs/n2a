@@ -123,7 +123,7 @@ public class Input extends Function
         public boolean             smooth;                     // mode flag. When true, time must also be true. Does not change the behavior of Holder, just stored here for convenience.
         public int                 timeColumn;                 // We assume column 0, unless a header overrides this.
         public boolean             timeColumnSet;              // Indicates that a header appeared in the file, so timeColumn has been evaluated.
-        public char                delimiter = ' ';            // Regular expression for separator character. Allows switch between comma and space/tab.
+        public char                delimiter = ' ';            // Separator character. Allows switch between comma and space/tab.
         public boolean             delimiterSet;               // Indicates that check for CSV has been performed. Avoids constant re-checking.
         public double              epsilon;
 
@@ -290,15 +290,31 @@ public class Input extends Function
                             if (c.isEmpty ()) continue;  // and use default value of 0 that the array element was initialized with
 
                             // General case
-                            try {nextValues[i] = Double.parseDouble (c);}
-                            catch (NumberFormatException e) {}  // should leave nextValues[i] at 0
+                            try
+                            {
+                                nextValues[i] = Double.parseDouble (c);
+                            }
+                            catch (NumberFormatException e)
+                            {
+                                c = c.trim ().toLowerCase ();
+                                double negate = 1;
+                                if (c.startsWith ("-"))
+                                {
+                                    negate = -1;
+                                    c = c.substring (1);
+                                }
+                                if      (c.contains ("inf")  ||  c.contains ("∞")) nextValues[i] = negate * Double.POSITIVE_INFINITY;
+                                else if (c.contains ("nan")) nextValues[i] = Double.NaN;
+                                // else should leave nextValues[i] at 0
+                            }
 
-                            // Special case for ISO 8601 formatted date
+                            // Special case for formatted dates
                             // Convert date to Unix time. Dates before epoch will be negative.
                             if (i == timeColumn)
                             {
                                 try
                                 {
+                                    // ISO 8601 and its prefixes
                                     SimpleDateFormat format = null;
                                     if (nextValues[i] < 3000  &&  nextValues[i] > 1000)  // Just the year. Two-digit years are not accepted.
                                     {
@@ -315,6 +331,11 @@ public class Input extends Function
                                             case 19: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm:ss");     break;
                                             case 23: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm:ss.SSS"); break;
                                         }
+                                    }
+                                    else if (c.contains ("/"))  // Conventional date
+                                    {
+                                        // TODO: add keyword parameter for correct date format, such as "mdy" or "ymd".
+                                        format = new SimpleDateFormat ("MM/dd/yyyy");
                                     }
                                     if (format != null)
                                     {

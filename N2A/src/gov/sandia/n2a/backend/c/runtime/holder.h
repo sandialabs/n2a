@@ -60,7 +60,7 @@ public:
     void   read  (const String & parmFileName);
     void   read  (std::istream & stream);
 
-    T      get   (const String & name, T defaultValue = (T) 0) const;
+    T      get   (const String & name, T defaultValue = (T) 0) const;  // TODO: perform unit conversion. Consider using https://github.com/LLNL/units or https://github.com/martinmoene/PhysUnits-RT
     String get   (const String & name, const String & defaultValue = "") const;
 };
 

@@ -571,6 +571,16 @@ public:
         return true;
     }
 
+    bool contains (const String & that) const
+    {
+        return find (that) != npos;
+    }
+
+    bool contains (char that) const
+    {
+        return find_first_of (that) != npos;
+    }
+
     const char * begin () const
     {
         return memory;
@@ -601,12 +611,12 @@ public:
             char * j = memory;
             while (i <= last) *j++ = *i++;
             top = j;  // ... and adjust end marker.
-            *top = 0;
         }
         else  // Only adjust end marker.
         {
             top = last + 1;
         }
+        *top = 0;
         return *this;
     }
 

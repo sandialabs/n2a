@@ -138,7 +138,7 @@ class OutputParser:
                     if c == '\t':
                         self.delimiter = c
                         break
-                    if c == ',': self.delimiter = c
+                    if c == ',': self.delimiter = c  # no break, because we allow tab character to override this
                     # space character is lowest precedence
                 self.delimiterSet = self.delimiter != ' ' or line.strip()
 
