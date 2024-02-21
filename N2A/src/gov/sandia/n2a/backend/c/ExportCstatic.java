@@ -1,5 +1,5 @@
 /*
-Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -94,7 +94,7 @@ public class ExportCstatic implements ExportModel
                 line = reader.readLine ();
             }
             catch (IOException e) {}
-            if (! line.isEmpty ()) throw new Exception ("Compile failed. See 'err' file for details.");
+            if (! line.isEmpty ()  &&  ! line.equals ("success")) throw new Exception ("Compile failed. See 'err' file for details.");
 
             // Move resources to destination
             // Notice that even though the export may be built on a remote host
