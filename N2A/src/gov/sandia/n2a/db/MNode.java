@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -13,6 +13,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+
+import gov.sandia.n2a.language.type.Scalar;
 
 /**
     A hierarchical key-value storage system, with subclasses that provide persistence.
@@ -442,14 +444,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     {
         String value = get (keys);
         if (value.isEmpty ()) return defaultValue;
-        try
-        {
-            return Double.parseDouble (value);
-        }
-        catch (NumberFormatException e)
-        {
-            return defaultValue;
-        }
+        return Scalar.parseDouble (value, defaultValue);  // TODO: should we use Scalar.convert() instead? This would handle units as well.
     }
 
     public double getOrDefault (double defaultValue, Object... keys)

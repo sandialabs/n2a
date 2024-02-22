@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -290,23 +290,7 @@ public class Input extends Function
                             if (c.isEmpty ()) continue;  // and use default value of 0 that the array element was initialized with
 
                             // General case
-                            try
-                            {
-                                nextValues[i] = Double.parseDouble (c);
-                            }
-                            catch (NumberFormatException e)
-                            {
-                                c = c.trim ().toLowerCase ();
-                                double negate = 1;
-                                if (c.startsWith ("-"))
-                                {
-                                    negate = -1;
-                                    c = c.substring (1);
-                                }
-                                if      (c.contains ("inf")  ||  c.contains ("∞")) nextValues[i] = negate * Double.POSITIVE_INFINITY;
-                                else if (c.contains ("nan")) nextValues[i] = Double.NaN;
-                                // else should leave nextValues[i] at 0
-                            }
+                            nextValues[i] = Scalar.parseDouble (c, 0);
 
                             // Special case for formatted dates
                             // Convert date to Unix time. Dates before epoch will be negative.

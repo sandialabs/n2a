@@ -256,7 +256,7 @@ namespace n2a
 
         /**
             Sets this node's own value.
-            Passing nullptr makes future calls to data() returns false, that is, makes the value of this node undefined.
+            Passing nullptr makes future calls to data() return false, that is, makes the value of this node undefined.
             Should be overridden by a subclass.
         **/
         virtual void set (const char * value);

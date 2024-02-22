@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -61,6 +61,30 @@ public class Scalar extends Type
         }
         catch (Exception e) {}
         return 0;
+    }
+
+    /**
+        Alternate method for converting string to number. May be faster than convert().
+    **/
+    public static double parseDouble (String a, double defaultValue)
+    {
+        try
+        {
+            return Double.parseDouble (a);
+        }
+        catch (NumberFormatException e)
+        {
+            a = a.trim ().toLowerCase ();
+            double negate = 1;
+            if (a.startsWith ("-"))
+            {
+                negate = -1;
+                a = a.substring (1);
+            }
+            if (a.contains ("inf")  ||  a.contains ("∞")) return negate * Double.POSITIVE_INFINITY;
+            if (a.contains ("nan")) return Double.NaN;
+            return defaultValue;
+        }
     }
 
     public Type clear ()
