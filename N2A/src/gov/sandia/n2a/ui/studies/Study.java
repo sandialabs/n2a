@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -46,7 +46,7 @@ public class Study
     protected StudyIterator       iterator;
     protected int                 count;        // Total number of samples that will be generated
     protected int                 index;        // Of next sample that should be created. Always 1 greater than last completed sample. When 0, study is about to start. When equal to count, study has completed.
-    protected List<String>        incomplete;
+    protected List<String>        incomplete = new LinkedList<String> ();
     protected int                 lastComplete; // Used to throttle status messages when running headless.
     protected Random              random;       // random number generator used by iterator
     protected long                startTime;    // Of main loop in thread. Used to estimate time remaining.
@@ -202,7 +202,7 @@ public class Study
     {
         if (! source.get ("finished").isEmpty ()) return 1;
         if (count == 0) return 0;
-        float complete = getJobCount () - (incomplete == null ? 0 : incomplete.size ());
+        float complete = getJobCount () - incomplete.size ();
         return complete / count;
     }
 
@@ -284,8 +284,8 @@ public class Study
         public void run ()
         {
             PanelStudy ps = PanelStudy.instance;
-            index = source.getOrDefault (0, "barrier");  // The sample immediately after the most recent barrier that was passed, if any. Implies that everything up through index-1 was fully completed.
-            if (iterator == null)
+            int lastBarrier = source.getOrDefault (0, "barrier");  // The sample immediately after the most recent barrier that was passed, if any. Implies that everything up through index-1 was fully completed.
+            if (iterator == null)  // Cold start
             {
                 buildIterator ();
                 if (iterator == null)  // Failed to find any study variables.
@@ -312,38 +312,28 @@ public class Study
                     return;
                 }
                 if (iterator.usesRandom ()) initRandom ();
-                if (index == 0) saveIterators ();  // Snapshot initial state. This is like a barrier.
+                if (lastBarrier == 0) saveIterators ();     // Snapshot initial state. This is like a barrier.
+                else                  restoreIterators ();  // Restart study from previous session of the app.
+            }
+            else  // Warm start
+            {
+                // Because this is a new thread, we need to initialize the thread-local RNG.
+                if (iterator.usesRandom ()) initRandom ();
             }
             count = iterator.count ();
-
-            if (iterator.usesRandom ()) initRandom ();
 
             String inherit = source.get ("$inherit");
             MNode model = AppData.docs.childOrEmpty ("models", inherit);
             MNode modelCopy = new MVolatile ("", inherit);
             modelCopy.merge (model);  // "model" is never touched. We only use "modelCopy".
 
-            // Gather list of incomplete jobs.
-            int jobCount = getJobCount ();
-            if (incomplete == null)
-            {
-                incomplete = new LinkedList<String> ();
-                while (index < jobCount)
-                {
-                    String jobKey = getJobKey (index++);
-                    NodeJob node;
-                    synchronized (PanelRun.jobNodes) {node = PanelRun.jobNodes.get (jobKey);}
-                    if (node == null  ||  node.complete != 1) incomplete.add (jobKey);
-                }
-            }
-
             // Outer loop handles failed jobs.
+            int jobCount = getJobCount ();
             startTime = System.currentTimeMillis ();
             boolean done = false;  // Indicates that iterator has completed. This is different than stop.
             int retry = source.getOrDefault (3, "config", "retry");
             for (int retries = 0; ! stop  &&  retries <= retry; retries++)
             {
-                restoreIterators ();  // Restores index as well.
                 // Inner loop does the entire study, breaking only when done or if jobs failed.
                 while (! stop)
                 {
@@ -370,7 +360,7 @@ public class Study
                         catch (InterruptedException e) {}
                         continue;
                     }
-                    else if (iterator.barrier ()  ||  done)
+                    else if (iterator.barrier ()  &&  index > lastBarrier  ||  done)
                     {
                         if (incomplete.isEmpty ())  // Pass the barrier
                         {
@@ -387,7 +377,10 @@ public class Study
                             try {sleep (1000);}
                             catch (InterruptedException e) {}
                             if (failed == 0) continue;
-                            // Some jobs failed, so try again.
+
+                            // Some jobs failed, so recapitulate from last barrier.
+                            restoreIterators ();  // Restores index as well.
+                            incomplete.clear ();
                             break;
                         }
                     }
@@ -401,6 +394,7 @@ public class Study
 
                     // Verify that work needs to be done.
                     String jobKey = source.key () + "-" + index++;  // source key is generated the same way regular job keys. Unless the user launches a study and a regular job in the same second, they will never overlap.
+                    incomplete.add (jobKey);
                     NodeJob node;
                     synchronized (PanelRun.jobNodes) {node = PanelRun.jobNodes.get (jobKey);}
                     if (node != null)
@@ -416,16 +410,12 @@ public class Study
                     MNode collated = new MPart (modelCopy);  // TODO: the only reason to collate here is to ensure that host and backend are correctly identified if they are inherited. Need a more efficient method, such as lazy collation in MPart.
                     NodeJob.collectJobParameters (collated, inherit, job);
                     job.save ();
-                    NodeJob.saveSnapshot (modelCopy, job);
+                    NodeJob.saveSnapshot (modelCopy, job);  // TODO: keep most of snapshot with study record. Only save modified parameters in each job snapshot.
 
                     // Update job count.
                     // It is important to do this after the collated model is saved, so that the UI thread will see complete information.
                     // Notice that index was incremented above, so it now gives the count of jobs rather than the job number.
-                    if (index > jobCount)
-                    {
-                        source.set (index, "jobs");
-                        incomplete.add (jobKey);
-                    }
+                    if (index > jobCount) source.set (index, "jobs");
 
                     if (ps == null)  // headless
                     {
@@ -438,12 +428,12 @@ public class Study
                     }
                     else  // with GUI
                     {
+                        final NodeJob finalNode = node;
                         EventQueue.invokeLater (new Runnable ()
                         {
                             public void run ()
                             {
-                                NodeJob node;
-                                synchronized (PanelRun.jobNodes) {node = PanelRun.jobNodes.get (jobKey);}
+                                NodeJob node = finalNode;
                                 if (node == null)
                                 {
                                     node = PanelRun.instance.addNewRun (job, false);
@@ -514,11 +504,11 @@ public class Study
         }
         else
         {
-            complete = getJobCount () - (incomplete == null ? 0 :incomplete.size ());
+            complete = getJobCount () - incomplete.size ();
             status = "" + complete + "/" + count + " samples; ";
             if (complete <= 0)
             {
-                status += "Unknonw time remaining";
+                status += "Unknown time remaining";
             }
             else
             {

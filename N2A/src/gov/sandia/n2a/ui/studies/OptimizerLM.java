@@ -1,5 +1,5 @@
 /*
-Copyright 2021-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -42,7 +42,6 @@ public class OptimizerLM extends StudyIterator
     protected double      toleranceX;
     protected double      toleranceG;
     protected double      perturbation;
-    protected boolean     skipCycle0;
     protected String      dummy;
 
     protected MatrixDense x;       // current state vector
@@ -123,7 +122,6 @@ public class OptimizerLM extends StudyIterator
         // Compare with EquationSet ctor code that handles watch variables.
         // If "loss" is a state variable (as opposed to temporary), then there will be
         // a 1-cycle delay, and the first row will be useless.
-        skipCycle0 = true;  // TODO: detect when first row is inert and ignore it in LM calculations. For now, we assume it is always inert.
         MNode g = model.child (keyPath);
         MNode p = g.parent ();
         dummy = "x0";
@@ -162,10 +160,9 @@ public class OptimizerLM extends StudyIterator
             // Results of first sample are now available. This establishes number of rows in Jacobian.
             yindex = 0;
             OutputParser.Column series = getSeries (yindex);
-            int offset = (skipCycle0  &&  series.startRow == 0) ? 1 : 0;
-            int m = series.startRow + series.values.size () - offset;
+            int m = series.startRow + series.values.size ();
             y = new MatrixDense (m, 1);
-            for (int r = 0; r < m; r++) y.set (r, series.get (r+offset));
+            for (int r = 0; r < m; r++) y.set (r, series.get (r));
             ynorm = y.norm (2);
 
             // Update estimated number of iterations, based on size of initial error.
@@ -190,7 +187,7 @@ public class OptimizerLM extends StudyIterator
         int n = variables.size ();
         if (sample < n) return true;  // Collect remaining samples needed to build Jacobian.
 
-        // Build Jacobian right after the last needed sample has been collected. 
+        // Build Jacobian right after the last needed sample has been collected.
         int m = y.rows ();
         if (sample == n)  // We now have exactly enough samples to compute Jacobian. Next sample we collect (n) will be the first check for step size.
         {
@@ -199,13 +196,12 @@ public class OptimizerLM extends StudyIterator
             for (int c = 0; c < n; c++)
             {
                 OutputParser.Column series = getSeries (baseIndex + c);
-                int offset = (skipCycle0  &&  series.startRow == 0) ? 1 : 0;
                 double h = perturbation * Math.abs (x.get (c));
                 if (h == 0) h = perturbation;
                 double norm = 0;
                 for (int r = 0; r < m; r++)
                 {
-                    double value = (series.get (r+offset) - y.get (r)) / h;
+                    double value = (series.get (r) - y.get (r)) / h;
                     J.set (r, c, value);
                     norm += value * value;
                 }
@@ -259,9 +255,8 @@ public class OptimizerLM extends StudyIterator
             // Retrieve sample
             int yindexNext = baseIndex + sample - 1;
             OutputParser.Column series = getSeries (yindexNext);
-            int offset = (skipCycle0  &&  series.startRow == 0) ? 1 : 0;
             MatrixDense tempY = new MatrixDense (m, 1);
-            for (int r = 0; r < m; r++) tempY.set (r, series.get (r+offset));
+            for (int r = 0; r < m; r++) tempY.set (r, series.get (r));
             double ynormNext = tempY.norm (2);
 
             // compute the scaled actual reduction
@@ -662,10 +657,9 @@ public class OptimizerLM extends StudyIterator
         //   y -- Based on saved index
         if (yindex < 0) return;
         OutputParser.Column series = getSeries (yindex);
-        int offset = (skipCycle0  &&  series.startRow == 0) ? 1 : 0;
-        int m = series.startRow + series.values.size () - offset;
+        int m = series.startRow + series.values.size ();
         y = new MatrixDense (m, 1);
-        for (int r = 0; r < m; r++) y.set (r, series.get (r+offset));
+        for (int r = 0; r < m; r++) y.set (r, series.get (r));
         ynorm = y.norm (2);
 
         //   J, qr, Qy
@@ -677,12 +671,11 @@ public class OptimizerLM extends StudyIterator
         for (int c = 0; c < n; c++)
         {
             series = getSeries (baseIndex + c);
-            offset = (skipCycle0  &&  series.startRow == 0) ? 1 : 0;
             double h = perturbation * Math.abs (x.get (c));
             if (h == 0) h = perturbation;
             for (int r = 0; r < m; r++)
             {
-                J.set (r, c, (series.get (r+offset) - y.get (r)) / h);
+                J.set (r, c, (series.get (r) - y.get (r)) / h);
             }
         }
         qr = new FactorQR (J);

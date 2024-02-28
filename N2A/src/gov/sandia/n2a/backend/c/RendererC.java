@@ -123,7 +123,7 @@ public class RendererC extends Renderer
             ae.operands[0].render (this);
             result.append (".get (");  // safe element access
             ae.operands[1].render (this);
-            if (ae.operands.length == 3)
+            if (ae.operands.length > 2)
             {
                 result.append (",");
                 ae.operands[2].render (this);

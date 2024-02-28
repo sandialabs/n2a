@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,6 +15,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -58,7 +59,7 @@ import javax.swing.tree.TreePath;
     duration -- Expected amount of sim time for model.
     errSize -- Number of bytes in err file after backend preparations were completed.
                Any error output by the simulation itself should append to this.
-    host -- Name of system that will run the simulation. May contain a hierarchy of addtional keys.
+    host -- Name of system that will run the simulation. May contain a hierarchy of additional keys.
     lineLength -- How many bytes back from current end of output file to start scanning for timestamp.
     pid -- OS identifier for the simulation process. Used to monitor or kill the job.
     progress -- Name of output file used to monitor for current sim time.
@@ -162,32 +163,61 @@ public class NodeJob extends NodeBase
         Remove all files from the job dir except the main job file.
         This allows the job to restart cleanly, without file-creation conflicts.
     **/
-    public synchronized void reset ()
+    public void reset ()
     {
-        // Reset variables to initial state.
-        complete        = -1;
-        dateStarted     = null;
-        dateFinished    = null;
-        expectedSimTime = 0;
-        lastMonitored   = 0;
-        lastActive      = 0;
-
-        // Purge files
-        Host localhost = Host.get ();
         MNode source = getSource ();
-        Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
-        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (localJobDir))
-        {
-            for (Path path : dirStream)
-            {
-                if (path.endsWith ("job")) continue;
-                localhost.deleteTree (path);  // deleteTree() works for both files and dirs, and also absorbs most exceptions. 
-            }
-        }
-        catch (IOException e) {e.printStackTrace ();}
+        Host h = Host.get (source);
+        h.unmonitor (this);
 
-        PanelRun panelRun = PanelRun.instance;
-        if (! panelRun.tree.isCollapsed (new TreePath (getPath ()))) build (panelRun.tree);
+        synchronized (this)
+        {
+            // Reset variables to initial state.
+            complete        = -1;
+            dateStarted     = null;
+            dateFinished    = null;
+            expectedSimTime = 0;
+            lastMonitored   = 0;
+            lastActive      = 0;
+
+            // Purge files
+            Host localhost = Host.get ();
+            Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
+            try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (localJobDir))
+            {
+                List<Path> deleted = new ArrayList<Path> ();
+                for (Path path : dirStream)
+                {
+                    if (path.endsWith ("job")) continue;
+                    localhost.deleteTree (path);  // deleteTree() works for both files and dirs, and also absorbs most exceptions.
+                    deleted.add (path);
+                }
+
+                // On Windows there appears to be some lag between deleting a file and it actually
+                // disappearing. Not sure if this happens on other platforms.
+                // The caller of reset(), mainly Study, depends on these files being gone,
+                // so we busy-wait for that to happen.
+                for (int tries = 0; tries < 100; tries++)  // If we exceed the number of tries, something else will likely fail.
+                {
+                    for (int i = deleted.size () - 1; i >= 0; i--)
+                    {
+                        if (! Files.exists (deleted.get (i))) deleted.remove (i);
+                    }
+                    if (deleted.isEmpty ()) break;
+                    try {Thread.sleep (10);}
+                    catch (InterruptedException e) {}
+                }
+            }
+            catch (IOException e) {}
+        }
+
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                PanelRun panelRun = PanelRun.instance;
+                if (! panelRun.tree.isCollapsed (new TreePath (getPath ()))) build (panelRun.tree);
+            }
+        });
     }
 
     /**
@@ -196,16 +226,6 @@ public class NodeJob extends NodeBase
     public synchronized void distribute ()
     {
         MNode source = getSource ();
-        if (source.isEmpty ())  // TODO: remove this conversion after N2A release 1.2 has been available for at least 1 month
-        {
-            // Convert old-format job directories to new format, which has separate "job" and "model" files.
-            System.err.println ("converting to new job format: " + source.key ());
-            Path jobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
-            MDoc model = new MDoc (jobDir.resolve ("model"));
-            collectJobParameters (model, model.get ("$inherit"), source);
-            String temp = model.get ("$meta", "pid");
-            if (! temp.isEmpty ()) source.set (temp, "pid");
-        }
         inherit = source.getOrDefault (key, "$inherit").split (",", 2)[0].replace ("\"", "");
         setUserObject (inherit);
 
@@ -216,6 +236,9 @@ public class NodeJob extends NodeBase
         Path finished = localJobDir.resolve ("finished");
         if (Files.exists (finished)) checkFinished (finished);
 
+        long started = source.getLong ("started");
+        if (started > 0) dateStarted = new Date (started);
+
         EventQueue.invokeLater (new Runnable ()
         {
             public void run ()
@@ -225,20 +248,11 @@ public class NodeJob extends NodeBase
             }
         });
 
-        // Convert old-style started file to key in job record.
-        // TODO: Remove this conversion after release of N2A 1.2
-        if (! source.data ("started"))
-        {
-            Path startedFile = localJobDir.resolve ("started");
-            if (Files.exists (startedFile)) source.set (Host.lastModified (startedFile), "started");
-        }
-
-        long started = source.getLong ("started");
         if (started > 0)
         {
-            dateStarted = new Date (started);
-            Host env = Host.get (source);
-            env.monitor (this);
+            if (deleted) return;
+            if (complete >= 1  &&  complete != 3) return;
+            Host.get (source).monitor (this);
         }
         else  // Not started yet, so send to wait-for-host queue.
         {
@@ -418,7 +432,16 @@ public class NodeJob extends NodeBase
         if (complete == 3)
         {
             // Check if process is still lingering
-            if (! simulator.isAlive (source)) complete = 4;
+            if (! simulator.isAlive (source))
+            {
+                complete = 4;
+                dateFinished = new Date (System.currentTimeMillis ());
+                try
+                {
+                    Files.copy (new ByteArrayInputStream ("dead".getBytes ("UTF-8")), finished, StandardCopyOption.REPLACE_EXISTING);
+                }
+                catch (IOException e) {}
+            }
         }
 
         PanelRun   panelRun   = PanelRun.instance;

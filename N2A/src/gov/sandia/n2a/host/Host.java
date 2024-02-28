@@ -499,6 +499,11 @@ public abstract class Host
         synchronized (running) {running.add (job);}
     }
 
+    public void unmonitor (NodeJob job)
+    {
+        synchronized (running) {running.remove (job);}
+    }
+
     public class MonitorThread extends Thread
     {
         public boolean stop;

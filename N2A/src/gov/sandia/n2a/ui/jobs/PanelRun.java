@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1115,7 +1115,7 @@ public class PanelRun extends JPanel
             if (Files.exists (snapshotPath))
             {
                 MNode snapshot = new MDoc (snapshotPath);
-                doc   = snapshot.child (key);
+                doc   = snapshot.child (key);  // Could be null if snapshot is deleted before we have a chance to load it.
                 model = MPartSnapshot.from (key, snapshot);
             }
             else
@@ -1124,7 +1124,7 @@ public class PanelRun extends JPanel
                 model = new MDoc (localJobDir.resolve ("model"), key);
             }
 
-            doc.visit (new Visitor ()
+            if (doc != null) doc.visit (new Visitor ()
             {
                 public boolean visit (MNode node)
                 {

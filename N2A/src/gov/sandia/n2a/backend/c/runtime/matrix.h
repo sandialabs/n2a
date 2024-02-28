@@ -49,8 +49,8 @@ public:
     virtual ~MatrixAbstract ();
     virtual uint32_t classID () const = 0;  ///< @return A bitvector indicating all the classes to which this object can be cast.  Hack to avoid the cost of dynamic_cast.
 
-    virtual T   get         (const int row, const int column) const = 0;  ///< Safe element accesss. Returns 0 if indices are out of range.
-    virtual T & operator () (const int row, const int column) const = 0;  ///< Raw element accesss. No range checking. More efficient.
+    virtual T   get         (const int row, const int column = 0) const = 0;  ///< Safe element accesss. Returns 0 if indices are out of range.
+    virtual T & operator () (const int row, const int column = 0) const = 0;  ///< Raw element accesss. No range checking. More efficient.
     virtual int rows        () const = 0;
     virtual int columns     () const = 0;
 };
@@ -231,13 +231,13 @@ public:
 
     void resize (const int rows, const int columns = 1);  ///< Subroutine of constructors.
 
-    virtual T get (const int row, const int column) const
+    virtual T get (const int row, const int column = 0) const
     {
         if (row < 0     ||  row    >= rows_   ) return (T) 0;
         if (column < 0  ||  column >= columns_) return (T) 0;
         return ((T *) data)[offset + column * strideC_ + row * strideR_];
     }
-    virtual T & operator () (const int row, const int column) const
+    virtual T & operator () (const int row, const int column = 0) const
     {
         return ((T *) data)[offset + column * strideC_ + row * strideR_];
     }
@@ -299,13 +299,13 @@ public:
         }
     }
 
-    virtual T get (const int row, const int column) const
+    virtual T get (const int row, const int column = 0) const
     {
         if (row < 0     ||  row    >= R) return (T) 0;
         if (column < 0  ||  column >= C) return (T) 0;
         return data[column][row];
     }
-    virtual T & operator () (const int row, const int column) const
+    virtual T & operator () (const int row, const int column = 0) const
     {
         return (T &) data[column][row];
     }
@@ -391,8 +391,8 @@ public:
     virtual uint32_t classID () const;
 
     void        set         (const int row, const int column, const T value);  ///< If value is non-zero, creates element if not already there; if value is zero, removes element if it exists.
-    virtual T   get         (const int row, const int column) const {return operator() (row, column);}
-    virtual T & operator () (const int row, const int column) const;           ///< If element does not exist, this returns a dummy element. Assigning to it will have no effect. Elements must be created with set().
+    virtual T   get         (const int row, const int column = 0) const {return operator() (row, column);}
+    virtual T & operator () (const int row, const int column = 0) const;       ///< If element does not exist, this returns a dummy element. Assigning to it will have no effect. Elements must be created with set().
     virtual int rows        () const;
     virtual int columns     () const;
 };
