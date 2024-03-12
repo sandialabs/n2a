@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.eqset;
 
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.language.AccessVariable;
@@ -561,7 +562,7 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Collect the keys of all db parts that are somewhere in our inheritance tree.
-        Includes our own key.
+        Includes our own key if we are top-level model.
     **/
     public Set<String> collectAncestors ()
     {
@@ -570,12 +571,26 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Collect the keys of all db parts that are somewhere in the given child's
-        inheritance tree. Includes the child's own key.
+        inheritance tree. Includes the child's own key if it is a member of the models DB.
     **/
     public static Set<String> collectAncestors (MNode child)
     {
         Set<String> result = new HashSet<String> ();
-        result.add (child.key ());
+
+        // Add child's own key.
+        // However, guard against adding a sub-part name.
+        // This should only be a direct member of the models DB.
+        // The given child could be several different things. Generally it will be an MPart,
+        // so not a direct descendant of the model DB. In that case, we can check
+        // for root node, which is likely to be derived from a direct DB part.
+        // The child could also be an actual member of the model DB. In this case
+        // its parent should be an MDir.
+        if (child == child.root ()  ||  child.parent () instanceof MDir)
+        {
+            String key = child.key ();
+            if (AppData.docs.child ("models", key) != null) result.add (key);
+        }
+
         collectAncestors (child, result);
         return result;
     }
