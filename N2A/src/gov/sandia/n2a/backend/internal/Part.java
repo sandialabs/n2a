@@ -185,7 +185,7 @@ public class Part extends Instance
         if (bed.setDt) simulator.move (this, ((Scalar) bed.dt.type).value);
 
         // Prepare variables that have a combiner, in case they get written before the first finish().
-        clearExternalWriteBuffers (bed.localBufferedExternalWrite);  // skips REPLACE it because it is unnecessary when called from update(). Handle REPLACE separately ...
+        clearExternalWriteBuffers (bed.localBufferedExternalWrite);  // Skips REPLACE because it is unnecessary when called from update(). Handle REPLACE separately ...
         for (Variable v : bed.localBufferedExternalWrite) if (v.assignment == Variable.REPLACE) temp.set (v, temp.get (v));  // This must come after the variables are initialized. Otherwise, there is no point.
 
         // Request event monitors
