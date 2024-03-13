@@ -4,7 +4,7 @@ Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.eqset;
+package gov.sandia.n2a.db;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,9 +14,6 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import gov.sandia.n2a.db.AppData;
-import gov.sandia.n2a.db.MCombo;
-import gov.sandia.n2a.db.MNode;
 
 /**
     Collates models following all the N2A language rules, and provides an interface

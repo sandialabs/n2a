@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui.eq.undo;
 
-import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 
 public interface NodeFactory

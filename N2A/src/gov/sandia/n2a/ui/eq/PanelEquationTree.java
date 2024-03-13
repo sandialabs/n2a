@@ -7,8 +7,8 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.ui.eq;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.ui.CompoundEdit;

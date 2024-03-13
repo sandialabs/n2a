@@ -11,7 +11,7 @@ import java.util.List;
 import javax.swing.tree.TreeNode;
 import javax.swing.undo.CannotRedoException;
 
-import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;

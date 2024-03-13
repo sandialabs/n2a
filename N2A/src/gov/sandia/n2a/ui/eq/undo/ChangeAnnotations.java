@@ -14,8 +14,8 @@ import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.FilteredTreeModel;
 import gov.sandia.n2a.ui.eq.PanelEquationTree;
 import gov.sandia.n2a.ui.eq.StoredPath;

@@ -18,7 +18,7 @@ import java.util.Set;
 import gov.sandia.n2a.backend.neuroml.Sequencer.SequencerElement;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.operator.Negate;

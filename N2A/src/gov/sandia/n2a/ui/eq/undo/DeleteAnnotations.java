@@ -8,8 +8,8 @@ package gov.sandia.n2a.ui.eq.undo;
 
 import java.util.List;
 
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotations;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
 

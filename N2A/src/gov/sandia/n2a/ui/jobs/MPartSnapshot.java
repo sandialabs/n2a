@@ -12,7 +12,7 @@ import java.util.List;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.eqset.MPart;
+import gov.sandia.n2a.db.MPart;
 
 public class MPartSnapshot extends MPart
 {

@@ -8,8 +8,8 @@ package gov.sandia.n2a.backend.vensim;
 
 import gov.sandia.n2a.backend.vensim.Spreadsheet.Holder;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.db.MVolatile;
-import gov.sandia.n2a.eqset.MPart;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Operator;
