@@ -1,5 +1,5 @@
 /*
-Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -15,11 +15,14 @@ import java.util.regex.Pattern;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
+import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.linear.MatrixSparse;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import tech.units.indriya.AbstractUnit;
@@ -85,7 +88,7 @@ public class Mfile extends Function
         protected Map<String,Matrix>       matrices  = new HashMap<String,Matrix> ();
         protected Map<String,List<String>> childKeys = new HashMap<String,List<String>> ();
 
-        public static Holder get (Simulator simulator, String path)
+        public static Holder get (Simulator simulator, String path, Instance context, Mfile mf)
         {
             Holder result;
             Object o = simulator.holders.get (path);
@@ -93,6 +96,11 @@ public class Mfile extends Function
             {
                 result = new Holder ();
                 result.doc = new MDoc (simulator.jobDir.resolve (path));
+                Type inherit = mf.evalKeyword (context, "inherit");
+                if (inherit instanceof Text)
+                {
+                    result.doc = new MPartRepo (result.doc, ((Text) inherit).value);
+                }
                 simulator.holders.put (path, result);
             }
             else if (! (o instanceof Holder))
