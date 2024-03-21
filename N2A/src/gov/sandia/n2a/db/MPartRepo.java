@@ -14,6 +14,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import gov.sandia.n2a.backend.internal.Simulator;
+
 /**
     Serves as the root node of a tree, providing a user-defined set of files
     as the repo.
@@ -63,9 +65,10 @@ public class MPartRepo extends MPart
 
     public void build (String paths)
     {
+        Simulator simulator = Simulator.instance.get ();
         String[] pieces = paths.split (":");
         List<Path> parsedPaths = new ArrayList<Path> (pieces.length);
-        for (String p : pieces) parsedPaths.add (Paths.get (p));
+        for (String p : pieces) parsedPaths.add (simulator.jobDir.resolve (Paths.get (p)));
         build (parsedPaths);
     }
 
