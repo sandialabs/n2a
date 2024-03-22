@@ -13,7 +13,7 @@ package gov.sandia.n2a.db;
 **/
 public class MPartChild extends MPart
 {
-    protected MPartChild (MPart container, MPart inheritedFrom, MNode source)
+    public MPartChild (MPart container, MPart inheritedFrom, MNode source)
     {
         super (container, inheritedFrom, source);
     }

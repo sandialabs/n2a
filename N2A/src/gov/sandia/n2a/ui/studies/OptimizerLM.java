@@ -106,7 +106,9 @@ public class OptimizerLM extends StudyIterator
             max.set (c, vMax);
 
             double value = 0;
-            String initial = model.get (v.keyPath (root));
+            String initial;
+            if (v.child ("start") == null) initial = model.get (v.keyPath (root));
+            else                           initial = v.get ("start");
             if (initial.isBlank ())
             {
                 if (Double.isFinite (vMin)  &&  Double.isFinite (vMax)) value = (vMin + vMax) / 2;
@@ -250,7 +252,7 @@ public class OptimizerLM extends StudyIterator
         // Inner loop of algorithm -- Search over possible step sizes until we find one that gives acceptable improvement.
 
         //   Work done after sample
-        if (sample > n)  // Skip this the first time (when sample==n).
+        if (sample > n)  // Skip this the first time (when sample==n). Notice that the last section of code below is the first to be executed on sample==n.
         {
             // Retrieve sample
             int yindexNext = baseIndex + sample - 1;
@@ -344,6 +346,30 @@ public class OptimizerLM extends StudyIterator
             // Determine the Levenberg-Marquardt parameter.
             lmpar (p);  // par is updated as a side-effect
 
+            // Limit p so x+p stays within bounds.
+            // This only consider dimensions individually. A more accurate approach would re-scale all elements of p together.
+            for (int c = 0; c < n; c++)
+            {
+                double tx = x.get (c);
+                double tp = p.get (c);
+                double txp = tx - tp;  // p is actually stored as negative, so compute x+p by subtracting p.
+                double limit = max.get (c);
+                if (txp > limit)
+                {
+                    System.out.println ("p over: " + tx + " " + tp + " " + limit);
+                    p.set (c, tx - limit);  // solve for tp in limit=tx-tp
+                }
+                else
+                {
+                    limit = min.get (c);
+                    if (txp < limit)
+                    {
+                        System.out.println ("p under: " + tx + " " + tp + " " + limit);
+                        p.set (c, tx - limit);
+                    }
+                }
+            }
+
             // Store the direction p and x+p. Calculate the norm of p.
             xp = x.subtract (p);  // p is actually negative
             pnorm = p.multiplyElementwise (scales).norm (2);
@@ -391,7 +417,7 @@ public class OptimizerLM extends StudyIterator
             solve for b in R'b = DDx / |Dx|  (that is, Sb = DDx / |Dx|)
             par += (|Dx| - delta) / (delta * |b|^2)
     **/
-    public void lmpar (MatrixDense x)
+    public void lmpar (MatrixDense x)  // Here, "x" is same as "p" in main algorithm. this.x is hidden.
     {
         double minimum = Double.MIN_NORMAL;
         int n = J.columns ();
@@ -725,6 +751,8 @@ public class OptimizerLM extends StudyIterator
                     double h = perturbation * Math.abs (value);
                     if (h == 0) h = perturbation;
                     value += h;
+                    // We don't bound the perturbation. Presumably it is small enough that
+                    // if it transgresses min or max, it does not go so far that the model fails.
                 }
                 model.set (value, keyPath);
             }

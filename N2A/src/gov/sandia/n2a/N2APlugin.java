@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,6 +21,7 @@ import gov.sandia.n2a.plugins.extpoints.Export;
 import gov.sandia.n2a.plugins.extpoints.Import;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.plugins.extpoints.ShutdownHook;
+import gov.sandia.n2a.plugins.extpoints.StudyHook;
 import gov.sandia.n2a.plugins.extpoints.Activity;
 import gov.sandia.n2a.transfer.ExportNative;
 import gov.sandia.n2a.transfer.ImportNative;
@@ -138,7 +139,8 @@ public class N2APlugin extends Plugin
             Import.class,
             Operator.Factory.class,
             Settings.class,
-            ShutdownHook.class
+            ShutdownHook.class,
+            StudyHook.class
         };
     }
 

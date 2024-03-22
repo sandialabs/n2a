@@ -1116,7 +1116,7 @@ public class PanelRun extends JPanel
             {
                 MNode snapshot = new MDoc (snapshotPath);
                 doc   = snapshot.child (key);  // Could be null if snapshot is deleted before we have a chance to load it.
-                model = MPartSnapshot.from (key, snapshot);
+                model = NodeJob.getMPartSnapshot (key, snapshot);
             }
             else
             {

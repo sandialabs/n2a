@@ -262,6 +262,7 @@ public class JobC extends Thread
                 if (shared) libPath.add (runtimeDir);
                 if (ffmpegBinDir != null) libPath.add (ffmpegBinDir);  // This could be redundant with existing system path.
 
+                Backend.copyExtraFiles (model, job);
                 env.submitJob (job, env.clobbersOut (), commands, libPath);
             }
             job.clear ("status");

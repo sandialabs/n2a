@@ -102,6 +102,7 @@ import gov.sandia.n2a.plugins.extpoints.Export;
 import gov.sandia.n2a.plugins.extpoints.ExportModel;
 import gov.sandia.n2a.plugins.extpoints.Import;
 import gov.sandia.n2a.plugins.extpoints.ImportModel;
+import gov.sandia.n2a.plugins.extpoints.StudyHook;
 import gov.sandia.n2a.ui.CompoundEdit;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
@@ -179,7 +180,7 @@ public class PanelEquations extends JPanel
     protected JButton buttonView;
     protected JButton buttonViewOptions;
     public    JButton buttonRun;
-    protected JButton buttonStudy;
+    public    JButton buttonStudy;
     protected JButton buttonExport;
     protected JButton buttonImport;
 
@@ -1205,12 +1206,18 @@ public class PanelEquations extends JPanel
     {
         if (record == null) return;
         prepareForTabChange ();
+        launchJob (root.source);
+    }
+
+    public static void launchJob (MPart collated)
+    {
+        MNode doc = collated.getSource ();
 
         String jobKey = new SimpleDateFormat ("yyyy-MM-dd-HHmmss", Locale.ROOT).format (new Date ());
         MDoc job = (MDoc) AppData.runs.childOrCreate (jobKey);
-        NodeJob.collectJobParameters (root.source, record.key (), job);
+        NodeJob.collectJobParameters (collated, doc.key (), job);
         job.save ();  // Force directory (and job file) to exist, so Backends can work with the dir.
-        NodeJob.saveSnapshot (record, job);
+        NodeJob.saveSnapshot (doc, job);
 
         MainTabbedPane mtp = (MainTabbedPane) MainFrame.instance.tabs;
         mtp.setPreferredFocus (PanelRun.instance, PanelRun.instance.tree);
@@ -1304,6 +1311,11 @@ public class PanelEquations extends JPanel
                 return false;  // Don't descend after finding a study tag.
             }
         });
+        for (ExtensionPoint exp : PluginManager.getExtensionsForPoint (StudyHook.class))
+        {
+            StudyHook h = (StudyHook) exp;
+            if (study.child ("config", "plugin", h.name ()) != null) h.modifyStudy (study);
+        }
         study.save ();  // force directory to exist
         return study;
     }

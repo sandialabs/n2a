@@ -26,9 +26,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import gov.sandia.n2a.db.AppData;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.host.Host;
@@ -719,7 +721,7 @@ public class NodeJob extends NodeBase
         if (Files.exists (snapshotPath))  // mini-repo snapshot
         {
             MNode snapshot = new MDoc (snapshotPath);  // Load the mini-repo
-            return MPartSnapshot.from (key, snapshot);
+            return getMPartSnapshot (key, snapshot);
         }
         if (Files.exists (modelPath))  // collated snapshot
         {
@@ -727,6 +729,22 @@ public class NodeJob extends NodeBase
         }
         // No snapshot. Retrieve directly from database.
         return new MPart (AppData.docs.childOrEmpty ("models", key));
+    }
+
+    /**
+        Constructs an MPart tree for the model with the given key,
+        using the given snapshot to override the main "models" database.
+        This should not be used for editing the model.
+    **/
+    public static MPart getMPartSnapshot (String key, MNode snapshot)
+    {
+        List<MNode> containers = new ArrayList<MNode> (2);
+        containers.add (snapshot);
+        containers.add (AppData.docs.childOrCreate ("models"));
+        MCombo temp = new MCombo ("temp", containers);
+        MPart result = new MPartRepo (temp.child (key), temp);
+        temp.done ();
+        return result;
     }
 
     /**

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -191,36 +191,6 @@ public class MDir extends MDocGroup
             if (ref != null) doc = ref.get ();
             if (doc != null) doc.parent = this;
         }
-    }
-
-    public synchronized void addListener (MNodeListener listener)
-    {
-        listeners.add (listener);
-    }
-
-    public synchronized void removeListener (MNodeListener listener)
-    {
-        listeners.remove (listener);
-    }
-
-    public synchronized void fireChanged ()
-    {
-        for (MNodeListener l : listeners) l.changed ();
-    }
-
-    public synchronized void fireChildAdded (String key)
-    {
-        for (MNodeListener l : listeners) l.childAdded (key);
-    }
-
-    public synchronized void fireChildDeleted (String key)
-    {
-        for (MNodeListener l : listeners) l.childDeleted (key);
-    }
-
-    public synchronized void fireChildChanged (String oldKey, String newKey)
-    {
-        for (MNodeListener l : listeners) l.childChanged (oldKey, newKey);
     }
 
     /**

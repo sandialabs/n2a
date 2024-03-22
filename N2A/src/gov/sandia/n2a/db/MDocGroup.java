@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -200,7 +200,15 @@ public class MDocGroup extends MNode
 
     public synchronized void removeListener (MNodeListener listener)
     {
-        listeners.remove (listener);
+        // Don't call listeners.remove() directly, because ArrayList calls equals().
+        // If the listener is an MNode, this could result in a deep comparison
+        // of entire trees, when all that is really needed is object identity.
+        for (int i = listeners.size () - 1; i >= 0; i--)
+        {
+            if (listeners.get (i) != listener) continue;
+            listeners.remove (i);
+            break;
+        }
     }
 
     public synchronized void fireChanged ()

@@ -24,13 +24,19 @@ public class MPartRepo extends MPart
 {
     protected MNode repo;
 
-    public MPartRepo (MNode source, String paths)
+    public MPartRepo (MNode source, MNode repo)
+    {
+        super (null, null, source);
+        build (repo);
+    }
+
+    public MPartRepo (MNode source, List<Path> paths)
     {
         super (null, null, source);
         build (paths);
     }
 
-    public MPartRepo (MNode source, List<Path> paths)
+    public MPartRepo (MNode source, String paths)
     {
         super (null, null, source);
         build (paths);

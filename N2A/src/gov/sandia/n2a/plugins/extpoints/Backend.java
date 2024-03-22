@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -14,11 +14,13 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Host.ProcessInfo;
+import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 
@@ -152,6 +154,29 @@ public abstract class Backend implements ExtensionPoint
         }
 
         return true;
+    }
+
+    /**
+        Copies files specified in $meta.host.file to remote system.
+        @param model The model to be executed. Must be collated far enough that $meta.host.file is fully defined.
+        @param job Should have remote host set. If blank or localhost, then no files are copied.
+    **/
+    public static void copyExtraFiles (MNode model, MNode job) throws Exception
+    {
+        Host env = Host.get (job);
+        if (! (env instanceof Remote)) return;
+        MNode files = model.child ("$meta", "host", "files");
+        if (files == null) return;
+        Path localJobDir  = Host.getJobDir (Host.getLocalResourceDir (), job);
+        Path remoteJobDir = Host.getJobDir (env.getResourceDir (),       job);
+        for (MNode f : files)
+        {
+            String localFileName  = f.key ();
+            String remoteFileName = f.getOrDefault (localFileName);
+            Path localPath  = localJobDir .resolve (localFileName);
+            Path remotePath = remoteJobDir.resolve (remoteFileName);
+            Files.copy (localPath, remotePath, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
     /**

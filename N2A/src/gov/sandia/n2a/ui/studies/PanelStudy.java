@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -614,7 +614,7 @@ public class PanelStudy extends JPanel
                         if (temp.child ("loss") == null) break;
                         variablePaths.remove (1);
                     }
-                    loss = variables.child (variablePaths.get (0)).child ("loss");
+                    if (! variablePaths.isEmpty ()) loss = variables.child (variablePaths.get (0)).child ("loss");
                 }
             }
             if (currentStudy != null)

@@ -14,6 +14,9 @@ import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
+import gov.sandia.n2a.plugins.extpoints.StudyHook;
 import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.PanelEquations;
 import gov.sandia.n2a.ui.eq.PanelModel;
@@ -407,8 +410,13 @@ public class Study
                     // See PanelEquations.listenerRun for similar code.
                     final MDoc job = (MDoc) AppData.runs.childOrCreate (jobKey);
                     iterator.assign (modelCopy);  // Overlay current parameters. This can include $inherit itself, allowing iteration over model structure.
-                    MNode collated = new MPart (modelCopy);  // TODO: the only reason to collate here is to ensure that host and backend are correctly identified if they are inherited. Need a more efficient method, such as lazy collation in MPart.
+                    MPart collated = new MPart (modelCopy);
                     NodeJob.collectJobParameters (collated, inherit, job);
+                    for (ExtensionPoint exp : PluginManager.getExtensionsForPoint (StudyHook.class))
+                    {
+                        StudyHook h = (StudyHook) exp;
+                        if (source.child ("config", "plugin", h.name ()) != null) h.modifySample (collated, job);
+                    }
                     job.save ();
                     NodeJob.saveSnapshot (modelCopy, job);  // TODO: keep most of snapshot with study record. Only save modified parameters in each job snapshot.
 
