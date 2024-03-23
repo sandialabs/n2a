@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,7 +16,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.ui.Undoable;
 import gov.sandia.n2a.ui.eq.PanelModel;
@@ -133,7 +133,7 @@ public class AddDoc extends Undoable
 
         MDoc doc = (MDoc) AppData.docs.childOrCreate ("models", name);  // Triggers PanelModel.childAdded(name), which updates the select and MRU panels, but not the equation tree panel.
         doc.merge (saved);
-        new MPart (doc).clearRedundantOverrides ();
+        new MPartRepo (doc).clearRedundantOverrides ();
         AppData.set (doc.get ("$meta", "id"), doc);
         if (pm == null) return;
         if (doc.get ("$meta", "gui", "category").contains (",")) pm.panelSearch.search ();  // update for multiple categories

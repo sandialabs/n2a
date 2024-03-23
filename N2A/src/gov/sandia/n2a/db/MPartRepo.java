@@ -24,18 +24,36 @@ public class MPartRepo extends MPart
 {
     protected MNode repo;
 
+    /**
+        Creates MPart tree with the default "models" repo.
+    **/
+    public MPartRepo (MNode source)
+    {
+        super (null, null, source);
+        build (AppData.docs.childOrCreate ("models"));
+    }
+
+    /**
+        Creates MPart tree with explicit repo.
+    **/
     public MPartRepo (MNode source, MNode repo)
     {
         super (null, null, source);
         build (repo);
     }
 
+    /**
+        Creates MPart tree with repo constructed from a list of paths.
+    **/
     public MPartRepo (MNode source, List<Path> paths)
     {
         super (null, null, source);
         build (paths);
     }
 
+    /**
+        Creates MPart tree with repo constructed from a path string.
+    **/
     public MPartRepo (MNode source, String paths)
     {
         super (null, null, source);
@@ -80,12 +98,7 @@ public class MPartRepo extends MPart
 
     protected MNode getRepo ()
     {
-        return repo;
-    }
-
-    protected MPart construct (MPart container, MPart inheritedFrom, MNode source)
-    {
-        return new MPartChild (container, inheritedFrom, source);
+        return repo;  // That's why we're here.
     }
 
     /**

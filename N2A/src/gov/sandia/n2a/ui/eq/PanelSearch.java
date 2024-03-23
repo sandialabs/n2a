@@ -11,6 +11,7 @@ import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.language.Operator;
@@ -120,7 +121,7 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
 
                 MNode doc = AppData.docs.child ("models", node.key);
                 if (doc == null) return null;
-                MPart source = new MPart (doc);
+                MPart source = new MPartRepo (doc);
 
                 FontMetrics fm = getFontMetrics (getFont ());
                 return gov.sandia.n2a.ui.eq.tree.NodeBase.getToolTipText (source, fm);
@@ -1136,7 +1137,7 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
         {
             handles = new HashMap<String,EndpointHandles> ();
             MNode doc = AppData.docs.child ("models", key);
-            MPart part = new MPart (doc);
+            MPart part = new MPartRepo (doc);
             for (MNode c : part)
             {
                 String value = c.get ();

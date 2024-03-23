@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.host.Host;
@@ -261,7 +262,7 @@ public class Main
             return 1;
         }
         record.mergeUnder (doc);
-        MPart collated = new MPart (record);  // TODO: the only reason to collate here is to ensure that host and backend are correctly identified if they are inherited. Need a more efficient method, such as lazy collation in MPart.
+        MPart collated = new MPartRepo (record);  // TODO: the only reason to collate here is to ensure that host and backend are correctly identified if they are inherited. Need a more efficient method, such as lazy collation in MPart.
         NodeJob.collectJobParameters (collated, key, job);
         NodeJob.saveSnapshot (record, job);
 
@@ -341,7 +342,7 @@ public class Main
             return 1;
         }
         record.mergeUnder (doc);
-        MPart collated = new MPart (record);
+        MPart collated = new MPartRepo (record);
         if (! collated.containsKey ("study"))
         {
             System.err.println ("Model not tagged as a study");

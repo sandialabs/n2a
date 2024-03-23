@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,6 +18,7 @@ import javax.swing.tree.TreePath;
 import javax.swing.undo.CannotRedoException;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.language.AccessVariable;
@@ -286,7 +287,7 @@ public class ChangeVariable extends UndoableView
             NodePart parent = (NodePart) nodeAfter.getTrueParent ();
             renamed = parent.child (nameBefore);  // Our ctor parameter may still have context prefix.
             if (renamed != null) return;  // In this case, renamed should also equal nodeBefore.
-            MPart c = new MPart (new MVolatile (nameBefore));
+            MPart c = new MPartRepo (new MVolatile (nameBefore));
             if (nodeAfter instanceof NodeVariable) renamed = new NodeVariable (c);
             else                                   renamed = new NodePart (c);
             parent.add (renamed);

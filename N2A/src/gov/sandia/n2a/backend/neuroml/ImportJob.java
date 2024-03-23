@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,6 +11,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.Variable.ParsedValue;
@@ -4142,7 +4143,7 @@ public class ImportJob extends XMLutility
             MNode parent = findBasePart (part);
             if (parent != null)
             {
-                MPart mparent = new MPart (parent);
+                MPart mparent = new MPartRepo (parent);
 
                 NameMap nameMap = partMap.outward.get (parent.key ());
                 if (nameMap == null)

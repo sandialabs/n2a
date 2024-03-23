@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -42,10 +42,12 @@ public class MPart extends MNode
     protected MPart container;
     protected NavigableMap<String,MPart> children;
 
+    // MPart can't be constructed directly. Instead, use a repo provider like MPartRepo.
+
     /**
         Collates a full model from the given source document.
     **/
-    public MPart (MNode source)
+    protected MPart (MNode source)
     {
         container     = null;
         this.source   = source;
@@ -65,23 +67,13 @@ public class MPart extends MNode
     }
 
     /**
-        Allows different subclasses of MPart to supply their own choice of repo.
-        This embeds the choice of repo in the class itself, rather than a member
-        variable. Works together with construct().
+        Provides the repo used to expand $inherit.
+        The root of the MPart tree must be a subclass that knows how to provide this information.
+        MPartRepo is the main implementation.
     **/
     protected MNode getRepo ()
     {
-        return AppData.docs.childOrCreate ("models");
-    }
-
-    /**
-        Enables a subclass of MPart to continue creating instances of itself for
-        all children, rather than reverting to the base class. Works together
-        with getRepo().
-    **/
-    protected MPart construct (MPart container, MPart inheritedFrom, MNode source)
-    {
-        return new MPart (container, inheritedFrom, source);
+        return container.getRepo ();
     }
 
     /**
@@ -251,7 +243,7 @@ public class MPart extends MNode
             MPart c = children.get (key);
             if (c == null)
             {
-                c = construct (this, from, n);
+                c = new MPart (this, from, n);
                 children.put (key, c);
                 c.underrideChildren (from, n);
             }
@@ -425,7 +417,7 @@ public class MPart extends MNode
     /**
         Remove any top document values from this node and its children.
     **/
-    public synchronized void releaseOverride ()
+    protected synchronized void releaseOverride ()
     {
         if (! isFromTopDocument ()) return;  // This node is not overridden, so nothing to do.
 
@@ -445,7 +437,7 @@ public class MPart extends MNode
     /**
         Assuming that source in the current node belongs to the top-level document, reset all overridden children back to their original state.
     **/
-    public synchronized void releaseOverrideChildren ()
+    protected synchronized void releaseOverrideChildren ()
     {
         Iterator<MNode> i = source.iterator ();  // Implicitly, everything we iterate over will be from the top document.
         while (i.hasNext ())
@@ -462,7 +454,7 @@ public class MPart extends MNode
         If this is a leaf node, then be sure to set a non-null value afterward. IE: leaf nodes should
         always be defined in documents.
     **/
-    public synchronized void override ()
+    protected synchronized void override ()
     {
         if (isFromTopDocument ()) return;
         // The only way to get past the above line is if original==source
@@ -473,7 +465,7 @@ public class MPart extends MNode
     /**
         Checks if any child is overridden. If so, then then current node must remain overridden as well.
     **/
-    public synchronized boolean overrideNecessary ()
+    protected synchronized boolean overrideNecessary ()
     {
         for (MNode c : this) if (((MPart) c).isFromTopDocument ()) return true;
         return false;
@@ -483,7 +475,7 @@ public class MPart extends MNode
         If an override is no longer needed on this node, reset it to its original state, and make
         a recursive call to our parent. This is effectively the anti-operation to override().
     **/
-    public synchronized void clearPath ()
+    protected synchronized void clearPath ()
     {
         if (source != original  &&  (! source.data ()  ||  source.get ().equals (original.get ()))  &&  ! overrideNecessary ())
         {
@@ -533,7 +525,7 @@ public class MPart extends MNode
         // We don't have the child, so by construction it is not in any source document.
         override ();  // ensures that source is a member of the top-level document tree
         MNode s = source.set (value, index);
-        result = construct (this, null, s);
+        result = new MPart (this, null, s);
         if (children == null) children = new TreeMap<String,MPart> (comparator);
         children.put (index, result);
         if (index.equals ("$inherit"))  // We've created an $inherit line, so load the inherited equations.
@@ -630,8 +622,11 @@ public class MPart extends MNode
 
     /**
         Clears all top-level document nodes which exactly match the value they override.
-        This is a utility function to support import and copy/paste. In general, internal
-        models are kept in a clean state by set().
+        In general, internal models are kept in a clean state by set().
+        This utility function is only needed when we create a tree by importing or pasting
+        already-collated material from some source. In that case, the material won't distinguish
+        between top-level document and expanded nodes. This method undoes the collation
+        so that only necessary top-level nodes remain.
         @return true if the entire tree from this node down is free of top-level nodes.
     **/
     public synchronized boolean clearRedundantOverrides ()
@@ -671,7 +666,7 @@ public class MPart extends MNode
         {
             MNode toDoc = source.childOrCreate (toIndex);
             toDoc.merge (fromDoc);
-            MPart c = construct (this, null, toDoc);
+            MPart c = new MPart (this, null, toDoc);
             children.put (toIndex, c);
             c.underrideChildren (null, toDoc);  // The sub-tree is empty, so all injected nodes are new. They don't really underride anything.
             c.expand ();

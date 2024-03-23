@@ -11,6 +11,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.host.Host;
@@ -410,7 +411,7 @@ public class Study
                     // See PanelEquations.listenerRun for similar code.
                     final MDoc job = (MDoc) AppData.runs.childOrCreate (jobKey);
                     iterator.assign (modelCopy);  // Overlay current parameters. This can include $inherit itself, allowing iteration over model structure.
-                    MPart collated = new MPart (modelCopy);
+                    MPart collated = new MPartRepo (modelCopy);
                     NodeJob.collectJobParameters (collated, inherit, job);
                     for (ExtensionPoint exp : PluginManager.getExtensionsForPoint (StudyHook.class))
                     {

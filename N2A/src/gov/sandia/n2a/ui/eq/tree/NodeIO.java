@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,6 +8,7 @@ package gov.sandia.n2a.ui.eq.tree;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.db.MVolatile;
 
 @SuppressWarnings("serial")
@@ -34,7 +35,7 @@ public class NodeIO extends NodePart
             pinIn      = parent.pinOut;
             pinInOrder = parent.pinOutOrder;
         }
-        source = new MPart (empty);  // fake source
+        source = new MPartRepo (empty);  // fake source
     }
 
     @Override

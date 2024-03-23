@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -49,6 +49,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.db.MPersistent;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.EquationEntry;
@@ -130,7 +131,7 @@ public class ExportJob extends XMLutility
 
         try
         {
-            MPart mpart = new MPart (source);
+            MPart mpart = new MPartRepo (source);
             modelName = source.key ();
             equations = new EquationSet (mpart);
             makeExecutable (equations, true);
@@ -3177,7 +3178,7 @@ public class ExportJob extends XMLutility
                 {
                     // Do a complete build of the model, including inheritance resolution.
                     // This makes it indistinguishable from an embedded LEMS model.
-                    source = new MPart (source);
+                    source = new MPartRepo (source);
                     equations = new EquationSet (source);
                     makeExecutable (equations, false);
                 }
@@ -3739,7 +3740,7 @@ public class ExportJob extends XMLutility
                                 {
                                     MNode doc = AppData.docs.child ("models", a.partName);
                                     if (doc == null) continue;
-                                    MPart part = new MPart (doc);
+                                    MPart part = new MPartRepo (doc);
                                     MNode node = part.child (query);
                                     if (node == null) continue;
                                     NameMap nameMap = partMap.exportMap (a.partName);

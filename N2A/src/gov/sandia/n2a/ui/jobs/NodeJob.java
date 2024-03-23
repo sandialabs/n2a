@@ -728,7 +728,7 @@ public class NodeJob extends NodeBase
             return new MDoc (modelPath, key);
         }
         // No snapshot. Retrieve directly from database.
-        return new MPart (AppData.docs.childOrEmpty ("models", key));
+        return new MPartRepo (AppData.docs.childOrEmpty ("models", key));
     }
 
     /**

@@ -89,6 +89,7 @@ import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.db.MNode.Visitor;
@@ -634,7 +635,7 @@ public class PanelEquations extends JPanel
         updateLock ();
         try
         {
-            root = new NodePart (new MPart (record));
+            root = new NodePart (new MPartRepo (record));
             root.build ();
             root.findConnections ();
             root.findPins ();

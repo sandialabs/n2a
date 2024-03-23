@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -18,7 +18,7 @@ import java.util.Set;
 import gov.sandia.n2a.backend.neuroml.Sequencer.SequencerElement;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.db.MPart;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.operator.Negate;
@@ -308,7 +308,7 @@ public class PartMap
         for (MNode c : AppData.docs.childOrEmpty ("models"))
         {
             if (c.child ("$meta", "backend", "lems", "part") == null) continue;  // Must directly declare a NeuroML part to be included.
-            NameMap map = new NameMap (new MPart (c));  // Create map using fully-collated part, not just the immediate one.
+            NameMap map = new NameMap (new MPartRepo (c));  // Create map using fully-collated part, not just the immediate one.
             outward.put (map.internal, map);
             for (String n : map.neuroml) inward.put (n, map);
         }
