@@ -103,7 +103,7 @@ public class MPartRepo extends MPart
 
     /**
         A variant of MDocGroup where the key must be a simple name rather than path.
-        This does not handle move() or set() with a different path value.
+        This does not handle move() or set() that changes path.
     **/
     public static class MDocGroupKey extends MDocGroup
     {
@@ -111,9 +111,7 @@ public class MPartRepo extends MPart
 
         public Path pathForDoc (String key)
         {
-            Path result = paths.get (key);
-            if (result != null) return result;
-            return super.pathForDoc (key);
+            return paths.get (key).toAbsolutePath ();
         }
 
         public synchronized MNode set (Path value, String key)

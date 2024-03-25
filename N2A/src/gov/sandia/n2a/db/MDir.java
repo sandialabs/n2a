@@ -99,7 +99,7 @@ public class MDir extends MDocGroup
                 Path parentPath = childPath.getParent ();
                 if (! Files.isReadable (parentPath)) return null;
             }
-            result = new MDoc (this, key);
+            result = new MDoc (this, null, key);
             children.put (key, new SoftReference<MDoc> (result));
         }
         return result;
@@ -148,7 +148,7 @@ public class MDir extends MDocGroup
         MDoc result = (MDoc) getChild (key);
         if (result == null)  // new document
         {
-            result = new MDoc (this, key);
+            result = new MDoc (this, null, key);
             children.put (key, new SoftReference<MDoc> (result));
             result.markChanged ();  // Set the new document to save. Adds to writeQueue.
 
@@ -212,7 +212,7 @@ public class MDir extends MDocGroup
         SoftReference<MDoc> reference = children.get (key);
         if (reference == null)  // added back into db, or not currently loaded
         {
-            MDoc child = new MDoc (this, key);
+            MDoc child = new MDoc (this, null, key);
             reference = new SoftReference<MDoc> (child);
             children.put (key, reference);
             fireChildAdded (key);

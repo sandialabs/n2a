@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -34,16 +34,6 @@ import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 public class MDoc extends MPersistent
 {
     /**
-        Constructs a document as a child of an MDir.
-        In this case, the key contains the file name in the dir, and the full path is constructed
-        when needed using information from the parent.
-    **/
-    protected MDoc (MDir parent, String key)
-    {
-        this (parent, null, key);
-    }
-
-    /**
         Constructs a stand-alone document with blank key.
         In this case, the value contains the full path to the file on disk.
     **/
@@ -61,9 +51,9 @@ public class MDoc extends MPersistent
         this (null, path.toAbsolutePath ().toString (), key);
     }
 
-    protected MDoc (MDocGroup parent, String path, String name)
+    protected MDoc (MDocGroup parent, String path, String key)
     {
-        super (parent, path, name);
+        super (parent, path, key);
     }
 
     /**

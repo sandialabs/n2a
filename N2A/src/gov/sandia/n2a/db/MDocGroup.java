@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.lang.ref.SoftReference;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,10 +24,8 @@ import java.util.TreeMap;
 
 /**
     Holds a collection of MDocs and ensures that any changes get written out to disk.
-    Assumes that the MDocs are at random places in the file system, and that the key contains the full path.
-    MDir makes the stronger assumption that all files share the same directory, so the key only contains the file name.
 **/
-public class MDocGroup extends MNode
+public abstract class MDocGroup extends MNode
 {
     protected String                                   name;  // We could be held in an even higher-level node.
     protected NavigableMap<String,SoftReference<MDoc>> children   = new TreeMap<String,SoftReference<MDoc>> ();
@@ -68,21 +65,13 @@ public class MDocGroup extends MNode
     }
 
     /**
-        Generates a path for the MDoc, based only on the key.
-        This requires making restrictive assumptions about the mapping between key and path.
-        This base class assumes the key is literally the path, as a string.
-        MDir assumes that the key is a file or subdir name within a given directory.
+        Generates absolute path for the MDoc, based only on the key.
     **/
-    public Path pathForDoc (String key)
-    {
-        return Paths.get (key);
-    }
+    public abstract Path pathForDoc (String key);
 
     /**
         Similar to pathForDoc(), but gives path to the file for the purposes of moving or deleting.
-        This is different from pathForDoc() in the specific case of an MDir that has non-null suffix.
-        In that case, the file is actually a subdirectory that contains both the MDoc and possibly
-        other files.
+        This is potentially a directory rather than a specific file.
     **/
     public Path pathForFile (String key)
     {
@@ -100,7 +89,7 @@ public class MDocGroup extends MNode
         {
             Path path = pathForDoc (key);
             if (! Files.isReadable (path)) return null;
-            result = new MDoc (this, key, key);  // Assumes key==path.
+            result = new MDoc (this, pathForDoc (key).toString (), key);
             children.put (key, new SoftReference<MDoc> (result));
         }
         return result;
@@ -133,18 +122,20 @@ public class MDocGroup extends MNode
 	}
 
     /**
-        Creates a new MDoc that refers to the path given in key.
-        @param key Mapped to location on disk according to pathForDoc().
-        @param value ignored in all cases.
+        Creates a new MDoc.
+        @param key Simple name for document.
+        @param value The path to the document. Depending on subclass, this may
+        be ignored. IE: if the subclass knows how to construct path from just
+        the key.
     **/
     public synchronized MNode set (String value, String key)
     {
         MDoc result = (MDoc) getChild (key);
         if (result == null)  // new document, or at least new to us
         {
-            result = new MDoc (this, key, key);  // Assumes key==path. This is overridden in MDir.
-            children.put (key, new SoftReference<MDoc> (result));
             Path path = pathForDoc (key);
+            result = new MDoc (this, path.toString (), key);
+            children.put (key, new SoftReference<MDoc> (result));
             if (! Files.exists (path)) result.markChanged ();  // Set the new document to save. Adds to writeQueue.
 
             fireChildAdded (key);
@@ -176,7 +167,7 @@ public class MDocGroup extends MNode
         }
 
         SoftReference<MDoc> fromReference = children.get (fromKey);
-        boolean fromExists = children.containsKey (fromKey);
+        boolean fromExists = fromReference != null;
         boolean toExists   = children.containsKey (toKey);
         children.remove (fromKey);
         children.remove (toKey);
