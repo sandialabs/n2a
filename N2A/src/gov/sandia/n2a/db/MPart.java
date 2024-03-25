@@ -77,6 +77,15 @@ public class MPart extends MNode
     }
 
     /**
+        Enables a subclass of MPart to continue creating instances of itself for
+        all children, rather than reverting to the base class.
+    **/
+    protected MPart construct (MPart container, MPart inheritedFrom, MNode source)
+    {
+        return new MPart (container, inheritedFrom, source);
+    }
+
+    /**
         Convenience method for expand(LinkedList<MNode>).
     **/
     protected synchronized void expand ()
@@ -243,7 +252,7 @@ public class MPart extends MNode
             MPart c = children.get (key);
             if (c == null)
             {
-                c = new MPart (this, from, n);
+                c = construct (this, from, n);
                 children.put (key, c);
                 c.underrideChildren (from, n);
             }
@@ -525,7 +534,7 @@ public class MPart extends MNode
         // We don't have the child, so by construction it is not in any source document.
         override ();  // ensures that source is a member of the top-level document tree
         MNode s = source.set (value, index);
-        result = new MPart (this, null, s);
+        result = construct (this, null, s);
         if (children == null) children = new TreeMap<String,MPart> (comparator);
         children.put (index, result);
         if (index.equals ("$inherit"))  // We've created an $inherit line, so load the inherited equations.
@@ -666,7 +675,7 @@ public class MPart extends MNode
         {
             MNode toDoc = source.childOrCreate (toIndex);
             toDoc.merge (fromDoc);
-            MPart c = new MPart (this, null, toDoc);
+            MPart c = construct (this, null, toDoc);
             children.put (toIndex, c);
             c.underrideChildren (null, toDoc);  // The sub-tree is empty, so all injected nodes are new. They don't really underride anything.
             c.expand ();
