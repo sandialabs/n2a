@@ -37,12 +37,13 @@ public class OptimizerLM extends StudyIterator
     protected int         yindex     = -1;    // Index of the job that provided the current value of y. Used to restore iterator state.
     protected int         maxIterations;
     protected int         expectedIterations; // estimate updated after first sample
+    protected List<MNode> loss;
     protected List<MNode> variables;
     protected double      toleranceF;
     protected double      toleranceX;
     protected double      toleranceG;
     protected double      perturbation;
-    protected String      dummy;
+    protected String[]    dummy;
 
     protected MatrixDense x;       // current state vector
     protected MatrixDense y;       // current value of time series output by model.  y=f(x) where f() is one entire job run.
@@ -61,10 +62,11 @@ public class OptimizerLM extends StudyIterator
     protected double      pnorm;
     protected double      delta;   // step bound
 
-    public OptimizerLM (Study study, String[] keys, List<MNode> variables)
+    public OptimizerLM (Study study, List<MNode> loss, List<MNode> variables)
     {
-        super (keys);
+        super (loss.get (0).keyPath (study.source.child ("variables")));  // by convention, we store optimizer state under the first loss variable
         this.study     = study;
+        this.loss      = loss;
         this.variables = variables;
 
         maxIterations = study.source.getOrDefault (200,     "config", "maxIterations");
@@ -124,11 +126,17 @@ public class OptimizerLM extends StudyIterator
         // Compare with EquationSet ctor code that handles watch variables.
         // If "loss" is a state variable (as opposed to temporary), then there will be
         // a 1-cycle delay, and the first row will be useless.
-        MNode g = model.child (keyPath);
-        MNode p = g.parent ();
-        dummy = "x0";
-        int suffix = 1;
-        while (p.child (dummy) != null) dummy = "x" + suffix++;
+        int count = loss.size ();
+        dummy = new String[count];
+        for (int i = 0; i < count; i++)
+        {
+            MNode g = model.child (loss.get (i).keyPath (root));
+            MNode p = g.parent ();
+            String d = "x0";
+            int suffix = 1;
+            while (p.child (d) != null) d = "x" + suffix++;
+            dummy[i] = d;
+        }
     }
 
     public int count ()
@@ -161,10 +169,7 @@ public class OptimizerLM extends StudyIterator
         {
             // Results of first sample are now available. This establishes number of rows in Jacobian.
             yindex = 0;
-            OutputParser.Column series = getSeries (yindex);
-            int m = series.startRow + series.values.size ();
-            y = new MatrixDense (m, 1);
-            for (int r = 0; r < m; r++) y.set (r, series.get (r));
+            y = new MatrixDense (getSeries (yindex));
             ynorm = y.norm (2);
 
             // Update estimated number of iterations, based on size of initial error.
@@ -197,13 +202,13 @@ public class OptimizerLM extends StudyIterator
             MatrixDense Jnorms = new MatrixDense (n, 1);  // norm of each column in J
             for (int c = 0; c < n; c++)
             {
-                OutputParser.Column series = getSeries (baseIndex + c);
+                double[] series = getSeries (baseIndex + c);
                 double h = perturbation * Math.abs (x.get (c));
                 if (h == 0) h = perturbation;
                 double norm = 0;
                 for (int r = 0; r < m; r++)
                 {
-                    double value = (series.get (r) - y.get (r)) / h;
+                    double value = (series[r] - y.get (r)) / h;
                     J.set (r, c, value);
                     norm += value * value;
                 }
@@ -256,9 +261,7 @@ public class OptimizerLM extends StudyIterator
         {
             // Retrieve sample
             int yindexNext = baseIndex + sample - 1;
-            OutputParser.Column series = getSeries (yindexNext);
-            MatrixDense tempY = new MatrixDense (m, 1);
-            for (int r = 0; r < m; r++) tempY.set (r, series.get (r));
+            MatrixDense tempY = new MatrixDense (getSeries (yindexNext));
             double ynormNext = tempY.norm (2);
 
             // compute the scaled actual reduction
@@ -631,15 +634,15 @@ public class OptimizerLM extends StudyIterator
     public void save (MNode study)
     {
         if (inner != null) inner.save (study);
-        MNode loss = node (study);  // by convention, we store optimizer state under the loss variable
+        MNode state = node (study);
 
-        loss.set (iteration, "iteration");
-        loss.set (sample,    "sample");
-        loss.set (baseIndex, "baseIndex");
-        loss.set (yindex,    "yindex");
-        loss.set (ratio,     "ratio");
-        loss.set (par,       "par");
-        loss.set (delta,     "delta");
+        state.set (iteration, "iteration");
+        state.set (sample,    "sample");
+        state.set (baseIndex, "baseIndex");
+        state.set (yindex,    "yindex");
+        state.set (ratio,     "ratio");
+        state.set (par,       "par");
+        state.set (delta,     "delta");
 
         int n = variables.size ();
         for (int c = 0; c < n; c++)
@@ -656,15 +659,15 @@ public class OptimizerLM extends StudyIterator
     public void load (MNode study)
     {
         if (inner != null) inner.load (study);
-        MNode loss = node (study);
+        MNode state = node (study);
 
-        iteration = loss.getOrDefault (0,  "iteration");
-        sample    = loss.getOrDefault (-1, "sample");
-        baseIndex = loss.getOrDefault (1,  "baseIndex");
-        yindex    = loss.getOrDefault (-1, "yindex");
-        ratio     = loss.getOrDefault (0,  "ratio");
-        par       = loss.getOrDefault (0,  "par");
-        delta     = loss.getOrDefault (1,  "delta");
+        iteration = state.getOrDefault (0,  "iteration");
+        sample    = state.getOrDefault (-1, "sample");
+        baseIndex = state.getOrDefault (1,  "baseIndex");
+        yindex    = state.getOrDefault (-1, "yindex");
+        ratio     = state.getOrDefault (0,  "ratio");
+        par       = state.getOrDefault (0,  "par");
+        delta     = state.getOrDefault (1,  "delta");
 
         int n = variables.size ();
         for (int c = 0; c < n; c++)
@@ -682,10 +685,8 @@ public class OptimizerLM extends StudyIterator
 
         //   y -- Based on saved index
         if (yindex < 0) return;
-        OutputParser.Column series = getSeries (yindex);
-        int m = series.startRow + series.values.size ();
-        y = new MatrixDense (m, 1);
-        for (int r = 0; r < m; r++) y.set (r, series.get (r));
+        y = new MatrixDense (getSeries (yindex));
+        int m = y.rows ();
         ynorm = y.norm (2);
 
         //   J, qr, Qy
@@ -696,12 +697,12 @@ public class OptimizerLM extends StudyIterator
         J = new MatrixDense (m, n);
         for (int c = 0; c < n; c++)
         {
-            series = getSeries (baseIndex + c);
+            double[] series = getSeries (baseIndex + c);
             double h = perturbation * Math.abs (x.get (c));
             if (h == 0) h = perturbation;
             for (int r = 0; r < m; r++)
             {
-                J.set (r, c, (series.get (r) - y.get (r)) / h);
+                J.set (r, c, (series[r] - y.get (r)) / h);
             }
         }
         qr = new FactorQR (J);
@@ -714,10 +715,15 @@ public class OptimizerLM extends StudyIterator
         MNode root = study.source.child ("variables");
 
         // Output "loss"
-        MNode g = model.child (keyPath);
-        MNode p = g.parent ();
-        p.set ("output(\"study\"," + g.key () + ",\"loss\")", dummy);
-        // TODO: sampling intervals (see EquationSet ctor)
+        int count = loss.size ();
+        for (int i = 0; i < count; i++)
+        {
+            MNode l = loss.get (i);
+            MNode g = model.child (l.keyPath (root));
+            MNode p = g.parent ();
+            p.set ("output(\"study\"," + g.key () + ",\"loss" + i + "\")", dummy[i]);
+            // TODO: sampling intervals (see EquationSet ctor)
+        }
 
         // Set starting point
         if (sample < 0)
@@ -769,12 +775,21 @@ public class OptimizerLM extends StudyIterator
         }
     }
 
-    public OutputParser.Column getSeries (int index)
+    public double[] getSeries (int index)
     {
         NodeJob node = study.getJob (index);
         Path jobDir = node.getJobPath ().getParent ();
         OutputParser parser = new OutputParser ();
         parser.parse (jobDir.resolve ("study"));
-        return parser.getColumn ("loss");
+        int columns = loss.size ();
+        double[] result = new double[parser.rows * columns];
+        for (int i = 0; i < columns; i++)
+        {
+            OutputParser.Column c = parser.getColumn ("loss" + i);
+            int count = c.values.size ();
+            int offset = i * parser.rows + c.startRow;
+            for (int j = 0; j < count; j++) result[offset+j] = c.values.get (j);
+        }
+        return result;
     }
 }

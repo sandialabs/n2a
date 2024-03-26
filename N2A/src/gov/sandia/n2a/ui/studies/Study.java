@@ -81,7 +81,7 @@ public class Study
         MNode variables = source.childOrEmpty ("variables");
         class VariableVisitor implements Visitor
         {
-            MNode                     loss;
+            List<MNode>               loss     = new ArrayList<MNode> ();
             List<MNode>               optimize = new ArrayList<MNode> ();
             Map<String,IteratorGroup> groups   = new HashMap<String,IteratorGroup> ();
 
@@ -98,7 +98,7 @@ public class Study
                 }
                 else if (n.child ("loss") != null)  // Identifies the variable whose error value we wish to minimize.
                 {
-                    loss = n;  // There can only be one goal, so only last-found goal is used.
+                    loss.add (n);
                 }
                 else if (value.startsWith ("["))
                 {
@@ -155,12 +155,12 @@ public class Study
 
         // Set up optimization iterator.
         // This must always be last, so that it forms the inner loop. Combinatorial iteration takes place around it.
-        if (visitor.loss == null  ||  visitor.optimize.isEmpty ()) return;
+        if (visitor.loss.isEmpty ()  ||  visitor.optimize.isEmpty ()) return;
         StudyIterator it;
         switch (source.getOrDefault ("lm", "config", "optimizer"))
         {
             case "lm":
-            default: it = new OptimizerLM (this, visitor.loss.keyPath (variables), visitor.optimize);
+            default: it = new OptimizerLM (this, visitor.loss, visitor.optimize);
         }
         if (iterator != null)
         {

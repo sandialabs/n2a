@@ -570,14 +570,14 @@ public class PanelStudy extends JPanel
                     Path jobDir = node.getJobPath ().getParent ();
                     OutputParser parser = new OutputParser ();
                     parser.parse (jobDir.resolve ("study"));
-                    Column c = parser.getColumn ("loss");
-                    if (c != null)
+                    double error = 0;
+                    for (Column c : parser.columns)
                     {
+                        if (c == parser.time) continue;
                         // TODO: handle different methods for expressing loss. This version only handles squared error over time series.
-                        double error = 0;
                         for (float e : c.values) error += e * e;
-                        values[0] = Scalar.print (Math.sqrt (error));
                     }
+                    if (error > 0) values[0] = Scalar.print (Math.sqrt (error));
                 }
             }
             return values[column-1];
@@ -601,20 +601,19 @@ public class PanelStudy extends JPanel
                         public boolean visit (MNode n)
                         {
                             if (! n.data ()) return true;  // The first non-null node along a branch is the study variable. Everything under that is extra metadata.
-                            MNode loss = n.child ("loss");
-                            if (loss == null) variablePaths.add (   n.keyPath (variables));
-                            else              variablePaths.add (0, n.keyPath (variables));
+                            MNode temp = n.child ("loss");
+                            if (temp == null)
+                            {
+                                variablePaths.add (n.keyPath (variables));  // add to end
+                            }
+                            else if (loss == null)  // This is a loss variable. Only keep the first one found.
+                            {
+                                loss = temp;
+                                variablePaths.add (0, n.keyPath (variables));  // insert in front
+                            }
                             return false;
                         }
                     });
-                    // Eliminate multiple loss columns, if they exist.
-                    while (variablePaths.size () >= 2)
-                    {
-                        MNode temp = variables.child (variablePaths.get (1));
-                        if (temp.child ("loss") == null) break;
-                        variablePaths.remove (1);
-                    }
-                    if (! variablePaths.isEmpty ()) loss = variables.child (variablePaths.get (0)).child ("loss");
                 }
             }
             if (currentStudy != null)
