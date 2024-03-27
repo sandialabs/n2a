@@ -1976,7 +1976,12 @@ public class EquationSet implements Comparable<EquationSet>
             if (v.equations.size () == 0) continue;  // If no equations, then this is an implicit variable, so no need to list here.
             if (v.name.equals ("$connect")  ||  v.name.equals ("$init")  ||  v.name.equals ("$live")) continue;  // Phase indicators are always present, and thus uninformative.
 
-            renderer.result.append (pad + v.nameString ());
+            renderer.result.append (pad);
+            if (showNamespace  &&  v.reference != null  &&  v.reference.variable != v)  // Writing to variable in another equation set.
+            {
+                renderer.result.append ("<" + v.reference.variable.container.prefix () + ">");
+            }
+            renderer.result.append (v.nameString ());
             renderer.result.append (" =" + v.combinerString ());
             if (v.equations.size () == 1)
             {
@@ -2077,7 +2082,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             //   Variables
             //   In addition to simply moving the variables up to this container, we need to do incremental maintenance of:
-            //   * Display names, for debugging.
+            //   * Display names, for debugging. (Some LHS names are not adjusted, because it's not worth the extra code complexity.)
             //   * Resolution paths.
             //   Of those, resolution paths are the most difficult, because many different objects are affected:
             //   * References to variables in s
@@ -2091,7 +2096,7 @@ public class EquationSet implements Comparable<EquationSet>
             //   And it is necessary to handle both LHS and RHS references.
 
             //     Pass 1 -- Change RHS references originating from variables within s so they function within this container instead.
-            //     Need to do this before variables get moved, because we depend on the identity of their current container.
+            //     Need to do this before variables get moved, because we depend on the identity of s, their current container.
             Visitor prefixer = new Visitor ()
             {
                 public boolean visit (Operator op)
@@ -2155,10 +2160,10 @@ public class EquationSet implements Comparable<EquationSet>
                     {
                         r.remove (last--);  // The last entry should always be from.container. The only other case, of a connection binding, is eliminated by early tests in the flatten() function.
                         // There are two possible cases.
-                        // 1) Descending reference from parent or higher parents. The parent will be he last entry in the path, and thus no further change is needed.
+                        // 1) Descending reference from parent or higher parents. The parent is now the last entry in the path, and thus no further change is needed.
                         // 2) Ascending reference from deeper children. parent needs to be added, effectively replacing child as the final destination.
                         // The problem is how to distinguish these cases ...
-                        if (last >= 0)  // Path was more than 1 step, so check if parent is now last entry.
+                        if (last >= 0)  // Path had more than 1 step, so check if parent is now last entry.
                         {
                             if (r.get (last) != to.container) r.add (to.container);  // parent was not last entry, so need to add it
                         }
@@ -2301,10 +2306,12 @@ public class EquationSet implements Comparable<EquationSet>
 
             //     Adjusts resolution paths that go through s.
             //     These paths do not target s itself, but rather its parents or deeper children.
+            //     This is only for variables. Connection resolution paths are adjusted later.
             class Resolver implements Visitor
             {
                 EquationSet child;  // The container being eliminated (same as "s" in outer code).
                 EquationSet parent; // Holds "child". Remains after child is eliminated. (Same as EquationSet.this in outer code.)
+                Variable    source; // The variable that originates the resolution.
                 Variable    target; // The variable in "child" that should be the destination of the resolution path. If null, don't filter (process every reference).
 
                 public boolean visit (Operator op)
@@ -2332,9 +2339,25 @@ public class EquationSet implements Comparable<EquationSet>
                     {
                         Object o = r.get (i);
                         if (o != child) continue;
+
                         // Found child in path. Now update it.
-                        r.remove (i);  // Always remove child
-                        if (i == last) r.add (parent);  // The original path targeted child, so it should now target parent.
+                        // There are 2 cases:
+                        // * path ascends or descends through child --> remove child
+                        // * both origin and destination are descendants of child --> replace child with parent
+                        // Other cases and why they don't apply:
+                        // * Any path that ends at child -- Should already be processed above when moving variables.
+                        // * Path the descends to child then ascends again -- parent would bracket child. This loop should be eliminated by path simplification elsewhere.
+                        //if (i == last) throw new Backend.AbortRun ("ERROR: resolution path ends at the part being flattened: " + child.prefix ());  // internal sanity check
+                        boolean ascendsToParent    =                              r.get (i+1)  == parent;
+                        boolean descendsFromParent = (i == 0 ? source.container : r.get (i-1)) == parent;
+                        if (ascendsToParent  ||  descendsFromParent)
+                        {
+                            r.remove (i);
+                        }
+                        else
+                        {
+                            r.set (i, parent);
+                        }
                         break;
                     }
                 }
@@ -2352,12 +2375,14 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     for (Variable v : current.variables)
                     {
+                        source = v;
+
                         // Process v's own resolution path.
                         if (v.reference.variable != v)
                         {
                             adjustResolution (v.reference.resolution);
 
-                            // Handle the special case where v used $up to climb the tree.
+                            // Cosmetic: Handle the special case where v used $up to climb the tree.
                             String pieces[] = v.name.split ("\\.");
                             int up = 0;
                             while (pieces[up].equals ("$up")) up++;
@@ -2375,9 +2400,9 @@ public class EquationSet implements Comparable<EquationSet>
                         {
                             if (o instanceof Variable)
                             {
-                                Variable user = (Variable) o;
-                                if (user.reference.variable != user) adjustResolution (user.reference.resolution);
-                                user.visit (this);
+                                source = (Variable) o;
+                                if (source.reference.variable != source) adjustResolution (source.reference.resolution);
+                                source.visit (this);
                             }
                             // else if (o instanceof EquationSet)  // should not be a relevant case.
                             //   A possibility is o==s. However, this should not occur if flatten() is run immediately after resolveRHS().
@@ -2398,7 +2423,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
 
             //   Metadata
-            if (s.metadata.size () > 0) metadata.set (s.metadata, prefix);
+            if (s.metadata.size () > 0) metadata.set (s.metadata, prefix);  // TODO: consider mergeUnder (without prefix) instead 
 
             //   Dependent connections (paths that pass through s)
             if (s.dependentConnections != null)
@@ -2407,7 +2432,7 @@ public class EquationSet implements Comparable<EquationSet>
                 for (ConnectionBinding c : s.dependentConnections)
                 {
                     int i = c.resolution.indexOf (s);  // By construction, this element must exist.
-                    c.resolution.set (i, this);  // replace s with this
+                    c.resolution.set (i, this);  // replace s with this (parent)
                     if (i+1 < c.resolution.size ()  &&  c.resolution.get (i+1) == this) c.resolution.remove (i+1);
                     if (i   > 0                     &&  c.resolution.get (i-1) == this) c.resolution.remove (i-1);
                     if (! dependentConnections.contains (c)) dependentConnections.add (c);
