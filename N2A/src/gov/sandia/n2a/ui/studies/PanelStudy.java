@@ -234,6 +234,7 @@ public class PanelStudy extends JPanel
 
     /**
         Set up displayPanel with tabs appropriate to the newly-selected study.
+        Execute only on EDT.
     **/
     public void view ()
     {
@@ -440,6 +441,10 @@ public class PanelStudy extends JPanel
             updateColumnWidths ();
         }
 
+        /**
+            Notifies GUI of new jobs created by study thread.
+            Execute only on EDT.
+        **/
         public void addJobs ()
         {
             int oldRowCount = modelSamples.getRowCount ();
@@ -493,6 +498,7 @@ public class PanelStudy extends JPanel
         protected List<String[]> variablePaths = new ArrayList<String[]> ();
         protected List<String[]> rowValues     = new ArrayList<String[]> ();
         protected MNode          loss;
+        protected LoadSamples    thread;
 
         public int getRowCount ()
         {
@@ -537,52 +543,25 @@ public class PanelStudy extends JPanel
             }
 
             String[] values = rowValues.get (index);
-            if (values == null)  // Load model and extract relevant values
+            if (values == null)
             {
-                // A more memory-efficient approach would be to scan the model file for keys without fully loading it.
-                MNode model = NodeJob.getModel (jobKey);
-                if (model == null) return null;  // This could happen if the job was deleted outside the study.
-                values = new String[variableCount];
-                float blanks = 0;
-                for (int i = 0; i < variableCount; i++)
-                {
-                    String value = model.get (variablePaths.get (i));
-                    values[i] = value;
-                    if (value.isEmpty ()) blanks++;
-                }
-
-                if (loss != null) values[0] = "";  // Don't show literal content of variable. Instead we will compute loss value below.
-
-                // Only save if enough entries have non-empty values.
-                // Otherwise, leave the row null so we can try again. Very likely, the model is missing or incomplete.
-                // This can happen if we try to read it before it is written out or when it is only partially written.
-                // We can't require 100% non-blank, because empty string could be a legitimate value.
-                // However, it is probably be quite rare.
-                int threshold = (int) Math.floor (variableCount * 0.25);  // 75% non-blank
-                if (variableCount > 1) threshold = Math.max (threshold, 1);
-                if (blanks <= threshold) rowValues.set (index, values);
+                restartThread ();
+                return null;
             }
-            if (column == 1  &&  loss != null  &&  values[0].isBlank ())  // Update loss value
+            if (column == 1  &&  loss != null  &&  values[0] == null)
             {
-                NodeJob node = currentStudy.getJob (index);
-                if (node != null  &&  node.complete >= 1)
-                {
-                    Path jobDir = node.getJobPath ().getParent ();
-                    OutputParser parser = new OutputParser ();
-                    parser.parse (jobDir.resolve ("study"));
-                    double error = 0;
-                    for (Column c : parser.columns)
-                    {
-                        if (c == parser.time) continue;
-                        // TODO: handle different methods for expressing loss. This version only handles squared error over time series.
-                        for (float e : c.values) error += e * e;
-                    }
-                    if (error > 0) values[0] = Scalar.print (Math.sqrt (error));
-                }
+                values[0] = "";  // Run only one LoadLoss thread per row. This will be set back to null if the data is not ready yet.
+                NodeJob node;
+                synchronized (PanelRun.jobNodes) {node = PanelRun.jobNodes.get (jobKey);}
+                new LoadLoss (node, index, values).start ();
             }
             return values[column-1];
         }
 
+        /**
+            Switches to new study or updates contents of current study.
+            Execute only on EDT.
+        **/
         public synchronized void update (Study displayStudy)
         {
             if (currentStudy != displayStudy)
@@ -593,34 +572,182 @@ public class PanelStudy extends JPanel
                 rowValues.clear ();
                 loss = null;
 
-                if (currentStudy != null)
+                if (currentStudy == null) return;
+
+                MNode variables = currentStudy.source.childOrEmpty ("variables");
+                variables.visit (new Visitor ()
                 {
-                    MNode variables = currentStudy.source.childOrEmpty ("variables");
-                    variables.visit (new Visitor ()
+                    public boolean visit (MNode n)
                     {
-                        public boolean visit (MNode n)
+                        if (! n.data ()) return true;  // The first non-null node along a branch is the study variable. Everything under that is extra metadata.
+                        MNode temp = n.child ("loss");
+                        if (temp == null)
                         {
-                            if (! n.data ()) return true;  // The first non-null node along a branch is the study variable. Everything under that is extra metadata.
-                            MNode temp = n.child ("loss");
-                            if (temp == null)
-                            {
-                                variablePaths.add (n.keyPath (variables));  // add to end
-                            }
-                            else if (loss == null)  // This is a loss variable. Only keep the first one found.
-                            {
-                                loss = temp;
-                                variablePaths.add (0, n.keyPath (variables));  // insert in front
-                            }
-                            return false;
+                            variablePaths.add (n.keyPath (variables));  // add to end
+                        }
+                        else if (loss == null)  // This is a loss variable. Only keep the first one found.
+                        {
+                            loss = temp;
+                            variablePaths.add (0, n.keyPath (variables));  // insert in front
+                        }
+                        return false;
+                    }
+                });
+            }
+
+            if (currentStudy != null)
+            {
+                // Launch thread to load samples.
+                int rows = currentStudy.getJobCount ();
+                while (rowValues.size () < rows) rowValues.add (null);
+                restartThread ();
+            }
+        }
+
+        protected synchronized void restartThread ()
+        {
+            if (thread != null  &&  thread.study == currentStudy  &&  thread.isAlive ())
+            {
+                thread.restart = true;
+            }
+            else
+            {
+                thread = new LoadSamples ();
+                thread.start ();
+            }
+        }
+
+        protected class LoadSamples extends Thread
+        {
+            Study   study         = currentStudy;
+            int     variableCount = variablePaths.size ();
+            int     index         = rowValues.size ();
+            boolean restart;  // After finishing with the current index, start at top row again.
+
+            public LoadSamples ()
+            {
+                super ("Load samples for " + currentStudy);
+                setDaemon (true);
+            }
+
+            public void run ()
+            {
+                while (index > 0)
+                {
+                    String[] values;
+                    synchronized (SampleTableModel.this)
+                    {
+                        if (thread != this) return;
+                        if (restart)
+                        {
+                            index = rowValues.size ();
+                            restart = false;
+                        }
+                        index--;
+                        values = rowValues.get (index);
+                    }
+                    if (values != null) continue;
+
+                    String jobKey = study.getJobKey (index);
+                    MNode model = study.getSampleModel (jobKey);
+                    if (model == null) continue;  // This could happen if the job was deleted outside the study.
+                    values = new String[variableCount];
+                    float blanks = 0;
+                    int i =  loss == null ? 0 : 1;  // Skip loss variable if it exists.
+                    for (; i < values.length; i++)
+                    {
+                        String value = model.get (variablePaths.get (i));
+                        values[i] = value;
+                        if (value.isEmpty ()) blanks++;
+                    }
+
+                    // Only save if enough entries have non-empty values.
+                    // Otherwise, leave the row null so we can try again. Very likely, the model is missing or incomplete.
+                    // This can happen if we try to read it before it is written out or when it is only partially written.
+                    // We can't require 100% non-blank, because empty string could be a legitimate value.
+                    // However, it is probably be quite rare.
+                    int threshold = (int) Math.floor (values.length * 0.25);  // 75% non-blank
+                    if (values.length > 1) threshold = Math.max (threshold, 1);
+                    if (blanks > threshold) continue;
+
+                    if (loss != null)
+                    {
+                        NodeJob node = study.getJob (jobKey);
+                        loadLoss (node, values);
+                    }
+
+                    synchronized (SampleTableModel.this)
+                    {
+                        if (study != currentStudy) return;
+                        rowValues.set (index, values);
+                    }
+
+                    // Update UI
+                    final int finalIndex = index;
+                    EventQueue.invokeLater (new Runnable ()
+                    {
+                        public void run ()
+                        {
+                            int row = rowValues.size () - finalIndex - 1;
+                            if (row >= 0) fireTableRowsUpdated (row, row);
                         }
                     });
                 }
+
+                synchronized (SampleTableModel.this)
+                {
+                    if (thread == this) thread = null;
+                }
             }
-            if (currentStudy != null)
+        }
+
+        protected class LoadLoss extends Thread
+        {
+            NodeJob  node;
+            int      index;
+            String[] values;
+
+            public LoadLoss (NodeJob node, int index, String[] values)
             {
-                int rows = currentStudy.getJobCount ();
-                while (rowValues.size () < rows) rowValues.add (null);  // We will lazy-load the actual row data, because not all rows will necessarily be displayed.
+                super ("Load loss for " + index);
+                setDaemon (true);
+                this.node   = node;
+                this.index  = index;
+                this.values = values;
             }
+
+            public void run ()
+            {
+                loadLoss (node, values);
+                if (values[0] == null) return;
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        int row = rowValues.size () - index - 1;
+                        if (row >= 0) fireTableCellUpdated (row, 1);
+                    }
+                });
+            }
+        }
+
+        public void loadLoss (NodeJob node, String[] values)
+        {
+            double error = 0;
+            if (node != null  &&  node.complete >= 1)
+            {
+                Path jobDir = node.getJobPath ().getParent ();
+                OutputParser parser = new OutputParser ();
+                parser.parse (jobDir.resolve ("study"));
+                for (Column c : parser.columns)
+                {
+                    if (c == parser.time) continue;
+                    // TODO: handle different methods for expressing loss. This version only handles squared error over time series.
+                    for (float e : c.values) error += e * e;
+                }
+            }
+            if (error > 0) values[0] = Scalar.print (Math.sqrt (error));
+            else           values[0] = null;
         }
     }
 

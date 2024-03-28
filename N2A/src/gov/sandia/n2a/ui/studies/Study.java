@@ -265,10 +265,29 @@ public class Study
 
     public NodeJob getJob (int index)
     {
-        String jobKey = getJobKey (index);
-        NodeJob result;
-        synchronized (PanelRun.jobNodes) {result = PanelRun.jobNodes.get (jobKey);}
-        return result;
+        return getJob (getJobKey (index));
+    }
+
+    public NodeJob getJob (String jobKey)
+    {
+        synchronized (PanelRun.jobNodes) {return PanelRun.jobNodes.get (jobKey);}
+    }
+
+    /**
+        @return The top-level model associated with the given sample, including all
+        variable values. In general this is not a collated model, but rather a
+        regular model from the DB plus variable settings for the current sample.
+    **/
+    public MNode getSampleModel (String jobKey)
+    {
+        MNode job = AppData.runs.child (jobKey);
+        if (job == null) return null;
+
+        String key          = job.get ("$inherit");
+        Path   localJobDir  = Host.getJobDir (Host.getLocalResourceDir (), job);
+        Path   snapshotPath = localJobDir.resolve ("snapshot");
+        MNode  snapshot     = new MDoc (snapshotPath);  // Load the mini-repo
+        return snapshot.child (key);
     }
 
     public Path getDir ()

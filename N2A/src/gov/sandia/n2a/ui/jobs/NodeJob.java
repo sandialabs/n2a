@@ -748,7 +748,7 @@ public class NodeJob extends NodeBase
     }
 
     /**
-        Writes the collated model to the local job directory.
+        Writes the model and its associated base models to the local job directory.
         @param doc The main model (not collated). May be directly from the model DB, or a temporary node.
         In either case, its key must be the model name as it would appear in the DB.
         @param job The job record, used only to determine name of job directory.
