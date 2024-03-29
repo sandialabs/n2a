@@ -37,7 +37,7 @@ public class IteratorPermute extends IteratorIndexed
             for (int i = 0; i < count; i++) order[i] = i;
 
             // permute
-            Random r = Simulator.instance.get ().random;
+            Random r = Simulator.instance.get ().random;  // This simulator instance is not actually used for simulation. It just wraps the study's RNG.
             for (int i = 0; i < count - 1; i++)
             {
                 int j = r.nextInt (count - i) + i;
