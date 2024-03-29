@@ -31,10 +31,8 @@ import gov.sandia.n2a.language.function.Draw2D;
 import gov.sandia.n2a.language.function.Draw3D;
 import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Exp;
-import gov.sandia.n2a.language.function.Gaussian;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Output;
-import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.operator.GE;
 import gov.sandia.n2a.language.operator.GT;
 import gov.sandia.n2a.language.operator.LE;
@@ -729,30 +727,6 @@ public class EquationSet implements Comparable<EquationSet>
             if (p == proposedParent) return true;
             p = p.container;
         }
-        return false;
-    }
-
-    public boolean usesRandom ()
-    {
-        class RandomVisitor implements Visitor
-        {
-            boolean found;
-            public boolean visit (Operator op)
-            {
-                if (op instanceof Uniform  ||  op instanceof Gaussian) found = true;
-                return ! found;
-            }
-        }
-        RandomVisitor visitor = new RandomVisitor ();
-
-        for (Variable v : variables)
-        {
-            v.visit (visitor);
-            if (visitor.found) return true;
-        }
-
-        for (EquationSet p : parts) if (p.usesRandom ()) return true;
-
         return false;
     }
 

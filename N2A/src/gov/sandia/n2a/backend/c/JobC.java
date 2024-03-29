@@ -222,12 +222,8 @@ public class JobC extends Thread
             String duration = digestedModel.metadata.get ("duration");
             if (! duration.isBlank ()) job.set (duration, "duration");
 
-            seed = -1;
-            if (digestedModel.usesRandom ())  // only record seed if actually used
-            {
-                seed = model.getOrDefault (System.currentTimeMillis () & 0x7FFFFFFF, "$meta", "seed");
-                job.set (seed, "seed");
-            }
+            seed = model.getOrDefault (System.currentTimeMillis () & 0x7FFFFFFF, "$meta", "seed");
+            job.set (seed, "seed");
 
             System.out.println (digestedModel.dump (false));
 
@@ -1543,10 +1539,7 @@ public class JobC extends Thread
             result.append ("  signal (SIGINT,  signalHandler);\n");  // For graceful shutdown
             result.append ("  signal (SIGTERM, signalHandler);\n");  // ditto
             result.append ("\n");
-            if (seed >= 0)
-            {
-                result.append ("  srand (" + seed + ");\n");
-            }
+            result.append ("  srand (" + seed + ");\n");
             result.append ("  try\n");
             result.append ("  {\n");
             result.append ("    init (argc, argv);\n");
