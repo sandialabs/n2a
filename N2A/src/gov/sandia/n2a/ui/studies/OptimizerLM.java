@@ -12,7 +12,7 @@ import java.util.List;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.UnitValue;
-import gov.sandia.n2a.linear.FactorQR;
+import gov.sandia.n2a.linear.FactorizationQR;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
@@ -45,22 +45,22 @@ public class OptimizerLM extends StudyIterator
     protected double      perturbation;
     protected String[]    dummy;
 
-    protected MatrixDense x;       // current state vector
-    protected MatrixDense y;       // current value of time series output by model.  y=f(x) where f() is one entire job run.
-    protected MatrixDense min;     // limits on domain
-    protected MatrixDense max;
-    protected MatrixDense J;       // the Jacobian, given current state x
-    protected FactorQR    qr;
-    protected MatrixDense Qy;
-    protected MatrixDense p;
-    protected MatrixDense xp;
-    protected MatrixDense scales;  // sensitivity of each variable in x
-    protected double      ratio;
-    protected double      par;     // Levenberg-Marquardt parameter (mix between Gauss-Newton and gradient-descent)
-    protected double      xnorm;
-    protected double      ynorm;
-    protected double      pnorm;
-    protected double      delta;   // step bound
+    protected MatrixDense     x;       // current state vector
+    protected MatrixDense     y;       // current value of time series output by model.  y=f(x) where f() is one entire job run.
+    protected MatrixDense     min;     // limits on domain
+    protected MatrixDense     max;
+    protected MatrixDense     J;       // the Jacobian, given current state x
+    protected FactorizationQR qr;
+    protected MatrixDense     Qy;
+    protected MatrixDense     p;
+    protected MatrixDense     xp;
+    protected MatrixDense     scales;  // sensitivity of each variable in x
+    protected double          ratio;
+    protected double          par;     // Levenberg-Marquardt parameter (mix between Gauss-Newton and gradient-descent)
+    protected double          xnorm;
+    protected double          ynorm;
+    protected double          pnorm;
+    protected double          delta;   // step bound
 
     public OptimizerLM (Study study, List<MNode> loss, List<MNode> variables)
     {
@@ -231,7 +231,7 @@ public class OptimizerLM extends StudyIterator
             }
 
             // Factorize J
-            qr = new FactorQR (J);
+            qr = new FactorizationQR (J);
             Qy = qr.getQ ().transpose ().multiply (y);  // Qy is permuted
 
             // compute the norm of the scaled gradient
@@ -271,6 +271,7 @@ public class OptimizerLM extends StudyIterator
                 double temp = ynormNext / ynorm;
                 reductionActual = 1 - temp * temp;
             }
+            //System.err.println ("reductionActual=" + reductionActual + " " + ynormNext + " " + ynorm);
 
             // compute the scaled predicted reduction and the scaled directional derivative
             MatrixDense Jp = new MatrixDense (n, 1);
@@ -313,6 +314,7 @@ public class OptimizerLM extends StudyIterator
                 xnorm  = x.multiplyElementwise (scales).norm (2);
                 ynorm  = ynormNext;
             }
+            //System.err.println ("ratio=" + ratio);
 
             // tests for convergence
             if (   Math.abs (reductionActual) <= toleranceF
@@ -359,17 +361,12 @@ public class OptimizerLM extends StudyIterator
                 double limit = max.get (c);
                 if (txp > limit)
                 {
-                    System.out.println ("p over: " + tx + " " + tp + " " + limit);
                     p.set (c, tx - limit);  // solve for tp in limit=tx-tp
                 }
                 else
                 {
                     limit = min.get (c);
-                    if (txp < limit)
-                    {
-                        System.out.println ("p under: " + tx + " " + tp + " " + limit);
-                        p.set (c, tx - limit);
-                    }
+                    if (txp < limit) p.set (c, tx - limit);
                 }
             }
 
@@ -433,12 +430,14 @@ public class OptimizerLM extends StudyIterator
         //   Solve for x by back-substitution in Rx=Q'y (which comes from QRx=y, where J=QR).
         d = qr.QR.backSubstitue (false, d);
         for (int j = 0; j < n; j++) x.set (j, d.get (qr.P[j]));
+        //System.err.println ("x=" + x);
 
         // Evaluate the function at the origin, and test
         // for acceptance of the Gauss-Newton direction.
         MatrixDense dx = x.multiplyElementwise (scales);
         double dxnorm = dx.norm (2);
         double fp = dxnorm - delta;
+        //System.err.println ("fp=" + fp + " " + dxnorm + " " + delta);
         if (fp <= 0.1 * delta)
         {
             par = 0;
@@ -497,6 +496,7 @@ public class OptimizerLM extends StudyIterator
             // If the function is small enough, accept the current value
             // of par.  Also test for the exceptional cases where parl
             // is zero or the number of iterations has reached 10.
+            //System.err.println ("par=" + par + " " + parl + " " + paru + " " + fp + " " + delta);
             if (   Math.abs (fp) <= 0.1 * delta
                 || (parl == 0  &&  fp <= temp  &&  temp < 0)
                 || iteration >= 10)
@@ -705,7 +705,7 @@ public class OptimizerLM extends StudyIterator
                 J.set (r, c, (series[r] - y.get (r)) / h);
             }
         }
-        qr = new FactorQR (J);
+        qr = new FactorizationQR (J);
         Qy = qr.getQ ().transpose ().multiply (y);
     }
 

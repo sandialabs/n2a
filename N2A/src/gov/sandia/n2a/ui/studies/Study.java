@@ -157,10 +157,14 @@ public class Study
         // This must always be last, so that it forms the inner loop. Combinatorial iteration takes place around it.
         if (visitor.loss.isEmpty ()  ||  visitor.optimize.isEmpty ()) return;
         StudyIterator it;
-        switch (source.getOrDefault ("lm", "config", "optimizer"))
+        switch (source.getOrDefault ("lm2", "config", "optimizer"))
         {
             case "lm":
-            default: it = new OptimizerLM (this, visitor.loss, visitor.optimize);
+                it = new OptimizerLM (this, visitor.loss, visitor.optimize);
+                break;
+            case "lm2":
+            default:
+                it = new OptimizerLM2 (this, visitor.loss, visitor.optimize);
         }
         if (iterator != null)
         {
@@ -537,6 +541,10 @@ public class Study
             if (complete <= 0)
             {
                 status += "Unknown time remaining";
+            }
+            else if (complete > count)
+            {
+                status += "Should have finished already";
             }
             else
             {

@@ -1,3 +1,9 @@
+/*
+Copyright 2021-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
 package gov.sandia.n2a.linear;
 
 import gov.sandia.n2a.language.type.Matrix;
@@ -15,7 +21,7 @@ import gov.sandia.n2a.language.type.Matrix;
     decomposition is in the least squares solution of non-square systems of
     simultaneous linear equations. This will fail if isFullRank() returns false.
 **/
-public class FactorQR
+public class FactorizationQR implements Factorization
 {
     // These members are public because it is expected that a caller may want to
     // access them directly. The functions that return component matrices are there
@@ -29,7 +35,16 @@ public class FactorQR
     public double[]    Qdiag;
     public int[]       P;  // Permutation matrix, stored as a list. AP=QR. Matrix P(r,c)==1 iff list P[c]==r. That is, P[c] stores the original position of column c before it was permuted.
 
-    public FactorQR (Matrix A)
+    public FactorizationQR ()
+    {
+    }
+
+    public FactorizationQR (Matrix A)
+    {
+        factorize (A);
+    }
+
+    public void factorize (Matrix A)
     {
         m = A.rows ();
         n = A.columns ();
@@ -291,6 +306,15 @@ public class FactorQR
             }
         }
         return result;
+    }
+
+    public MatrixDense invert ()
+    {
+        // TODO: a better way to invert.
+        // This is quick and dirty, just to satisfy the Factorize interface.
+        MatrixDense B = new MatrixDense (m, n);
+        B.identity ();
+        return solve (B);
     }
 
     public double[] saveRdiag ()
