@@ -49,6 +49,7 @@ public class OptimizerLM2 extends StudyIterator
     protected double      toleranceX;
     protected double      toleranceG;
     protected double      perturbation;
+    protected double      perturbationMin;  // Lower limit on absolute size of perturbation.
     protected String[]    dummy;
 
     protected MatrixDense   x;       // current state vector
@@ -74,11 +75,12 @@ public class OptimizerLM2 extends StudyIterator
         this.loss      = loss;
         this.variables = variables;
 
-        maxIterations = study.source.getOrDefault (200,     "config", "maxIterations");
-        toleranceF    = study.source.getOrDefault (epsilon, "config", "toleranceF");
-        toleranceX    = study.source.getOrDefault (epsilon, "config", "toleranceX");
-        toleranceG    = study.source.getOrDefault (epsilon, "config", "toleranceG");
-        perturbation  = study.source.getOrDefault (epsilon, "config", "perturbation");
+        maxIterations   = study.source.getOrDefault (200,     "config", "maxIterations");
+        toleranceF      = study.source.getOrDefault (epsilon, "config", "toleranceF");
+        toleranceX      = study.source.getOrDefault (epsilon, "config", "toleranceX");
+        toleranceG      = study.source.getOrDefault (epsilon, "config", "toleranceG");
+        perturbation    = study.source.getOrDefault (epsilon, "config", "perturbation");
+        perturbationMin = study.source.getOrDefault (0.0,     "config", "perturbationMin");
 
         int n = variables.size ();
         x      = new MatrixDense (n, 1);
@@ -218,7 +220,8 @@ public class OptimizerLM2 extends StudyIterator
             {
                 double[] series = getSeries (baseIndex + c);
                 double h = perturbation * Math.abs (x.get (c));
-                if (h == 0) h = perturbation;
+                if      (h < perturbationMin) h = perturbationMin;
+                else if (h == 0)              h = perturbation;
                 double norm = 0;
                 for (int r = 0; r < m; r++)
                 {
@@ -615,7 +618,8 @@ public class OptimizerLM2 extends StudyIterator
                 if (c == sample)
                 {
                     double h = perturbation * Math.abs (value);
-                    if (h == 0) h = perturbation;
+                    if      (h < perturbationMin) h = perturbationMin;
+                    else if (h == 0)              h = perturbation;
                     value += h;
                     // We don't bound the perturbation. Presumably it is small enough that
                     // if it transgresses min or max, it does not go so far that the model fails.
