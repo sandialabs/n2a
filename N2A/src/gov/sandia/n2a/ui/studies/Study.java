@@ -92,11 +92,11 @@ public class Study
                 String value = n.get ().trim ();
 
                 StudyIterator it = null;
-                if (n.child ("optimize") != null)  // Identifies a variable to be optimized
+                if (n.getFlag ("optimize"))  // Identifies a variable to be optimized
                 {
                     optimize.add (n);  // The optimizer may use value as a hint about range to work within.
                 }
-                else if (n.child ("loss") != null)  // Identifies the variable whose error value we wish to minimize.
+                else if (n.getFlag ("loss"))  // Identifies the variable whose error value we wish to minimize.
                 {
                     loss.add (n);
                 }
