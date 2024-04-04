@@ -1200,7 +1200,7 @@ template<class T>
 void
 ImageOutput<T>::removeLight (int index)
 {
-    auto & it = lights.find (index);
+    const auto & it = lights.find (index);
     if (it == lights.end ()) return;
     delete it->second;
     lights.erase (it);
