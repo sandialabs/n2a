@@ -1323,7 +1323,11 @@ Population<T>::getIteratorsSimple (bool poll)
         iterators.push_back (it);
         if (it->firstborn < it->size) nothingNew = false;
     }
-    if (nothingNew  &&  ! poll) return 0;
+    if (nothingNew  &&  ! poll)
+    {
+        for (auto it : iterators) delete it;
+        return 0;
+    }
 
     // Sort so that population with the most old entries is the outermost iterator.
     // That allows the most number of old entries to be skipped.
@@ -1372,7 +1376,11 @@ Population<T>::getIteratorsNN (bool poll)
         if (it->firstborn < it->size) nothingNew = false;
         if (it->k > 0  ||  it->radius > 0) spatialFiltering = true;
     }
-    if (nothingNew  &&  ! poll) return 0;
+    if (nothingNew  &&  ! poll)
+    {
+        for (auto it : iterators) delete it;
+        return 0;
+    }
 
     // Sort so that population with the most old entries is the outermost iterator.
     // That allows the most number of old entries to be skipped.
