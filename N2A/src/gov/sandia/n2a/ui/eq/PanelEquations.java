@@ -680,7 +680,7 @@ public class PanelEquations extends JPanel
 
     public void updateLock ()
     {
-        locked = ! ((MCombo) AppData.docs.child ("models")).isWriteable (record);
+        locked = ! ((MCombo) AppData.docs.child ("models")).isWritable (record);
         // The following are safe to call, even when record is not fully loaded, and despite which panel is active.
         panelEquationTree.updateLock ();
         if (view == NODE) panelEquationGraph.updateLock ();

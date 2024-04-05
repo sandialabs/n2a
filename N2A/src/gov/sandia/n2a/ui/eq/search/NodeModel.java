@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -132,7 +132,7 @@ public class NodeModel extends NodeBase
 
     public boolean allowEdit ()
     {
-        return ((MCombo) AppData.docs.child ("models")).isWriteable (key);
+        return ((MCombo) AppData.docs.child ("models")).isWritable (key);
     }
 
     public void applyEdit (JTree tree)

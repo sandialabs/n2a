@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -713,7 +713,7 @@ public class PanelEntry extends JPanel
         public void updateLock ()
         {
             if (record == null) locked = true;
-            else                locked = ! ((MCombo) AppData.docs.child ("references")).isWriteable (record);
+            else                locked = ! ((MCombo) AppData.docs.child ("references")).isWritable (record);
         }
 
         public void build ()

@@ -110,7 +110,7 @@ public class PanelSearch extends JPanel
             {
                 String key = list.getSelectedValue ();
                 if (key == null) return;
-                if (! ((MCombo) AppData.docs.child ("references")).isWriteable (key)) return;
+                if (! ((MCombo) AppData.docs.child ("references")).isWritable (key)) return;
                 lastSelection = list.getSelectedIndex ();
                 MainFrame.undoManager.apply (new DeleteEntry ((MDoc) AppData.docs.child ("references", key)));
             }
@@ -521,7 +521,7 @@ public class PanelSearch extends JPanel
             setText (name);
 
             Color color = Color.black;
-            if (! references.isWriteable (doc))
+            if (! references.isWritable (doc))
             {
                 String colorName = "";
                 MNode repo = AppData.repos.child (doc.parent ().key ());  // This can return null if multirepo structure changes and this panel is repainted before the change notification arrives.

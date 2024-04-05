@@ -340,7 +340,7 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
                             String key = ((NodeModel) oldNode).key;
                             MCombo models = (MCombo) AppData.docs.child ("models");
                             MNode doc = models.child (key);
-                            if (! models.isWriteable (doc)) return false;  // Must be able to change model in order to change category.
+                            if (! models.isWritable (doc)) return false;  // Must be able to change model in order to change category.
                             String oldCategory = oldNode.getCategory ();
     
                             // Determine new category.

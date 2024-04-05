@@ -61,22 +61,22 @@ public class MCombo extends MNode implements MNodeListener
         return name;
     }
 
-    public boolean containerIsWriteable (MNode container)
+    public boolean containerIsWritable (MNode container)
     {
         if (container == primary) return true;
         if (container == null  ||  ! containers.contains (container)) return false;
         return AppData.repos.getBoolean (container.key (), "editable");  // Each container is an MDir whose name has been set to the repo name.
     }
 
-    public boolean isWriteable (MNode doc)
+    public boolean isWritable (MNode doc)
     {
-        return containerIsWriteable (doc.parent ());
+        return containerIsWritable (doc.parent ());
     }
 
-    public synchronized boolean isWriteable (String key)
+    public synchronized boolean isWritable (String key)
     {
         load ();
-        return containerIsWriteable (children.get (key));
+        return containerIsWritable (children.get (key));
     }
 
     public synchronized boolean isVisible (MNode doc)
@@ -97,6 +97,7 @@ public class MCombo extends MNode implements MNodeListener
     **/
     public synchronized boolean isHiding (String key)
     {
+        load ();
         int count = 0;
         for (MNode c : containers) if (c.child (key) != null) count++;
         return count > 1;
@@ -129,7 +130,7 @@ public class MCombo extends MNode implements MNodeListener
         // This actually removes the original object.
         load ();
         MNode container = children.get (key);
-        if (containerIsWriteable (container)) container.clear (key);  // Triggers childDeleted() call from MDir, which updates our children collection.
+        if (containerIsWritable (container)) container.clear (key);  // Triggers childDeleted() call from MDir, which updates our children collection.
     }
 
     public synchronized int size ()
@@ -142,7 +143,7 @@ public class MCombo extends MNode implements MNodeListener
     {
         load ();
         MNode container = children.get (key);
-        if (containerIsWriteable (container)) return container.set (value, key);
+        if (containerIsWritable (container)) return container.set (value, key);
         return primary.set (value, key);  // Triggers childAdded() call from MDir, which updates our children collection.
     }
 
@@ -155,7 +156,7 @@ public class MCombo extends MNode implements MNodeListener
     {
         load ();
         MNode container = children.get (fromKey);
-        if (containerIsWriteable (container)) container.move (fromKey, toKey);  // Triggers childChanged() call from MDir, which updates our children collection.
+        if (containerIsWritable (container)) container.move (fromKey, toKey);  // Triggers childChanged() call from MDir, which updates our children collection.
     }
 
     public synchronized void addListener (MNodeListener listener)
@@ -266,44 +267,10 @@ public class MCombo extends MNode implements MNodeListener
         fireChildChanged (oldKey, newKey);
     }
 
-    public class IteratorCombo implements Iterator<MNode>
-    {
-        List<String>     keys;
-        Iterator<String> iterator;
-        String           key;  // of most recent node returned by next()
-
-        public IteratorCombo (List<String> keys)
-        {
-            this.keys = keys;
-            iterator = keys.iterator ();
-        }
-
-        public boolean hasNext ()
-        {
-            return iterator.hasNext ();
-        }
-
-        /**
-            If a document is deleted while the iterator is running, this could return null.
-            If a document is added, it will not be included.
-        **/
-        public MNode next ()
-        {
-            key = iterator.next ();
-            return getChild (key);
-        }
-
-        public void remove ()
-        {
-            clearChild (key);
-            iterator.remove ();
-        }
-    }
-
     public synchronized Iterator<MNode> iterator ()
     {
         load ();
-        return new IteratorCombo (new ArrayList<String> (children.keySet ()));  // Duplicate the keys, to avoid concurrent modification
+        return new IteratorWrapper (new ArrayList<String> (children.keySet ()));  // Duplicate the keys, to avoid concurrent modification
     }
 
     public synchronized void save ()

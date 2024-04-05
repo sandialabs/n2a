@@ -46,6 +46,7 @@ public class MPart extends MNode
 
     /**
         Collates a full model from the given source document.
+        This function is no longer used. It is here to show how the collation process is meant to work.
     **/
     protected MPart (MNode source)
     {
@@ -139,7 +140,7 @@ public class MPart extends MNode
     protected synchronized void inherit (LinkedList<MNode> visited, MPart root, MNode from)
     {
         MNode models = getRepo ();
-        boolean maintainable =  from == root  &&  root.isFromTopDocument ()  &&  (! (models instanceof MCombo)  ||  ((MCombo) models).isWriteable (((MPart) root.root ()).source));
+        boolean maintainable =  from == root  &&  root.isFromTopDocument ()  &&  (! (models instanceof MCombo)  ||  ((MCombo) models).isWritable (((MPart) root.root ()).source));
         boolean changedName = false;  // Indicates that at least one name changed due to ID resolution. This lets us delay updating the field until all names are processed.
         boolean changedID   = false;
 
