@@ -7,7 +7,7 @@ can be compiled separately and added to a library. In the latter case, you can
 use this header file like any other, to bring in symbols so you can use MNode
 in an application.
 
-Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,6 +21,7 @@ the U.S. Government retains certain rights in this software.
 #include <set>
 #include <mutex>
 #include <memory>
+#include <forward_list>
 
 #ifdef _MSC_VER
 #  define strcasecmp _stricmp
@@ -39,11 +40,15 @@ namespace n2a
     // MNode class ID constants
     // This is a hack to avoid the cost of RTTI.
     // (Everything is an MNode, so we don't have a specific bit for that.)
-    #define MVolatileID    0x01
-    #define MPersistentID  0x02
-    #define MDocID         0x04
-    #define MDocGroupID    0x08
-    #define MDirID         0x10
+    #define MVolatileID    0x001
+    #define MPersistentID  0x002
+    #define MDocID         0x004
+    #define MDocGroupID    0x008
+    #define MDirID         0x010
+    #define MDocGroupKeyID 0x020
+    #define MComboID       0x040
+    #define MPartID        0x080
+    #define MPartRepoID    0x100
 
     class SHARED MNode;
     class SHARED MVolatile;
@@ -51,6 +56,10 @@ namespace n2a
     class SHARED MDoc;
     class SHARED MDocGroup;
     class SHARED MDir;
+    class SHARED MDocGroupKey;
+    class SHARED MCombo;
+    class SHARED MPart;
+    class SHARED MPartRepo;
     class SHARED Schema;
     class SHARED Schema2;
     class LineReader;
@@ -327,7 +336,7 @@ namespace n2a
             this node unchanged. The value of this node is only replaced if the source value is defined.
             Children of the source node are then merged with this node's children.
         **/
-        void merge (MNode & that);
+        virtual void merge (MNode & that);
 
         /**
             Deep copies the source node into this node, while leaving all values in this node unchanged.
@@ -508,7 +517,59 @@ namespace n2a
         **/
         bool structureEquals (MNode & that);
 
+        /**
+            Receives notifications from an Observable MNode about changes in its contents.
+        **/
+        struct Observer
+        {
+            /**
+                Structure has changed in a way that affects more than one or two children.
+            **/
+            virtual void changed () = 0;
+
+            /**
+                A key that was formerly null now has data.
+                If a key becomes non-null as the result of a move, then childChanged() will be sent instead.
+            **/
+            virtual void childAdded (const String & key) = 0;
+
+            /**
+                A key that had data has become null.
+                If a key becomes null as the result of a move, then childChanged() will be sent instead.
+            **/
+            virtual void childDeleted (const String & key) = 0;
+
+            /**
+                Content has changed under two keys.
+                The newKey will always have new content, and the oldKey will either have new content or become null.
+                If a move effectively deletes the destination, then a childDeleted() message will be sent instead.
+                If content changes at a single location, then oldKey==newKey.
+            **/
+            virtual void childChanged (const String & oldKey, const String & newKey) = 0;
+        };
+
+        virtual void addObserver (Observer * o);
+        virtual void removeObserver (Observer * o);
+
+        /**
+            This class provides a concrete implementation that only requires
+            calling the fire functions.
+        **/
+        struct Observable
+        {
+            std::vector<Observer *> observers;
+
+            virtual void addObserver (Observer * o);
+            virtual void removeObserver (Observer * o);
+
+            void fireChanged ();
+            void fireChildAdded (const String & key);
+            void fireChildDeleted (const String & key);
+            void fireChildChanged (const String & oldKey, const String & newKey);
+        };
+
         friend MDoc;
+        friend MPart;
 
     protected:
         /**
@@ -519,7 +580,14 @@ namespace n2a
         **/
         std::recursive_mutex mutex;
 
-        // Internal functions for manipulating children ...
+        /**
+            Gives a direct pointer to the c-string representing the key in memory.
+            The returned pointer is semi-permanent, in the sense that it does not
+            change as long as this object is in existence.
+            If no such location exists, throws an exception.
+            Used by other MNode classes to make child indexing more space efficient.
+        **/
+        virtual const char * keyPointer () const;
 
         /**
             Returns the child indicated by the given key.
@@ -534,11 +602,14 @@ namespace n2a
         virtual void childClear (const String & key);
     };
 
+    /**
+        Basic in-memory implementation of MNode.
+    **/
     class SHARED MVolatile : public MNode
     {
     public:
         MVolatile (const char * value = 0, const char * name = 0, MNode * container = 0);
-        virtual ~MVolatile ();  ///< frees memory used by children
+        virtual ~MVolatile ();  ///< frees memory used by value and children
         virtual uint32_t classID () const;
 
         virtual String      key          () const;
@@ -560,15 +631,20 @@ namespace n2a
         friend MPersistent;
 
     protected:
-        String                                 name;
-        char *                                 value;     ///< Our own local copy of string. We are responsible to manage this memory. We use char * rather than String so this value can be null, not merely empty.
-        MNode *                                container;
-        std::map<const char *, MNode *, Order> children;  // Children are always a subclass of MVolatile. As long as a child exists, we can simply hold a pointer to its name.
+        String                                   name;
+        char *                                   value;     ///< Our own local copy of string. We are responsible to manage this memory. We use char * rather than String so this value can be null, not merely empty.
+        MNode *                                  container;
+        std::map<const char *, MNode *, Order> * children;  // Children are always a subclass of MVolatile. As long as a child exists, we can simply hold a pointer to its name.
 
-        virtual MNode & childGet   (const String & key, bool create = false);
-        virtual void    childClear (const String & key);
+        virtual const char * keyPointer () const;
+        virtual MNode &      childGet   (const String & key, bool create = false);
+        virtual void         childClear (const String & key);
     };
 
+    /**
+        An MNode that keeps track of modified state, so it can be written to
+        persistent storage.
+    **/
     class SHARED MPersistent : public MVolatile
     {
     public:
@@ -699,8 +775,6 @@ namespace n2a
 
     /**
         Holds a collection of MDocs and ensures that any changes get written out to disk.
-        Assumes that the MDocs are at random places in the file system, and that the key contains the full path.
-        MDir makes the stronger assumption that all files share the same directory, so the key only contains the file name.
 
         This node takes responsibility for the memory used by all MDocs it holds.
         The original Java code uses soft references to allow MDocs to be garbage collected when
@@ -709,7 +783,7 @@ namespace n2a
         for ugly code. Instead, there is a function for explicitly releasing an MDoc.
         If you retrieve it again later, it will be recreated from file.
     **/
-    class SHARED MDocGroup : public MNode
+    class SHARED MDocGroup : public MNode, MNode::Observable
     {
     public:
         MDocGroup (const char * key = 0);
@@ -740,22 +814,14 @@ namespace n2a
         virtual Iterator begin ();
 
         /**
-            Generates a path for the MDoc, based only on the key.
-            This requires making restrictive assumptions about the mapping between key and path.
-            This base class assumes the key is literally the path, as a string.
-            MDir assumes that the key is a file or subdir name within a given directory.
+            Generates absolute path for the MDoc, based only on the key.
         **/
         virtual String pathForDoc (const String & key) const;
         /**
             Similar to pathForDoc(), but gives path to the file for the purposes of moving or deleting.
-            This is different from pathForDoc() in the specific case of an MDir that has non-null suffix.
-            In that case, the file is actually a subdirectory that contains both the MDoc and possibly
-            other files.
+            This is potentially a directory rather than a specific file.
         **/
-        virtual String pathForFile (const String & key) const
-        {
-            return pathForDoc (key);
-        }
+        virtual String pathForFile (const String & key) const;
         /**
             Writes pending changes to disk.
         **/
@@ -770,14 +836,16 @@ namespace n2a
         using MNode::getOrDefault;
 
         friend MDoc;
+        friend MCombo;
 
     protected:
         String                          name;  // We could be held in an even higher-level node.
-        std::map<String, MDoc *, Order> children;
+        std::map<String, MDoc *, Order> children;  // Keeping a full copy of the string allows the node to be released from memory while we still remember it.
         std::set<MDoc *>                writeQueue;
 
-        virtual MNode & childGet   (const String & key, bool create = false);
-        virtual void    childClear (const String & key);
+        virtual const char * keyPointer () const;
+        virtual MNode &      childGet   (const String & key, bool create = false);
+        virtual void         childClear (const String & key);
     };
 
     /**
@@ -821,7 +889,353 @@ namespace n2a
         String suffix; ///< Relative path to document file, or null if documents are directly under root
         bool   loaded; ///< Indicates that an initial read of the dir has been done. After that, it is not necessary to monitor the dir, only keep track of documents internally.
 
-        virtual MNode & childGet (const String & key, bool create = false);
+        virtual const char * keyPointer () const;
+        virtual MNode &      childGet   (const String & key, bool create = false);
+    };
+
+    /**
+        A variant of MDocGroup where the key must be a simple name rather than path.
+        This does not handle move() or set() with a different path value.
+        Exists mainly as a utility for MPartRepo.
+    **/
+    class SHARED MDocGroupKey : public MDocGroup
+    {
+    public:
+        virtual uint32_t classID () const;
+        virtual String pathForDoc (const String & key) const;
+        void addDoc (const String & value, const String & key);  // Adds doc to paths, with associated key.
+
+    protected:
+        std::map<String,String> paths;
+    };
+
+    /**
+        Presents several different sets of MPersistent children as a single set.
+        The children continue to point to their original parent, so they are stored properly.
+    **/
+    class SHARED MCombo : public MNode, MNode::Observable, MNode::Observer
+    {
+    public:
+        MCombo (const String & name, const std::vector<MNode *> & containers, bool ownContainers = true);
+        virtual ~MCombo ();
+        void init (const std::vector<MNode *> & containers, bool ownContainers = true);
+        void releaseContainers ();
+
+        virtual String   key   () const;
+        virtual void     clear ();
+        virtual int      size  ();
+        virtual void     move  (const String & fromKey, const String & toKey);
+        virtual Iterator begin ();
+
+        bool    containerIsWritable (MNode & container)  const;
+        bool    isWriteable         (MNode & doc)        const;
+        bool    isWriteable         (const String & key);
+        bool    isVisible           (const MNode & doc);
+        /**
+            Determine if there is more than one container that has a child with the same key.
+            If so, some document is being hidden by another.
+        **/
+        bool    isHiding            (const String & key);
+        MNode & containerFor        (const String & key);
+
+        virtual void changed      ();  ///< Force a rebuild of children.
+        virtual void childAdded   (const String & key);
+        virtual void childDeleted (const String & key);
+        virtual void childChanged (const String & oldKey, const String & newKey);
+
+        void save ();
+        void load ();
+
+    protected:
+        String  name;
+        bool    loaded;
+        MNode * primary;  ///< The one container that allows creation of new parts. This is a shortcut to the first object in containers.
+
+        std::vector<MNode *>             containers;
+        bool                             ownContainers;  // Indicates that we should delete each element in containers when we are destroyed.
+        std::map<String, MNode *, Order> children;  // from key to container; requires second lookup to retrieve actual child
+
+        virtual const char * keyPointer () const;
+        virtual MNode &      childGet   (const String & key, bool create = false);
+        virtual void         childClear (const String & key);
+
+        /**
+            Similar to containerFor(), but does a fresh search for child rather than using cached information.
+            This is a subroutine for childAdded(), childDeleted() and childChanged().
+        **/
+        MNode * rescanContainer (const String & key) const;
+    };
+
+    /**
+        Collates models following all the N2A language rules, and provides an interface
+        for active editing. Also suitable for construction of EquationSets for execution.
+        Implements the full MNode interface on the collated tree, as if it were nothing
+        more than a regular MNode tree. Changes made through this interface cause changes
+        in the original top-level document that would otherwise produce the resulting tree.
+        Additional functions (outside the main MNode interface) support efficient
+        construction.
+
+        All MNode functions are fully supported. In particular, merge() is safe to use, even
+        if it involves $inherit lines.
+
+        See notes on MNode regarding "undefined" nodes. A value of undefined in a top-level
+        document allows an underlying inherited value to show through. This should be used
+        only for interior structural nodes, not for leaf nodes. It is possible to set a
+        top-level leaf node to null, but this should be immediately followed by setting
+        children or a value.
+    **/
+    class SHARED MPart : public MNode
+    {
+    public:
+        // MPart can't be constructed directly. Instead, make an MPartRepo.
+        virtual ~MPart ();  ///< frees memory used by children
+        virtual uint32_t classID () const;
+
+        virtual String   key          () const;
+        virtual MPart &  parent       () const;
+        /**
+            Removes all children of this node from the top-level document, and restores them to their non-overridden state.
+            Some of the nodes may disappear, if they existed only due to override.
+            In general, acts as if the clear is applied in the top-level document, followed by a full collation of the tree.
+        **/
+        virtual void     clear        ();
+        virtual int      size         () const;
+        virtual bool     data         () const;
+        virtual String   getOrDefault (const String & defaultValue);
+        /**
+            Changes value of this node in the top-level document, possibly creating
+            of clearing a chain of overrides in parent nodes. Setting a value that
+            exactly matches an inherited value will possibly clear overrides. Setting
+            a value different from inherited will create an override.
+
+            Setting null has a more subtle effect. It will change the top-level document
+            as described above, possibly creating or clearing overrides. However, an
+            undefined node in the top-level document allows an inherited value to show
+            through in calls to get() and data(). Thus, setting null will not generally
+            make this MPart node undefined.
+        **/
+        virtual void     set          (const char * value);
+        /**
+            Ensures that the minimal number of override nodes are created.
+            Processes $inherit first, so that as other children are set, they are recognized as matching
+            an inherited value when that is the case.
+        **/
+        virtual void     merge        (MNode & that);
+        virtual void     move         (const String & fromKey, const String & toKey);
+        virtual Iterator begin        ();
+
+        // C++ name resolution
+        using MNode::clear;
+        using MNode::data;
+        using MNode::getOrDefault;
+        using MNode::set;
+
+        MNode & getSource ();
+        MNode & getOriginal ();
+
+        /**
+            Indicates if this node has the form of a sub-part.
+        **/
+        bool isPart ()
+        {
+            return isPart (*this);
+        }
+
+        /**
+            Indicates if the given node has the form of a sub-part.
+            Since none of the tests depend on actually being an MPart, this test is static so it can be applied to any MNode without casting.
+        **/
+        static bool isPart (MNode & node);
+
+        /**
+            Indicates that the current value comes from the top-level document.
+        **/
+        bool isFromTopDocument () const;
+
+        /**
+            Indicates that the current value comes from the top-level document
+            and that some parent also defines this node.
+        **/
+        bool isOverridden () const;
+
+        /**
+           Indicates that this node exists in some parent document, regardless of whether
+           there is a local override or not.
+        **/
+        bool isInherited () const;
+
+        /**
+            Clears all top-level document nodes which exactly match the value they override.
+            In general, internal models are kept in a clean state by set().
+            This utility function is only needed when you create a tree by importing or pasting
+            already-collated material from some source. In that case, the material won't distinguish
+            between top-level document and expanded nodes. This method lets you undo the collation
+            so that only necessary top-level nodes remain.
+            @return true if the entire tree from this node down is free of top-level nodes.
+        **/
+        bool clearRedundantOverrides ();
+
+    protected:
+        MNode *                                  source;
+        MNode *                                  original;        ///< The original source of this node, before it was overwritten by another document. Refers to same object as source if this node has not been overridden.
+        MPart *                                  inheritedFrom;   ///< Node in the tree that contains the $include statement that generated this node. Retained even if the node is overridden.
+        MPart *                                  container;
+        std::map<const char *, MPart *, Order> * children;
+
+        MPart (MPart * container, MPart * inheritedFrom, MNode & source);
+
+        /**
+            Allows different subclasses of MPart to supply their own choice of repo.
+            This embeds the choice of repo in the class itself, rather than a member
+            variable. Works together with construct().
+        **/
+        virtual MNode & getRepo    ();
+        virtual MNode & findModel  (const String & ID);
+        /**
+            Enables a subclass of MPart to continue creating instances of itself for
+            all children, rather than reverting to the base class.
+        **/
+        virtual MPart * construct  (MPart * container, MPart * inheritedFrom, MNode & source);
+        virtual MNode & childGet   (const String & key, bool create = false);
+        /**
+            Removes the named child of this node from the top-level document, and restores it to its non-overridden state.
+            The child may disappear, if it existed only due to override.
+            In general, acts as if the clear is applied in the top-level document, followed by a full collation of the tree.
+        **/
+        virtual void    childClear (const String & key);
+
+        /**
+            Convenience method for expand(forward_list<MNode*>).
+        **/
+        void expand ();
+
+        /**
+            Loads all inherited structure into the sub-tree rooted at this node,
+            using existing structure placed here by higher nodes as a starting point.
+            The remainder of the tree is filled in by "underride". Assumes this sub-tree
+            is a clean structure with only entries placed by higher levels, and no
+            lingering structure that we might otherwise build now.
+            @param visited Used to guard against a document loading itself.
+        **/
+        void expand (std::forward_list<MNode *> & visited);
+
+        /**
+            Initiates an underride load of all equations inherited by this node,
+            using the current value of $inherit in our collated children.
+            @param visited Used to guard against a document loading itself.
+        **/
+        void inherit (std::forward_list<MNode *> & visited);
+
+        /**
+            Injects inherited equations as children of this node.
+            Handles recursion up the hierarchy of parents.
+            Handles relinking to parents whose name has changed. (ID is assumed to be constant and universal.)
+            @param visited Used to guard against a document loading itself.
+            @param root The node in the collated tree (named "$inherit") which triggered the current
+            round of inheritance. May be a child of a higher node, or a child of this node, but never
+            a child of a lower node.
+            @param from The $inherit node to be processed. We parse this into a set of part names
+            which we retrieve from the database.
+        **/
+        void inherit (std::forward_list<MNode *> & visited, MPart & root, MNode & from);
+
+        /**
+            Injects inherited equations at this node.
+            Handles recursion down our containment hierarchy.
+            @param newSource The current node in the source document which corresponds to this node in the MPart tree.
+        **/
+        void underride (MPart * from, MNode & newSource);
+
+        /**
+            Injects inherited equations as children of this node.
+            Handles recursion down our containment hierarchy.
+            See note on underride(MPart,MNode). This is safe to run more than once for a given $inherit statement.
+            @param newSource The current node in the source document which matches this node in the MPart tree.
+        **/
+        void underrideChildren (MPart * from, MNode & newSource);
+
+        /**
+            Remove any effects the $inherit line "from" had on this node and our children.
+            @param parent Enables us to delete ourselves from the containing collection.
+            If null, this is the top node of the subtree to be purged, so we should not be
+            deleted.
+        **/
+        void purge (MPart & from, MPart * parent);
+
+        /**
+            Remove any top document values from this node and its children.
+        **/
+        void releaseOverride ();
+
+        /**
+            Assuming that source in the current node belongs to the top-level document, reset all overridden children back to their original state.
+        **/
+        void releaseOverrideChildren ();
+
+        /**
+            Extends the trail of overrides from the root to this node.
+            Used to prepare this node for modification, where all edits must reside in top-level document.
+            If this is a leaf node, then be sure to set a non-null value afterward. IE: leaf nodes should
+            always be defined in documents.
+        **/
+        void Override ();
+
+        /**
+            Checks if any child is overridden. If so, then then current node must remain overridden as well.
+        **/
+        bool overrideNecessary ();
+
+        /**
+            If an override is no longer needed on this node, reset it to its original state, and make
+            a recursive call to our parent. This is effectively the anti-operation to override().
+        **/
+        void clearPath ();
+
+        /**
+            Subroutine of set() which locates each parent and records its ID.
+            Must only be called on an $inherit node in the top-level document.
+        **/
+        void setIDs ();
+
+        /**
+            Ensure that our key in our container's children map points to
+            memory that actually exists. This needs to be called any time the value
+            of "source" is about to change.
+            @param key The new pointer to use.
+        **/
+        void updateKey (const char * key);
+    };
+
+    class SHARED MPartRepo : public MPart
+    {
+    public:
+        /**
+            Collates a full model from the given source document.
+        **/
+        MPartRepo (MNode & source, MNode & repo, bool ownRepo = false);
+        /**
+            Creates MPart tree with repo constructed from a list of paths.
+        **/
+        MPartRepo (MNode & source, const std::vector<String> & paths);
+        /**
+            Creates MPart tree with repo constructed from a path string.
+        **/
+        MPartRepo (MNode & source, const String & paths);
+        ~MPartRepo ();
+        virtual uint32_t classID () const;
+
+    protected:
+        MNode * repo;
+        bool    ownRepo;  ///< Indicates that we constructed the repo ourselves, so are responsible to release it.
+
+        std::map<String,String> * indexID;
+
+        void build (MNode & repo);
+        void build (const std::vector<String> & paths);
+        void build (const String & paths);
+
+        virtual MNode & getRepo   ();
+        virtual MNode & findModel (const String & ID);
     };
 
     class SHARED Schema

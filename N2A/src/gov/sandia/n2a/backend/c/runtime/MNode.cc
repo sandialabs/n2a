@@ -7,7 +7,7 @@ it separately and add to a library. In first case, just include this source file
 as if it were a header. In the second case, you can use MNode.h as an ordinary
 header to expose symbols.
 
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -691,6 +691,12 @@ n2a::MNode::structureEquals (MNode & that)
     return true;
 }
 
+const char *
+n2a::MNode::keyPointer () const
+{
+    throw "No memory representation for key";
+}
+
 n2a::MNode &
 n2a::MNode::childGet (const String & key, bool create)
 {
@@ -703,12 +709,69 @@ n2a::MNode::childClear (const String & key)
 {
 }
 
+void
+n2a::MNode::addObserver (Observer * o)
+{
+    throw "Observable interface is not supported.";
+}
+
+void
+n2a::MNode::removeObserver (Observer * o)
+{
+    throw "Observable interface is not supported.";
+}
+
+
+// class MNode::Observable ---------------------------------------------------
+
+void
+n2a::MNode::Observable::addObserver (Observer * o)
+{
+    observers.push_back (o);
+}
+
+void
+n2a::MNode::Observable::removeObserver (Observer * o)
+{
+    for (int i = observers.size () - 1; i >= 0; i--)
+    {
+        if (observers[i] != o) continue;
+        observers.erase (observers.begin () + i);
+        break;
+    }
+}
+
+void
+n2a::MNode::Observable::fireChanged ()
+{
+    for (auto it : observers) it->changed ();
+}
+
+void
+n2a::MNode::Observable::fireChildAdded (const String & key)
+{
+    for (auto it : observers) it->childAdded (key);
+}
+
+void
+n2a::MNode::Observable::fireChildDeleted (const String & key)
+{
+    for (auto it : observers) it->childDeleted (key);
+}
+
+void
+n2a::MNode::Observable::fireChildChanged (const String & oldKey, const String & newKey)
+{
+    for (auto it : observers) it->childChanged (oldKey, newKey);
+}
+
 
 // class MVolatile -----------------------------------------------------------
 
 n2a::MVolatile::MVolatile (const char * value, const char * key, MNode * container)
 :   container (container),
-    name (key)  // If key is null, name is empty string.
+    name      (key),  // If key is null, name is empty string.
+    children  (nullptr)
 {
     if (value) this->value = strdup (value);
     else       this->value = nullptr;
@@ -717,7 +780,9 @@ n2a::MVolatile::MVolatile (const char * value, const char * key, MNode * contain
 n2a::MVolatile::~MVolatile ()
 {
     if (value) free (value);
-    for (auto c : children) delete c.second;
+    if (! children) return;
+    for (auto c : *children) delete c.second;
+    delete children;
 }
 
 uint32_t
@@ -743,15 +808,17 @@ void
 n2a::MVolatile::clear ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    for (auto c : children) delete c.second;
-    children.clear ();
+    if (! children) return;
+    for (auto c : *children) delete c.second;
+    children->clear ();
 }
 
 int
 n2a::MVolatile::size ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    return children.size ();
+    if (! children) return 0;
+    return children->size ();
 }
 
 bool
@@ -782,22 +849,23 @@ n2a::MVolatile::move (const String & fromKey, const String & toKey)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (toKey == fromKey) return;
+    if (! children) return;  // nothing to move
 
-    std::map<const char *, MNode *>::iterator end = children.end ();
-    std::map<const char *, MNode *>::iterator it = children.find (toKey.c_str ());
+    auto end = children->end ();
+    auto it  = children->find (toKey.c_str ());
     if (it != end)
     {
         delete it->second;
-        children.erase (it);
+        children->erase (it);
     }
 
-    it = children.find (fromKey.c_str ());
+    it = children->find (fromKey.c_str ());
     if (it != end)
     {
-        MVolatile * keep = (MVolatile *) it->second;  // It's not currently necessary to check classID here.
-        children.erase (it);
+        MVolatile * keep = static_cast<MVolatile *> (it->second);  // It's not currently necessary to check classID here.
+        children->erase (it);
         keep->name = toKey;
-        children[keep->name.c_str ()] = keep;
+        (*children)[keep->name.c_str ()] = keep;
     }
 }
 
@@ -806,21 +874,35 @@ n2a::MVolatile::begin ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     Iterator result (*this);
-    result.keys->reserve (children.size ());
-    for (auto c : children) result.keys->push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
+    if (children)
+    {
+        result.keys->reserve (children->size ());
+        for (auto c : *children) result.keys->push_back (c.first);  // To be safe for delete, these must be full copies of the strings.
+    }
     return result;
+}
+
+const char *
+n2a::MVolatile::keyPointer () const
+{
+    return name.c_str ();
 }
 
 n2a::MNode &
 n2a::MVolatile::childGet (const String & key, bool create)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    auto it = children.find (key.c_str ());
-    if (it == children.end ())
+    if (! children)
+    {
+        if (! create) return none;
+        children = new std::map<const char *, MNode *, Order>;
+    }
+    auto it = children->find (key.c_str ());
+    if (it == children->end ())
     {
         if (! create) return none;
         MVolatile * result = new MVolatile (nullptr, key.c_str (), this);
-        children[result->name.c_str ()] = result;
+        (*children)[result->name.c_str ()] = result;
         return *result;
     }
     return * it->second;
@@ -830,10 +912,11 @@ void
 n2a::MVolatile::childClear (const String & key)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    std::map<const char *, MNode *>::iterator it = children.find (key.c_str ());
-    if (it == children.end ()) return;
+    if (! children) return;  // nothing to clear
+    auto it = children->find (key.c_str ());
+    if (it == children->end ()) return;
     delete it->second;
-    children.erase (it);
+    children->erase (it);
 }
 
 
@@ -903,23 +986,24 @@ n2a::MPersistent::move (const String & fromKey, const String & toKey)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     if (toKey == fromKey) return;
+    if (! children) return;
 
-    std::map<const char *, MNode *>::iterator end = children.end ();
-    std::map<const char *, MNode *>::iterator it = children.find (toKey.c_str ());
+    auto end = children->end ();
+    auto it  = children->find (toKey.c_str ());
     if (it != end)
     {
         delete it->second;
-        children.erase (it);
+        children->erase (it);
         markChanged ();
     }
 
-    it = children.find (fromKey.c_str ());
+    it = children->find (fromKey.c_str ());
     if (it != end)
     {
         MPersistent * keep = (MPersistent *) it->second;  // just assume all children are MPersistent
-        children.erase (it);
+        children->erase (it);
         keep->name = toKey;
-        children[keep->name.c_str ()] = keep;
+        (*children)[keep->name.c_str ()] = keep;
         keep->markChanged ();
         markChanged ();
     }
@@ -929,13 +1013,18 @@ n2a::MNode &
 n2a::MPersistent::childGet (const String & key, bool create)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    auto it = children.find (key.c_str ());
-    if (it == children.end ())
+    if (! children)
+    {
+        if (! create) return none;
+        children = new std::map<const char *, MNode *, Order>;
+    }
+    auto it = children->find (key.c_str ());
+    if (it == children->end ())
     {
         if (! create) return none;
         markChanged ();
         MPersistent * result = new MPersistent (this, nullptr, key.c_str ());
-        children[result->name.c_str ()] = result;
+        (*children)[result->name.c_str ()] = result;
         return *result;
     }
     return * it->second;
@@ -945,6 +1034,7 @@ void
 n2a::MPersistent::childClear (const String & key)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
+    // Notice that this method will mark us changed, even if key doesn't exist.
     MVolatile::childClear (key);
     markChanged ();
 }
@@ -1220,15 +1310,15 @@ n2a::MDocGroup::move (const String & fromKey, const String & toKey)
     catch (...) {}  // This can happen if a new doc has not yet been flushed to disk.
 
     // Bookkeeping in "children" collection
-    std::map<String, MDoc *>::iterator end = children.end ();
-    std::map<String, MDoc *>::iterator it  = children.find (toKey.c_str ());
+    auto end = children.end ();
+    auto it  = children.find (toKey);
     if (it != end)
     {
         delete it->second;
         children.erase (it);
     }
 
-    it = children.find (fromKey.c_str ());
+    it = children.find (fromKey);
     if (it != end)
     {
         MDoc * keep = (MDoc *) it->second;
@@ -1251,7 +1341,14 @@ n2a::MDocGroup::begin ()
 String
 n2a::MDocGroup::pathForDoc (const String & key) const
 {
-    return key;
+    // MSVC gave a link error when this was a pure-virtual function, so added this stupid implementation.
+    throw "MDocGroup is an abstract class. You must define pathForDoc() in a subclass.";
+}
+
+String
+n2a::MDocGroup::pathForFile (const String & key) const
+{
+    return pathForDoc (key);
 }
 
 void
@@ -1262,6 +1359,12 @@ n2a::MDocGroup::save ()
     writeQueue.clear ();
 }
 
+const char *
+n2a::MDocGroup::keyPointer () const
+{
+    return name.c_str ();
+}
+
 n2a::MNode &
 n2a::MDocGroup::childGet (const String & key, bool create)
 {
@@ -1269,7 +1372,7 @@ n2a::MDocGroup::childGet (const String & key, bool create)
     std::lock_guard<std::recursive_mutex> lock (mutex);
 
     MDoc * result;
-    std::map<String, MDoc *>::iterator it = children.find (key);
+    auto it = children.find (key);
     if (it == children.end ())
     {
         if (! create) return none;
@@ -1293,7 +1396,7 @@ void
 n2a::MDocGroup::childClear (const String & key)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    std::map<String, MDoc *>::iterator it = children.find (key);
+    auto it = children.find (key);
     if (it == children.end ()) return;
 
     MDoc * doc = it->second;
@@ -1308,7 +1411,7 @@ n2a::MDocGroup::unload (n2a::MDoc * doc)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
     String key = doc->key ();
-    std::map<String, MDoc *>::iterator it = children.find (key);
+    auto it = children.find (key);
     if (it == children.end ()) return;
     if (doc->needsWrite) doc->save ();
     writeQueue.erase (doc);
@@ -1449,6 +1552,13 @@ n2a::MDir::load ()
     loaded = true;
 }
 
+const char *
+n2a::MDir::keyPointer () const
+{
+    if (! name.empty ()) return name.c_str ();
+    return root.c_str ();
+}
+
 n2a::MNode &
 n2a::MDir::childGet (const String & key, bool create)
 {
@@ -1456,7 +1566,7 @@ n2a::MDir::childGet (const String & key, bool create)
     std::lock_guard<std::recursive_mutex> lock (mutex);
 
     MDoc * result;
-    std::map<String, MDoc *>::iterator it = children.find (key);
+    auto it = children.find (key);
     if (it == children.end ())
     {
         if (! create) return none;
@@ -1482,6 +1592,1037 @@ n2a::MDir::childGet (const String & key, bool create)
         if (create  &&  ! exists) result->markChanged ();  // Set the new document to save. Adds to writeQueue.
     }
     return *result;
+}
+
+
+// class MDocGroupKey --------------------------------------------------------
+
+uint32_t
+n2a::MDocGroupKey::classID () const
+{
+    return MDocGroupID | MDocGroupKeyID;
+}
+
+String
+n2a::MDocGroupKey::pathForDoc (const String & key) const
+{
+    auto it = paths.find (key);
+    if (it == paths.end ()) return MDocGroup::pathForDoc (key);
+    return it->second;
+}
+
+void
+n2a::MDocGroupKey::addDoc (const String & value, const String & key)
+{
+    paths[key] = value;
+}
+
+
+// class MCombo --------------------------------------------------------------
+
+n2a::MCombo::MCombo (const String & name, const std::vector<MNode *> & containers, bool ownContainers)
+:   name (name)
+{
+    init (containers, ownContainers);
+}
+
+n2a::MCombo::~MCombo ()
+{
+    releaseContainers ();
+}
+
+void
+n2a::MCombo::init (const std::vector<MNode *> & containers, bool ownContainers)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    releaseContainers ();
+    for (auto c : containers) c->addObserver (this);
+    this->containers    = containers;  // Copy elements.
+    this->ownContainers = ownContainers;
+
+    if (! containers.empty ()) primary = containers[0];
+    else                       primary = new MVolatile ();
+    children.clear ();
+    loaded = false;
+    fireChanged ();
+}
+
+void
+n2a::MCombo::releaseContainers ()
+{
+    if (primary  &&  containers.empty ()) delete primary;  // Because we made it ourselves. See init().
+    if (ownContainers)
+    {
+        for (auto c : containers) delete c;
+    }
+    else
+    {
+        for (auto c : containers) c->removeObserver (this);
+    }
+}
+
+String
+n2a::MCombo::key () const
+{
+    return name;
+}
+
+void
+n2a::MCombo::clear ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    // This does not remove the original objects, only our links to them.
+    containers.clear ();
+    children  .clear ();
+    fireChanged ();
+}
+
+int
+n2a::MCombo::size ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    load ();
+    return children.size ();
+}
+
+void
+n2a::MCombo::move (const String & fromKey, const String & toKey)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    auto it = children.find (fromKey);
+    if (it != children.end ()  &&  containerIsWritable (* it->second)) it->second->move (fromKey, toKey);  // Triggers childChanged() call from MDir, which updates our children collection.
+}
+
+n2a::MNode::Iterator
+n2a::MCombo::begin ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    Iterator result (*this);
+    result.keys->reserve (children.size ());
+    for (auto & c : children) result.keys->push_back (c.first);
+    return result;
+}
+
+bool
+n2a::MCombo::containerIsWritable (MNode & container) const
+{
+    if (&container == primary) return true;
+    if (&container == &none) return false;
+    for (auto c : containers) if (c == &container) return false;
+    return true;  // A sub-class could add application-specific criteria for when a container is writable.
+}
+
+bool
+n2a::MCombo::isWriteable (MNode & doc) const
+{
+    return containerIsWritable (doc.parent ());
+}
+
+bool
+n2a::MCombo::isWriteable (const String & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    load ();
+    auto it = children.find (key);
+    if (it == children.end ()) return false;
+    return containerIsWritable (* it->second);
+}
+
+bool
+n2a::MCombo::isVisible (const MNode & doc)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (&doc == &none) return false;
+    String key = doc.key ();
+    for (auto c : containers)
+    {
+        MNode & child = c->child (key);
+        if (&child != &none) return &doc == &child;
+    }
+    return false;
+}
+
+bool
+n2a::MCombo::isHiding (const String & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    load ();
+    int count = 0;
+    for (auto c : containers) if (&c->child (key) != &none) count++;
+    return count > 1;
+}
+
+n2a::MNode &
+n2a::MCombo::containerFor (const String & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    load ();
+    auto it = children.find (key);
+    if (it == children.end ()) return none;
+    return * it->second;
+}
+
+void
+n2a::MCombo::changed ()
+{
+    // Force a rebuild of children.
+    children.clear ();  // Similar to MVolatile, we don't need to dispose of key strings, because they belong to the individual nodes.
+    loaded = false;
+    fireChanged ();
+}
+
+void
+n2a::MCombo::childAdded (const String & key)
+{
+    MNode & oldChild = childGet (key);
+    MNode * newContainer = rescanContainer (key);
+    MNode & newChild = newContainer->child (key);
+    if (&oldChild == &newChild) return;  // Change is hidden by higher-precedence dataset.
+    children[key] = newContainer;
+    if (&oldChild == &none) fireChildAdded (key);         // This is a completely new child.
+    else                    fireChildChanged (key, key);  // The newly-added child hides the old child, so this appears as a change of content.
+}
+
+void
+n2a::MCombo::childDeleted (const String & key)
+{
+    MNode * newContainer = rescanContainer (key);
+    if (! newContainer)
+    {
+        children.erase (key);
+        fireChildDeleted (key);
+        return;
+    }
+    // A hidden node was exposed by the delete.
+    // It's also possible that the deleted node was hidden so no effective change occurred.
+    // It's not worth the extra work to detect the "still hidden" case.
+    children[key] = newContainer;
+    fireChildChanged (key, key);
+}
+
+void
+n2a::MCombo::childChanged (const String & oldKey, const String & newKey)
+{
+    if (oldKey != newKey)  // Not a simple change of content, but rather a move of some sort.
+    {
+        // Update container mapping at both oldKey and newKey
+        MNode * container = rescanContainer (oldKey);
+        if (container) children.erase (oldKey);
+        else           children[oldKey] = container;
+
+        container = rescanContainer (newKey);
+        if (container) children.erase (newKey);
+        else           children[newKey] = container;
+    }
+
+    // It's possible that both oldKey and newKey are hidden by higher-precedent datasets,
+    // producing no effective change. We should avoid forwarding the message in that case,
+    // but it's not worth the effort to detect.
+    fireChildChanged (oldKey, newKey);
+}
+
+void
+n2a::MCombo::save ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    for (auto c : containers)
+    {
+        uint32_t id = c->classID ();
+        if      (id & MDirID)   static_cast<MDir *>   (c)->save ();
+        else if (id & MComboID) static_cast<MCombo *> (c)->save ();
+    }
+}
+
+void
+n2a::MCombo::load ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (loaded) return;
+    for (int i = containers.size () - 1; i >= 0; i--)
+    {
+        MNode * container = containers[i];
+        uint32_t id = container->classID ();
+        if (id & MDirID)  // Avoid forcing the load of every file!
+        {
+            MDir * dir = static_cast<MDir *> (container);
+            dir->load ();
+            for (auto it : dir->children) children[it.first] = container;
+        }
+        else if (id & MComboID)  // Ditto
+        {
+            MCombo * combo = static_cast<MCombo *> (container);
+            combo->load ();
+            for (auto it : combo->children) children[it.first] = container;
+        }
+        else  // General case
+        {
+            for (auto & c : *container) children[c.key ()] = container;
+        }
+    }
+    loaded = true;
+}
+
+const char *
+n2a::MCombo::keyPointer () const
+{
+    return name.c_str ();
+}
+
+n2a::MNode &
+n2a::MCombo::childGet (const String & key, bool create)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    load ();
+    auto it = children.find (key);
+    if (it != children.end ()) return it->second->child (key);
+    if (create) return primary->childOrCreate (key);  // Triggers childAdded() call from MDir, which updates our children collection.
+    return none;
+}
+
+void
+n2a::MCombo::childClear (const String & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    // This actually removes the original object.
+    load ();
+    auto it = children.find (key);
+    if (it != children.end ()  &&  containerIsWritable (* it->second)) it->second->clear (key);  // Triggers childDeleted() call from MDir, which updates our children collection.
+}
+
+n2a::MNode *
+n2a::MCombo::rescanContainer (const String & key) const
+{
+    for (auto c : containers) if (&c->child (key) != &none) return c;
+    return nullptr;
+}
+
+
+// class MPart ---------------------------------------------------------------
+
+n2a::MPart::MPart (MPart * container, MPart * inheritedFrom, MNode & source)
+:   container     (container),
+    inheritedFrom (inheritedFrom),
+    children      (nullptr)
+{
+    this->source = original = &source;
+}
+
+n2a::MPart::~MPart ()
+{
+    if (! children) return;
+    for (auto c : *children) delete c.second;
+    delete children;
+}
+
+uint32_t
+n2a::MPart::classID () const
+{
+    return MPartID;
+}
+
+String
+n2a::MPart::key () const
+{
+    return source->key ();  // same as original->key()
+}
+
+n2a::MPart &
+n2a::MPart::parent () const
+{
+    return *container;
+}
+
+void
+n2a::MPart::clear ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (! children) return;  // nothing to clear
+    if (! isFromTopDocument ()) return; // Nothing to do.
+    releaseOverrideChildren ();
+    clearPath ();
+    expand ();
+}
+
+int
+n2a::MPart::size () const
+{
+    if (! children) return 0;
+    return children->size ();
+}
+
+bool
+n2a::MPart::data () const
+{
+    return source->data ()  ||  original->data ();
+}
+
+String
+n2a::MPart::getOrDefault (const String & defaultValue)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (source->data ()) return source->getOrDefault (defaultValue);
+    return original->getOrDefault (defaultValue);
+}
+
+void
+n2a::MPart::set (const char * value)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (source->data () ? source->get () == value : value == nullptr) return;  // No change, so nothing to do.
+    bool couldReset = original->data () ? original->get () == value : value == nullptr;
+    if (! couldReset) Override ();
+    source->set (value);
+    if (couldReset) clearPath ();
+    if (source->key () == "$inherit")  // We changed a $inherit node, so rebuild our subtree.
+    {
+        setIDs ();
+        container->purge (*this, nullptr);  // Undo the effect we had on the subtree.
+        container->expand ();
+    }
+}
+
+void
+n2a::MPart::merge (MNode & that)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (that.data ()) set (that.get ().c_str ());
+
+    // Process $inherit first
+    MNode & thatInherit = that.child ("$inherit");
+    if (&thatInherit != &none)
+    {
+        MNode * inherit = & childGet ("$inherit");
+        bool existing =  inherit != &none;
+        if (! existing) inherit = &childOrCreate ("$inherit");
+
+        // Now do the equivalent of inherit.merge(thatInherit), but pay attention to IDs.
+        // If "that" comes from an outside source, it could merge in IDs which disagree
+        // with the ones we would otherwise look up during setIDs() called by set(). To honor the
+        // imported IDs (that is, prioritize them over imported names), we merge the metadata
+        // under $inherit first, then set the node itself in a way that avoids calling setIDs().
+        for (auto & thatInheritChild : thatInherit)
+        {
+            String index = thatInheritChild.key ();
+            MNode & c = inherit->childOrCreate (index);
+            c.merge (thatInheritChild);
+        }
+        String thatInheritValue = thatInherit.get ();
+        if (! thatInheritValue.empty ())
+        {
+            // This is a copy of set() with appropriate modifications.
+            MPart * i = static_cast<MPart *> (inherit);
+            String thisInheritValue = i->source->get ();
+            if (thisInheritValue != thatInheritValue)
+            {
+                bool couldReset =  i->original->get () == thatInheritValue;
+                if (! couldReset) i->Override ();
+                i->source->set (thatInheritValue);
+                if (couldReset) i->clearPath ();
+                if (existing) purge (*i, nullptr);
+                expand ();
+            }
+        }
+    }
+
+    // Then the rest of the children
+    for (auto & thatChild : that)
+    {
+        if (&thatChild == &thatInherit) continue;
+        String key = thatChild.key ();
+        MNode & c = childOrCreate (key);
+        c.merge (thatChild);
+    }
+}
+
+void
+n2a::MPart::move (const String & fromKey, const String & toKey)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (toKey == fromKey) return;
+    childClear (toKey);  // By definition, no top-level document nodes are allowed to remain at the destination. However, underrides may exist.
+    MNode & fromPart = childGet (fromKey);
+    if (&fromPart == &none) return;
+    if (! static_cast<MPart &> (fromPart).isFromTopDocument ()) return;  // We only move top-document nodes.
+
+    MNode & fromDoc = source->child (fromKey);
+    MNode & toPart  = childGet (toKey);
+    if (&toPart == &none)  // No node at the destination, so merge at level of top-document.
+    {
+        MNode & toDoc = source->childOrCreate (toKey);
+        toDoc.merge (fromDoc);
+        MPart * c = construct (this, nullptr, toDoc);
+        (*children)[c->source->keyPointer ()] = c;
+        c->underrideChildren (nullptr, toDoc);  // The sub-tree is empty, so all injected nodes are new. They don't really underride anything.
+        c->expand ();
+    }
+    else  // Some existing underrides, so merge in collated tree. This is more expensive because it involves multiple calls to set().
+    {
+        toPart.merge (fromDoc);
+    }
+    childClear (fromKey);
+}
+
+n2a::MNode::Iterator
+n2a::MPart::begin ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    Iterator result (*this);
+    if (children)
+    {
+        result.keys->reserve (children->size ());
+        for (auto & c : *children) result.keys->push_back (c.first);
+    }
+    return result;
+}
+
+n2a::MNode &
+n2a::MPart::getSource ()
+{
+    return *source;
+}
+
+n2a::MNode &
+n2a::MPart::getOriginal ()
+{
+    return *original;
+}
+
+bool
+n2a::MPart::isPart (MNode & node)
+{
+    if (! node.get ().empty ()) return false;  // A part never has an assignment. A variable might not have an assignment if it is multi-line.
+    if (node.key ().starts_with ("$")) return false;
+    for (auto & c : node) if (c.key ().starts_with ("@")) return false;  // has the form of a multi-line equation
+    return true;
+}
+
+bool
+n2a::MPart::isFromTopDocument () const
+{
+    // There are only 3 cases allowed:
+    // * original == source and inheritedFrom != null -- node holds an inherited value
+    // * original == source and inheritedFrom == null -- node holds a top-level value
+    // * original != source and inheritedFrom != null -- node holds a top-level value and an underride (inherited value)
+    // The fourth case is excluded by the logic of this class. If original != source, then inheritedFrom cannot be null.
+    return original != source  ||  inheritedFrom == nullptr;
+}
+
+bool
+n2a::MPart::isOverridden () const
+{
+    return original != source;  // and inheritedFrom != null, but no need to check that.
+}
+
+bool
+n2a::MPart::isInherited () const
+{
+    return inheritedFrom != nullptr;
+}
+
+bool
+n2a::MPart::clearRedundantOverrides ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    bool overrideNecessary = false;
+    if (children)
+    {
+        for (auto c : *children)
+        {
+            if (! c.second->clearRedundantOverrides ()) overrideNecessary = true;
+        }
+    }
+
+    if (source != original  &&  (! source->data ()  ||  source->get () == original->get ()))
+    {
+        if (overrideNecessary)
+        {
+            source->set (nullptr);  // Turn this into a pure placeholder node.
+        }
+        else
+        {
+            const char * key = original->keyPointer ();
+            updateKey (key);
+            source->parent ().clear (key);
+            source = original;
+        }
+    }
+    return ! isFromTopDocument ();
+}
+
+n2a::MNode &
+n2a::MPart::getRepo ()
+{
+    return container->getRepo ();
+}
+
+n2a::MNode &
+n2a::MPart::findModel (const String & ID)
+{
+    return container->findModel (ID);
+}
+
+n2a::MPart *
+n2a::MPart::construct (MPart * container, MPart * inheritedFrom, MNode & source)
+{
+    return new MPart (container, inheritedFrom, source);
+}
+
+n2a::MNode &
+n2a::MPart::childGet (const String & key, bool create)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (children)
+    {
+        auto it = children->find (key.c_str ());
+        if (it != children->end ()) return * it->second;
+    }
+    if (! create) return none;
+
+    // We don't have the child, so by construction it is not in any source document.
+    Override ();  // ensures that source is a member of the top-level document tree
+    MNode & s = source->childOrCreate (key);
+    MPart * result = construct (this, nullptr, s);
+    if (! children) children = new std::map<const char *, MPart *, Order>;
+    (*children)[result->source->keyPointer ()] = result;
+    if (key == "$inherit")  // We've created an $inherit line, so load the inherited equations.
+    {
+        result->setIDs ();
+        // Purge is unnecessary because "result" is a new entry. There is no previous $inherit line.
+        expand ();
+    }
+    return *result;
+}
+
+void
+n2a::MPart::childClear (const String & key)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    if (! children) return;
+    if (! isFromTopDocument ()) return;  // This node is not overridden, so none of the children will be.
+    if (&source->child (key) == &none) return;  // The child is not overridden, so nothing to do.
+    (*children)[key.c_str ()]->releaseOverride ();
+    source->clear (key);
+    clearPath ();
+
+    auto it = children->find (key.c_str ());
+    if (it != children->end ())  // If child still exists, then it was overridden but exposed by the delete.
+    {
+        if (key == "$inherit") expand ();             // We changed our $inherit expression, so rebuild our subtree.
+        else                   it->second->expand (); // Otherwise, rebuild the subtree under the child.
+    }
+}
+
+void
+n2a::MPart::expand ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    std::forward_list<MNode *> visited;
+    visited.push_front (static_cast<MPart &> (root ()).source);
+    expand (visited);
+}
+
+void
+n2a::MPart::expand (std::forward_list<MNode *> & visited)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    inherit (visited);
+    if (! children) return;
+    for (auto c : *children)
+    {
+        if (c.second->isPart ()) c.second->expand (visited);
+    }
+}
+
+void
+n2a::MPart::inherit (std::forward_list<MNode *> & visited)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (! children) return;
+    auto it = children->find ("$inherit");
+    if (it != children->end ()) inherit (visited, *it->second, *it->second);
+}
+
+void
+n2a::MPart::inherit (std::forward_list<MNode *> & visited, MPart & root, MNode & from)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    MNode & models = getRepo ();
+    bool maintainable =  &from == &root  &&  root.isFromTopDocument ()  &&  (models.classID () & MComboID == 0  ||  static_cast<MCombo &> (models).isWriteable (* static_cast<MPart &> (root.root ()).source));
+    bool changedName = false;  // Indicates that at least one name changed due to ID resolution. This lets us delay updating the field until all names are processed.
+    bool changedID   = false;
+
+    std::vector<String> parentNames = split (from.get (),              ",");
+    std::vector<String> IDs         = split (from.get ("$meta", "id"), ",");  // Any unassigned ID in middle of list will appear as an empty string in the array. Thus they remain in sync.
+    int count = parentNames.size ();
+    for (int i = 0; i < count; i++)
+    {
+        String parentName = parentNames[i].trim ().replace_all ("\"", "");
+        parentNames[i] = parentName;
+        MNode * parentSource = &models.child (parentName);
+
+        String id = "";
+        if (i < IDs.size ()) id = IDs[i].trim ();
+
+        String parentID = "";
+        if (parentSource != &none)
+        {
+            parentID = parentSource->get ("$meta", "id");
+            if (! id.empty ()  &&  parentID != id) parentSource = &none;  // Even though the name matches, parentSource is not really the same model that was originally linked.
+        }
+        if (parentSource == &none)
+        {
+            if (! id.empty ())
+            {
+                parentSource = & findModel (id);
+                if (parentSource != &none  &&  maintainable)  // relink
+                {
+                    parentNames[i] = parentSource->key ();
+                    changedName = true;
+                }
+            }
+        }
+        else
+        {
+            if (id.empty ()  &&  ! parentID.empty ()  &&  maintainable)
+            {
+                while (IDs.size () <= i) IDs.push_back ("");
+                IDs[i] = parentID;
+                changedID = true;
+            }
+        }
+
+        if (parentSource != &none)
+        {
+            // Does visited contain parentSource? This guards against infinite loop via $inherit.
+            bool found = false;
+            for (auto v : visited)
+            {
+                if (v == parentSource)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (! found)
+            {
+                underrideChildren (&root, *parentSource);
+                MNode & parentFrom = parentSource->child ("$inherit");
+                if (&parentFrom != &none)
+                {
+                    visited.push_front (parentSource);
+                    inherit (visited, root, parentFrom);  // We continue to treat the root as the initiator for all the inherited equations.
+                    visited.pop_front ();
+                }
+            }
+        }
+    }
+
+    if (changedName)
+    {
+        String value = parentNames[0];
+        for (int i = 1; i < parentNames.size (); i++)
+        {
+            value += ", ";
+            value += parentNames[i];
+        }
+        root.source->set (value);
+    }
+    if (changedID)
+    {
+        String value = IDs[0];
+        for (int i = 1; i < IDs.size (); i++)
+        {
+            value += ",";
+            value += IDs[i];
+        }
+        root.source->set (value, "$meta", "id");
+    }
+}
+
+void
+n2a::MPart::underride (MPart * from, MNode & newSource)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (from != this)  // We don't allow incoming $inherit lines to underride the $inherit that brought them in, since their existence is completely contingent on it.
+    {
+        if (inheritedFrom == &none)
+        {
+            inheritedFrom = from;
+            original = &newSource;
+        }
+        else if (! original->data ())  // an inherited value of undefined
+        {
+            // Allow deeper inherited value to show through.
+            // Does not change which $inherit line is responsible for the existence of this node.
+            if (original == source)
+            {
+                updateKey (newSource.keyPointer ());
+                source = original = &newSource;
+            }
+            else
+            {
+                original = &newSource;
+            }
+        }
+    }
+    underrideChildren (from, newSource);
+}
+
+void
+n2a::MPart::underrideChildren (MPart * from, MNode & newSource)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    if (newSource.size () == 0) return;
+    if (! children) children = new std::map<const char *, MPart *, Order>;
+    for (auto & n : newSource)
+    {
+        String key = n.key ();
+        auto it = children->find (key.c_str ());
+        if (it == children->end ())
+        {
+            MPart * c = construct (this, from, n);
+            (*children)[c->source->keyPointer ()] = c;
+            c->underrideChildren (from, n);
+        }
+        else
+        {
+            it->second->underride (from, n);
+        }
+    }
+}
+
+void
+n2a::MPart::purge (MPart & from, MPart * parent)
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    if (inheritedFrom == &from)
+    {
+        if (source == original)  // This node exists only because of "from". Implicitly, we are not from the top document, and all our children are in the same condition.
+        {
+            if (parent) parent->clear (source->key ());
+            return;
+        }
+        else  // This node contains an underride, so simply remove that underride.
+        {
+            original = source;
+            inheritedFrom = nullptr;
+        }
+    }
+
+    if (! children) return;
+    auto it = children->find ("$inherit");
+    if (it != children->end ()  &&  it->second->inheritedFrom == &from) purge (* it->second, nullptr);  // If our local $inherit is contingent on "from", then remove all its effects as well. Note that a $inherit line never comes from itself (inherit.inheritedFrom != inherit).
+
+    for (auto c : *children) c.second->purge (from, this);
+}
+
+void
+n2a::MPart::releaseOverride ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    if (! isFromTopDocument ()) return;  // This node is not overridden, so nothing to do.
+
+    String key = source->key ();
+    bool selfDestruct = false;
+    if (source == original)  // This node only exists in top doc, so it should be deleted entirely.
+    {
+        container->children->erase (key.c_str ());
+        selfDestruct = true;
+    }
+    else  // This node is overridden, so release it.
+    {
+        releaseOverrideChildren ();
+        updateKey (original->keyPointer ());
+        source = original;
+    }
+    if (key == "$inherit") container->purge (*this, nullptr);
+    if (selfDestruct) delete this;
+}
+
+void
+n2a::MPart::releaseOverrideChildren ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    for (auto & c : *source)  // Implicitly, everything we iterate over will be from the top document.
+    {
+        (*children)[c.keyPointer ()]->releaseOverride ();  // The key is guaranteed to be in our children collection.
+    }
+    source->clear ();
+}
+
+void
+n2a::MPart::Override ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (isFromTopDocument ()) return;
+    // The only way to get past the above line is if original==source
+    container->Override ();
+    MNode & temp = container->source->childGet (key (), true);
+    updateKey (temp.keyPointer ());
+    source = &temp;
+}
+
+bool
+n2a::MPart::overrideNecessary ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (! children) return false;
+    for (auto c : *children) if (c.second->isFromTopDocument ()) return true;
+    return false;
+}
+
+void
+n2a::MPart::clearPath ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+    if (source != original  &&  (! source->data ()  ||  source->get () == original->get ())  &&  ! overrideNecessary ())
+    {
+        updateKey (original->keyPointer ());
+        source->parent ().clear (source->key ());  // delete ourselves from the top-level document
+        source = original;
+        container->clearPath ();
+    }
+}
+
+void
+n2a::MPart::setIDs ()
+{
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    std::vector<String> parentNames = split (source->get (), ",");
+    int count = parentNames.size ();
+    if (count == 0)
+    {
+        clear ("$meta", "id");
+        return;
+    }
+
+    std::vector<String> newIDs (count);
+    for (int i = 0; i < count; i++)
+    {
+        String parentName = parentNames[i].trim ().replace_all ("\"", "");
+        MNode & parentSource = getRepo ().child (parentName);
+        if (&parentSource == &none) newIDs.push_back ("");
+        else                        newIDs.push_back (parentSource.get ("$meta", "id"));
+    }
+
+    String id = newIDs[0];
+    for (int i = 1; i < newIDs.size (); i++)
+    {
+        id += ",";
+        id += newIDs[i];
+    }
+    set (id, "$meta", "id");
+}
+
+void
+n2a::MPart::updateKey (const char * key)
+{
+    if (! container) return;  // Sometimes we are the root node, so guard access to "container".
+    container->children->erase (key);
+    (*container->children)[key] = this;
+}
+
+
+// class MPartRepo -----------------------------------------------------------
+
+n2a::MPartRepo::MPartRepo (MNode & source, MNode & repo, bool ownRepo)
+:   MPart (nullptr, nullptr, source)
+{
+    this->ownRepo = ownRepo;
+    build (repo);
+}
+
+n2a::MPartRepo::MPartRepo (MNode & source, const std::vector<String> & paths)
+:   MPart (nullptr, nullptr, source)
+{
+    build (paths);
+}
+
+n2a::MPartRepo::MPartRepo (MNode & source, const String & paths)
+:   MPart (nullptr, nullptr, source)
+{
+    build (paths);
+}
+
+n2a::MPartRepo::~MPartRepo ()
+{
+    if (ownRepo) delete repo;
+}
+
+uint32_t
+n2a::MPartRepo::classID () const
+{
+    return MPartRepoID;
+}
+
+void
+n2a::MPartRepo::build (MNode & repo)
+{
+    this->repo = &repo;
+    underrideChildren (nullptr, *source);
+    expand ();
+}
+
+void
+n2a::MPartRepo::build (const std::vector<String> & paths)
+{
+    // Assemble search path into a repo.
+    ownRepo = true;
+    std::vector<MNode *> containers;
+    for (auto & path : paths)
+    {
+        if (is_directory (path))
+        {
+            containers.push_back (new MDir (path));
+        }
+        else
+        {
+            MDocGroupKey * group = new MDocGroupKey;
+            containers.push_back (group);
+            int pos = path.find_last_of ('/');
+            if (pos == String::npos) group->addDoc (path, path);
+            else                     group->addDoc (path, path.substr (pos+1));
+        }
+    }
+    build (* new MCombo (nullptr, containers));
+}
+
+void
+n2a::MPartRepo::build (const String & paths)
+{
+    build (split (paths, ":"));
+}
+
+n2a::MNode &
+n2a::MPartRepo::getRepo ()
+{
+    return *repo;
+}
+
+n2a::MNode &
+n2a::MPartRepo::findModel (const String & ID)
+{
+    if (indexID == nullptr)
+    {
+        indexID = new std::map<String,String>;
+        for (auto & n : *repo)
+        {
+            String nid = n.get ("$meta", "id");
+            if (! nid.empty ()) indexID->emplace (nid, n.key ());
+        }
+    }
+    auto it = indexID->find (ID);
+    if (it == indexID->end ()) return none;
+    return repo->child (it->second);
 }
 
 

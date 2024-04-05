@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -768,6 +768,22 @@ inline void split (const String & source, const String & delimiter, String & fir
         first = temp.substr (0, index);
         second = temp.substr (index + delimiter.size ());
     }
+}
+
+inline std::vector<String> split (const String & source, const String & delimiter)
+{
+    std::vector<String> result;
+    int lengthSource    = source.size ();
+    int lengthDelimiter = delimiter.size ();
+    int index           = 0;
+    while (index < lengthSource)
+    {
+        int next = source.find (delimiter);
+        if (next == String::npos) next = lengthSource;
+        result.push_back (source.substr (index, next-index));
+        index = next + lengthDelimiter;
+    }
+    return result;
 }
 
 inline String join (const String & delimiter, const std::vector<String> & elements)
