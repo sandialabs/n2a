@@ -518,7 +518,7 @@ namespace n2a
         bool structureEquals (MNode & that);
 
         /**
-            Receives notifications from an Observable MNode about changes in its contents.
+            Receives notifications from an observable MNode about changes in its contents.
         **/
         struct Observer
         {
@@ -552,15 +552,14 @@ namespace n2a
         virtual void removeObserver (Observer * o);
 
         /**
-            This class provides a concrete implementation that only requires
-            calling the fire functions.
+            Utility class for implementing the observable interface.
         **/
         struct Observable
         {
             std::vector<Observer *> observers;
 
-            virtual void addObserver (Observer * o);
-            virtual void removeObserver (Observer * o);
+            void addObserver (Observer * o);
+            void removeObserver (Observer * o);
 
             void fireChanged ();
             void fireChildAdded (const String & key);
@@ -700,17 +699,14 @@ namespace n2a
         static void setMissingFileException (int method);
 
         /**
-            Constructs a stand-alone document with blank key.
-            In this case, the value contains the full path to the file on disk.
-            @param root Path separator must be forward slash (/), regardless of platform.
+            @param path Separator must be forward slash (/), regardless of platform.
+            When this is a stand-alone document (no parent), path is required.
+            When parent is specified, it may be possible to determine path only from key.
+            In that case, path may be omitted.
+            @param key This is always the simple name of the document, with no extra
+            pathing. When this is a pure stand-alone document, key may be omitted.
         **/
-        MDoc (const String & path);
-        /**
-            Constructs a stand-alone document with specified key.
-            In this case, the value contains the full path to the file on disk.
-            @param root Path separator must be forward slash (/), regardless of platform.
-        **/
-        MDoc (const String & path, const String & key);
+        MDoc (const char * path = nullptr, const char * key = nullptr, MDocGroup * container = nullptr);
         virtual uint32_t classID () const;
 
         virtual void markChanged ();
@@ -752,22 +748,7 @@ namespace n2a
         friend MDir;
 
     protected:
-        bool needsRead;  ///< Indicates whether initial load has been done.
         static int missingFileException;
-
-        /**
-            Constructs a document as a child of an MDocGroup.
-            In this case, "path" is the full path to the file on disk.
-            The default implementation of MDocGroup also sets key to the full path.
-        **/
-        MDoc (MDocGroup & container, const String & path, const String & key);
-
-        /**
-            Constructs a document as a child of an MDir.
-            In this case, the key contains the file name in the dir, and the full path is constructed
-            when needed using information from the parent.
-        **/
-        MDoc (MDir & container, const String & key);
 
         virtual MNode & childGet   (const String & key, bool create = false);
         virtual void    childClear (const String & key);
@@ -783,7 +764,7 @@ namespace n2a
         for ugly code. Instead, there is a function for explicitly releasing an MDoc.
         If you retrieve it again later, it will be recreated from file.
     **/
-    class SHARED MDocGroup : public MNode, MNode::Observable
+    class SHARED MDocGroup : public MNode
     {
     public:
         MDocGroup (const char * key = 0);
@@ -812,6 +793,8 @@ namespace n2a
         **/
         virtual void     move  (const String & fromKey, const String & toKey);
         virtual Iterator begin ();
+        virtual void     addObserver (Observer * o);
+        virtual void     removeObserver (Observer * o);
 
         /**
             Generates absolute path for the MDoc, based only on the key.
@@ -839,9 +822,10 @@ namespace n2a
         friend MCombo;
 
     protected:
-        String                          name;  // We could be held in an even higher-level node.
-        std::map<String, MDoc *, Order> children;  // Keeping a full copy of the string allows the node to be released from memory while we still remember it.
+        String                          name;     // We could be held in an even higher-level node.
+        std::map<String, MDoc *, Order> children; // Keeping a full copy of the string allows the node to be released from memory while we still remember it.
         std::set<MDoc *>                writeQueue;
+        Observable                      observable;
 
         virtual const char * keyPointer () const;
         virtual MNode &      childGet   (const String & key, bool create = false);
@@ -912,20 +896,26 @@ namespace n2a
     /**
         Presents several different sets of MPersistent children as a single set.
         The children continue to point to their original parent, so they are stored properly.
+
+        Memory management: By default, the caller is responsible to manage objects in "containers".
+        The caller may ask us to manage these by setting ownContainers to true in the constructor call.
+        In that case, the objects in "containers" must be allocated on the heap, not stack.
     **/
-    class SHARED MCombo : public MNode, MNode::Observable, MNode::Observer
+    class SHARED MCombo : public MNode, public MNode::Observer
     {
     public:
-        MCombo (const String & name, const std::vector<MNode *> & containers, bool ownContainers = true);
+        MCombo (const String & name, const std::vector<MNode *> & containers, bool ownContainers = false);
         virtual ~MCombo ();
-        void init (const std::vector<MNode *> & containers, bool ownContainers = true);
+        void init (const std::vector<MNode *> & containers, bool ownContainers = false);
         void releaseContainers ();
 
-        virtual String   key   () const;
-        virtual void     clear ();
-        virtual int      size  ();
-        virtual void     move  (const String & fromKey, const String & toKey);
-        virtual Iterator begin ();
+        virtual String   key            () const;
+        virtual void     clear          ();
+        virtual int      size           ();
+        virtual void     move           (const String & fromKey, const String & toKey);
+        virtual Iterator begin          ();
+        virtual void     addObserver    (MNode::Observer * o);
+        virtual void     removeObserver (MNode::Observer * o);
 
         bool    containerIsWritable (MNode & container)  const;
         bool    isWriteable         (MNode & doc)        const;
@@ -952,8 +942,9 @@ namespace n2a
         MNode * primary;  ///< The one container that allows creation of new parts. This is a shortcut to the first object in containers.
 
         std::vector<MNode *>             containers;
-        bool                             ownContainers;  // Indicates that we should delete each element in containers when we are destroyed.
+        bool                             ownContainers;  // Indicates that we should delete each entry in "containers" when we are destroyed.
         std::map<String, MNode *, Order> children;  // from key to container; requires second lookup to retrieve actual child
+        Observable                       observable;
 
         virtual const char * keyPointer () const;
         virtual MNode &      childGet   (const String & key, bool create = false);
@@ -983,6 +974,10 @@ namespace n2a
         only for interior structural nodes, not for leaf nodes. It is possible to set a
         top-level leaf node to null, but this should be immediately followed by setting
         children or a value.
+
+        Memory management: An MPart takes responsibility for its contents and child MParts.
+        However, the underlying source MNodes are the responsibility of the caller.
+        Usually, these will be managed by the repository object held by MPartRepo.
     **/
     class SHARED MPart : public MNode
     {
@@ -992,15 +987,15 @@ namespace n2a
         virtual uint32_t classID () const;
 
         virtual String   key          () const;
-        virtual MPart &  parent       () const;
+        virtual MNode &  parent       () const;
         /**
             Removes all children of this node from the top-level document, and restores them to their non-overridden state.
             Some of the nodes may disappear, if they existed only due to override.
             In general, acts as if the clear is applied in the top-level document, followed by a full collation of the tree.
         **/
         virtual void     clear        ();
-        virtual int      size         () const;
-        virtual bool     data         () const;
+        virtual int      size         ();
+        virtual bool     data         ();
         virtual String   getOrDefault (const String & defaultValue);
         /**
             Changes value of this node in the top-level document, possibly creating
@@ -1206,6 +1201,14 @@ namespace n2a
         void updateKey (const char * key);
     };
 
+    /**
+        A top-level MPart node the supplies the repository for all the inherited
+        parts. The repository can be supplied or build in several different ways.
+
+        Memory management: If we construct the repo ourselves, we will destroy it.
+        If the repo is provided by the caller, then they can set whether we take
+        responsibility for it or not.
+    **/
     class SHARED MPartRepo : public MPart
     {
     public:

@@ -1050,28 +1050,9 @@ n2a::MDoc::setMissingFileException (int method)
     missingFileException = method;
 }
 
-n2a::MDoc::MDoc (const String & path)
-:   MPersistent (nullptr, path.c_str (), nullptr)
+n2a::MDoc::MDoc (const char * path, const char * key, n2a::MDocGroup * container)
+:   MPersistent (container, path, key)
 {
-    needsRead = true;
-}
-
-n2a::MDoc::MDoc (const String & path, const String & key)
-:   MPersistent (nullptr, path.c_str (), key.c_str ())
-{
-    needsRead = true;
-}
-
-n2a::MDoc::MDoc (n2a::MDocGroup & container, const String & path, const String & key)
-:   MPersistent (&container, path.c_str (), key.c_str ())
-{
-    needsRead = true;
-}
-
-n2a::MDoc::MDoc (n2a::MDir & container, const String & key)
-:   MPersistent (&container, nullptr, key.c_str ())
-{
-    needsRead = true;
 }
 
 uint32_t
@@ -1088,7 +1069,7 @@ n2a::MDoc::markChanged ()
 
     // If this is a new document, then treat it as if it were already loaded.
     // If there is content on disk, it will be blown away.
-    needsRead  = false;
+    if (! children) children = new std::map<const char *, MNode *, Order>;
     needsWrite = true;
     if (container  &&  container->classID () & MDocGroupID)
     {
@@ -1101,7 +1082,7 @@ int
 n2a::MDoc::size ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    if (needsRead) load ();  // redundant with the guard in load(), but should save time in the common case that file is already loaded
+    if (! children) load ();  // redundant with the guard in load(), but should save time in the common case that file is already loaded
     return MPersistent::size ();
 }
 
@@ -1109,7 +1090,7 @@ bool
 n2a::MDoc::data ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    if (needsRead) load ();
+    if (! children) load ();
     return MPersistent::data ();
 }
 
@@ -1140,7 +1121,7 @@ n2a::MDoc::move (const String & fromKey, const String & toKey)
 {
     if (fromKey == toKey) return;
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    if (needsRead) load ();
+    if (! children) load ();
     MPersistent::move (fromKey, toKey);
 }
 
@@ -1148,7 +1129,7 @@ n2a::MNode::Iterator
 n2a::MDoc::begin ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    if (needsRead) load ();
+    if (! children) load ();
     return MPersistent::begin ();
 }
 
@@ -1164,8 +1145,8 @@ void
 n2a::MDoc::load ()
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    if (! needsRead) return;  // already loaded
-    needsRead  = false; // prevent re-entrant call when creating nodes
+    if (children) return;  // already loaded
+    children = new std::map<const char *, MNode *, Order>;  // prevent re-entrant call when creating nodes
     needsWrite = true;  // lie to ourselves, to prevent being put onto the MDir write queue
     String file = path ();
     try
@@ -1231,7 +1212,7 @@ n2a::MNode &
 n2a::MDoc::childGet (const String & key, bool create)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    if (needsRead) load ();
+    if (! children) load ();
     return MPersistent::childGet (key, create);
 
 }
@@ -1240,7 +1221,7 @@ void
 n2a::MDoc::childClear (const String & key)
 {
     std::lock_guard<std::recursive_mutex> lock (mutex);
-    if (needsRead) load ();
+    if (! children) load ();
     MPersistent::childClear (key);
 }
 
@@ -1248,8 +1229,8 @@ n2a::MDoc::childClear (const String & key)
 // class MDocGroup -----------------------------------------------------------
 
 n2a::MDocGroup::MDocGroup (const char * key)
+:   name (key)
 {
-    if (key) name = key;
 }
 
 n2a::MDocGroup::~MDocGroup ()
@@ -1283,6 +1264,7 @@ n2a::MDocGroup::clear ()
     for (auto & c : children) delete c.second;
     children.clear ();
     writeQueue.clear ();
+    observable.fireChanged ();
 }
 
 int
@@ -1310,21 +1292,25 @@ n2a::MDocGroup::move (const String & fromKey, const String & toKey)
     catch (...) {}  // This can happen if a new doc has not yet been flushed to disk.
 
     // Bookkeeping in "children" collection
-    auto end = children.end ();
-    auto it  = children.find (toKey);
-    if (it != end)
+    auto it = children.find (toKey);
+    if (it != children.end ())
     {
         delete it->second;
         children.erase (it);
     }
 
     it = children.find (fromKey);
-    if (it != end)
+    if (it == children.end ())  // from does not exist
+    {
+        observable.fireChildDeleted (toKey);  // Because we overwrote an existing node with a non-existing node, causing the destination to cease to exist.
+    }
+    else  // from exists
     {
         MDoc * keep = (MDoc *) it->second;
         children.erase (it);
         keep->name = toKey;
         children[toKey] = keep;
+        observable.fireChildChanged (fromKey, toKey);
     }
 }
 
@@ -1336,6 +1322,18 @@ n2a::MDocGroup::begin ()
     result.keys->reserve (children.size ());
     for (auto & c : children) result.keys->push_back (c.first);  // In order be safe for delete, these must be full copies of the strings.
     return result;
+}
+
+void
+n2a::MDocGroup::addObserver (Observer * o)
+{
+    observable.addObserver (o);
+}
+
+void
+n2a::MDocGroup::removeObserver (Observer * o)
+{
+    observable.removeObserver (o);
 }
 
 String
@@ -1385,9 +1383,11 @@ n2a::MDocGroup::childGet (const String & key, bool create)
 
     if (! result)
     {
-        result = new MDoc (*this, key, key);  // Assumes key==path. This is overridden in MDir.
+        String path = pathForDoc (key);
+        result = new MDoc (path.c_str (), key.c_str (), this);
         children[key] = result;
-        if (create  &&  ! exists (pathForDoc (key))) result->markChanged ();  // Set the new document to save. Adds to writeQueue.
+        if (create  &&  ! exists (path)) result->markChanged ();  // Set the new document to save. Adds to writeQueue.
+        observable.fireChildAdded (key);
     }
     return *result;
 }
@@ -1404,6 +1404,7 @@ n2a::MDocGroup::childClear (const String & key)
     children.erase (it);
     writeQueue.erase (doc);
     remove_all (pathForFile (key));
+    observable.fireChildDeleted (key);
 }
 
 void
@@ -1587,7 +1588,7 @@ n2a::MDir::childGet (const String & key, bool create)
             // Allow the possibility that the dir exists but lacks its special file.
             if (! n2a::exists (pathForFile (key))) return none;
         }
-        result = new MDoc (*this, key);  // Assumes key==path.
+        result = new MDoc (nullptr, key.c_str (), this);
         children[key] = result;
         if (create  &&  ! exists) result->markChanged ();  // Set the new document to save. Adds to writeQueue.
     }
@@ -1623,6 +1624,8 @@ n2a::MDocGroupKey::addDoc (const String & value, const String & key)
 n2a::MCombo::MCombo (const String & name, const std::vector<MNode *> & containers, bool ownContainers)
 :   name (name)
 {
+    primary = nullptr;
+    this->ownContainers = false;
     init (containers, ownContainers);
 }
 
@@ -1645,7 +1648,7 @@ n2a::MCombo::init (const std::vector<MNode *> & containers, bool ownContainers)
     else                       primary = new MVolatile ();
     children.clear ();
     loaded = false;
-    fireChanged ();
+    observable.fireChanged ();
 }
 
 void
@@ -1675,7 +1678,7 @@ n2a::MCombo::clear ()
     // This does not remove the original objects, only our links to them.
     containers.clear ();
     children  .clear ();
-    fireChanged ();
+    observable.fireChanged ();
 }
 
 int
@@ -1702,6 +1705,18 @@ n2a::MCombo::begin ()
     result.keys->reserve (children.size ());
     for (auto & c : children) result.keys->push_back (c.first);
     return result;
+}
+
+void
+n2a::MCombo::addObserver (MNode::Observer * o)
+{
+    observable.addObserver (o);
+}
+
+void
+n2a::MCombo::removeObserver (MNode::Observer * o)
+{
+    observable.removeObserver (o);
 }
 
 bool
@@ -1769,7 +1784,7 @@ n2a::MCombo::changed ()
     // Force a rebuild of children.
     children.clear ();  // Similar to MVolatile, we don't need to dispose of key strings, because they belong to the individual nodes.
     loaded = false;
-    fireChanged ();
+    observable.fireChanged ();
 }
 
 void
@@ -1780,8 +1795,8 @@ n2a::MCombo::childAdded (const String & key)
     MNode & newChild = newContainer->child (key);
     if (&oldChild == &newChild) return;  // Change is hidden by higher-precedence dataset.
     children[key] = newContainer;
-    if (&oldChild == &none) fireChildAdded (key);         // This is a completely new child.
-    else                    fireChildChanged (key, key);  // The newly-added child hides the old child, so this appears as a change of content.
+    if (&oldChild == &none) observable.fireChildAdded (key);         // This is a completely new child.
+    else                    observable.fireChildChanged (key, key);  // The newly-added child hides the old child, so this appears as a change of content.
 }
 
 void
@@ -1791,14 +1806,14 @@ n2a::MCombo::childDeleted (const String & key)
     if (! newContainer)
     {
         children.erase (key);
-        fireChildDeleted (key);
+        observable.fireChildDeleted (key);
         return;
     }
     // A hidden node was exposed by the delete.
     // It's also possible that the deleted node was hidden so no effective change occurred.
     // It's not worth the extra work to detect the "still hidden" case.
     children[key] = newContainer;
-    fireChildChanged (key, key);
+    observable.fireChildChanged (key, key);
 }
 
 void
@@ -1819,7 +1834,7 @@ n2a::MCombo::childChanged (const String & oldKey, const String & newKey)
     // It's possible that both oldKey and newKey are hidden by higher-precedent datasets,
     // producing no effective change. We should avoid forwarding the message in that case,
     // but it's not worth the effort to detect.
-    fireChildChanged (oldKey, newKey);
+    observable.fireChildChanged (oldKey, newKey);
 }
 
 void
@@ -1927,10 +1942,11 @@ n2a::MPart::key () const
     return source->key ();  // same as original->key()
 }
 
-n2a::MPart &
+n2a::MNode &
 n2a::MPart::parent () const
 {
-    return *container;
+    if (container) return *container;
+    return none;
 }
 
 void
@@ -1945,14 +1961,14 @@ n2a::MPart::clear ()
 }
 
 int
-n2a::MPart::size () const
+n2a::MPart::size ()
 {
     if (! children) return 0;
     return children->size ();
 }
 
 bool
-n2a::MPart::data () const
+n2a::MPart::data ()
 {
     return source->data ()  ||  original->data ();
 }
@@ -2593,7 +2609,7 @@ n2a::MPartRepo::build (const std::vector<String> & paths)
             else                     group->addDoc (path, path.substr (pos+1));
         }
     }
-    build (* new MCombo (nullptr, containers));
+    build (* new MCombo (nullptr, containers, true));
 }
 
 void
@@ -2637,7 +2653,7 @@ n2a::Schema::Schema (int version, const String & type)
 n2a::Schema *
 n2a::Schema::latest ()
 {
-    return new Schema2 (2, "");
+    return new Schema2 (3, "");
 }
 
 void
