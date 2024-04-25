@@ -62,6 +62,7 @@ import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
+import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class RendererC extends Renderer
 {
@@ -617,17 +618,24 @@ public class RendererC extends Renderer
                     boolean commaNeeded = ! mode.isEmpty ();
                     for (Entry<String,Operator> k : o.keywords.entrySet ())
                     {
+                        if (commaNeeded) result.append ("+\",\"");
+                        result.append ("+\"" + k.getKey () + "=\"+");
                         Operator kv = k.getValue ();
                         if (kv instanceof Add)
                         {
                             Add a = (Add) kv;
-                            result.append ("+\"");
-                            if (commaNeeded) result.append (",");
-                            result.append (k.getKey () + "=\"+" + a.name);
-                            commaNeeded = true;
+                            result.append (a.name);
                         }
-                        // else badness -- This case should be flagged during pre-processing in JobC
-                        // TODO: support calculated mode flags of types beyond string
+                        else if (kv instanceof AccessVariable)
+                        {
+                            kv.render (this);  // Should be a reference to the value. This could be a string or number. Can't be anything else, in particular a matrix.
+                        }
+                        else
+                        {
+                            Backend.err.get ().println ("Can't render keyword argument for output()");
+                            throw new Backend.AbortRun ();
+                        }
+                        commaNeeded = true;
                     }
                     result.append (").c_str ()");
                 }
