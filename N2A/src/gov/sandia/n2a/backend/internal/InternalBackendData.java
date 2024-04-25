@@ -1,5 +1,5 @@
 /*
-Copyright 2015-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2015-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -11,7 +11,6 @@ import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.AccountableConnection;
 import gov.sandia.n2a.eqset.EquationSet.ConnectionBinding;
-import gov.sandia.n2a.eqset.EquationSet.ReplaceConstants;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
 import gov.sandia.n2a.language.AccessVariable;
@@ -35,7 +34,6 @@ import java.util.Map;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -916,8 +914,8 @@ public class InternalBackendData
             }
         }
 
-        determineOrderInit ("$init", s, localInit);
-        determineOrderInit ("$init", s, globalInit);
+        s.determineOrderInit ("$init", localInit);
+        s.determineOrderInit ("$init", globalInit);
 
         singleton = s.isSingleton ();
         populationCanGrowOrDie =  s.lethalP  ||  s.lethalType  ||  s.canGrow ();
@@ -975,7 +973,7 @@ public class InternalBackendData
                     if (temporary) PdependenciesTemp.add (t);
                 }
             }
-            determineOrderInit ("$connect", s, Pdependencies);
+            s.determineOrderInit ("$connect", Pdependencies);
             // determineOrderInit() is not needed for PdepenciesTemp, because temps are already in the correct order.
         }
 
@@ -1388,82 +1386,6 @@ public class InternalBackendData
     {
         namesLocalTempObject.add (name);
         return countLocalTempObject++;
-    }
-
-    /**
-        Sequence variables for maximum information spread during init cycle.
-        Builds dependencies based only on equations that can actually fire.
-        Note that the C backend uses EquationSet.simplify() to do a similar task.
-        That function relies on Variable.deepCopy(List<Variable>) to duplicate the
-        list and establish an internally-coherent set of dependencies.
-        We don't do that here because we need to keep Java object identity across all lists.
-    **/
-    public static void determineOrderInit (String phase, EquationSet s, List<Variable> list)
-    {
-        // Back up dependency info.
-        int count = list.size ();
-        Map<Variable,List<Object>>          backupUsedBy = new HashMap<Variable,List<Object>> (count);
-        Map<Variable,Map<Variable,Integer>> backupUses   = new HashMap<Variable,Map<Variable,Integer>> (count);
-        for (Variable v : list)
-        {
-            backupUsedBy.put (v, v.usedBy);
-            backupUses  .put (v, v.uses);
-            v.usedBy = null;
-            v.uses   = null;
-        }
-
-        ReplaceConstants replace = s.new ReplaceConstants (phase);
-        replace.priorityKnown = false;  // This renders replace.init moot.
-
-        class DependencyVisitor implements Visitor
-        {
-            public Variable v;
-            public boolean visit (Operator op)
-            {
-                if (op instanceof AccessVariable)
-                {
-                    AccessVariable av = (AccessVariable) op;
-                    Variable listVariable = EquationSet.find (av.reference.variable, list);
-                    if (listVariable != null) v.addDependencyOn (listVariable);
-                    return false;
-                }
-                return true;
-            }
-        }
-        DependencyVisitor depend = new DependencyVisitor ();
-
-        for (Variable v : list)
-        {
-            // Work through equations, adding dependencies for any that are ambiguous,
-            // and terminate at the first one that will always fire.
-            replace.self = v;
-            depend.v = v;
-            for (EquationEntry e : v.equations)
-            {
-                boolean couldFire   = true;
-                boolean alwaysFires = true;
-                if (e.condition != null)
-                {
-                    e.condition.visit (depend);  // We will at least have to evaluate the condition, so add its dependencies.
-                    Operator test = e.condition.deepCopy ().transform (replace).simplify (v, true);
-                    if (test.isScalar ()) couldFire = alwaysFires = test.getDouble () != 0;
-                    else                  alwaysFires = false;
-                }
-                if (couldFire  &&  e.expression != null) e.expression.visit (depend);
-                if (alwaysFires) break;  // Don't check any more equations, because Internal will stop here.
-            }
-        }
-        EquationSet.addDrawDependencies (list);
-
-        EquationSet.determineOrderInit (list);
-
-        // Restore backup of dependency structure.
-        // This is mainly to support further analysis by backends that use InternalBackend.constructStaticNetwork()
-        for (Variable v : list)
-        {
-            v.usedBy = backupUsedBy.get (v);
-            v.uses   = backupUses  .get (v);
-        }
     }
 
     public static class ResolveContainer implements Instance.Resolver

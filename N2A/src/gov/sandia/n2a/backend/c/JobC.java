@@ -2779,7 +2779,6 @@ public class JobC extends Thread
             }
             s.simplify ("$init", bed.globalInit);
             if (fixedPoint) EquationSet.determineExponentsSimplified (bed.globalInit);
-            EquationSet.determineOrderInit (bed.globalInit);
             for (Variable v : bed.globalInit)
             {
                 multiconditional (v, context, "  ");
@@ -3832,7 +3831,6 @@ public class JobC extends Thread
             }
             s.simplify ("$init", bed.localInit);
             if (fixedPoint) EquationSet.determineExponentsSimplified (bed.localInit);
-            EquationSet.determineOrderInit (bed.localInit);
             if (bed.localInit.contains (bed.dt))
             {
                 result.append ("  EventStep<" + T + "> * event = getEvent ();\n");

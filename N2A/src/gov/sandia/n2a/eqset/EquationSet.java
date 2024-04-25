@@ -4328,6 +4328,81 @@ public class EquationSet implements Comparable<EquationSet>
         while ((v = queuePriority.poll ()) != null) list.add (v);
     }
 
+    /**
+        Sequence variables for maximum information spread during init cycle.
+        Builds dependencies based only on equations that can actually fire.
+        Guarantees that dependencies between variables are unchanged when this
+        function finishes. (They are modified temporarily as par of the process.)
+        Thus it is safe to call this function on lists that have not been deep-copied.
+    **/
+    public void determineOrderInit (String phase, List<Variable> list)
+    {
+        // Back up dependency info.
+        int count = list.size ();
+        Map<Variable,List<Object>>          backupUsedBy = new HashMap<Variable,List<Object>> (count);
+        Map<Variable,Map<Variable,Integer>> backupUses   = new HashMap<Variable,Map<Variable,Integer>> (count);
+        for (Variable v : list)
+        {
+            backupUsedBy.put (v, v.usedBy);
+            backupUses  .put (v, v.uses);
+            v.usedBy = null;
+            v.uses   = null;
+        }
+
+        ReplaceConstants replace = new ReplaceConstants (phase);
+        replace.priorityKnown = false;  // This renders replace.init moot.
+
+        class DependencyVisitor implements Visitor
+        {
+            public Variable v;
+            public boolean visit (Operator op)
+            {
+                if (op instanceof AccessVariable)
+                {
+                    AccessVariable av = (AccessVariable) op;
+                    Variable listVariable = EquationSet.find (av.reference.variable, list);
+                    if (listVariable != null) v.addDependencyOn (listVariable);
+                    return false;
+                }
+                return true;
+            }
+        }
+        DependencyVisitor depend = new DependencyVisitor ();
+
+        for (Variable v : list)
+        {
+            // Work through equations, adding dependencies for any that are ambiguous,
+            // and terminate at the first one that will always fire.
+            replace.self = v;
+            depend.v = v;
+            for (EquationEntry e : v.equations)
+            {
+                boolean couldFire   = true;
+                boolean alwaysFires = true;
+                if (e.condition != null)
+                {
+                    e.condition.visit (depend);  // We will at least have to evaluate the condition, so add its dependencies.
+                    Operator test = e.condition.deepCopy ().transform (replace).simplify (v, true);
+                    if (test.isScalar ()) couldFire = alwaysFires = test.getDouble () != 0;
+                    else                  alwaysFires = false;
+                }
+                if (couldFire  &&  e.expression != null) e.expression.visit (depend);
+                if (alwaysFires) break;  // Don't check any more equations, because Internal will stop here.
+            }
+        }
+        addDrawDependencies (list);
+
+        determineOrderInit (list);
+
+        // Restore backup of dependency structure.
+        // This is mainly to support further analysis by backends that use InternalBackend.constructStaticNetwork()
+        for (Variable v : list)
+        {
+            v.usedBy = backupUsedBy.get (v);
+            v.uses   = backupUses  .get (v);
+        }
+    }
+
     public void simplify (String phase, List<Variable> list)
     {
         simplify (phase, list, null);
@@ -4354,7 +4429,7 @@ public class EquationSet implements Comparable<EquationSet>
         // In other phases, it is necessary to look up current value.
         if (phase.equals ("$init")  ||  phase.equals ("$connect"))
         {
-            determineOrderInit (list);
+            determineOrderInit (phase, list);
             int i = 0;
             for (Variable v : list) v.priority = i++;
         }
