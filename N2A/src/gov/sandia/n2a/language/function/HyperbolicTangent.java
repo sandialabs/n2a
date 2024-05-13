@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -37,7 +37,7 @@ public class HyperbolicTangent extends Function implements MatrixVisitable
     public void determineExponent (ExponentContext context)
     {
         operands[0].determineExponent (context);
-        updateExponent (context, 0, MSB - 1);  // result is always in [-1,1]. TODO: select center more carefully, based on center of operand
+        updateExponent (context, -MSB, MSB - 1);  // result is always in [-1,1]. TODO: select center more carefully, based on center of operand
     }
 
     public void determineExponentNext ()

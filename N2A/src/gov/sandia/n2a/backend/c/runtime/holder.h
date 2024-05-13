@@ -379,7 +379,8 @@ public:
     bool                           delimiterSet;
     T                              epsilon;  ///< for time values
 #   ifdef n2a_FP
-    int                            exponent;  ///< of value returned by get()
+    int                            exponent;    ///< of value returned by get()
+    int                            exponentRow; ///< of row value passed into get()
 #   endif
 
     InputHolder (const String & fileName);
@@ -391,9 +392,9 @@ public:
     Matrix<T> get    (T row);
 };
 #ifdef n2a_FP
-template<class T> SHARED InputHolder<T> * inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle = 0);
+template<class T> SHARED InputHolder<T> * inputHelper (const String & fileName, int exponent, int exponentRow, InputHolder<T> * oldHandle = 0);
 #else
-template<class T> SHARED InputHolder<T> * inputHelper (const String & fileName,               InputHolder<T> * oldHandle = 0);
+template<class T> SHARED InputHolder<T> * inputHelper (const String & fileName,                                InputHolder<T> * oldHandle = 0);
 #endif
 
 template<class T>

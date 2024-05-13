@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -143,7 +143,7 @@ public class BuildMatrix extends Operator
         Matrix A = new MatrixDense (rows, cols);  // potential constant to replace us
         boolean isConstant = true;  // any element that is not constant will change this to false
         int cent  = 0;  // for fixed-point analysis
-        int pow   = 0;
+        int pow   = 0;  // power of the bit at "cent"
         int count = 0;
         for (int c = 0; c < cols; c++)
         {
@@ -202,12 +202,12 @@ public class BuildMatrix extends Operator
                 cent /= count;
                 pow  /= count;
                 result.center   = cent;
-                result.exponent = pow + MSB - cent;
+                result.exponent = pow - cent;
             }
             else
             {
                 result.center   = MSB / 2;
-                result.exponent = MSB - result.center;
+                result.exponent = -result.center;
             }
             return result;
         }
@@ -224,7 +224,7 @@ public class BuildMatrix extends Operator
             for (Operator e : c)
             {
                 e.determineExponent (context);
-                if (! (e instanceof Constant)  ||  e.getDouble () != 0)  // avoid counting zeros
+                if (! (e instanceof Constant)  ||  e.getDouble () != 0)  // Avoid counting zeros. Operators that are not Constant are assumed to be nonzero.
                 {
                     cent += e.center;
                     pow  += e.exponent;
@@ -240,7 +240,7 @@ public class BuildMatrix extends Operator
         else
         {
             cent = MSB / 2;
-            pow  = MSB - cent;
+            pow  = -cent;
         }
         updateExponent (context, pow, cent);
     }

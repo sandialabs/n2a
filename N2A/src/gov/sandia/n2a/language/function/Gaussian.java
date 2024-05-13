@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -68,7 +68,7 @@ public class Gaussian extends Function
             // exceed 6.66 standard deviations when using 32-bit uniform numbers. Thus, 7 std is safe.
             // log2(7)~=2.81, so magnitude of msb is 2
             // Since about 68% of all results are less than 1 sigma, center can point to bit holding 2^-1.
-            updateExponent (context, 2, MSB - 3);
+            updateExponent (context, 2 - MSB, MSB - 3);
         }
         else
         {

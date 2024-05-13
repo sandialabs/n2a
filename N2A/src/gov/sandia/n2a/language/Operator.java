@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -116,24 +116,23 @@ public class Operator implements Cloneable
     **/
     public static int MSB = 30;
     /**
-        The power of bit that occupies the MSB position, before any shift to prepare value for use by the next operator.
+        The power of bit that occupies the LSB position, before any shift to prepare value for use by the next operator.
         In the fixed-point analysis implemented by Operator, all bits are fractional just like IEEE floats,
-        and we keep track of the power of the most significant bit, just like the IEEE float exponent.
-        In the case of a simple integer, exponent is equal to MSB.
-        We expect that the fixed-point implementation will do saturation checks, so we don't accommodate
-        the largest possible output of each operation, only the median.
-        Ideally, only the lower half of the available bits will be occupied.
+        but unlike IEEE float we keep track of the power of the least significant bit. That simplifies some calculations.
+        This value is equivalent to the amount of shift needed to make the bit in position zero have power zero.
+        In the case of a simple integer, exponent is 0.
     **/
     public int exponent = UNKNOWN;
     /**
         Zero-based index of median magnitude.
+        We expect that the fixed-point implementation will do saturation checks, so we don't accommodate
+        the largest possible output of each operation, only the median.
         For numbers with a range of magnitudes, this will generally be MSB/2 (equivalent to Q16.15 format).
         It is expected that about half the time, all nonzero bits are at or below this position in the word.
-        Simple integers, on the other hand, will set this to 0, and all their nonzero bits are at or above this position.
     **/
     public int center = MSB / 2;
     /**
-        The power of bit that occupies the MSB position, as required by the operator that contains us.
+        The power of bit that occupies the LSB position, as required by the operator that contains us.
         Used to determine shifts.
     **/
     public int exponentNext = UNKNOWN;
@@ -282,7 +281,7 @@ public class Operator implements Cloneable
 
     public int centerPower ()
     {
-        return exponent - MSB + center;
+        return exponent + center;
     }
 
     /**

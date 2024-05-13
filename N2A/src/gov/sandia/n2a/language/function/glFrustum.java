@@ -63,8 +63,8 @@ public class glFrustum extends Function
             // Impose bounds on exponent. This will potentially make the resulting matrix lose significance.
             // There's nothing we can do about that. Fixed-point has limited capacity to represent a projection matrix.
             int shift = 0;
-            if      (pow < 0      ) shift = pow;            // Must be able to represent 1 for rotation matrix.
-            else if (pow > MSB - 8) shift = pow - MSB + 8;  // Must have at least 8 bits below decimal to have a crude rotation matrix.
+            if      (pow < -MSB) shift = pow + MSB; // Must be able to represent 1 for rotation matrix.
+            else if (pow > -8  ) shift = pow + 8;   // Must have at least 8 bits below decimal to have a crude rotation matrix.
             cent += shift;
             pow  -= shift;
 

@@ -70,75 +70,95 @@ identity (const MatrixStrided<int> & A, int one)
 int
 norm (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult)
 {
-    const int exponentN = 15;
+    const int exponentN = -FP_MSB2;
 
     int * a   = A.base ();
     int * end = a + A.rows () * A.columns ();  // Assumes MatrixFixed, so that elements are dense in memory.
-    int result = 0;
 
-    if (n == INFINITY)
+    if (n == 0  ||  n == INFINITY)
     {
-        while (a < end) result = std::max (std::abs (*a++), result);
-        int shift = exponentA - exponentResult;
+        int result = 0;
+        int shift = -exponentResult;
+        if (n)  // INFINITY
+        {
+            while (a < end) result = std::max (std::abs (*a++), result);
+            shift += exponentA;
+        }
+        else  // 0
+        {
+            while (a < end) if (*a++) result++;
+        }
         if (shift > 0) return result <<  shift;
         if (shift < 0) return result >> -shift;
         return result;
     }
-    if (n == 0)
+
+    uint64_t sum = 0;
+    if (n == 0x1 << -exponentN)
     {
-        while (a < end) if (*a++) result++;
-        int shift = FP_MSB - exponentResult;
-        if (shift > 0) return result <<  shift;
-        if (shift < 0) return result >> -shift;
-        return result;
-    }
-    if (n == 0x1 << exponentN)
-    {
-        while (a < end) result += std::abs (*a++);
+        while (a < end) sum += std::abs (*a++);
         int shift = exponentA - exponentResult;
-        if (shift > 0) return result <<  shift;
-        if (shift < 0) return result >> -shift;
-        return result;
+        if (shift > 0) sum <<=  shift;
+        if (shift < 0) sum >>= -shift;
+        if (sum > INFINITY) return INFINITY;
+        return sum;
     }
 
     // Fully general form
-    // "result" will hold the sum, and exponentA will hold exponentSum when done.
-    int root;  // exponent=15
-    if (n == 0x2 << exponentN)
+    // exponentA will hold exponentSum when done.
+    int root;  // exponent=-MSB/2
+    if (n == 0x2 << -exponentN)
     {
-        root = 0x4000;  // 0.5
-        exponentA = exponentA * 2 - FP_MSB;  // raw result of squaring elements of A
-        register uint64_t sum = 0;
+        root = 0x1 << FP_MSB2 - 1;  // 0.5
+        exponentA = exponentA * 2;  // raw result of squaring elements of A
         while (a < end)
         {
             int t = *a++;
             sum += (int64_t) t * t;
         }
-        while (sum > INFINITY)
-        {
-            sum >>= 1;
-            exponentA++;
-        }
-        result = sum;  // truncate to 32 bits
     }
-    else
+    else  // fractional power or power > 2
     {
         // for root:
-        // raw division = exponentOne-exponentN+MSB = MSB-MSB/2+MSB
-        // want exponentN, so shift = raw-exponentN = (MSB-MSB/2+MSB)-MSB/2 = MSB
+        // raw division = exponentOne - exponentN = 0 - -MSB/2 = MSB/2
+        // want exponentN, so shift = raw - exponentN = MSB/2 - -MSB/2 = MSB
         root = (0x1 << FP_MSB) / n;
 
-        // for exponentSum:
-        // assume center of A = MSB/2
-        // center power of A = centerA = exponentA - MSB/2
-        // center power of one term = centerTerm = centerA*n
-        // want center of term at MSB/2, so exponentSum = centerTerm+MSB/2 = (exponentA-MSB/2)*n+MSB/2 = exponentA*n+(1-n)*MSB/2
-        int exponentSum = ((exponentA - FP_MSB2) * n >> exponentN) + FP_MSB2;
+        // Estimate center bit position
+        // Ideally this would be the median of MSB positions, but that
+        // requires sorting. Instead, we compute the average.
+        int count = 0;
+        int center = 0;
+        int * t = a;
+        while (t < end)
+        {
+            int temp = std::abs (*t++);
+            if (! temp) continue;
+            count++;
+            while (temp)
+            {
+                temp >>= 1;
+                center++;
+            }
+        }
+        if (count) center /= count;
+        else       center = FP_MSB2;  // Though, in this case it doesn't matter because matrix is all zeroes.
 
-        while (a < end) result += pow (std::abs (*a++), n, exponentA, exponentSum);
+        // for exponentSum:
+        // centerA = center power of A = exponentA + center
+        // centerTerm = center power of one term = centerA*n
+        // want center of term at MSB/2, so exponentSum = centerTerm - MSB/2 = (exponentA+center)*n - MSB/2
+        int exponentSum = ((exponentA + center) * n >> -exponentN) - FP_MSB2;
+
+        while (a < end) sum += pow (std::abs (*a++), n, exponentA, exponentSum);
         exponentA = exponentSum;
     }
-    return pow (result, root, exponentA, exponentResult);
+    while (sum > INFINITY)
+    {
+        sum >>= 1;
+        exponentA++;
+    }
+    return pow ((int) sum, root, exponentA, exponentResult);
 }
 
 Matrix<int>
@@ -146,15 +166,16 @@ normalize (const MatrixStrided<int> & A, int exponentA)
 {
     // Calculate 2-norm of A
     // Allow for magnitude of "scale" to be larger than the magnitude of individual elements.
-    int count = norm (A, 0, exponentA, FP_MSB);  // Number of nonzero elements
+    int count = norm (A, 0, exponentA, 0);  // Number of nonzero elements
     int bits = 0;
     while (count >>= 1) bits++;
     int exponentScale = exponentA + bits;
-    int scale = norm (A, 0x2 << 15, exponentA, exponentScale);  // 2-norm
+    int scale = norm (A, 0x2 << FP_MSB2, exponentA, exponentScale);  // 2-norm
 
     // Divide A
-    // Goal is for result to be at exponent=0
-    // See comments on Divide in RendererCfp
+    // raw = exponentA - exponentScale
+    // goal = -MSB = everything in [0,1]
+    // shift = raw - goal = exponentA - exponentScale - -MSB
     int shift = exponentA - exponentScale + FP_MSB;
     return divide (A, scale, shift);
 }
@@ -466,17 +487,17 @@ glFrustum (int left, int right, int bottom, int top, int near, int far, int expo
     Matrix<int> result (4, 4);
     clear (result);
 
-    // After division, raw = exponent - exponent + MSB = MSB
-    // Goal is to shift back to original exponent. shift = raw - exponent = MSB - exponent
-    int shift = FP_MSB - exponent;
+    // After division, raw = exponent - exponent = 0
+    // Goal is to shift back to original exponent. shift = raw - exponent = -exponent
+    int shift = -exponent;
     result(0,0) = (  (int64_t) 2 * near       << shift) / (right - left);
     result(1,1) = (  (int64_t) 2 * near       << shift) / (top   - bottom);
     result(0,2) = (  (int64_t) right + left   << shift) / (right - left);
     result(1,2) = (  (int64_t) top   + bottom << shift) / (top   - bottom);
     result(2,2) = (-((int64_t) far   + near)  << shift) / (far   - near);
-    // shift = MSB - exponent
+    // shift = exponentOne - exponent = 0 - exponent
     result(3,2) = -1 << shift;
-    // raw = (exponent + exponent - MSB) - exponent + MSB = exponent
+    // raw = (exponent + exponent) - exponent = exponent
     // shift = raw - exponent = 0
     result(2,3) = (int64_t) -2 * far * near / (far - near);
 
@@ -489,19 +510,19 @@ glOrtho (int left, int right, int bottom, int top, int near, int far, int expone
     Matrix<int> result (4, 4);
     clear (result);
 
-    // raw = MSB - exponent + MSB = 2*MSB - exponent
-    // shift = raw - exponent = 2*MSB - 2*exponent
-    int shift = 2 * (FP_MSB - exponent);
+    // raw = exponentOne - exponent = 0 - exponent = -exponent
+    // shift = raw - exponent = -2*exponent
+    int shift = -2 * exponent;
     result(0,0) = ((int64_t)  2 << shift) / (right - left);
     result(1,1) = ((int64_t)  2 << shift) / (top   - bottom);
     result(2,2) = ((int64_t) -2 << shift) / (far   - near);
-    // raw = exponent - exponent + MSB = MSB
-    // shift = raw - exponent = MSB - exponent
-    shift = FP_MSB - exponent;
+    // raw = exponent - exponent = 0
+    // shift = raw - exponent = -exponent
+    shift = -exponent;
     result(0,3) = (-((int64_t) right + left  ) << shift) / (right - left);
     result(1,3) = (-((int64_t) top   + bottom) << shift) / (top   - bottom);
     result(2,3) = (-((int64_t) far   + near  ) << shift) / (far   - near);
-    // shift = MSB - exponent
+    // shift = exponentOne - exponent = -exponent
     result(3,3) = 1 << shift;
 
     return result;
@@ -512,13 +533,13 @@ glLookAt (const MatrixFixed<int,3,1> & eye, const MatrixFixed<int,3,1> & center,
 {
     // Create an orthonormal frame
     Matrix<int> f = center - eye;
-    f = normalize (f, exponent);              // f exponent=0
-    Matrix<int> u = normalize (up, exponent); // u exponent=0
-    Matrix<int> s = cross (f, u, FP_MSB);     // s exponent=0; but s is not necessarily unit length
-    s = normalize (s, 0);
+    f = normalize (f, exponent);              // f exponent=-MSB
+    Matrix<int> u = normalize (up, exponent); // u exponent=-MSB
+    Matrix<int> s = cross (f, u, FP_MSB);     // s exponent=-MSB; but s is not necessarily unit length
+    s = normalize (s, -FP_MSB);
     u = cross (s, f, FP_MSB);
 
-    Matrix<int> R (4, 4);  // R exponent=0
+    Matrix<int> R (4, 4);  // R exponent=-MSB
     clear (R);
     R(0,0) =  s[0];
     R(0,1) =  s[1];
@@ -532,12 +553,12 @@ glLookAt (const MatrixFixed<int,3,1> & eye, const MatrixFixed<int,3,1> & center,
     R(3,3) = 1 << FP_MSB;
 
     Matrix<int> Tr (4, 4);  // Tr has the exponent passed to this function
-    identity (Tr, 1 << FP_MSB - exponent);
+    identity (Tr, 1 << -exponent);
     Tr(0,3) = -eye[0];
     Tr(1,3) = -eye[1];
     Tr(2,3) = -eye[2];
 
-    // raw = 0 + exponent - MSB
+    // raw = -MSB + exponent
     // goal = exponent
     // shift = raw - goal = -MSB
     return multiply (R, Tr, FP_MSB);
@@ -546,29 +567,29 @@ glLookAt (const MatrixFixed<int,3,1> & eye, const MatrixFixed<int,3,1> & center,
 Matrix<int>
 glPerspective (int fovy, int aspect, int near, int far, int exponent)
 {
-    // raw = (exponent + 1 - MSB) - MSB + MSB = exponent + 1 - MSB
-    // goal = 1, same as M_PI
-    // shift = raw - goal = exponent - MSB
-    int shift = exponent - FP_MSB;
+    // raw = (exponent + 1-MSB) - 0 = exponent+1-MSB
+    // goal = 1-MSB, same as M_PI
+    // shift = raw - goal = exponent+1-MSB - (1-MSB) = exponent
+    int shift = exponent;
     fovy = ::shift ((int64_t) fovy * M_PI / 180, shift);
-    // raw = MSB - 3 + MSB = 2*MSB - 3
+    // raw = exponentOne - exponentTan = 0 - 3-MSB = MSB-3
     // goal = exponent
-    // shift = raw - goal = 2*MSB - 3 - exponent
-    shift = 2 * FP_MSB - 3 - exponent;
-    int f = ((int64_t) 1 << shift) / tan (fovy / 2, 1, 3);  // tan() goes to infinity, but 8 (2^3) should be sufficient for almost all cases.
+    // shift = raw - goal = MSB-3 - exponent
+    shift = FP_MSB - 3 - exponent;
+    int f = ((int64_t) 1 << shift) / tan (fovy / 2, 1-FP_MSB, 3-FP_MSB);  // tan() goes to infinity, but 8 (2^3) should be sufficient for almost all cases.
 
     Matrix<int> result (4, 4);
     clear (result);
 
-    // raw = exponent - exponent + MSB = MSB
+    // raw = exponent - exponent = 0
     // goal = exponent
-    // shift = raw - goal = MSB - exponent
-    shift = FP_MSB - exponent;
+    // shift = raw - goal = -exponent
+    shift = -exponent;
     result(0,0) = ((int64_t) f          << shift) / aspect;
     result(1,1) = f;
     result(2,2) = ((int64_t) far + near << shift) / (near - far);
     result(3,2) = -1 << FP_MSB - exponent;
-    // raw = (exponent + exponent - MSB) - exponent + MSB = exponent
+    // raw = (exponent + exponent) - exponent = exponent
     result(2,3) = (int64_t) 2 * far * near / (near - far);
 
     return result;
@@ -583,42 +604,43 @@ glRotate (int angle, const MatrixFixed<int,3,1> & axis, int exponent)
 Matrix<int>
 glRotate (int angle, int x, int y, int z, int exponent)
 {
-    // raw = (exponent + 1 - MSB) - MSB + MSB = exponent + 1 - MSB
-    // goal = 1, same as M_PI
-    // shift = raw - goal = exponent - MSB
-    int shift = exponent - FP_MSB;
+    // raw = (exponent + 1-MSB) - 0 = exponent + 1 - MSB
+    // goal = 1-MSB, same as M_PI
+    // shift = raw - goal = exponent
+    int shift = exponent;
     angle = ::shift ((int64_t) angle * M_PI / 180, shift);
-    // c, s and c1 all have exponent 1
+    // c, s and c1 all have exponent 1-MSB
     int c = cos (angle, 1);
     int s = sin (angle, 1);
     int c1 = (1 << FP_MSB - 1) - c;
 
     // normalize([x y z])
-    // raw = exponent + exponent - MSB
+    // raw = exponent + exponent
     // result = exponent + 2 bits of headroom for additions
-    int l = sqrt ((int64_t) x * x + (int64_t) y * y + (int64_t) z * z, 2 * exponent - FP_MSB, exponent + 2);
-    // raw = exponent - (exponent + 2) + MSB = MSB - 2
-    // goal = 0
+    int l = sqrt ((int64_t) x * x + (int64_t) y * y + (int64_t) z * z, 2 * exponent, exponent + 2);
+    // raw = exponent - (exponent + 2) = -2
+    // goal = -MSB
+    // shift = raw - goal = -2 - -MSB = MSB-2
     shift = FP_MSB - 2;
     x = ((int64_t) x << shift) / l;
     y = ((int64_t) y << shift) / l;
     z = ((int64_t) z << shift) / l;
 
-    // exponentResult=0
+    // exponentResult=-MSB
     Matrix<int> result (4, 4);
     clear (result);
 
-    // raw = (0 + 0 - MSB) + 1 - MSB = -2*MSB + 1
-    // goal = 1 to match c
-    // shift = -2 * MSB, applied in two stages
+    // raw = -MSB + -MSB + 1-MSB = -3*MSB + 1
+    // goal = 1-MSB to match c
+    // shift = -2*MSB, applied in two stages
     // Then we need one bit upshift to match exponentResult
     result(0,0) = (((int64_t) x * x >> FP_MSB) * c1 >> FP_MSB) + c << 1;
     result(1,1) = (((int64_t) y * y >> FP_MSB) * c1 >> FP_MSB) + c << 1;
     result(2,2) = (((int64_t) z * z >> FP_MSB) * c1 >> FP_MSB) + c << 1;
     result(3,3) = 1 << FP_MSB;
     // For second term:
-    // raw = 0 + 1 - MSB
-    // goal = 1
+    // raw = -MSB + 1-MSB
+    // goal = 1-MSB
     result(1,0) = (((int64_t) y * x >> FP_MSB) * c1 >> FP_MSB) + ((int64_t) z * s >> FP_MSB) << 1;
     result(2,0) = (((int64_t) x * z >> FP_MSB) * c1 >> FP_MSB) - ((int64_t) y * s >> FP_MSB) << 1;
     result(0,1) = (((int64_t) x * y >> FP_MSB) * c1 >> FP_MSB) - ((int64_t) z * s >> FP_MSB) << 1;
@@ -643,7 +665,7 @@ glScale (int sx, int sy, int sz, int exponent)
     result(0,0) = sx;
     result(1,1) = sy;
     result(2,2) = sz;
-    result(3,3) = 1 << FP_MSB - exponent;
+    result(3,3) = 1 << -exponent;
     return result;
 }
 
@@ -657,22 +679,22 @@ Matrix<int>
 glTranslate (int x, int y, int z, int exponent)
 {
     Matrix<int> result (4, 4);
-    identity (result, 1 << FP_MSB - exponent);
+    identity (result, 1 << -exponent);
     result(0,3) = x;
     result(1,3) = y;
     result(2,3) = z;
     return result;
 }
 
-// exponentResult = 1, to accommodate [-pi, pi]
+// exponentResult = 1-MSB, to accommodate [-pi, pi]
 // exponentY == exponentX, but it doesn't matter what the exponent is; only ratio matters
 int
 atan2 (int y, int x)
 {
-    // Using CORDIC algorithm. See https://www.mathworks.com/help/fixedpoint/ug/calculate-fixed-point-arctangent.html
+    // Using the CORDIC algorithm. See https://www.mathworks.com/help/fixedpoint/ug/calculate-fixed-point-arctangent.html
 
     // Look-up table for values of atan(2^-i), i=0,1,2,...
-    // Converted to fixed-point with exponent=1 (same as result of this function).
+    // Converted to fixed-point with exponent=1-MSB (same as result of this function).
     // Limited to 12 terms, as a compromise between accuracy and time+space cost.
     // The Mathworks article discusses these tradeoffs.
     static const int lut[] = {421657428, 248918914, 131521918, 66762579, 33510843, 16771757, 8387925, 4194218, 2097141, 1048574, 524287, 262143}; //, 131071, 65535, 32767, 16383, 8191, 4095, 2047, 1023, 511, 255, 127, 63, 31, 15, 7, 4, 2, 1};
@@ -717,6 +739,9 @@ atan2 (int y, int x)
 
     if (x >> 4 >= y)  // Use small-angle formula.
     {
+        // raw = 0
+        // goal = 1-MSB
+        // shift = 0 - (1-MSB) = MSB-1
         result += (int) (((int64_t) y << FP_MSB - 1) / x);
     }
     else  // Use CORDIC
@@ -758,10 +783,9 @@ int
 ceil (int a, int exponentA, int exponentResult)
 {
     int result;
-    if (exponentA >= 0  &&  exponentA < FP_MSB)
+    if (exponentA >= -FP_MSB  &&  exponentA < 0)
     {
-        int decimalPlaces = FP_MSB - exponentA;
-        int wholeMask = 0xFFFFFFFF << decimalPlaces;
+        int wholeMask = 0xFFFFFFFF << -exponentA;
         int decimalMask = ~wholeMask;
         result = a + decimalMask & wholeMask;
     }
@@ -779,32 +803,37 @@ ceil (int a, int exponentA, int exponentResult)
 int
 cos (int a, int exponentA)
 {
-    // We want to add PI/2 to a. M_PI exponent=1. To induce down-shift, claim it is 0.
-    // Thus, shift is exactly exponentA.
-    if (exponentA >= 0) return sin (a + (M_PI >> exponentA), exponentA);
-    // If exponentA is negative, then a is too small to use as-is.
-    if (exponentA < -FP_MSB) return 0x20000000;  // one, with exponent=1
-    return sin ((a >> -exponentA) + M_PI, 0);
+    // We want to add PI/2 to a. M_PI exponent=1-MSB. To induce down-shift, claim it is -MSB.
+    // current = -MSB  (formerly 1-MSB)
+    // goal = exponentA
+    // shift = current - goal = exponentA + MSB
+    if (exponentA >= -FP_MSB) return sin (a + (M_PI >> exponentA + FP_MSB), exponentA);
+
+    // If a is too small, then result is basically 1.
+    if (exponentA < -2 * FP_MSB) return 0x20000000;  // one, with exponent=1-MSB
+
+    // Shift a to match M_PI. Strategy for PI/2 remains the same.
+    return sin ((a >> -exponentA - FP_MSB) + M_PI, -FP_MSB);
 }
 
 int
 exp (int a, int exponentResult)
 {
-    const int exponentA = 7;  // Hard-coded value established in gov.sandia.n2a.language.function.Exp class.
+    const int exponentA = 7 - FP_MSB;  // Hard-coded value established in gov.sandia.n2a.language.function.Exp class.
 
     if (a == 0)
     {
-        int shift = FP_MSB - exponentResult;
+        int shift = -exponentResult;
         if (shift < 0) return 0;
         return 1 << shift;
     }
-    const int one = 1 << FP_MSB - exponentA;
-    if (a == one)
+    const int one = 1 << -exponentA;
+    if (a == one)  // special case for returning e, the natural logarithm base.
     {
-        int shift = 1 - exponentResult;  // M_E exponent=1
+        int shift = 1 - FP_MSB - exponentResult;  // M_E exponent=1-MSB
+        if (shift == 0) return M_E;
         if (shift < 0) return M_E >> -shift;
-        if (shift > 0) return INFINITY;  // Up-shifting M_E is nonsense, since it already uses all the bits.
-        return M_E;
+        return INFINITY;  // Up-shifting M_E is nonsense, since it already uses all the bits.
     }
 
     // Algorithm:
@@ -820,13 +849,13 @@ exp (int a, int exponentResult)
     int exponentWork = exponentA;
 
     // Shift for inner loop:
-    // i has exponent=MSB
-    // a has exponent=7 per above comment
+    // i has exponent=0
+    // a has exponent=7-MSB per above comment
     // term and result have exponentWork
-    // raw multiply = exponentA+exponentWork at bit 60
-    // raw divide = (exponentA+exponentWork)-MSB at bit 30
-    // We want exponentWork at bit 30, so shift = raw-exponentWork = (exponentA+exponentWork-MSB)-exponentWork = exponentA-MSB
-    const int shift = FP_MSB - exponentA;  // preemtively flip the sign, since this is always used in the positive form
+    // raw = (exponentA + exponentWork) - 0
+    // goal = exponentWork
+    // shift = raw - goal = exponentA
+    const int shift = -exponentA;  // preemtively flip the sign, since this is always used in the positive form
     const int round = 1 << shift - 1;
     const int maximum = 1 << FP_MSB;
 
@@ -848,13 +877,15 @@ exp (int a, int exponentResult)
 
     if (negate)
     {
-        // Let 1 have exponent=0 at bit 60 (2*MSB)
-        // raw result of inversion = 0-exponentWork at bit 30
+        // Let 1 have exponent=-2*MSB
+        // raw result of inversion = -2*MSB - exponentWork
+        // goal = exponentResult
+        // shift = raw - goal = -2*MSB - exponentWork - exponentResult
         uint64_t temp = ((uint64_t) 1 << 2 * FP_MSB) / result;
-        int shift = -exponentWork - exponentResult;
+        int shift = -2 * FP_MSB - exponentWork - exponentResult;
         if (shift < 0)
         {
-            if (shift < -60) return 0;  // Prevent weird effects from modulo arithmetic on size of shift.
+            if (shift < -2 * FP_MSB) return 0;  // Prevent weird effects from modulo arithmetic on size of shift.
             return temp >> -shift;
         }
         if (shift > 0)
@@ -877,8 +908,9 @@ exp (int a, int exponentResult)
         if (shift > 0)
         {
             if (shift > FP_MSB) return INFINITY;
-            // Don't bother trapping overflow with 32-bit math. Our fixed-point analysis should keep numbers in range in any case.
-            return result <<= shift;
+            uint64_t temp = (uint64_t) result << shift;
+            if (temp > INFINITY) return INFINITY;
+            return temp;
         }
         return result;
     }
@@ -888,10 +920,9 @@ int
 floor (int a, int exponentA, int exponentResult)
 {
     int result;
-    if (exponentA >= 0  &&  exponentA < FP_MSB)
+    if (exponentA >= -FP_MSB  &&  exponentA < 0)
     {
-        int decimalPlaces = FP_MSB - exponentA;
-        int wholeMask = 0xFFFFFFFF << decimalPlaces;
+        int wholeMask = 0xFFFFFFFF << -exponentA;
         result = a & wholeMask;
     }
     else
@@ -909,11 +940,13 @@ int
 log (int a, int exponentA, int exponentResult)
 {
     // We use the simple identity log_e(a) = log_2(a) / log_2(e)
-    // exponentRaw = exponentResult - 0 + MSB
+    // exponentRaw = exponentResult - -MSB
     // shift = exponentRaw - exponentResult = MSB
     return ((int64_t) log2 (a, exponentA, exponentResult) << FP_MSB) / M_LOG2E;
 }
 
+// This implementation tries to keep everything within a single 32-bit word,
+// so it throws away some precision.
 int
 log2 (int a, int exponentA, int exponentResult)
 {
@@ -922,7 +955,7 @@ log2 (int a, int exponentA, int exponentResult)
 
     // If a<1, then the result is -log2(1/a)
     bool negate = false;
-    if (exponentA < 0  ||  (exponentA < FP_MSB  &&  a < 1 << FP_MSB - exponentA))
+    if (exponentA < -FP_MSB  ||  (exponentA < 0  &&  a < 1 << -exponentA))
     {
         negate = true;
 
@@ -936,45 +969,48 @@ log2 (int a, int exponentA, int exponentResult)
         }
 
         // compute 1/a
-        // Let the numerator 1 have center power of 0, with center at MSB/2, for exponent=MSB/2
-        // Center of a is presumably at MSB/2
-        // Center of inverse should be at MSB/2
-        // Center power of a is exponentA-MSB/2
-        // Center power of inverse is 0-(exponentA-MSB/2) = MSB/2-exponentA
-        // Exponent of inverse = center power + MSB/2 = MSB-exponentA
-        // Exponent of unshifted division = exponentRaw = MSB/2-exponentA+MSB = 3*MSB/2-exponentA
-        // Needed shift for exponent of inverse = exponentRaw - (MSB-exponentA) = MSB/2
-        // If shifting 1 up to necessary position: (1 << MSB/2) << MSB/2 = 1 << MSB
+        // Let the numerator 1 have exponent=-MSB, to maximize significant bits in result.
+        // raw division exponent = -MSB - exponentA
         a = (1 << FP_MSB) / a;
-        exponentA = FP_MSB - exponentA;
+        exponentA = -FP_MSB - exponentA;
     }
 
     // At this point a >= 1
     // Using the identity log(ab)=log(a)+log(b), we put a into normal form:
     //   operand = a*2^exponentA
     //   log2(operand) = log2(a)+log2(2^exponentA) = log2(a)+exponentA
-    int exponentWork = 15;
-    int one = 1 << FP_MSB - exponentWork;
+    // Our remaining work will be only on the mantissa of a, not its exponent.
+    // Goal is to shift the mantissa be in [1,2). Alternately, we define "1"
+    // with an exponent.
+    int exponentOne = -FP_MSB2;
+    int one = 1 << -exponentOne;
     while (a < one)
     {
         one >>= 1;
-        exponentWork++;
+        exponentOne++;
     }
-    int result = exponentA - exponentWork;  // Represented as a pure integer, with exponent=MSB
-    int two = 2 * one;
+    int result = exponentA - exponentOne;  // Represented as a pure integer, with exponent=0. Later this will have to be shifted to exponentResult.
+    int two = 2 * one;  // Same as upshift by 1.
     while (a >= two)  // This could also be done with a bit mask that checks for any bits in the twos position or higher.
     {
         result++;
         a = (a >> 1) + (a & 1);  // divide-by-2 with rounding
     }
 
+    // "result" is now the exponent of the bit in a at power 0.
+    // That gives us the whole part of log_2(operand). We now need to compute the fractional part.
+
     // TODO: Guard against large shifts.
-    int shift = FP_MSB - exponentResult;
+    int shift = -exponentResult;
     if (a > one)  // Otherwise a==one, in which case the following algorithm will do nothing.
     {
-        while (shift > 0)
+        while (shift > 0)  // The requested result has some fractional bits, so fill them.
         {
-            a = multiplyRound (a, a, exponentWork - FP_MSB);  // exponentRaw - exponentWork = (2*exponentWork-MSB) - exponentWork
+            // exponentOne is the working exponent of mantissa a
+            // raw exponent of a^2 = 2*exponentOne
+            // goal = exponentOne
+            // shift = raw - goal = exponentOne
+            a = multiplyRound (a, a, exponentOne);
             result <<= 1;
             shift--;
             if (a >= two)
@@ -983,7 +1019,7 @@ log2 (int a, int exponentA, int exponentResult)
                 a = (a >> 1) + (a & 1);
             }
         }
-        a = multiplyRound (a, a, exponentWork - FP_MSB);
+        a = multiplyRound (a, a, exponentOne);
         if (a >= two) result++;
     }
 
@@ -1056,15 +1092,15 @@ modFloor (int a, int b, int exponentA, int exponentB)
 int
 pow (int a, int b, int exponentA, int exponentResult)
 {
-    // exponentB = 15
+    // exponentB = -MSB/2
 
     // Use the identity: a^b = e^(b*ln(a))
     // Most of the complexity of this function is in trapping special cases.
     // For details, see man page for floating-point pow().
     // We don't have signed zero, so ignore all distinctions based on that.
     bool negate = false;
-    int blna = 1;  // exponent=7, as required by exp(); Nonzero indicates that blna needs to be calculated.
-    int shift = FP_MSB - exponentA;
+    int blna = 1;  // exponent=7-MSB, as required by exp(); Nonzero indicates that blna needs to be calculated.
+    int shift = -exponentA;
     int one;
     if (shift < 0) one = 0;
     else           one = 1 << shift;
@@ -1120,9 +1156,10 @@ pow (int a, int b, int exponentA, int exponentResult)
 
         if (blna)
         {
-            // raw multiply = exponentB+7-MSB at bit 30
-            // shift = (exponentB+7-MSB)-7 = exponentB-MSB = -15
-            int64_t temp = (int64_t) b * log (a, exponentA, 7) >> 15;
+            // raw multiply = exponentB + exponentBLNA
+            // goal = exponentBLNA
+            // shift = raw - goal = exponentB = -MSB/2
+            int64_t temp = (int64_t) b * log (a, exponentA, 7-FP_MSB) >> FP_MSB2;
             if (temp >  INFINITY) return INFINITY;
             if (temp < -INFINITY) return 0;
             blna = temp;
@@ -1137,9 +1174,9 @@ int
 round (int a, int exponentA, int exponentResult)
 {
     int result;
-    if (exponentA >= 0  &&  exponentA < FP_MSB)
+    if (exponentA >= -FP_MSB  &&  exponentA < 0)
     {
-        int decimalPlaces = FP_MSB - exponentA;
+        int decimalPlaces = -exponentA;
         int mask = 0xFFFFFFFF << decimalPlaces;
         int half = 0x1 << decimalPlaces - 1;
         result = a + half & mask;
@@ -1159,7 +1196,7 @@ int
 sgn (int a, int exponentResult)
 {
     if (a == 0) return 0;
-    int result = 0x1 << FP_MSB - exponentResult;  // This breaks for exponentResult outside [0, MSB], but the calling code is already meaningless in that case.
+    int result = 0x1 << -exponentResult;  // This breaks for exponentResult outside [-MSB, 0], but the calling code is already meaningless in that case.
     if (a < 0) return -result;
     return result;
 }
@@ -1170,8 +1207,8 @@ sqrt (int a, int exponentA, int exponentResult)
     if (a < 0) return NAN;
 
     // Simple approach: apply the identity a^0.5=e^(ln(a^0.5))=e^(0.5*ln(a))
-    //int l = log (a, exponentA, MSB/2) >> 1;
-    //return exp (l, MSB/2, exponentResult);
+    //int l = log (a, exponentA, -MSB/2) >> 1;
+    //return exp (l, -MSB/2, exponentResult);
 
     // More efficient approach: Use digit-by-digit method described in
     // https://en.wikipedia.org/wiki/Methods_of_computing_square_roots
@@ -1186,13 +1223,12 @@ sqrt (int a, int exponentA, int exponentResult)
     //   sqrt(2m)   >> -(n-1)/2
 
     uint32_t m = a;  // "m" for mantissa
-    int exponent0 = exponentA - FP_MSB;  // exponent at bit position 0
-    if (exponent0 % 2)  // Odd, so leave remainder inside sqrt()
+    if (exponentA % 2)  // Odd, so leave remainder inside sqrt()
     {
         m <<= 1;  // equivalent to "2m" in the comments above
-        exponent0--;
+        exponentA--;
     }
-    int exponentRaw = exponent0 / 2 + FP_MSB;  // exponent of raw result at MSB
+    int exponentRaw = exponentA / 2;  // exponent of raw result
 
     uint32_t bit;
     if (m & 0xFFFE0000) bit = 1 << 30;
@@ -1243,13 +1279,12 @@ sqrt (int64_t a, int exponentA, int exponentResult)
     if (a < 0) return NAN;
 
     uint64_t m = a;  // "m" for mantissa
-    int exponent0 = exponentA - FP_MSB;  // exponent at bit position 0
-    if (exponent0 % 2)  // Odd, so leave remainder inside sqrt()
+    if (exponentA % 2)  // Odd, so leave remainder inside sqrt()
     {
         m <<= 1;  // equivalent to "2m" in the comments above
-        exponent0--;
+        exponentA--;
     }
-    int exponentRaw = exponent0 / 2 + FP_MSB;  // exponent of raw result at MSB
+    int exponentRaw = exponentA / 2;
 
     uint64_t bit;
     if      (m & 0xFFFFFFFF80000000) bit = (int64_t) 1 << 60;
@@ -1292,12 +1327,14 @@ sqrt (int64_t a, int exponentA, int exponentResult)
 int
 sin (int a, int exponentA)
 {
+    const int exponentResult = 1 - FP_MSB;
+
     // Limit a to [0,pi/2)
     // To create 2PI, we lie about the exponent of M_PI, increasing it by 1.
-    a = modFloor (a, M_PI, exponentA, 2);  // exponent = min (exponentA, 2)
-    int shift = exponentA - 2;
-    if (shift < 0) a >>= -shift;
-    const int PIat2 = M_PI >> 1;  // M_PI with exponent=2 rather than 1
+    a = modFloor (a, M_PI, exponentA, 2-FP_MSB);  // exponent = min (exponentA, 2-MSB)
+    int shift = exponentA + FP_MSB - 2;  // shift = exponentA - (2-MSB); If negative, then result above has exponentA.
+    if (shift < 0) a >>= -shift;  // Shift it to match exponent of 2*pi.
+    const int PIat2 = M_PI >> 1;  // M_PI with exponent=2-MSB rather than 1-MSB
     bool negate = false;
     if (a > PIat2)
     {
@@ -1305,27 +1342,27 @@ sin (int a, int exponentA)
         negate = true;
     }
     if (a > PIat2 >> 1) a = PIat2 - a;
-    a <<= 1;  // Now exponent=1, which matches our promised exponentResult.
+    a <<= 1;  // Now exponent=1-MSB, which matches our promised exponentResult.
 
     // Use power-series to compute sine, similar to exp()
     // sine(a) = sum_0^inf (-1)^n * x^(2n-1) / (2n+1)! = x - x^3/3! + x^5/5! - x^7/7! ...
 
     int term = a;
     int result = a;  // zeroth term
-    int n1 = 0;  // exponent=MSB
+    int n1 = 0;  // exponent=0
     int n2 = 1;
     for (int n = 1; n < 7; n++)
     {
         n1 = n2 + 1;
         n2 = n1 + 1;
         // raw exponent of operations below, in evaluation order:
-        // 2*exponentResult at bit 60
-        // 2*exponentResult-MSB at bit 30
-        // shift = (2*exponenetResult-MSB)-exponentResult = exponentResult-MSB = -29
-        // 2*exponentResult at bit 60
-        // 2*exponentResult-MSB at bit 30
+        // multiply: 2*exponentResult
+        // divide: 2*exponentResult
+        // shift = 2*exponenetResult - exponentResult = exponentResult = 1-MSB
+        // multiply: 2*exponentResult
+        // divide : 2*exponentResult
         // same shift again
-        term = ((int64_t) -term * a / n1 >> 29) * a / n2 >> 29;
+        term = ((int64_t) -term * a / n1 >> -exponentResult) * a / n2 >> -exponentResult;
         if (term == 0) break;
         result += term;
     }
@@ -1340,32 +1377,37 @@ tan (int a, int exponentA, int exponentResult)
     // See http://mathworld.wolfram.com/MaclaurinSeries.html
     // However, to save space we simply compute sin()/cos().
     // raw division exponent=0 at bit 0
-    return ((int64_t) sin (a, exponentA) << exponentResult) / cos (a, exponentA);  // Don't do any saturation checks. We are not really interested in infinity.
+    return ((int64_t) sin (a, exponentA) << -exponentResult) / cos (a, exponentA);  // Don't do any saturation checks. We are not really interested in infinity.
 }
 
 int
 tanh (int a, int exponentA)
 {
     // result = (exp(2a) - 1) / (exp(2a) + 1)
-    // exponentResult = 0
+    // exponentResult = -MSB
 
     // tanh() is symmetric around 0, so only deal with one sign
     bool negate = a < 0;
     if (negate) a = -a;
     if (a == 0) return 0;  // This also traps NAN
 
-    // Determine exponent desired from exp(2a). The result from exp(2a) is never smaller than 1, so exponent>=0
+    // Determine "exponentOne" desired from exp(2a).
+    // The result from exp(2a) is never smaller than 1, so exponentOne>=-MSB
+    // 1 must be representable, so exponentOne<=0.
     // We want enough bits to contain the msb of the output. This is
-    // exponent = log2(exp(2a)) = ln(exp(2a)) / ln(2) = 2a / (log2(2) / log2(e)) = 2a * log2(e)
-    // "exponent" should be expressed as a simple integer
-    // raw = exponentA + 1 + exponentLOG2E - MSB = exponentA + 1 - MSB
-    // shift = raw - MSB = exponentA + 1 - 2 * MSB
-    int exponent = 0;
-    if (exponentA >= -1)
+    // exponentMSB = log2(exp(2a)) = ln(exp(2a)) / ln(2) = 2a / (log2(2) / log2(e)) = 2a * log2(e)
+    // Claiming that exponentA is one higher has the effect of multiplying by 2.
+    // exponents of the multiplication itself are:
+    // raw = (exponentA+1) + exponentLOG2E = exponentA + 1 + -MSB
+    // goal = 0  (integer count of bits)
+    // shift = raw - goal = exponentA + 1 - MSB
+    int exponentOne = -FP_MSB;
+    if (exponentA >= -1 - FP_MSB)  // Otherwise 2a is less than 1, so no need for the following calculation.
     {
-        exponent = multiplyCeil (a, M_LOG2E, exponentA + 1 - 2 * FP_MSB);
-        // If exponent gets too large, the result will always be 1 or -1
-        if (exponent > FP_MSB) return negate ? -0x40000000 : 0x40000000;
+        exponentOne = multiplyCeil (a, M_LOG2E, exponentA + 1 - FP_MSB);  // exponentOne now refers to MSB
+        // If exponentOne gets too large, the result will always be 1 or -1
+        if (exponentOne > FP_MSB  ||  exponentOne == 0) return negate ? -0x40000000 : 0x40000000;
+        exponentOne -= FP_MSB;  // exponentOne now refers to LSB
     }
 
     // Find true magnitude of a
@@ -1377,21 +1419,31 @@ tanh (int a, int exponentA)
 
     // Require at least 16 bits for exp() after downshifting.
     // Otherwise answer is not as accurate as simple linear.
-    if (exponentA < 22 - FP_MSB)  // Includes offset of 6 for the downshift.
+    // See the downshift after this if-block. This is equivalent to ensuring that
+    // total amount of shift (6-MSB-exponentA) < 16.
+    // Solving for exponentA: exponentA > -10 - MSB
+    // Negating logic ...
+    if (exponentA <= -10 - FP_MSB)
     {
         // Return linear answer, if possible.
-        if (exponentA < -FP_MSB) return 0;  // Can't return result with correct magnitude, so only option is zero.
-        int result = a >> -exponentA;
+        // goal = exponentResult = -MSB
+        // shift = exponentA - goal = exponentA + MSB
+        if (exponentA < -2 * FP_MSB) return 0;  // Can't return result with correct magnitude, so only option is zero.
+        int result = a >> -exponentA - FP_MSB;
         if (negate) return -result;
         return result;
     }
     // Set correct magnitude for exp().
-    // exp(a) expects exponentA=7, but we want exp(2a), so shift to exponentA=6 and lie about it
-    a >>= 6 - exponentA;
+    // exp(a) expects exponentA=7-MSB, but we want exp(2a), so shift to exponentA=6 and lie about it
+    // goal = 6-MSB
+    // shift = exponentA - goal = exponentA - 6 + MSB
+    // This implies that exponentA <= 6-MSB.
+    if (exponentA > 6 - FP_MSB) return negate ? -0x40000000 : 0x40000000;
+    a >>= 6 - FP_MSB - exponentA;
 
     // call exp() and complete calculation
-    int result = exp (a, exponent);
-    int one = 1 << FP_MSB - exponent;
+    int result = exp (a, exponentOne);
+    int one = 1 << -exponentOne;
     result = ((int64_t) result - one << FP_MSB) / ((int64_t) result + one);
 
     if (negate) return -result;

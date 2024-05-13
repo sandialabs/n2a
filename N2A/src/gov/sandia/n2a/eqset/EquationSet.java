@@ -3272,9 +3272,8 @@ public class EquationSet implements Comparable<EquationSet>
         for (EquationSet s : parts) s.assignParents ();
     }
 
-    public void determineExponents ()
+    public void determineExponents (ExponentContext context)
     {
-        ExponentContext context = new ExponentContext (this);
         determineExponentsInit (context);
         int limit = context.depth * 2 + 2;  // One cycle for each variable to get initial exponent, and another cycle for each var to influence itself, plus a couple more for good measure. 
 
@@ -3303,7 +3302,7 @@ public class EquationSet implements Comparable<EquationSet>
 
         // List results of analysis to error stream
         PrintStream ps = Backend.err.get ();
-        ps.println ("Results of fixed-point analysis. Column 1 is expected median absolute value as a power of 10. Column 2 is binary power of MSB.");
+        ps.println ("Results of fixed-point analysis. Column 1 is expected median absolute value as a power of 10. Column 2 is binary power of LSB.");
         if (dumpMedians (ps, context)) throw new AbortRun ();
     }
 
@@ -3328,13 +3327,8 @@ public class EquationSet implements Comparable<EquationSet>
         {
             double duration = root.metadata.getOrDefault (0.0, "duration");
             haveDuration =  duration != 0;
-            if (haveDuration) exponentTime = (int) Math.floor (Math.log (duration) / Math.log (2));
+            if (haveDuration) exponentTime = (int) Math.floor (Math.log (duration) / Math.log (2)) - Operator.MSB;
             else              exponentTime = Operator.UNKNOWN;
-        }
-
-        public ExponentContext (int exponentTime)
-        {
-            this.exponentTime = exponentTime;
         }
 
         public void updateTime ()
@@ -3348,12 +3342,12 @@ public class EquationSet implements Comparable<EquationSet>
                 {
                     if (e.expression != null  &&  e.expression.exponent != Operator.UNKNOWN)
                     {
-                        min = Math.min (min, e.expression.centerPower ());
+                        min = Math.min (min, e.expression.centerPower ());  // Mainly to accommodate constants, whose center encompasses all their significant bits.
                     }
                 }
             }
-            if (min == Integer.MAX_VALUE) exponentTime = 0;        // If no value of $t' has been set yet, estimate duration as 1s, and $t has exponent=0.
-            else                          exponentTime = min + 20; // +20 allows one million minimally-sized timesteps, each with 10 bit resolution
+            if (min == Integer.MAX_VALUE) exponentTime = -Operator.MSB; // If no value of $t' has been set yet, estimate duration as 1s, and $t has exponent=-MSB.
+            else                          exponentTime = min - 10;      // 10 bits to represent value of smallest timestep. Assuming MSB==30, this allows one million minimally-sized timesteps.
         }
 
         public boolean updateInputs ()
@@ -3361,27 +3355,40 @@ public class EquationSet implements Comparable<EquationSet>
             boolean changed = false;
             for (ArrayList<Input> list : inputs.values ())
             {
-                int count = 0;
-                int pow = 0;
+                int count    = 0;
+                int pow      = 0;
+                int countRow = 0;
+                int powRow   = 0;
                 for (Input i : list)
                 {
+                    if (i.exponent != Operator.UNKNOWN)
+                    {
+                        count++;
+                        pow += i.exponent;
+                    }
+                    if (i.operands.length <= 1) continue;
                     Operator operand1 = i.operands[1];
                     if (operand1.exponent != Operator.UNKNOWN)
                     {
-                        count++;
-                        pow += operand1.exponent;
+                        countRow++;
+                        powRow += operand1.exponent;
                     }
                 }
-                if (count > 0)
+                if (count > 0) pow /= count;
+                else           pow = Operator.UNKNOWN;
+                if (countRow > 0) powRow /= countRow;
+                else              powRow = Operator.UNKNOWN;
+                for (Input i : list)
                 {
-                    pow /= count;
-                    for (Input i : list)
+                    if (i.exponent != pow)
                     {
-                        if (i.exponentTime != pow)
-                        {
-                            i.exponentTime = pow;
-                            changed = true;
-                        }
+                        i.exponent = pow;
+                        changed = true;
+                    }
+                    if (i.exponentRow != powRow)
+                    {
+                        i.exponentRow = powRow;
+                        changed = true;
                     }
                 }
             }
@@ -3472,22 +3479,8 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Update the newly-created operators in a subset of variables that has been simplified for a specific phase.
     **/
-    public static void determineExponentsSimplified (List<Variable> list)
+    public static void determineExponentsSimplified (ExponentContext context, List<Variable> list)
     {
-        // Determine exponentTime.
-        // This value is only used to update $t and $t', and it is available from either $t or $t',
-        // if one of them exists in the list.
-        int exponentTime = Operator.UNKNOWN;
-        for (Variable v : list)
-        {
-            if (v.name.equals ("$t"))
-            {
-                exponentTime = v.exponent;
-                break;
-            }
-        }
-        ExponentContext context = new ExponentContext (exponentTime);  // Could be UNKNOWN, but if so it won't hurt anything, because it is only needed for $t.
-
         // Update any newly-created operators.
         for (Variable v : list)
         {
@@ -3577,7 +3570,7 @@ public class EquationSet implements Comparable<EquationSet>
             // No need to warn about large v.exponent, because the user will be able to view the list.
 
             // Convert center power to an approximate decimal value.
-            int centerPower = v.exponent - Operator.MSB + v.center;
+            int centerPower = v.exponent + v.center;
             String base10 = Integer.toString ((int) Math.floor (centerPower / b2d));
             String exponent = Integer.toString (v.exponent);
             if (v.exponent == Operator.UNKNOWN)

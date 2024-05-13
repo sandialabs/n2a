@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -85,7 +85,7 @@ public class Norm extends Function
             {
                 // Result is an integer
                 centerNew   = 0;
-                exponentNew = MSB;
+                exponentNew = 0;
             }
             else if (Double.isInfinite (n))
             {
@@ -105,7 +105,7 @@ public class Norm extends Function
         op0.determineExponentNext ();
 
         Operator op1 = operands[1];  // n
-        op1.exponentNext = Operator.MSB / 2;  // required by fixedpoint in C backend
+        op1.exponentNext = -MSB / 2;  // required by fixedpoint in C backend
         op1.determineExponentNext ();
     }
 

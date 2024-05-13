@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -67,7 +67,7 @@ public class ReadImage extends Function
     public void determineExponent (ExponentContext context)
     {
         // Color channels are generally in [0,1]
-        updateExponent (context, 0, MSB - 1);
+        updateExponent (context, -MSB, MSB - 1);
 
         // operands[0] is the file string
         // operands[1] is the color string

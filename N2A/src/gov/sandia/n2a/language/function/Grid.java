@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -43,8 +43,8 @@ public class Grid extends Function
         }
 
         boolean raw = getKeywordFlag ("raw");
-        if (raw) updateExponent (context, MSB, 0);       // integer
-        else     updateExponent (context, -1,  MSB - 1); // Since output never quite reaches 1, all bits can be fractional.
+        if (raw) updateExponent (context, 0,        0);       // integer
+        else     updateExponent (context, -1 - MSB, MSB - 1); // Since output never quite reaches 1, all bits can be fractional.
     }
 
     public void determineExponentNext ()
@@ -52,7 +52,7 @@ public class Grid extends Function
         for (int i = 0; i < operands.length; i++)
         {
             Operator op = operands[i];
-            op.exponentNext = MSB;  // grid() requires integers
+            op.exponentNext = 0;  // grid() requires integers
             op.determineExponentNext ();
         }
     }

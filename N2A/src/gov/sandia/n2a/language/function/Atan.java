@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -38,7 +38,7 @@ public class Atan extends Function
     public void determineExponent (ExponentContext context)
     {
         for (int i = 0; i < operands.length; i++) operands[i].determineExponent (context);
-        updateExponent (context, 1, MSB - 1);  // in [-pi,pi]
+        updateExponent (context, 1 - MSB, MSB - 1);  // in [-pi,pi]
     }
 
     public void determineExponentNext ()
@@ -55,8 +55,8 @@ public class Atan extends Function
             {
                 // atan(y) = atan2(y,1), so treat x as 1
                 // If y is so small that all its bits are lost, then angle can be treated as zero.
-                // If y is so large that all the bits of x are lost, then angle can be treated as pi. 
-                next = Math.max (0, y.exponent);
+                // If y is so large that all the bits of x are lost, then angle can be treated as pi/2 (1.57...). 
+                next = Math.max (-MSB, y.exponent);
             }
         }
         else

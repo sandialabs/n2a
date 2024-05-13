@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -57,7 +57,7 @@ public class ReadMatrix extends Function
     public void determineExponent (ExponentContext context)
     {
         int centerNew   = MSB / 2;
-        int exponentNew = getExponentHint (0) + MSB - centerNew;
+        int exponentNew = getExponentHint (0) - centerNew;
         updateExponent (context, exponentNew, centerNew);
     }
 

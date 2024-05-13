@@ -1,5 +1,5 @@
 /*
-Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -64,7 +64,7 @@ public class UnitMap extends Function
         for (int i = 1; i < operands.length; i++)
         {
             Operator op = operands[i];
-            op.exponentNext = 0;    // a number in [0,1] with some provision for going slightly out of bounds
+            op.exponentNext = -MSB;    // a number in [0,1] with some provision for going slightly out of bounds
             op.determineExponentNext ();
         }
     }

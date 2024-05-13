@@ -34,7 +34,7 @@ public class Mcount extends Mfile
 
     public void determineExponent (ExponentContext context)
     {
-        updateExponent (context, MSB, 0);  // small integer
+        updateExponent (context, 0, 0);  // small integer
     }
 
     public void determineExponentNext ()
@@ -44,7 +44,7 @@ public class Mcount extends Mfile
         for (int i = 1; i < operands.length; i++)
         {
             Operator op = operands[i];
-            op.exponentNext = MSB;
+            op.exponentNext = 0;
             op.determineExponentNext ();
         }
     }

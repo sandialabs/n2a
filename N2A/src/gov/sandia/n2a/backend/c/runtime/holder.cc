@@ -120,6 +120,7 @@ template class MatrixStrided<float>;
 template class Matrix<float>;
 template class MatrixFixed<float,3,1>;
 
+template SHARED void          clear      (      MatrixStrided<float>  & A, const float scalar);
 template SHARED float         norm       (const MatrixStrided<float>  & A, float n);
 template SHARED Matrix<float> normalize  (const MatrixAbstract<float> & A);
 template SHARED Matrix<float> operator * (const MatrixStrided<float>  & A, const MatrixAbstract<float> & B);
@@ -150,16 +151,16 @@ template class InputHolder<n2a_T>;
 template class OutputHolder<n2a_T>;
 template SHARED IteratorNonzero<n2a_T> * getIterator (MatrixAbstract<n2a_T> * A);
 #ifdef n2a_FP
-template SHARED MatrixInput <n2a_T> * matrixHelper     (const String & fileName, int exponent, MatrixInput <n2a_T> * oldHandle);
-template SHARED InputHolder <n2a_T> * inputHelper      (const String & fileName, int exponent, InputHolder <n2a_T> * oldHandle);
+template SHARED MatrixInput <n2a_T> * matrixHelper     (const String & fileName, int exponent,                  MatrixInput <n2a_T> * oldHandle);
+template SHARED InputHolder <n2a_T> * inputHelper      (const String & fileName, int exponent, int exponentRow, InputHolder <n2a_T> * oldHandle);
 #else
-template SHARED MatrixInput <n2a_T> * matrixHelper     (const String & fileName,               MatrixInput <n2a_T> * oldHandle);
-template SHARED InputHolder <n2a_T> * inputHelper      (const String & fileName,               InputHolder <n2a_T> * oldHandle);
+template SHARED MatrixInput <n2a_T> * matrixHelper     (const String & fileName,                                MatrixInput <n2a_T> * oldHandle);
+template SHARED InputHolder <n2a_T> * inputHelper      (const String & fileName,                                InputHolder <n2a_T> * oldHandle);
 #endif
-template SHARED Mfile       <n2a_T> * MfileHelper      (const String & fileName,               Mfile       <n2a_T> * oldHandle);
-template SHARED OutputHolder<n2a_T> * outputHelper     (const String & fileName,               OutputHolder<n2a_T> * oldHandle);
-template SHARED ImageInput  <n2a_T> * imageInputHelper (const String & fileName,               ImageInput  <n2a_T> * oldHandle);
-template SHARED ImageOutput <n2a_T> * imageOutputHelper(const String & fileName,               ImageOutput <n2a_T> * oldHandle);
+template SHARED Mfile       <n2a_T> * MfileHelper      (const String & fileName,                                Mfile       <n2a_T> * oldHandle);
+template SHARED OutputHolder<n2a_T> * outputHelper     (const String & fileName,                                OutputHolder<n2a_T> * oldHandle);
+template SHARED ImageInput  <n2a_T> * imageInputHelper (const String & fileName,                                ImageInput  <n2a_T> * oldHandle);
+template SHARED ImageOutput <n2a_T> * imageOutputHelper(const String & fileName,                                ImageOutput <n2a_T> * oldHandle);
 
 #ifdef HAVE_JNI
 
@@ -398,6 +399,14 @@ putUnique (std::vector<GLfloat> & vertices, float x, float y, float z)
 void
 icosphere (std::vector<GLfloat> & vertices, std::vector<GLuint> & indices)
 {
+    // This function is always defined as float.
+    // When compiling the fixed-point runtime, it is necessary to restore the
+    // floating-point definition of pi.
+#   ifdef n2a_FP
+#   undef M_PI
+#   define M_PI 3.14159265359f
+#   endif
+
     float angleH = 2 * M_PI / 5; // 72 degrees
     float angleV = atan (0.5);   // elevation = 26.565 degree
 

@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.Conversion;
+import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.host.Windows;
@@ -78,8 +79,9 @@ public class JobC extends Thread
 {
     protected static Map<Host,Set<String>> runtimeBuilt = new HashMap<Host,Set<String>> ();  // collection of Hosts for which runtime has already been checked/built during this session
 
-    public    MNode       job;
-    protected EquationSet digestedModel;
+    public    MNode           job;
+    protected EquationSet     digestedModel;
+    protected ExponentContext exponentContext;
 
     public    Host env;
     public    Path localJobDir;
@@ -503,6 +505,7 @@ public class JobC extends Thread
                 runtimeBuilt.put (env, runtimes);
             }
             CompilerFactory factory = BackendC.getFactory (env);
+            supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
             String runtimeName = factory.prefixLibrary (shared) + runtimeName () + factory.suffixLibrary (shared);
             Path runtimeLib = runtimeDir.resolve (runtimeName);
             for (ProvideOperator pf : extensions)
@@ -537,7 +540,6 @@ public class JobC extends Thread
             if (runtimes.contains (runtimeName)) return;
 
             // Compile runtime
-            supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
             List<String> sources = new ArrayList<String> ();  // List of source names
             sources.add ("runtime");
             sources.add ("holder");
@@ -902,7 +904,11 @@ public class JobC extends Thread
         digestedModel.determineTypes ();
         digestedModel.determineDuration ();
         digestedModel.assignParents ();
-        if (fixedPoint) digestedModel.determineExponents ();
+        if (fixedPoint)
+        {
+            exponentContext = new ExponentContext (digestedModel);
+            digestedModel.determineExponents (exponentContext);
+        }
         digestedModel.findConnectionMatrix ();
         analyzeEvents (digestedModel);
         analyze (digestedModel);
@@ -1246,7 +1252,7 @@ public class JobC extends Thread
 
         SIMULATOR = "Simulator<" + T + ">::instance" + (tls ? "->" : ".");
 
-        result.append ("#include \"math.h\"\n");  // math.h must always come first, because it messes with mode in which <cmath> is included.
+        result.append ("#include \"mymath.h\"\n");  // math.h must always come first, because it messes with mode in which <cmath> is included.
         result.append ("#include \"runtime.h\"\n");
         if (kokkos)
         {
@@ -1963,7 +1969,7 @@ public class JobC extends Thread
         for (Input i : mainInput)
         {
             result.append ("  " + i.name + " = inputHelper<" + T + "> (\"" + i.operands[0].getString () + "\"");
-            if (fixedPoint) result.append (", " + i.exponent);
+            if (fixedPoint) result.append (", " + i.exponent + ", " + i.exponentRow);
             result.append (");\n");
 
             boolean smooth =             i.getKeywordFlag ("smooth");
@@ -2778,7 +2784,7 @@ public class JobC extends Thread
                 result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
             }
             s.simplify ("$init", bed.globalInit);
-            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.globalInit);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, bed.globalInit);
             for (Variable v : bed.globalInit)
             {
                 multiconditional (v, context, "  ");
@@ -2799,7 +2805,7 @@ public class JobC extends Thread
                 if (bed.n != null)  // and not singleton, so trackN is true
                 {
                     result.append ("  resize (" + resolve (bed.n.reference, context, bed.nInitOnly));
-                    if (context.useExponent) result.append (RendererC.printShift (bed.n.exponent - Operator.MSB));
+                    if (context.useExponent) result.append (RendererC.printShift (bed.n.exponent));
                     result.append (");\n");
                 }
             }
@@ -2828,9 +2834,9 @@ public class JobC extends Thread
             {
                 result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + ");
                 // For fixed-point:
-                // raw result = exponentDerivative+exponentTime-MSB
-                // shift = raw-exponentVariable = exponentDerivative+exponentTime-MSB-exponentVariable
-                int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
+                // raw result = exponentDerivative+exponentTime
+                // shift = raw-exponentVariable = exponentDerivative+exponentTime-exponentVariable
+                int shift = v.derivative.exponent + bed.dt.exponent - v.exponent;
                 if (shift != 0  &&  fixedPoint)
                 {
                     result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
@@ -2846,7 +2852,7 @@ public class JobC extends Thread
             for (Variable v : bed.globalIntegrated)
             {
                 result.append ("    " + resolve (v.reference, context, false) + " += ");
-                int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
+                int shift = v.derivative.exponent + bed.dt.exponent - v.exponent;
                 if (shift != 0  &&  fixedPoint)
                 {
                     result.append ("(int) ((int64_t) " + resolve (v.derivative.reference, context, false) + " * dt" + RendererC.printShift (shift) + ");\n");
@@ -2875,7 +2881,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.globalUpdate);
-            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.globalUpdate);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, bed.globalUpdate);
             for (Variable v : bed.globalUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -2899,7 +2905,7 @@ public class JobC extends Thread
             {
                 // $n may be assigned during the regular update cycle, so we need to monitor it.
                 result.append ("  if (" + mangle ("$n") + " != " + mangle ("next_", "$n") + ") " + SIMULATOR + "resize (this, max (0, " + mangle ("next_", "$n"));
-                if (context.useExponent) result.append (RendererC.printShift (bed.n.exponent - Operator.MSB));
+                if (context.useExponent) result.append (RendererC.printShift (bed.n.exponent));
                 result.append ("));\n");
                 result.append ("  else " + SIMULATOR + "resize (this, -1);\n");
             }
@@ -2966,7 +2972,7 @@ public class JobC extends Thread
                             returnN = false;
                         }
                         result.append ("  " + SIMULATOR + "resize (this, max (0, " + mangle ("$n"));
-                        if (context.useExponent) result.append (RendererC.printShift (bed.n.exponent - Operator.MSB));
+                        if (context.useExponent) result.append (RendererC.printShift (bed.n.exponent));
                         result.append ("));\n");
                     }
                 }
@@ -2978,7 +2984,7 @@ public class JobC extends Thread
                         returnN = false;
                     }
                     result.append ("  int floorN = max (0, ");
-                    if (context.useExponent) result.append (mangle ("$n") + RendererC.printShift (bed.n.exponent - Operator.MSB));
+                    if (context.useExponent) result.append (mangle ("$n") + RendererC.printShift (bed.n.exponent));
                     else                     result.append ("(int) " + mangle ("$n"));
                     result.append (");\n");
                     result.append ("  if (n != floorN) " + SIMULATOR + "resize (this, floorN);\n");
@@ -3050,7 +3056,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.globalDerivativeUpdate);  // This is unlikely to make any difference. Just being thorough before call to multiconditional().
-            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.globalDerivativeUpdate);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, bed.globalDerivativeUpdate);
             for (Variable v : bed.globalDerivativeUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -3232,7 +3238,7 @@ public class JobC extends Thread
                 result.append ("      " + T + " p = c->getP ();\n");
                 result.append ("      if (p <= 0) continue;\n");
                 result.append ("      if (p < 1  &&  p < uniform<" + T + "> ()");
-                if (fixedPoint) result.append (" >> 16");
+                if (fixedPoint) result.append (RendererC.printShift (-1 - Operator.MSB - bed.p.exponent));  // shift = exponentUniform - p.exponent = (-1-MSB) - p.exponent
                 result.append (") continue;\n");
                 result.append ("      if (poll  &&  pollSorted.count (c)) continue;\n");
                 result.append ("\n");
@@ -3830,7 +3836,7 @@ public class JobC extends Thread
                 result.append ("  lastT = " + SIMULATOR + "currentEvent->t;\n");
             }
             s.simplify ("$init", bed.localInit);
-            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.localInit);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, bed.localInit);
             if (bed.localInit.contains (bed.dt))
             {
                 result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
@@ -3934,7 +3940,7 @@ public class JobC extends Thread
                     for (Variable v : bed.localIntegrated)
                     {
                         result.append ("    " + resolve (v.reference, context, false) + " = preserve->" + mangle (v) + " + ");
-                        int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
+                        int shift = v.derivative.exponent + bed.dt.exponent - v.exponent;
                         if (shift != 0  &&  fixedPoint)
                         {
                             if (v.type instanceof Matrix)
@@ -3958,7 +3964,7 @@ public class JobC extends Thread
                 for (Variable v : bed.localIntegrated)
                 {
                     result.append (pad + "  " + resolve (v.reference, context, false) + " += ");
-                    int shift = v.derivative.exponent + bed.dt.exponent - Operator.MSB - v.exponent;
+                    int shift = v.derivative.exponent + bed.dt.exponent - v.exponent;
                     if (shift != 0  &&  fixedPoint)
                     {
                         if (v.type instanceof Matrix)
@@ -4003,7 +4009,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.localUpdate);
-            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.localUpdate);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, bed.localUpdate);
             for (Variable v : bed.localUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -4180,12 +4186,12 @@ public class JobC extends Thread
                         result.append ("  if (pow (" + resolve (bed.p.reference, context, false) + ", " + resolve (bed.dt.reference, context, false));
                         if (context.useExponent)
                         {
-                            result.append (RendererC.printShift (bed.dt.exponent - 15));  // second operand must have exponent=15
+                            result.append (RendererC.printShift (bed.dt.exponent + Operator.MSB / 2));  // Second operand must have exponent=-MSB/2. shift = dt.exponent - -MSB/2
                             result.append (", " + bed.p.exponent);  // exponentA
                             result.append (", " + bed.p.exponent);  // exponentResult
                         }
                         result.append (") < uniform<" + T + "> ()");
-                        if (context.useExponent) result.append (RendererC.printShift (-1 - bed.p.exponent));  // -1 is hard-coded from the Uniform function.
+                        if (context.useExponent) result.append (RendererC.printShift (-1 - Operator.MSB - bed.p.exponent));  // shift = exponentUniform - p.exponent = (-1-MSB) - p.exponent
                         result.append (")\n");
                     }
                 }
@@ -4198,7 +4204,7 @@ public class JobC extends Thread
                         for (Variable t : s.ordered) if (t.hasAttribute ("temporary")  &&  bed.p.dependsOn (t) != null) list.add (t);
                         list.add (bed.p);
                         s.simplify ("$live", list, bed.p);
-                        if (fixedPoint) EquationSet.determineExponentsSimplified (list);
+                        if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, list);
                         for (Variable v : list)
                         {
                             multiconditional (v, context, "  ");
@@ -4208,12 +4214,12 @@ public class JobC extends Thread
                     result.append ("  if (" + mangle ("$p") + " <= 0  ||  " + mangle ("$p") + " < " + context.print (1, bed.p.exponent) + "  &&  pow (" + mangle ("$p") + ", " + resolve (bed.dt.reference, context, false));
                     if (context.useExponent)
                     {
-                        result.append (RendererC.printShift (bed.dt.exponent - 15));
+                        result.append (RendererC.printShift (bed.dt.exponent + Operator.MSB / 2));
                         result.append (", " + bed.p.exponent);
                         result.append (", " + bed.p.exponent);
                     }
                     result.append (") < uniform<" + T + "> ()");
-                    if (context.useExponent) result.append (RendererC.printShift (-1 - bed.p.exponent));
+                    if (context.useExponent) result.append (RendererC.printShift (-1 - Operator.MSB - bed.p.exponent));
                     result.append (")\n");
                 }
                 result.append ("  {\n");
@@ -4269,7 +4275,7 @@ public class JobC extends Thread
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
             }
             s.simplify ("$live", bed.localDerivativeUpdate);
-            if (fixedPoint) EquationSet.determineExponentsSimplified (bed.localDerivativeUpdate);
+            if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, bed.localDerivativeUpdate);
             for (Variable v : bed.localDerivativeUpdate)
             {
                 multiconditional (v, context, "  ");
@@ -4575,7 +4581,7 @@ public class JobC extends Thread
                         }
                         list.add (project);
                         s.simplify ("$connect", list, project);
-                        if (fixedPoint) EquationSet.determineExponentsSimplified (list);
+                        if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, list);
                         for (Variable v : list)
                         {
                             multiconditional (v, context, "      ");
@@ -4712,7 +4718,7 @@ public class JobC extends Thread
                 }
                 list.add (bed.p);
                 s.simplify ("$connect", list, bed.p);
-                if (fixedPoint) EquationSet.determineExponentsSimplified (list);
+                if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, list);
                 for (Variable v : list)
                 {
                     multiconditional (v, context, "  ");
@@ -4740,7 +4746,7 @@ public class JobC extends Thread
                 for (Variable t : s.ordered) if (t.hasAttribute ("temporary")  &&  bed.xyz.dependsOn (t) != null) list.add (t);
                 list.add (bed.xyz);
                 s.simplify ("$live", list, bed.xyz);  // evaluate in $live phase, because endpoints already exist when connection is evaluated.
-                if (fixedPoint) EquationSet.determineExponentsSimplified (list);
+                if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, list);
                 for (Variable v : list)
                 {
                     multiconditional (v, context, "    ");
@@ -4888,9 +4894,9 @@ public class JobC extends Thread
                         case Variable.DIVIDE:
                         {
                             // The current and buffered values of the variable have the same exponent.
-                            // raw = exponentV + exponentV - MSB
-                            // shift = raw - exponentV = exponentV - MSB
-                            int shift = v.exponent - Operator.MSB;
+                            // raw = exponentV + exponentV
+                            // shift = raw - exponentV = exponentV
+                            int shift = v.exponent;
                             if (shift != 0  &&  fixedPoint)
                             {
                                 result.append (" = (int64_t) " + current + " * " + buffered + RendererC.printShift (shift) + ";\n");
@@ -5339,9 +5345,9 @@ public class JobC extends Thread
                     result.append (" += ");
                     break;
                 case Variable.MULTIPLY:
-                    // raw exponent = exponentV + exponentExpression - MSB
-                    // shift = raw - exponentV = expnentExpression - MSB
-                    shift = e.expression.exponentNext - Operator.MSB;
+                    // raw exponent = exponentV + exponentExpression
+                    // shift = raw - exponentV = expnentExpression
+                    shift = e.expression.exponentNext;
                     if (shift != 0  &&  fixedPoint)
                     {
                         if (shift < 0) result.append (" = (int64_t) " + LHS + " * ");
@@ -5353,9 +5359,9 @@ public class JobC extends Thread
                     }
                     break;
                 case Variable.DIVIDE:
-                    // raw = exponentV - exponentExpression + MSB
-                    // shift = raw - exponentV = MSB - exponentExpression
-                    shift = Operator.MSB - e.expression.exponentNext;
+                    // raw = exponentV - exponentExpression
+                    // shift = raw - exponentV = -exponentExpression
+                    shift = -e.expression.exponentNext;
                     if (shift != 0  &&  fixedPoint)
                     {
                         if (shift > 0) result.append (" = ((int64_t) " + LHS + RendererC.printShift (shift) + ") / ");
@@ -5565,7 +5571,7 @@ public class JobC extends Thread
                             bed.defined.add (v);
                         }
                         context.result.append (pad + "InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (" + i.fileName);
-                        if (fixedPoint) context.result.append (", " + i.exponent);
+                        if (fixedPoint) context.result.append (", " + i.exponent + ", " + i.exponentRow);
                         context.result.append (");\n");
 
                         boolean smooth =             i.getKeywordFlag ("smooth");
@@ -5756,7 +5762,7 @@ public class JobC extends Thread
                                     context.result.append (pad + name + " = ");
                                     value.render (context);
                                     context.result.append (";\n");
-                                    if (fixedPoint) context.result.append (pad + name + " /= powf (2, FP_MSB - " + value.exponent + ");\n");
+                                    if (fixedPoint) context.result.append (pad + name + " /= powf (2, - " + value.exponent + ");\n");
                                     continue;
 
                                 // The model matrix will get coerced to float in the call to draw.
@@ -5799,7 +5805,7 @@ public class JobC extends Thread
                             context.result.append (" = ");
                             if (fixedPoint  &&  convertToFloat) context.result.append ("(");
                             value.render (context);
-                            if (fixedPoint  &&  convertToFloat) context.result.append (") / powf (2, FP_MSB - " + value.exponent + ")");
+                            if (fixedPoint  &&  convertToFloat) context.result.append (") / powf (2, - " + value.exponent + ")");
                             context.result.append (";\n");
                         }
                     }

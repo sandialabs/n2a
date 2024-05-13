@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -51,10 +51,10 @@ public class Round extends Function implements MatrixVisitable
 
         int centerPower = Math.max (0, op.centerPower ());  // because we always output an integer
         int pow  = op.exponent;
-        int cent = MSB - (pow - centerPower);  // We trust that op has its center positioned within the range [0,MSB], so (pow - centerPower) <= MSB.
-        if (pow < 0)
+        int cent = centerPower - pow;  // We trust that op has its center positioned within the range [0,MSB], so (centerPower - pow) >= 0.
+        if (pow < -MSB)
         {
-            pow = 0;
+            pow = -MSB;
             cent = MSB;
         }
         f.updateExponent (context, pow, cent);
@@ -71,9 +71,9 @@ public class Round extends Function implements MatrixVisitable
     public static void determineExponentNextStatic (Function f, int exponentNext)
     {
         Operator op = f.operands[0];
-        if      (op.exponent < 0)   op.exponentNext = 0;  // Must have at least one bit above the decimal point in order to round.
-        else if (op.exponent < MSB) op.exponentNext = op.exponent;  // Decimal point is visible, so we can process this.
-        else                        op.exponentNext = exponentNext; // Otherwise, just pass through.
+        if      (op.exponent < -MSB) op.exponentNext = -MSB;  // Must have at least one bit above the decimal point in order to round.
+        else if (op.exponent < 0   ) op.exponentNext = op.exponent;  // Decimal point is visible, so we can process this.
+        else                         op.exponentNext = exponentNext; // Otherwise, just pass through.
         op.determineExponentNext ();
         f.exponent = op.exponentNext;
     }

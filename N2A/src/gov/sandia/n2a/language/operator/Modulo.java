@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -47,7 +47,7 @@ public class Modulo extends OperatorBinary
             // The most precise answer is smaller than the magnitude of either operand.
             int pow         = Math.min (operand0.exponent, operand1.exponent);
             int centerPower = Math.min (operand0.centerPower (), operand1.centerPower ());
-            int cent = MSB - (pow - centerPower);
+            int cent = centerPower - pow;
             updateExponent (context, pow, cent);
         }
         else if (operand0.exponent != UNKNOWN)

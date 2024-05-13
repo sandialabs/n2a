@@ -80,9 +80,9 @@ namespace n2a
 
 #define FP_MSB    30
 #define FP_MSB2   15
-#define M_LOG2E   1549082004  // log_2(e) = 1.4426950408889634074; exponent=0
-#define M_E       1459366444  // exponent=1
-#define M_PI      1686629713  // exponent=1
+#define M_LOG2E   1549082004  // log_2(e) = 1.4426950408889634074; exponent=-MSB
+#define M_E       1459366444  // exponent=1-MSB
+#define M_PI      1686629713  // exponent=1-MSB
 #define NAN       0x80000000
 #define INFINITY  0x7FFFFFFF
 
@@ -110,22 +110,22 @@ namespace std
     }
 }
 
-SHARED int atan2    (int y, int x);                                                    // returns angle in [-pi,pi], exponentResult=1; exponentA must match exponentB, but it may be arbitrary.
+SHARED int atan2    (int y, int x);                                                    // returns angle in [-pi,pi], exponentResult=1-MSB; exponentA must match exponentB, but it may be arbitrary.
 SHARED int ceil     (int a,        int exponentA,                int exponentResult);  // Only needed for matrices. For scalars, an immediate implementation is emitted.
-SHARED int cos      (int a,        int exponentA);                                     // exponentResult=1
-SHARED int exp      (int a,                                      int exponentResult);  // exponentA=7
+SHARED int cos      (int a,        int exponentA);                                     // exponentResult=1-MSB
+SHARED int exp      (int a,                                      int exponentResult);  // exponentA=7-MSB
 SHARED int floor    (int a,        int exponentA,                int exponentResult);  // Only needed for matrices.
 SHARED int log      (int a,        int exponentA,                int exponentResult);
-SHARED int log2     (int a,        int exponentA,                int exponentResult);  // Use as a subroutine. Not directly available to user.
+SHARED int log2     (int a,        int exponentA,                int exponentResult);  // Used as a subroutine. Not directly available to user.
 SHARED int modFloor (int a, int b, int exponentA, int exponentB);                      // exponentResult is promised to be min(exponentA,exponentB)
-SHARED int pow      (int a, int b, int exponentA,                int exponentResult);  // exponentB=15
+SHARED int pow      (int a, int b, int exponentA,                int exponentResult);  // exponentB=-MSB/2
 SHARED int round    (int a,        int exponentA,                int exponentResult);  // Only needed for matrices.
 SHARED int sgn      (int a,                                      int exponentResult);  // Only needed for matrices.
-SHARED int sin      (int a,        int exponentA);                                     // exponentResult=1
+SHARED int sin      (int a,        int exponentA);                                     // exponentResult=1-MSB
 SHARED int sqrt     (int a,        int exponentA,                int exponentResult);
-SHARED int sqrt     (int64_t a,    int exponentA,                int exponentResult);  // 64-bit version of sqrt(). exponentA still refers to power in bit position FP_MSB, not any bit in the upper half of a.
+SHARED int sqrt     (int64_t a,    int exponentA,                int exponentResult);  // 64-bit version of sqrt().
 SHARED int tan      (int a,        int exponentA,                int exponentResult);
-SHARED int tanh     (int a,        int exponentA);                                     // exponentResult=0
+SHARED int tanh     (int a,        int exponentA);                                     // exponentResult=-MSB
 
 #endif  // n2a_FP
 

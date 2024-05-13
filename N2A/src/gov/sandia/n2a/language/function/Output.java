@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -100,7 +100,7 @@ public class Output extends Function
         if (operands.length > 2)
         {
             Operator op2 = operands[2];
-            op2.exponentNext = 15;  // To avoid passing extra exponent parameter, we use a general-purpose value.
+            op2.exponentNext = 0;  // If index, it will be truncated to an integer.
             op2.determineExponentNext ();
         }
 
@@ -386,7 +386,12 @@ public class Output extends Function
     public String getColumnName (Instance context)
     {
         // Explicit column name
-        if (hasColumnName) return operands[2].eval (context).toString ();
+        if (hasColumnName)
+        {
+            Type name = operands[2].eval (context);
+            if (name instanceof Scalar) return String.valueOf ((long) ((Scalar) name).value);
+            return name.toString ();
+        }
 
         // Auto-generate column name
         if (context instanceof InstanceTemporaries) context = ((InstanceTemporaries) context).wrapped;

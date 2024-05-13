@@ -28,10 +28,18 @@ template SHARED n2a_T pulse (n2a_T t, n2a_T width, n2a_T period, n2a_T rise, n2a
 
 template SHARED n2a_T unitmap (const MatrixAbstract<n2a_T> & A, n2a_T row, n2a_T column);
 
-#ifdef n2a_FP
+#define float  1  // This is an evil hack to get around lack of string comparison in c preprocessor.
+#define double 2
+#define int    3
+#if n2a_T != float
+#undef float
 template SHARED Matrix<float> glOrtho (float left, float right, float bottom, float top, float near, float far);
-// Non-templated integer gl functions are defined in fixedpoint.cc
-#else
+#endif
+#undef float  // Undo the hack
+#undef double
+#undef int
+
+#ifndef n2a_FP
 template SHARED Matrix<n2a_T> glFrustum (n2a_T left, n2a_T right, n2a_T bottom, n2a_T top, n2a_T near, n2a_T far);
 template SHARED Matrix<n2a_T> glOrtho (n2a_T left, n2a_T right, n2a_T bottom, n2a_T top, n2a_T near, n2a_T far);
 template SHARED Matrix<n2a_T> glLookAt (const MatrixFixed<n2a_T,3,1> & eye, const MatrixFixed<n2a_T,3,1> & center, const MatrixFixed<n2a_T,3,1> & up);
@@ -43,6 +51,7 @@ template SHARED Matrix<n2a_T> glScale (n2a_T sx, n2a_T sy, n2a_T sz);
 template SHARED Matrix<n2a_T> glTranslate (const MatrixFixed<n2a_T,3,1> & position);
 template SHARED Matrix<n2a_T> glTranslate (n2a_T x, n2a_T y, n2a_T z);
 #endif
+// else n2a_FP is defined -- Non-templated integer gl functions are defined in fixedpoint.cc
 
 template SHARED void removeMonitor (std::vector<Part<n2a_T> *> & partList, Part<n2a_T> * part);
 

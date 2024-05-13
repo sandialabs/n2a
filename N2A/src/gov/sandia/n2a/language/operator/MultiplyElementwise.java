@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -66,7 +66,7 @@ public class MultiplyElementwise extends OperatorBinary
         {
             int cent = MSB / 2;
             int pow = operand0.centerPower () + operand1.centerPower ();
-            pow += MSB - cent;
+            pow -= cent;
             updateExponent (context, pow, cent);
         }
         // else don't to propagate a bad guess. Instead, hope that better information arrives in next cycle.

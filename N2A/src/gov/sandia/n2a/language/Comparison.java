@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -47,7 +47,7 @@ public class Comparison extends OperatorBinary implements OperatorLogical
         operand0.determineExponent (context);
         operand1.determineExponent (context);
         if (operand0.exponent != UNKNOWN  ||  operand1.exponent != UNKNOWN) alignExponent (context);
-        updateExponent (context, MSB, 0);  // Output is 1 or 0
+        updateExponent (context, 0, 0);  // Output is 1 or 0, pure integer.
 
         // Any time a variable is compared to a value, it is a clue about the expected range of the variable.
         // The following two blocks apply this heuristic.

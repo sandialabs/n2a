@@ -68,7 +68,7 @@ template<class T, int R, int C> MatrixFixed<T,R,1> uniform (const MatrixFixed<T,
     T * end = t + C;
     while (t < end) *t++ = uniform<T> ();
 #   ifdef n2a_FP
-    return multiply (sigma, temp, 31);  // See uniform<int>(int) in runtime.tcc
+    return multiply (sigma, temp, 1 + FP_MSB);  // See uniform<int>(int) in runtime.tcc
 #   else
     return sigma * temp;
 #   endif
@@ -92,7 +92,7 @@ template<class T, int R, int C> MatrixFixed<T,R,1> gaussian (const MatrixFixed<T
     T * end = t + C;
     while (t < end) *t++ = gaussian<T> ();
 #   ifdef n2a_FP
-    return multiply (sigma, temp, 28);  // See gaussian<int>(int) in runtime.tcc
+    return multiply (sigma, temp, FP_MSB - 2);  // See gaussian<int>(int) in runtime.tcc
 #   else
     return sigma * temp;
 #   endif
@@ -109,11 +109,11 @@ template<class T, int R> MatrixFixed<T,R,1> sphere (const MatrixFixed<T,R,1> & s
     // directions on a sphere of dimension R, then scale that vector so that it fills
     // the volume evenly between radius 0 and 1. This requires less density near the center.
 #   ifdef n2a_FP
-    int n     = norm (result, 2 << 15, 2, 4);  // exponentA is result of gaussian(). exponentResult should be roughly 2+log2(R) (exponent of gaussian, plus log of the number of additions). Currently hardcoded for up to 4 rows.
-    int R1    = (1 << 30) / R >> 15;  // result of division is exponent 0. R1 must be exponent 15.
-    int scale = pow (uniform<int> (), R1, -1, -1);
-    result = divide (result, n, FP_MSB-2);  // result of division is 2-4+MSB = MSB-2. Result is always in [0,1], so exponentResult should be 0.
-    result = multiply (result, scale, FP_MSB+1);  // result of multiply is 0+(-1)-MSB=-MSB-1. Result is always in [0,1].
+    int n     = norm (result, 2 << FP_MSB2, 2-FP_MSB, 4-FP_MSB);  // exponentA is result of gaussian(). exponentResult should be roughly 2+log2(R)-MSB (exponent of gaussian, plus log of the number of additions). Currently hardcoded for up to 4 rows.
+    int R1    = (1 << FP_MSB2) / R;  // R1 exponent is -MSB/2, as required by pow()
+    int scale = pow (uniform<int> (), R1, -1-FP_MSB, -1-FP_MSB);
+    result = divide (result, n, FP_MSB-2);  // result of division is (2-MSB) - (4-MSB) = -2. Result is always in [0,1], so exponentResult should be -MSB.
+    result = multiply (result, scale, FP_MSB+1);  // result of multiply is -MSB + -1-MSB = -2*MSB-1. Result is always in [0,1].
     return multiplyElementwise (sigma, result, FP_MSB);  // Result should have same exponent as sigma
 #   else
     T scale = pow (uniform<T> (), (T) 1 / R) / norm (result, (T) 2);
@@ -131,9 +131,9 @@ template<class T, int R, int C> MatrixFixed<T,R,1> sphere (const MatrixFixed<T,R
     while (t < end) *t++ = gaussian<T> ();
 
 #   ifdef n2a_FP
-    int n     = norm (temp, 2 << 15, 2, 4);
-    int C1    = (1 << 30) / C >> 15;
-    int scale = pow (uniform<int> (), C1, -1, -1);
+    int n     = norm (temp, 2 << FP_MSB2, 2-FP_MSB, 4-FP_MSB);
+    int C1    = (1 << FP_MSB2) / C;
+    int scale = pow (uniform<int> (), C1, -1-FP_MSB, -1-FP_MSB);
     temp = divide (temp, n, FP_MSB-2);
     temp = multiply (temp, scale, FP_MSB+1);
     return multiply (sigma, temp, FP_MSB);
@@ -289,7 +289,7 @@ public:
 
     // Accessors for $variables
     virtual T    getLive ();                         ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
-    virtual T    getP    ();                         ///< Default is 1 (always create)
+    virtual T    getP    ();                         ///< Default is 1 (always create). exponent=-MSB
     virtual void getXYZ  (MatrixFixed<T,3,1> & xyz); ///< Default is [0;0;0].
 
     // Events

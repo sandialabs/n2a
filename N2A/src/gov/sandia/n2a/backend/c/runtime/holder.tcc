@@ -21,6 +21,7 @@ the U.S. Government retains certain rights in this software.
 #include <sys/stat.h>
 #ifdef _MSC_VER
 #  define stat _stat
+#  define timegm _mkgmtime
 #else
 #  include <dirent.h>
 #endif
@@ -274,7 +275,7 @@ convert (String input, int exponent)
     bits |= 0x10000000000000l;  // set implied msb of mantissa (bit 52) to 1
     bits &= 0x1FFFFFFFFFFFFFl;  // clear sign and exponent bits
     if (negate) bits = -bits;
-    return bits >> 52 - FP_MSB + exponent - e;
+    return bits >> 52 + exponent - e;
 }
 
 #endif
@@ -594,7 +595,7 @@ ImageInput<T>::get (String channelName, T now, bool step)
                         double nextPTS = atof (video->get ("nextPTS").c_str ());
                         if (framePeriod) nextPTS /= framePeriod;
 #                       ifdef n2a_FP
-                        t = (T) (nextPTS * pow (2.0, FP_MSB - Event<T>::exponent));
+                        t = (T) (nextPTS * pow (2.0, -Event<T>::exponent));
 #                       else
                         t = nextPTS;
 #                       endif
@@ -605,7 +606,7 @@ ImageInput<T>::get (String channelName, T now, bool step)
                 if (pattern.size ())
                 {
 #                   ifdef n2a_FP
-                    index = (int) (now / pow (2.0f, FP_MSB - Event<T>::exponent));
+                    index = (int) (now / pow (2.0f, -Event<T>::exponent));
 #                   else
                     index = (int) now;
 #                   endif
@@ -662,9 +663,9 @@ ImageInput<T>::get (String channelName, T now, bool step)
 
 #       ifdef n2a_FP
         // Convert buffer to int.
-        float conversion = pow (2.0f, FP_MSB - exponent);
+        float conversion = pow (2.0f, -exponent);
         int count = image.width * image.height * 3;
-        Pointer q (count * sizeof (T));
+        n2a::Pointer q (count * sizeof (T));
         float * from = (float *) p;
         T *     to   = (T *)     q;
         T *     end  = to + count;
@@ -870,7 +871,7 @@ template<>
 void
 setColor (float target[], const Matrix<int> & color, bool withAlpha)
 {
-    float conversion = powf (2, FP_MSB);  // exponent=0
+    float conversion = powf (2, FP_MSB);  // exponent=MSB
     target[0] = color[0] / conversion;
     target[1] = color[1] / conversion;
     target[2] = color[2] / conversion;
@@ -896,11 +897,11 @@ ImageOutput<T>::setClearColor (const Matrix<T> & color)
     if (count == 1) count = color.columns ();
     bool hasAlpha = count > 3;
 
-    uint32_t      r = std::min (1.0f, std::max (0.0f, color[0])) * 255;
-    uint32_t      g = std::min (1.0f, std::max (0.0f, color[1])) * 255;
-    uint32_t      b = std::min (1.0f, std::max (0.0f, color[2])) * 255;
+    uint32_t      r = std::min (1.0f, std::max (0.0f, (float) color[0])) * 255;
+    uint32_t      g = std::min (1.0f, std::max (0.0f, (float) color[1])) * 255;
+    uint32_t      b = std::min (1.0f, std::max (0.0f, (float) color[2])) * 255;
     uint32_t      a = 0xFF;
-    if (hasAlpha) a = std::min (1.0f, std::max (0.0f, color[3])) * 255;
+    if (hasAlpha) a = std::min (1.0f, std::max (0.0f, (float) color[3])) * 255;
     clearColor = r << 24 | g << 16 | b << 8 | a;
 
 #   ifdef HAVE_GL
@@ -971,7 +972,7 @@ ImageOutput<T>::drawDisc (T now, bool raw, const MatrixFixed<T,3,1> & center,   
     next (now);
 
 #   ifdef n2a_FP
-    double conversion = pow (2.0, FP_MSB - exponent);
+    double conversion = pow (2.0, -exponent);
     MatrixFixed<double,3,1> center = centerFP;
     center /= conversion;
     double radius = radiusFP / conversion;
@@ -1007,7 +1008,7 @@ ImageOutput<T>::drawSquare (T now, bool raw, const MatrixFixed<T,3,1> & center, 
     next (now);
 
 #   ifdef n2a_FP
-    double conversion = pow (2.0, FP_MSB - exponent);
+    double conversion = pow (2.0, -exponent);
     n2a::Point center = centerFP;
     center /= conversion;
     double w = wFP / conversion;
@@ -1045,7 +1046,7 @@ ImageOutput<T>::drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1,   c
     next (now);
 
 #   ifdef n2a_FP
-    double conversion = pow (2.0, FP_MSB - exponent);
+    double conversion = pow (2.0, -exponent);
     n2a::Point p1 = p1FP;
     n2a::Point p2 = p2FP;
     p1 /= conversion;
@@ -1146,7 +1147,7 @@ ImageOutput<T>::writeImage  ()
         if (timeScale)
         {
 #           ifdef n2a_FP
-            canvas.timestamp = timeScale * t / pow (2.0, FP_MSB - Event<T>::exponent);
+            canvas.timestamp = timeScale * t / pow (2.0, -Event<T>::exponent);
 #           else
             canvas.timestamp = timeScale * t;
 #           endif
@@ -1424,7 +1425,7 @@ T
 #ifdef n2a_FP
 ImageOutput<T>::drawCube (T now, const Material & material, const Matrix<float> & model, int exponentP)
 {
-    const_cast<Matrix<float> &> (model) /= powf (2, FP_MSB - exponentP);
+    const_cast<Matrix<float> &> (model) /= powf (2, -exponentP);
 #else
 ImageOutput<T>::drawCube (T now, const Material & material, const Matrix<float> & model)
 {
@@ -1515,8 +1516,8 @@ T
 #ifdef n2a_FP
 ImageOutput<T>::drawCylinder (T now, const Material & material, const MatrixFixed<float,3,1> & p1, int exponentP, float r1, int exponentR, const MatrixFixed<float,3,1> & p2, float r2, int cap1, int cap2, int steps, int stepsCap)
 {
-    float scaleP = powf (2, FP_MSB - exponentP);
-    float scaleR = powf (2, FP_MSB - exponentR);
+    float scaleP = powf (2, -exponentP);
+    float scaleR = powf (2, -exponentR);
     const_cast<MatrixFixed<float,3,1> &> (p1) /= scaleP;
     const_cast<MatrixFixed<float,3,1> &> (p2) /= scaleP;
     r1 /= scaleR;
@@ -1573,9 +1574,17 @@ ImageOutput<T>::drawCylinder (T now, const Material & material, const MatrixFixe
     // This also works when r1 is shorter than r2.
     float slopeZ = (r2 - r1) / length;
 
+#   ifdef n2a_FP
+#   pragma push_macro("M_PI")
+#   undef M_PI
+#   define M_PI 3.14159265359f
+#   endif
     float angleStep    = M_PI * 2 / steps;
     float angleStep2   = M_PI     / steps;  // half of a regular step
     float angleStepCap = M_PI / 2 / (stepsCap + 1);
+#   ifdef n2a_FP
+#   pragma pop_macro("M_PI")
+#   endif
 
     int  rowsBegin = 0;     // Index of first vertex in first ring.
     int  rowsEnd   = 0;     // Index of first vertex after last ring.
@@ -1789,7 +1798,7 @@ T
 #ifdef n2a_FP
 ImageOutput<T>::drawPlane (T now, const Material & material, const Matrix<float> & model, int exponentP)
 {
-    const_cast<Matrix<float> &> (model) /= powf (2, FP_MSB - exponentP);
+    const_cast<Matrix<float> &> (model) /= powf (2, -exponentP);
 #else
 ImageOutput<T>::drawPlane (T now, const Material & material, const Matrix<float> & model)
 {
@@ -1838,7 +1847,7 @@ T
 #ifdef n2a_FP
 ImageOutput<T>::drawSphere (T now, const Material & material, const Matrix<float> & model, int exponentP, int steps)
 {
-    const_cast<Matrix<float> &> (model) /= powf (2, FP_MSB - exponentP);
+    const_cast<Matrix<float> &> (model) /= powf (2, -exponentP);
 #else
 ImageOutput<T>::drawSphere (T now, const Material & material, const Matrix<float> & model,                int steps)
 {
@@ -2235,7 +2244,7 @@ InputHolder<T>::getRow (T row)
                     bool valid = false;
                     if (index == timeColumn)
                     {
-                        int year   = 1970;  // will be adjusted below for mktime()
+                        int year   = 1970;  // will be adjusted below for timegm()
                         int month  = 1;     // ditto
                         int day    = 1;
                         int hour   = 0;
@@ -2296,12 +2305,12 @@ InputHolder<T>::getRow (T row)
 
                             struct tm date;
                             date.tm_isdst = 0;  // time is strictly UTC, with no DST
-                            // ignoring tm_wday and tm_yday, as mktime() doesn't do anything with them
+                            // ignoring tm_wday and tm_yday, as timegm() doesn't do anything with them
 
-                            // Hack to adjust for mktime() that can't handle dates before posix epoch (1970/1/1).
+                            // Hack to adjust for timegm() that can't handle dates before posix epoch (1970/1/1).
                             // This simple hack only works for years after ~1900.
                             // Solution comes from https://bugs.php.net/bug.php?id=17123
-                            // Alternate solution would be to implement a simple mktime() right here.
+                            // Alternate solution would be to implement a simple timegm() right here.
                             // Since we don't care about DST or timezones, all it has to do is handle Gregorion leap-years.
                             time_t offset = 0;
                             if (year <= 70)  // Yes, that includes 1970 itself.
@@ -2314,7 +2323,7 @@ InputHolder<T>::getRow (T row)
                                 date.tm_hour = 0;
                                 date.tm_min  = 0;
                                 date.tm_sec  = 0;
-                                offset = mktime (&date);
+                                offset = timegm (&date);
                             }
 
                             date.tm_year = year;
@@ -2324,10 +2333,10 @@ InputHolder<T>::getRow (T row)
                             date.tm_min  = minute;
                             date.tm_sec  = second;
 
-                            nextValues[index] = mktime (&date) - offset;  // Unix time; an integer, so exponent=MSB
+                            nextValues[index] = timegm (&date) - offset;  // Unix time; an integer, so exponent=0
 #                           ifdef n2a_FP
                             // Need to put value in expected exponent.
-                            int shift = FP_MSB - (time ? Event<T>::exponent : exponent);
+                            int shift = -(time ? exponentRow : exponent);
                             if (shift >= 0) nextValues[index] <<= shift;
                             else            nextValues[index] >>= -shift;
 #                           endif
@@ -2337,7 +2346,7 @@ InputHolder<T>::getRow (T row)
                     if (! valid)  // Not a date, so general case ...
                     {
 #                       ifdef n2a_FP
-                        nextValues[index] = convert (field, time  &&  index == timeColumn ? Event<T>::exponent : exponent);
+                        nextValues[index] = convert (field, time  &&  index == timeColumn ? exponentRow : exponent);
 #                       else
                         nextValues[index] = (T) atof (field.c_str ());
 #                       endif
@@ -2516,9 +2525,9 @@ InputHolder<T>::get (T row)
 template<class T>
 InputHolder<T> *
 #ifdef n2a_FP
-inputHelper (const String & fileName, int exponent, InputHolder<T> * oldHandle)
+inputHelper (const String & fileName, int exponent, int exponentRow, InputHolder<T> * oldHandle)
 #else
-inputHelper (const String & fileName,               InputHolder<T> * oldHandle)
+inputHelper (const String & fileName,                                InputHolder<T> * oldHandle)
 #endif
 {
     InputHolder<T> * handle = (InputHolder<T> *) SIMULATOR getHolder (fileName, oldHandle);
@@ -2527,7 +2536,8 @@ inputHelper (const String & fileName,               InputHolder<T> * oldHandle)
         handle = new InputHolder<T> (fileName);
         SIMULATOR holders.push_back (handle);
 #       ifdef n2a_FP
-        handle->exponent = exponent;
+        handle->exponent    = exponent;
+        handle->exponentRow = exponentRow;
 #       endif
     }
     return handle;
@@ -2602,7 +2612,7 @@ OutputHolder<T>::trace (T now)
         {
             columnMap["$t"] = 0;
 #           ifdef n2a_FP
-            columnValues.push_back ((float) t / pow (2.0f, FP_MSB - Event<T>::exponent));
+            columnValues.push_back ((float) t / pow (2.0f, -Event<T>::exponent));
 #           else
             columnValues.push_back (t);
 #           endif
@@ -2611,7 +2621,7 @@ OutputHolder<T>::trace (T now)
         else
         {
 #           ifdef n2a_FP
-            columnValues[0] = (float) t / pow (2.0f, FP_MSB - Event<T>::exponent);
+            columnValues[0] = (float) t / pow (2.0f, -Event<T>::exponent);
 #           else
             columnValues[0] = t;
 #           endif
@@ -2670,7 +2680,7 @@ OutputHolder<T>::trace (T now, const String & column, T value,                 c
     if      (valueFP ==  NAN)      value =  std::numeric_limits<float>::quiet_NaN ();
     else if (valueFP ==  INFINITY) value =  std::numeric_limits<float>::infinity ();
     else if (valueFP == -INFINITY) value = -std::numeric_limits<float>::infinity ();
-    else                           value = (float) valueFP / pow (2.0f, FP_MSB - exponent);
+    else                           value = (float) valueFP / pow (2.0f, -exponent);
 #   endif
 
     std::unordered_map<String, int>::iterator result = columnMap.find (column);
@@ -2757,27 +2767,24 @@ OutputHolder<T>::trace (T now, const String & column, const Matrix<T> & A, const
 template<class T>
 T
 #ifdef n2a_FP
-OutputHolder<T>::trace (T now, T columnFP, T valueFP, int exponent, const char * mode)
+OutputHolder<T>::trace (T now, T index,  T valueFP, int exponent, const char * mode)
 #else
-OutputHolder<T>::trace (T now, T column,   T value,                 const char * mode)
+OutputHolder<T>::trace (T now, T column, T value,                 const char * mode)
 #endif
 {
     trace (now);
 
 #   ifdef n2a_FP
-    float column = (float) columnFP / pow (2.0f, FP_MSB - 15);  // column has fixed exponent of 15
     float value;
     if      (valueFP ==  NAN)      value =  std::numeric_limits<float>::quiet_NaN ();
     else if (valueFP ==  INFINITY) value =  std::numeric_limits<float>::infinity ();
     else if (valueFP == -INFINITY) value = -std::numeric_limits<float>::infinity ();
-    else                           value = (float) valueFP / pow (2.0f, FP_MSB - exponent);
+    else                           value = (float) valueFP / pow (2.0f, -exponent);
+#   else
+    int index = (int) column;  // truncates floating-point
 #   endif
 
-    String columnName;
-    int index;  // Only used for "raw" mode.
-    if (raw) columnName = index = (int) round (column);
-    else     columnName = column;
-
+    String columnName = index;
     std::unordered_map<String, int>::iterator result = columnMap.find (columnName);
     if (result == columnMap.end ())
     {

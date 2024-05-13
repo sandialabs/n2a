@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -49,8 +49,7 @@ public class Exp extends Function implements MatrixVisitable
 
         // Currently, op is always signed. The best we can do is assume output is centered around 1.
         int centerNew   = MSB / 2;
-        int exponentNew = getExponentHint (0);
-        exponentNew += MSB - centerNew;
+        int exponentNew = getExponentHint (0) - centerNew;
         updateExponent (context, exponentNew, centerNew);
     }
 
@@ -61,7 +60,7 @@ public class Exp extends Function implements MatrixVisitable
         // Our goal with fixed-point is to roughly match the performance of single-precision float.
         // The largest number representable in float is 2^127, so allocating 8 bits above the decimal
         // should be more than enough.
-        op.exponentNext = 7;
+        op.exponentNext = 7 - MSB;
         op.determineExponentNext ();
     }
 

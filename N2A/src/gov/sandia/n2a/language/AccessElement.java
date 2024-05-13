@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -139,7 +139,7 @@ public class AccessElement extends Function implements NonzeroIterable
         for (int i = 1; i < operands.length; i++)
         {
             Operator op = operands[i];
-            op.exponentNext = MSB;  // forces pure integer
+            op.exponentNext = 0;  // forces pure integer
             op.determineExponentNext ();
         }
     }

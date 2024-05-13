@@ -52,7 +52,7 @@ public class Mfile extends Function
 
         // Set exponent based on hint. Suitable for numerics outputs. Does no harm for string outputs.
         int centerNew   = MSB / 2;
-        int exponentNew = getExponentHint (0) + MSB - centerNew;
+        int exponentNew = getExponentHint (0) - centerNew;
         updateExponent (context, exponentNew, centerNew);
     }
 
@@ -65,7 +65,7 @@ public class Mfile extends Function
         for (int i = 1; i < operands.length; i++)
         {
             Operator op = operands[i];
-            op.exponentNext = MSB;
+            op.exponentNext = 0;
             op.determineExponentNext ();
         }
     }

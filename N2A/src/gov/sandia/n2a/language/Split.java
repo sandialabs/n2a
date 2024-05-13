@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -38,7 +38,7 @@ public class Split extends Operator
 
     public void determineExponent (ExponentContext context)
     {
-        updateExponent (context, MSB, 0);  // integer
+        updateExponent (context, 0, 0);  // integer
     }
 
     public void determineUnit (boolean fatal) throws Exception

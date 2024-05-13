@@ -36,7 +36,7 @@ import tech.units.indriya.AbstractUnit;
 public class Input extends Function
 {
     public boolean timeWarning;
-    public int     exponentTime = UNKNOWN; // For C backend with integer math. The exponent used to convert time values to integer, both from the input file and from the caller.
+    public int     exponentRow = UNKNOWN;  // For C backend with integer math. The exponent used to convert row or time values into a floating-point number.
     public String  name;                   // For C backend, the name of the InputHolder object.
     public String  fileName;               // For C backend, the name of the string variable holding the file name, if any.
 
@@ -71,7 +71,7 @@ public class Input extends Function
         for (Operator op : operands) op.determineExponent (context);
 
         int centerNew   = MSB / 2;
-        int exponentNew = getExponentHint (0) + MSB - centerNew;
+        int exponentNew = getExponentHint (0) - centerNew;
         updateExponent (context, exponentNew, centerNew);
     }
 
@@ -87,14 +87,14 @@ public class Input extends Function
         if (operands.length > 1)
         {
             Operator op = operands[1];
-            if (usesTime ()) op.exponentNext = exponentTime;
-            else             op.exponentNext = MSB;  // We expect an integer.
+            if (usesTime ()) op.exponentNext = exponentRow;
+            else             op.exponentNext = 0;  // We expect an integer.
             op.determineExponentNext ();
         }
         if (operands.length > 2)
         {
             Operator op = operands[2];
-            op.exponentNext = MSB;  // We expect an integer.
+            op.exponentNext = 0;  // We expect an integer.
             op.determineExponentNext ();
         }
     }

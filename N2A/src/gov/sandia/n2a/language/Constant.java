@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -88,7 +88,7 @@ public class Constant extends Operator
 
             int e = 0;
             if (v != 0  &&  Double.isFinite (v)) e = Math.getExponent (v);
-            int exponentNew = e + MSB - centerNew;
+            int exponentNew = e - centerNew;
             updateExponent (context, exponentNew, centerNew);
         }
         // Matrix constants are built by BuildMatrix with their exponent and center values set correctly.
@@ -104,11 +104,11 @@ public class Constant extends Operator
         if (shift == 0) return;
         if (shift < 0)  // down-shift
         {
-            // The mantissa of a float is 24 bits (1 implicit + 23 explicit).
-            // If this were aligned at MSB, we would have an extra (MSB+1)-24=MSB-23 zero bits beyond any zeros in the mantissa.
-            // Since the mantissa is actually aligned with center, we must subtract MSB-center bits from that count.
-            // available zero bits = zeros(mantissa)+MSB-23-(MSB-center) = zeros(mantissa)-23+center
-            int z = trailingZeros () - 23 + center;
+            // To avoid throwing away precision, we only shift until we run out of trailing zeros.
+            // How many trailing zeros do we have?
+            // Assuming 24 bits (1 implicit + 23 explicit) of a float, we have (center+1)-24 zeros
+            // that are just padding, plus any trailing zeros in the value itself.
+            int z = trailingZeros () + center - 23;
             z = Math.max (z, 0);  // Don't allow negative z. This could happen if we are truncating some bits (center is less than 23, but there are no trailing zeros).
             shift = Math.max (shift, -z);
         }

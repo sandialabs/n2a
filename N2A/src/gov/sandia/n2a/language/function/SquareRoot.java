@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -46,7 +46,7 @@ public class SquareRoot extends Function implements MatrixVisitable
         if (op.exponent == UNKNOWN) return;
         int pow = op.centerPower () / 2;
         int centerNew   = MSB / 2;
-        int exponentNew = pow + MSB - centerNew;
+        int exponentNew = pow - centerNew;
         updateExponent (context, exponentNew, centerNew);
     }
 

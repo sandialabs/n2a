@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -38,7 +38,7 @@ public class Cosine extends Function implements MatrixVisitable
     public void determineExponent (ExponentContext context)
     {
         operands[0].determineExponent (context);
-        updateExponent (context, 1, MSB - 2);  // Largest absolute value is 1, but we allow one extra bit above the decimal for the convenience of the C implementation.
+        updateExponent (context, 1 - MSB, MSB - 2);  // Largest absolute value is 1, but we allow one extra bit above the decimal for the convenience of the C implementation.
     }
 
     public void determineExponentNext ()

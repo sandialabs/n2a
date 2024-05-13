@@ -55,7 +55,7 @@ public:
     virtual int columns     () const = 0;
 };
 
-template<class T> class Matrix;
+template<class T> class SHARED Matrix;
 
 template<class T> SHARED void      clear      (const MatrixAbstract<T> & A, const T scalar = (T) 0);      ///< Set all elements to given value. const on A is a lie to allow transient matrix regions.
 template<class T> SHARED void      identity   (const MatrixAbstract<T> & A);                              ///< Set diagonal to 1 and all other elements to 0. Does not have to be a square matrix. const on A is a lie to allow transient matrix regions.
@@ -180,8 +180,8 @@ template<class T> SHARED Matrix<T> operator - (const T scalar,             const
 // Fixed-point operations on MatrixStrided<int>
 // These are not templates. Their implementations are in fixedpoint.cc
 SHARED void        identity            (const MatrixStrided<int> & A, int one);  // "one" is passed explicitly, already scaled with the right exponent
-SHARED int         norm                (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult);  // exponentN=15
-SHARED Matrix<int> normalize           (const MatrixStrided<int> & A, int exponentA);  // result has exponent=0
+SHARED int         norm                (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult); // exponentN=-MSB/2
+SHARED Matrix<int> normalize           (const MatrixStrided<int> & A,        int exponentA);                     // result has exponent=-MSB
 SHARED Matrix<int> cross               (const MatrixStrided<int> & A, const MatrixStrided<int> & B, int shift);
 
 SHARED Matrix<int> visit               (const MatrixStrided<int> & A, int (*function) (int, int),      int exponent1);

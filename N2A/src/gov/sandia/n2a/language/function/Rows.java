@@ -1,5 +1,5 @@
 /*
-Copyright 2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -34,7 +34,7 @@ public class Rows extends Function
 
     public void determineExponent (ExponentContext context)
     {
-        updateExponent (context, MSB, 0);  // small integer
+        updateExponent (context, 0, 0);  // small integer
     }
 
     public void determineExponentNext ()

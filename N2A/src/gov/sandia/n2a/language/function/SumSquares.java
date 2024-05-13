@@ -1,5 +1,5 @@
 /*
-Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -57,7 +57,7 @@ public class SumSquares extends Function
         {
             int shift = (int) Math.floor (Math.log (Asize) / Math.log (2));   // log2(Asize)
             int centerNew   = MSB / 2;
-            int exponentNew = op0.centerPower () * 2 + shift + MSB - centerNew;
+            int exponentNew = op0.centerPower () * 2 + shift - centerNew;
             updateExponent (context, exponentNew, centerNew);
         }
     }

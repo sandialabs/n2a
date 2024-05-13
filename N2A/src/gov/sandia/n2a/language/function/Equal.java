@@ -1,5 +1,5 @@
 /*
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -71,7 +71,7 @@ public class Equal extends Function
             if      (op0 instanceof Constant) ((Constant) op0).determineExponent (context, op1.exponent);
             else if (op1 instanceof Constant) ((Constant) op1).determineExponent (context, op0.exponent);
         }
-        updateExponent (context, MSB, 0);  // Output is 1 or 0
+        updateExponent (context, 0, 0);  // Output is 1 or 0
 
         // Any time a variable is compared to a value, it is a clue about the expected range of the variable.
         // The following two blocks apply this heuristic.

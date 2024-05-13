@@ -164,8 +164,7 @@ public class RendererC extends Renderer
                 }
                 else if (useExponent)
                 {
-                    int shiftX = Operator.MSB - y.exponent;
-                    int x =  shiftX >= 0 ? 0x1 << shiftX : 0;
+                    int x =  y.exponent >= 0 ? 0x1 << y.exponent : 0;
                     result.append (", " + x);
                 }
             }
@@ -249,14 +248,14 @@ public class RendererC extends Renderer
             if (op instanceof Draw3D)
             {
                 boolean needModel = ((Draw3D) d).needModelMatrix ();
-                int exponentP = Operator.MSB;
+                int exponentP = 0;
                 if (useExponent)
                 {
                     // position and model matrix share same exponent
                     Operator model = d.getKeyword ("model");
                     if (model != null) exponentP = model.exponentNext;
                     else if (d.operands.length > 1) exponentP = d.operands[1].exponentNext;
-                    // else model has been initialized to identity, presumably integer 1. Operator.MSB set above is suitable default.
+                    // else model has been initialized to identity, presumably integer 1. Zero set above is suitable default.
                 }
 
                 result.append (d.name + "->" + op + " (" + job.SIMULATOR + "currentEvent->t, material");

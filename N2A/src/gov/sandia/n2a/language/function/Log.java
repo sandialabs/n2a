@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -51,7 +51,7 @@ public class Log extends Function implements MatrixVisitable
         int p = 0;
         if (o != 0) p = (int) (Math.signum (o) * Math.round (Math.log (Math.abs (o)) / Math.log (2)));
         int centerNew   = MSB / 2;
-        int exponentNew = p + MSB - centerNew;
+        int exponentNew = p - centerNew;
         updateExponent (context, exponentNew, centerNew);
     }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -54,7 +54,7 @@ public class Sphere extends Function
             Operator sigma = new Constant (new MatrixDense (3, 1, 1));
             sigma.parent = this;
             sigma.center   = MSB / 2;  // Constant matrix should always carry fixed-point information.
-            sigma.exponent = MSB - sigma.center;
+            sigma.exponent = -sigma.center;
             operands[0] = sigma;
             return this;
         }
@@ -134,7 +134,7 @@ public class Sphere extends Function
     {
         if (operands.length == 0)
         {
-            updateExponent (context, -1, MSB);  // Current implementation never quite reaches 1, only [0,1).
+            updateExponent (context, -1 - MSB, MSB);  // Current implementation never quite reaches 1, only [0,1).
         }
         else
         {

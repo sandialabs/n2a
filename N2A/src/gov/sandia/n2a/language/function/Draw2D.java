@@ -17,7 +17,7 @@ public class Draw2D extends Draw
         // Last arg is color, which is always a raw integer.
         int last = operands.length - 1;
         Operator c = operands[last];
-        c.exponentNext = MSB;
+        c.exponentNext = 0;
         c.determineExponentNext ();
 
         // All pixel-valued operands must agree on exponent.

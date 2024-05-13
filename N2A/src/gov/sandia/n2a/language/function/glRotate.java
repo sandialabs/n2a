@@ -37,13 +37,13 @@ public class glRotate extends Function
     public void determineExponent (ExponentContext context)
     {
         for (Operator op : operands) op.determineExponent (context);
-        updateExponent (context, 0, MSB - 1);  // A pure rotation matrix only needs to represent 1.
+        updateExponent (context, -MSB, MSB - 1);  // A pure rotation matrix only needs to represent 1.
         // No relevant keyword arguments.
     }
 
     public void determineExponentNext ()
     {
-        exponentNext = exponent;  // exponent is assigned 0 above
+        exponentNext = exponent;  // exponent is assigned -MSB above
 
         // Determine average exponent of operands, then force them to agree.
         int avg = 0;

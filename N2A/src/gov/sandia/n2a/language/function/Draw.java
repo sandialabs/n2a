@@ -95,7 +95,7 @@ public class Draw extends Function
         {
             op.determineExponent (context);
         }
-        updateExponent (context, MSB, 0);  // Our output is always an integer (1).
+        updateExponent (context, 0, 0);  // Our output is always an integer (1).
 
         if (keywords == null) return;
         for (Operator op : keywords.values ())
@@ -139,11 +139,11 @@ public class Draw extends Function
                 case "emission":
                 case "specular":
                     // exponent depends on whether color is an integer or a matrix
-                    if (op.getType () instanceof Matrix) op.exponentNext = 0;
-                    else                                 op.exponentNext = MSB;
+                    if (op.getType () instanceof Matrix) op.exponentNext = -MSB;
+                    else                                 op.exponentNext = 0;
                     break;
                 default:
-                    op.exponentNext = MSB;  // Suitable for integer or boolean values.
+                    op.exponentNext = 0;  // Suitable for integer or boolean values.
             }
             op.determineExponentNext ();
         }

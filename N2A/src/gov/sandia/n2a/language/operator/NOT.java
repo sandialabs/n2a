@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -53,10 +53,12 @@ public class NOT extends OperatorUnary implements OperatorLogicalInput
             Constant c = (Constant) result;
             if (c.value instanceof Matrix)
             {
-                // See determineExponent() below
+                // Divide 1/operand
+                // center power = 0 - (operand center power)
+                // shift so center is at MSB/2
                 if (operand.exponent == UNKNOWN) return result;
                 result.center   = MSB / 2;
-                result.exponent = 0 - operand.centerPower () + MSB - result.center;
+                result.exponent = 0 - operand.centerPower () - result.center;
             }
         }
         return result;
@@ -74,12 +76,12 @@ public class NOT extends OperatorUnary implements OperatorLogicalInput
             if (operand.exponent == UNKNOWN) return;
             int cent = MSB / 2;
             int pow = 0 - operand.centerPower ();  // See Divide class. We're treating this as 1/A, where 1 has center power 0.
-            pow += MSB - cent;
+            pow -= cent;
             updateExponent (context, pow, cent);
         }
         else  // Logical not
         {
-            updateExponent (context, MSB, 0);
+            updateExponent (context, 0, 0);
         }
     }
 

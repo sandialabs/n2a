@@ -346,7 +346,7 @@ template<>
 int
 uniform ()
 {
-    // exponent=-1; We promise the semi-open interval [0,1), so must never actaully reach 1.
+    // exponent=-1-MSB; We promise the semi-open interval [0,1), so must never actaully reach 1.
 #if RAND_MAX == 0x7FFFFFFF
     return rand ();
 #elif RAND_MAX == 0x7FFF
@@ -360,7 +360,10 @@ template<>
 int
 uniform (int sigma)
 {
-    return (int64_t) uniform<int> () * sigma >> 31;  // shift = -1 - MSB
+    // raw = (-1-MSB) + exponentSigma
+    // goal = exponentSigma
+    // shift = raw - goal = -1-MSB
+    return (int64_t) uniform<int> () * sigma >> 1 + FP_MSB;
 }
 
 template<>
@@ -374,7 +377,7 @@ uniform (int lo, int hi, int step)
 
 // Box-Muller method (polar variant) for Gaussian random numbers.
 // Although this method can return very large values, we limit it to strictly
-// less than 8 std (3 bits above the decimal point). Result exponent=2.
+// less than 8 std (3 bits above the decimal point). Result exponent=2-MSB.
 template<>
 int
 gaussian ()
@@ -389,28 +392,29 @@ gaussian ()
     }
     else
     {
-        const int half  = 0x40000000; // 0.5, with exponent=-1
-        const int big   = 0xFFFF;     // Too large for log(). exponent=14
-        const int small = 0x8;        // Too small for the division that creates multiplier. exponent=14
+        const int half  = 0x40000000; // 0.5, with exponent=-1-MSB
+        const int big   = 0xFFFF;     // Too large for log(). exponent=-16
+        const int small = 0x8;        // Too small for the division that creates multiplier. exponent=-16
         int v1, v2, s;
         do
         {
-            v1 = uniform<int> () - half;   // u-0.5; Then implicitly double by treating exponent as 0 rather than -1.
+            v1 = uniform<int> () - half;   // u-0.5; Then implicitly double by treating exponent as -MSB rather than -1-MSB.
             v2 = uniform<int> () - half;
-            // Squaring v puts exponent=0 at bit MSB*2
-            // Down-shift puts exponent=14 at bit MSB.
+            // raw after multiply = -2*MSB
+            // goal = -16
+            // shift = raw - goal = -2*MSB + 16
             // We could keep more bits, but this approach is better conditioned.
-            s = (int64_t) v1 * v1 + (int64_t) v2 * v2 >> FP_MSB + 14;
+            s = (int64_t) v1 * v1 + (int64_t) v2 * v2 >> 2 * FP_MSB - 16;
         }
         while (s >= big  ||  s <= small);
-        // log (s, 14, 14) / s -- Raw result of division has exponent=MSB
-        // Median absolute value of result is near 1 (ln(0.5)/0.5~=-1.4), so we want center power of 0, for exponent=15.
-        // Ideal shift is 15(=MSB-15), to put exponent=15 at MSB.
-        // We also multiply by 2, so claim exponent=16.
-        int multiplier = sqrt (((int64_t) log (s, 14, 14) << FP_MSB - 15) / -s, 16, 14);  // multiplier has exponent=14; v1 and v2 have exponent=0
-        nextGaussian = (int64_t) v2 * multiplier >> FP_MSB - 12;  // product has exponent=14 at bit MSB*2; shift so exponent=2 at MSB
+        // log (s, -16, -16) / s -- Raw result of division has exponent= -16 - -16 = 0
+        // Median absolute value of result is near 1 (ln(0.5)/0.5~=-1.4), so we want center power of 0.
+        // Want center bit in the middle of the word, position 15. Resulting exponent = -15.
+        // We also multiply by 2, so claim exponent=-14.
+        int multiplier = sqrt (((int64_t) log (s, -16, -16) << 15) / -s, -14, -16);  // multiplier has exponent=-16; v1 and v2 have exponent=-MSB
+        nextGaussian = (int64_t) v2 * multiplier >> 18;  // product has exponent=-16-MSB; shift so exponent=2-MSB
         haveNextGaussian = true;
-        return         (int64_t) v1 * multiplier >> FP_MSB - 12;
+        return         (int64_t) v1 * multiplier >> 18;
     }
 }
 
@@ -418,7 +422,10 @@ template<>
 int
 gaussian (int sigma)
 {
-    return (int64_t) gaussian<int> () * sigma >> 28;   // ones bit of gaussian draw is at position MSB - 2
+    // raw = 2-MSB + X
+    // goal = X
+    // shift = raw - goal = 2-MSB
+    return (int64_t) gaussian<int> () * sigma >> FP_MSB - 2;
 }
 
 template<>
@@ -426,7 +433,7 @@ MatrixFixed<int,3,1>
 grid (int i, int nx, int ny, int nz)
 {
     MatrixFixed<int,3,1> result = gridRaw<int> (i, nx, ny, nz);
-    result[0] = (((int64_t) result[0] << 1) + 1 << FP_MSB) / nx;  // exponentResult = -1
+    result[0] = (((int64_t) result[0] << 1) + 1 << FP_MSB) / nx;  // exponentResult = -1-MSB
     result[1] = (((int64_t) result[1] << 1) + 1 << FP_MSB) / ny;
     result[2] = (((int64_t) result[2] << 1) + 1 << FP_MSB) / nz;
     return result;
@@ -448,16 +455,16 @@ pulse (int t, int width, int period, int rise, int fall)
 
 template<>
 int
-unitmap (const MatrixAbstract<int> & A, int row, int column)  // row and column have exponent=0
+unitmap (const MatrixAbstract<int> & A, int row, int column)  // row and column have exponent=-MSB
 {
     // Just assume handle is good.
-    int rows    = A.rows ();  // exponent=MSB
+    int rows    = A.rows ();  // exponent=0
     int columns = A.columns ();
     int lastRow    = rows    - 1;
     int lastColumn = columns - 1;
-    int64_t scaledRow    = row    * rows    - (0x1 << FP_MSB - 1);   // raw exponent = 0+MSB-MSB = 0
+    int64_t scaledRow    = row    * rows    - (0x1 << FP_MSB - 1);   // raw exponent = 0 + -MSB = -MSB
     int64_t scaledColumn = column * columns - (0x1 << FP_MSB - 1);
-    int r = scaledRow    >> FP_MSB;  // to turn raw result into integer, shift = 0-MSB = -MSB
+    int r = scaledRow    >> FP_MSB;  // to turn raw result into integer, shift = -MSB - 0 = -MSB
     int c = scaledColumn >> FP_MSB;
     if (r < 0)
     {
@@ -465,7 +472,7 @@ unitmap (const MatrixAbstract<int> & A, int row, int column)  // row and column 
         else if (c >= lastColumn) return A(0,lastColumn);
         else
         {
-            int b = scaledColumn & 0x3FFFFFFF;  // fractional part, with exponent = 0 (same as raw exponent)
+            int b = scaledColumn & 0x3FFFFFFF;  // fractional part, with exponent = -MSB (same as raw exponent)
             int b1 = (1 << FP_MSB) - b;
             return (int64_t) b1 * A(0,c) + (int64_t) b * A(0,c+1) >> FP_MSB;
         }
@@ -698,7 +705,11 @@ template<class T>
 T
 Part<T>::getP ()
 {
+#   ifdef n2a_FP
+    return 1 << FP_MSB2;
+#   else
     return 1;
+#   endif
 }
 
 template<class T>
@@ -988,8 +999,10 @@ ConnectPopulation<T>::reset (bool newOnly)
     if (newOnly) count = std::max (0, size - firstborn);
     else         count = size;
 #   ifdef n2a_FP
-    // raw multiply = -1+MSB-MSB = -1
-    // shift = -1 - MSB
+    // raw multiply = -1-MSB + 0 = -1-MSB
+    // goal = 0
+    // shift = -1-MSB - 0 = -1-MSB
+    // Could instead call multiplyRound()
     if (count > 1) i = (int) (((int64_t) uniform<T> () * (count - 1) >> FP_MSB) + 1 >> 1);  // Add 1 just below the decimal point to cause rounding. Total shift is -(MSB+1)
 #   else
     if (count > 1) i = (int) round (uniform<T> () * (count - 1));
@@ -1275,13 +1288,13 @@ Population<T>::connect ()
     outer->setProbe (c);
     while (outer->next ())
     {
-        T create = c->getP ();
+        T p = c->getP ();
         // Yes, we need all 3 conditions. If create is 0 or 1, we do not do a random draw, since it would have no effect.
-        if (create <= 0) continue;
+        if (p <= 0) continue;
 #       ifdef n2a_FP
-        if (create < 1  &&  create < uniform<T> () >> 16) continue;
+        if (p < 1  &&  p < uniform<T> () >> 1 + FP_MSB2) continue;  // p exponent is -MSB/2; uniform() exponent is -1-MSB. shift = (-1-MSB) - -MSB/2 = -1 - MSB/2
 #       else
-        if (create < 1  &&  create < uniform<T> ()) continue;
+        if (p < 1  &&  p < uniform<T> ()) continue;
 #       endif
 
         c->enterSimulation ();
@@ -1512,7 +1525,7 @@ void
 Simulator<T>::init (WrapperBase<T> * wrapper)
 {
 #   ifdef n2a_FP
-    EventStep<T> * event = new EventStep<T> (0, (1 << FP_MSB) / 10000);  // Works for exponentTime=0. For any other case, it is necessary for top-level part to call setPeriod().
+    EventStep<T> * event = new EventStep<T> (0, ((int64_t) 1 << -Event<int>::exponent) / 1000);  // 1ms step sizes, rather than 0.1ms like below. We are only promised (weakly) 10 bits below the decimal.
 #   else
     EventStep<T> * event = new EventStep<T> ((T) 0, (T) 1e-4);
 #   endif
@@ -1778,7 +1791,7 @@ RungeKutta<int>::run (Event<int> & event)
         event.visit ([](Visitor<int> * visitor)
         {
             visitor->part->finalizeDerivative ();
-            visitor->part->multiplyAddToStack (2 << FP_MSB - 1);  // exponent=1, just enough to hold the values used by RK4
+            visitor->part->multiplyAddToStack (2 << FP_MSB - 1);  // exponent=1-MSB, just enough to hold the values used by RK4
         });
     }
     es.dt = dt;  // restore original values

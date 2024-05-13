@@ -80,13 +80,13 @@ public class Spreadsheet extends Function implements NonzeroIterable
         if (getKeyword ("info") == null)  // normal mode. This includes "prefix" mode, but in that case we return a string, so don't care about exponent.
         {
             int centerNew   = MSB / 2;
-            int exponentNew = getExponentHint (0) + MSB - centerNew;
+            int exponentNew = getExponentHint (0) - centerNew;
             updateExponent (context, exponentNew, centerNew);
         }
         else  // info mode
         {
             if (getType () instanceof Text) return;  // If we return a string, leave exponent as unknown.
-            updateExponent (context, MSB, 0);  // Return an integer
+            updateExponent (context, 0, 0);  // Return an integer
         }
     }
 

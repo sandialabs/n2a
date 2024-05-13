@@ -192,9 +192,8 @@ public class RendererCfp extends RendererC
             OperatorBinary b = (OperatorBinary) op;
 
             // Explanation of shift -- The exponent of the result will be the sum of the exponents
-            // of the two operands. That new exponent will be associated with bit position 2*MSB.
-            // We want the exponent at bit position MSB.
-            int exponentRaw = b.operand0.exponentNext + b.operand1.exponentNext - Operator.MSB;  // Exponent at MSB position after a direct integer multiply.
+            // of the two operands.
+            int exponentRaw = b.operand0.exponentNext + b.operand1.exponentNext;  // Exponent at LSB position after a direct integer multiply.
             int shift = exponentRaw - b.exponentNext;
 
             if (shift == 0)
@@ -266,8 +265,8 @@ public class RendererCfp extends RendererC
             // Explanation of shift -- In a division, the quotient is effectively down-shifted by
             // the number of bits in the denominator, and its exponent is the difference between
             // the exponents of the numerator and denominator. In A/B, exponentA-exponentB will
-            // be the exponent at bit position 0. We want the exponent at bit position MSB.
-            int exponentRaw = d.operand0.exponentNext - d.operand1.exponentNext + Operator.MSB;  // Exponent in MSB from a direct integer division.
+            // be the exponent at bit position 0.
+            int exponentRaw = d.operand0.exponentNext - d.operand1.exponentNext;  // Exponent in LSB from a direct integer division.
             int shift = exponentRaw - d.exponentNext;
 
             if (shift == 0)
@@ -395,13 +394,13 @@ public class RendererCfp extends RendererC
         {
             Ceil c = (Ceil) op;
             Operator a = c.operands[0];
-            if (a.exponent >= Operator.MSB)  // LSB is above decimal, so ceil() operation is impossible. This test must be on a.exponent rather than a.exponentNext because ...
+            if (a.exponent >= 0)  // LSB is above decimal, so ceil() operation is impossible. This test must be on a.exponent rather than a.exponentNext because ...
             {
                 // a.exponentNext has been set to f.exponentNext by Round.determineExponentNextStatic(),
                 // so no shift is necessary.
                 a.render (this);
             }
-            else  // a.exponentNext is in [0, MSB), as enforced by Round.determineExponentNextStatic()
+            else  // a.exponentNext is in [-MSB, -1], as enforced by Round.determineExponentNextStatic()
             {
                 // Create a mask for bits below the decimal point.
                 // When this mask is added to the number, it will add 1 to the first bit position
@@ -409,8 +408,7 @@ public class RendererCfp extends RendererC
                 // any residual bits below the decimal.
                 // This works for both positive and negative numbers.
                 int shift = a.exponentNext - c.exponentNext;
-                int decimalPlaces = Operator.MSB - a.exponentNext;
-                int wholeMask = 0xFFFFFFFF << decimalPlaces;
+                int wholeMask = 0xFFFFFFFF << -a.exponentNext;
                 int decimalMask = ~wholeMask;
 
                 if (shift != 0) result.append ("(");
@@ -456,8 +454,7 @@ public class RendererCfp extends RendererC
             if (op.parent == null  ||  op.parent instanceof OperatorLogicalInput) return super.render (op);
 
             Event e = (Event) op;
-            int exponentRaw = Operator.MSB - e.eventType.valueIndex;
-            int shift = exponentRaw - e.exponentNext;
+            int shift = -e.eventType.valueIndex - e.exponentNext;
 
             if (shift != 0) result.append ("(");
             result.append ("(flags & (" + bed.localFlagType + ") 0x1 << " + e.eventType.valueIndex + ")");
@@ -473,7 +470,7 @@ public class RendererCfp extends RendererC
             // See Ceil above for similar code.
             Floor f = (Floor) op;
             Operator a = f.operands[0];
-            if (a.exponent >= Operator.MSB)
+            if (a.exponent >= 0)
             {
                 a.render (this);
             }
@@ -481,8 +478,7 @@ public class RendererCfp extends RendererC
             {
                 // Mask off bits below the decimal point. This works for both positive and negative numbers.
                 int shift = a.exponentNext - f.exponentNext;
-                int decimalPlaces = Operator.MSB - a.exponentNext;
-                int wholeMask = 0xFFFFFFFF << decimalPlaces;
+                int wholeMask = 0xFFFFFFFF << -a.exponentNext;
 
                 if (shift != 0) result.append ("(");
                 result.append ("(");
@@ -528,14 +524,14 @@ public class RendererCfp extends RendererC
             // See Ceil above for similar code.
             Round r = (Round) op;
             Operator a = r.operands[0];
-            if (a.exponent >= Operator.MSB)
+            if (a.exponent >= 0)
             {
                 a.render (this);
             }
-            else  // a.exponentNext in [0, MSB)
+            else  // a.exponentNext in [-MSB, -1]
             {
                 int shift = a.exponentNext - r.exponentNext;
-                int decimalPlaces = Operator.MSB - a.exponentNext;
+                int decimalPlaces = -a.exponentNext;
                 int mask = 0xFFFFFFFF << decimalPlaces;
                 int half = 0x1 << decimalPlaces - 1;
 
@@ -555,7 +551,7 @@ public class RendererCfp extends RendererC
         {
             Signum s = (Signum) op;
             Operator a = s.operands[0];
-            int one = 0x1 << Operator.MSB - s.exponentNext;
+            int one = 0x1 << -s.exponentNext;
             boolean needParens = a.precedence () >= new LT ().precedence ();
             if (needParens) result.append ("(");
             a.render (this);
@@ -609,14 +605,14 @@ public class RendererCfp extends RendererC
         if (op instanceof Multiply)
         {
             OperatorBinary b = (OperatorBinary) op;
-            int exponentRaw = b.operand0.exponentNext + b.operand1.exponentNext - Operator.MSB;
+            int exponentRaw = b.operand0.exponentNext + b.operand1.exponentNext;
             int shift = exponentRaw - b.exponentNext;
             return shift < 0;  // only use 64-bit when we downshift the raw result
         }
         if (op instanceof Divide)
         {
             OperatorBinary b = (OperatorBinary) op;
-            int exponentRaw = b.operand0.exponentNext - b.operand1.exponentNext + Operator.MSB;
+            int exponentRaw = b.operand0.exponentNext - b.operand1.exponentNext;
             int shift = exponentRaw - b.exponentNext;
             return shift > 0;  // only use 64-bit when we upshift the raw result
         }
@@ -665,7 +661,7 @@ public class RendererCfp extends RendererC
         bits |= 0x10000000000000l;  // set implied msb of mantissa (bit 52) to 1
         bits &= 0x1FFFFFFFFFFFFFl;  // clear sign and exponent bits
         if (negate) bits = -bits;
-        bits >>= 52 - Operator.MSB + exponent - e;
+        bits >>= 52 + exponent - e;
         return Integer.toString ((int) bits);
     }
 }

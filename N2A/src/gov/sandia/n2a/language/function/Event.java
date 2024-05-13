@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2020 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -47,7 +47,7 @@ public class Event extends Function
 
         // Our output is boolean, so use standard values for that.
         int cent = MSB / 2;
-        int pow  = MSB - cent;
+        int pow  = -cent;
         updateExponent (context, pow, cent);
 
         // Need to record the exponent for time, since we avoid passing context to determineExponentNext().

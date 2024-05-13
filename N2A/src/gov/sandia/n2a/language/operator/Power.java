@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -151,7 +151,7 @@ public class Power extends OperatorBinary
         }
         if (exponentNew != UNKNOWN)
         {
-            exponentNew += MSB - centerNew;
+            exponentNew -= centerNew;
             updateExponent (context, exponentNew, centerNew);
         }
     }
@@ -159,7 +159,7 @@ public class Power extends OperatorBinary
     public void determineExponentNext ()
     {
         operand0.exponentNext = operand0.exponent;
-        operand1.exponentNext = MSB / 2;  // Exponentiation is very sensitive, so no benefit in allowing arbitrary size of input.
+        operand1.exponentNext = -MSB / 2;  // Exponentiation is very sensitive, so no benefit in allowing arbitrary size of input.
         operand0.determineExponentNext ();
         operand1.determineExponentNext ();
     }

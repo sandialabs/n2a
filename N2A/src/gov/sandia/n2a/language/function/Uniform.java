@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -63,7 +63,7 @@ public class Uniform extends Function
     {
         if (operands.length == 0)
         {
-            updateExponent (context, -1, MSB);  // Current implementation never quite reaches 1, only [0,1).
+            updateExponent (context, -1 - MSB, MSB);  // Current implementation never quite reaches 1, only [0,1).
             return;
         }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -87,6 +87,18 @@ public class Add extends OperatorBinary
             int c0 = operand0.center - (pow - operand0.exponent);
             int c1 = operand1.center - (pow - operand1.exponent);
             int cent = Math.max (c0, c1);
+            int min  = Math.min (c0, c1);
+            if (cent >= MSB)
+            {
+                // The most optimistic thing we could hope for is that value only exceeds center by 1 bit.
+                pow += cent - (MSB - 1);
+                cent = MSB - 1;
+            }
+            else if (min < 0)
+            {
+                pow  += min;  // decreases pow
+                cent -= min;  // increases cent
+            }
             updateExponent (context, pow, cent);
         }
         else if (operand0.exponent != UNKNOWN)

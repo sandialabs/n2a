@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -40,7 +40,7 @@ public class Pulse extends Function
         {
             operands[i].determineExponent (context);
         }
-        updateExponent (context, 0,  MSB - 2); // Output reaches exactly 1.
+        updateExponent (context, -MSB,  MSB - 2); // Output reaches exactly 1.
     }
 
     public void determineExponentNext ()

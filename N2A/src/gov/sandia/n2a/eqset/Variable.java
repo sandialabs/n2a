@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -910,14 +910,14 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
         else if (name.equals ("$index")  ||  name.equals ("$type"))  // Variables stored as a pure integer.
         {
-            centerNew   = 0;
-            exponentNew = Operator.MSB;
+            centerNew   = 0;  // Unless we have an estimate of population size, this is the best we can do.
+            exponentNew = 0;
         }
         else if (name.equals ("$connect")  ||  name.equals ("$init")  ||  name.equals ("$live"))
         {
-            // Booleans are stored as regular floats.
-            centerNew   = Operator.MSB / 2;
-            exponentNew = Operator.MSB - centerNew;
+            // Booleans are stored as simple integers where possible.
+            centerNew   = 0;
+            exponentNew = 0;
         }
         else
         {
@@ -975,10 +975,10 @@ public class Variable implements Comparable<Variable>, Cloneable
                     }
                     else if (v.assignment == DIVIDE)
                     {
-                        int centerPower = v.exponent - Operator.MSB + v.center;
+                        int centerPower = v.exponent + v.center;
                         centerPower *= -1;  // Negate to account for division 1/v
                         cent += Operator.MSB / 2;  // Fix quotient center at MSB/2
-                        pow  += centerPower + Operator.MSB / 2;
+                        pow  += centerPower - Operator.MSB / 2;
                         multiplicative = true;
                     }
                     else
@@ -1021,7 +1021,7 @@ public class Variable implements Comparable<Variable>, Cloneable
                 else
                 {
                     int b = bound.exponent;  // For expressions, which have variable magnitude.
-                    if (bound instanceof Constant) b = bound.centerPower ();  // Constants have exactly one magnitude (and center is always shifted to hold it), so use directly.
+                    if (bound instanceof Constant) b = bound.centerPower () - Operator.MSB;  // Constants have exactly one magnitude (and center is always shifted to hold it), so use directly.
                     if (b > exponentNew)  // Ensure we can accommodate max magnitude.
                     {
                         centerNew  -= b - exponentNew;
@@ -1049,23 +1049,51 @@ public class Variable implements Comparable<Variable>, Cloneable
                 }
                 exponentNew = context.exponentTime;
             }
+            if (name.equals ("$p")  &&  order == 0)
+            {
+                // The exponent of $p is hard-coded in the C runtime: getP() and connect().
+                // If we know that both functions are overridden for this part, then we can let exponent be
+                // determined by equations writing $p. However, it is not worth the effort to check that.
+                // The hard-coded value (assuming 32-bit words) provides both sufficient precision and head-room.
+                centerNew   = Operator.MSB / 2;
+                exponentNew = -Operator.MSB;
+            }
         }
 
         // User-specified exponent overrides any calculated value.
-        String magnitude = "";
-        if (metadata != null) magnitude = metadata.get ("median");
-        if (! magnitude.isEmpty ())
+        if (metadata != null)
         {
-            if (exponent != Operator.UNKNOWN) return;  // Already processed the hint.
-            try
+            String medianHint = metadata.get ("median");
+            String centerHint = metadata.get ("center");
+            boolean haveMedian = ! medianHint.isBlank ();
+            boolean haveCenter = ! centerHint.isBlank ();
+            if (haveMedian  ||  haveCenter)
             {
-                double value = Operator.parse (magnitude).getDouble ();
-                int centerPower = 0;
-                if (value > 0) centerPower = (int) Math.floor (Math.log (value) / Math.log (2));  // log2 (value)
-                centerNew   = Operator.MSB / 2;
-                exponentNew = centerPower + Operator.MSB - centerNew;
+                if (exponent != Operator.UNKNOWN) return;  // Already processed the hint.
+
+                if (haveCenter)
+                {
+                    try
+                    {
+                        centerNew = Integer.valueOf (centerHint);
+                        if (! haveMedian) exponentNew = -centerNew;  // assume center power 0
+                    }
+                    catch (NumberFormatException e) {}
+                }
+
+                if (haveMedian)
+                {
+                    try
+                    {
+                        double value = Operator.parse (medianHint).getDouble ();
+                        int centerPower = 0;
+                        if (value > 0) centerPower = (int) Math.floor (Math.log (value) / Math.log (2));  // log2 (value)
+                        if (! haveCenter) centerNew = Operator.MSB / 2;
+                        exponentNew = centerPower - centerNew;
+                    }
+                    catch (Exception e) {}
+                }
             }
-            catch (Exception e) {}
         }
 
         if (exponentNew != exponent  ||  centerNew != center) changed = true;
