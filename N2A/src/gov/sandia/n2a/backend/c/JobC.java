@@ -868,7 +868,7 @@ public class JobC extends Thread
         {
             try (BufferedWriter params = Files.newBufferedWriter (jobDir.resolve ("params")))
             {
-                tagCommandLineParameters (digestedModel, params);
+                tagCommandLineParameters (digestedModel, true, params);
             }
             catch (Exception e) {e.printStackTrace ();}
         }
@@ -915,10 +915,10 @@ public class JobC extends Thread
         analyzeNames (digestedModel);
     }
 
-    public void tagCommandLineParameters (EquationSet s, Writer params) throws IOException
+    public void tagCommandLineParameters (EquationSet s, boolean partCLI, Writer params) throws IOException
     {
         MNode nodeCLI = s.metadata.child ("backend", "c", "cli");
-        if (nodeCLI != null  &&  ! nodeCLI.getFlag ()) return;  // Suppress this part or all its children.
+        if (nodeCLI != null) partCLI = nodeCLI.getFlag ();
 
         for (Variable v : s.variables)
         {
@@ -927,6 +927,7 @@ public class JobC extends Thread
             nodeCLI = v.metadata.child ("backend", "c", "cli");
             if (nodeCLI == null)  // Without CLI flag, base decision on param flag.
             {
+                if (! partCLI) continue;
                 if (! v.metadata.getFlag ("param")) continue;
             }
             else  // CLI flag takes precedence over everything else.
@@ -959,7 +960,7 @@ public class JobC extends Thread
             params.append ("\n");
         }
 
-        for (EquationSet p : s.parts) tagCommandLineParameters (p, params);
+        for (EquationSet p : s.parts) tagCommandLineParameters (p, partCLI, params);
     }
 
     /**
