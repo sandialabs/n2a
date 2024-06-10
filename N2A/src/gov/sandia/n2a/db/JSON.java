@@ -198,7 +198,16 @@ public class JSON
     {
         writer.append (indent + escape (node.key ()));
         writer.append (": ");
+        writeValue (node, writer, indent);
+    }
 
+    /**
+        Picking up just after key and colon, this writes the value for a node.
+        @param indent Leading space in front of the key for which we are writing the value.
+        We will calculate further indent for children if needed.
+    **/
+    public void writeValue (MNode node, Writer writer, String indent) throws IOException
+    {
         if (node.isEmpty ())  // No children
         {
             if (node.data ()) writer.append (convertValue (node));
@@ -206,11 +215,43 @@ public class JSON
         }
         else  // children
         {
-            writer.append ("{\n");
+            // Determine if this is an object or an array
+            // An array has keys 0, 1, 2, ...
+            // with no breaks in the sequence and no other kind of key.
+            // A node that contains an array must not have a value.
+            boolean isArray = ! node.data ();
+            if (isArray)
+            {
+                int i = 0;
+                for (MNode c : node)
+                {
+                    if (c.key ().equals (String.valueOf (i++))) continue;
+                    isArray = false;
+                    break;
+                }
+            }
+
             String indent2 = indent + tab;
-            if (node.data ()) writer.append (indent2 + "\"\": " + convertValue (node) + ",\n");  // Save node value as a fake child.
-            writeChildren (node, writer, indent2);
-            writer.append ("\n" + indent + "}");
+            if (isArray)
+            {
+                writer.append ("[\n");
+                boolean first = true;
+                for (MNode c : node)  // if this node has no children, nothing at all is written
+                {
+                    if (! first) writer.append (",\n");   // Just use Unix line endings. Most text editors will work
+                    writer.append (indent2);
+                    writeValue (c, writer, indent2);
+                    first = false;
+                }
+                writer.append ("\n" + indent + "]");
+            }
+            else  // object
+            {
+                writer.append ("{\n");
+                if (node.data ()) writer.append (indent2 + "\"\": " + convertValue (node) + ",\n");  // Save node value as a fake child.
+                writeChildren (node, writer, indent2);
+                writer.append ("\n" + indent + "}");
+            }
         }
     }
 

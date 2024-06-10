@@ -8,7 +8,9 @@ package gov.sandia.n2a.backend.c;
 
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
+import gov.sandia.n2a.db.JSON;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.eqset.EquationEntry;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.EquationSet.Conversion;
@@ -28,6 +30,7 @@ import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Split;
 import gov.sandia.n2a.language.Transformer;
+import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.Visitor;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Draw;
@@ -58,7 +61,6 @@ import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.io.Writer;
 import java.net.URL;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -82,6 +84,7 @@ public class JobC extends Thread
     public    MNode           job;
     protected EquationSet     digestedModel;
     protected ExponentContext exponentContext;
+    protected MVolatile       params;
 
     public    Host env;
     public    Path localJobDir;
@@ -220,9 +223,19 @@ public class JobC extends Thread
 
             Files.createDirectories (jobDir);  // digestModel() might write to a remote file (params), so we need to ensure the dir exists first.
             digestedModel = new EquationSet (model);
+            if (cli) params = new MVolatile ();
             digestModel ();
             String duration = digestedModel.metadata.get ("duration");
             if (! duration.isBlank ()) job.set (duration, "duration");
+            if (cli)
+            {
+                try (BufferedWriter writer = Files.newBufferedWriter (jobDir.resolve ("params.json")))
+                {
+                    JSON json = new JSON ();
+                    json.write (params, writer);
+                }
+                catch (IOException iox) {iox.printStackTrace ();}
+            }
 
             seed = model.getOrDefault (System.currentTimeMillis () & 0x7FFFFFFF, "$meta", "seed");
             job.set (seed, "seed");
@@ -864,14 +877,7 @@ public class JobC extends Thread
         digestedModel.addAttribute ("global",      false, false, "$n");
         digestedModel.addAttribute ("state",       true,  false, "$n");  // Forbid $n from being temporary, even if it meets the criteria.
         digestedModel.addAttribute ("preexistent", true,  false, "$index", "$t'", "$t");  // Technically, $index is not pre-existent, but always receives special handling which has the same effect.
-        if (cli)
-        {
-            try (BufferedWriter params = Files.newBufferedWriter (jobDir.resolve ("params")))
-            {
-                tagCommandLineParameters (digestedModel, true, params);
-            }
-            catch (Exception e) {e.printStackTrace ();}
-        }
+        if (cli) tagCommandLineParameters (digestedModel, true, params);
         analyzeIOvectors (digestedModel);
         digestedModel.resolveLHS ();
         digestedModel.fillIntegratedVariables ();
@@ -915,7 +921,7 @@ public class JobC extends Thread
         analyzeNames (digestedModel);
     }
 
-    public void tagCommandLineParameters (EquationSet s, boolean partCLI, Writer params) throws IOException
+    public void tagCommandLineParameters (EquationSet s, boolean partCLI, MNode params) throws IOException
     {
         MNode nodeCLI = s.metadata.child ("backend", "c", "cli");
         if (nodeCLI != null) partCLI = nodeCLI.getFlag ();
@@ -946,7 +952,9 @@ public class JobC extends Thread
 
             // Determine parameter format/range hint
             String hint = v.metadata.get ("param");
+            if (hint.trim ().equals ("1")) hint = "";  // Get rid of explicit positive case, since it isn't really a hint.
             if (hint.isBlank ()) hint = v.metadata.get ("study");
+            hint = hint.trim ();
 
             String                  comment = v.metadata.get ("notes");
             if (comment.isBlank ()) comment = v.metadata.get ("note");
@@ -954,10 +962,54 @@ public class JobC extends Thread
             int pos = comment.indexOf ('\n');
             if (pos >= 0) comment = comment.substring (0, pos);
 
-            params.append (v.fullName () + "=" + defaultValue);
-            if (! hint.isBlank ()) params.append (";" + hint);
-            if (! comment.isBlank ()) params.append ("#" + comment);
-            params.append ("\n");
+            // Create parameter entry for this variable
+            List<String> keypath = v.getKeyPath ();
+            MVolatile node = (MVolatile) params.childOrCreate (keypath.toArray ());
+            if (! defaultValue.isBlank ()) node.set (defaultValue, "default");
+            if (! comment.isBlank ()) node.set (comment, "description");
+            if (! hint.isBlank ())
+            {
+                // Parse hint to determine GUI type
+                if (hint.equals ("flag"))
+                {
+                    node.set ("flag", "type");
+                }
+                else if (hint.startsWith ("["))
+                {
+                    node.set ("number", "type");
+                    hint = hint.substring (1);
+                    String[] pieces = hint.split ("]", 2);
+                    if (pieces.length > 1)
+                    {
+                        String unit = pieces[1].trim ();
+                        if (! unit.isBlank ()) node.set (unit, "range", "unit");
+                    }
+
+                    pieces = pieces[0].split (",");
+                    double lo = 0;
+                    double hi = new UnitValue (pieces[0]).get ();
+                    double step = 1;
+                    if (pieces.length > 1)
+                    {
+                        lo = hi;
+                        hi = new UnitValue (pieces[1]).get ();
+                    }
+                    if (pieces.length > 2)
+                    {
+                        step = new UnitValue (pieces[2]).get ();
+                    }
+                    if (lo   != 0) node.setObject (lo,   "range", "low");
+                    if (hi   != 1) node.setObject (hi,   "range", "high");
+                    if (step != 1) node.setObject (step, "range", "step");
+                }
+                else if (hint.contains (","))
+                {
+                    node.set ("choice", "type");
+                    String[] pieces = hint.split (",");
+                    for (int i = 0; i < pieces.length; i++) node.set (pieces[i].trim (), "choices", i);
+                }
+                // anything else --> plain text
+            }
         }
 
         for (EquationSet p : s.parts) tagCommandLineParameters (p, partCLI, params);
