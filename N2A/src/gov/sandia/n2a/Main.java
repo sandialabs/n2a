@@ -22,6 +22,7 @@ import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Export;
 import gov.sandia.n2a.plugins.extpoints.ExportModel;
+import gov.sandia.n2a.plugins.extpoints.Service;
 import gov.sandia.n2a.plugins.extpoints.ShutdownHook;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.PanelEquations;
@@ -65,6 +66,7 @@ public class Main
         String headless = "";
         String format = null;
         Path path = null;
+        ArrayList<String> servers = null;
         for (String arg : args)
         {
             if      (arg.startsWith ("-plugin="    )) pluginClassNames.add            (arg.substring (8));
@@ -74,9 +76,15 @@ public class Main
             else if (arg.equals     ("-csv"        )) record.set (true, "$meta", "csv");
             else if (arg.equals     ("-run"        )) headless = "run";
             else if (arg.equals     ("-study"      )) headless = "study";
-            else if (arg.startsWith ("-export"     )) headless = "export";
-            else if (arg.startsWith ("-import"     )) headless = "import";
-            else if (arg.startsWith ("-model="     ))
+            else if (arg.equals     ("-export"     )) headless = "export";
+            else if (arg.equals     ("-import"     )) headless = "import";
+            else if (arg.startsWith ("-server="    ))
+            {
+                headless = "server";
+                servers = new ArrayList<String> ();
+                for (String s : arg.substring (8).split (",")) servers.add (s);
+            }
+            else if (arg.startsWith ("-model="))
             {
                 MNode temp = new MVolatile ("", arg.substring (7));
                 temp.merge (record);
@@ -158,14 +166,28 @@ public class Main
                         exitCode = 1;
                     }
                     break;
+                case "server":
+                    // Shut down gracefully when a Posix signal is sent, such as SIGTERM.
+                    Runtime.getRuntime ().addShutdownHook (new Thread ()
+                    {
+                        public void run ()
+                        {
+                            shutdown ();
+                        }
+                    });
+                    // Start servers
+                    List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (Service.class);
+                    for (ExtensionPoint exp : exps)
+                    {
+                        Service s = (Service) exp;
+                        if (servers.contains (s.name ())) s.start ();
+                    }
+                    // Don't call shutdown() now.
+                    return;
             }
 
             // Save all data and exit.
-            // See MainFrame window close listener
-            AppData.quit ();
-            List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (ShutdownHook.class);
-            for (ExtensionPoint exp : exps) ((ShutdownHook) exp).shutdown ();
-            Host.quit ();  // Close down any ssh sessions.
+            shutdown ();
             if (exitCode != 0) System.exit (exitCode);
             return;
         }
@@ -182,6 +204,14 @@ public class Main
                 setUncaughtExceptionHandler (MainFrame.instance);
             }
         });
+    }
+
+    public static void shutdown ()
+    {
+        List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (ShutdownHook.class);
+        for (ExtensionPoint exp : exps) ((ShutdownHook) exp).shutdown ();
+        AppData.quit ();  // Save all user settings (including those from other parts of the app).
+        Host.quit ();  // Close down any ssh sessions.
     }
 
     public static void processParamFile (String fileName, MNode record)

@@ -6,12 +6,9 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.ui;
 
+import gov.sandia.n2a.Main;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
-import gov.sandia.n2a.host.Host;
-import gov.sandia.n2a.plugins.ExtensionPoint;
-import gov.sandia.n2a.plugins.PluginManager;
-import gov.sandia.n2a.plugins.extpoints.ShutdownHook;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
@@ -27,8 +24,6 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowStateListener;
 import java.util.ArrayList;
-import java.util.List;
-
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.InputMap;
@@ -122,11 +117,8 @@ public class MainFrame extends JFrame
             public void windowClosing (WindowEvent arg0)
             {
                 PanelModel.instance.panelEquations.saveFocus ();  // Hack to ensure that final viewport position gets recorded.
-                PanelStudy.instance.quit ();  // Give any active study threads a chance to shut down gracefully.
-                AppData.quit ();  // Save all user settings (including those from other parts of the app).
-                List<ExtensionPoint> exps = PluginManager.getExtensionsForPoint (ShutdownHook.class);
-                for (ExtensionPoint exp : exps) ((ShutdownHook) exp).shutdown ();
-                Host.quit ();  // Close down any ssh sessions.
+                PanelStudy.instance.quit ();  // Give any active study threads a chance to shut down gracefully. TODO: should this be part of Main.shudown() ?
+                Main.shutdown ();
             }
         });
 
