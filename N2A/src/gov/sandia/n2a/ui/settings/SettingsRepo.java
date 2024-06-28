@@ -13,6 +13,7 @@ import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
+import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
@@ -457,6 +458,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         inputMap = gitTable.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),     "delete");
+        inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"), "delete");
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),      "startEditing");
 
         actionMap = gitTable.getActionMap ();
@@ -1128,7 +1130,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             Path baseDir = reposDir.resolve (name);
             GitWrapper gitRepo = new GitWrapper (baseDir.resolve (".git"));
             gitRepo.setURL (URL);
-            AppData.repos.set (1, name, "visible");  // Implicitly creates the repo node.
+            AppData.repos.set (1, name, "editable");  // Implicitly creates the repo node.
 
             repos   .add (row, AppData.repos.child (name));
             gitRepos.add (row, gitRepo);
@@ -1521,6 +1523,13 @@ public class SettingsRepo extends JScrollPane implements Settings
                 String remoteName = branch.getRemote ();
                 if (remoteName == null) remoteName = Constants.DEFAULT_REMOTE_NAME;
                 remote = new RemoteConfig (config, remoteName);
+
+                // Ensure that repo is configured for EOL handling across platforms.
+                // Our goal is to only ever commit LFs to the git repo, but working-tree
+                // line endings can be platform-specific.
+                Path infoDir = gitDir.resolve ("info");
+                Files.createDirectories (infoDir);
+                Host.stringToFile ("* text\n", infoDir.resolve ("attributes"));  // And yes, every last file in the repo is text.
             }
             catch (Exception e)
             {
@@ -2334,6 +2343,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                         {
                             if (working == current) deltas = oldDeltas;
                         }
+                        warning ("Please do a pull to synchronize with upstream. Then try push again.");
                         EventQueue.invokeLater (new Runnable ()
                         {
                             public void run ()
