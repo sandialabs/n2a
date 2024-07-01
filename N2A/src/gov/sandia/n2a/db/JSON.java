@@ -186,12 +186,14 @@ public class JSON
         }
     }
 
+    /**
+        This is the start point for writing a JSON file.
+        It can write either the value or children of node, depending on what is present.
+        The children can either be a list or object.
+    **/
     public void write (MNode node, Writer writer) throws IOException
     {
-        // The node's own value is never written, only its children.
-        writer.append ("{\n");
-        writeChildren (node, writer, tab);
-        writer.append ("\n}\n");
+        writeValue (node, writer, "");
     }
 
     public void write (MNode node, Writer writer, String indent) throws IOException
