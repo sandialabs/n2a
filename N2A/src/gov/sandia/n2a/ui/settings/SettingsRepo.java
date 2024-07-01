@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1529,7 +1529,8 @@ public class SettingsRepo extends JScrollPane implements Settings
                 // line endings can be platform-specific.
                 Path infoDir = gitDir.resolve ("info");
                 Files.createDirectories (infoDir);
-                Host.stringToFile ("* text\n", infoDir.resolve ("attributes"));  // And yes, every last file in the repo is text.
+                Path attributesPath = infoDir.resolve ("attributes");
+                if (! Files.exists (attributesPath)) Host.stringToFile ("* text\n", attributesPath);  // And yes, every last file in the repo is text.
             }
             catch (Exception e)
             {
