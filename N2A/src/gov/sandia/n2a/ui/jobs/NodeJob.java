@@ -89,11 +89,11 @@ public class NodeJob extends NodeBase
     protected static HashSet<String> imageSuffixes     = new HashSet<String> (Arrays.asList (ImageIO.getReaderFileSuffixes ()));  // We don't expect to load image handling plugins after startup, so one-time initialization is fine.
     public    static HashSet<String> videoSuffixes     = new HashSet<String> (Arrays.asList ("mp4", "m4v", "mov", "qt", "avi", "flv", "mkv", "wmv", "asf", "webm", "h264", "mpeg", "mpg", "vob", "3gp"));  // Some typical video file suffixes. Others will be added from FFmpeg, if available.
 
-    protected String  key;
+    public    String  key;
     protected String  inherit         = "";
     public    double  complete        = -1; // A number between 0 and 1, where 0 means just started (including preparation and waiting in HPC queue) and 1 means done. -1 means unknown or waiting for host. 2 means failed. 3 means killed-lingering. 4 means killed-dead.
-    protected Date    dateStarted     = null;
-    protected Date    dateFinished    = null;
+    public    Date    dateStarted     = null;
+    public    Date    dateFinished    = null;
     protected double  expectedSimTime = 0;  // If greater than 0, then we can use this to estimate percent complete.
     protected double  lastSimTime     = 0;  // Even if expectedSimTime is unknown, we can still compare this to check for progress.
     protected String  lastStatus      = "";
@@ -241,28 +241,26 @@ public class NodeJob extends NodeBase
         long started = source.getLong ("started");
         if (started > 0) dateStarted = new Date (started);
 
-        EventQueue.invokeLater (new Runnable ()
-        {
-            public void run ()
-            {
-                PanelRun panel = PanelRun.instance;
-                panel.model.nodeChanged (NodeJob.this);
-            }
-        });
-
         if (started > 0)
         {
             if (deleted) return;
             if (complete >= 1  &&  complete != 3) return;
             Host.get (source).monitor (this);
         }
-        else  // Not started yet, so send to wait-for-host queue.
+        else if (! source.isEmpty ())  // Not started yet, so send to wait-for-host queue. The guard on source.isEmpty() prevents a partially-deleted job from being mistaken for a new job.
         {
-            // However, only try to start jobs that still have enough info to actually run.
-            // Sometimes a directory might be lingering from an incomplete delete,
-            // so don't try to start a job in that case.
-            if (! source.isEmpty ()) Host.waitForHost (this);
+            Host.waitForHost (this);
         }
+
+        PanelRun panel = PanelRun.instance;
+        if (panel == null) return;  // Probably running headless, so skip UI updates.
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                panel.model.nodeChanged (NodeJob.this);
+            }
+        });
     }
 
     /**
