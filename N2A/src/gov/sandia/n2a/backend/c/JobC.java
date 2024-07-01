@@ -508,14 +508,14 @@ public class JobC extends Thread
             if (env.config.getFlag ("backend", "c", "compilerChanged"))
             {
                 changed = true;
-                runtimeBuilt.remove (env);
+                JobC.runtimeBuilt.remove (env);
             }
-            Set<String> runtimes = runtimeBuilt.get (env);
+            Set<String> runtimes = JobC.runtimeBuilt.get (env);
             if (runtimes == null)
             {
                 if (unpackRuntime ()) changed = true;
                 runtimes = new HashSet<String> ();
-                runtimeBuilt.put (env, runtimes);
+                JobC.runtimeBuilt.put (env, runtimes);
             }
             CompilerFactory factory = BackendC.getFactory (env);
             supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
@@ -582,7 +582,7 @@ public class JobC extends Thread
                 if (Files.exists (object)) continue;
                 job.set ("Compiling " + objectName, "status");
 
-                Compiler c = factory.make (localJobDir);
+                Compiler c = factory.compiler (localJobDir);
                 if (shared) c.setShared ();
                 if (debug ) c.setDebug ();
                 if (gprof ) c.setProfiling ();
@@ -615,7 +615,7 @@ public class JobC extends Thread
                 if (! exists)
                 {
                     job.set ("Linking runtime library", "status");
-                    Compiler c = factory.make (localJobDir);
+                    Compiler c = factory.compiler (localJobDir);
                     c.setShared ();
                     if (debug) c.setDebug ();
                     if (gprof) c.setProfiling ();
@@ -791,7 +791,7 @@ public class JobC extends Thread
         String stem   = pos > 0 ? name.substring (0, pos) : name;
         Path   binary = source.getParent ().resolve (stem + factory.suffixBinary ());
 
-        Compiler c = factory.make (localJobDir);
+        Compiler c = factory.compiler (localJobDir);
         if (debug) c.setDebug ();
         if (gprof) c.setProfiling ();
         addIncludes (c);
@@ -832,7 +832,7 @@ public class JobC extends Thread
         Path library = parent.resolve (factory.prefixLibrary (shared) + libStem + factory.suffixLibrary (shared));
 
         // 1) Generate object file
-        Compiler c = factory.make (localJobDir);
+        Compiler c = factory.compiler (localJobDir);
         if (shared) c.setShared ();
         if (debug ) c.setDebug ();
         if (gprof ) c.setProfiling ();

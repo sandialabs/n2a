@@ -95,7 +95,7 @@ public class ProvideSpreadsheet implements ProvideOperator
             job.job.set ("Compiling " + object, "status");
 
             CompilerFactory factory = BackendC.getFactory (env);
-            Compiler c = factory.make (localJobDir);
+            Compiler c = factory.compiler (localJobDir);
             if (job.shared) c.setShared ();
             if (job.debug ) c.setDebug ();
             if (job.gprof ) c.setProfiling ();

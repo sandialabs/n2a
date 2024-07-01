@@ -1,5 +1,5 @@
 /*
-Copyright 2022-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,7 +21,7 @@ public class CompilerClang extends CompilerGCC
             super (host, gcc);
         }
 
-        public Compiler make (Path localJobDir)
+        public Compiler compiler (Path localJobDir)
         {
             return new CompilerClang (host, localJobDir, gcc, Darwin);
         }
