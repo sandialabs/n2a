@@ -245,6 +245,12 @@ public class SshPath implements Path
         return fileSystem.uri.resolve (toAbsolutePath ().toString ());
     }
 
+    /**
+        Resolves paths relative to user home directory on remote system.
+        This is a bit different from other implementations of nio.file.Path,
+        which resolve relative to current working directory. We generally don't
+        change CWD during a remote session, and its initial value is user home.
+    **/
     public SshPath toAbsolutePath ()
     {
         if (absolute) return this;
