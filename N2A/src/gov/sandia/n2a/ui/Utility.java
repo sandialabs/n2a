@@ -100,6 +100,28 @@ public class Utility
         return new ImageIcon (combined);
     }
 
+    public static Color hueWithTrueLightness (float h, float l)
+    {
+        float[] hsl = new float[3];
+        hsl[0] = h;
+        hsl[1] = 1;
+        hsl[2] = l;
+        float[] rgb = HSLtoRGB (hsl);
+        float y = 0.299f * rgb[0] + 0.587f * rgb[1] + 0.114f * rgb[2];
+        float max = 0;
+        for (int i = 0; i < 3; i++)
+        {
+            rgb[i] *= l / y;
+            max = Math.max (max, rgb[i]);
+        }
+        if (max > 1)
+        {
+            for (int i = 0; i < 3; i++) rgb[i] *= 1 / max;
+        }
+
+        return new Color (rgb[0], rgb[1], rgb[2]);
+    }
+
     public static float[] HSLfromColor (Color c)
     {
         return HSLfromRGB (c.getRGBColorComponents (null));
@@ -148,6 +170,12 @@ public class Utility
 
     public static Color HSLtoColor (float[] hsl)
     {
+        float[] rgb = HSLtoRGB (hsl);
+        return new Color (rgb[0], rgb[1], rgb[2]);
+    }
+
+    public static float[] HSLtoRGB (float[] hsl)
+    {
         float h = hsl[0];
         float s = hsl[1];
         float l = hsl[2];
@@ -177,7 +205,7 @@ public class Utility
             b = HS (m1, m2, h - onethird);
         }
 
-        return new Color (r, g, b);
+        return new float[]{r, g, b};
     }
 
     protected static float HS (float n1, float n2, float h)

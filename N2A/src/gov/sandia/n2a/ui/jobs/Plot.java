@@ -29,6 +29,8 @@ import org.jfree.data.general.DatasetChangeListener;
 import org.jfree.data.general.DatasetGroup;
 import org.jfree.data.xy.XYDataset;
 
+import gov.sandia.n2a.ui.Utility;
+
 public class Plot extends OutputParser
 {
     protected Path         path;
@@ -330,7 +332,7 @@ public class Plot extends OutputParser
                 axis1 = new NumberAxis ();
                 axis1.setAutoRangeIncludesZero (false);
                 axis1.setTickLabelFont (axis0.getTickLabelFont ());
-                Color color1 = Color.getHSBColor (0.5f, 1.0f, 0.8f);
+                Color color1 = Color.getHSBColor (0.5f, 1.0f, 0.7f);
                 axis1.setTickMarkPaint  (color1);
                 axis1.setTickLabelPaint (color1);
                 axis1.setAxisLinePaint  (color1);
@@ -372,7 +374,30 @@ public class Plot extends OutputParser
 
         Color c = column.color;
         // TODO: avoid assigning a color close to any that the user explicitly specified for some other plot line.
-        if (c == null) c = Color.getHSBColor ((float) i / count + shift, 1.0f, 0.9f);
+        if (c == null)
+        {
+            float hue;
+            if (shift != 0  ||  count > 12)  // Split axis or too many colors.
+            {
+                hue = (float) i / count + shift;
+            }
+            else  // Single axis the small number of colors.
+            {
+                int r = (int) Math.floor (Math.log (i) / Math.log (3));
+                if (r == 0)
+                {
+                    hue = i / 3.0f;
+                }
+                else
+                {
+                    int   j      = i - (int) Math.round (Math.pow (3, r));
+                    float step   = (float) Math.pow (3, -r);
+                    float offset = step / 3;
+                    hue = j * step + offset;
+                }
+            }
+            c = Utility.hueWithTrueLightness (hue, 0.5f);
+        }
         renderer.setSeriesPaint (i, c);
         renderer.setLegendTextPaint (i, c);
 
