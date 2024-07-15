@@ -186,6 +186,7 @@ public class CompilerGCC extends Compiler
             command.add ("-fpic");
             command.add ("-shared");
         }
+        // else static. We don't use the "-static" flag because it is OK for the resulting binary to depend on some shared code, just not our own runtime.
         for (String setting : settings) command.add (setting);
         if (Darwin) command.add ("-Wl,-dead_strip");
         else        command.add ("-Wl,--gc-sections");
