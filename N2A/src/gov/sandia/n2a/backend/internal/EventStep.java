@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,7 +25,7 @@ public class EventStep extends Event
         Part i = head.next;
         while (i != head)
         {
-            simulator.integrate (i);
+            i.integrate (simulator);
             i = i.next;
         }
 

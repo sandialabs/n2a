@@ -1,12 +1,11 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.internal;
 
-import gov.sandia.n2a.language.type.Instance;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -151,11 +150,6 @@ public class Simulator implements Iterable<Part>
                 catch (Exception e) {}
             }
         }
-    }
-
-    public void integrate (Instance i)
-    {
-        i.integrate (this);
     }
 
     public void updatePopulations ()

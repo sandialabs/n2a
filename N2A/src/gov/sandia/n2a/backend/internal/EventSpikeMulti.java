@@ -1,5 +1,5 @@
 /*
-Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -19,7 +19,7 @@ public class EventSpikeMulti extends EventSpike
     public void run (Simulator simulator)
     {
         setFlag ();
-        for (Instance i : targets) simulator.integrate (i);
+        for (Instance i : targets) i.integrate (simulator);
         for (Instance i : targets) i.update (simulator);
         for (Instance i : targets)
         {
