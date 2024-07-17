@@ -73,8 +73,10 @@ public class Variable implements Comparable<Variable>, Cloneable
     public boolean                      blocked;    // For Johnson circuit algorithm.
 
     // fixed-point analysis
-    public int                          exponent = Operator.UNKNOWN; // power of most significant bit expected to be stored by this variable.
-    public int                          center   = Operator.MSB / 2;
+    //public boolean                      signed   = true;             // For now we assume that variables are always signed. Handling a mix of signed and unsigned values is significantly more complex.
+    public int                          MSB      = 30;               // Zero-based position of most significant bit, not including sign bit.
+    public int                          exponent = Operator.UNKNOWN; // power of bit 0 (LSB) for values stored in this variable
+    public int                          center   = MSB / 2;
     public Operator                     bound;                       // The expression that imposes the largest magnitude on this variable. May be null.
 
     // Internal backend
