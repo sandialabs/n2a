@@ -600,12 +600,6 @@ Simulatable<T>::path (String & result)
     result = "";
 }
 
-template<class T>
-void
-Simulatable<T>::getNamedValue (const String & name, String & value)
-{
-}
-
 
 // class Part ----------------------------------------------------------------
 

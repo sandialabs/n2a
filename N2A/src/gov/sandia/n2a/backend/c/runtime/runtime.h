@@ -259,7 +259,6 @@ public:
 
     // Generic metadata
     virtual void path (String & result);
-    virtual void getNamedValue (const String & name, String & value);
 };
 
 template<class T>
