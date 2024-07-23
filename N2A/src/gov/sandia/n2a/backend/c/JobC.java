@@ -1132,6 +1132,11 @@ public class JobC extends Thread
         }
     }
 
+    /**
+        Finds all $live instances that we depend on to determine our own life/death.
+        This information is used to limit garbage collection of dead parts until their
+        dependent parts have had a chance to see the death and die themselves.
+    **/
     public void findLiveReferences (EquationSet s)
     {
         for (EquationSet p : s.parts)
@@ -1148,6 +1153,12 @@ public class JobC extends Thread
         }
     }
 
+    /**
+        Recursive subroutine of findLiveReferences() that walks up each possible containment or connection
+        path to find $live values that can vary at runtime.
+        This approach can potentially add entries in BackendDataC.localReference redundant with those added
+        by BackendDataC.analyze(). Redundant entries are eliminated while emitting code for enter/leaveSimulation().
+    **/
     @SuppressWarnings("unchecked")
     public void findLiveReferences (EquationSet s, ArrayList<Object> resolution, NavigableSet<EquationSet> touched, List<VariableReference> localReference, boolean terminate)
     {
