@@ -228,7 +228,7 @@ template<class T> class DelayBuffer;
     equivalent first.
 
     <p>Reference counting has to do with whether a part might be executed,
-    regardless of whether it is live or not. Thus, enqueue() and dequeue()
+    regardless of whether it is live or not. Thus, enterSimulation() and leaveSimulation()
     are responsible for maintaining refcounts on parts that we directly
     reference.
 **/
