@@ -109,10 +109,11 @@ public class Operator implements Cloneable
     public Unit<?> unit;   // Stands in for the physical dimensions associated with the output of this operator.
 
     // Fixed-point
-    public static int UNKNOWN = Integer.MIN_VALUE;
+    public static final int UNKNOWN = Integer.MIN_VALUE;
     /**
         Zero-based index of most significant bit in the machine word.
         Generally, the bit immediately below the sign bit.
+        @todo Move this to EquationSet.ExponentContext and allow it to be set on a per-simulation basis.
     **/
     public static int MSB = 30;
     /**
