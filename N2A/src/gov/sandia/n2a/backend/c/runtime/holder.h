@@ -356,6 +356,9 @@ template<class T> SHARED Mfile<T> * MfileHelper (const String & fileName, Mfile<
 SHARED std::vector<String> keyPath (const char * delimiter, const std::vector<String> & path);  ///< Converts any path elements with delimiters into separate elements.
 template<typename... Args> std::vector<String> keyPath (const char * delimiter, Args... keys) {return keyPath (delimiter, {keys...});}
 
+/// Convert date to Unix time. Dates before epoch will be negative.
+template<class T> SHARED T convertDate (const String & field, T defaultValue);
+
 template<class T>
 class SHARED InputHolder : public Holder
 {

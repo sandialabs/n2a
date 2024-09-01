@@ -161,6 +161,7 @@ template SHARED Mfile       <n2a_T> * MfileHelper      (const String & fileName,
 template SHARED OutputHolder<n2a_T> * outputHelper     (const String & fileName,                                OutputHolder<n2a_T> * oldHandle);
 template SHARED ImageInput  <n2a_T> * imageInputHelper (const String & fileName,                                ImageInput  <n2a_T> * oldHandle);
 template SHARED ImageOutput <n2a_T> * imageOutputHelper(const String & fileName,                                ImageOutput <n2a_T> * oldHandle);
+template SHARED n2a_T convertDate (const String & field, n2a_T defaultValue);
 
 #ifdef HAVE_JNI
 

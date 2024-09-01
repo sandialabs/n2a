@@ -249,12 +249,6 @@ public class ProvideSpreadsheet implements ProvideOperator
     }
 
     @Override
-    public Boolean prepareStaticObjects (Operator op, RendererC context, String pad)
-    {
-        return null;
-    }
-
-    @Override
     public Boolean prepareDynamicObjects (Operator op, RendererC context, boolean init,String pad)
     {
         if (! (op instanceof Spreadsheet)) return null;

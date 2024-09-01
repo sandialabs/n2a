@@ -1,5 +1,5 @@
 /*
-Copyright 2021-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -39,7 +39,10 @@ public interface ProvideOperator extends ExtensionPoint
         @return True if a new library file was built. False if the existing library
         file is unchanged. See the function library(JobC).
     **/
-    public boolean rebuildRuntime (JobC job) throws Exception;
+    default public boolean rebuildRuntime (JobC job) throws Exception
+    {
+        return false;
+    }
 
     /**
         @return Path to the object that should be linked into the C runtime.
@@ -48,7 +51,10 @@ public interface ProvideOperator extends ExtensionPoint
         is in use, the provided object will be incorporated into the runtime's main
         library. OK to return null.
     **/
-    public Path library (JobC job) throws Exception;
+    default public Path library (JobC job) throws Exception
+    {
+        return null;
+    }
 
     /**
         @return Full path to header file that should be included in the model source code.
@@ -58,7 +64,10 @@ public interface ProvideOperator extends ExtensionPoint
         include directory. This allows the include file to pull in other includes in
         the same or lower directory. OK to return null.
     **/
-    public Path include (JobC job) throws Exception;
+    default public Path include (JobC job) throws Exception
+    {
+        return null;
+    }
 
     /**
         Inserts any special code generation for the extension function(s).
@@ -68,31 +77,51 @@ public interface ProvideOperator extends ExtensionPoint
         @return null if operator is not recognized. Otherwise, boolean value to
         return from renderer.render().
     **/
-    public Boolean render (RendererC renderer, Operator op);
+    default public Boolean render (RendererC renderer, Operator op)
+    {
+        return null;
+    }
 
     /**
         @return null if operator is not recognized. Otherwise, boolean value to
         return from visitor function (true to continue visiting; false to stop).
     **/
-    public Boolean assignNames (RendererC renderer, Operator op);
+    default public Boolean assignNames (RendererC renderer, Operator op)
+    {
+        return null;
+    }
 
-    public void generateStatic           (RendererC renderer);
-    public void generateMainInitializers (RendererC renderer);
+    default public void generateStatic (RendererC renderer)
+    {
+    }
+
+    default public void generateMainInitializers (RendererC renderer)
+    {
+    }
 
     /**
         @return null if operator is not recognized. Otherwise, boolean value to
         return from visitor function (true to continue visiting; false to stop).
     **/
-    public Boolean prepareStaticObjects (Operator op, RendererC context, String pad);
+    default public Boolean prepareStaticObjects (Operator op, RendererC context, String pad)
+    {
+        return null;
+    }
 
     /**
         @return null if operator is not recognized. Otherwise, boolean value to
         return from visitor function (true to continue visiting; false to stop).
     **/
-    public Boolean prepareDynamicObjects (Operator op, RendererC context, boolean init, String pad);
+    default public Boolean prepareDynamicObjects (Operator op, RendererC context, boolean init, String pad)
+    {
+        return null;
+    }
 
     /**
         @return true if the operator was recognized/processed
     **/
-    public boolean getIterator (NonzeroIterable nzit, RendererC context);
+    default public boolean getIterator (NonzeroIterable nzit, RendererC context)
+    {
+        return false;
+    }
 }

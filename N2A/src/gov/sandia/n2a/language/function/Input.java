@@ -294,41 +294,7 @@ public class Input extends Function
 
                             // Special case for formatted dates
                             // Convert date to Unix time. Dates before epoch will be negative.
-                            if (i == timeColumn)
-                            {
-                                try
-                                {
-                                    // ISO 8601 and its prefixes
-                                    SimpleDateFormat format = null;
-                                    if (nextValues[i] < 3000  &&  nextValues[i] > 1000)  // Just the year. Two-digit years are not accepted.
-                                    {
-                                        format = new SimpleDateFormat ("yyyy");
-                                    }
-                                    else if (c.contains ("-"))  // Other parts of date/time are present
-                                    {
-                                        switch (c.length ())
-                                        {
-                                            case 7:  format = new SimpleDateFormat ("yyyy-MM");                   break;
-                                            case 10: format = new SimpleDateFormat ("yyyy-MM-dd");                break;
-                                            case 13: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH");           break;
-                                            case 16: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm");        break;
-                                            case 19: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm:ss");     break;
-                                            case 23: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm:ss.SSS"); break;
-                                        }
-                                    }
-                                    else if (c.contains ("/"))  // Conventional date
-                                    {
-                                        // TODO: add keyword parameter for correct date format, such as "mdy" or "ymd".
-                                        format = new SimpleDateFormat ("MM/dd/yyyy");
-                                    }
-                                    if (format != null)
-                                    {
-                                        format.setTimeZone (TimeZone.getTimeZone ("GMT"));
-                                        nextValues[i] = format.parse (c).toInstant ().toEpochMilli () / 1000.0;
-                                    }
-                                }
-                                catch (ParseException e) {}
-                            }
+                            if (i == timeColumn) nextValues[i] = convertDate (c, nextValues[i]);
                         }
                         if (time) nextLine = nextValues[timeColumn];
                         else      nextLine = currentLine + 1;
@@ -345,6 +311,46 @@ public class Input extends Function
                 nextValues = empty;
             }
         }
+    }
+
+    public static double convertDate (String dateString)
+    {
+        double asNumber = Scalar.parseDouble (dateString, 0);
+        return convertDate (dateString, asNumber);
+    }
+
+    public static double convertDate (String dateString, double asNumber)
+    {
+        // ISO 8601 and its prefixes
+        SimpleDateFormat format = null;
+        if (asNumber < 3000  &&  asNumber > 1000)  // Just the year. Two-digit years are not accepted.
+        {
+            format = new SimpleDateFormat ("yyyy");
+        }
+        else if (dateString.contains ("-"))  // Other parts of date/time are present
+        {
+            switch (dateString.length ())
+            {
+                case 7:  format = new SimpleDateFormat ("yyyy-MM");                   break;
+                case 10: format = new SimpleDateFormat ("yyyy-MM-dd");                break;
+                case 13: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH");           break;
+                case 16: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm");        break;
+                case 19: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm:ss");     break;
+                case 23: format = new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm:ss.SSS"); break;
+            }
+        }
+        else if (dateString.contains ("/"))  // Conventional date
+        {
+            // TODO: add keyword parameter for correct date format, such as "mdy" or "ymd".
+            format = new SimpleDateFormat ("MM/dd/yyyy");
+        }
+        if (format != null)
+        {
+            format.setTimeZone (TimeZone.getTimeZone ("GMT"));
+            try {return format.parse (dateString).toInstant ().toEpochMilli () / 1000.0;}
+            catch (ParseException e) {}
+        }
+        return asNumber;
     }
 
     public Holder getRow (Instance context, double line)

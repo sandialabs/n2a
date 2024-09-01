@@ -177,7 +177,7 @@ public class Variable implements Comparable<Variable>, Cloneable
         }
         catch (UnsupportedFunctionException e)
         {
-            e.message = "Unsupported function " + e.message + " in " + fullName ();
+            e.message = "Unsupported function '" + e.message + "' in " + fullName ();
             throw e;
         }
     }

@@ -228,7 +228,7 @@ public class Spreadsheet extends Function implements NonzeroIterable
                     // waste of time to convert to dense matrix if each element is accessed
                     // only once during a simulation. Here it is impossible to know how
                     // all that will play out, so we use a simple heuristic based on fill-in
-                    // to decide whether to covnert to dense matrix after the load finishes.
+                    // to decide whether to convert to dense matrix after the load finishes.
                     Sheet ws = new Sheet ();
                     wb.put (name, ws);
                     if (first == null) first = ws;

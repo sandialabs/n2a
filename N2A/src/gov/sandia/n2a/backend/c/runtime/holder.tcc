@@ -2087,6 +2087,121 @@ InputHolder<T>::~InputHolder ()
 }
 
 template<class T>
+T
+convertDate (const String & field, T defaultValue)
+{
+    bool valid = false;
+    int year   = 1970;  // will be adjusted below for timegm()
+    int month  = 1;     // ditto
+    int day    = 1;
+    int hour   = 0;
+    int minute = 0;
+    int second = 0;
+
+    // ISO 8601 and its prefixes
+    int length = field.size ();
+    if (length == 4)
+    {
+        year  = atoi (field.c_str ());
+        valid =  year < 3000  &&  year > 1000;
+    }
+    else if (length >= 7  &&  field[4] == '-')
+    {
+        valid = true;
+        year  = atoi (field.substr (0, 4).c_str ());
+        month = atoi (field.substr (5, 2).c_str ());
+        if (length >= 10  &&  field[7] == '-')
+        {
+            day = atoi (field.substr (8, 2).c_str ());
+            if (length >= 13  &&  field[10] == 'T')
+            {
+                hour = atoi (field.substr (11, 2).c_str ());
+                if (length >= 16  &&  field[13] == ':')
+                {
+                    minute = atoi (field.substr (14, 2).c_str ());
+                    if (length >= 19  &&  field[16] == ':')
+                    {
+                        second = atoi (field.substr (17, 2).c_str ());
+                    }
+                }
+            }
+        }
+    }
+    else  // Conventional dates
+    {
+        int pos1 = field.find_first_of ('/');
+        if (pos1 != String::npos)
+        {
+            month = atoi (field.substr (0, pos1).c_str ());
+            pos1++;
+            int pos2 = field.find_first_of ('/', pos1);
+            if (pos2 != String::npos)
+            {
+                valid = true;
+                day  = atoi (field.substr (pos1, pos2-pos1).c_str ());
+                year = atoi (field.substr (pos2+1).c_str ());
+
+                // TODO: add keyword parameter for correct date format, such as "mdy" or "ymd". Implement by shuffling fields.
+                if (month > 31)  // probably ymd format
+                {
+                    int temp = month;
+                    month    = day;
+                    day      = year;
+                    year     = temp;
+                }
+            }
+            else  // Only two numbers, so either ym or my
+            {
+                year = atoi (field.substr (pos1).c_str ());
+                if (month > 12)  // probably ym format
+                {
+                    int temp = month;
+                    month    = year;
+                    year     = temp;
+                }
+            }
+        }
+    }
+
+    if (! valid) return defaultValue;
+
+    month -= 1;
+    year  -= 1900;
+
+    struct tm date;
+    date.tm_isdst = 0;  // time is strictly UTC, with no DST
+    // ignoring tm_wday and tm_yday, as timegm() doesn't do anything with them
+
+    // Hack to adjust for timegm() that can't handle dates before posix epoch (1970/1/1).
+    // This simple hack only works for years after ~1900.
+    // Solution comes from https://bugs.php.net/bug.php?id=17123
+    // Alternate solution would be to implement a simple timegm() right here.
+    // Since we don't care about DST or timezones, all it has to do is handle Gregorion leap-years.
+    time_t offset = 0;
+    if (year <= 70)  // Yes, that includes 1970 itself.
+    {
+        // The referenced post suggested 56 years, which apparently makes week days align correctly.
+        year += 56;
+        date.tm_year = 70 + 56;
+        date.tm_mon  = 0;
+        date.tm_mday = 1;
+        date.tm_hour = 0;
+        date.tm_min  = 0;
+        date.tm_sec  = 0;
+        offset = timegm (&date);
+    }
+
+    date.tm_year = year;
+    date.tm_mon  = month;
+    date.tm_mday = day;
+    date.tm_hour = hour;
+    date.tm_min  = minute;
+    date.tm_sec  = second;
+
+    return timegm (&date) - offset;  // Unix time; an integer, so exponent=0
+}
+
+template<class T>
 void
 InputHolder<T>::getRow (T row)
 {
@@ -2240,107 +2355,20 @@ InputHolder<T>::getRow (T row)
                     String field = line.substr (i, j - i);
 
                     // Special case for formatted date
-                    // Convert date to Unix time. Dates before epoch will be negative.
                     bool valid = false;
                     if (index == timeColumn)
                     {
-                        int year   = 1970;  // will be adjusted below for timegm()
-                        int month  = 1;     // ditto
-                        int day    = 1;
-                        int hour   = 0;
-                        int minute = 0;
-                        int second = 0;
-
-                        // ISO 8601 and its prefixes
-                        int length = field.size ();
-                        if (length == 4)
-                        {
-                            year  = atoi (field.c_str ());
-                            valid =  year < 3000  &&  year > 1000;
-                        }
-                        else if (length >= 7  &&  field[4] == '-')
-                        {
-                            valid = true;
-                            year  = atoi (field.substr (0, 4).c_str ());
-                            month = atoi (field.substr (5, 2).c_str ());
-                            if (length >= 10  &&  field[7] == '-')
-                            {
-                                day = atoi (field.substr (8, 2).c_str ());
-                                if (length >= 13  &&  field[10] == 'T')
-                                {
-                                    hour = atoi (field.substr (11, 2).c_str ());
-                                    if (length >= 16  &&  field[13] == ':')
-                                    {
-                                        minute = atoi (field.substr (14, 2).c_str ());
-                                        if (length >= 19  &&  field[16] == ':')
-                                        {
-                                            second = atoi (field.substr (17, 2).c_str ());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        else  // Conventional dates
-                        {
-                            int pos1 = field.find_first_of ('/');
-                            if (pos1 != String::npos)
-                            {
-                                month = atoi (field.substr (0, pos1).c_str ());
-                                pos1++;
-                                int pos2 = field.find_first_of ('/', pos1);
-                                if (pos2 != String::npos)
-                                {
-                                    valid = true;
-                                    day  = atoi (field.substr (pos1, pos2-pos1).c_str ());
-                                    year = atoi (field.substr (pos2+1).c_str ());
-                                    // TODO: add keyword parameter for correct date format, such as "mdy" or "ymd". Implement by shuffling fields.
-                                }
-                            }
-                        }
-
+                        nextValues[index] = convertDate (field, NAN);
+                        valid = ! std::isnan (nextValues[index]);
+#                       ifdef n2a_FP
                         if (valid)
                         {
-                            month -= 1;
-                            year  -= 1900;
-
-                            struct tm date;
-                            date.tm_isdst = 0;  // time is strictly UTC, with no DST
-                            // ignoring tm_wday and tm_yday, as timegm() doesn't do anything with them
-
-                            // Hack to adjust for timegm() that can't handle dates before posix epoch (1970/1/1).
-                            // This simple hack only works for years after ~1900.
-                            // Solution comes from https://bugs.php.net/bug.php?id=17123
-                            // Alternate solution would be to implement a simple timegm() right here.
-                            // Since we don't care about DST or timezones, all it has to do is handle Gregorion leap-years.
-                            time_t offset = 0;
-                            if (year <= 70)  // Yes, that includes 1970 itself.
-                            {
-                                // The referenced post suggested 56 years, which apparently makes week days align correctly.
-                                year += 56;
-                                date.tm_year = 70 + 56;
-                                date.tm_mon  = 0;
-                                date.tm_mday = 1;
-                                date.tm_hour = 0;
-                                date.tm_min  = 0;
-                                date.tm_sec  = 0;
-                                offset = timegm (&date);
-                            }
-
-                            date.tm_year = year;
-                            date.tm_mon  = month;
-                            date.tm_mday = day;
-                            date.tm_hour = hour;
-                            date.tm_min  = minute;
-                            date.tm_sec  = second;
-
-                            nextValues[index] = timegm (&date) - offset;  // Unix time; an integer, so exponent=0
-#                           ifdef n2a_FP
                             // Need to put value in expected exponent.
                             int shift = -(time ? exponentRow : exponent);
                             if (shift >= 0) nextValues[index] <<= shift;
                             else            nextValues[index] >>= -shift;
-#                           endif
                         }
+#                       endif
                     }
 
                     if (! valid)  // Not a date, so general case ...
