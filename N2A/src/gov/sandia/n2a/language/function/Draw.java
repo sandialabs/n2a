@@ -15,6 +15,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.FloatBuffer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -312,6 +313,7 @@ public class Draw extends Function
 
                 // Fall through image sequence code below ...
                 vout = null;
+                dirCreated = false;
             }
 
             if (format.isBlank ()) format = suffix;
@@ -469,8 +471,12 @@ public class Draw extends Function
             if (! opened) open ();
             if (! dirCreated)
             {
-                path.toFile ().getAbsoluteFile ().mkdirs ();
-                dirCreated = true;
+                try
+                {
+                    Files.createDirectories (path);
+                    dirCreated = true;
+                }
+                catch (IOException e) {e.printStackTrace ();}
             }
 
             BufferedImage background;
@@ -503,10 +509,9 @@ public class Draw extends Function
             else
             {
                 String filename = path.resolve (String.format ("%d.%s", frameCount, format)).toString ();
-                // Path.toAbsolutePath() does not resolve against job directory the same way File.getAbsoluteFile() does.
                 try
                 {
-                    boolean success = ImageIO.write (image, format, new File (filename).getAbsoluteFile ());
+                    boolean success = ImageIO.write (image, format, new File (filename));
                     if (! success)
                     {
                         format = "png";  // This should always be available in JVM. Preferable over JPEG because it is lossless.
