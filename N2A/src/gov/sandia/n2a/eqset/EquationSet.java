@@ -3839,7 +3839,7 @@ public class EquationSet implements Comparable<EquationSet>
     protected boolean findConstantsEval ()
     {
         boolean changed = false;
-        for (Variable v : variables)
+        for (Variable v : new ArrayList<Variable> (variables))  // Buffer so that Variable.simplify() can add new variables. In that case, Variable.simplify() should return true so that another cycle can include the new variable in optimizations.
         {
             if (v.simplify ()) changed = true;
 

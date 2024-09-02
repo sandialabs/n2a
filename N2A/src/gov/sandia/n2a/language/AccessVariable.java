@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -116,6 +116,12 @@ public class AccessVariable extends Operator
                 // Not forming a dependency on v2 also supports the case where v2 is acting as an (unmarked) local
                 // temporary that is made externally visible via a second variable.
                 if (! v2.hasAny ("externalRead", "externalWrite")) return this;
+            }
+            else  // Referencing variable in same equation set
+            {
+                // If the intermediate variable is explicitly marked state, then is has been deliberately inserted
+                // to create a 1-cycle delay. Don't optimize this away.
+                if (v.hasAttribute ("state")) return this;
             }
 
             // Fold aliased variable
