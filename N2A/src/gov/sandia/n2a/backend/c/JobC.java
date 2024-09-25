@@ -798,7 +798,9 @@ public class JobC extends Thread
         for (ProvideOperator po : extensions)
         {
             Path include = po.include (this);
-            if (include != null) c.addInclude (include.getParent ());
+            if (include == null) continue;
+            Path dir = include.getParent ();
+            if (dir != null) c.addInclude (dir);
         }
         c.addDefine ("n2a_T", T);
         if (fixedPoint) c.addDefine ("n2a_FP");
@@ -841,7 +843,8 @@ public class JobC extends Thread
         {
             Path include = po.include (this);
             if (include == null) continue;
-            c.addInclude (include.getParent ());
+            Path dir = include.getParent ();
+            if (dir != null) c.addInclude (dir);
         }
         c.addDefine ("n2a_T", T);
         if (fixedPoint) c.addDefine ("n2a_FP");
