@@ -80,7 +80,6 @@ void signalHandler (int number)
 
 template class Simulatable<n2a_T>;
 template class Part<n2a_T>;
-template class PartTime<n2a_T>;
 template class WrapperBase<n2a_T>;
 template class ConnectIterator<n2a_T>;
 template class ConnectPopulation<n2a_T>;

@@ -607,19 +607,43 @@ template<class T>
 void
 Part<T>::setPrevious (Part<T> * previous)
 {
+    this->previous = previous;
 }
 
 template<class T>
 void
 Part<T>::setVisitor (VisitorStep<T> * visitor)
 {
+    this->visitor = visitor;
 }
 
 template<class T>
 EventStep<T> *
 Part<T>::getEvent ()
 {
-    return (EventStep<T> *) SIMULATOR currentEvent;
+    return (EventStep<T> *) visitor->event;
+}
+
+template<class T>
+void
+Part<T>::dequeue ()
+{
+    // TODO: Need mutex on visitor when modifying its queue, even if it is not part of currentEvent.
+    if (SIMULATOR currentEvent == visitor->event)
+    {
+        // Avoid damaging iterator in visitor
+        if (visitor->previous == this) visitor->previous = this->next;
+    }
+    if (this->next) this->next->setPrevious (previous);
+    previous->next = this->next;
+}
+
+template<class T>
+void
+Part<T>::setPeriod (T dt)
+{
+    dequeue ();
+    SIMULATOR enqueue (this, dt);
 }
 
 template<class T>
@@ -756,52 +780,6 @@ removeMonitor (std::vector<Part<T> *> & partList, Part<T> * part)
 }
 
 
-// class PartTime ------------------------------------------------------------
-
-template<class T>
-void
-PartTime<T>::setPrevious (Part<T> * previous)
-{
-    this->previous = previous;
-}
-
-template<class T>
-void
-PartTime<T>::setVisitor (VisitorStep<T> * visitor)
-{
-    this->visitor = visitor;
-}
-
-template<class T>
-EventStep<T> *
-PartTime<T>::getEvent ()
-{
-    return (EventStep<T> *) visitor->event;
-}
-
-template<class T>
-void
-PartTime<T>::dequeue ()
-{
-    // TODO: Need mutex on visitor when modifying its queue, even if it is not part of currentEvent.
-    if (SIMULATOR currentEvent == visitor->event)
-    {
-        // Avoid damaging iterator in visitor
-        if (visitor->previous == this) visitor->previous = this->next;
-    }
-    if (this->next) this->next->setPrevious (previous);
-    previous->next = this->next;
-}
-
-template<class T>
-void
-PartTime<T>::setPeriod (T dt)
-{
-    dequeue ();
-    SIMULATOR enqueue (this, dt);
-}
-
-
 // Wrapper -------------------------------------------------------------------
 
 template<class T>
@@ -886,14 +864,6 @@ void
 WrapperBase<T>::addToMembers ()
 {
     population->addToMembers ();
-}
-
-
-// class ConnectIterator -----------------------------------------------------
-
-template<class T>
-ConnectIterator<T>::~ConnectIterator ()
-{
 }
 
 

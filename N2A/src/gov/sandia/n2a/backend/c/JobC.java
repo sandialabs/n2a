@@ -2389,7 +2389,7 @@ public class JobC extends Thread
         BackendDataC bed = (BackendDataC) s.backendData;
 
         // Unit class
-        result.append ("class " + prefix (s) + " : public PartTime<" + T + ">\n");
+        result.append ("class " + prefix (s) + " : public Part<" + T + ">\n");
         result.append ("{\n");
         result.append ("public:\n");
 
@@ -3745,7 +3745,7 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "setPeriod (" + T + " dt)\n");
             result.append ("{\n");
-            result.append ("  PartTime<" + T + ">::setPeriod (dt);\n");
+            result.append ("  Part<" + T + ">::setPeriod (dt);\n");
             result.append ("  if (container->visitor->event != visitor->event) container->setPeriod (dt);\n");
             result.append ("}\n");
             result.append ("\n");

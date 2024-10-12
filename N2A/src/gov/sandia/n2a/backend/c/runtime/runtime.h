@@ -187,7 +187,6 @@ SHARED void signalHandler (int number);
 
 template<class T> class Simulatable;
 template<class T> class Part;
-template<class T> class PartTime;
 template<class T> class WrapperBase;
 template<class T> class ConnectIterator;
 template<class T> class ConnectPopulation;
@@ -265,12 +264,16 @@ template<class T>
 class SHARED Part : public Simulatable<T>
 {
 public:
-    Part<T> * next; ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
+    Part<T> *        next;      ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
+    Part<T> *        previous;  ///< This back-link is only maintained on an event list.
+    VisitorStep<T> * visitor;
 
     // Simulation queue
     virtual void           setPrevious (Part<T> * previous);
     virtual void           setVisitor  (VisitorStep<T> * visitor);  ///< Informs this part of both its associated event and the specific thread.
     virtual EventStep<T> * getEvent    ();  ///< @return the event this part is associated with. Provides t and dt.
+    virtual void           dequeue     ();  ///< Handles all direct requests (oustide of sim loop).
+    virtual void           setPeriod   (T dt);
 
     // Lifespan management
     virtual void die             (); ///< Set $live=0 (in some form) and decrement $n of our population. If accountable connection, decrement connection counts in target compartments.
@@ -300,27 +303,8 @@ public:
 
 template<class T> SHARED void removeMonitor (std::vector<Part<T> *> & partList, Part<T> * part);
 
-/**
-    Supports ability to dequeue and move to a different simulation period.
-    Implements other half of doubly-linked list. It is possible to mix singly- and doubly-linked
-    parts in the same queue, but only a doubly-linked part can dequeue outside of sim loop.
-**/
 template<class T>
-class SHARED PartTime : public Part<T>
-{
-public:
-    Part<T> * previous;
-    VisitorStep<T> * visitor;
-
-    virtual void           setPrevious (Part<T> * previous);
-    virtual void           setVisitor  (VisitorStep<T> * visitor);
-    virtual EventStep<T> * getEvent    ();
-    virtual void           dequeue     ();  ///< Handles all direct requests (oustide of sim loop).
-    virtual void           setPeriod   (T dt);
-};
-
-template<class T>
-class SHARED WrapperBase : public PartTime<T>
+class SHARED WrapperBase : public Part<T>
 {
 public:
     Population<T> * population;  // The top-level population can never be a connection, only a compartment.
@@ -344,7 +328,7 @@ template<class T>
 class SHARED ConnectIterator
 {
 public:
-    virtual ~ConnectIterator ();
+    virtual ~ConnectIterator () = default;
     virtual bool setProbe (Part<T> * probe) = 0; ///< Sets up the next connection instance to have its endpoints configured. Return value is used primarily by ConnectPopulation to implement $max.
     virtual bool next     () = 0;                ///< Fills probe with next permutation. Returns false if no more permutations are available.
 };
