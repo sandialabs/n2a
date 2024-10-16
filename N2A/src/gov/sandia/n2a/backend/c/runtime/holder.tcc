@@ -298,6 +298,7 @@ matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle)
         if (! ifs.good ()) std::cerr << "Failed to open matrix file: " << fileName << std::endl;
         String line;
         getline (ifs, line);
+        line.trim ();  // In particular, get rid of trailing line-ending character in some cases.
         if (line == "Sparse")  // Homegrown sparse matrix format
         {
             MatrixSparse<T> * S = new MatrixSparse<T>;

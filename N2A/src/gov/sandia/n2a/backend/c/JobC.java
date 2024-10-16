@@ -3733,7 +3733,7 @@ public class JobC extends Thread
                     result.append (");\n");
                 }
 
-                result.append ("  return new ConnectMatrix<" + T + "> (rows, cols, " + cm.rows.index + ", " + cm.cols.index + ", it, dummy);\n");
+                result.append ("  return new ConnectMatrix<" + T + "> (rows, cols, " + cm.rows.index + ", " + cm.cols.index + ", it, dummy, this);\n");
             }
             result.append ("}\n");
             result.append ("\n");
