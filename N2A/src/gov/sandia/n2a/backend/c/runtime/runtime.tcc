@@ -1104,13 +1104,14 @@ ConnectPopulationNN<T>::reset (bool newOnly)
 // class ConnectMatrix -------------------------------------------------------
 
 template<class T>
-ConnectMatrix<T>::ConnectMatrix (ConnectPopulation<T> * rows, ConnectPopulation<T> * cols, int rowIndex, int colIndex, IteratorNonzero<T> * it, Part<T> * dummy)
-:   rows     (rows),
-    cols     (cols),
-    rowIndex (rowIndex),
-    colIndex (colIndex),
-    it       (it),
-    dummy    (dummy)
+ConnectMatrix<T>::ConnectMatrix (ConnectPopulation<T> * rows, ConnectPopulation<T> * cols, int rowIndex, int colIndex, IteratorNonzero<T> * it, Part<T> * dummy, Population<T> * population)
+:   rows       (rows),
+    cols       (cols),
+    rowIndex   (rowIndex),
+    colIndex   (colIndex),
+    it         (it),
+    dummy      (dummy),
+    population (population)
 {
 }
 
@@ -1120,7 +1121,7 @@ ConnectMatrix<T>::~ConnectMatrix ()
     delete rows;
     delete cols;
     delete it;
-    delete dummy;
+    population->Population<T>::remove (dummy);
 }
 
 template<class T>
@@ -1156,28 +1157,16 @@ ConnectMatrix<T>::next ()
 // class Population ----------------------------------------------------------
 
 template<class T>
-Population<T>::Population ()
-{
-    dead = 0;
-}
-
-template<class T>
-Population<T>::~Population ()
-{
-    Part<T> * p = dead;
-    while (p)
-    {
-        Part<T> * next = p->next;
-        delete p;
-        p = next;
-    }
-}
-
-template<class T>
 Part<T> *
-Population<T>::create ()
+Population<T>::allocate ()
 {
     return 0;
+}
+
+template<class T>
+void
+Population<T>::release (Part<T> * part)
+{
 }
 
 template<class T>
@@ -1190,33 +1179,7 @@ template<class T>
 void
 Population<T>::remove (Part<T> * part)
 {
-    part->next = dead;
-    dead = part;
-}
-
-template<class T>
-Part<T> *
-Population<T>::allocate ()
-{
-    Part<T> * result = 0;
-
-    Part<T> ** p = &dead;
-    while (*p)
-    {
-        if ((*p)->isFree ())
-        {
-            result = *p;
-            result->clear ();
-            *p = (*p)->next;  // remove from dead
-            break;
-        }
-        p = & (*p)->next;
-    }
-
-    if (! result) result = create ();
-    add (result);
-
-    return result;
+    release (part);
 }
 
 template<class T>
@@ -1227,6 +1190,7 @@ Population<T>::resize (int n)
     for (int currentN = getN (); currentN < n; currentN++)
     {
         Part<T> * p = allocate ();
+        add (p);
         p->enterSimulation ();
         event->enqueue (p);
         p->init ();
@@ -1248,7 +1212,7 @@ Population<T>::connect ()
     if (! outer) return;
 
     EventStep<T> * event = container->getEvent ();
-    Part<T> * c = create ();
+    Part<T> * c = allocate ();
     outer->setProbe (c);
     while (outer->next ())
     {
@@ -1261,14 +1225,15 @@ Population<T>::connect ()
         if (p < 1  &&  p < uniform<T> ()) continue;
 #       endif
 
+        add (c);
         c->enterSimulation ();
         event->enqueue (c);
         c->init ();
 
-        c = this->create ();
+        c = allocate ();
         outer->setProbe (c);
     }
-    delete c;  // The last created connection instance doesn't get used.
+    release (c);  // The last allocated connection instance doesn't get used.
     delete outer;  // Automatically deletes inner iterators as well.
 }
 
@@ -1415,9 +1380,9 @@ Population<T>::getIteratorsNN (bool poll)
         B->contained = true;
         if (A->k > 0  ||  A->radius > 0)  // Note that NN structure won't be created on deepest iterator. TODO: Is this correct?
         {
-            A->c = create ();
+            A->c = allocate ();
             A->prepareNN ();
-            delete A->c;
+            release (A->c);
         }
     }
 

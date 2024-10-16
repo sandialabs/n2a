@@ -1078,6 +1078,7 @@ namespace n2a
 
         static std::vector<ImageFileFormat*> formats;
     };
+    SHARED void freeFormats ();  ///< Dispose of registered ImageFileFormat objects. Called just before program terminates to make memory debuggers like valgrind happy. Otherwise, completely unnecessary.
 
     class SHARED ImageFileFormatBMP : public ImageFileFormat
     {

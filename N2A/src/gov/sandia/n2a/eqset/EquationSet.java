@@ -2594,8 +2594,8 @@ public class EquationSet implements Comparable<EquationSet>
         if (connectionBindings == null  ||  connected)  // Either a compartment, or a connection that also happens to be the endpoint of another connection.
         {
             boolean singleton = isSingleton ();
-            // isSingleton() may be wrong until resolveLHS() has run, as that is the only way to know
-            // if external writes modify $n. The configuration below will be corrected in findExternal().
+            // isSingleton() may be wrong until resolveLHS() has run, as that is the only way to know if
+            // external writes modify $n. The configuration below will be corrected in findExternal().
 
             v = new Variable ("$index");
             if (add (v))

@@ -188,8 +188,8 @@ public class Population extends Instance
         if (equations.connectionBindings != null)
         {
             // Check poll deadline.
-            boolean shouldConnect = false;
-            if (bed.poll >= 0)
+            boolean shouldConnect =  bed.poll == 0;
+            if (bed.poll > 0)
             {
                 double pollDeadline = valuesFloat[bed.pollDeadline];
                 double t = simulator.currentEvent.t;
@@ -728,9 +728,9 @@ public class Population extends Instance
     @SuppressWarnings("unchecked")
     public void connect (Simulator simulator)
     {
-        boolean poll = false;  // If true, check all latent connections. If false, only check for new connections.
         InternalBackendData bed = (InternalBackendData) equations.backendData;
-        if (bed.poll >= 0)
+        boolean poll =  bed.poll == 0;  // If true, check all latent connections. If false, only check for new connections.
+        if (bed.poll > 0)
         {
             double t = simulator.currentEvent.t;
             double pollDeadline = valuesFloat[bed.pollDeadline];

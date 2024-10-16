@@ -146,6 +146,12 @@ ImageFile::set (const String & name, const String & value)
 
 vector<ImageFileFormat *> ImageFileFormat::formats;
 
+void
+n2a::freeFormats ()
+{
+    for (auto f : ImageFileFormat::formats) delete f;
+}
+
 ImageFileFormat::~ImageFileFormat ()
 {
     vector<ImageFileFormat*>::iterator i;

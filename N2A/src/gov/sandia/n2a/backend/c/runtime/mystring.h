@@ -94,6 +94,17 @@ public:
         assign (buffer, n);
     }
 
+    String (uint32_t value)
+    {
+        memory    = 0;
+        top       = 0;
+        capacity_ = 0;
+
+        char buffer[16];
+        int n = sprintf (buffer, "%u", value);
+        assign (buffer, n);
+    }
+
     String (long value)
     {
         memory    = 0;
@@ -331,6 +342,13 @@ public:
         return operator+ (buffer);
     }
 
+    String operator+ (uint32_t that) const
+    {
+        char buffer[16];
+        sprintf (buffer, "%u", that);
+        return operator+ (buffer);
+    }
+
     String operator+ (long that) const
     {
         char buffer[32];
@@ -398,6 +416,13 @@ public:
     {
         char buffer[16];
         int n = sprintf (buffer, "%i", that);
+        return append (buffer, n);
+    }
+
+    String & operator+= (uint32_t that)
+    {
+        char buffer[16];
+        int n = sprintf (buffer, "%u", that);
         return append (buffer, n);
     }
 

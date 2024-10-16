@@ -18,6 +18,7 @@ the U.S. Government retains certain rights in this software.
 #include <queue>
 #include <vector>
 #include <map>
+#include <mutex>
 
 #include "shared.h"
 
@@ -408,10 +409,11 @@ public:
     int                    rowIndex;
     int                    colIndex;
     IteratorNonzero<T>   * it;
-    Part<T>              * dummy; ///< Temporary connection used to evaluate index mappings.
+    Part<T>              * dummy;      ///< Temporary connection used to evaluate index mappings.
+    Population<T>        * population; ///< Needed to release "dummy" when done.
     Part<T>              * c;
 
-    ConnectMatrix (ConnectPopulation<T> * rows, ConnectPopulation<T> * cols, int rowIndex, int colIndex, IteratorNonzero<T> * it, Part<T> * dummy);
+    ConnectMatrix (ConnectPopulation<T> * rows, ConnectPopulation<T> * cols, int rowIndex, int colIndex, IteratorNonzero<T> * it, Part<T> * dummy, Population<T> * population);
     virtual ~ConnectMatrix ();
 
     virtual bool setProbe (Part<T> * probe);
@@ -422,32 +424,34 @@ public:
     The shared variables of a group of part instances. Because a population
     may be contained in another part, which may be replicated several times,
     there may be several separate populations of exactly that same kind of
-    part. Therefore, these cannot simply be stored as static members in the
-    part class.
+    part.
 
-    <p>Lifetime management: An object of this class is responsible to destroy
-    any part instances that are held on the dead list. If a simulation shuts
-    down normally, this will usually be all instances that exist. If the
-    simulation is terminated by a signal, some instances may still be held
-    in EventStep objects. In that case, EventStep is responsible to free its
-    contents. Those parts will not go through a proper death process.
+    <p>Lifetime management: A population class allocates a single (static) pool
+    of part instances shared by all its population instances. This pool generally does
+    not shrink during the simulation, on the assumption that the peak number
+    of part instances may be required more than once. When the simulation shuts
+    down, the main thread can call ::releaseMemory() to clean up all the pools.
 **/
 template<class T>
 class SHARED Population : public Simulatable<T>
 {
 public:
     Part<T> * container;
-    Part<T> * dead; ///< Head of linked list of available parts, using Part::next.
 
-    Population ();
-    virtual ~Population ();  ///< Deletes all parts on our dead list.
+    // The code generator will create fields like the following in subclasses:
+    //static Part<T> *        dead;        ///< Head of linked list of available parts, using Part::next.
+    //static vector<Part<T>*> memory;      ///< Allocated blocks of memory for part instances.
+    //static mutex            mutexMemory; ///< Controls access to "dead" and "memory".
+    //static void releaseMemory ();  ///< Free all blocks of allocated memory.
+
+    virtual ~Population () = default;
 
     // Instance management
-    virtual Part<T> * create   ();               ///< Construct an instance of the kind of part this population holds. Caller is fully responsible for lifespan of result, unless it gives the part to us via add().
-    virtual void      add      (Part<T> * part); ///< The given part is going onto a simulator queue, but we may also account for it in other ways.
-    virtual void      remove   (Part<T> * part); ///< Move part to dead list, and update any other accounting for the part.
-    virtual Part<T> * allocate ();               ///< If a dead part is available, re-use it. Otherwise, create and add a new part.
-    virtual void      resize   (int n);          ///< Add or kill instances until $n matches given n.
+    virtual Part<T> * allocate ();               ///< Obtains an instance of the part. This comes from the dead list. If no dead instance is free, allocates more memory and adds any leftover instances to the dead list.
+    virtual void      release  (Part<T> * part); ///< Returns part to the dead list.
+    virtual void      add      (Part<T> * part); ///< Makes the given instance an active member of the population.
+    virtual void      remove   (Part<T> * part); ///< Moves part to dead list. Derived classes may update other accounting for the part.
+    virtual void      resize   (int n);          ///< Adds or kills instances until $n matches given n.
     virtual int       getN     ();               ///< Subroutine for resize(). Returns current number of live instances (true n). Not exactly the same as an accessor for $n, because it does not give the requested size, only actual size.
 
     // Connections

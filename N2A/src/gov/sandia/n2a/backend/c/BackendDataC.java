@@ -73,6 +73,7 @@ public class BackendDataC
     public boolean needGlobalPreserve;
     public boolean needGlobalCtor;
     public boolean needGlobalDtor;
+    public boolean needGlobalClear;
     public boolean needGlobalInit;
     public boolean needGlobalIntegrate;
     public boolean needGlobalUpdate;
@@ -86,6 +87,7 @@ public class BackendDataC
     public boolean needLocalPreserve;
     public boolean needLocalCtor;
     public boolean needLocalDtor;
+    public boolean needLocalClear;
     public boolean needLocalDie;
     public boolean needLocalInit;
     public boolean needLocalIntegrate;
@@ -529,7 +531,7 @@ public class BackendDataC
 
         flagCount = 0;
         if (trackInstances  &&  s.connected) clearNew = flagCount++;
-        if (populationCanBeInactive)         inactive = flagCount++;  // This may end up not being used.
+        if (populationCanBeInactive)         inactive = flagCount++;
         if      (flagCount == 0 ) globalFlagType = "";
         else if (flagCount <= 8 ) globalFlagType = "uint8_t";
         else if (flagCount <= 16) globalFlagType = "uint16_t";
@@ -544,11 +546,10 @@ public class BackendDataC
         needGlobalDerivative         = ! Euler  &&  globalDerivative.size () > 0;
         needGlobalIntegrate          = globalIntegrated.size () > 0;
         needGlobalPreserve           = ! Euler  &&  (needGlobalIntegrate  ||  globalDerivativePreserve.size () > 0  ||  globalBufferedExternalWriteDerivative.size () > 0);
+        needGlobalClear              = ! singleton  &&  (trackN  ||  trackInstances  ||  index != null  ||  newborn >= 0)  ||  poll > 0  ||  ! globalFlagType.isEmpty ()  ||  globalMembers.size () > 0;
         needGlobalDtor               = needGlobalPreserve  ||  needGlobalDerivative;
-        needGlobalCtor               = needGlobalDtor  ||  (index != null  ||  n != null)  &&  ! singleton;
-        needGlobalInit               =    globalMembers.size () > 0
-                                       || ! globalFlagType.isEmpty ()
-                                       || globalInit.size () > 0
+        needGlobalCtor               = needGlobalDtor  ||  needGlobalClear;
+        needGlobalInit               =    globalInit.size () > 0
                                        || singleton
                                        || n != null
                                        || s.connectionBindings != null;
@@ -566,8 +567,9 @@ public class BackendDataC
         needLocalDerivative         = ! Euler  &&  localDerivative.size () > 0;
         needLocalIntegrate          = localIntegrated.size () > 0;
         needLocalPreserve           = ! Euler  &&  (needLocalIntegrate  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0);
+        needLocalClear              = s.accountableConnections != null  ||  refcount  ||  localMembers.size () > 0;
         needLocalDtor               = needLocalPreserve  ||  needLocalDerivative;
-        needLocalCtor               = needLocalDtor  ||  s.accountableConnections != null  ||  refcount  ||  index != null  ||  localMembers.size () > 0  ||  s.parts.size () > 0;
+        needLocalCtor               = needLocalDtor  ||  needLocalClear  ||  s.parts.size () > 0;
         needLocalDie                = canDie  &&  (liveFlag >= 0  ||  trackN  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
         needLocalInit               =    localBufferedExternal.size () > 0
                                       || eventTargets.size () > 0
@@ -587,6 +589,7 @@ public class BackendDataC
         for (EquationSet p : s.parts)
         {
             BackendDataC pbed = (BackendDataC) p.backendData;
+            if (pbed.needGlobalClear)              needLocalClear              = true;
             if (pbed.needGlobalInit)               needLocalInit               = true;
             if (pbed.needGlobalIntegrate)          needLocalIntegrate          = true;
             if (pbed.needGlobalUpdate)             needLocalUpdate             = true;

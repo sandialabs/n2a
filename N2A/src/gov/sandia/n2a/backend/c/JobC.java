@@ -1429,6 +1429,7 @@ public class JobC extends Thread
                 header.append ("  " + SHARED + "void " + ns_ + "init (int argc, const char * argv[]);\n");
                 header.append ("  " + SHARED + "void " + ns_ + "run (" + T + " until);\n");
                 header.append ("  " + SHARED + "void " + ns_ + "finish ();\n");
+                header.append ("  " + SHARED + "void " + ns_ + "releaseMemory ();\n");
                 header.append ("\n");
                 if (digestedModel.metadata.getFlag ("backend", "c", "vector"))
                 {
@@ -1551,7 +1552,7 @@ public class JobC extends Thread
             result.append ("  " + SIMULATOR + "clear ();\n");
         }
         //   Simulator::clear() ensures that all instances have been moved onto the dead list of their respective population.
-        result.append ("  delete wrapper;\n");  // Destructs top-level population, which causes a chain of deletes that reaches all instances of all parts.
+        result.append ("  delete wrapper;\n");
         if (cli)
         {
             result.append ("  delete params;\n");
@@ -1560,6 +1561,15 @@ public class JobC extends Thread
         {
             result.append ("  finalize_profiling ();\n");
         }
+        result.append ("}\n");
+        result.append ("\n");
+
+        // Release Memory
+        result.append ("void " + ns_ + "releaseMemory ()\n");
+        result.append ("{\n");
+        generateReleaseMemory (context, digestedModel);
+        result.append ("  freeLUT ();\n");
+        result.append ("  freeFormats ();\n");
         result.append ("}\n");
         result.append ("\n");
 
@@ -1617,7 +1627,8 @@ public class JobC extends Thread
             result.append ("  {\n");
             result.append ("    init (argc, argv);\n");
             result.append ("    " + SIMULATOR + "run ();\n");
-            result.append ("    finish ();\n");
+            result.append ("    finish ();\n");  // Calls Simulator::clear(), which flushes output files.
+            result.append ("    releaseMemory ();\n");  // Needed only to make memory checkers happy
             result.append ("  }\n");
             result.append ("  catch (const char * message)\n");
             result.append ("  {\n");
@@ -2019,6 +2030,15 @@ public class JobC extends Thread
         }
     }
 
+    public void generateReleaseMemory (RendererC context, EquationSet s)
+    {
+        for (EquationSet p : s.parts) generateReleaseMemory (context, p);
+
+        BackendDataC bed = (BackendDataC) s.backendData;
+        if (bed.singleton) return;
+        context.result.append ("  for (auto m : " + prefix (s) + "_Population::memory) delete[] m;\n");
+    }
+
     public void generateMainInitializers (RendererC context)
     {
         StringBuilder result = context.result;
@@ -2247,27 +2267,37 @@ public class JobC extends Thread
         }
         else
         {
+            // Static members
+            result.append ("  static Part<" + T + "> * dead;\n");
+            result.append ("  static std::vector<" + prefix + " *> memory;\n");  // These are actually pointers to arrays rather than simple objects.
+            result.append ("  static std::mutex mutexMemory;\n");
+            result.append ("\n");
+
             if (bed.trackN)
             {
-                result.append ("  int n;\n");
+                result.append ("  uint32_t n;\n");
             }
             if (bed.trackInstances)
             {
                 result.append ("  std::vector<" + prefix + " *> instances;\n");
+                result.append ("  uint32_t firstFreeIndex;\n");
             }
             else if (bed.index != null)  // The instances vector can supply the next index, so only declare nextIndex if instances was not declared.
             {
-                result.append ("  int nextIndex;\n");
+                result.append ("  uint32_t nextIndex;\n");
             }
             if (bed.newborn >= 0)
             {
-                result.append ("  int firstborn;\n");
+                result.append ("  uint32_t firstborn;\n");
             }
         }
         if (bed.poll >= 0)
         {
-            result.append ("  " + T + " pollDeadline;\n");  // Same type as Event::t
             result.append ("  std::unordered_set<" + prefix + " *> pollSorted;\n");
+            if (bed.poll > 0)
+            {
+                result.append ("  " + T + " pollDeadline;\n");  // Same type as Event::t
+            }
         }
         if (bed.needGlobalDerivative)
         {
@@ -2305,16 +2335,21 @@ public class JobC extends Thread
         {
             result.append ("  virtual ~" + prefix + "_Population ();\n");
         }
+        if (bed.needGlobalClear)
+        {
+            result.append ("  virtual void clear ();\n");
+        }
         if (! bed.singleton)
         {
-            result.append ("  virtual Part<" + T + "> * create ();\n");
-            if (bed.index != null  ||  bed.poll >= 0)
+            result.append ("  virtual Part<" + T + "> * allocate ();\n");
+            result.append ("  virtual void release (Part<" + T + "> * part);\n");
+            if (bed.poll >= 0  ||  bed.trackInstances  ||  bed.index != null  ||  bed.pathToContainer == null)
             {
                 result.append ("  virtual void add (Part<" + T + "> * part);\n");
-                if (bed.trackInstances  ||  bed.poll >= 0)
-                {
-                    result.append ("  virtual void remove (Part<" + T + "> * part);\n");
-                }
+            }
+            if (bed.poll >= 0  ||  bed.trackInstances)
+            {
+                result.append ("  virtual void remove (Part<" + T + "> * part);\n");
             }
         }
         if (bed.needGlobalInit)
@@ -2453,16 +2488,16 @@ public class JobC extends Thread
         {
             for (EquationSet.AccountableConnection ac : s.accountableConnections)
             {
-                result.append ("  int " + prefix (ac.connection) + "_" + mangle (ac.alias) + "_count;\n");
+                result.append ("  uint32_t " + prefix (ac.connection) + "_" + mangle (ac.alias) + "_count;\n");
             }
         }
         if (bed.refcount)
         {
-            result.append ("  int refcount;\n");
+            result.append ("  uint32_t refcount;\n");
         }
         if (bed.index != null)
         {
-            result.append ("  int " + mangle ("$index") + ";\n");
+            result.append ("  uint32_t " + mangle ("$index") + ";\n");
         }
         if (bed.lastT)
         {
@@ -2522,7 +2557,7 @@ public class JobC extends Thread
         {
             result.append ("  virtual ~" + prefix (s) + " ();\n");
         }
-        if (bed.localMembers.size () > 0)
+        if (bed.needLocalClear)
         {
             result.append ("  virtual void clear ();\n");
         }
@@ -2669,6 +2704,15 @@ public class JobC extends Thread
         String ps = prefix (s);
         String ns = ps + "_Population::";  // namespace for all functions associated with part s
 
+        // Define static members in this translation unit.
+        if (! bed.singleton)
+        {
+            result.append ("Part<" + T + "> * " + ns + "dead;\n");  // automatically initialized to 0
+            result.append ("vector<" + ps + " *> " + ns + "memory;\n");
+            result.append ("mutex " + ns + "mutexMemory;\n");
+            result.append ("\n");
+        }
+
         // Functions for pollSorted
         if (bed.poll >= 0)
         {
@@ -2710,21 +2754,6 @@ public class JobC extends Thread
         {
             result.append (ns + ps + "_Population ()\n");
             result.append ("{\n");
-            if (! bed.singleton)
-            {
-                if (bed.trackN)
-                {
-                    result.append ("  n = 0;\n");
-                }
-                if (bed.index != null  &&  ! bed.trackInstances)
-                {
-                    result.append ("  nextIndex = 0;\n");
-                }
-                if (bed.newborn >= 0)
-                {
-                    result.append ("  firstborn = 0;\n");
-                }
-            }
             if (bed.needGlobalDerivative)
             {
                 result.append ("  stackDerivative = 0;\n");
@@ -2732,6 +2761,10 @@ public class JobC extends Thread
             if (bed.needGlobalPreserve)
             {
                 result.append ("  preserve = 0;\n");
+            }
+            if (bed.needGlobalClear)
+            {
+                result.append ("  clear ();\n");
             }
             result.append ("}\n");
             result.append ("\n");
@@ -2759,53 +2792,128 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
-        // Population create
-        if (! bed.singleton)  // In the case of a singleton, this will remain a pure virtual function, and throw an exception if called.
+        if (bed.needGlobalClear)
         {
-            result.append ("Part<" + T + "> * " + ns + "create ()\n");
+            result.append ("void " + ns + "clear ()\n");
             result.append ("{\n");
-            result.append ("  " + ps + " * p = new " + ps + ";\n");
-            if (bed.pathToContainer == null) result.append ("  p->container = (" + prefix (s.container) + " *) container;\n");
-            result.append ("  return p;\n");
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
-        // Population add / remove
-        if (! bed.singleton  &&  (bed.index != null  ||  bed.poll >= 0))
-        {
-            result.append ("void " + ns + "add (Part<" + T + "> * part)\n");
-            result.append ("{\n");
-            result.append ("  " + ps + " * p = (" + ps + " *) part;\n");
-            if (bed.trackInstances)
+            if (! bed.singleton)
             {
-                result.append ("  if (p->" + mangle ("$index") + " < 0)\n");
-                result.append ("  {\n");
-                result.append ("    p->" + mangle ("$index") + " = instances.size ();\n");
-                result.append ("    instances.push_back (p);\n");
-                result.append ("  }\n");
-                result.append ("  else\n");
-                result.append ("  {\n");
-                result.append ("    instances[p->" + mangle ("$index") + "] = p;\n");
-                result.append ("  }\n");
+                if (bed.trackN)
+                {
+                    result.append ("  n = 0;\n");
+                }
+                if (bed.trackInstances)
+                {
+                    result.append ("  firstFreeIndex = 0;\n");
+                }
+                else if (bed.index != null)
+                {
+                    result.append ("  nextIndex = 0;\n");
+                }
                 if (bed.newborn >= 0)
                 {
-                    result.append ("  p->flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
-                    result.append ("  firstborn = min (firstborn, p->" + mangle ("$index") + ");\n");
+                    result.append ("  firstborn = 0;\n");
                 }
             }
-            else if (bed.index != null)
+            if (bed.poll > 0)
             {
-                result.append ("  if (p->" + mangle ("$index") + " < 0) p->" + mangle ("$index") + " = nextIndex++;\n");
+                result.append ("  pollDeadline = 0;\n");  // Should make first full pass in init cycle. This will generally coincide with testing all new instances in the endpoint populations, so no added expense.
             }
-            if (bed.poll >= 0)
+            if (! bed.globalFlagType.isEmpty ())
             {
-                result.append ("  pollSorted.insert (p);\n");
+                result.append ("  flags = 0;\n");
             }
+            for (Variable v : bed.globalMembers)
+            {
+                if (v.hasAttribute ("MatrixPointer")) continue;
+                result.append ("  " + zero (mangle (v), v) + ";\n");
+            }
+            result.append ("}\n");
+        }
+
+        // Population allocate / release / add / remove
+        if (! bed.singleton)
+        {
+            result.append ("Part<" + T + "> * " + ns + "allocate ()\n");
+            result.append ("{\n");
+            result.append ("  Part<" + T + "> * result;\n");
+            result.append ("  {\n");
+            result.append ("    lock_guard<mutex> lock (mutexMemory);\n");
+            result.append ("    Part<" + T + "> ** p = &dead;\n");
+            result.append ("    while (*p  &&  ! (*p)->isFree ()) p = & (*p)->next;\n");  // Find the first free entry on dead list.
+            result.append ("    if (! *p)\n");  // No free entry, so allocate memory.
+            result.append ("    {\n");
+            result.append ("      int size = (1 << 20) / sizeof (" + ps + ");\n");  // As many instances as will fit in 1MiB. That is, allocation chunk is approximately 1 megabyte. TODO: get hint from metadata.
+            result.append ("      " + ps + " * m = new " + ps + "[size];\n");
+            result.append ("      memory.push_back (m);\n");
+            result.append ("      " + ps + " * end = m + size;\n");
+            result.append ("      while (m < end)\n");
+            result.append ("      {\n");  // Same code as release(), but it saves a little time not to make the function call.
+            result.append ("        m->next = dead;\n");
+            result.append ("        dead = m++;\n");
+            result.append ("      }\n");
+            result.append ("      p = &dead;\n");
+            result.append ("    }\n");
+            result.append ("    result = *p;\n");
+            result.append ("    *p = (*p)->next;\n");  // remove from dead
+            result.append ("  }\n");
+            result.append ("  result->clear ();\n");
+            result.append ("  return result;\n");
             result.append ("}\n");
             result.append ("\n");
 
-            if (bed.trackInstances  ||  bed.poll >= 0)
+            result.append ("void " + ns + "release (Part<" + T + "> * part)\n");
+            result.append ("{\n");
+            result.append ("  lock_guard<mutex> lock (mutexMemory);\n");
+            result.append ("  part->next = dead;\n");
+            result.append ("  dead = part;\n");
+            result.append ("}\n");
+            result.append ("\n");
+
+            // Population add / remove
+            if (bed.poll >= 0  ||  bed.trackInstances  ||  bed.index != null  ||  bed.pathToContainer == null)
+            {
+                result.append ("void " + ns + "add (Part<" + T + "> * part)\n");
+                result.append ("{\n");
+                result.append ("  " + ps + " * p = (" + ps + " *) part;\n");
+                if (bed.pathToContainer == null)
+                {
+                    result.append ("  p->container = (" + prefix (s.container) + " *) container;\n");
+                }
+                if (bed.trackInstances)
+                {
+                    result.append ("  uint32_t size = instances.size ();\n");
+                    result.append ("  if (firstFreeIndex < size)\n");
+                    result.append ("  {\n");
+                    result.append ("    p->" + mangle ("$index") + " = firstFreeIndex++;\n");
+                    result.append ("    instances[p->" + mangle ("$index") + "] = p;\n");
+                    result.append ("    while (firstFreeIndex < size  &&  instances[firstFreeIndex]) firstFreeIndex++;\n");
+                    result.append ("  }\n");
+                    result.append ("  else\n");  // Presumably, firstFreeIndex is exactly instances.size()
+                    result.append ("  {\n");
+                    result.append ("    p->" + mangle ("$index") + " = size;\n");
+                    result.append ("    instances.push_back (p);\n");
+                    result.append ("    firstFreeIndex = size + 1;\n");
+                    result.append ("  }\n");
+                    if (bed.newborn >= 0)
+                    {
+                        result.append ("  p->flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
+                        result.append ("  firstborn = min (firstborn, p->" + mangle ("$index") + ");\n");
+                    }
+                }
+                else if (bed.index != null)
+                {
+                    result.append ("  if (p->" + mangle ("$index") + " < 0) p->" + mangle ("$index") + " = nextIndex++;\n");
+                }
+                if (bed.poll >= 0)
+                {
+                    result.append ("  pollSorted.insert (p);\n");
+                }
+                result.append ("}\n");
+                result.append ("\n");
+            }
+
+            if (bed.poll >= 0  ||  bed.trackInstances)
             {
                 result.append ("void " + ns + "remove (Part<" + T + "> * part)\n");
                 result.append ("{\n");
@@ -2813,7 +2921,8 @@ public class JobC extends Thread
                 if (bed.trackInstances)
                 {
                     result.append ("  instances[p->" + mangle ("$index") + "] = 0;\n");
-                    result.append ("  Population<" + T + ">::remove (part);\n");
+                    result.append ("  firstFreeIndex = min (firstFreeIndex, p->" + mangle ("$index") + ");\n");
+                    result.append ("  release (part);\n");
                 }
                 if (bed.poll >= 0)
                 {
@@ -2831,21 +2940,14 @@ public class JobC extends Thread
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
             s.setInit (1);
-            //   Zero out members
-            for (Variable v : bed.globalMembers)
+            // Zero out members
+            for (Variable v : bed.globalBufferedExternalWrite)
             {
-                result.append ("  " + zero (mangle (v), v) + ";\n");
+                // Clear current values so we can use a proper combiner during init.
+                if (v.assignment == Variable.REPLACE) continue;
+                result.append ("  " + clearAccumulator (mangle (v), v, context) + ";\n");
             }
-            for (Variable v : bed.globalBufferedExternal)
-            {
-                result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
-                result.append ("  " + clearAccumulator (mangle (         v), v, context) + ";\n");
-            }
-            if (! bed.globalFlagType.isEmpty ())
-            {
-                result.append ("  flags = 0;\n");
-            }
-            //   Compute variables
+            // Compute variables
             if (bed.nInitOnly)  // $n is not stored, so we need to declare a local variable to receive its value.
             {
                 result.append ("  " + type (bed.n) + " " + mangle (bed.n) + ";\n");
@@ -2856,7 +2958,18 @@ public class JobC extends Thread
             {
                 multiconditional (v, context, "  ");
             }
-            //   create instances
+            for (Variable v : bed.globalBufferedExternalWrite)
+            {
+                if (v.assignment == Variable.REPLACE)
+                {
+                    result.append ("  " + mangle ("next_", v) + " = " + resolve (v.reference, context, false) + ";\n");
+                }
+                else
+                {
+                    result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
+                }
+            }
+            // Create instances
             if (bed.singleton)
             {
                 if (bed.newborn >= 0)
@@ -2876,7 +2989,7 @@ public class JobC extends Thread
                     result.append (");\n");
                 }
             }
-            //   make connections
+            // Make connections
             if (s.connectionBindings != null)
             {
                 result.append ("  " + SIMULATOR + "connect (this);\n");  // queue to evaluate our connections
@@ -2988,39 +3101,45 @@ public class JobC extends Thread
 
             if (s.connectionBindings != null)
             {
-                boolean needShouldConnect = bed.poll > 0;
-                for (ConnectionBinding target : s.connectionBindings)
+                if (bed.poll == 0)  // Always check connections every cycle.
                 {
-                    BackendDataC bedc = (BackendDataC) target.endpoint.backendData;
-                    if (bedc.canResize  ||  bedc.canGrow) needShouldConnect = true;
+                    result.append ("  " + SIMULATOR + "connect (this);\n");
                 }
-
-                if (needShouldConnect)
+                else  // Decide when to check connections based on poll deadline or status of endpoints.
                 {
-                    result.append ("  bool shouldConnect = false;\n");
-
-                    // Check poll deadline.
-                    if (bed.poll >= 0)
-                    {
-                        result.append ("  if (" + SIMULATOR + "currentEvent->t >= pollDeadline) shouldConnect = true;\n");
-                    }
-
-                    // Check for newly-created parts in endpoint populations.
-                    // To limit work, only do this for shallow structures that don't require enumerating sub-populations.
-                    Set<EquationSet> endpoints = new HashSet<EquationSet> ();
+                    boolean needShouldConnect = bed.poll > 0;
                     for (ConnectionBinding target : s.connectionBindings)
                     {
-                        // Prevent duplicate code for connections to the same endpoint.
-                        // Note that the check for new instances is only meaningful for distinct endpoints.
-                        // The path to the endpoint doesn't matter.
-                        if (endpoints.contains (target.endpoint)) continue;
-                        endpoints.add (target.endpoint);
-
                         BackendDataC bedc = (BackendDataC) target.endpoint.backendData;
-                        if (bedc.canResize  ||  bedc.canGrow) checkInstances (s, true, "", target.resolution, 0, "  ", result);
+                        if (bedc.canResize  ||  bedc.canGrow) needShouldConnect = true;
                     }
 
-                    result.append ("  if (shouldConnect) " + SIMULATOR + "connect (this);\n");
+                    if (needShouldConnect)
+                    {
+                        result.append ("  bool shouldConnect = false;\n");
+
+                        // Check poll deadline.
+                        if (bed.poll > 0)
+                        {
+                            result.append ("  if (" + SIMULATOR + "currentEvent->t >= pollDeadline) shouldConnect = true;\n");
+                        }
+
+                        // Check for newly-created parts in endpoint populations.
+                        Set<EquationSet> endpoints = new HashSet<EquationSet> ();
+                        for (ConnectionBinding target : s.connectionBindings)
+                        {
+                            // Prevent duplicate code for connections to the same endpoint.
+                            // Note that the check for new instances is only meaningful for distinct endpoints.
+                            // The path to the endpoint doesn't matter.
+                            if (endpoints.contains (target.endpoint)) continue;
+                            endpoints.add (target.endpoint);
+
+                            BackendDataC bedc = (BackendDataC) target.endpoint.backendData;
+                            if (bedc.canResize  ||  bedc.canGrow) checkInstances (s, true, "", target.resolution, 0, "  ", result);
+                        }
+
+                        result.append ("  if (shouldConnect) " + SIMULATOR + "connect (this);\n");
+                    }
                 }
             }
 
@@ -3298,7 +3417,7 @@ public class JobC extends Thread
                 result.append ("  if (outer)\n");
                 result.append ("  {\n");
                 result.append ("    EventStep<" + T + "> * event = container->getEvent ();\n");
-                result.append ("    " + ps + " * c = (" + ps + " *) create ();\n");
+                result.append ("    " + ps + " * c = (" + ps + " *) allocate ();\n");
                 result.append ("    outer->setProbe (c);\n");
                 result.append ("    while (outer->next ())\n");
                 result.append ("    {\n");
@@ -3309,15 +3428,15 @@ public class JobC extends Thread
                 result.append (") continue;\n");
                 result.append ("      if (poll  &&  pollSorted.count (c)) continue;\n");
                 result.append ("\n");
-                result.append ("      add (c);\n");  // We don't use allocate() for connections, so need to call add() explicitly. TODO: consider managing memory for connections.
+                result.append ("      add (c);\n");
                 result.append ("      c->enterSimulation ();\n");
                 result.append ("      event->enqueue (c);\n");
                 result.append ("      c->init ();\n");
                 result.append ("\n");
-                result.append ("      c = (" + ps + " *) create ();\n");
+                result.append ("      c = (" + ps + " *) allocate ();\n");
                 result.append ("      outer->setProbe (c);\n");
                 result.append ("    }\n");
-                result.append ("    delete c;\n");
+                result.append ("    release (c);\n");
                 result.append ("    delete outer;\n");
                 result.append ("  }\n");
                 if (bed.populationCanBeInactive) result.append ("\n");
@@ -3547,7 +3666,7 @@ public class JobC extends Thread
                 result.append ("    delete cols;\n");
                 result.append ("    return 0;\n");
                 result.append ("  }\n");
-                result.append ("  " + ps + " * dummy = (" + ps + " *) create ();\n");  // Will be deleted when ConnectMatrix is deleted.
+                result.append ("  " + ps + " * dummy = (" + ps + " *) allocate ();\n");  // Will be deleted when ConnectMatrix is deleted.
                 result.append ("  dummy->setPart (" + cm.rows.index + ", (*rows->instances)[0]);\n");
                 result.append ("  dummy->setPart (" + cm.cols.index + ", (*cols->instances)[0]);\n");
                 result.append ("  dummy->getP ();\n");  // We don't actually want $p. This just forces "dummy" to initialize any local matrix variables.
@@ -3681,22 +3800,7 @@ public class JobC extends Thread
                     result.append ("  " + mangle (p.name) + ".instance.container = this;\n");
                 }
             }
-            if (s.accountableConnections != null)
-            {
-                for (EquationSet.AccountableConnection ac : s.accountableConnections)
-                {
-                    result.append ("  int " + prefix (ac.connection) + "_" + mangle (ac.alias) + "_count = 0;\n");
-                }
-            }
-            if (bed.refcount)
-            {
-                result.append ("  refcount = 0;\n");
-            }
-            if (bed.index != null)
-            {
-                result.append ("  " + mangle ("$index") + " = -1;\n");  // -1 indicates that an index needs to be assigned. This should only be done once.
-            }
-            if (bed.localMembers.size () > 0)
+            if (bed.needLocalClear)
             {
                 result.append ("  clear ();\n");
             }
@@ -3727,14 +3831,33 @@ public class JobC extends Thread
         }
 
         // Unit clear
-        if (bed.localMembers.size () > 0)
+        if (bed.needLocalClear)
         {
             result.append ("void " + ns + "clear ()\n");
             result.append ("{\n");
+            if (s.accountableConnections != null)
+            {
+                for (EquationSet.AccountableConnection ac : s.accountableConnections)
+                {
+                    result.append ("  " + prefix (ac.connection) + "_" + mangle (ac.alias) + "_count = 0;\n");
+                }
+            }
+            if (bed.refcount)
+            {
+                result.append ("  refcount = 0;\n");
+            }
             for (Variable v : bed.localMembers)
             {
                 if (v.hasAttribute ("MatrixPointer")) continue;
                 result.append ("  " + zero (mangle (v), v) + ";\n");
+            }
+            for (EquationSet p : s.parts)
+            {
+                BackendDataC pbed = (BackendDataC) p.backendData;
+                if (pbed.needGlobalClear)
+                {
+                    result.append ("  " + mangle (p.name) + ".clear ();\n");
+                }
             }
             result.append ("}\n");
             result.append ("\n");
@@ -5081,6 +5204,7 @@ public class JobC extends Thread
             result.append ("{\n");
             String pt = prefix (target);
             result.append ("  " + pt + " * to = (" + pt + " *) " + mangle (target.name) + ".allocate ();\n");  // if this is a recycled part, then clear() is called
+            result.append ("  " + mangle (target.name) + ".add (to);\n");
             BackendDataC tbed = (BackendDataC) target.backendData;
             if (tbed.pathToContainer == null)
             {

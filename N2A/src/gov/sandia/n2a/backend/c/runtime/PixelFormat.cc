@@ -681,7 +681,7 @@ PixelFormat::buildChar2Float ()
 }
 
 void
-freeLUT ()
+n2a::freeLUT ()
 {
     free (PixelFormat::lutFloat2Char);
     free (PixelFormat::lutChar2Float);

@@ -1091,8 +1091,8 @@ public class InternalBackendData
                 poll = new UnitValue (pollString).get ();
                 if (poll >= 0)
                 {
-                    pollDeadline = allocateGlobalFloat ("pollDeadline");
-                    pollSorted   = allocateGlobalObject ("pollSorted");
+                    pollSorted = allocateGlobalObject ("pollSorted");
+                    if (poll > 0) pollDeadline = allocateGlobalFloat ("pollDeadline");
                 }
             }
 
