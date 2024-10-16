@@ -546,7 +546,9 @@ public class BackendDataC
         needGlobalDerivative         = ! Euler  &&  globalDerivative.size () > 0;
         needGlobalIntegrate          = globalIntegrated.size () > 0;
         needGlobalPreserve           = ! Euler  &&  (needGlobalIntegrate  ||  globalDerivativePreserve.size () > 0  ||  globalBufferedExternalWriteDerivative.size () > 0);
-        needGlobalClear              = ! singleton  &&  (trackN  ||  trackInstances  ||  index != null  ||  newborn >= 0)  ||  poll > 0  ||  ! globalFlagType.isEmpty ()  ||  globalMembers.size () > 0;
+        needGlobalClear              =    ! singleton  &&  (trackN  ||  trackInstances  ||  index != null  ||  newborn >= 0)
+                                       || ! globalFlagType.isEmpty ()
+                                       || globalMembers.size () > 0;
         needGlobalDtor               = needGlobalPreserve  ||  needGlobalDerivative;
         needGlobalCtor               = needGlobalDtor  ||  needGlobalClear;
         needGlobalInit               =    globalInit.size () > 0
@@ -555,7 +557,10 @@ public class BackendDataC
                                        || s.connectionBindings != null;
         needGlobalUpdate             = globalUpdate.size () > 0;
         needGlobalFinalizeN          = s.container == null  &&  (canResize  ||  canGrowOrDie);
-        needGlobalFinalize           = globalBufferedExternal.size () > 0  ||  needGlobalFinalizeN  ||  poll >= 0  ||  (canResize  &&  (canGrowOrDie  ||  ! nInitOnly));
+        needGlobalFinalize           =    globalBufferedExternal.size () > 0
+                                       || needGlobalFinalizeN
+                                       || s.connectionBindings != null
+                                       || (canResize  &&  (canGrowOrDie  ||  ! nInitOnly));
         needGlobalUpdateDerivative   = ! Euler  &&  globalDerivativeUpdate.size () > 0;
         needGlobalFinalizeDerivative = ! Euler  &&  globalBufferedExternalDerivative.size () > 0;
 

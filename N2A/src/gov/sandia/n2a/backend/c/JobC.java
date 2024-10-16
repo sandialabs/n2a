@@ -2815,10 +2815,6 @@ public class JobC extends Thread
                     result.append ("  firstborn = 0;\n");
                 }
             }
-            if (bed.poll > 0)
-            {
-                result.append ("  pollDeadline = 0;\n");  // Should make first full pass in init cycle. This will generally coincide with testing all new instances in the endpoint populations, so no added expense.
-            }
             if (! bed.globalFlagType.isEmpty ())
             {
                 result.append ("  flags = 0;\n");
@@ -2992,6 +2988,23 @@ public class JobC extends Thread
             // Make connections
             if (s.connectionBindings != null)
             {
+                if (bed.poll > 0)
+                {
+                    // During the init cycle, a newly-created connection population will most likely examine
+                    // all possible combinations of instances from target populations. Thus, it makes sense
+                    // to wait one full period before polling.
+                    result.append ("  pollDeadline = " + SIMULATOR + "currentEvent->t + ");
+                    if (fixedPoint)
+                    {
+                        Variable dt = digestedModel.find (new Variable ("$t", 1));
+                        result.append (context.print (bed.poll, dt.exponent));
+                    }
+                    else
+                    {
+                        result.append (bed.poll);
+                    }
+                    result.append (";\n");
+                }
                 result.append ("  " + SIMULATOR + "connect (this);\n");  // queue to evaluate our connections
             }
             s.setInit (0);
