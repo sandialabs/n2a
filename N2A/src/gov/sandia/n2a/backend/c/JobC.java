@@ -1160,7 +1160,7 @@ public class JobC extends Thread
         Recursive subroutine of findLiveReferences() that walks up each possible containment or connection
         path to find $live values that can vary at runtime.
         This approach can potentially add entries in BackendDataC.localReference redundant with those added
-        by BackendDataC.analyze(). Redundant entries are eliminated while emitting code for enter/leaveSimulation().
+        by BackendDataC.analyze(). Redundant entries are eliminated while emitting code in init() and die().
     **/
     @SuppressWarnings("unchecked")
     public void findLiveReferences (EquationSet s, ArrayList<Object> resolution, NavigableSet<EquationSet> touched, List<VariableReference> localReference, boolean terminate)
@@ -1169,19 +1169,17 @@ public class JobC extends Thread
         {
             Variable live = s.find (new Variable ("$live"));
             if (live == null  ||  live.hasAttribute ("constant")) return;
-            if (live.hasAttribute ("initOnly"))
+
+            // At this point, $live must be "initOnly".
+            if (touched.add (s))  // Prevent us from adding the same part twice. However, does not prevent overlaps with those added by analyze().
             {
-                if (touched.add (s))
-                {
-                    VariableReference result = new VariableReference ();
-                    result.variable = live;
-                    result.resolution = (ArrayList<Object>) resolution.clone ();
-                    localReference.add (result);
-                    s.referenced = true;
-                }
-                return;
+                VariableReference result = new VariableReference ();
+                result.variable = live;
+                result.resolution = (ArrayList<Object>) resolution.clone ();
+                localReference.add (result);
+                s.referenced = true;
             }
-            // The third possibility is "accessor", in which case we fall through ...
+            return;
         }
 
         // Recurse up to container
@@ -2569,13 +2567,9 @@ public class JobC extends Thread
         {
             result.append ("  virtual void die ();\n");
         }
-        if (bed.localReference.size () > 0)
+        if (! bed.singleton)
         {
-            result.append ("  virtual void enterSimulation ();\n");
-        }
-        if (bed.localReference.size () > 0  ||  ! bed.singleton)
-        {
-            result.append ("  virtual void leaveSimulation ();\n");
+            result.append ("  virtual void remove ();\n");
         }
         if (bed.refcount)
         {
@@ -2972,7 +2966,6 @@ public class JobC extends Thread
                 {
                     result.append ("  instance.flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
                 }
-                result.append ("  instance.enterSimulation ();\n");
                 result.append ("  container->getEvent ()->enqueue (&instance);\n");
                 result.append ("  instance.init ();\n");
             }
@@ -3442,7 +3435,6 @@ public class JobC extends Thread
                 result.append ("      if (poll  &&  pollSorted.count (c)) continue;\n");
                 result.append ("\n");
                 result.append ("      add (c);\n");
-                result.append ("      c->enterSimulation ();\n");
                 result.append ("      event->enqueue (c);\n");
                 result.append ("      c->init ();\n");
                 result.append ("\n");
@@ -3913,6 +3905,19 @@ public class JobC extends Thread
                     result.append ("  " + mangle (alias) + "->" + prefix (s) + "_" + mangle (alias) + "_count--;\n");
                 }
 
+                if (bed.localReference.size () > 0)
+                {
+                    // To prevent duplicates, we track which paths to containers have already been processed.
+                    // The key is a string rather than EquationSet, because we may have references to several
+                    // different instances of the same EquationSet, and all must be accounted.
+                    TreeSet<String> touched = new TreeSet<String> ();
+                    for (VariableReference r : bed.localReference)
+                    {
+                        String container = resolveContainer (r, context, "");
+                        if (touched.add (container)) result.append ("  " + container + "refcount--;\n");
+                    }
+                }
+
                 // release event monitors
                 for (EventTarget et : bed.eventTargets)
                 {
@@ -3931,36 +3936,12 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
-        // Unit enterSimulation
-        if (bed.localReference.size () > 0)
+        // Unit remove
+        if (! bed.singleton)
         {
-            result.append ("void " + ns + "enterSimulation ()\n");
+            result.append ("void " + ns + "remove ()\n");
             result.append ("{\n");
-            TreeSet<String> touched = new TreeSet<String> ();  // String rather than EquationSet, because we may have references to several different instances of the same EquationSet, and all must be accounted
-            for (VariableReference r : bed.localReference)
-            {
-                String container = resolveContainer (r, context, "");
-                if (touched.add (container)) result.append ("  " + container + "refcount++;\n");
-            }
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
-        // Unit leaveSimulation
-        if (bed.localReference.size () > 0  ||  ! bed.singleton)
-        {
-            result.append ("void " + ns + "leaveSimulation ()\n");
-            result.append ("{\n");
-            if (! bed.singleton)
-            {
-                result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".remove (this);\n");
-            }
-            TreeSet<String> touched = new TreeSet<String> ();
-            for (VariableReference r : bed.localReference)
-            {
-                String container = resolveContainer (r, context, "");
-                if (touched.add (container)) result.append ("  " + container + "refcount--;\n");
-            }
+            result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".remove (this);\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -4080,6 +4061,18 @@ public class JobC extends Thread
             for (String alias : bed.accountableEndpoints)
             {
                 result.append ("  " + mangle (alias) + "->" + prefix (s) + "_" + mangle (alias) + "_count++;\n");
+            }
+
+            if (bed.localReference.size () > 0)
+            {
+                // TODO: "touched" repeats the effort already expended to generate die().
+                TreeSet<String> touched = new TreeSet<String> ();
+                for (VariableReference r : bed.localReference)
+                {
+                    String container = resolveContainer (r, context, "");
+                    if (touched.add (container)) result.append ("  " + container + "refcount++;\n");
+                }
+                result.append ("\n");
             }
 
             // Request event monitors
@@ -4858,7 +4851,7 @@ public class JobC extends Thread
             // Remove inactive instance.
             result.append ("  die ();\n");
             result.append ("  dequeue ();\n");
-            result.append ("  leaveSimulation ();\n");
+            result.append ("  remove ();\n");
 
             if (bed.populationCanBeInactive)
             {
@@ -4877,30 +4870,7 @@ public class JobC extends Thread
         {
             result.append (T + " " + ns + "getLive ()\n");
             result.append ("{\n");
-            if (! bed.live.hasAttribute ("accessor"))  // "accessor" indicates whether or not $value is actually stored
-            {
-                result.append ("  if (" + resolve (bed.live.reference, context, false, "", true) + " == 0) return 0;\n");
-            }
-            if (s.lethalConnection)
-            {
-                for (ConnectionBinding c : s.connectionBindings)
-                {
-                    VariableReference r = s.resolveReference (c.alias + ".$live");
-                    if (! r.variable.hasAttribute ("constant"))
-                    {
-                        result.append ("  if (" + resolve (r, context, false, "", true) + " == 0) return 0;\n");
-                    }
-                }
-            }
-            if (s.lethalContainer)
-            {
-                VariableReference r = s.resolveReference ("$up.$live");
-                if (! r.variable.hasAttribute ("constant"))
-                {
-                    result.append ("  if (" + resolve (r, context, false, "", true) + " == 0) return 0;\n");
-                }
-            }
-            result.append ("  return 1;\n");
+            result.append ("  return " + resolve (bed.live.reference, context, false, "", true) + ";\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -5241,7 +5211,6 @@ public class JobC extends Thread
                 }
             }
             // TODO: Convert contained populations from matching populations in the source part?
-            result.append ("  to->enterSimulation ();\n");
             result.append ("  getEvent ()->enqueue (to);\n");
 
             // Match variables between the two sets.

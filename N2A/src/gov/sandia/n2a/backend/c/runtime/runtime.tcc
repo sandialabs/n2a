@@ -654,13 +654,7 @@ Part<T>::die ()
 
 template<class T>
 void
-Part<T>::enterSimulation ()
-{
-}
-
-template<class T>
-void
-Part<T>::leaveSimulation ()
+Part<T>::remove ()
 {
 }
 
@@ -1191,7 +1185,6 @@ Population<T>::resize (int n)
     {
         Part<T> * p = allocate ();
         add (p);
-        p->enterSimulation ();
         event->enqueue (p);
         p->init ();
     }
@@ -1226,7 +1219,6 @@ Population<T>::connect ()
 #       endif
 
         add (c);
-        c->enterSimulation ();
         event->enqueue (c);
         c->init ();
 
@@ -1819,7 +1811,7 @@ EventStep<T>::run ()
             Part<T> * p = visitor->part;  // for convenience
             if (p->next) p->next->setPrevious (v->previous);
             v->previous->next = p->next;
-            p->leaveSimulation ();
+            p->remove ();
         }
     });
     if (SIMULATOR stop) return;
@@ -1999,7 +1991,7 @@ VisitorStep<T>::~VisitorStep ()
     while (p)
     {
         Part<T> * next = p->next;
-        p->leaveSimulation ();
+        p->remove ();
         p = next;
     }
 }

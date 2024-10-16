@@ -3096,10 +3096,12 @@ public class EquationSet implements Comparable<EquationSet>
 
     /**
         Determines the attributes of $live, based on whether other parts depend on it.
-        $live is either constant, accessor, or stored.
-        constant (the default) if we can't die or no part depends on us.
-        accessor               if we only die in response to the death of our container or a referenced part.
-        stored                 if we can die from $n, $p or $type, that is, if the fact that we died is local knowledge.
+        $live is either constant or stored.
+          constant (default) if we can't die or no part depends on us.
+          stored             otherwise.
+        For simplicity, we don't set $live to "accessor". It would be possible to wrap all
+        non-local causes of death (container, referenced part) in getLive(), but that can
+        make garbage collection of dead parts more complex.
         Depends on results of: findDeath() (and indirectly on findInitOnly())
     **/
     public void setAttributesLive ()
@@ -3118,18 +3120,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             if (canDie ()  &&  live.hasUsers ())
             {
-                // "accessor" is the lightest-weight representation of $live, requiring no storage space.
-                // "initOnly" causes space to be allocated for $live.
-                // Processing of some lethal conditions require storage. These take precedence.
-                // Stored $live works for all lethal conditions.
-                if (lethalN  ||  lethalP  ||  lethalType)
-                {
-                    live.addAttribute ("initOnly");  // Not exactly true. $live can change after init(), but only indirectly. This forces $live to be set during init().
-                }
-                else  // lethalConnection  ||  lethalContainer
-                {
-                    live.addAttribute ("accessor");
-                }
+                live.addAttribute ("initOnly");  // Not exactly true. $live can change after init(), but only indirectly. This forces $live to be set during init().
             }
             else
             {

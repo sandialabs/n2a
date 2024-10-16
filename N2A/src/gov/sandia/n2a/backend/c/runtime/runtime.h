@@ -227,10 +227,9 @@ template<class T> class DelayBuffer;
     and $max. If finalize() will return false, it should call die() or do the
     equivalent first.
 
-    <p>Reference counting has to do with whether a part might be executed,
-    regardless of whether it is live or not. Thus, enterSimulation() and leaveSimulation()
-    are responsible for maintaining refcounts on parts that we directly
-    reference.
+    <p>Even if dead, a part instance must remain valid as long as any live
+    instances reference it. Thus, init() and die() are responsible for maintaining
+    refcounts on parts that we directly reference.
 **/
 template<class T>
 class SHARED Simulatable
@@ -277,10 +276,9 @@ public:
     virtual void           setPeriod   (T dt);
 
     // Lifespan management
-    virtual void die             (); ///< Set $live=0 (in some form) and decrement $n of our population. If accountable connection, decrement connection counts in target compartments.
-    virtual void enterSimulation (); ///< Tells us we are going onto the simulator queue. Increment refcount on parts we directly access.
-    virtual void leaveSimulation (); ///< Tells us we are leaving the simulator queue. Ask our population to put us on its dead list. Reduce refcount on parts we directly access, to indicate that they may be re-used.
-    virtual bool isFree          (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
+    virtual void die    (); ///< Set $live=0 (in some form) and decrement $n of our population. If accountable connection, decrement connection counts in target compartments. Reduces refcount on parts we directly access, to indicate that they may be re-used.
+    virtual void remove (); ///< Asks our population to put us on its dead list.
+    virtual bool isFree (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
 
     // Connection-specific accessors
     virtual void      setPart    (int i, Part<T> * part);           ///< Assign the instance of population i referenced by this connection.

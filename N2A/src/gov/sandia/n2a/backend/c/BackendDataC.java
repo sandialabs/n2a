@@ -312,7 +312,7 @@ public class BackendDataC
                 if (! unusedTemporary  &&  ! emptyCombiner  &&  v != type) localInit.add (v);
                 if (v.hasAttribute ("reference"))
                 {
-                    if (v.reference.variable.container.canDie ()) localReference.add (v.reference);
+                    if (v.reference.variable.container.canDie ()) localReference.add (v.reference);  // These are filtered for duplicates at code-generation time, just because it is easier to do there.
                 }
                 else
                 {
@@ -575,7 +575,12 @@ public class BackendDataC
         needLocalClear              = s.accountableConnections != null  ||  refcount  ||  localMembers.size () > 0;
         needLocalDtor               = needLocalPreserve  ||  needLocalDerivative;
         needLocalCtor               = needLocalDtor  ||  needLocalClear  ||  s.parts.size () > 0;
-        needLocalDie                = canDie  &&  (liveFlag >= 0  ||  trackN  ||  accountableEndpoints.size () > 0  ||  eventTargets.size () > 0);
+        needLocalDie                =    canDie
+                                      && (   liveFlag >= 0
+                                          || trackN
+                                          || accountableEndpoints.size () > 0
+                                          || localReference.size () > 0
+                                          || eventTargets.size () > 0);
         needLocalInit               =    localBufferedExternal.size () > 0
                                       || eventTargets.size () > 0
                                       || ! localFlagType.isEmpty ()
@@ -583,6 +588,7 @@ public class BackendDataC
                                       || simplifiedLocalInit.size () > 0
                                       || trackN
                                       || accountableEndpoints.size () > 0
+                                      || localReference.size () > 0
                                       || eventTargets.size () > 0
                                       || s.parts.size () > 0;
         needLocalUpdate             = localUpdate.size () > 0;
