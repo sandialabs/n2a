@@ -3215,12 +3215,17 @@ public class JobC extends Thread
                 result.append ("  }\n");
                 result.append ("\n");
             }
-            result.append ("  Population<" + T + ">::resize (n);\n");
+            result.append ("  Population<" + T + ">::resize (n);\n");  // Grow population, if needed. Does not shrink population.
             result.append ("\n");
-            result.append ("  for (int i = instances.size () - 1; this->n > n  &&  i >= 0; i--)\n");
+            result.append ("  for (int i = instances.size () - 1; this->n > n  &&  i >= 0; i--)\n");  // Shrink population, if needed.
             result.append ("  {\n");
             result.append ("    Part * p = instances[i];\n");
-            result.append ("    if (p  &&  p->getLive ()) p->die ();\n");
+            result.append ("    if (p  &&  p->getLive ())\n");
+            result.append ("    {\n");
+            result.append ("      p->die ();\n");
+            result.append ("      p->dequeue ();\n");
+            result.append ("      p->remove ();\n");
+            result.append ("    }\n");
             result.append ("  }\n");
             result.append ("}\n");
             result.append ("\n");
