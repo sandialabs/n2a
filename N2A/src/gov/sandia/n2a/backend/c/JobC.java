@@ -2861,10 +2861,14 @@ public class JobC extends Thread
             result.append ("\n");
 
             // Population add / remove
-            if (bed.poll >= 0  ||  bed.trackInstances  ||  bed.index != null  ||  bed.pathToContainer == null)
+            if (bed.trackN  ||  bed.pathToContainer == null  ||  bed.trackInstances  ||  bed.index != null  ||  bed.poll >= 0)
             {
                 result.append ("void " + ns + "add (Part<" + T + "> * part)\n");
                 result.append ("{\n");
+                if (bed.trackN)
+                {
+                    result.append ("  n++;\n");
+                }
                 result.append ("  " + ps + " * p = (" + ps + " *) part;\n");
                 if (bed.pathToContainer == null)
                 {
@@ -2903,10 +2907,14 @@ public class JobC extends Thread
                 result.append ("\n");
             }
 
-            if (bed.poll >= 0  ||  bed.trackInstances)
+            if (bed.trackN  ||  bed.trackInstances  ||  bed.poll >= 0)
             {
                 result.append ("void " + ns + "remove (Part<" + T + "> * part)\n");
                 result.append ("{\n");
+                if (bed.trackN)
+                {
+                    result.append ("  n--;\n");
+                }
                 result.append ("  " + ps + " * p = (" + ps + " *) part;\n");
                 if (bed.trackInstances)
                 {
@@ -3903,8 +3911,6 @@ public class JobC extends Thread
                 }
 
                 // instance counting
-                if (bed.trackN) result.append ("  container->" + mangle (s.name) + ".n--;\n");
-
                 for (String alias : bed.accountableEndpoints)
                 {
                     result.append ("  " + mangle (alias) + "->" + prefix (s) + "_" + mangle (alias) + "_count--;\n");
@@ -4061,13 +4067,10 @@ public class JobC extends Thread
             }
 
             // instance counting
-            if (bed.trackN) result.append ("  " + containerOf (s, false, "") + mangle (s.name) + ".n++;\n");
-
             for (String alias : bed.accountableEndpoints)
             {
                 result.append ("  " + mangle (alias) + "->" + prefix (s) + "_" + mangle (alias) + "_count++;\n");
             }
-
             if (bed.localReference.size () > 0)
             {
                 // TODO: "touched" repeats the effort already expended to generate die().
