@@ -114,6 +114,7 @@ public class JobC extends Thread
     public    String  libStem;       // name of library; only meaningful when lib is true
     public    boolean shared = true; // When lib is false, determines whether target binary uses static or dynamic linking to runtime. When lib is true, determines whether target library is shared or static. Target library always contains full runtime, but will not include external resources like FFmpeg.
     public    boolean csharp;        // Emit library code for use by C# (and other CLR languages). Only has an effect when lib is true.
+    protected boolean jni;           // Emit library code for use by Java. Only has an effect when lib is true.
     public    boolean tls;           // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
     protected boolean usesPolling;
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
@@ -186,6 +187,7 @@ public class JobC extends Thread
             cli    = model.getFlag ("$meta", "backend", "c", "cli");
             tls    = model.getFlag ("$meta", "backend", "c", "tls");
             csharp = model.getFlag ("$meta", "backend", "c", "sharp");
+            jni    = model.getFlag ("$meta", "backend", "c", "jni");
             if (! lib)  // Model is output as a regular executable/binary. (When "lib" is true, model is output as linkable code.)
             {
                 // For an executable, "shared" means that it links to a shared library containing the runtime code.
@@ -652,7 +654,7 @@ public class JobC extends Thread
             "myendian.h", "image.h", "Image.cc", "ImageFileFormat.cc", "ImageFileFormatBMP.cc", "PixelBuffer.cc", "PixelFormat.cc",
             "canvas.h", "CanvasImage.cc",
             "video.h", "Video.cc", "VideoFileFormatFFMPEG.cc",
-            "NativeResource.cc", "NativeResource.h",
+            "NativeResource.cc", "NativeResource.h", "NativeIOvector.cc",
             "shared.h",
             "OutputHolder.h", "OutputParser.h",  // Not needed by runtime, but provided as a utility for users.
             "Shader.vp", "Shader.fp",  // GPU code not compiled into runtime.
@@ -758,7 +760,7 @@ public class JobC extends Thread
             c.addLibrary ("avformat");
             c.addLibrary ("avutil");
         }
-        if (jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
+        if (lib  &&  jni  ||  jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
         {
             c.addObject (runtimeDir.resolve (objectName ("NativeResource")));
         }
@@ -1319,11 +1321,15 @@ public class JobC extends Thread
 
         result.append ("#include \"mymath.h\"\n");  // math.h must always come first, because it messes with mode in which <cmath> is included.
         result.append ("#include \"runtime.h\"\n");
+        result.append ("#include \"MatrixFixed.tcc\"\n");  // Pulls in matrix.h, and thus access to all other matrix classes. We need templates for MatrixFixed because dimensions are arbitrary in user code.
         if (kokkos)
         {
             result.append ("#include \"profiling.h\"\n");
         }
-        result.append ("#include \"MatrixFixed.tcc\"\n");  // Pulls in matrix.h, and thus access to all other matrix classes. We need templates for MatrixFixed because dimensions are arbitrary in user code.
+        if (lib  &&  jni)
+        {
+            result.append ("#include \"NativeResource.h\"\n");
+        }
         for (ProvideOperator po : extensions)
         {
             Path include = po.include (this);
@@ -1387,6 +1393,14 @@ public class JobC extends Thread
                 if (shared)
                 {
                     SHARED = "SHARED ";
+                    // The following appears redundant with shared.h, but it's here for two reasons.
+                    // 1) It simplifies the export for the user by not forcing them to obtain an extra include file.
+                    // 2) The logic is slightly different. This always does dllimport when not building the dll,
+                    //    whereas shared.h will only do it if n2a_DLL is defined. In other words, shared.h is really
+                    //    only defined to work within the C runtime build system, while this block can work in
+                    //    arbitrary user code.
+                    // Note, however, that if the user grabs other resources like MNode, they still need to have
+                    // shared.h and define n2a_DLL.
                     header.append ("#undef SHARED\n");
                     header.append ("#ifdef _MSC_VER\n");
                     header.append ("#  ifdef _USRDLL\n");
@@ -1402,9 +1416,15 @@ public class JobC extends Thread
 
                 header.append ("namespace " + ns + "\n");
                 header.append ("{\n");
-                header.append ("  class " + SHARED + "IOvector\n");
+                if (jni)
+                {
+                    header.append ("  struct " + SHARED + "IOvector : public NativeResource\n");
+                }
+                else
+                {
+                    header.append ("  struct " + SHARED + "IOvector\n");
+                }
                 header.append ("  {\n");
-                header.append ("  public:\n");
                 header.append ("    virtual int size () = 0;\n");
                 header.append ("    virtual " + T + " get (int i) = 0;\n");
                 header.append ("    virtual void set (int i, " + T + " value) = 0;\n");
@@ -1441,8 +1461,15 @@ public class JobC extends Thread
                     }
                     else
                     {
+                        // In this case, ns_ == "", so no need to include in expression.
+                        // The following line is always in the n2a namespace.
                         header.append ("  " + SHARED + "IOvector * " + "IOvectorCreate (const std::vector<std::string> & keys);\n");
                     }
+                    // If the client program uses a different C runtime than the shared library we generate,
+                    // then a simple delete of the IOvector pointer in the client code will crash, because it will
+                    // attempt to return the memory to a heap different from whence it came. A function in our
+                    // own library will be linked to the correct runtime and thus send it back to the correct heap.
+                    // That's why this function is always defined.
                     header.append ("  " + SHARED + "void  " + ns_ + "IOvectorDelete (" + ns + "::IOvector * self);\n");
                 }
 
@@ -1609,6 +1636,12 @@ public class JobC extends Thread
                     result.append ("void  " + ns_ + "IOvectorSet    (IOvector * self, int i, " + T + " value) {self->set (i, value);}\n");
                 }
                 result.append     ("void  " + ns_ + "IOvectorDelete (IOvector * self)                     {delete self;}\n");
+
+                if (jni)
+                {
+                    result.append ("\n");
+                    result.append ("#include \"NativeIOvector.cc\"\n");
+                }
             }
         }
         else

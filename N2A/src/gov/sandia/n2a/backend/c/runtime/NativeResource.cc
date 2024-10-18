@@ -39,7 +39,7 @@ NativeResource::~NativeResource ()
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_gov_sandia_n2a_backend_c_NativeResource_destruct (JNIEnv * env, jclass obj, jlong handle)
+Java_gov_sandia_n2a_backend_c_NativeResource_destruct (JNIEnv * env, jclass cls, jlong handle)
 {
     NativeResource * nr = (NativeResource *) handle;
     if (nr->proxy)
@@ -51,7 +51,7 @@ Java_gov_sandia_n2a_backend_c_NativeResource_destruct (JNIEnv * env, jclass obj,
 }
 
 extern "C" JNIEXPORT jobject JNICALL
-Java_gov_sandia_n2a_backend_c_NativeResource_getProxy (JNIEnv * env, jclass obj, jlong handle)
+Java_gov_sandia_n2a_backend_c_NativeResource_getProxy (JNIEnv * env, jclass cls, jlong handle)
 {
     NativeResource * nr = (NativeResource *) handle;
     if (nr->proxy == 0) return env->NewLocalRef (0);
@@ -59,7 +59,7 @@ Java_gov_sandia_n2a_backend_c_NativeResource_getProxy (JNIEnv * env, jclass obj,
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_gov_sandia_n2a_backend_c_NativeResource_setProxy (JNIEnv * env, jclass obj, jlong handle, jobject proxy)
+Java_gov_sandia_n2a_backend_c_NativeResource_setProxy (JNIEnv * env, jclass cls, jlong handle, jobject proxy)
 {
     if (NativeResource::jvm == 0)
     {
