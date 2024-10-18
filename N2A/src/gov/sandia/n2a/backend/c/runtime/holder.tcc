@@ -2160,6 +2160,7 @@ convertDate (const String & field, T defaultValue)
                     month    = year;
                     year     = temp;
                 }
+                valid = year > 12  &&  month <= 12;
             }
         }
     }

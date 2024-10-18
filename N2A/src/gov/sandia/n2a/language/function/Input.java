@@ -313,12 +313,6 @@ public class Input extends Function
         }
     }
 
-    public static double convertDate (String dateString)
-    {
-        double asNumber = Scalar.parseDouble (dateString, 0);
-        return convertDate (dateString, asNumber);
-    }
-
     public static double convertDate (String dateString, double asNumber)
     {
         // ISO 8601 and its prefixes
