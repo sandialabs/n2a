@@ -60,7 +60,9 @@ public class JSON
                 else
                 {
                     reader.reset ();
-                    node.set (Double.valueOf (number.toString ()));
+                    Double value = Double.valueOf (number.toString ());
+                    if (node instanceof MVolatile) ((MVolatile) node).setObject (value);
+                    else                           node.set (value);
                     break;
                 }
             }
@@ -83,14 +85,16 @@ public class JSON
                 char[] buffer = new char[3];
                 int count = reader.read (buffer);
                 if (count < 3) throw new IOException ("Incomplete token");
-                node.set (true);
+                if (node instanceof MVolatile) ((MVolatile) node).setObject (true);
+                else                           node.set (true);
             }
             else if (c == 'f')  // false
             {
                 char[] buffer = new char[4];
                 int count = reader.read (buffer);
                 if (count < 4) throw new IOException ("Incomplete token");
-                node.set (false);
+                if (node instanceof MVolatile) ((MVolatile) node).setObject (false);
+                else                           node.set (false);
             }
             else if (c == 'n')  // null
             {

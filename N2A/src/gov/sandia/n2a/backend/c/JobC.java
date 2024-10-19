@@ -970,7 +970,19 @@ public class JobC extends Thread
             // Create parameter entry for this variable
             List<String> keypath = v.getKeyPath ();
             MVolatile node = (MVolatile) params.childOrCreate (keypath.toArray ());
-            if (! defaultValue.isBlank ()) node.set (defaultValue, "default");
+            if (! defaultValue.isBlank ())
+            {
+                int length = defaultValue.length ();
+                if (defaultValue.startsWith ("\"")  &&  defaultValue.endsWith ("\"")  &&  length >= 2)
+                {
+                    // The value is a string constant.
+                    // This will be quoted by JSON, so we don't need the extra pair of quotes,
+                    // and they may cause problems interpreting parameter inputs later.
+                    defaultValue = defaultValue.substring (1, length - 1);
+                }
+
+                node.set (defaultValue, "default");
+            }
             if (! comment.isBlank ()) node.set (comment, "description");
             if (! hint.isBlank ())
             {

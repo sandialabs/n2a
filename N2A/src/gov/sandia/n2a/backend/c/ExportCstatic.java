@@ -161,8 +161,8 @@ public class ExportCstatic implements ExportModel
             }
             if (t.cli)
             {
-                Path from = t.jobDir.resolve ("params");
-                Path to   = parent  .resolve (stem + ".params");
+                Path from = t.jobDir.resolve ("params.json");
+                Path to   = parent  .resolve (stem + ".json");
                 Files.move (from, to, StandardCopyOption.REPLACE_EXISTING);
             }
 

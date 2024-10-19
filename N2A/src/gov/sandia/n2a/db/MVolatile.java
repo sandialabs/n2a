@@ -82,6 +82,7 @@ public class MVolatile extends MNode
     public synchronized String getOrDefault (String defaultValue)
     {
         if (value == null) return defaultValue;
+        if (value instanceof Boolean) return ((Boolean) value) ? "1" : "0";
         String result = value.toString ();
         if (result.isEmpty ()) return defaultValue;
         return result;
