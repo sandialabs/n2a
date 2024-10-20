@@ -8,7 +8,7 @@ package gov.sandia.n2a.backend.c;
 
 public class NativeIOvector extends NativeResource
 {
-    protected static native long   construct (String[] path);
+    protected static native long   construct (String... path);
     protected static native int    size      (long handle);
     protected static native double get       (long handle, int i);
     protected static native void   set       (long handle, int i, double value);
@@ -21,7 +21,7 @@ public class NativeIOvector extends NativeResource
         the index should appear in the path immediately after the name of that part.
         Since the path is all strings, the index should be converted to a string as well.
     **/
-    public NativeIOvector (String[] path)
+    public NativeIOvector (String... path)
     {
         super (construct (path), true);
     }

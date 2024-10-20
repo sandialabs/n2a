@@ -15,7 +15,7 @@ package gov.sandia.n2a.backend.c;
 **/
 public class NativeSimulator
 {
-    public static native void init   (String[] args);
+    public static native void init   (String... args);
     public static native void run    (double until);
     public static native void finish ();
 }

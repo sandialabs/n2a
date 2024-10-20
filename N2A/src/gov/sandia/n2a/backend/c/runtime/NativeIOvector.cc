@@ -14,7 +14,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_gov_sandia_n2a_backend_c_NativeSimulator_init (JNIEnv * env, jclass cls, jobjectArray args)
 {
     int argc = env->GetArrayLength (args);
-    const char * argv = new const char * [argc];
+    const char ** argv = new const char * [argc];
     for (int i = 0; i < argc; i++)
     {
         jstring string = (jstring) env->GetObjectArrayElement (args, i);
@@ -25,7 +25,8 @@ Java_gov_sandia_n2a_backend_c_NativeSimulator_init (JNIEnv * env, jclass cls, jo
 
     for (int i = 0; i < argc; i++)
     {
-        env->ReleaseStringUTFChars (argv[i]);
+        jstring string = (jstring) env->GetObjectArrayElement (args, i);
+        env->ReleaseStringUTFChars (string, argv[i]);
     }
     delete[] argv;
 }
@@ -45,14 +46,14 @@ Java_gov_sandia_n2a_backend_c_NativeSimulator_finish (JNIEnv * env, jclass cls)
 extern "C" JNIEXPORT jlong JNICALL
 Java_gov_sandia_n2a_backend_c_NativeIOvector_construct (JNIEnv * env, jclass cls, jobjectArray path)
 {
-    int count = env->GetArrayLength (args);
+    int count = env->GetArrayLength (path);
     vector<string> keys (count);
     for (int i = 0; i < count; i++)
     {
         jstring string = (jstring) env->GetObjectArrayElement (path, i);
         const char * c = env->GetStringUTFChars (string, 0);
         keys[i] = c;  // Makes a copy of c.
-        env->ReleaseStringUTFChars (c);
+        env->ReleaseStringUTFChars (string, c);
     }
 
     jlong result = (jlong) n2a::IOvectorCreate (keys);

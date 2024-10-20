@@ -1341,6 +1341,7 @@ public class JobC extends Thread
         if (lib  &&  jni)
         {
             result.append ("#include \"NativeResource.h\"\n");
+            result.append ("#include <jni.h>\n");
         }
         for (ProvideOperator po : extensions)
         {
@@ -2386,11 +2387,11 @@ public class JobC extends Thread
         {
             result.append ("  virtual Part<" + T + "> * allocate ();\n");
             result.append ("  virtual void release (Part<" + T + "> * part);\n");
-            if (bed.poll >= 0  ||  bed.trackInstances  ||  bed.index != null  ||  bed.pathToContainer == null)
+            if (bed.trackN  ||  bed.pathToContainer == null  ||  bed.trackInstances  ||  bed.index != null  ||  bed.poll >= 0)
             {
                 result.append ("  virtual void add (Part<" + T + "> * part);\n");
             }
-            if (bed.poll >= 0  ||  bed.trackInstances)
+            if (bed.trackN  ||  bed.trackInstances  ||  bed.poll >= 0)
             {
                 result.append ("  virtual void remove (Part<" + T + "> * part);\n");
             }

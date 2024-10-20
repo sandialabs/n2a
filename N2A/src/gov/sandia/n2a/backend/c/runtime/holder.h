@@ -56,7 +56,7 @@ public:
     std::unordered_map<String,String> namedValues;
 
     void   parse (const String & line);
-    void   parse (int argc, const char * argv[]);
+    void   parse (int argc, const char * argv[]);  ///< The arguments have the same semantics as main(argc, argv). In particular, the first argument is ignored because it is the name of the program.
     void   read  (const String & parmFileName);
     void   read  (std::istream & stream);
 
