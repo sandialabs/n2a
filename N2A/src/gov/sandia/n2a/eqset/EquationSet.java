@@ -2675,26 +2675,14 @@ public class EquationSet implements Comparable<EquationSet>
             // * $t' -- if it is constant and matches constant $t' in container. This may have been created by findConstants().
             if (v.equations.size () > 0  &&  v.name.contains ("$")  &&  ! v.name.equals ("$index"))
             {
-                // Check for constant $t'
-                boolean sharedDt = false;
-                if (container != null  &&  v.name.equals ("$t")  &&  v.order == 1  &&  v.hasAttribute ("constant"))
-                {
-                    Variable cdt = container.find (v);
-                    if (cdt != null  &&  cdt.hasAttribute ("constant"))
-                    {
-                        double  value =   v.equations.first ().expression.getDouble ();
-                        double cvalue = cdt.equations.first ().expression.getDouble ();
-                        sharedDt =  value == cvalue;
-                    }
-                }
+                // Formerly, when constant $t' matching its container, it was removed.
+                // We no longer do this, because the C backend needs to know details about $t' for every part.
+                // OTOH, the Internal backend has an adequate method for recognizing this case.
 
-                if (! sharedDt)  // Check for general case
-                {
-                    if (v.name.startsWith ("$")) continue;
-                    String[] pieces = v.name.split ("\\.");
-                    if (pieces.length == 2  &&  endpointSpecials.contains (pieces[1])) continue;
-                    // else fall through ...
-                }
+                if (v.name.startsWith ("$")) continue;
+                String[] pieces = v.name.split ("\\.");
+                if (pieces.length == 2  &&  endpointSpecials.contains (pieces[1])) continue;
+                // else fall through ...
             }
 
             // Scan AST for any special output functions.

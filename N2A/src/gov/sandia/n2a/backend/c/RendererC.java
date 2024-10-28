@@ -70,7 +70,6 @@ public class RendererC extends Renderer
     protected EquationSet    part;
     protected BackendDataC   bed;
     protected boolean        global;                               // Whether this is in the population object (true) or a part object (false)
-    protected boolean        hasEvent;                             // Indicates that event has been retrieved within current scope.
     public    boolean        useExponent;                          // Some functions have extra parameters in fixed-point mode. Rather than duplicate rendering code, we tack on the extra parameters here.
     public    Set<String>    initialized = new HashSet<String> (); // List of holder objects which have been initialized. Used to prevent redundant initialization in a single function, so gets cleared between emission of different functions.
 

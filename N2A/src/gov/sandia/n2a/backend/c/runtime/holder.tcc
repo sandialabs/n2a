@@ -21,7 +21,6 @@ the U.S. Government retains certain rights in this software.
 #include <sys/stat.h>
 #ifdef _MSC_VER
 #  define stat _stat
-#  define timegm _mkgmtime
 #else
 #  include <dirent.h>
 #endif
@@ -2091,8 +2090,11 @@ template<class T>
 T
 convertDate (const String & field, T defaultValue)
 {
+    // This function uses mktime(), which depends on the value of the environment variable TZ.
+    // To ensure interpretation in UTC, this variable must be set in the program startup code.
+
     bool valid = false;
-    int year   = 1970;  // will be adjusted below for timegm()
+    int year   = 1970;  // will be adjusted below for mktime()
     int month  = 1;     // ditto
     int day    = 1;
     int hour   = 0;
@@ -2172,12 +2174,12 @@ convertDate (const String & field, T defaultValue)
 
     struct tm date;
     date.tm_isdst = 0;  // time is strictly UTC, with no DST
-    // ignoring tm_wday and tm_yday, as timegm() doesn't do anything with them
+    // ignoring tm_wday and tm_yday, as mktime() doesn't do anything with them
 
-    // Hack to adjust for timegm() that can't handle dates before posix epoch (1970/1/1).
+    // Hack to adjust for mktime() that can't handle dates before posix epoch (1970/1/1).
     // This simple hack only works for years after ~1900.
     // Solution comes from https://bugs.php.net/bug.php?id=17123
-    // Alternate solution would be to implement a simple timegm() right here.
+    // Alternate solution would be to implement a simple mktime() right here.
     // Since we don't care about DST or timezones, all it has to do is handle Gregorion leap-years.
     time_t offset = 0;
     if (year <= 70)  // Yes, that includes 1970 itself.
@@ -2190,7 +2192,7 @@ convertDate (const String & field, T defaultValue)
         date.tm_hour = 0;
         date.tm_min  = 0;
         date.tm_sec  = 0;
-        offset = timegm (&date);
+        offset = mktime (&date);
     }
 
     date.tm_year = year;
@@ -2200,7 +2202,7 @@ convertDate (const String & field, T defaultValue)
     date.tm_min  = minute;
     date.tm_sec  = second;
 
-    return timegm (&date) - offset;  // Unix time; an integer, so exponent=0
+    return mktime (&date) - offset;  // Unix time; an integer, so exponent=0
 }
 
 template<class T>

@@ -881,7 +881,7 @@ public class JobC extends Thread
         digestedModel.addAttribute ("global",      false, true,  "$max", "$min", "$k", "$radius");
         digestedModel.addAttribute ("global",      false, false, "$n");
         digestedModel.addAttribute ("state",       true,  false, "$n");  // Forbid $n from being temporary, even if it meets the criteria.
-        digestedModel.addAttribute ("preexistent", true,  false, "$index", "$t'", "$t");  // Technically, $index is not pre-existent, but always receives special handling which has the same effect.
+        digestedModel.addAttribute ("preexistent", true,  false, "$index", "$t");  // Technically, $index is not pre-existent, but always receives special handling which has the same effect.
         if (cli) tagCommandLineParameters (digestedModel, true, params);
         analyzeIOvectors (digestedModel);
         digestedModel.resolveLHS ();
@@ -922,6 +922,7 @@ public class JobC extends Thread
         }
         digestedModel.findConnectionMatrix ();
         analyzeEvents (digestedModel);
+        analyzeDt (digestedModel);
         analyze (digestedModel);
         analyzeNames (digestedModel);
     }
@@ -1237,12 +1238,26 @@ public class JobC extends Thread
         for (EquationSet p : s.parts) analyzeEvents (p);
     }
 
+    /**
+        Determine how $t' and lastT are handled.
+        Depends on the results of analyze() above.
+        It is important that containers are processed before their children.
+    **/
+    public void analyzeDt (EquationSet s)
+    {
+        ((BackendDataC) s.backendData).analyzeDt (s);
+        for (EquationSet p : s.parts) analyzeDt (p);
+    }
+
     public void analyze (EquationSet s)
     {
+        // It is important that children are processed before their container.
         for (EquationSet p : s.parts) analyze (p);
+
         BackendDataC bed = (BackendDataC) s.backendData;
         bed.analyze (s);
-        bed.analyzeLastT (s);
+
+        bed.lastT = bed.needLocalIntegrate  &&  (bed.dtCanChange  ||  bed.eventTargets.size () > 0);
 
         Transformer t = new Transformer ()
         {
@@ -1350,6 +1365,7 @@ public class JobC extends Thread
             result.append ("#include <" + include.getFileName () + ">\n");
         }
         result.append ("\n");
+        result.append ("#include <stdlib.h>\n");
         result.append ("#include <iostream>\n");
         result.append ("#include <vector>\n");
         result.append ("#include <unordered_set>\n");  // Only needed for polling. We could walk the tree and check if any parts need polling before emitting this line, but it's probably not worth the effort.
@@ -1572,6 +1588,7 @@ public class JobC extends Thread
         }
         result.append ("  " + SIMULATOR + "integrator = new " + integrator + "<" + T + ">;\n");
         result.append ("  " + SIMULATOR + "after = " + after + ";\n");
+        result.append ("  putenv ((char *) \"TZ=\");\n");  // Per tzset() manpage, setting TZ to blank causes us to be in UTC.
         result.append ("  initIO ();\n");
         result.append ("  wrapper = new Wrapper;\n");
         result.append ("  " + SIMULATOR + "init (wrapper);\n");  // Simulator takes possession of wrapper, so it will be freed automatically.
@@ -1657,7 +1674,7 @@ public class JobC extends Thread
                 }
             }
         }
-        else
+        else  // main() function for standalone simulator
         {
             result.append ("int main (int argc, const char * argv[])\n");
             result.append ("{\n");
@@ -1673,33 +1690,28 @@ public class JobC extends Thread
             result.append ("    " + SIMULATOR + "run ();\n");
             result.append ("    finish ();\n");  // Calls Simulator::clear(), which flushes output files.
             result.append ("    releaseMemory ();\n");  // Needed only to make memory checkers happy
+            result.append ("\n");
+            if (env instanceof Windows)  // Hack to work around flaky batch processing. See Windows.submitJob() for details.
+            {
+                result.append ("    ofstream ofs (\"finished\");\n");
+                result.append ("    ofs << \"success\";\n");
+            }
+            result.append ("    return 0;\n");
             result.append ("  }\n");
             result.append ("  catch (const char * message)\n");
             result.append ("  {\n");
             result.append ("    cerr << \"Exception: \" << message << endl;\n");
-            if (env instanceof Windows)  // Hack to work around flaky batch processing. See Windows.submitJob() for details.
-            {
-                result.append ("    ofstream ofs (\"finished\");\n");
-                result.append ("    ofs << \"failure\";\n");
-            }
-            result.append ("    return 1;\n");
             result.append ("  }\n");
             result.append ("  catch (...)\n");
             result.append ("  {\n");
             result.append ("    cerr << \"Generic Exception\" << endl;\n");
-            if (env instanceof Windows)
-            {
-                result.append ("    ofstream ofs (\"finished\");\n");
-                result.append ("    ofs << \"failure\";\n");
-            }
-            result.append ("    return 1;\n");
             result.append ("  }\n");
             if (env instanceof Windows)
             {
                 result.append ("  ofstream ofs (\"finished\");\n");
-                result.append ("  ofs << \"success\";\n");
+                result.append ("  ofs << \"failure\";\n");
             }
-            result.append ("  return 0;\n");
+            result.append ("  return 1;\n");
             result.append ("}\n");
         }
 
@@ -2312,7 +2324,7 @@ public class JobC extends Thread
         else
         {
             // Static members
-            result.append ("  static Part<" + T + "> * dead;\n");
+            result.append ("  static std::vector<" + prefix + " *> dead;\n");
             result.append ("  static std::vector<" + prefix + " *> memory;\n");  // These are actually pointers to arrays rather than simple objects.
             result.append ("  static std::mutex mutexMemory;\n");
             result.append ("\n");
@@ -2410,7 +2422,7 @@ public class JobC extends Thread
         }
         if (bed.needGlobalFinalize)
         {
-            result.append ("  virtual bool finalize ();\n");
+            result.append ("  virtual int finalize ();\n");
         }
         if (bed.canResize)
         {
@@ -2605,10 +2617,6 @@ public class JobC extends Thread
         {
             result.append ("  virtual void clear ();\n");
         }
-        if (s.container == null)
-        {
-            result.append ("  virtual void setPeriod (" + T + " dt);\n");
-        }
         if (bed.needLocalDie)
         {
             result.append ("  virtual void die ();\n");
@@ -2619,6 +2627,8 @@ public class JobC extends Thread
         }
         if (bed.refcount)
         {
+            result.append ("  virtual void ref ();\n");
+            result.append ("  virtual void deref ();\n");
             result.append ("  virtual bool isFree ();\n");
         }
         if (bed.needLocalInit)
@@ -2635,7 +2645,7 @@ public class JobC extends Thread
         }
         if (bed.needLocalFinalize)
         {
-            result.append ("  virtual bool finalize ();\n");
+            result.append ("  virtual int finalize ();\n");
         }
         if (bed.needLocalUpdateDerivative)
         {
@@ -2661,6 +2671,7 @@ public class JobC extends Thread
         {
             result.append ("  void checkInactive ();\n");
         }
+        result.append ("  virtual " + T + " getDt ();\n");
         if (bed.live != null  &&  ! bed.live.hasAttribute ("constant"))
         {
             result.append ("  virtual " + T + " getLive ();\n");
@@ -2747,7 +2758,7 @@ public class JobC extends Thread
         // Define static members in this translation unit.
         if (! bed.singleton)
         {
-            result.append ("Part<" + T + "> * " + ns + "dead;\n");  // automatically initialized to 0
+            result.append ("vector<" + ps + " *> " + ns + "dead;\n");
             result.append ("vector<" + ps + " *> " + ns + "memory;\n");
             result.append ("mutex " + ns + "mutexMemory;\n");
             result.append ("\n");
@@ -2875,23 +2886,24 @@ public class JobC extends Thread
             result.append ("  Part<" + T + "> * result;\n");
             result.append ("  {\n");
             result.append ("    lock_guard<mutex> lock (mutexMemory);\n");
-            result.append ("    Part<" + T + "> ** p = &dead;\n");
-            result.append ("    while (*p  &&  ! (*p)->isFree ()) p = & (*p)->next;\n");  // Find the first free entry on dead list.
-            result.append ("    if (! *p)\n");  // No free entry, so allocate memory.
+            result.append ("    int last = dead.size () - 1;\n");
+            result.append ("    int i = last;\n");
+            result.append ("    while (i >= 0  &&  ! dead[i]->isFree ()) i--;\n");  // Find the first free entry on dead list.
+            result.append ("    if (i < 0)\n");  // No free entry, so allocate memory.
             result.append ("    {\n");
             result.append ("      int size = (1 << 20) / sizeof (" + ps + ");\n");  // As many instances as will fit in 1MiB. That is, allocation chunk is approximately 1 megabyte. TODO: get hint from metadata.
             result.append ("      " + ps + " * m = new " + ps + "[size];\n");
             result.append ("      memory.push_back (m);\n");
             result.append ("      " + ps + " * end = m + size;\n");
-            result.append ("      while (m < end)\n");
-            result.append ("      {\n");  // Same code as release(), but it saves a little time not to make the function call.
-            result.append ("        m->next = dead;\n");
-            result.append ("        dead = m++;\n");
-            result.append ("      }\n");
-            result.append ("      p = &dead;\n");
+            result.append ("      while (m < end) dead.push_back (m++);\n");
+            result.append ("      result = dead.back ();\n");
             result.append ("    }\n");
-            result.append ("    result = *p;\n");
-            result.append ("    *p = (*p)->next;\n");  // remove from dead
+            result.append ("    else\n");
+            result.append ("    {\n");
+            result.append ("      result = dead[i];\n");
+            result.append ("      if (i < last) dead[i] = dead[last];\n");  // remove from dead
+            result.append ("    }\n");
+            result.append ("    dead.pop_back ();\n");
             result.append ("  }\n");
             result.append ("  result->clear ();\n");
             result.append ("  return result;\n");
@@ -2901,8 +2913,7 @@ public class JobC extends Thread
             result.append ("void " + ns + "release (Part<" + T + "> * part)\n");
             result.append ("{\n");
             result.append ("  lock_guard<mutex> lock (mutexMemory);\n");
-            result.append ("  part->next = dead;\n");
-            result.append ("  dead = part;\n");
+            result.append ("  dead.push_back ((" + ps + " *) part);\n");
             result.append ("}\n");
             result.append ("\n");
 
@@ -3020,7 +3031,6 @@ public class JobC extends Thread
                 {
                     result.append ("  instance.flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
                 }
-                result.append ("  container->getEvent ()->enqueue (&instance);\n");
                 result.append ("  instance.init ();\n");
             }
             else
@@ -3065,9 +3075,24 @@ public class JobC extends Thread
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
             if (kokkos) result.append ("  push_region (\"" + ns + "integrate()\");\n");
-            result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
-            context.hasEvent = true;
-            result.append ("  " + T + " dt = event->dt;\n");
+
+            if (s.container == null)
+            {
+                result.append ("  " + T + " dt = ((Wrapper *) container)->dt;\n");
+            }
+            else
+            {
+                BackendDataC cbed = (BackendDataC) s.container.backendData;
+                if (cbed.lastT)
+                {
+                    result.append ("  " + T + " dt = " + SIMULATOR + "currentEvent->t - ((" + prefix (s.container) + " *) container)->lastT;\n");
+                }
+                else
+                {
+                    result.append ("  " + T + " dt = ((" + prefix (s.container) + " *) container)->getDt ();\n");
+                }
+            }
+
             result.append ("  if (preserve)\n");
             result.append ("  {\n");
             for (Variable v : bed.globalIntegrated)
@@ -3103,7 +3128,6 @@ public class JobC extends Thread
                 }
             }
             result.append ("  }\n");
-            context.hasEvent = false;
             if (kokkos) result.append ("  pop_region ();\n");
             result.append ("}\n");
             result.append ("\n");
@@ -3138,7 +3162,7 @@ public class JobC extends Thread
         // Population finalize
         if (bed.needGlobalFinalize)
         {
-            result.append ("bool " + ns + "finalize ()\n");
+            result.append ("int " + ns + "finalize ()\n");
             result.append ("{\n");
 
             if (bed.canResize  &&  bed.n.derivative == null  &&  bed.canGrowOrDie)  // $n shares control with other specials, so must coordinate with them
@@ -3214,7 +3238,7 @@ public class JobC extends Thread
                         // the rate of change in $n is pre-determined, so it relentlessly overrides any other structural dynamics
                         if (returnN)
                         {
-                            result.append ("  if (n == 0) return false;\n");
+                            result.append ("  if (n == 0) return 2;\n");
                             returnN = false;
                         }
                         result.append ("  " + SIMULATOR + "resize (this, max (0, " + mangle ("$n"));
@@ -3226,7 +3250,7 @@ public class JobC extends Thread
                 {
                     if (returnN)
                     {
-                        result.append ("  if (n == 0) return false;\n");
+                        result.append ("  if (n == 0) return 2;\n");
                         returnN = false;
                     }
                     result.append ("  int floorN = max (0, ");
@@ -3244,12 +3268,12 @@ public class JobC extends Thread
                 // case, $p controls lifespan of simulation. This also means we can't
                 // use $n to indicate that the population is dead. The alternative is
                 // to use $live.
-                if (bed.singleton) result.append ("  return " + resolve (bed.live.reference, context, false, "instance.", false) + ";\n");
-                else               result.append ("  return n;\n");
+                if (bed.singleton) result.append ("  return " + resolve (bed.live.reference, context, false, "instance.", true) + " ? 0 : 2;\n");
+                else               result.append ("  return n > 0 ? 0 : 2;\n");
             }
             else
             {
-                result.append ("  return true;\n");
+                result.append ("  return 0;\n");
             }
             result.append ("}\n");
             result.append ("\n");
@@ -3277,7 +3301,6 @@ public class JobC extends Thread
             result.append ("    if (p  &&  p->getLive ())\n");
             result.append ("    {\n");
             result.append ("      p->die ();\n");
-            result.append ("      p->dequeue ();\n");
             result.append ("      p->remove ();\n");
             result.append ("    }\n");
             result.append ("  }\n");
@@ -3481,7 +3504,6 @@ public class JobC extends Thread
                 result.append ("  ConnectIterator<" + T + "> * outer = getIterators (poll);\n");
                 result.append ("  if (outer)\n");
                 result.append ("  {\n");
-                result.append ("    EventStep<" + T + "> * event = container->getEvent ();\n");
                 result.append ("    " + ps + " * c = (" + ps + " *) allocate ();\n");
                 result.append ("    outer->setProbe (c);\n");
                 result.append ("    while (outer->next ())\n");
@@ -3494,7 +3516,6 @@ public class JobC extends Thread
                 result.append ("      if (poll  &&  pollSorted.count (c)) continue;\n");
                 result.append ("\n");
                 result.append ("      add (c);\n");
-                result.append ("      event->enqueue (c);\n");
                 result.append ("      c->init ();\n");
                 result.append ("\n");
                 result.append ("      c = (" + ps + " *) allocate ();\n");
@@ -3927,17 +3948,6 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
-        // Unit setPeriod
-        if (s.container == null)  // instance of top-level population, so set period on wrapper whenever our period changes
-        {
-            result.append ("void " + ns + "setPeriod (" + T + " dt)\n");
-            result.append ("{\n");
-            result.append ("  Part<" + T + ">::setPeriod (dt);\n");
-            result.append ("  if (container->visitor->event != visitor->event) container->setPeriod (dt);\n");
-            result.append ("}\n");
-            result.append ("\n");
-        }
-
         // Unit die
         if (bed.needLocalDie)
         {
@@ -4003,9 +4013,21 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
-        // Unit isFree
+        // Unit ref / deref / isFree
         if (bed.refcount)
         {
+            result.append ("void " + ns + "ref ()\n");
+            result.append ("{\n");
+            result.append ("  refcount++;\n");
+            result.append ("}\n");
+            result.append ("\n");
+
+            result.append ("void " + ns + "deref ()\n");
+            result.append ("{\n");
+            result.append ("  refcount--;\n");
+            result.append ("}\n");
+            result.append ("\n");
+
             result.append ("bool " + ns + "isFree ()\n");
             result.append ("{\n");
             result.append ("  return refcount == 0;\n");
@@ -4076,14 +4098,12 @@ public class JobC extends Thread
             {
                 result.append ("  lastT = " + SIMULATOR + "currentEvent->t;\n");
             }
+            if (bed.copyDt)
+            {
+                result.append ("  " + mangle (bed.dt) + " = container->getDt ();\n");
+            }
             s.simplify ("$init", bed.localInit);
             if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, bed.localInit);
-            if (bed.localInit.contains (bed.dt))
-            {
-                result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
-                context.hasEvent = true;
-                result.append ("  " + type (bed.dt) + " " + mangle (bed.dt) + ";\n");
-            }
             for (Variable v : bed.localInit)  // optimized list: only variables with equations that actually fire during init
             {
                 multiconditional (v, context, "  ");
@@ -4103,13 +4123,15 @@ public class JobC extends Thread
                     result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
                 }
             }
-            if (bed.localInit.contains (bed.dt))
+            String dt = resolve (bed.dt.reference, context, false);
+            result.append ("  " + SIMULATOR + "enqueue (this, " + dt + ");\n");
+            if (s.container == null)  // Top-level model, so move Wrapper as well.
             {
-                result.append ("  if (" + mangle (bed.dt) + " != event->dt) setPeriod (" + mangle (bed.dt) + ");\n");
-            }
-            else if (bed.setDt)  // implies that bed.dt exists and is constant
-            {
-                result.append ("  setPeriod (" + resolve (bed.dt.reference, context, false) + ");\n");
+                result.append ("  if (container->dt != " + dt + ")\n");
+                result.append ("  {\n");
+                result.append ("    container->dt = " + dt + ";\n");
+                result.append ("    " + SIMULATOR + "enqueue (container, " + dt + ");\n");
+                result.append ("  }\n");
             }
 
             // instance counting
@@ -4126,7 +4148,6 @@ public class JobC extends Thread
                     String container = resolveContainer (r, context, "");
                     if (touched.add (container)) result.append ("  " + container + "refcount++;\n");
                 }
-                result.append ("\n");
             }
 
             // Request event monitors
@@ -4156,7 +4177,6 @@ public class JobC extends Thread
             }
 
             s.setInit (0);
-            context.hasEvent = false;
             result.append ("}\n");
             result.append ("\n");
         }
@@ -4166,6 +4186,21 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
+
+            // Early-out
+            // Don't accumulate integrated values when part is dead, as this could result in a numerical error.
+            if (bed.liveFlag >= 0)  // $live is stored in this part
+            {
+                result.append ("  if (! (flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ")) return;\n");
+            }
+            // Prevent part from executing on the wrong step event.
+            if (bed.dt.hasAttribute ("externalWrite"))
+            {
+                result.append ("  if (" + mangle (bed.dt) + " != " + SIMULATOR + "currentEvent->dt) return;\n");
+            }
+            // For simplicity, we don't call kokkos push_region until after the early out.
+            // This makes profiling stats slightly inaccurate.
+
             if (kokkos) result.append ("  push_region (\"" + ns + "integrate()\");\n");
             if (bed.localIntegrated.size () > 0)
             {
@@ -4175,9 +4210,7 @@ public class JobC extends Thread
                 }
                 else
                 {
-                    result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
-                    context.hasEvent = true;
-                    result.append ("  " + T + " dt = event->dt;\n");
+                    result.append ("  " + T + " dt = " + resolve (bed.dt.reference, context, false) + ";\n");
                 }
                 // Note the resolve() call on the left-hand-side below has lvalue==false.
                 // Integration always takes place in the primary storage of a variable.
@@ -4241,7 +4274,6 @@ public class JobC extends Thread
                     result.append ("  " + mangle (e.name) + ".integrate ();\n");
                 }
             }
-            context.hasEvent = false;
             if (kokkos) result.append ("  pop_region ();\n");
             result.append ("}\n");
             result.append ("\n");
@@ -4253,7 +4285,21 @@ public class JobC extends Thread
             bed.defined.clear ();
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
+
+            // Early-out
+            // Prevent a dead part from writing changes to other parts.
+            if (bed.liveFlag >= 0)
+            {
+                result.append ("  if (! (flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ")) return;\n");
+            }
+            // Prevent part from executing on the wrong step event.
+            if (bed.dt.hasAttribute ("externalWrite"))
+            {
+                result.append ("  if (" + mangle (bed.dt) + " != " + SIMULATOR + "currentEvent->dt) return;\n");
+            }
+
             if (kokkos) result.append ("  push_region (\"" + ns + "update()\");\n");
+
             for (Variable v : bed.localBufferedInternalUpdate)
             {
                 result.append ("  " + type (v) + " " + mangle ("next_", v) + ";\n");
@@ -4268,6 +4314,7 @@ public class JobC extends Thread
             {
                 result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
+
             // contained populations
             for (EquationSet e : s.parts)
             {
@@ -4276,7 +4323,9 @@ public class JobC extends Thread
                     result.append ("  " + mangle (e.name) + ".update ();\n");
                 }
             }
+
             if (kokkos) result.append ("  pop_region ();\n");
+
             result.append ("}\n");
             result.append ("\n");
         }
@@ -4285,8 +4334,19 @@ public class JobC extends Thread
         if (bed.needLocalFinalize)
         {
             bed.defined.clear ();
-            result.append ("bool " + ns + "finalize ()\n");
+            result.append ("int " + ns + "finalize ()\n");
             result.append ("{\n");
+
+            // Early-out if we are dead.
+            // Among other things, this prevents us from calling die() twice.
+            if (bed.liveFlag >= 0)  // $live is stored in this part
+            {
+                result.append ("  if (! (flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ")) return 2;\n");
+            }
+            if (bed.dt.hasAttribute ("externalWrite"))  // This attribute can also indicate local writes to $t'. It is set by BackendDataC.analyzeDt().
+            {
+                result.append ("  if (" + mangle (bed.dt) + " != " + SIMULATOR + "currentEvent->dt) return 1;\n");
+            }
 
             // contained populations
             for (EquationSet e : s.parts)
@@ -4295,20 +4355,6 @@ public class JobC extends Thread
                 {
                     result.append ("  " + mangle (e.name) + ".finalize ();\n");  // ignore return value
                 }
-            }
-
-            // Early-out if we are already dead
-            if (bed.liveFlag >= 0)  // $live is stored in this part
-            {
-                result.append ("  if (! (flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ")) return false;\n");  // early-out if we are already dead, to avoid another call to die()
-            }
-
-            // Preemptively fetch current event
-            boolean needT = bed.eventSources.size () > 0  ||  s.lethalP  ||  bed.localBufferedExternal.contains (bed.dt);
-            if (needT)
-            {
-                result.append ("  EventStep<" + T + "> * event = getEvent ();\n");
-                context.hasEvent = true;
             }
 
             // Events
@@ -4359,12 +4405,9 @@ public class JobC extends Thread
             {
                 if (v == bed.dt)
                 {
-                    result.append ("  if (" + mangle ("next_", v) + " != event->dt) setPeriod (" + mangle ("next_", v) + ");\n");
+                    result.append ("  bool dtChanged =  " + mangle (v) + " != " + mangle ("next_", v) + ";\n");
                 }
-                else
-                {
-                    result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
-                }
+                result.append ("  " + mangle (v) + " = " + mangle ("next_", v) + ";\n");
             }
             for (Variable v : bed.localBufferedExternalWrite)
             {
@@ -4417,7 +4460,7 @@ public class JobC extends Thread
                     else
                     {
                         result.append ("      die ();\n");
-                        result.append ("      return false;\n");
+                        result.append ("      return 2;\n");
                     }
                     result.append ("    }\n");
                 }
@@ -4474,7 +4517,7 @@ public class JobC extends Thread
                 }
                 result.append ("  {\n");
                 result.append ("    die ();\n");
-                result.append ("    return false;\n");
+                result.append ("    return 2;\n");
                 result.append ("  }\n");
             }
 
@@ -4488,7 +4531,7 @@ public class JobC extends Thread
                         result.append ("  if (" + resolve (r, context, false, "", true) + " == 0)\n");
                         result.append ("  {\n");
                         result.append ("    die ();\n");
-                        result.append ("    return false;\n");
+                        result.append ("    return 2;\n");
                         result.append ("  }\n");
                 	}
                 }
@@ -4502,13 +4545,24 @@ public class JobC extends Thread
                     result.append ("  if (" + resolve (r, context, false, "", true) + " == 0)\n");
                     result.append ("  {\n");
                     result.append ("    die ();\n");
-                    result.append ("    return false;\n");
+                    result.append ("    return 2;\n");
                     result.append ("  }\n");
                 }
             }
 
-            result.append ("  return true;\n");
-            context.hasEvent = false;
+            if (bed.dt.hasAttribute ("externalWrite"))
+            {
+                result.append ("  if (dtChanged)\n");
+                result.append ("  {\n");
+                result.append ("    " + SIMULATOR + "enqueue (this, " + mangle (bed.dt) + ");\n");
+                result.append ("    return 1;\n");
+                result.append ("  }\n");
+            }
+            else
+            {
+                result.append ("  return 0;\n");
+            }
+
             result.append ("}\n");
             result.append ("\n");
         }
@@ -4904,7 +4958,6 @@ public class JobC extends Thread
             }
             // Remove inactive instance.
             result.append ("  die ();\n");
-            result.append ("  dequeue ();\n");
             result.append ("  remove ();\n");
 
             if (bed.populationCanBeInactive)
@@ -4918,6 +4971,32 @@ public class JobC extends Thread
             result.append ("}\n");
             result.append ("\n");
         }
+
+        // Unit getDt
+        result.append (T + " " + ns + "getDt ()\n");
+        result.append ("{\n");
+        if (bed.dt.hasAttribute ("accessor"))
+        {
+            if (s.container == null)
+            {
+                result.append ("  return container->getDt ();\n");  // Get default value from Wrapper.
+            }
+            else
+            {
+                // Notice that our container $t' won't be "constant", because otherwise we'd be "constant".
+                // It could be an "initOnly" local variable, but not one that updates after init.
+                BackendDataC pbed = (BackendDataC) s.container.backendData;
+                context.part = s.container;
+                result.append ("  return " + resolve (pbed.dt.reference, context, false, "container->", false) + ";\n");
+                context.part = s;
+            }
+        }
+        else  // "constant" or local variable (whether or not "initOnly")
+        {
+            result.append ("  return " + resolve (bed.dt.reference, context, false) + ";\n");
+        }
+        result.append ("}\n");
+        result.append ("\n");
 
         // Unit getLive
         if (bed.live != null  &&  ! bed.live.hasAttribute ("constant"))
@@ -5265,7 +5344,6 @@ public class JobC extends Thread
                 }
             }
             // TODO: Convert contained populations from matching populations in the source part?
-            result.append ("  getEvent ()->enqueue (to);\n");
 
             // Match variables between the two sets.
             // TODO: a match between variables should be marked as a dependency. That should be done much earlier by the middle end.
@@ -6234,22 +6312,21 @@ public class JobC extends Thread
         if (r.variable.hasAttribute ("preexistent"))
         {
             String vname = r.variable.name;
-            if (vname.startsWith ("$"))
+            if (! vname.startsWith ("$"))
+            {
+                return vname;  // most likely a local variable, for example "rc" in mapIndex()
+            }
+            else
             {
                 int vorder = r.variable.order;
                 if (vname.equals ("$t"))
                 {
-                    if (! lvalue)
+                    if (! lvalue  &&  vorder == 0)
                     {
-                        if      (vorder == 0) name = SIMULATOR + "currentEvent->t";
-                        else if (vorder == 1)
-                        {
-                            if (context.hasEvent) name = "event->dt";
-                            else                  name = "getEvent ()->dt";
-                        }
-                        // Higher orders of $t should not be "preexistent". They are handled by the main case below.
+                        name = SIMULATOR + "currentEvent->t";
                     }
-                    // for lvalue, fall through to the main case below
+                    // For lvalue, fall through to the main case below.
+                    // Higher orders of $t should not be "preexistent". They are handled below.
                 }
                 else if (vname.equals ("$n"))
                 {
@@ -6259,17 +6336,13 @@ public class JobC extends Thread
                     }
                 }
             }
-            else
-            {
-                return vname;  // most likely a local variable, for example "rc" in mapIndex()
-            }
         }
         if (r.variable.name.equals ("$live"))
         {
             if (r.variable.hasAttribute ("accessor"))
             {
                 if (lvalue) return "unresolved";
-                name = "getLive ()";
+                return containers + "getLive ()";
             }
             else  // not "constant" or "accessor", so must be direct access
             {
@@ -6279,7 +6352,11 @@ public class JobC extends Thread
         }
         else if (r.variable.hasAttribute ("accessor"))
         {
-            return "unresolved";  // At present, only $live can have "accessor" attribute.
+            if (r.variable.name.equals ("$t")  &&  r.variable.order == 1  &&  ! lvalue)  // $t'
+            {
+                return containers + "getDt ()";
+            }
+            return "unresolved";  // Only $live and $t' can have "accessor" attribute.
         }
         if (r.variable.name.endsWith (".$count"))
         {
@@ -6378,7 +6455,7 @@ public class JobC extends Thread
         BackendDataC bed = (BackendDataC) s.backendData;
         if (bed.pathToContainer != null  &&  ! global) base += mangle (bed.pathToContainer) + "->";
         base += "container";
-        if (global) return "((" + prefix (s.container) + " *) " + base + ")->";
+        if (global) return "((" + prefix (s.container) + " *) " + base + ")->";  // s.container should always be non-null. IE: we don't reference up to Wrapper. If we do, it is directly coded rather than coming here.
         return base + "->";
     }
 

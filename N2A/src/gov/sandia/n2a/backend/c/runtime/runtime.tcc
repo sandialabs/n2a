@@ -510,11 +510,6 @@ unitmap (const MatrixAbstract<int> & A, int row, int column)  // row and column 
 // class Simulatable ---------------------------------------------------------
 
 template<class T>
-Simulatable<T>::~Simulatable ()
-{
-}
-
-template<class T>
 void
 Simulatable<T>::clear ()
 {
@@ -539,10 +534,10 @@ Simulatable<T>::update ()
 }
 
 template<class T>
-bool
+int
 Simulatable<T>::finalize ()
 {
-    return true;
+    return 0;  // Continue living.
 }
 
 template<class T>
@@ -605,49 +600,6 @@ Simulatable<T>::path (String & result)
 
 template<class T>
 void
-Part<T>::setPrevious (Part<T> * previous)
-{
-    this->previous = previous;
-}
-
-template<class T>
-void
-Part<T>::setVisitor (VisitorStep<T> * visitor)
-{
-    this->visitor = visitor;
-}
-
-template<class T>
-EventStep<T> *
-Part<T>::getEvent ()
-{
-    return (EventStep<T> *) visitor->event;
-}
-
-template<class T>
-void
-Part<T>::dequeue ()
-{
-    // TODO: Need mutex on visitor when modifying its queue, even if it is not part of currentEvent.
-    if (SIMULATOR currentEvent == visitor->event)
-    {
-        // Avoid damaging iterator in visitor
-        if (visitor->previous == this) visitor->previous = this->next;
-    }
-    if (this->next) this->next->setPrevious (previous);
-    previous->next = this->next;
-}
-
-template<class T>
-void
-Part<T>::setPeriod (T dt)
-{
-    dequeue ();
-    SIMULATOR enqueue (this, dt);
-}
-
-template<class T>
-void
 Part<T>::die ()
 {
 }
@@ -655,6 +607,18 @@ Part<T>::die ()
 template<class T>
 void
 Part<T>::remove ()
+{
+}
+
+template<class T>
+void
+Part<T>::ref ()
+{
+}
+
+template<class T>
+void
+Part<T>::deref ()
 {
 }
 
@@ -725,6 +689,17 @@ Part<T>::getP ()
 }
 
 template<class T>
+T
+Part<T>::getDt ()
+{
+#   ifdef n2a_FP
+    return ((int64_t) 1 << -Event<int>::exponent) / 1000;  // 1ms step sizes, rather than 0.1ms like below. We are only promised (weakly) 10 bits below the decimal.
+#   else
+    return (T) 1e-4;
+#   endif
+}
+
+template<class T>
 void
 Part<T>::getXYZ (MatrixFixed<T,3,1> & xyz)
 {
@@ -777,9 +752,18 @@ removeMonitor (std::vector<Part<T> *> & partList, Part<T> * part)
 // Wrapper -------------------------------------------------------------------
 
 template<class T>
+WrapperBase<T>::WrapperBase ()
+{
+    // If $t' is never set in the model, then Wrapper will return this value
+    // causing all its children to queue with this period.
+    dt = Part<T>::getDt ();
+}
+
+template<class T>
 void
 WrapperBase<T>::init ()
 {
+    SIMULATOR enqueue (this, dt);
     population->init ();
 }
 
@@ -798,9 +782,11 @@ WrapperBase<T>::update ()
 }
 
 template<class T>
-bool
+int
 WrapperBase<T>::finalize ()
 {
+    // Wrapper.finalize() should only ever get called on an EventStep.
+    if (((EventStep<T> *) SIMULATOR currentEvent)->dt != dt) return 1;  // dequeue
     return population->finalize ();  // We depend on explicit code in the top-level finalize() to signal when $n goes to zero.
 }
 
@@ -858,6 +844,13 @@ void
 WrapperBase<T>::addToMembers ()
 {
     population->addToMembers ();
+}
+
+template<class T>
+T
+WrapperBase<T>::getDt ()
+{
+    return dt;
 }
 
 
@@ -1180,13 +1173,11 @@ template<class T>
 void
 Population<T>::resize (int n)
 {
-    EventStep<T> * event = container->getEvent ();
     for (int currentN = getN (); currentN < n; currentN++)
     {
         Part<T> * p = allocate ();
         add (p);
-        event->enqueue (p);
-        p->init ();
+        p->init ();  // Includes setPeriod(), that actually puts part onto simulator queue.
     }
 }
 
@@ -1204,7 +1195,6 @@ Population<T>::connect ()
     ConnectIterator<T> * outer = getIterators (false);  // If this version of connect() is called, then poll is known to be false.
     if (! outer) return;
 
-    EventStep<T> * event = container->getEvent ();
     Part<T> * c = allocate ();
     outer->setProbe (c);
     while (outer->next ())
@@ -1219,7 +1209,6 @@ Population<T>::connect ()
 #       endif
 
         add (c);
-        event->enqueue (c);
         c->init ();
 
         c = allocate ();
@@ -1445,19 +1434,14 @@ template<class T>
 void
 Simulator<T>::init (WrapperBase<T> * wrapper)
 {
-#   ifdef n2a_FP
-    EventStep<T> * event = new EventStep<T> (0, ((int64_t) 1 << -Event<int>::exponent) / 1000);  // 1ms step sizes, rather than 0.1ms like below. We are only promised (weakly) 10 bits below the decimal.
-#   else
-    EventStep<T> * event = new EventStep<T> ((T) 0, (T) 1e-4);
-#   endif
+    EventStep<T> * event = new EventStep<T> ((T) 0, wrapper->dt);
     currentEvent = event;
     periods.push_back (event);
 
     // Init cycle
-    event->enqueue (wrapper);  // no need for wrapper->enterSimulation()
     wrapper->init ();
     updatePopulations ();
-    event->requeue ();  // Only reinserts self if not empty.
+    event->requeue ();
 }
 
 template<class T>
@@ -1514,7 +1498,9 @@ template<class T>
 void
 Simulator<T>::enqueue (Part<T> * part, T dt)
 {
-    // find a matching event
+    // Find a matching event.
+    // Could use a binary search here, but it's not worth the complexity.
+    // In general, there will only be 1 or 2 periods.
     int index = 0;
     int count = periods.size ();
     for (; index < count; index++)
@@ -1529,11 +1515,13 @@ Simulator<T>::enqueue (Part<T> * part, T dt)
     }
     else
     {
+        // Maintains "periods" in ascending order.
         event = new EventStep<T> (currentEvent->t + dt, dt);
         periods.insert (periods.begin () + index, event);
         queueEvent.push (event);
     }
     event->enqueue (part);
+    part->ref ();  // The queue counts as a user of the part.
 }
 
 template<class T>
@@ -1758,11 +1746,6 @@ template<class T> int Event<T>::exponent;
 #endif
 
 template<class T>
-Event<T>::~Event ()
-{
-}
-
-template<class T>
 bool
 Event<T>::isStep () const
 {
@@ -1777,7 +1760,7 @@ EventStep<T>::EventStep (T t, T dt)
 :   dt (dt)
 {
     this->t = t;
-    visitors.push_back (new VisitorStep<T> (this));
+    visitors.push_back (new VisitorStep<T> ());
 }
 
 template<class T>
@@ -1805,12 +1788,35 @@ EventStep<T>::run ()
     });
     visit ([](Visitor<T> * visitor)
     {
-        if (! visitor->part->finalize ())
+        VisitorStep<T> * v = (VisitorStep<T> *) visitor;
+        Part<T> * p = visitor->part;  // for convenience
+
+        int dispose = p->finalize ();
+        if (dispose > 0)  // Remove from queue.
         {
-            VisitorStep<T> * v = (VisitorStep<T> *) visitor;
-            Part<T> * p = visitor->part;  // for convenience
-            if (p->next) p->next->setPrevious (v->previous);
-            v->previous->next = p->next;
+            // We must manage v->index carefully so we don't call finalize() on any parts added
+            // during this pass, for example by $type split. (They should only have init() called.)
+            int last = v->queue.size () - 1;
+            if (v->index < last)
+            {
+                v->queue[v->index] = v->queue[last];
+                if (v->last == last)
+                {
+                    // The next current element is one that existed before any adds done by finalize().
+                    // It still needs to be processed.
+                    v->index--;  // Repeat processing at current index. This decrement neutralizes the increment in the for loop of EventStep::run().
+                    v->last--;
+                }
+                // else v->last < last, which means there are some newly-added parts which should not be finalized.
+                // In this case, a new part gets moved into v->queue[v->index], and we do not want to process it.
+                // v->index remains untouched, so it increments past this element.
+                // Notice that we never have v->last > last.
+            }
+            v->queue.pop_back ();
+            p->deref ();  // Balance ref added when part was enqueued.
+        }
+        if (dispose > 1)  // Also remove from population.
+        {
             p->remove ();
         }
     });
@@ -1831,14 +1837,14 @@ template<class T>
 void
 EventStep<T>::requeue ()
 {
-    if (visitors[0]->queue.next)  // still have instances, so re-queue event
+    if (visitors[0]->queue.empty ())  // Our list of instances is empty, so die.
+    {
+        SIMULATOR removePeriod (this);
+    }
+    else  // Still have instances, so re-queue event.
     {
         this->t += dt;
         SIMULATOR queueEvent.push (this);
-    }
-    else  // our list of instances is empty, so die
-    {
-        SIMULATOR removePeriod (this);
     }
 }
 
@@ -1846,7 +1852,7 @@ template<class T>
 void
 EventStep<T>::enqueue (Part<T> * part)
 {
-    visitors[0]->enqueue (part);
+    visitors[0]->queue.push_back (part);
 }
 
 
@@ -1873,7 +1879,7 @@ template<class T>
 void
 EventSpikeSingle<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 {
-    Visitor<T> v (this, target);
+    Visitor<T> v (target);
     f (&v);
 }
 
@@ -1958,9 +1964,8 @@ EventSpikeMultiLatch<T>::run ()
 // class Visitor -------------------------------------------------------------
 
 template<class T>
-Visitor<T>::Visitor (Event<T> * event, Part<T> * part)
-:   event (event),
-    part (part)
+Visitor<T>::Visitor (Part<T> * part)
+:   part (part)
 {
 }
 
@@ -1975,49 +1980,23 @@ Visitor<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 // class VisitorStep ---------------------------------------------------------
 
 template<class T>
-VisitorStep<T>::VisitorStep (EventStep<T> * event)
-:   Visitor<T> (event)
-{
-    queue.next = 0;
-    previous = 0;
-}
-
-template<class T>
 VisitorStep<T>::~VisitorStep ()
 {
     // Flush any lingering instances. These get moved to their respective population dead list.
     // Note that singletons don't get moved to a dead list because they are a direct member of their population object.
-    Part<T> * p = queue.next;
-    while (p)
-    {
-        Part<T> * next = p->next;
-        p->remove ();
-        p = next;
-    }
+    for (auto p : queue) p->remove ();
 }
 
 template<class T>
 void
 VisitorStep<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 {
-    previous = &queue;
-    while (previous->next)
+    last = queue.size () - 1;
+    for (index = 0; index <= last; index++)  // Notice that queue can shrink or grow due to finalize().
     {
-        this->part = previous->next;
+        this->part = queue[index];
         f (this);
-        if (previous->next == this->part) previous = this->part;  // Normal advance through list. Check is necessary in case part dequeued while f() was running.
     }
-}
-
-template<class T>
-void
-VisitorStep<T>::enqueue (Part<T> * newPart)
-{
-    newPart->setVisitor (this);
-    if (queue.next) queue.next->setPrevious (newPart);
-    newPart->setPrevious (&queue);
-    newPart->next = queue.next;
-    queue.next = newPart;
 }
 
 
@@ -2025,7 +2004,7 @@ VisitorStep<T>::enqueue (Part<T> * newPart)
 
 template<class T>
 VisitorSpikeMulti<T>::VisitorSpikeMulti (EventSpikeMulti<T> * event)
-:   Visitor<T> (event)
+:   event (event)
 {
 }
 
@@ -2033,8 +2012,7 @@ template<class T>
 void
 VisitorSpikeMulti<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 {
-    EventSpikeMulti<T> * e = (EventSpikeMulti<T> *) this->event;
-    for (auto target : *e->targets)
+    for (auto target : *event->targets)
     {
         this->part = target;
         f (this);

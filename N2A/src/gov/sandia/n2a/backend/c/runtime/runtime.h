@@ -232,17 +232,16 @@ template<class T> class DelayBuffer;
     refcounts on parts that we directly reference.
 **/
 template<class T>
-class SHARED Simulatable
+struct SHARED Simulatable
 {
-public:
-    virtual ~Simulatable ();
+    virtual ~Simulatable () = default;
     virtual void clear ();  ///< Zeroes the same member variables zeroed by the ctor, in order to recycle a part.
 
     // Interface for computing simulation steps
     virtual void init               ();  ///< Initialize all variables. A part must increment $n of its population, enqueue each of its contained populations and call their init(). A population must create its instances, enqueue them and call init(). If this is a connection with $min or $max, increment count in respective target compartments.
     virtual void integrate          ();
     virtual void update             ();
-    virtual bool finalize           ();  ///< A population may init() and add new parts to simulator. @return true if this part is still live, false if it should be removed from simulator queue.
+    virtual int  finalize           ();  ///< A population may init() and add new parts to simulator. @return 0 if this part is still live; 1 if it should be removed from simulator queue; 2 if it should also be removed from population.
     virtual void updateDerivative   ();  ///< Same as update(), but restricted to computing derivatives.
     virtual void finalizeDerivative ();  ///< Same as finalize(), but restricted to computing derivatives.
 
@@ -261,23 +260,13 @@ public:
 };
 
 template<class T>
-class SHARED Part : public Simulatable<T>
+struct SHARED Part : public Simulatable<T>
 {
-public:
-    Part<T> *        next;      ///< All parts exist on one primary linked list, either in the simulator or the population's dead list.
-    Part<T> *        previous;  ///< This back-link is only maintained on an event list.
-    VisitorStep<T> * visitor;
-
-    // Simulation queue
-    virtual void           setPrevious (Part<T> * previous);
-    virtual void           setVisitor  (VisitorStep<T> * visitor);  ///< Informs this part of both its associated event and the specific thread.
-    virtual EventStep<T> * getEvent    ();  ///< @return the event this part is associated with. Provides t and dt.
-    virtual void           dequeue     ();  ///< Handles all direct requests (oustide of sim loop).
-    virtual void           setPeriod   (T dt);
-
     // Lifespan management
-    virtual void die    (); ///< Set $live=0 (in some form) and decrement $n of our population. If accountable connection, decrement connection counts in target compartments. Reduces refcount on parts we directly access, to indicate that they may be re-used.
+    virtual void die    (); ///< Set $live=0 (in some form). If accountable connection, decrement connection counts in target compartments. Reduces refcount on parts we directly access, to indicate that they may be re-used.
     virtual void remove (); ///< Asks our population to put us on its dead list.
+    virtual void ref    (); ///< Increment refcount, if there is one. Called by Simulator when part is enqueued. This keeps a part from being reused until it is off all queues.
+    virtual void deref  (); ///< Decrement refcount, if there is one. Called by Simulator (visitor) when part is dequeued.
     virtual bool isFree (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
 
     // Connection-specific accessors
@@ -291,6 +280,7 @@ public:
     // Accessors for $variables
     virtual T    getLive ();                         ///< @return 1 if we are in normal simulation. 0 if we have died. Default is 1.
     virtual T    getP    ();                         ///< Default is 1 (always create). exponent=-MSB
+    virtual T    getDt   ();                         ///< Get $t'. Walks up containment hierarchy, starting with current part, until it finds a stored value.
     virtual void getXYZ  (MatrixFixed<T,3,1> & xyz); ///< Default is [0;0;0].
 
     // Events
@@ -303,15 +293,17 @@ public:
 template<class T> SHARED void removeMonitor (std::vector<Part<T> *> & partList, Part<T> * part);
 
 template<class T>
-class SHARED WrapperBase : public Part<T>
+struct SHARED WrapperBase : public Part<T>
 {
-public:
     Population<T> * population;  // The top-level population can never be a connection, only a compartment.
+    T               dt;          // $t'. Never accessed directly by generated code, other than one update by first child.
+
+    WrapperBase ();
 
     virtual void init               ();
     virtual void integrate          ();
     virtual void update             ();
-    virtual bool finalize           ();
+    virtual int  finalize           ();
     virtual void updateDerivative   ();
     virtual void finalizeDerivative ();
 
@@ -321,12 +313,13 @@ public:
     virtual void multiplyAddToStack (T scalar);
     virtual void multiply           (T scalar);
     virtual void addToMembers       ();
+
+    virtual T    getDt              ();
 };
 
 template<class T>
-class SHARED ConnectIterator
+struct SHARED ConnectIterator
 {
-public:
     virtual ~ConnectIterator () = default;
     virtual bool setProbe (Part<T> * probe) = 0; ///< Sets up the next connection instance to have its endpoints configured. Return value is used primarily by ConnectPopulation to implement $max.
     virtual bool next     () = 0;                ///< Fills probe with next permutation. Returns false if no more permutations are available.
@@ -338,9 +331,8 @@ public:
     When nested, this class is responsible for destructing its inner iterators.
 **/
 template<class T>
-class SHARED ConnectPopulation : public ConnectIterator<T>
+struct SHARED ConnectPopulation : public ConnectIterator<T>
 {
-public:
     int                      index;      ///< of endpoint, for use with accessors
     ConnectPopulation<T> *   permute;
     bool                     contained;  ///< Another iterator holds us in its permute reference.
@@ -389,9 +381,8 @@ public:
     trigger linkage. Our dtor and reset() contain code that does trigger linkage.
 **/
 template<class T>
-class SHARED ConnectPopulationNN : public ConnectPopulation<T>
+struct SHARED ConnectPopulationNN : public ConnectPopulation<T>
 {
-public:
     ConnectPopulationNN (int index, bool poll);
     virtual ~ConnectPopulationNN ();
 
@@ -399,9 +390,8 @@ public:
 };
 
 template<class T>
-class SHARED ConnectMatrix : public ConnectIterator<T>
+struct SHARED ConnectMatrix : public ConnectIterator<T>
 {
-public:
     ConnectPopulation<T> * rows;
     ConnectPopulation<T> * cols;
     int                    rowIndex;
@@ -431,13 +421,12 @@ public:
     down, the main thread can call ::releaseMemory() to clean up all the pools.
 **/
 template<class T>
-class SHARED Population : public Simulatable<T>
+struct SHARED Population : public Simulatable<T>
 {
-public:
     Part<T> * container;
 
     // The code generator will create fields like the following in subclasses:
-    //static Part<T> *        dead;        ///< Head of linked list of available parts, using Part::next.
+    //static vector<Part<T>*> dead;        ///< List of available parts.
     //static vector<Part<T>*> memory;      ///< Allocated blocks of memory for part instances.
     //static mutex            mutexMemory; ///< Controls access to "dead" and "memory".
     //static void releaseMemory ();  ///< Free all blocks of allocated memory.
@@ -447,8 +436,8 @@ public:
     // Instance management
     virtual Part<T> * allocate ();               ///< Obtains an instance of the part. This comes from the dead list. If no dead instance is free, allocates more memory and adds any leftover instances to the dead list.
     virtual void      release  (Part<T> * part); ///< Returns part to the dead list.
-    virtual void      add      (Part<T> * part); ///< Makes the given instance an active member of the population.
-    virtual void      remove   (Part<T> * part); ///< Moves part to dead list. Derived classes may update other accounting for the part.
+    virtual void      add      (Part<T> * part); ///< Makes the given instance an active member of the population. Increments $n.
+    virtual void      remove   (Part<T> * part); ///< Moves part to dead list and decrements $n. Derived classes may update other accounting for the part.
     virtual void      resize   (int n);          ///< Adds or kills instances until $n matches given n.
     virtual int       getN     ();               ///< Subroutine for resize(). Returns current number of live instances (true n). Not exactly the same as an accessor for $n, because it does not give the requested size, only actual size.
 
@@ -462,15 +451,14 @@ public:
 };
 
 template<class T>
-class SHARED Event
+struct SHARED Event
 {
-public:
     T t;
 #   ifdef n2a_FP
     static int exponent;  ///< for time values
 #   endif
 
-    virtual ~Event ();
+    virtual ~Event () = default;
     virtual bool isStep () const;  ///< Always returns false, except for instances of EventStep. Used as a poor-man's RTTI in the class More.
 
     virtual void run () = 0;  ///< Does all the work of a simulation cycle. This may be adapted to the specifics of the event type.
@@ -478,9 +466,8 @@ public:
 };
 
 template<class T>
-class More
+struct More
 {
-public:
     /**
         Returns true if a sorts before b. However, priority_queue.top() returns the last
         element in sort order. Thus we need to sort so earlier times come last.
@@ -517,12 +504,11 @@ class priorityQueue : public std::priority_queue<Event<T> *,std::vector<Event<T>
 **/
 template<class T>
 #ifdef n2a_TLS
-class Simulator   // TLS is incompatible with shared runtime library. Can only be used within a fully self-contained model DLL.
+struct Simulator   // TLS is incompatible with shared runtime library. Can only be used within a fully self-contained model DLL.
 #else
-class SHARED Simulator
+struct SHARED Simulator
 #endif
 {
-public:
     priorityQueue<T>                             queueEvent;    ///< Pending events in time order.
     std::vector<std::pair<Population<T> *, int>> queueResize;   ///< Populations that need to change $n after the current cycle completes.
     std::queue<Population<T> *>                  queueConnect;  ///< Connection populations that want to construct or recheck their instances after all populations are resized in current cycle.
@@ -567,24 +553,21 @@ template<class T> thread_local Simulator<T> * Simulator<T>::instance;
 #endif
 
 template<class T>
-class SHARED Integrator
+struct SHARED Integrator
 {
-public:
     // For now, we don't need a virtual dtor, because this class contains no data.
     virtual void run (Event<T> & event) = 0;
 };
 
 template<class T>
-class SHARED Euler : public Integrator<T>
+struct SHARED Euler : public Integrator<T>
 {
-public:
     virtual void run (Event<T> & event);
 };
 
 template<class T>
-class SHARED RungeKutta : public Integrator<T>
+struct SHARED RungeKutta : public Integrator<T>
 {
-public:
     virtual void run (Event<T> & event);
 };
 
@@ -600,9 +583,8 @@ public:
     then this class is responsible for disposing any parts that are still alive.
 **/
 template<class T>
-class SHARED EventStep : public Event<T>
+struct SHARED EventStep : public Event<T>
 {
-public:
     T dt;
     std::vector<VisitorStep<T> *> visitors;
 
@@ -620,16 +602,14 @@ public:
     Lightweight class representing one-time events, of which there may be a large quantity.
 **/
 template<class T>
-class SHARED EventSpike : public Event<T>
+struct SHARED EventSpike : public Event<T>
 {
-public:
     int latch;
 };
 
 template<class T>
-class SHARED EventSpikeSingle : public EventSpike<T>
+struct SHARED EventSpikeSingle : public EventSpike<T>
 {
-public:
     Part<T> * target;
 
     virtual void run   ();
@@ -637,16 +617,14 @@ public:
 };
 
 template<class T>
-class SHARED EventSpikeSingleLatch : public EventSpikeSingle<T>
+struct SHARED EventSpikeSingleLatch : public EventSpikeSingle<T>
 {
-public:
     virtual void run ();
 };
 
 template<class T>
-class SHARED EventSpikeMulti : public EventSpike<T>
+struct SHARED EventSpikeMulti : public EventSpike<T>
 {
-public:
     std::vector<Part<T> *> * targets;
 
     virtual void run   ();
@@ -655,9 +633,8 @@ public:
 };
 
 template<class T>
-class SHARED EventSpikeMultiLatch : public EventSpikeMulti<T>
+struct SHARED EventSpikeMultiLatch : public EventSpikeMulti<T>
 {
-public:
     virtual void run ();
 };
 
@@ -667,13 +644,11 @@ public:
     only needed when actually iterating over parts.
 **/
 template<class T>
-class SHARED Visitor
+struct SHARED Visitor
 {
-public:
-    Event<T> * event;
-    Part<T> *  part;  ///< Current instance being processed.
+    Part<T> * part;  ///< Current instance being processed.
 
-    Visitor (Event<T> * event, Part<T> * part = 0);
+    Visitor (Part<T> * part = 0);
 
     virtual void visit (const std::function<void (Visitor<T> * visitor)> & f); ///< Applies function to each instance on our local queue. Steps "part" through the list and calls f(this) each time.
 };
@@ -682,36 +657,60 @@ public:
     Manages the subset of EventStep's load of instances assigned to a specific thread.
 **/
 template<class T>
-class SHARED VisitorStep : public Visitor<T>
+struct SHARED VisitorStep : public Visitor<T>
 {
-public:
-    Part<T>   queue;    ///< The head of a singly-linked list. queue itself never executes, rather, its "next" field points to the first active part.
-    Part<T> * previous; ///< Points to the part immediately ahead of the current part.
+    std::vector<Part<T> *> queue;  ///< The list of parts to simulate.
+    int                    index;  ///< Of element in queue currently being simulated.
+    int                    last;   ///< Element of queue at which we should stop iterating. Accommodates new parts added during finalize() pass.
 
-    VisitorStep (EventStep<T> * event);
     ~VisitorStep ();  ///< Free any parts still lingering in queue.
 
-    virtual void visit   (const std::function<void (Visitor<T> * visitor)> & f);
-    virtual void enqueue (Part<T> * newPart);  ///< Puts newPart on our local queue. Called by EventStep::enqueue(), which balances load across all threads.
+    virtual void visit (const std::function<void (Visitor<T> * visitor)> & f);
 };
 
 template<class T>
-class SHARED VisitorSpikeMulti : public Visitor<T>
+struct SHARED VisitorSpikeMulti : public Visitor<T>
 {
-public:
+    EventSpikeMulti<T> * event;
+
     VisitorSpikeMulti (EventSpikeMulti<T> * event);
 
     virtual void visit (const std::function<void (Visitor<T> * visitor)> & f);
 };
 
-// TODO: This implementation using std::map is quite inefficient in both memory and time.
-// If we can assume constant delay and constant dt, then a fixed-size ring buffer would be best.
-// Maybe we can have two implementations: one general and one efficient. The code generator
-// could choose between them based on whether the above conditions are met.
-template<class T>
-class SHARED DelayBuffer
+/**
+    For implementing delay().
+    Requires a known maximum delay depth. The parameter D should be max delay plus one.
+    Requires a known initial value.
+**/
+template<class T, int D>
+struct RingBuffer
 {
-public:
+    T buffer[D];
+
+    RingBuffer (T initialValue = (T) 0)
+    {
+        for (int i = 0; i < D; i++) buffer[i] = initialValue;
+    }
+
+    T step (T now, T dt, T delay, T futureValue)
+    {
+        int t = (int) round (now   / dt);
+        int d = (int) round (delay / dt);
+        T result = buffer[t % D];
+        buffer[(t + d) % D] = futureValue;
+        return result;
+    }
+};
+
+/**
+    For implementing delay() in more general situations where requirements of RingBuffer
+    can't be satisfied.
+    This implementation using std::map is quite inefficient in both memory and time.
+**/
+template<class T>
+struct SHARED DelayBuffer
+{
     T             value;
     std::map<T,T> buffer;
 
