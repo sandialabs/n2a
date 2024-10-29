@@ -3530,7 +3530,7 @@ public class JobC extends Thread
             {
                 result.append ("  if (n == 0)\n");
                 result.append ("  {\n");
-                result.append ("    flags |= (" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.inactive) + ";\n");
+                result.append ("    " + bed.setFlag ("flags", true, bed.inactive) + ";\n");
                 result.append ("    ((" + prefix (s.container) + " *) container)->checkInactive ();\n");
                 result.append ("  }\n");
             }
@@ -3543,10 +3543,10 @@ public class JobC extends Thread
         {
             result.append ("void " + ns + "clearNew ()\n");
             result.append ("{\n");
-            result.append ("  flags &= ~((" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.clearNew) + ");\n");  // Reset our clearNew flag
+            result.append ("  " + bed.clearFlag ("flags", true, bed.clearNew) + ";\n");  // Reset our clearNew flag
             if (bed.singleton)
             {
-                result.append ("  instance.flags &= ~((" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ");\n");
+                result.append ("  " + bed.clearFlag ("instance.flags", false, bed.newborn) + ";\n");
             }
             else
             {
@@ -3554,7 +3554,7 @@ public class JobC extends Thread
                 result.append ("  for (int i = firstborn; i < count; i++)\n");
                 result.append ("  {\n");
                 result.append ("    " + ps + " * p = instances[i];\n");
-                result.append ("    if (p) p->flags &= ~((" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ");\n");
+                result.append ("    if (p) " + bed.clearFlag ("p->flags", false, bed.newborn) + ";\n");
                 result.append ("  }\n");
                 result.append ("  firstborn = count;\n");
             }
@@ -3963,7 +3963,7 @@ public class JobC extends Thread
                 // tag part as dead
                 if (bed.liveFlag >= 0)  // $live is stored in this part
                 {
-                    result.append ("  flags &= ~((" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ");\n");
+                    result.append ("  " + bed.clearFlag ("flags", false, bed.liveFlag) + ";\n");
                 }
 
                 // instance counting
@@ -4065,7 +4065,7 @@ public class JobC extends Thread
                     // the actual equations will have $live factored out by EquationSet.simplify() below.
                     if (bed.newborn >= 0)  // Must work around the fact that "flags" has already been initialized by Population::add().
                     {
-                        result.append ("  flags |= (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ";\n");
+                        result.append ("  " + bed.setFlag ("flags", false, bed.liveFlag) + ";\n");
                     }
                     else  // "flags" has not yet been initialized
                     {
@@ -4191,7 +4191,7 @@ public class JobC extends Thread
             // Don't accumulate integrated values when part is dead, as this could result in a numerical error.
             if (bed.liveFlag >= 0)  // $live is stored in this part
             {
-                result.append ("  if (! (flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ")) return;\n");
+                result.append ("  if (! (" + bed.getFlag ("flags", false, bed.liveFlag) + ")) return;\n");
             }
             // Prevent part from executing on the wrong step event.
             if (bed.dt.hasAttribute ("externalWrite"))
@@ -4290,7 +4290,7 @@ public class JobC extends Thread
             // Prevent a dead part from writing changes to other parts.
             if (bed.liveFlag >= 0)
             {
-                result.append ("  if (! (flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ")) return;\n");
+                result.append ("  if (! (" + bed.getFlag ("flags", false, bed.liveFlag) + ")) return;\n");
             }
             // Prevent part from executing on the wrong step event.
             if (bed.dt.hasAttribute ("externalWrite"))
@@ -4341,7 +4341,7 @@ public class JobC extends Thread
             // Among other things, this prevents us from calling die() twice.
             if (bed.liveFlag >= 0)  // $live is stored in this part
             {
-                result.append ("  if (! (flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ")) return 2;\n");
+                result.append ("  if (! (" + bed.getFlag ("flags", false, bed.liveFlag) + ")) return 2;\n");
             }
             if (bed.dt.hasAttribute ("externalWrite"))  // This attribute can also indicate local writes to $t'. It is set by BackendDataC.analyzeDt().
             {
@@ -4940,7 +4940,7 @@ public class JobC extends Thread
         {
             result.append ("bool " + ns + "getNewborn ()\n");
             result.append ("{\n");
-            result.append ("  return flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
+            result.append ("  return " + bed.getFlag ("flags", false, bed.newborn) + ";\n");
             result.append ("}\n");
             result.append ("\n");
         }
@@ -4954,7 +4954,7 @@ public class JobC extends Thread
             for (EquationSet e : s.parts)
             {
                 BackendDataC ebed = (BackendDataC) e.backendData;
-                result.append ("  if (! (" + mangle (e.name) + ".flags & (" + ebed.globalFlagType + ") 0x1" + RendererC.printShift (ebed.inactive) + ")) return;\n");
+                result.append ("  if (! (" + bed.getFlag (mangle (e.name) + ".flags", true, ebed.inactive) + ")) return;\n");
             }
             // Remove inactive instance.
             result.append ("  die ();\n");
@@ -4964,7 +4964,7 @@ public class JobC extends Thread
             {
                 result.append ("  if (container->" + mangle (s.name) + ".n == 0)\n");
                 result.append ("  {\n");
-                result.append ("    container->" + mangle (s.name) + ".flags |= (" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.inactive) + ";\n");
+                result.append ("    " + bed.setFlag ("container->" + mangle (s.name) + ".flags", true, bed.inactive) + ";\n");
                 result.append ("    container->checkInactive ();\n");
                 result.append ("  }\n");
             }
@@ -6346,8 +6346,8 @@ public class JobC extends Thread
             }
             else  // not "constant" or "accessor", so must be direct access
             {
-                if (logical) return "(" + containers + "flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ")";
-                else return "((" + containers + "flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ") ? 1 : 0)";
+                if (logical) return "(" + bed.getFlag (containers + "flags", false, bed.liveFlag) + ")";
+                else return "((" + bed.getFlag (containers + "flags", false, bed.liveFlag) + ") ? 1 : 0)";
             }
         }
         else if (r.variable.hasAttribute ("accessor"))
@@ -6540,7 +6540,7 @@ public class JobC extends Thread
                     result.append (prefix + "result->instances = new vector<Part<" + T + "> *>;\n");
                     result.append (prefix + "result->deleteInstances = true;\n");
                 }
-                result.append (prefix + "bool newborn = " + pointer + "instance.flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
+                result.append (prefix + "bool newborn = " + bed.getFlag (pointer + "instance.flags", false, bed.newborn) + ";\n");
                 result.append (prefix + "if (result->firstborn == INT_MAX  &&  newborn) result->firstborn = result->instances->size ();\n");
                 result.append (prefix + "result->instances->push_back (& " + pointer + "instance);\n");
             }
@@ -6563,9 +6563,9 @@ public class JobC extends Thread
             // Schedule the population to have its newborn flags cleared.
             // We assume that any newborn flags along the path to this population are either unimportant
             // or will get cleared elsewhere.
-            result.append (prefix + "if (! (" + pointer + "flags & (" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.clearNew) + "))\n");
+            result.append (prefix + "if (! (" + bed.getFlag (pointer + "flags", true, bed.clearNew) + "))\n");
             result.append (prefix + "{\n");
-            result.append (prefix + "  " + pointer + "flags |= (" + bed.globalFlagType + ") 0x1" + RendererC.printShift (bed.clearNew) + ";\n");
+            result.append (prefix + "  " + bed.setFlag (pointer + "flags", true, bed.clearNew) + ";\n");
             pointer = stripDereference (pointer);
             if (pointer.isEmpty ()) pointer = "this";
             else                    pointer = "& " + pointer;
@@ -6579,7 +6579,7 @@ public class JobC extends Thread
                 result.append (prefix + "result->instances = new vector<Part<" + T + "> *>;\n");
                 result.append (prefix + "result->deleteInstances = true;\n");
             }
-            result.append (prefix + "bool newborn = " + pointer + "flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
+            result.append (prefix + "bool newborn = " + bed.getFlag (pointer + "flags", false, bed.newborn) + ";\n");
             result.append (prefix + "if (result->firstborn == INT_MAX  &&  newborn) result->firstborn = result->instances->size ();\n");
             result.append (prefix + "result->instances->push_back (" + stripDereference (pointer) + ");\n");
         }
@@ -6640,7 +6640,7 @@ public class JobC extends Thread
         {
             if (bed.singleton)
             {
-                result.append (prefix + "if (" + pointer + "instance.flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ") shouldConnect = true;\n");
+                result.append (prefix + "if (" + bed.getFlag (pointer + "instance.flags", false, bed.newborn) + ") shouldConnect = true;\n");
             }
             else
             {
@@ -6649,7 +6649,7 @@ public class JobC extends Thread
         }
         else
         {
-            result.append (prefix + "if (" + pointer + "flags & (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ") shouldConnect = true;\n");
+            result.append (prefix + "if (" + bed.getFlag (pointer + "flags", false, bed.newborn) + ") shouldConnect = true;\n");
         }
     }
 }

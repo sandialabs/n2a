@@ -338,8 +338,7 @@ public class RendererC extends Renderer
         {
             Event e = (Event) op;
             // The cast to bool gets rid of the specific numeric value from flags.
-            // If used in a numeric expression, it should convert to either 1 or 0.
-            result.append ("((bool) (flags & (" + bed.localFlagType + ") 0x1 << " + e.eventType.valueIndex + "))");
+            result.append ("((" + bed.getFlag ("flags", false, e.eventType.valueIndex) + ") ? 1 : 0)");
             return true;
         }
         if (op instanceof Exp)

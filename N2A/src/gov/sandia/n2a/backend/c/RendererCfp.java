@@ -457,7 +457,7 @@ public class RendererCfp extends RendererC
             int shift = -e.eventType.valueIndex - e.exponentNext;
 
             if (shift != 0) result.append ("(");
-            result.append ("(flags & (" + bed.localFlagType + ") 0x1 << " + e.eventType.valueIndex + ")");
+            result.append ("((" + bed.getFlag ("flags", false, e.eventType.valueIndex) + ") ? 1 : 0)");
             if (shift != 0)
             {
                 result.append (printShift (shift));
