@@ -263,11 +263,13 @@ template<class T>
 struct SHARED Part : public Simulatable<T>
 {
     // Lifespan management
-    virtual void die    (); ///< Set $live=0 (in some form). If accountable connection, decrement connection counts in target compartments. Reduces refcount on parts we directly access, to indicate that they may be re-used.
-    virtual void remove (); ///< Asks our population to put us on its dead list.
-    virtual void ref    (); ///< Increment refcount, if there is one. Called by Simulator when part is enqueued. This keeps a part from being reused until it is off all queues.
-    virtual void deref  (); ///< Decrement refcount, if there is one. Called by Simulator (visitor) when part is dequeued.
-    virtual bool isFree (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
+    virtual void die            (); ///< Set $live=0 (in some form). If accountable connection, decrement connection counts in target compartments. Reduces refcount on parts we directly access, to indicate that they may be re-used.
+    virtual void remove         (); ///< Asks our population to put us on its dead list.
+    virtual void ref            (); ///< Increment refcount, if there is one. Called by Simulator when part is enqueued. This keeps a part from being reused until it is off all queues.
+    virtual void deref          (); ///< Decrement refcount, if there is one. Called by Simulator (visitor) when part is dequeued.
+    virtual bool isFree         (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
+    virtual void clearDuplicate (); ///< Clears the "duplicate" flag, if it exists.
+    virtual int  flush          (); ///< Check if this part is dead, dequeued or duplicate. Return values have same meaning as finalize().
 
     // Connection-specific accessors
     virtual void      setPart    (int i, Part<T> * part);           ///< Assign the instance of population i referenced by this connection.
@@ -297,10 +299,13 @@ struct SHARED WrapperBase : public Part<T>
 {
     Population<T> * population;  // The top-level population can never be a connection, only a compartment.
     T               dt;          // $t'. Never accessed directly by generated code, other than one update by first child.
+    bool            duplicate;
 
     WrapperBase ();
 
     virtual void init               ();
+    virtual void clearDuplicate     ();
+    virtual int  flush              ();
     virtual void integrate          ();
     virtual void update             ();
     virtual int  finalize           ();
@@ -536,6 +541,7 @@ struct SHARED Simulator
     void updatePopulations ();
 
     void enqueue      (Part<T> * part, T dt); ///< Places part on event with period dt. If the event already exists, then the actual time till the part next executes may be less than dt, but thereafter will be exactly dt. Caller is responsible to call dequeue() or enterSimulation().
+    void linger       (T dt);                 ///< Does bookkeeping for lazy removal from period dt. When enough parts have been dequeued, does a pass to flush them.
     void removePeriod (EventStep<T> * event);
 
     // callbacks
@@ -585,8 +591,11 @@ struct SHARED RungeKutta : public Integrator<T>
 template<class T>
 struct SHARED EventStep : public Event<T>
 {
-    T dt;
+    T                             dt;
     std::vector<VisitorStep<T> *> visitors;
+    uint32_t                      countLinger;
+
+    static uint32_t threshold;  ///< Maximum value of countDequeue before we do a preemptive flush.
 
     EventStep (T t, T dt);
     virtual ~EventStep ();  ///< Frees any parts that have not yet died.
@@ -594,6 +603,7 @@ struct SHARED EventStep : public Event<T>
 
     virtual void  run     ();
     virtual void  visit   (const std::function<void (Visitor<T> * visitor)> & f);
+    void          flush   ();  ///< Subroutine of run(). Removes dead, dequeued or duplicate parts from queue.
     void          requeue ();  ///< Subroutine of run(). If our load of instances is non-empty, then get back in the simulation queue.
     void          enqueue (Part<T> * part);
 };

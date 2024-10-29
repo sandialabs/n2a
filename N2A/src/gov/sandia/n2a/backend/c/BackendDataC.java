@@ -66,8 +66,8 @@ public class BackendDataC
     public Variable type;
     public Variable xyz;
 
-    public boolean copyDt;         // Grab $t' from container during init.
-    public boolean dtCanChange;    // $t' can change between integration cycles. This is one precondition for lastT.
+    public boolean copyDt;         // Must copy $t' from container during init. The local value could then vary during simulation, or it could be "initOnly".
+    public boolean dtCanChange;    // $t' can change between integration cycles, such that the current value does not equal time since last integration. This is one precondition for lastT.
     public boolean lastT;          // Remember last integration time.
     public int     duplicate = -1; // Index of flag used to detect duplicate entries in queue.
 
@@ -92,6 +92,7 @@ public class BackendDataC
     public boolean needLocalClear;
     public boolean needLocalDie;
     public boolean needLocalInit;
+    public boolean needLocalFlush;
     public boolean needLocalIntegrate;
     public boolean needLocalUpdate;
     public boolean needLocalFinalize;
@@ -198,10 +199,7 @@ public class BackendDataC
     public void analyzeDt (EquationSet s)
     {
         dt = s.find (new Variable ("$t", 1));  // This should always exist.
-        // Usually at this point, the only attribute that might be set on $t' is "constant".
-        // In particular, it usually doesn't have "initOnly" or "accessor".
-        // However, nothing specific prevents those attributes from being set.
-        if (dt.equations.isEmpty ()  &&  ! dt.hasAttribute ("externalWrite"))  // Pure read. Per note above, also not "constant".
+        if (dt.equations.isEmpty ()  &&  ! dt.hasAttribute ("externalWrite"))  // Pure read. Since equations is empty, also not "constant".
         {
             // Strictly speaking, this should be "initOnly". $t' acquires its value from container,
             // then retains that value for the rest of the sim. By construction, container $t' is not constant.
@@ -226,6 +224,10 @@ public class BackendDataC
         }
         else if (! dt.hasAny ("constant", "initOnly"))  // $t' gets written to in some form, beyond the init cycle.
         {
+            // The case we're trying to trap is where the current value of $t' does not equal the amount of time
+            // since last integration.
+            // $t' could also change if we have a variable-step integrator. In that case, $t' would have to come from
+            // the integrator rather than a stored or calculated value.
             dtCanChange = true;
         }
 
@@ -552,7 +554,7 @@ public class BackendDataC
         int flagCount = eventTargets.size ();
         if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"})) liveFlag = flagCount++;
         if (trackInstances  &&  s.connected) newborn = flagCount++;
-        if (dt.hasAttribute ("externalWrite")) duplicate = flagCount++;  // analyzeDt() adds "externalWrite", even if $t' is only modified locally.
+        if (eventTargets.size () > 0  &&  dtCanChange) duplicate = flagCount++;
         if      (flagCount == 0 ) localFlagType = "";
         else if (flagCount <= 8 ) localFlagType = "uint8_t";
         else if (flagCount <= 16) localFlagType = "uint16_t";
@@ -626,6 +628,9 @@ public class BackendDataC
                                       || localReference.size () > 0
                                       || eventTargets.size () > 0
                                       || s.parts.size () > 0;
+        needLocalFlush              =    eventTargets.size () > 0  &&  (canDie  ||  dtCanChange)  // The implication is that it can die or $t' change during an event (off main EventStep), but we don't actually test that specifically.
+                                      || connectionCanBeInactive
+                                      || canResize;
         needLocalUpdate             = localUpdate.size () > 0;
         needLocalFinalize           = localBufferedExternal.size () > 0  ||  type != null  ||  canDie;
         needLocalUpdateDerivative   = ! Euler  &&  localDerivativeUpdate.size () > 0;
@@ -645,6 +650,8 @@ public class BackendDataC
             if (pbed.needGlobalPreserve)           needLocalPreserve           = true;
             if (pbed.needGlobalDerivative)         needLocalDerivative         = true;
         }
+
+        lastT = needLocalIntegrate  &&  (dtCanChange  ||  eventTargets.size () > 0);
     }
 
     /**

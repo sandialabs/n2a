@@ -1257,8 +1257,6 @@ public class JobC extends Thread
         BackendDataC bed = (BackendDataC) s.backendData;
         bed.analyze (s);
 
-        bed.lastT = bed.needLocalIntegrate  &&  (bed.dtCanChange  ||  bed.eventTargets.size () > 0);
-
         Transformer t = new Transformer ()
         {
             public Operator transform (Operator op)
@@ -2635,6 +2633,14 @@ public class JobC extends Thread
         {
             result.append ("  virtual void init ();\n");
         }
+        if (bed.needLocalFlush)
+        {
+            if (bed.duplicate >= 0)
+            {
+                result.append ("  virtual void clearDuplicate ();\n");
+            }
+            result.append ("  virtual int flush ();\n");
+        }
         if (bed.needLocalIntegrate)
         {
             result.append ("  virtual void integrate ();\n");
@@ -3300,8 +3306,9 @@ public class JobC extends Thread
             result.append ("    Part * p = instances[i];\n");
             result.append ("    if (p  &&  p->getLive ())\n");
             result.append ("    {\n");
+            result.append ("      " + SIMULATOR + "linger (p->getDt ());\n");
             result.append ("      p->die ();\n");
-            result.append ("      p->remove ();\n");
+            result.append ("      remove (p);\n");
             result.append ("    }\n");
             result.append ("  }\n");
             result.append ("}\n");
@@ -4129,6 +4136,7 @@ public class JobC extends Thread
             {
                 result.append ("  if (container->dt != " + dt + ")\n");
                 result.append ("  {\n");
+                result.append ("    " + SIMULATOR + "linger (container->dt);\n");
                 result.append ("    container->dt = " + dt + ";\n");
                 result.append ("    " + SIMULATOR + "enqueue (container, " + dt + ");\n");
                 result.append ("  }\n");
@@ -4181,27 +4189,46 @@ public class JobC extends Thread
             result.append ("\n");
         }
 
+        if (bed.needLocalFlush)
+        {
+            if (bed.duplicate >= 0)
+            {
+                result.append ("void " + ns + "clearDuplicate ()\n");
+                result.append ("{\n");
+                result.append ("  " + bed.clearFlag ("flags", false, bed.duplicate) + ";\n");
+                result.append ("}\n");
+                result.append ("\n");
+            }
+
+            result.append ("int " + ns + "flush ()\n");
+            result.append ("{\n");
+
+            if (bed.liveFlag >= 0)  // $live is stored in this part
+            {
+                result.append ("  if (! (" + bed.getFlag ("flags", false, bed.liveFlag) + ")) return 2;\n");
+            }
+            if (bed.dtCanChange)
+            {
+                result.append ("  if (" + mangle (bed.dt) + " != " + SIMULATOR + "currentEvent->dt) return 1;\n");
+            }
+            if (bed.duplicate >= 0)
+            {
+                result.append ("  if (" + bed.getFlag ("flags", false, bed.duplicate) + ") return 1;\n");
+                result.append ("  " + bed.setFlag ("flags", false, bed.duplicate) + ";\n");
+            }
+            result.append ("  return 0;\n");
+
+            result.append ("}\n");
+            result.append ("\n");
+        }
+
         // Unit integrate
         if (bed.needLocalIntegrate)
         {
             result.append ("void " + ns + "integrate ()\n");
             result.append ("{\n");
-
-            // Early-out
-            // Don't accumulate integrated values when part is dead, as this could result in a numerical error.
-            if (bed.liveFlag >= 0)  // $live is stored in this part
-            {
-                result.append ("  if (! (" + bed.getFlag ("flags", false, bed.liveFlag) + ")) return;\n");
-            }
-            // Prevent part from executing on the wrong step event.
-            if (bed.dt.hasAttribute ("externalWrite"))
-            {
-                result.append ("  if (" + mangle (bed.dt) + " != " + SIMULATOR + "currentEvent->dt) return;\n");
-            }
-            // For simplicity, we don't call kokkos push_region until after the early out.
-            // This makes profiling stats slightly inaccurate.
-
             if (kokkos) result.append ("  push_region (\"" + ns + "integrate()\");\n");
+
             if (bed.localIntegrated.size () > 0)
             {
                 if (bed.lastT)
@@ -4274,6 +4301,7 @@ public class JobC extends Thread
                     result.append ("  " + mangle (e.name) + ".integrate ();\n");
                 }
             }
+
             if (kokkos) result.append ("  pop_region ();\n");
             result.append ("}\n");
             result.append ("\n");
@@ -4285,19 +4313,6 @@ public class JobC extends Thread
             bed.defined.clear ();
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
-
-            // Early-out
-            // Prevent a dead part from writing changes to other parts.
-            if (bed.liveFlag >= 0)
-            {
-                result.append ("  if (! (" + bed.getFlag ("flags", false, bed.liveFlag) + ")) return;\n");
-            }
-            // Prevent part from executing on the wrong step event.
-            if (bed.dt.hasAttribute ("externalWrite"))
-            {
-                result.append ("  if (" + mangle (bed.dt) + " != " + SIMULATOR + "currentEvent->dt) return;\n");
-            }
-
             if (kokkos) result.append ("  push_region (\"" + ns + "update()\");\n");
 
             for (Variable v : bed.localBufferedInternalUpdate)
@@ -4325,7 +4340,6 @@ public class JobC extends Thread
             }
 
             if (kokkos) result.append ("  pop_region ();\n");
-
             result.append ("}\n");
             result.append ("\n");
         }
@@ -4336,17 +4350,6 @@ public class JobC extends Thread
             bed.defined.clear ();
             result.append ("int " + ns + "finalize ()\n");
             result.append ("{\n");
-
-            // Early-out if we are dead.
-            // Among other things, this prevents us from calling die() twice.
-            if (bed.liveFlag >= 0)  // $live is stored in this part
-            {
-                result.append ("  if (! (" + bed.getFlag ("flags", false, bed.liveFlag) + ")) return 2;\n");
-            }
-            if (bed.dt.hasAttribute ("externalWrite"))  // This attribute can also indicate local writes to $t'. It is set by BackendDataC.analyzeDt().
-            {
-                result.append ("  if (" + mangle (bed.dt) + " != " + SIMULATOR + "currentEvent->dt) return 1;\n");
-            }
 
             // contained populations
             for (EquationSet e : s.parts)
@@ -4957,6 +4960,7 @@ public class JobC extends Thread
                 result.append ("  if (! (" + bed.getFlag (mangle (e.name) + ".flags", true, ebed.inactive) + ")) return;\n");
             }
             // Remove inactive instance.
+            result.append ("  " + SIMULATOR + "linger (getDt ());\n");
             result.append ("  die ();\n");
             result.append ("  remove ();\n");
 

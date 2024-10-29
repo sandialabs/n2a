@@ -631,6 +631,19 @@ Part<T>::isFree ()
 
 template<class T>
 void
+Part<T>::clearDuplicate ()
+{
+}
+
+template<class T>
+int
+Part<T>::flush ()
+{
+    return 0;  // Default is to stay alive.
+}
+
+template<class T>
+void
 Part<T>::setPart (int i, Part<T> * part)
 {
 }
@@ -769,6 +782,24 @@ WrapperBase<T>::init ()
 
 template<class T>
 void
+WrapperBase<T>::clearDuplicate ()
+{
+    duplicate = false;
+}
+
+template<class T>
+int
+WrapperBase<T>::flush ()
+{
+    // flush() should only ever get called on an EventStep, so the following cast should be safe.
+    if (((EventStep<T> *) SIMULATOR currentEvent)->dt != dt) return 1;  // dequeue
+    if (duplicate) return 1;
+    duplicate = true;
+    return 0;
+}
+
+template<class T>
+void
 WrapperBase<T>::integrate ()
 {
     population->integrate ();
@@ -785,8 +816,6 @@ template<class T>
 int
 WrapperBase<T>::finalize ()
 {
-    // Wrapper.finalize() should only ever get called on an EventStep.
-    if (((EventStep<T> *) SIMULATOR currentEvent)->dt != dt) return 1;  // dequeue
     return population->finalize ();  // We depend on explicit code in the top-level finalize() to signal when $n goes to zero.
 }
 
@@ -1503,10 +1532,7 @@ Simulator<T>::enqueue (Part<T> * part, T dt)
     // In general, there will only be 1 or 2 periods.
     int index = 0;
     int count = periods.size ();
-    for (; index < count; index++)
-    {
-        if (periods[index]->dt >= dt) break;
-    }
+    while (index < count  &&  periods[index]->dt < dt) index++;
 
     EventStep<T> * event;
     if (index < count  &&  periods[index]->dt == dt)
@@ -1522,6 +1548,21 @@ Simulator<T>::enqueue (Part<T> * part, T dt)
     }
     event->enqueue (part);
     part->ref ();  // The queue counts as a user of the part.
+}
+
+template<class T>
+void
+Simulator<T>::linger (T dt)
+{
+    int size = periods.size ();
+    for (int i = 0; i < size; i++)
+    {
+        EventStep<T> * event = periods[i];
+        if (event->dt != dt) continue;
+
+        if (event->countLinger++ >= EventStep<T>::threshold) event->flush ();
+        return;
+    }
 }
 
 template<class T>
@@ -1755,12 +1796,15 @@ Event<T>::isStep () const
 
 // class EventStep -----------------------------------------------------------
 
+template<class T> uint32_t EventStep<T>::threshold = 1000000;
+
 template<class T>
 EventStep<T>::EventStep (T t, T dt)
 :   dt (dt)
 {
     this->t = t;
     visitors.push_back (new VisitorStep<T> ());
+    countLinger = 0;
 }
 
 template<class T>
@@ -1781,6 +1825,7 @@ void
 EventStep<T>::run ()
 {
     // Update parts
+    if (countLinger) flush ();
     SIMULATOR integrator->run (*this);
     visit ([](Visitor<T> * visitor)
     {
@@ -1788,14 +1833,13 @@ EventStep<T>::run ()
     });
     visit ([](Visitor<T> * visitor)
     {
-        VisitorStep<T> * v = (VisitorStep<T> *) visitor;
         Part<T> * p = visitor->part;  // for convenience
-
         int dispose = p->finalize ();
         if (dispose > 0)  // Remove from queue.
         {
             // We must manage v->index carefully so we don't call finalize() on any parts added
             // during this pass, for example by $type split. (They should only have init() called.)
+            VisitorStep<T> * v = (VisitorStep<T> *) visitor;
             int last = v->queue.size () - 1;
             if (v->index < last)
             {
@@ -1835,6 +1879,37 @@ EventStep<T>::visit (const std::function<void (Visitor<T> * visitor)> & f)
 
 template<class T>
 void
+EventStep<T>::flush ()
+{
+    visit ([](Visitor<T> * visitor)
+    {
+        visitor->part->clearDuplicate ();
+    });
+
+    // This is a light-weight version of the finalize pass in run().
+    visit ([](Visitor<T> * visitor)
+    {
+        Part<T> * p = visitor->part;  // for convenience
+        if (p->flush ())  // Remove from queue.
+        {
+            VisitorStep<T> * v = (VisitorStep<T> *) visitor;
+            if (v->index < v->last)
+            {
+                v->queue[v->index] = v->queue[v->last];
+                v->index--;  // To repeat at current element.
+            }
+            v->queue.pop_back ();
+            v->last--;    // Because the vector got shorter.
+            p->deref ();  // Balance ref added when part was enqueued.
+        }
+        // If part is dead, no need to call p->remove(). It was called when part died.
+    });
+
+    countLinger = 0;
+}
+
+template<class T>
+void
 EventStep<T>::requeue ()
 {
     if (visitors[0]->queue.empty ())  // Our list of instances is empty, so die.
@@ -1867,9 +1942,13 @@ EventSpikeSingle<T>::run ()
     SIMULATOR integrator->run (*this);
     visit ([](Visitor<T> * visitor)
     {
-        visitor->part->update ();
-        visitor->part->finalize ();
-        visitor->part->finalizeEvent ();
+        Part<T> * p = visitor->part;
+        p->update ();
+        T dt = p->getDt ();
+        int dispose = p->finalize ();
+        if (dispose > 0) SIMULATOR linger (dt);
+        if (dispose > 1) p->remove ();
+        p->finalizeEvent ();
     });
 
     delete this;
@@ -1910,9 +1989,12 @@ EventSpikeMulti<T>::run ()
     });
     visit ([](Visitor<T> * visitor)
     {
-        visitor->part->finalize ();
-        visitor->part->finalizeEvent ();
-        // A part could die during event processing, but it can wait till next EventStep to leave queue.
+        Part<T> * p = visitor->part;
+        T dt = p->getDt ();
+        int dispose = p->finalize ();
+        if (dispose > 0) SIMULATOR linger (dt);  // It can wait till next EventStep to leave queue.
+        if (dispose > 1) p->remove ();
+        p->finalizeEvent ();  // TODO: Is is possible to get by without this?
     });
 
     delete this;
@@ -1930,23 +2012,10 @@ template<class T>
 void
 EventSpikeMulti<T>::setLatch ()
 {
-    int i = 0;
-    int last = targets->size () - 1;
-    while (i <= last)
+    for (int i = targets->size () - 1; i >= 0; i--)
     {
-        Part<T> * target = (*targets)[i];
-        if (target)
-        {
-            target->setLatch (EventSpike<T>::latch);
-        }
-        else
-        {
-            (*targets)[i] = (*targets)[last--];
-        }
-        i++;  // can go past last, but this will cause no harm.
+        (*targets)[i]->setLatch (EventSpike<T>::latch);
     }
-    if ((*targets)[last]) targets->resize (last + 1);
-    else                  targets->resize (last);
 }
 
 
