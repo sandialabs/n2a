@@ -4415,7 +4415,7 @@ public class JobC extends Thread
                 result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
             }
 
-            if (bed.type != null)
+            if (! s.splits.isEmpty ())
             {
                 result.append ("  switch ((int) " + mangle ("$type") + ")\n");
                 result.append ("  {\n");
