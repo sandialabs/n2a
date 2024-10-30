@@ -2598,7 +2598,14 @@ public class JobC extends Thread
         for (Delay d : bed.delays)
         {
             d.index = i++;
-            result.append ("  DelayBuffer<" + T + "> delay" + d.index + ";\n");
+            if (d.depth == 0)
+            {
+                result.append ("  DelayBuffer<" + T + "> delay" + d.index + ";\n");
+            }
+            else
+            {
+                result.append ("  RingBuffer<" + T + ", " + d.depth + "> delay" + d.index + ";\n");
+            }
         }
         result.append ("\n");
 
@@ -3942,6 +3949,16 @@ public class JobC extends Thread
             {
                 if (v.hasAttribute ("MatrixPointer")) continue;
                 result.append ("  " + zero (mangle (v), v) + ";\n");
+            }
+            for (Delay d : bed.delays)
+            {
+                result.append ("  delay" + d.index + ".clear (");
+                if (d.depth > 0)
+                {
+                    if (d.operands.length <= 2) result.append ("(" + T + ") 0");
+                    else                        context.render (d.operands[2]);
+                }
+                result.append (");\n");
             }
             for (EquationSet p : s.parts)
             {

@@ -19,6 +19,7 @@ import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.eqset.EquationSet;
 import gov.sandia.n2a.eqset.Variable;
 import gov.sandia.n2a.eqset.VariableReference;
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.plugins.extpoints.Backend;
@@ -533,6 +534,19 @@ public class BackendDataC
             }
         }
 
+        boolean haveRingBuffers = false;
+        for (Delay d : delays)
+        {
+            boolean constDepth   = dt.hasAttribute ("constant")  &&  d.operands[1] instanceof Constant;
+            boolean constInitial = d.operands.length <= 2  ||  d.operands[2] instanceof Constant;
+            if (constDepth  &&  constInitial)
+            {
+                d.depth = (int) Math.round (d.operands[1].getDouble () / dt.equations.first ().expression.getDouble ());
+                if (d.depth < 1) d.depth = 1;
+                haveRingBuffers = true;
+            }
+        }
+
         boolean canDie = s.canDie ();
         singleton      = s.isSingleton ();
         canResize      = globalMembers.contains (n);  // This search works even if n is null.
@@ -609,7 +623,7 @@ public class BackendDataC
         needLocalDerivative         = ! Euler  &&  localDerivative.size () > 0;
         needLocalIntegrate          = localIntegrated.size () > 0;
         needLocalPreserve           = ! Euler  &&  (needLocalIntegrate  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0);
-        needLocalClear              = s.accountableConnections != null  ||  refcount  ||  localMembers.size () > 0;
+        needLocalClear              = s.accountableConnections != null  ||  refcount  ||  localMembers.size () > 0  ||  haveRingBuffers;
         needLocalDtor               = needLocalPreserve  ||  needLocalDerivative;
         needLocalCtor               = needLocalDtor  ||  needLocalClear  ||  s.parts.size () > 0;
         needLocalDie                =    canDie

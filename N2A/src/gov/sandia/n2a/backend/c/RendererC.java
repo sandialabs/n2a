@@ -224,13 +224,22 @@ public class RendererC extends Renderer
         if (op instanceof Delay)
         {
             Delay d = (Delay) op;
-            result.append ("delay" + d.index + ".step (" + job.SIMULATOR + "currentEvent->t, ");
-            d.operands[1].render (this);
-            result.append (", ");
-            d.operands[0].render (this);
-            result.append (", ");
-            if (d.operands.length > 2) d.operands[2].render (this);
-            else                       result.append ("0");
+            result.append ("delay" + d.index + ".step (" + job.SIMULATOR + "currentEvent->t, ");  // $t
+            if (d.depth > 0)  // Use RingBuffer
+            {
+                result.append (job.resolve (bed.dt.reference, this, false));  // $t'
+                result.append (", ");
+                d.operands[0].render (this);  // value
+            }
+            else  // Use DelayBuffer
+            {
+                d.operands[1].render (this);  // delay
+                result.append (", ");
+                d.operands[0].render (this);  // value
+                result.append (", ");
+                if (d.operands.length > 2) d.operands[2].render (this);  // default value
+                else                       result.append ("0");
+            }
             result.append (")");
             return true;
         }

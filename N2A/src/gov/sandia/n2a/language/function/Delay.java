@@ -29,6 +29,7 @@ import gov.sandia.n2a.language.type.Scalar;
 public class Delay extends Function
 {
     public int index;  // For internal backend, the position in valuesObject of the buffer object. For C backend, the suffix of the buffer object name in the current class.
+    public int depth;  // If greater than 0, indicates that this delay has a known fixed number of steps. Set by backend analysis routine.
 
     public static Factory factory ()
     {

@@ -690,25 +690,23 @@ struct SHARED VisitorSpikeMulti : public Visitor<T>
 
 /**
     For implementing delay().
-    Requires a known maximum delay depth. The parameter D should be max delay plus one.
-    Requires a known initial value.
+    Requires a known delay depth D and a known initial value.
 **/
 template<class T, int D>
 struct RingBuffer
 {
     T buffer[D];
 
-    RingBuffer (T initialValue = (T) 0)
+    void clear (T initialValue = (T) 0)
     {
         for (int i = 0; i < D; i++) buffer[i] = initialValue;
     }
 
-    T step (T now, T dt, T delay, T futureValue)
+    T step (T now, T dt, T futureValue)
     {
-        int t = (int) round (now   / dt);
-        int d = (int) round (delay / dt);
+        int t = (int) round (now / dt);
         T result = buffer[t % D];
-        buffer[(t + d) % D] = futureValue;
+        buffer[t % D] = futureValue;
         return result;
     }
 };
@@ -724,8 +722,7 @@ struct SHARED DelayBuffer
     T             value;
     std::map<T,T> buffer;
 
-    DelayBuffer ();
-
+    void clear ();
     T step (T now, T delay, T value, T initialValue);
 };
 

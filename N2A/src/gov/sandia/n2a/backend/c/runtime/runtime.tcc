@@ -2092,9 +2092,11 @@ VisitorSpikeMulti<T>::visit (const std::function<void (Visitor<T> * visitor)> & 
 // class DelayBuffer ---------------------------------------------------------
 
 template<class T>
-DelayBuffer<T>::DelayBuffer ()
+void
+DelayBuffer<T>::clear ()
 {
     value = NAN;
+    buffer.clear ();
 }
 
 template<class T>
