@@ -882,7 +882,7 @@ public class JobC extends Thread
         digestedModel.addAttribute ("global",      false, false, "$n");
         digestedModel.addAttribute ("state",       true,  false, "$n");  // Forbid $n from being temporary, even if it meets the criteria.
         digestedModel.addAttribute ("preexistent", true,  false, "$index", "$t");  // Technically, $index is not pre-existent, but always receives special handling which has the same effect.
-        if (cli) tagCommandLineParameters (digestedModel, true, params);
+        if (cli) tagCommandLineParameters (digestedModel, true);
         analyzeIOvectors (digestedModel);
         digestedModel.resolveLHS ();
         digestedModel.fillIntegratedVariables ();
@@ -927,7 +927,7 @@ public class JobC extends Thread
         analyzeNames (digestedModel);
     }
 
-    public void tagCommandLineParameters (EquationSet s, boolean partCLI, MNode params) throws IOException
+    public void tagCommandLineParameters (EquationSet s, boolean partCLI) throws IOException
     {
         MNode nodeCLI = s.metadata.child ("backend", "c", "cli");
         if (nodeCLI != null) partCLI = nodeCLI.getFlag ();
@@ -1030,7 +1030,7 @@ public class JobC extends Thread
             }
         }
 
-        for (EquationSet p : s.parts) tagCommandLineParameters (p, partCLI, params);
+        for (EquationSet p : s.parts) tagCommandLineParameters (p, partCLI);
     }
 
     /**
