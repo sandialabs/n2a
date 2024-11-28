@@ -495,7 +495,7 @@ public class NodeVariable extends NodeContainer
         for (; i < name.length (); i++)
         {
             c = name.charAt (i);
-            if (! Character.isJavaIdentifierPart (c)  &&  c != '.'  &&  c != ' ') break;
+            if (! Character.isJavaIdentifierPart (c)  &&  c != '.'  &&  c != ' '  &&  c != '∞') break;
         }
         for (; i < name.length (); i++)
         {

@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -31,11 +32,17 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import io.jhdf.HdfFile;
+import io.jhdf.api.Attribute;
+import io.jhdf.api.Dataset;
+import io.jhdf.api.Group;
+import io.jhdf.exceptions.HdfException;
 import tech.units.indriya.AbstractUnit;
 
 public class Input extends Function
 {
-    public boolean timeWarning;
+    public boolean warningTime;
+    public String  warningIO;              // Only one message per file name.
     public int     exponentRow = UNKNOWN;  // For C backend with integer math. The exponent used to convert row or time values into a floating-point number.
     public String  name;                   // For C backend, the name of the InputHolder object.
     public String  fileName;               // For C backend, the name of the string variable holding the file name, if any.
@@ -105,11 +112,10 @@ public class Input extends Function
         unit = AbstractUnit.ONE;
     }
 
-    public static class Holder implements AutoCloseable
+    public static abstract class Holder implements AutoCloseable
     {
         public static final double[] empty = {0};
 
-        public BufferedReader      stream;
         public double              currentLine   = -1;
         public double[]            currentValues = empty;
         public double              nextLine      = Double.NaN; // Initial condition is no line available.
@@ -123,34 +129,30 @@ public class Input extends Function
         public boolean             smooth;                     // mode flag. When true, time must also be true. Does not change the behavior of Holder, just stored here for convenience.
         public int                 timeColumn;                 // We assume column 0, unless a header overrides this.
         public boolean             timeColumnSet;              // Indicates that a header appeared in the file, so timeColumn has been evaluated.
-        public char                delimiter = ' ';            // Separator character. Allows switch between comma and space/tab.
-        public boolean             delimiterSet;               // Indicates that check for CSV has been performed. Avoids constant re-checking.
         public double              epsilon;
 
-        public static Holder get (Simulator simulator, String path, boolean time) throws IOException
+        public Holder (Simulator simulator, boolean time)
         {
-            Holder result;
-            Object o = simulator.holders.get (path);
-            if (o == null)
-            {
-                result = new Holder ();
+            this.time = time;
+            epsilon = Math.sqrt (Math.ulp (1.0));  // sqrt (epsilon for time representation (currently double)), about 1e-8
+            if (time  &&  simulator.currentEvent instanceof EventStep) epsilon = Math.min (epsilon, ((EventStep) simulator.currentEvent).dt / 1000);
+        }
 
-                if (path.isEmpty ()) result.stream = new BufferedReader (new InputStreamReader (System.in));  // not ideal; reading stdin should be reserved for headless operation
-                else                 result.stream = Files.newBufferedReader (simulator.jobDir.resolve (path));
+        public abstract void getRow (double requested) throws IOException;
+    }
 
-                result.time = time;
-                result.epsilon = Math.sqrt (Math.ulp (1.0));  // sqrt (epsilon for time representation (currently double)), about 1e-8
-                if (time  &&  simulator.currentEvent instanceof EventStep) result.epsilon = Math.min (result.epsilon, ((EventStep) simulator.currentEvent).dt / 1000);
+    public static class HolderXSV extends Holder
+    {
+        public BufferedReader      stream;
+        public char                delimiter = ' ';            // Separator character. Allows switch between comma and space/tab.
+        public boolean             delimiterSet;               // Indicates that check for CSV has been performed. Avoids constant re-checking.
 
-                simulator.holders.put (path, result);
-            }
-            else if (! (o instanceof Holder))
-            {
-                Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
-                throw new Backend.AbortRun ();
-            }
-            else result = (Holder) o;
-            return result;
+        public HolderXSV (Simulator simulator, String path, boolean time) throws IOException
+        {
+            super (simulator, time);
+
+            if (path.isEmpty ()) stream = new BufferedReader (new InputStreamReader (System.in));  // not ideal; reading stdin should be reserved for headless operation
+            else                 stream = Files.newBufferedReader (simulator.jobDir.resolve (path));
         }
 
         public void close ()
@@ -313,6 +315,215 @@ public class Input extends Function
         }
     }
 
+    public static class HolderHDF5 extends Holder
+    {
+        protected String   fileName;
+        protected Dataset  data;
+        protected Object   flat;        // If slicing is not allowed, this holds the full raw data.
+        protected int      rowCount;
+        protected double   startingTime;
+        protected double   period;
+        protected double[] timestamps;  // If null, use startingTime+N*period. If non-null, treat this as time column.
+        protected int      lastRow;     // When using timestamps, where to start search.
+
+        public static class SubHolder
+        {
+            public HdfFile file;
+            public int     users;
+        }
+        protected static HashMap<String,SubHolder> files = new HashMap<String,SubHolder> ();  // Keep track of all open HDF5 files in the app (regardless of which simulation they belong to). These can be shared by multiple HolderHDF5 objects.
+
+        public HolderHDF5 (Simulator simulator, String fileName, String path, boolean nwb, boolean time) throws HdfException
+        {
+            super (simulator, time);
+
+            this.fileName = fileName;
+            SubHolder sub;
+            synchronized (files)
+            {
+                sub = files.get (fileName);
+                if (sub == null)
+                {
+                    sub = new SubHolder ();
+                    sub.file = new HdfFile (simulator.jobDir.resolve (fileName));
+                    files.put (fileName, sub);
+                }
+                sub.users++;
+            }
+            HdfFile file = sub.file;
+
+            if (nwb)
+            {
+                Group timeSeries = (Group) file.getByPath (path);
+                if (timeSeries == null) throw new HdfException ("Can't find TimeSeries: " + path);
+
+                data = (Dataset) timeSeries.getChild ("data");
+
+                Dataset ts = (Dataset) timeSeries.getChild ("timestamps");
+                if (ts == null)  // Use startingTime+N*period.
+                {
+                    Dataset starting_time = (Dataset) timeSeries.getChild ("starting_time");
+                    if (starting_time == null) throw new HdfException ("At least one of 'starting_time' or 'timestamps' must be defined: " + path);
+                    startingTime = ((double[]) starting_time.getData ())[0];
+                    Attribute rate = starting_time.getAttribute ("rate");
+                    if (rate == null) throw new HdfException ("'starting_time/rate' must be defined: " + path);
+                    period = 1 / (Float) rate.getData ();
+                }
+                else  // Use explicit time stamps.
+                {
+                    timestamps = (double[]) ts.getData ();
+                }
+            }
+            else
+            {
+                data = (Dataset) file.getByPath (path);
+            }
+
+            int[] dimensions = data.getDimensions ();
+            rowCount = dimensions[0];
+            if (dimensions.length > 2) throw new HdfException ("TimeSeries data must be 1D or 2D: " + path);
+            if (dimensions.length == 2) columnCount = dimensions[1];
+            else                        columnCount = 1;
+
+            if (time) currentLine = Double.NEGATIVE_INFINITY;
+            currentValues = new double[columnCount];
+
+            timeColumn = Integer.MAX_VALUE;
+        }
+
+        public void close ()
+        {
+            synchronized (files)
+            {
+                SubHolder sub = files.get (fileName);
+                sub.users--;
+                if (sub.users <= 0)
+                {
+                    try {sub.file.close ();}
+                    catch (HdfException e) {}
+                    files.remove (fileName);
+                }
+            }
+        }
+
+        public void getRow (double requested) throws IOException
+        {
+            // Since HDF5 allows random access, we just need to determine the requested row,
+            // or rows that bracket the requested time.
+            int row = -2;
+            if (time)
+            {
+                if (period > 0)
+                {
+                    row = (int) Math.floor ((requested - startingTime) / period);
+                }
+                else if (timestamps != null)
+                {
+                    for (row = lastRow; row < rowCount; row++)
+                    {
+                        if (requested >= timestamps[row] - epsilon) continue;
+                        // Now row points just past our desired current line.
+                        lastRow = row--;
+                        break;
+                    }
+                }
+                // else TODO: need to specify time column
+            }
+            if (row == -2)
+            {
+                row = (int) Math.floor (requested);
+            }
+
+            boolean fetchCurrent = true;
+            if (smooth)
+            {
+                if (nextLine - epsilon <= requested  &&  nextLine + period > requested)  // nextLine is re-usable.
+                {
+                    currentLine   = nextLine;
+                    currentValues = nextValues;
+                    fetchCurrent = false;
+                }
+
+                int nextRow = row + 1;
+                if (nextRow < rowCount)
+                {
+                    if (period > 0)              nextLine = startingTime + nextRow * period;
+                    else if (timestamps != null) nextLine = timestamps[nextRow];
+                    else                         nextLine = nextRow;
+                    // TODO: extract nextLine from time column, if available.
+                    nextValues = getSlice (row);
+                }
+                else
+                {
+                    nextLine   = Double.NaN;
+                    nextValues = empty;
+                }
+            }
+
+            if (fetchCurrent  &&  row >= 0  &&  row < rowCount)
+            {
+                if (period > 0)              currentLine = startingTime + row * period;
+                else if (timestamps != null) currentLine = timestamps[row];
+                else                         currentLine = row;
+                // TODO: extract currentLine from time column, if available.
+                currentValues = getSlice (row);
+            }
+        }
+
+        public double[] getSlice (int row)
+        {
+            Class<?> clz = data.getJavaType ();
+            if (flat == null)
+            {
+                try
+                {
+                    float[] floats = null;
+                    if (columnCount > 1)
+                    {
+                        long[] anchor = new long[2];
+                        int[]  size   = new int [2];
+                        anchor[0] = row;
+                        anchor[1] = 0;
+                        size  [0] = 1;
+                        size  [1] = columnCount;
+                        if (clz == double.class) return ((double[][]) data.getData (anchor, size))[0];
+                        if (clz == float.class) floats = ((float[][]) data.getData (anchor, size))[0];
+                    }
+                    else
+                    {
+                        long[] anchor = new long[1];
+                        int[]  size   = new int [1];
+                        anchor[0] = row;
+                        size  [0] = 1;
+                        if (clz == double.class) return (double[]) data.getData (anchor, size);  // Will have only a single element.
+                        if (clz == float.class) floats = (float[]) data.getData (anchor, size);
+                    }
+                    if (floats != null)
+                    {
+                        double[] result = new double[columnCount];
+                        for (int c = 0; c < columnCount; c++) result[c] = floats[c];
+                    }
+                }
+                catch (HdfException e)
+                {
+                    flat = data.getDataFlat ();
+                }
+            }
+
+            double[] result = new double[columnCount];
+            int base = row * columnCount;
+            if (clz == double.class)
+            {
+                for (int c = 0; c < columnCount; c++) result[c] = ((double[]) flat)[base + c];
+            }
+            else if (clz == float.class)
+            {
+                for (int c = 0; c < columnCount; c++) result[c] = ((float[]) flat)[base + c];
+            }
+            return result;
+        }
+    }
+
     public static double convertDate (String dateString, double asNumber)
     {
         // ISO 8601 and its prefixes
@@ -353,19 +564,40 @@ public class Input extends Function
         if (simulator == null) return null;  // If we can't cache a line from the requested stream, then semantics of this function are lost, so give up.
 
         Holder H = null;
+        String path = ((Text) operands[0].eval (context)).value;
         try
         {
             boolean smooth =             evalKeywordFlag (context, "smooth");
             boolean time   = smooth  ||  evalKeywordFlag (context, "time");
+            String  hdf    = evalKeyword (context, "hdf5", "");
 
-            // get an input holder
-            String path = ((Text) operands[0].eval (context)).value;
-            H = Holder.get (simulator, path, time);
+            String key = path;
+            if (! hdf.isBlank ()) key += "|" + hdf;  // Because multiple holders can share same HDF5 file.
+            Object o = simulator.holders.get (key);
+            if (o == null)  // Need to open new file.
+            {
+                if (hdf.isBlank ())
+                {
+                    H = new HolderXSV (simulator, path, time);  // can throw IOException
+                }
+                else
+                {
+                    boolean nwb = evalKeywordFlag (context, "nwb");
+                    H = new HolderHDF5 (simulator, path, hdf, nwb, time);
+                }
 
-            if (H.time != time  &&  ! timeWarning)
+                simulator.holders.put (key, H);
+            }
+            else if (! (o instanceof Holder))  // Already exists, but is wrong type.
+            {
+                throw new Backend.AbortRun ("Reopening file as a different resource type: " + path);
+            }
+            else H = (Holder) o;  // Already exists, and is correct type. This is the most common case.
+
+            if (H.time != time  &&  ! warningTime)
             {
                 Backend.err.get ().println ("WARNING: Changed time mode for input(" + path + ")");
-                timeWarning = true;
+                warningTime = true;
             }
             H.smooth = smooth;  // remember for use by caller
 
@@ -374,6 +606,11 @@ public class Input extends Function
         }
         catch (IOException e)
         {
+            if (! path.equals (warningIO))
+            {
+                Backend.err.get ().println ("WARNING: IO error on input(" + path + ")");
+                warningIO = path;
+            }
             return null;
         }
 

@@ -6,3 +6,4 @@ gov.sandia.n2a.backend.neuroml.PluginNeuroML
 gov.sandia.n2a.backend.neuron.PluginNeuron
 gov.sandia.n2a.backend.stacs.PluginSTACS
 gov.sandia.n2a.backend.vensim.PluginVensim
+gov.sandia.n2a.backend.glif.PluginGLIF

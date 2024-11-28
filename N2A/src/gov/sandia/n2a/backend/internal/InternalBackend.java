@@ -148,6 +148,8 @@ public class InternalBackend extends Backend
 
                 try {Files.copy (new ByteArrayInputStream ("failure".getBytes ("UTF-8")), localJobDir.resolve ("finished"));}
                 catch (Exception f) {}
+
+                if (simulator != null) simulator.closeStreams ();
             }
             long elapsedTime = 0;
             if (startTime != 0  &&  stopTime != 0) elapsedTime = stopTime - startTime;

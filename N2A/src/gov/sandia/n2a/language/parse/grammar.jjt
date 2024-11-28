@@ -99,8 +99,8 @@ TOKEN_MGR_DECLS:
     | <LRND:    "(" >
     | <RRND:    ")" >
 
-    | <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>|"."|" ")*("'")*>  // Notice that spaces are allowed inside an identifier
-    | <#LETTER: ["$", "A"-"Z", "_", "a"-"z", "\u0080"-"\u221d", "\u221f"-"\uffff"]>  // Past lower-ASCII we don't care about character class, but skip infinity (\u221e).
+    | <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>|"\u221e"|"."|" ")*("'")*>  // Notice that spaces are allowed inside an identifier
+    | <#LETTER: ["$", "A"-"Z", "_", "a"-"z", "\u0080"-"\u221d", "\u221f"-"\uffff"]>  // Past lower-ASCII we don't care about character class, but skip infinity (\u221e). Infinity is the only digit-like character beyond lower ASCII that we care about.
     | <#DIGIT:  ["0"-"9"]>
 
     | <NUMBER:

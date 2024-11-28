@@ -355,5 +355,11 @@
             <version>2.4.0</version>
             <classifier>natives-macosx-universal</classifier>
         </dependency>
+
+		<dependency>
+		    <groupId>io.jhdf</groupId>
+		    <artifactId>jhdf</artifactId>
+		    <version>0.8.4</version>
+		</dependency>
     </dependencies>
 </project>
