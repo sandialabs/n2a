@@ -2991,7 +2991,6 @@ public class JobC extends Thread
                     result.append ("  }\n");
                     if (bed.newborn >= 0)
                     {
-                        result.append ("  p->flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
                         result.append ("  firstborn = min (firstborn, p->" + mangle ("$index") + ");\n");
                     }
                 }
@@ -3073,10 +3072,6 @@ public class JobC extends Thread
             // Create instances
             if (bed.singleton)
             {
-                if (bed.newborn >= 0)
-                {
-                    result.append ("  instance.flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.newborn) + ";\n");
-                }
                 result.append ("  instance.init ();\n");
             }
             else
@@ -4116,27 +4111,18 @@ public class JobC extends Thread
             }
             if (! bed.localFlagType.isEmpty ())
             {
-                if (bed.liveFlag >= 0)  // Need to set $live
+                long flags = 0;
+                if (bed.liveFlag >= 0)
                 {
                     // It's OK to set $live here, before the equations are executed, because
                     // the actual equations will have $live factored out by EquationSet.simplify() below.
-                    if (bed.newborn >= 0)  // Must work around the fact that "flags" has already been initialized by Population::add().
-                    {
-                        result.append ("  " + bed.setFlag ("flags", false, bed.liveFlag) + ";\n");
-                    }
-                    else  // "flags" has not yet been initialized
-                    {
-                        result.append ("  flags = (" + bed.localFlagType + ") 0x1" + RendererC.printShift (bed.liveFlag) + ";\n");
-                    }
+                    flags |= 1 << bed.liveFlag;
                 }
-                else  // No need to set $live, just ensure that "flags" is initialized.
+                if (bed.newborn >= 0)
                 {
-                    if (bed.newborn < 0)  // "flags" has not yet been initialized
-                    {
-                        result.append ("  flags = 0;\n");
-                    }
-                    // else flags has already been initialized by Population::add()
+                    flags |= 1 << bed.newborn;
                 }
+                result.append ("  flags = " + flags + ";\n");
             }
 
             // Initialize static objects
