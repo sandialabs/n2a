@@ -86,10 +86,10 @@ public class JobC extends Thread
     protected ExponentContext exponentContext;
     protected MVolatile       params;
 
-    public    Host env;
-    public    Path localJobDir;
-    protected Path jobDir;     // local or remote
-    public    Path runtimeDir; // local or remote
+    public Host env;
+    public Path localJobDir;
+    public Path jobDir;     // local or remote
+    public Path runtimeDir; // local or remote
 
     protected Path        ffmpegLibDir;  // Where link libraries are found
     protected Path        ffmpegIncDir;
@@ -888,6 +888,7 @@ public class JobC extends Thread
         digestedModel.fillIntegratedVariables ();
         digestedModel.findIntegrated ();
         digestedModel.resolveRHS ();
+        digestedModel.revertSingletonConnections ();
         digestedModel.flatten ("c");
         digestedModel.findExternal ();
         digestedModel.sortParts ();
@@ -1120,6 +1121,22 @@ public class JobC extends Thread
         if (s.needInstanceTracking  &&  ! s.isSingleton ())
         {
             index.addUser (s);
+        }
+
+        // Connection C with A.$k or A.$radius relies on A.$xyz, even if it does not define A.$project.
+        // If C does define A.$project, then C depends on whatever $project uses. This will almost always
+        // include A.$xyz.
+        if (s.connectionBindings != null)
+        {
+            for (ConnectionBinding cb : s.connectionBindings)
+            {
+                String A = cb.alias;
+                if (s.find (new Variable (A + ".$k")) != null  ||  s.find (new Variable (A + ".$radius")) != null)
+                {
+                    Variable xyz = cb.endpoint.find (new Variable ("$xyz"));
+                    if (xyz != null) xyz.addUser (s);  // $xyz should never be null in this situation, but that's up to the user.
+                }
+            }
         }
     }
 
@@ -2334,11 +2351,18 @@ public class JobC extends Thread
             if (bed.trackInstances)
             {
                 result.append ("  std::vector<" + prefix + " *> instances;\n");
-                result.append ("  uint32_t firstFreeIndex;\n");
+                if (bed.index != null)
+                {
+                    result.append ("  uint32_t firstFreeIndex;\n");
+                }
             }
-            else if (bed.index != null)  // The instances vector can supply the next index, so only declare nextIndex if instances was not declared.
+            else
             {
-                result.append ("  uint32_t nextIndex;\n");
+                // The "instances" vector can supply the next index, so only declare nextIndex if instances was not declared.
+                if (bed.index != null)
+                {
+                    result.append ("  uint32_t nextIndex;\n");
+                }
             }
             if (bed.newborn >= 0)
             {
@@ -2689,7 +2713,7 @@ public class JobC extends Thread
         {
             result.append ("  virtual " + T + " getLive ();\n");
         }
-        if (bed.xyz != null  &&  s.connected)
+        if (bed.xyz != null  &&  s.connected > 0)
         {
             result.append ("  virtual void getXYZ (MatrixFixed<" + T + ",3,1> & xyz);\n");
         }
@@ -2868,11 +2892,17 @@ public class JobC extends Thread
                 }
                 if (bed.trackInstances)
                 {
-                    result.append ("  firstFreeIndex = 0;\n");
+                    if (bed.index != null)
+                    {
+                        result.append ("  firstFreeIndex = 0;\n");
+                    }
                 }
-                else if (bed.index != null)
+                else
                 {
-                    result.append ("  nextIndex = 0;\n");
+                    if (bed.index != null)
+                    {
+                        result.append ("  nextIndex = 0;\n");
+                    }
                 }
                 if (bed.newborn >= 0)
                 {
@@ -2965,9 +2995,12 @@ public class JobC extends Thread
                         result.append ("  firstborn = min (firstborn, p->" + mangle ("$index") + ");\n");
                     }
                 }
-                else if (bed.index != null)
+                else
                 {
-                    result.append ("  if (p->" + mangle ("$index") + " < 0) p->" + mangle ("$index") + " = nextIndex++;\n");
+                    if (bed.index != null)
+                    {
+                        result.append ("  if (p->" + mangle ("$index") + " < 0) p->" + mangle ("$index") + " = nextIndex++;\n");
+                    }
                 }
                 if (bed.poll >= 0)
                 {
@@ -5057,7 +5090,7 @@ public class JobC extends Thread
         }
 
         // Unit getXYZ
-        if (bed.xyz != null  &&  s.connected)  // Connection targets need to provide an accessor.
+        if (bed.xyz != null  &&  s.connected > 0)  // Connection targets need to provide an accessor.
         {
             bed.defined.clear ();
             result.append ("void " + ns + "getXYZ (MatrixFixed<" + T + ",3,1> & xyz)\n");

@@ -190,8 +190,9 @@ public class InternalBackendData
         public int               valueIndex;        // position of bit array in valuesFloat
         public int               mask;              // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
         public int               edge         = RISE;
-        public double            delay        = -1; // default is no-care; Indicates to process event in next regularly scheduled cycle of the target part
+        public double            delay        = -1; // Default is no-care, which indicates to process event in next regularly scheduled cycle of the target part.
         public int               timeIndex    = -1; // position in valuesFloat of timestamp when last event to this target was generated; used to force multiple sources to generate only one event in a given cycle; -1 means the guard is unneeded
+        public int               depth;             // For backends that use shift register to implement delay, the max number of bits needed.
         public List<EventSource> sources      = new ArrayList<EventSource> ();
         public List<Variable>    dependencies = new ArrayList<Variable> ();
 
@@ -358,6 +359,9 @@ public class InternalBackendData
         in the equation set).
         This must be done before the variables are sorted into sets according to attributes, because we
         may need to add the "externalRead" attribute to some of them.
+        @param s This must be the equation set associated with this backend data object. It's passed as
+        a parameter because we currently down't store a reference to it. There's little need to do so,
+        since this is the only place it's used.
     **/
     public void analyzeEvents (EquationSet s)
     {
@@ -613,6 +617,7 @@ public class InternalBackendData
                             }
                             ConditionVisitor cv = new ConditionVisitor ();
                             de.operands[0].visit (cv);
+                            // TODO: should check dependencies for event sources
 
                             //   Special case for event with no references that vary
                             if (et.sources.isEmpty ())
@@ -944,14 +949,14 @@ public class InternalBackendData
             indexAvailable = allocateGlobalObject ("indexAvailable");
         }
 
-        if (singleton  ||  s.connected  ||  s.needInstanceTracking  ||  populationCanResize)  // track instances
+        if (singleton  ||  s.connected > 0  ||  s.needInstanceTracking  ||  populationCanResize)  // track instances
         {
             // The reason populationCanResize forces use of the instances array is to enable pruning of parts when $n decreases.
             // The reason to "track instances" for a singleton is to allocate a slot for direct storage of the single instance in valuesObject.
 
             instances = allocateGlobalObject ("instances");
 
-            if (s.connected)  // in addition, track newly created instances
+            if (s.connected > 0)  // in addition, track newly created instances
             {
                 if (! singleton) firstborn = allocateGlobalFloat ("firstborn");
                 newborn = allocateLocalFloat ("newborn");

@@ -128,15 +128,17 @@ public class BackendDataC
     public List<Variable>    eventReferences = new ArrayList<Variable> ();
     public List<Delay>       delays          = new ArrayList<Delay> ();
 
+    public int    localFlagCount;
     public String localFlagType = ""; // empty string indicates that flags are not required
     public int    liveFlag = -1;      // -1 means $live is not stored
     public int    newborn  = -1;
 
+    public int    globalFlagCount;
     public String globalFlagType = "";
     public int    clearNew = -1;      // guard so that we only add population to clearNew queue once
     public int    inactive = -1;      // indicates that population was explicitly tested and found to be inactive
 
-    public void analyzeEvents (final EquationSet s)
+    public void analyzeEvents (EquationSet s)
     {
         InternalBackendData.analyzeEvents (s, eventTargets, eventReferences, delays);
 
@@ -182,8 +184,7 @@ public class BackendDataC
 
     /**
         Determine if $t' should be stored. The alternative is to offer its value via an accessor.
-        - If $t' is written in any form (at init, in updates, or by external parts), then it
-          must be stored.
+        - If $t' is written to (at init, in updates, or by external parts), then it must be stored.
         - "initOnly" -- Special case of the above, where the value is only written once.
           By default, a part gets $t' from its container if it isn't otherwise specified.
         - "constant" -- If $t' is defined constant locally, that value will simply be
@@ -236,7 +237,7 @@ public class BackendDataC
         if (! dt.equations.isEmpty ()  &&  ! dt.hasAny ("constant", "accessor")) dt.addAttribute ("externalWrite");  // Hack to force $t' check into finalize() rather than update().
     }
 
-    public void analyze (final EquationSet s)
+    public void analyze (EquationSet s)
     {
         boolean headless = AppData.properties.getBoolean ("headless");
         if (! headless) System.out.println (s.container == null ? s.name : s.prefix ());
@@ -552,7 +553,7 @@ public class BackendDataC
         canResize      = globalMembers.contains (n);  // This search works even if n is null.
         refcount       = s.referenced  &&  (canDie  ||  canResize);
         trackN         = n != null  &&  ! singleton;  // Should always be true when canResize is true.
-        trackInstances = s.connected  ||  s.needInstanceTracking  ||  canResize;
+        trackInstances = s.connected > 0  ||  s.needInstanceTracking  ||  canResize;
         canGrow        = s.canGrow ();
         canGrowOrDie   = s.lethalP  ||  s.lethalType  ||  canGrow;
         boolean Euler  = s.getRoot ().metadata.getOrDefault ("Euler", "backend", "all", "integrator").equals ("Euler");
@@ -565,34 +566,16 @@ public class BackendDataC
         }
         if (! globalUpdate.isEmpty ()  ||  ! globalIntegrated.isEmpty ()  ||  singleton  ||  canGrowOrDie  ||  canResize  &&  ! nInitOnly) populationCanBeInactive = false;
 
-        int flagCount = eventTargets.size ();
-        if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"})) liveFlag = flagCount++;
-        if (trackInstances  &&  s.connected) newborn = flagCount++;
-        if (eventTargets.size () > 0  &&  dtCanChange) duplicate = flagCount++;
-        if      (flagCount == 0 ) localFlagType = "";
-        else if (flagCount <= 8 ) localFlagType = "uint8_t";
-        else if (flagCount <= 16) localFlagType = "uint16_t";
-        else if (flagCount <= 32) localFlagType = "uint32_t";
-        else if (flagCount <= 64) localFlagType = "uint64_t";
-        else
-        {
-            Backend.err.get ().println ("ERROR: Too many local flags to fit in basic integer type");
-            throw new Backend.AbortRun ();
-        }
+        localFlagCount = eventTargets.size ();
+        if (live != null  &&  ! live.hasAny (new String[] {"constant", "accessor"})) liveFlag  = localFlagCount++;
+        if (trackInstances  &&  s.connected > 0)                                     newborn   = localFlagCount++;
+        if (eventTargets.size () > 0  &&  dtCanChange)                               duplicate = localFlagCount++;
+        localFlagType = determineFlagType (localFlagCount, "local");
 
-        flagCount = 0;
-        if (trackInstances  &&  s.connected) clearNew = flagCount++;
-        if (populationCanBeInactive)         inactive = flagCount++;
-        if      (flagCount == 0 ) globalFlagType = "";
-        else if (flagCount <= 8 ) globalFlagType = "uint8_t";
-        else if (flagCount <= 16) globalFlagType = "uint16_t";
-        else if (flagCount <= 32) globalFlagType = "uint32_t";
-        else if (flagCount <= 64) globalFlagType = "uint64_t";
-        else
-        {
-            Backend.err.get ().println ("ERROR: Too many global flags to fit in basic integer type");
-            throw new Backend.AbortRun ();
-        }
+        globalFlagCount = 0;
+        if (trackInstances  &&  s.connected > 0) clearNew = globalFlagCount++;
+        if (populationCanBeInactive)             inactive = globalFlagCount++;
+        globalFlagType = determineFlagType (globalFlagCount, "global");
 
         needGlobalDerivative         = ! Euler  &&  globalDerivative.size () > 0;
         needGlobalIntegrate          = globalIntegrated.size () > 0;
@@ -666,6 +649,17 @@ public class BackendDataC
         }
 
         lastT = needLocalIntegrate  &&  (dtCanChange  ||  eventTargets.size () > 0);
+    }
+
+    public static String determineFlagType (int flagCount, String category)
+    {
+        if (flagCount == 0 ) return "";
+        if (flagCount <= 8 ) return "uint8_t";
+        if (flagCount <= 16) return "uint16_t";
+        if (flagCount <= 32) return "uint32_t";
+        if (flagCount <= 64) return "uint64_t";
+        Backend.err.get ().println ("ERROR: Too many " + category + " flags to fit in basic integer type");
+        throw new Backend.AbortRun ();
     }
 
     /**

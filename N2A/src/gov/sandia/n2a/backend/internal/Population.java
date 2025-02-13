@@ -42,7 +42,7 @@ public class Population extends Instance
             Part p = new Part (equations, container);
             valuesObject[bed.instances] = p;
             n = 1;
-            if (equations.connected) p.valuesFloat[bed.newborn] = 1;
+            if (equations.connected > 0) p.valuesFloat[bed.newborn] = 1;
         }
         else if (bed.instances >= 0)
         {
@@ -850,7 +850,7 @@ public class Population extends Instance
                 for (int size = instances.size (); size <= index; size++) instances.add (null);
                 instances.set (index, p);
 
-                if (equations.connected)
+                if (equations.connected > 0)
                 {
                     p.valuesFloat[bed.newborn] = 1;
                     valuesFloat[bed.firstborn] = Math.min (valuesFloat[bed.firstborn], index);

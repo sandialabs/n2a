@@ -72,7 +72,7 @@ public class EquationSet implements Comparable<EquationSet>
     public MNode                               pinIn;                  // partial collection of input pins (does not include inner input pins which are exported)
     public MNode                               pinOut;                 // collection of output pins
     public List<ConnectionBinding>             connectionBindings;     // non-null iff this is a connection
-    public boolean                             connected;
+    public int                                 connected;              // Count of the number of connections for which this is an endpoint. If zero, we are not "connected" by anything.
     public NavigableSet<AccountableConnection> accountableConnections; // Connections which declare a $min or $max w.r.t. this part. Note: connected can be true even if accountableConnections is null.
     public List<ConnectionBinding>             dependentConnections;   // Connection bindings which include this equation set along their path. Used to update the paths during flattening.
     public boolean                             needInstanceTracking;   // Instance tracking is necessary due to a connection path that runs through this part.
@@ -109,10 +109,11 @@ public class EquationSet implements Comparable<EquationSet>
     **/
     public static class ConnectionBinding
     {
-        public int         index;  // position in connectionBindings array
+        public EquationSet connection;  // The connection part that contains this binding.
+        public int         index;       // position in connectionBindings array
         public String      alias;
-        public Variable    variable;  // The original variable from which this binding was derived. Other variables that resolve through this binding are recorded in Variable.usedBy.
-        public EquationSet endpoint;
+        public Variable    variable;    // The original variable from which this binding was derived. Other variables that resolve through this binding are recorded in Variable.usedBy.
+        public EquationSet endpoint;    // The final referenced part.
         /**
             Trail of objects followed to resolve the connection.
             Assumes that we start within the current instance, so the first entry will almost
@@ -129,14 +130,6 @@ public class EquationSet implements Comparable<EquationSet>
                 EquationSet s = (EquationSet) o;
                 if (s.dependentConnections == null) s.dependentConnections = new ArrayList<ConnectionBinding> ();
                 s.dependentConnections.add (this);
-            }
-        }
-
-        public void addDependencies ()
-        {
-            for (Object o : resolution)
-            {
-                if (o instanceof ConnectionBinding) variable.addDependencyOn (((ConnectionBinding) o).variable);
             }
         }
     }
@@ -1269,11 +1262,12 @@ public class EquationSet implements Comparable<EquationSet>
 
             // Store connection binding
             if (connectionBindings == null) connectionBindings = new ArrayList<ConnectionBinding> ();
+            result.connection = this;
             result.alias = v.name;
             result.variable = v;
             result.index = connectionBindings.size ();
             connectionBindings.add (result);
-            result.endpoint.connected = true;
+            result.endpoint.connected++;
             v.container = null;  // Prevent variable from interacting with other analysis routines.
             it.remove ();  // Should no longer be in the equation list, as there is nothing further to compute.
         }
@@ -2003,6 +1997,73 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
+        Determine if a connection can be replaced by a compartment that merely makes
+        references into other parts. This is possible when all the endpoints are
+        singletons relative to the connection, and the connection always exists.
+        To avoid issues with lethal containers, we also require that this connection
+        and all its endpoints share the same immediate container. With more analysis,
+        this requirement could be relaxed.
+        Depends on
+            findConnection()
+            resolveRHS(), resolveLHS() -- So we can rewrite the resolution paths.
+        This process needs to be done before flatten() to ensure that every compartment
+        that is "connected" by us is freed to be flattened.
+    **/
+    public void revertSingletonConnections ()
+    {
+        // Evaluate ourselves before recursive descent, because it may enable
+        // inner connections to also become singleton.
+        if (connectionBindings != null)
+        {
+            // Ensure all endpoints are singletons.
+            boolean OK = true;
+            for (ConnectionBinding cb : connectionBindings)
+            {
+                if (cb.endpoint.container != container  ||  ! cb.endpoint.isSingleton ())
+                {
+                    OK = false;
+                    break;
+                }
+            }
+
+            // Check if connection always exists.
+            // (Endpoints implicitly always exist because they pass isSingleton() above.)
+            // Basically, we forbid $p from existing. This is very conservative, but also
+            // reasonable since there is no value in defining $p for a singleton connection.
+            if (OK  &&  find (new Variable ("$p")) != null) OK = false;
+
+            if (OK)  // This connection passes all the tests.
+            {
+                // Convert this connection back into a regular part.
+                // First convert all references that pass through the connection variables so that they
+                // reach the endpoints directly. Then remove the connection bindings.
+                for (ConnectionBinding cb : connectionBindings)
+                {
+                    for (Object o : cb.variable.usedBy)
+                    {
+                        if (o instanceof Variable)
+                        {
+                            Variable v = (Variable) o;
+                            v.removeDependencyOn (cb.variable);
+
+                            // Rewrite the resolution path.
+                            List<Object> resolution = v.reference.resolution;
+                            int index = resolution.indexOf (cb);
+                            resolution.set (index, container);
+                            resolution.add (index + 1, cb.endpoint);
+                            v.reference.removeLoops ();
+                        }
+                    }
+                    cb.endpoint.connected--;
+                }
+                connectionBindings = null;
+            }
+        }
+
+        for (EquationSet p : parts) p.revertSingletonConnections ();
+    }
+
+    /**
         Convert this equation set into an equivalent object where each included part with $n==1
         (and satisfying a few other conditions) is merged into its containing part.
         Equations with combiners (=+, =*, and so on) are joined together into one long equation
@@ -2020,7 +2081,7 @@ public class EquationSet implements Comparable<EquationSet>
 
             // Check if connection or endpoint. They must remain separate equation sets for code-generation purposes.
             if (s.connectionBindings != null) continue;
-            if (s.connected) continue;
+            if (s.connected > 0) continue;
 
             // For similar reasons, if the part contains backend-related metadata, it should remain separate.
             if (s.metadata.child ("backend", backend) != null) continue;
@@ -2477,7 +2538,7 @@ public class EquationSet implements Comparable<EquationSet>
                         index.equations.clear ();
                         index.addAttribute ("initOnly");
                         index.removeAttribute ("constant");
-                        if (vrc.connected) index.addUser (vrc);
+                        if (vrc.connected > 0) index.addUser (vrc);
                     }
                 }
                 if (externalizer.allGlobal  &&  ! v.hasAttribute ("local")  &&  vr.hasAttribute ("global"))
@@ -2591,7 +2652,7 @@ public class EquationSet implements Comparable<EquationSet>
             }
         }
 
-        if (connectionBindings == null  ||  connected)  // Either a compartment, or a connection that also happens to be the endpoint of another connection.
+        if (connectionBindings == null  ||  connected > 0)  // Either a compartment, or a connection that also happens to be the endpoint of another connection.
         {
             boolean singleton = isSingleton ();
             // isSingleton() may be wrong until resolveLHS() has run, as that is the only way to know if
@@ -2619,7 +2680,7 @@ public class EquationSet implements Comparable<EquationSet>
             {
                 v = find (v);
             }
-            if (connected  &&  ! singleton) v.addUser (this);  // Force $index to exist for connection targets. Used for anti-indexing into list of instances.
+            if (connected > 0  &&  ! singleton) v.addUser (this);  // Force $index to exist for connection targets. Used for anti-indexing into list of instances.
         }
 
         if (connectionBindings == null)
@@ -2924,6 +2985,22 @@ public class EquationSet implements Comparable<EquationSet>
         Set<EquationSet> result = new TreeSet<EquationSet> ();
         for (ArrayList<EquationSet> split : splits) result.addAll (split);
         return result;
+    }
+
+    /**
+        Determines if another part can change into this one.
+    **/
+    public boolean isConversionTarget ()
+    {
+        if (container == null) return false;
+        for (EquationSet p : container.parts)
+        {
+            for (ArrayList<EquationSet> split : p.splits)
+            {
+                if (split.contains (this)) return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -4301,10 +4378,10 @@ public class EquationSet implements Comparable<EquationSet>
     }
 
     /**
-        Sequence variables for maximum information spread during init cycle.
+        Sequence variables for maximum information spread during given phase.
         Builds dependencies based only on equations that can actually fire.
         Guarantees that dependencies between variables are unchanged when this
-        function finishes. (They are modified temporarily as par of the process.)
+        function finishes. (They are modified temporarily as part of the process.)
         Thus it is safe to call this function on lists that have not been deep-copied.
     **/
     public void determineOrderInit (String phase, List<Variable> list)
