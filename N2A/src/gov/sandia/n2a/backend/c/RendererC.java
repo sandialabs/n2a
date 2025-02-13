@@ -66,12 +66,12 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class RendererC extends Renderer
 {
-    public    JobC           job;
-    protected EquationSet    part;
-    protected BackendDataC   bed;
-    protected boolean        global;                               // Whether this is in the population object (true) or a part object (false)
-    public    boolean        useExponent;                          // Some functions have extra parameters in fixed-point mode. Rather than duplicate rendering code, we tack on the extra parameters here.
-    public    Set<String>    initialized = new HashSet<String> (); // List of holder objects which have been initialized. Used to prevent redundant initialization in a single function, so gets cleared between emission of different functions.
+    public JobC           job;
+    public EquationSet    part;
+    public BackendDataC   bed;
+    public boolean        global;                               // Whether this is in the population object (true) or a part object (false)
+    public boolean        useExponent;                          // Some functions have extra parameters in fixed-point mode. Rather than duplicate rendering code, we tack on the extra parameters here.
+    public Set<String>    initialized = new HashSet<String> (); // List of holder objects which have been initialized. Used to prevent redundant initialization in a single function, so gets cleared between emission of different functions.
 
     public RendererC (JobC job, StringBuilder result)
     {
@@ -571,7 +571,11 @@ public class RendererC extends Renderer
 
             if (o.hasColumnName)  // column name is explicit
             {
+                // If this column name is a number, then ensure it is an integer. Truncate everything after the decimal.
+                boolean needCast =  ! useExponent  &&  o.operands[2].getType () instanceof Scalar;
+                if (needCast) result.append ("(int) (");
                 o.operands[2].render (this);
+                if (needCast) result.append (")");
             }
             else  // column name is generated, so use prepared string value
             {
