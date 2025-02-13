@@ -377,22 +377,22 @@ public class Plot extends OutputParser
         if (c == null)
         {
             float hue;
-            if (shift != 0  ||  count > 12)  // Split axis or too many colors.
+            if (shift != 0  ||  count > 6)  // Split axis or too many colors.
             {
                 hue = (float) i / count + shift;
             }
-            else  // Single axis the small number of colors.
+            else  // Single axis with small number of colors.
             {
-                int r = (int) Math.floor (Math.log (i) / Math.log (3));
-                if (r == 0)
+                if (i < 3)
                 {
                     hue = i / 3.0f;
                 }
                 else
                 {
-                    int   j      = i - (int) Math.round (Math.pow (3, r));
-                    float step   = (float) Math.pow (3, -r);
-                    float offset = step / 3;
+                    int   r      = (int) Math.floor (Math.log (i / 3) / Math.log (2));
+                    int   j      = i - (int) Math.round (3 * Math.pow (2, r));
+                    float step   = (float) (1 / (3 * Math.pow (2, r)));
+                    float offset = step / 2;
                     hue = j * step + offset;
                 }
             }
