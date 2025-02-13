@@ -6,7 +6,7 @@ Distributed under the UIUC/NCSA Open Source License.  See the file LICENSE
 for details.
 
 
-Copyright 2005-2022 Sandia Corporation.
+Copyright 2005-2025 Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 Distributed under the GNU Lesser General Public License.  See the file LICENSE
@@ -19,12 +19,10 @@ for details.
 
 
 #include "nosys.h"
+#include "mymath.h"
 
 #include <assert.h>
-#include <stdlib.h>
-#include <cstring>
-#include <stdint.h>
-#include <stddef.h>
+#include <string.h>
 
 #include <new>
 #include <atomic>

@@ -46,7 +46,7 @@ template<class T>
 class SHARED MatrixAbstract
 {
 public:
-    virtual ~MatrixAbstract ();
+    virtual ~MatrixAbstract () = 0;
     virtual uint32_t classID () const = 0;  ///< @return A bitvector indicating all the classes to which this object can be cast.  Hack to avoid the cost of dynamic_cast.
 
     virtual T   get         (const int row, const int column = 0) const = 0;  ///< Safe element accesss. Returns 0 if indices are out of range.
@@ -140,13 +140,6 @@ SHARED Matrix<int> shift (const MatrixAbstract<int> & A, int shift);  // Defined
     Provides several kinds of view specifically for the Matrix class.
     Handles these efficiently by using special combinations of start
     address and row and column stride.
-
-    <p>This is the superclass for both Matrix and Vector, because those are
-    really just more constrained forms of the general memory access pattern
-    described by this class.  However, the semantics of functions in this
-    class follow those of MatrixRegion in cases where they differ from
-    Matrix and Vector.  For example, resize() will change the bounds, but
-    will not allocate memory if they exceed the current storage size.
 **/
 template<class T>
 class SHARED MatrixStrided : public MatrixAbstract<T>

@@ -8,7 +8,6 @@ the U.S. Government retains certain rights in this software.
 #ifndef n2a_math_h
 #define n2a_math_h
 
-#define _USE_MATH_DEFINES
 #include <cmath>
 #include <limits>
 
@@ -16,6 +15,12 @@ the U.S. Government retains certain rights in this software.
 
 #define TWOPI  6.283185307179586476925286766559
 #define TWOPIf 6.283185307179586476925286766559f
+#ifndef M_PI
+#  define M_PI 3.141592653589793238462643383279502884
+#endif
+#ifndef INFINITY
+#  define INFINITY 1e10000f  // The idea is to overflow the exponent, forcing a round-up to infinity.
+#endif
 
 #ifdef _MSC_VER
 namespace std

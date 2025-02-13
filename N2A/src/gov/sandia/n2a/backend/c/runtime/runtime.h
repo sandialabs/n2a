@@ -269,7 +269,7 @@ struct SHARED Part : public Simulatable<T>
     virtual void deref          (); ///< Decrement refcount, if there is one. Called by Simulator (visitor) when part is dequeued.
     virtual bool isFree         (); ///< @return true if the part is ready to use, false if the we are still waiting on other parts that reference us.
     virtual void clearDuplicate (); ///< Clears the "duplicate" flag, if it exists.
-    virtual int  flush          (); ///< Check if this part is dead, dequeued or duplicate. Return values have same meaning as finalize().
+    virtual int  flush          (); ///< Check if this part is dead, dequeued or duplicate. Return value has same meaning as finalize().
 
     // Connection-specific accessors
     virtual void      setPart    (int i, Part<T> * part);           ///< Assign the instance of population i referenced by this connection.
@@ -474,7 +474,7 @@ template<class T>
 struct More
 {
     /**
-        Returns true if a sorts before b. However, priority_queue.top() returns the last
+        Returns true if a sorts after b. priority_queue.top() returns the last
         element in sort order. Thus we need to sort so earlier times come last.
         This means that we answer false when a has timestamp strictly before b.
         Regarding ties (equal timestamps): The contract of priority_queue appears to be that entries
@@ -491,10 +491,10 @@ struct More
         // Events have the same timestamp, so sort by event type ...
         bool stepA = a->isStep ();
         bool stepB = b->isStep ();
-        if (stepA  &&  stepB) return true;  // Both are step events. New entries will get sorted after existing entries at the same point in time.
+        if (stepA  &&  stepB) return a > b;  // Both are steps at same moment. This arbitrary comparison of pointer values is to satisfy the requirements of strict weak ordering.
         if (stepA) return ! SIMULATOR after;
         if (stepB) return   SIMULATOR after;
-        return true;  // Both are spike events.
+        return a > b;  // Both are spike events at same moment.
     }
 };
 
