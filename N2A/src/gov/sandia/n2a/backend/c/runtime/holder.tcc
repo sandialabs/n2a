@@ -2624,7 +2624,7 @@ OutputHolder<T>::~OutputHolder ()
             std::cerr << "WARNING: column info might have been lost" << std::endl;
         }
     }
-    for (auto it : columnMode) delete it;
+    for (auto it : columnMode) if (it) delete it;
 }
 
 template<class T>
@@ -2666,33 +2666,37 @@ template<class T>
 void
 OutputHolder<T>::addMode (const char * mode)
 {
+    if (! mode)
+    {
+        columnMode.push_back (0);
+        return;
+    }
+
     std::map<String,String> * result = new std::map<String,String>;
     columnMode.push_back (result);
-    if (mode)
+
+    String rest = mode;
+    String hint;
+    while (! rest.empty ())
     {
-        String rest = mode;
-        String hint;
-        while (! rest.empty ())
+        split (rest, ",", hint, rest);
+        hint.trim ();
+        String key;
+        String value;
+        split (hint, "=", key, value);
+        if (key == "timeScale")
         {
-            split (rest, ",", hint, rest);
-            hint.trim ();
-            String key;
-            String value;
-            split (hint, "=", key, value);
-            if (key == "timeScale")
-            {
-                std::map<String,String> * c = columnMode[0];
-                (*c)["scale"] = value;
-            }
-            else if (key == "ymin"  ||  key == "ymax"  ||  key == "xmin"  ||  key == "xmax")
-            {
-                std::map<String,String> * c = columnMode[0];
-                (*c)[key] = value;
-            }
-            else
-            {
-                (*result)[key] = value;
-            }
+            std::map<String,String> * c = columnMode[0];
+            (*c)["scale"] = value;
+        }
+        else if (key == "ymin"  ||  key == "ymax"  ||  key == "xmin"  ||  key == "xmax")
+        {
+            std::map<String,String> * c = columnMode[0];
+            (*c)[key] = value;
+        }
+        else
+        {
+            (*result)[key] = value;
         }
     }
 }
@@ -2718,9 +2722,24 @@ OutputHolder<T>::trace (T now, const String & column, T value,                 c
     std::unordered_map<String, int>::iterator result = columnMap.find (column);
     if (result == columnMap.end ())
     {
+        if (raw)
+        {
+            // Backfill entries up to, but not including, the one that will be created
+            // after this conditional section.
+            // Notice that "count" is one less than actual position index for the column.
+            // That is, column=="1" is in position 2, but count here would be 1, and we
+            // ensure columnValues and columnMap of size 2. Then below, those vectors are
+            // expanded to size 3. The three elements end up being $t, column 0, and column 1.
+            int count = atoi (column.c_str ());
+            for (int i = columnValues.size (); i <= count; i++)
+            {
+                columnValues.push_back (std::numeric_limits<float>::quiet_NaN ());
+                columnMap[i-1] = i;
+            }
+        }
         columnMap[column] = columnValues.size ();
         columnValues.push_back ((float) value);
-        addMode (mode);
+        if (! raw) addMode (mode);
     }
     else
     {
@@ -2797,51 +2816,6 @@ OutputHolder<T>::trace (T now, const String & column, const Matrix<T> & A, const
 #endif
 
 template<class T>
-T
-#ifdef n2a_FP
-OutputHolder<T>::trace (T now, T index,  T valueFP, int exponent, const char * mode)
-#else
-OutputHolder<T>::trace (T now, T column, T value,                 const char * mode)
-#endif
-{
-    trace (now);
-
-#   ifdef n2a_FP
-    float value;
-    if      (valueFP ==  NAN)      value =  std::numeric_limits<float>::quiet_NaN ();
-    else if (valueFP ==  INFINITY) value =  std::numeric_limits<float>::infinity ();
-    else if (valueFP == -INFINITY) value = -std::numeric_limits<float>::infinity ();
-    else                           value = (float) valueFP / pow (2.0f, -exponent);
-#   else
-    int index = (int) column;  // truncates floating-point
-#   endif
-
-    String columnName = index;
-    std::unordered_map<String, int>::iterator result = columnMap.find (columnName);
-    if (result == columnMap.end ())
-    {
-        if (raw)
-        {
-            index++;  // column index + offset for time column
-            columnValues.resize (index, std::numeric_limits<float>::quiet_NaN ());  // add any missing columns before the one we are about to create
-        }
-        columnMap[columnName] = columnValues.size ();
-        columnValues.push_back ((float) value);
-        addMode (mode);
-    }
-    else
-    {
-        columnValues[result->second] = (float) value;
-    }
-
-#   ifdef n2a_FP
-    return valueFP;
-#   else
-    return value;
-#   endif
-}
-
-template<class T>
 void
 OutputHolder<T>::writeTrace ()
 {
@@ -2903,6 +2877,7 @@ template<class T>
 void
 OutputHolder<T>::writeModes ()
 {
+    if (raw) return;
     std::ofstream mo (columnFileName.c_str ());
     mo << "N2A.schema=3\n";
     for (auto & it : columnMap)
@@ -2910,6 +2885,7 @@ OutputHolder<T>::writeModes ()
         int i = it.second;
         mo << i << ":" << it.first << "\n";
         auto mode = columnMode[i];
+        if (! mode) continue;
         for (auto & nv : *mode) mo << " " << nv.first << ":" << nv.second << "\n";
     }
     // mo should automatically flush and close here

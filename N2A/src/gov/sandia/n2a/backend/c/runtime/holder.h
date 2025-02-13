@@ -422,11 +422,9 @@ public:
 #   ifdef n2a_FP
     T         trace (T now, const String & column, T                 value, int exponent, const char * mode = 0);
     Matrix<T> trace (T now, const String & column, const Matrix<T> & A,     int exponent, const char * mode = 0);
-    T         trace (T now, T              column, T                 value, int exponent, const char * mode = 0);
 #   else
     T         trace (T now, const String & column, T                 value,               const char * mode = 0);
     Matrix<T> trace (T now, const String & column, const Matrix<T> & A,                   const char * mode = 0);
-    T         trace (T now, T              column, T                 value,               const char * mode = 0);
 #   endif
     void writeTrace ();
     void writeModes ();
