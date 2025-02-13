@@ -239,10 +239,9 @@ public class NodeJob extends NodeBase
         if (Files.exists (finished)) checkFinished (finished);
 
         long started = source.getLong ("started");
-        if (started > 0) dateStarted = new Date (started);
-
         if (started > 0)
         {
+            dateStarted = new Date (started);
             if (deleted) return;
             if (complete >= 1  &&  complete != 3) return;
             Host.get (source).monitor (this);
