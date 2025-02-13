@@ -504,6 +504,17 @@ public abstract class Host
         synchronized (running) {running.remove (job);}
     }
 
+    /**
+        @return A snapshot of the current list of running jobs.
+        This list is independent of the one used by Host, so it will
+        not continue to be updated after this function returns, nor will
+        modifications to it impact job monitoring.
+    **/
+    public List<NodeJob> getRunning ()
+    {
+        synchronized (running) {return new ArrayList<NodeJob> (running);}
+    }
+
     public class MonitorThread extends Thread
     {
         public boolean stop;
