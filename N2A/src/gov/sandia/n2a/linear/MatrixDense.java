@@ -314,6 +314,48 @@ public class MatrixDense extends Matrix
     }
 
     /**
+        In-place removal of row. Causes all following rows to shift up,
+        and matrix to get smaller.
+        Allocated memory block is unaffected. Thus, there will be wasted
+        space at the end.
+    **/
+    public void removeRow (int row)
+    {
+        for (int c = 0; c < columns; c++)
+        {
+            int a = offset + row * strideR + c * strideC;
+            for (int r = row + 1; r < rows; r++)
+            {
+                int next = a + strideR;
+                data[a] = data[next];
+                a = next;
+            }
+        }
+        rows--;
+    }
+
+    /**
+        In-place removal of column. Causes all following columns to shift left,
+        and matrix to get smaller.
+        Allocated memory block is unaffected. Thus, there will be wasted
+        space at the end.
+    **/
+    public void removeColumn (int column)
+    {
+        for (int r = 0; r < rows; r++)
+        {
+            int a = offset + r * strideR + column * strideC;
+            for (int c = column + 1; c < columns; c++)
+            {
+                int next = a + strideC;
+                data[a] = data[next];
+                a = next;
+            }
+        }
+        columns--;
+    }
+
+    /**
         @return A copy of this object, with diagonal elements set to 1 and off-diagonals set to zero.
      */
     public MatrixDense identity ()
