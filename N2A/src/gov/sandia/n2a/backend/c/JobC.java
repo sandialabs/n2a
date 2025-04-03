@@ -117,6 +117,7 @@ public class JobC extends Thread
     protected boolean jni;           // Emit library code for use by Java. Only has an effect when lib is true.
     public    boolean tls;           // Make global objects thread-local, so multiple simulations can be run in same process. (Generally, it is cleaner to use separate process for each simulation, but some users want this.)
     protected boolean usesPolling;
+    protected boolean hasMfile;      // Mfile is used somewhere in the model tree. When present, we emit code to set MDoc exception mode.
     protected List<ProvideOperator> extensions = new ArrayList<ProvideOperator> ();
 
     // These values are unique across the whole simulation, so they go here rather than BackendDataC.
@@ -1842,6 +1843,7 @@ public class JobC extends Thread
                             }
                         }
                     }
+                    if (f instanceof Mfile) hasMfile = true;
                     // Detect functions that need static handles
                     if (f.operands.length > 0)
                     {
@@ -2119,6 +2121,10 @@ public class JobC extends Thread
             result.append ("  " + r.name + " = matrixHelper<" + T + "> (\"" + r.operands[0].getString () + "\"");
             if (fixedPoint) result.append (", " + r.exponent);
             result.append (");\n");
+        }
+        if (hasMfile)
+        {
+            result.append ("  MDoc::setMissingFileException (1);\n");  // Print warning.
         }
         for (Mfile m : mainMfile)
         {
@@ -3286,6 +3292,7 @@ public class JobC extends Thread
                         if (context.useExponent) result.append (RendererC.printShift (bed.n.exponent));
                         result.append ("));\n");
                     }
+                    // else case is handled above, at the start of finalize(), so it can compare $n to next_$n.
                 }
                 else  // $n is the only kind of structural dynamics, so simply do a resize() when needed
                 {
@@ -5095,7 +5102,7 @@ public class JobC extends Thread
                 if (fixedPoint) EquationSet.determineExponentsSimplified (exponentContext, list);
                 for (Variable v : list)
                 {
-                    multiconditional (v, context, "    ");
+                    multiconditional (v, context, "  ");
                 }
             }
             result.append ("  xyz = " + resolve (bed.xyz.reference, context, false) + ";\n");

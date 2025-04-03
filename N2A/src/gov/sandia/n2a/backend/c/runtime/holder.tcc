@@ -111,6 +111,7 @@ void
 Parameters<T>::read (const String & parmFileName)
 {
     std::ifstream ifs (parmFileName.c_str ());
+    if (! ifs.good ()) fprintf (stderr, "Failed to open parameter file: %s\n", parmFileName.c_str ());
     read (ifs);
 }
 
@@ -294,7 +295,7 @@ matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle)
         SIMULATOR holders.push_back (handle);
 
         std::ifstream ifs (fileName.c_str ());
-        if (! ifs.good ()) std::cerr << "Failed to open matrix file: " << fileName << std::endl;
+        if (! ifs.good ()) fprintf (stderr, "Failed to open matrix file: %s\n", fileName.c_str ());
         String line;
         getline (ifs, line);
         line.trim ();  // In particular, get rid of trailing line-ending character in some cases.
@@ -2073,8 +2074,15 @@ InputHolder<T>::InputHolder (const String & fileName)
     epsilon          = (T) 1e-6;
 #   endif
 
-    if (fileName.empty ()) in = &std::cin;
-    else                   in = new std::ifstream (fileName.c_str ());
+    if (fileName.empty ())
+    {
+        in = &std::cin;
+    }
+    else
+    {
+        in = new std::ifstream (fileName.c_str ());
+        if (! in->good ()) fprintf (stderr, "Failed to open input file: %s\n", fileName.c_str ());
+    }
 }
 
 template<class T>

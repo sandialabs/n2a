@@ -1157,7 +1157,7 @@ n2a::MDoc::load ()
     }
     catch (...)  // An exception is common for a newly created doc that has not yet been flushed to disk.
     {
-        if (missingFileException >= 1) std::cerr << "Failed to read " << file << std::endl;
+        if (missingFileException >= 1) fprintf (stderr, "Failed to read file: %s\n", file.c_str ());
         if (missingFileException >= 2) throw "MDod::load() failed to read file";
     }
     clearChanged ();  // After load(), clear the slate so we can detect any changes and save the document.

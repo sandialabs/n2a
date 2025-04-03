@@ -6,6 +6,8 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.language.function;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -94,8 +96,16 @@ public class Mfile extends Function
             Object o = simulator.holders.get (path);
             if (o == null)
             {
+                // Our only purpose is to read the file, not write new data.
+                // Therefore, warn the user if it is unreadable.
+                Path dataPath = simulator.jobDir.resolve (path);
+                if (! Files.isReadable (dataPath))
+                {
+                    Backend.err.get ().println ("WARNING: Can't read Mfile: " + path);
+                }
+
                 result = new Holder ();
-                result.doc = new MDoc (simulator.jobDir.resolve (path));
+                result.doc = new MDoc (dataPath);
                 Type inherit = mf.evalKeyword (context, "inherit");
                 if (inherit instanceof Text)
                 {
