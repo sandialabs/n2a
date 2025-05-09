@@ -69,9 +69,9 @@ public class RendererC extends Renderer
     public JobC           job;
     public EquationSet    part;
     public BackendDataC   bed;
-    public boolean        global;                               // Whether this is in the population object (true) or a part object (false)
-    public boolean        useExponent;                          // Some functions have extra parameters in fixed-point mode. Rather than duplicate rendering code, we tack on the extra parameters here.
-    public Set<String>    initialized = new HashSet<String> (); // List of holder objects which have been initialized. Used to prevent redundant initialization in a single function, so gets cleared between emission of different functions.
+    public boolean        global;                           // Whether this is in the population object (true) or a part object (false)
+    public boolean        useExponent;                      // Some functions have extra parameters in fixed-point mode. Rather than duplicate rendering code, we tack on the extra parameters here.
+    public Set<Object>    defined = new HashSet<Object> (); // List of holder objects which have been initialized. Used to prevent redundant initialization in a single function, so gets cleared between emission of different functions.
 
     public RendererC (JobC job, StringBuilder result)
     {

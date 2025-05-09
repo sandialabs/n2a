@@ -2671,27 +2671,50 @@ OutputHolder<T>::trace (T now)
 }
 
 template<class T>
-void
-OutputHolder<T>::addMode (const char * mode)
+int
+OutputHolder<T>::getColumnIndex (const String & column)
 {
-    if (! mode)
-    {
-        columnMode.push_back (0);
-        return;
-    }
+    std::unordered_map<String, int>::iterator result = columnMap.find (column);
+    if (result != columnMap.end ()) return result->second;
 
-    std::map<String,String> * result = new std::map<String,String>;
-    columnMode.push_back (result);
+    if (raw)
+    {
+        // Backfill entries up to, but not including, the one that will be created
+        // after this conditional section.
+        // Notice that "count" is one less than actual position index for the column.
+        // That is, column=="1" is in position 2, but count here would be 1, and we
+        // ensure columnValues and columnMap of size 2. Then below, those vectors are
+        // expanded to size 3. The three elements end up being $t, column 0, and column 1.
+        int count = atoi (column.c_str ());
+        for (int i = columnValues.size (); i <= count; i++)
+        {
+            columnValues.push_back (std::numeric_limits<float>::quiet_NaN ());
+            columnMap[i-1] = i;
+        }
+    }
+    int index = columnValues.size ();
+    columnMap[column] = index;
+    columnValues.push_back (0);
+    if (! raw) columnMode.push_back (0);
+    return index;
+}
+
+template<class T>
+void
+OutputHolder<T>::setMode (int index, const char * mode, const char * lineSeparator, const char * keySeparator)
+{
+    if (! columnMode[index]) columnMode[index] = new std::map<String,String>;
+    std::map<String,String> * result = columnMode[index];
 
     String rest = mode;
     String hint;
     while (! rest.empty ())
     {
-        split (rest, ",", hint, rest);
+        split (rest, lineSeparator, hint, rest);
         hint.trim ();
         String key;
         String value;
-        split (hint, "=", key, value);
+        split (hint, keySeparator, key, value);
         if (key == "timeScale")
         {
             std::map<String,String> * c = columnMode[0];
@@ -2727,32 +2750,9 @@ OutputHolder<T>::trace (T now, const String & column, T value,                 c
     else                           value = (float) valueFP / pow (2.0f, -exponent);
 #   endif
 
-    std::unordered_map<String, int>::iterator result = columnMap.find (column);
-    if (result == columnMap.end ())
-    {
-        if (raw)
-        {
-            // Backfill entries up to, but not including, the one that will be created
-            // after this conditional section.
-            // Notice that "count" is one less than actual position index for the column.
-            // That is, column=="1" is in position 2, but count here would be 1, and we
-            // ensure columnValues and columnMap of size 2. Then below, those vectors are
-            // expanded to size 3. The three elements end up being $t, column 0, and column 1.
-            int count = atoi (column.c_str ());
-            for (int i = columnValues.size (); i <= count; i++)
-            {
-                columnValues.push_back (std::numeric_limits<float>::quiet_NaN ());
-                columnMap[i-1] = i;
-            }
-        }
-        columnMap[column] = columnValues.size ();
-        columnValues.push_back ((float) value);
-        if (! raw) addMode (mode);
-    }
-    else
-    {
-        columnValues[result->second] = (float) value;
-    }
+    int index = getColumnIndex (column);
+    columnValues[index] = (float) value;
+    if (mode  &&  ! columnMode[index]) setMode (index, mode);
 
 #   ifdef n2a_FP
     return valueFP;

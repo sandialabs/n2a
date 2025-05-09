@@ -1645,6 +1645,12 @@ public class Variable implements Comparable<Variable>, Cloneable
                 accessed by other equation sets</dd>
             <dt>state</dt>
                 <dd>Explicitly marked as not temporary.</dd>
+            <dt>initOnlyTemporary</dt>
+                <dd>This variable had both "initOnly" and "temporary" attributes.
+                These are mutually contradictory storage types, so one attribute
+                (usually "initOnly") was removed. However, knowing a variable
+                qualifies for both may allow some optimizations, so that history
+                is remembered with this attribute.</dd>
             <dt>externalRead</dt>
                 <dd>an equation in some other equation-set uses this variable</dd>
             <dt>externalWrite</dt>

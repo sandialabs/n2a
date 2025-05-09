@@ -132,6 +132,21 @@ public class EquationSet implements Comparable<EquationSet>
                 s.dependentConnections.add (this);
             }
         }
+
+        /**
+            Retrieves the equation set associated with the given resolution step,
+            or null if the position is out of range.
+            The result is similar to accessing "resolution" directly, except that a step
+            through a connection binding is converted to the resulting endpoint. This is
+            a convenience function to reduce boiler-plate code.
+        **/
+        public EquationSet getResolution (int position)
+        {
+            if (position < 0  ||  position >= resolution.size ()) return null;
+            Object o = resolution.get (position);
+            if (o instanceof ConnectionBinding) return ((ConnectionBinding) o).endpoint;
+            return (EquationSet) o;
+        }
     }
 
     public static class AccountableConnection implements Comparable<AccountableConnection>
@@ -4717,7 +4732,8 @@ public class EquationSet implements Comparable<EquationSet>
 
     public static class VisitInitOnly implements Visitor
     {
-        boolean isInitOnly = true;  // until something falsifies it
+        public boolean isInitOnly = true;  // until something falsifies it
+        public boolean allowInitOnlyTemporary = false;
         public boolean visit (Operator op)
         {
             if (! isInitOnly) return false;
@@ -4725,15 +4741,11 @@ public class EquationSet implements Comparable<EquationSet>
             if (op instanceof AccessVariable)
             {
                 AccessVariable av = (AccessVariable) op;
-
-                if (av.reference == null  ||  av.reference.variable == null)  // guard against failed resolution. TODO: is this check really necessary?
+                Variable r = av.reference.variable;
+                if (   ! r.hasAny ("initOnly", "constant")
+                    && ! (allowInitOnlyTemporary  &&  r.hasAttribute ("initOnlyTemporary")))
                 {
                     isInitOnly = false;
-                }
-                else  // successful resolution
-                {
-                    Variable r = av.reference.variable;
-                    if (! r.hasAny ("initOnly", "constant")) isInitOnly = false;
                 }
             }
             else if (op instanceof Function)
@@ -4864,6 +4876,7 @@ public class EquationSet implements Comparable<EquationSet>
             if (v.hasAll ("temporary", "initOnly"))
             {
                 v.removeAttribute ("initOnly");
+                v.addAttribute ("initOnlyTemporary");  // Supports some backend optimizations.
 
                 // If there are no regular update equations, then convert init equations into
                 // regular update equations, because their values would continue to hold if the

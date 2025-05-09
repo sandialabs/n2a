@@ -6,7 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 /*
 For 3D graphics support, this software depends on header files from the Khronos Group.
-Download the following files and place them in this directory:
+Download the following files and place them in same directory as holder.h:
     https://www.khronos.org/registry/OpenGL/api/GL/glcorearb.h
     https://www.khronos.org/registry/OpenGL/api/GL/wglext.h
 Store in subdirectory KHR:
@@ -417,8 +417,9 @@ public:
     OutputHolder (const String & fileName);
     virtual ~OutputHolder ();
 
-    void trace (T now);               ///< Subroutine for other trace() functions.
-    void addMode (const char * mode); ///< Subroutine for other trace() functions.
+    void trace (T now);  ///< Subroutine for other trace() functions.
+    int  getColumnIndex (const String & column);  ///< Retrieves index of existing column, or creates new column.
+    void setMode (int index, const char * mode, const char * lineSeparator = ",", const char * keySeparator = "=");  ///< Subroutine for other trace() functions.
 #   ifdef n2a_FP
     T         trace (T now, const String & column, T                 value, int exponent, const char * mode = 0);
     Matrix<T> trace (T now, const String & column, const Matrix<T> & A,     int exponent, const char * mode = 0);

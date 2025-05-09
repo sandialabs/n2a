@@ -8,10 +8,7 @@ package gov.sandia.n2a.backend.c;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-
 import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventSource;
 import gov.sandia.n2a.backend.internal.InternalBackendData.EventTarget;
@@ -121,7 +118,6 @@ public class BackendDataC
 
     public List<String> globalColumns = new ArrayList<String> ();
     public List<String> localColumns  = new ArrayList<String> ();
-    public Set<Object>  defined       = new HashSet<Object> ();  // Identifiers for IO objects that should be emitted only once in a given function. Cleared at the start of processing for each such function.
 
     public List<EventTarget> eventTargets    = new ArrayList<EventTarget> ();
     public List<EventSource> eventSources    = new ArrayList<EventSource> ();
@@ -234,7 +230,7 @@ public class BackendDataC
         }
 
         copyDt =  dt.equations.isEmpty ()  &&  ! dt.hasAttribute ("accessor");  // Implicitly, also not "constant".
-        if (! dt.equations.isEmpty ()  &&  ! dt.hasAny ("constant", "accessor")) dt.addAttribute ("externalWrite");  // Hack to force $t' check into finalize() rather than update().
+        if (! dt.equations.isEmpty ()  &&  ! dt.hasAny ("constant", "accessor")) dt.addAttribute ("externalWrite");  // Hack to force $t' check to be in finalize() rather than update().
     }
 
     public void analyze (EquationSet s)
@@ -464,7 +460,7 @@ public class BackendDataC
 
             // Checks if connection instance can be inactive
             //   Must not have dynamics
-            //   Should not specify $p -- It is only useful to optimize away an inactive connection when it is unconditional.
+            //   Should not specify $p -- Optimizing away an inactive connection is only useful when the connection is unconditional.
             if (! localUpdate.isEmpty ()  ||  ! localIntegrated.isEmpty ()  ||  p != null) connectionCanBeInactive = false;
             //   Target populations must not change.
             //   References to aliases must only come from descendants.
@@ -611,7 +607,6 @@ public class BackendDataC
         needLocalCtor               = needLocalDtor  ||  needLocalClear  ||  s.parts.size () > 0;
         needLocalDie                =    canDie
                                       && (   liveFlag >= 0
-                                          || trackN
                                           || accountableEndpoints.size () > 0
                                           || localReference.size () > 0
                                           || eventTargets.size () > 0);

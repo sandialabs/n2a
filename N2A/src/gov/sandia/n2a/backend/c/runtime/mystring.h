@@ -13,6 +13,8 @@ the U.S. Government retains certain rights in this software.
 #include <cstddef>
 #include <functional>
 #include <vector>
+#include <cmath>
+#include <float.h>  // for FLT_EPSILON
 #ifndef N2A_SPINNAKER
 # include <istream>
 #endif
@@ -20,22 +22,196 @@ the U.S. Government retains certain rights in this software.
 // In some cases, the compiler knows the exact size of a string during a call
 // to memchr(), due to inlining. However, in this source file we
 // can't know that information. We use maxSize to specify the scan limit for
-// memchr(), which is of course the logical thing to do. However, GCC barfs
+// memchr(), which is of course the logical thing to do. However, GCC 11+ barfs
 // up warnings when our scan limit exceeds the known (to it) size of the string.
 // We don't want to see this scary and useless warning.
-#ifdef __GNUC__
+#if __GNUC__ >= 11
 #  pragma GCC diagnostic ignored "-Wstringop-overread"
 #endif
 
+
+// String formatting functions -----------------------------------------------
+
+// These are general purpose functions for inserting formatted data into a
+// char buffer. Their main role is to substitute for sprintf on an embedded
+// system. However, they can be used anywhere.
+
+// For float functions, we support only one output format: the equivalent of %g.
+
+// These functions all take a pointer "p" to the start position in the char buffer.
+// The buffer is assumed to have enough room for any inserted value.
+// The pointer will be moved to just past the inserted string.
+
+inline void append (char * & p, const char * value)
+{
+    while (*value) *p++ = *value++;
+}
+
+template<class T, typename std::enable_if<std::is_integral<T>::value  &&  std::is_unsigned<T>::value  &&  sizeof (T) >= 4, bool>::type = true>
+inline void append (char * & p, T value)
+{
+    char * b = p;
+    do
+    {
+        char digit = value % 10;
+        value /= 10;
+        *b++ = '0' + digit;
+    }
+    while (value);
+
+    // Reverse the buffer contents.
+    char * a = p;
+    char * c = b - 1;
+    while (c > a)
+    {
+        char temp = *a;
+        *a++ = *c;
+        *c-- = temp;
+    }
+
+    p = b;
+}
+
+template<class T, typename std::enable_if<std::is_integral<T>::value  &&  std::is_signed<T>::value  &&  sizeof (T) >= 4, bool>::type = true>
+inline void append (char * & p, T value)
+{
+    if (value < 0)
+    {
+        *p++ = '-';
+        value = -value;
+    }
+    append (p, (typename std::make_unsigned<T>::type) value);
+}
+
+/**
+    The approach is to implement Dragon2 from Steele & White, "How to Print Floating-Point Numbers Accurately".
+    The output is intended only for human viewing, not accurate transfer of data.
+    The code also needs to be compact, so the output isn't as nice as a fully-developed C library.
+
+    Since user code is falling a float function, we assume full float support is present, including exp() and log().
+
+    @param value Must be a standard IEEE-754 float.
+**/
+inline void append (char * & p, float value)
+{
+    if (value == 0)
+    {
+        *p++ = '0';
+        return;
+    }
+
+    // Detect NaN and Inf first.
+    // Some float operations below will blow up on those.
+    uint32_t raw = * (uint32_t *) &value;  // integer form of value
+    if ((raw & 0x7F800000) == 0x7F800000)  // exponent==255
+    {
+        if (raw & 0x7FFFFF) append (p, ".nan");
+        else                append (p, ".inf");
+        return;
+    }
+
+    if (value < 0)
+    {
+        *p++ = '-';
+        value = -value;
+    }
+
+    // Align float to [1,10). This effectively transfers the exponent from binary
+    // representation into decimal. This is also what we print out for "e" at the end.
+    // Because this is done in floating-point, it destroys some precision. We're being lazy.
+    // TODO: adding FLT_EPSILON to log value breaks some output. Fix latter code to be less fragile to inexact alignment.
+    int e = (int) log10f (value);  // Truncates the exponent to integer, which is what we want. This will leave as much as one digit above the decimal point.
+    uint32_t threshold = 0xFFFFF7;  // Mantissa rounding threshold. 24 bits.
+    if      (e > 6) value /= powf (10, e);
+    else if (e < 0) value *= powf (10, -e);
+    else
+    {
+        // Mantissa rounding threshold depends on how many significant digits remain after the integer portion is printed.
+        // (mantissa * {remaining precision} + (1 << 23)) >> 24 == mantissa
+        uint32_t remaining = (uint32_t) powf (10, 6 - e);
+        threshold = (((uint64_t) remaining << 24) - (1 << 23)) / remaining;
+        e = 0;  // No adjustment
+    }
+    // At this point, value should not be subnormal, even if it started that way.
+
+    raw = * (uint32_t *) &value;
+    uint32_t mantissa = raw & 0x7FFFFF;  // 23 bits
+    mantissa |= 0x800000;  // Add implied 1.x (24th bit).
+    int exponent = (raw >> 23 & 0xFF) - 126;  // Standard bias is -127, +1 to move our reference point to bit 24. "exponent" is now the power of the bit in position 24.
+
+    // Output integer portion.
+    int shift = exponent - 24;
+    if (shift >= 0)
+    {
+        append (p, mantissa << shift);
+        // There are no bits below the decimal point.
+        return;
+    }
+    // else negative shift
+    uint32_t integer = mantissa >> -shift;
+    if (exponent >= 0) mantissa <<= exponent;  // Effective exponent becomes 0. Equivalently, the lower 24 bits are all fractional.
+    else               mantissa >>= exponent;  // Ditto. "exponent" might be slightly negative due to small errors in decimal alignment above.
+    mantissa &= 0xFFFFFF;
+    if (mantissa >= threshold)
+    {
+        integer++;
+        mantissa = 0;
+    }
+    append (p, integer);
+
+    if (mantissa)
+    {
+        // Output decimal point.
+        *p++ = '.';
+
+        // Output fractional portion.
+        // This is the core Steel & White algorithm.
+        //   B = 10
+        //   U is "digit"
+        //   R is "mantissa"
+        //   k is simply effective position (p) in output buffer
+        uint32_t n = -shift;  // number of bits below the decimal point
+        if (n > 23) n = 23;
+        int M = 1 << 24 - n - 1;  // digit cutoff threshold
+        char digit;
+        for (int i = 0; i < 6; i++)  // Limit number of digits, regardless of threshold.
+        {
+            mantissa *= 10;
+            digit = mantissa >> 24;
+            mantissa &= 0xFFFFFF;
+            M *= 10;
+            if (mantissa < M  ||  mantissa > (1 << 24) - M)
+            {
+                if (mantissa >= 0x800000) digit++;  // R >= 0.5
+                i = 100;  // Exit loop after this iteration.
+            }
+            *p++ = '0' + digit;
+        }
+    }
+
+    // Output decimal exponent.
+    if (e)
+    {
+        append (p, "e");
+        append (p, e);
+    }
+}
+
+inline void append (char * & p, double value)
+{
+    append (p, (float) value);
+}
+
+
+// String class --------------------------------------------------------------
 
 /**
     A lightweight drop-in replacement for std::string.
     Avoids STL bloat (locales, exceptions ...) and only deals with single-byte characters.
     This class only implements functions that are actually used by the runtime engine.
 **/
-class String    // Note the initial capital letter. This name will not conflict with std::string.
+struct String    // Note the initial capital letter. This name will not conflict with std::string.
 {
-public:
     using size_type = size_t;
 
     char *    memory;
@@ -83,53 +259,22 @@ public:
     /**
         This constructor allows numbers to be passed as string arguments without extra conversion code.
     **/
-    String (int value)
+    template<class T, typename std::enable_if<(std::is_integral<T>::value  ||  std::is_floating_point<T>::value)  &&  sizeof (T) >= 4, bool>::type = true>
+    String (T value)
     {
         memory    = 0;
         top       = 0;
         capacity_ = 0;
 
-        char buffer[16];
-        int n = sprintf (buffer, "%i", value);
-        assign (buffer, n);
-    }
-
-    String (uint32_t value)
-    {
-        memory    = 0;
-        top       = 0;
-        capacity_ = 0;
-
-        char buffer[16];
-        int n = sprintf (buffer, "%u", value);
-        assign (buffer, n);
-    }
-
-    String (long value)
-    {
-        memory    = 0;
-        top       = 0;
-        capacity_ = 0;
-
-        char buffer[32];
-        int n = sprintf (buffer, "%li", value);
-        assign (buffer, n);
-    }
-
-    String (double value)
-    {
-        memory    = 0;
-        top       = 0;
-        capacity_ = 0;
-
-        char buffer[32];
-        int n = sprintf (buffer, "%g", value);
-        assign (buffer, n);
+        char buffer[4 * sizeof (T)];
+        char * b = buffer;
+        ::append (b, value);
+        assign (buffer, b - buffer);
     }
 
     ~String ()
     {
-        if (memory) free (memory);
+        delete memory;  // Safe, even if "memory" is null.
     }
 
     String & assign (const char * value, size_type n)
@@ -140,9 +285,9 @@ public:
             size_type requiredCapacity = n + 1;
             if (requiredCapacity > capacity_)
             {
-                if (memory) free (memory);
+                delete memory;
                 capacity_ = requiredCapacity;
-                memory = (char *) malloc (capacity_);
+                memory = new char[capacity_];
             }
             memcpy (memory, value, n);  // Saves space (size of executable) rather than time.
             top = memory + n;
@@ -165,7 +310,7 @@ public:
     {
         if (this != &that)
         {
-            if (memory) free (memory);
+            delete memory;
             memory    = that.memory;
             top       = that.top;
             capacity_ = that.capacity_;
@@ -210,14 +355,14 @@ public:
         if (n <= capacity_) return;
         char * temp = memory;
         char * end  = top;
-        memory    = (char *) malloc (n);
+        memory    = new char[n];
         top       = memory + (end - temp);
         capacity_ = n;
         if (! temp) return;
         char * m = memory;
         char * a = temp;
         while (a <= end) *m++ = *a++;  // Copies both string and null terminator.
-        free (temp);
+        delete temp;
     }
 
     void resize (size_type n, char c = 0)
@@ -312,7 +457,7 @@ public:
         String result;
         int length = (top - memory) + (that.top - that.memory);
         result.capacity_ = length + 1;
-        result.memory = (char *) malloc (result.capacity_);
+        result.memory = new char[result.capacity_];
         combine (memory, that.memory, result.memory);
         result.top = result.memory + length;
         return result;
@@ -329,37 +474,19 @@ public:
             if (length > maxSize) length = maxSize;
         }
         result.capacity_ = length + 1;
-        result.memory = (char *) malloc (result.capacity_);
+        result.memory = new char[result.capacity_];
         combine (memory, that, result.memory);
         result.top = result.memory + length;
         return result;
     }
 
-    String operator+ (int that) const
+    template<class T, typename std::enable_if<(std::is_integral<T>::value  ||  std::is_floating_point<T>::value)  &&  sizeof (T) >= 4, bool>::type = true>
+    String operator+ (T that) const
     {
-        char buffer[16];
-        sprintf (buffer, "%i", that);
-        return operator+ (buffer);
-    }
-
-    String operator+ (uint32_t that) const
-    {
-        char buffer[16];
-        sprintf (buffer, "%u", that);
-        return operator+ (buffer);
-    }
-
-    String operator+ (long that) const
-    {
-        char buffer[32];
-        sprintf (buffer, "%li", that);
-        return operator+ (buffer);
-    }
-
-    String operator+ (double that) const
-    {
-        char buffer[32];
-        sprintf (buffer, "%g", that);
+        char buffer[4 * sizeof (T)];
+        char * b = buffer;
+        ::append (b, that);
+        *b = 0;
         return operator+ (buffer);
     }
 
@@ -373,7 +500,7 @@ public:
         {
             char * temp = memory;
             capacity_ = requiredCapacity;
-            memory = (char *) malloc (capacity_);
+            memory = new char[capacity_];
 
             char * m = memory;
             char * a = temp;
@@ -384,7 +511,7 @@ public:
 
             top = memory + length;
             *top = 0;
-            if (temp) free (temp);
+            delete temp;
         }
         else
         {
@@ -412,32 +539,13 @@ public:
         return append (&that, 1);
     }
 
-    String & operator+= (int that)
+    template<class T, typename std::enable_if<(std::is_integral<T>::value  ||  std::is_floating_point<T>::value)  &&  sizeof (T) >= 4, bool>::type = true>
+    String & operator+= (T that)
     {
-        char buffer[16];
-        int n = sprintf (buffer, "%i", that);
-        return append (buffer, n);
-    }
-
-    String & operator+= (uint32_t that)
-    {
-        char buffer[16];
-        int n = sprintf (buffer, "%u", that);
-        return append (buffer, n);
-    }
-
-    String & operator+= (long that)
-    {
-        char buffer[32];
-        int n = sprintf (buffer, "%li", that);
-        return append (buffer, n);
-    }
-
-    String & operator+= (double that)
-    {
-        char buffer[32];
-        int n = sprintf (buffer, "%g", that);
-        return append (buffer, n);
+        char buffer[4 * sizeof (T)];
+        char * b = buffer;
+        ::append (b, that);
+        return append (buffer, b - buffer);
     }
 
     String substr (size_type pos, size_type length = npos) const noexcept
@@ -698,7 +806,7 @@ public:
         if (length <= 0) return result;
 
         result.capacity_ = length + 1;
-        result.memory    = (char *) malloc (result.capacity_);
+        result.memory    = new char[result.capacity_];
         result.top       = result.memory + length;
 
         char * from = memory;
@@ -725,7 +833,7 @@ public:
         if (length <= 0) return result;
 
         result.capacity_ = length + 1;
-        result.memory    = (char *) malloc (result.capacity_);
+        result.memory    = new char[result.capacity_];
         result.top       = result.memory + length;
 
         char * from = memory;
@@ -742,7 +850,10 @@ public:
     }
 };
 
-#ifndef N2A_SPINNAKER
+
+// Global operations on String -----------------------------------------------
+
+#ifndef N2A_SPINNAKER   // This only covers IO functions. There are other functions below that still get defined.
 
 inline std::ostream & operator<< (std::ostream & out, const String & value)
 {

@@ -159,6 +159,9 @@ namespace n2a
         **/
         virtual int size ();
 
+        /**
+            @return True if size()==0. This is a convenience function.
+        **/
         bool empty ();
 
         /**
@@ -166,7 +169,7 @@ namespace n2a
             Works in conjunction with size() to provide information similar to the MUMPS function "DATA".
             Since get() returns "" for undefined nodes, this is the only way to determine whether a node
             is actually defined to "" or is undefined. "Undefined" is not the same as non-existent,
-            because and undefined node can have children. Only a child() call on a parent can confirm
+            because an undefined node can have children. Only a child() call on the parent node can confirm
             the complete non-existence of a node.
         **/
         virtual bool data ();

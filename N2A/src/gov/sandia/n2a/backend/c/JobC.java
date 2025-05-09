@@ -1048,6 +1048,7 @@ public class JobC extends Thread
         }
         if (s.isSingleton ())
         {
+            // Force singleton top-level model to keep $live, to signal when it dies.
             Variable live = s.find (new Variable ("$live"));
             live.addUser (s);
         }
@@ -1807,7 +1808,28 @@ public class JobC extends Thread
                         matrixNames.put (constant, constant.name);
                         staticMatrix.add (constant);
                     }
-                    return false;  // Don't try to descend tree from here
+                    return true;
+                }
+                if (op instanceof Add  &&  op.parent instanceof Variable  &&  op.getType () instanceof Text)  // Users should avoid this in general, but can support computing names for IO functions in separate variables.
+                {
+                    Add a = (Add) op;
+                    if (a.name == null)
+                    {
+                        Variable p = (Variable) a.parent;
+                        if (p.equations.size () == 1  &&  p.equations.first ().condition == null)
+                        {
+                            a.name = mangle (p);
+                        }
+                        else
+                        {
+                            a.name = "string" + stringNames.size ();
+                        }
+                        stringNames.put (a, a.name);
+                    }
+                    // Every binary operator below this must be another Add.
+                    // However, any operand that returns Text or Scalar is valid.
+                    // Some of these could be IO functions. (But why? ...)
+                    return true;
                 }
                 if (op instanceof Function)
                 {
@@ -1815,7 +1837,17 @@ public class JobC extends Thread
                     if (f instanceof Output)  // Handle computed strings
                     {
                         Output o = (Output) f;
-                        if (! o.hasColumnName)  // We need to auto-generate the column name.
+                        if (o.hasColumnName)
+                        {
+                            Operator operand2 = o.operands[2];
+                            if (operand2 instanceof Add)
+                            {
+                                Add a = (Add) operand2;
+                                a.name = "columnName" + stringNames.size ();
+                                stringNames.put (a, a.name);
+                            }
+                        }
+                        else  // We need to auto-generate the column name.
                         {
                             o.columnName = "columnName" + stringNames.size ();
                             stringNames.put (op, o.columnName);
@@ -1838,7 +1870,7 @@ public class JobC extends Thread
                                 {
                                     Add a = (Add) kv;
                                     a.name = "columnMode" + stringNames.size ();
-                                    stringNames.put (op, a.name);
+                                    stringNames.put (a, a.name);
                                 }
                             }
                         }
@@ -2148,6 +2180,7 @@ public class JobC extends Thread
         for (Output o : mainOutput)
         {
             result.append ("  " + o.name + " = outputHelper<" + T + "> (\"" + o.operands[0].getString () + "\");\n");
+            if (o.getKeywordFlag ("raw")) result.append ("  " + o.name + "->raw = true;\n");
         }
         for (ReadImage r : mainImageInput)
         {
@@ -2359,14 +2392,17 @@ public class JobC extends Thread
                 result.append ("  std::vector<" + prefix + " *> instances;\n");
                 if (bed.index != null)
                 {
+                    // "instances" vector can supply next index.
                     result.append ("  uint32_t firstFreeIndex;\n");
                 }
             }
             else
             {
-                // The "instances" vector can supply the next index, so only declare nextIndex if instances was not declared.
                 if (bed.index != null)
                 {
+                    // Without "instances" (above), we need another way to generate $index.
+                    // This approach increments monotonically forever, without re-using old indices.
+                    // Only suitable for small non-dynamic populations.
                     result.append ("  uint32_t nextIndex;\n");
                 }
             }
@@ -2925,6 +2961,7 @@ public class JobC extends Thread
                 result.append ("  " + zero (mangle (v), v) + ";\n");
             }
             result.append ("}\n");
+            result.append ("\n");
         }
 
         // Population allocate / release / add / remove
@@ -3004,7 +3041,7 @@ public class JobC extends Thread
                 {
                     if (bed.index != null)
                     {
-                        result.append ("  if (p->" + mangle ("$index") + " < 0) p->" + mangle ("$index") + " = nextIndex++;\n");
+                        result.append ("  p->" + mangle ("$index") + " = nextIndex++;\n");
                     }
                 }
                 if (bed.poll >= 0)
@@ -3042,10 +3079,11 @@ public class JobC extends Thread
         // Population init
         if (bed.needGlobalInit)
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
             s.setInit (1);
+
             // Zero out members
             for (Variable v : bed.globalBufferedExternalWrite)
             {
@@ -3075,6 +3113,7 @@ public class JobC extends Thread
                     result.append ("  " + clearAccumulator (mangle ("next_", v), v, context) + ";\n");
                 }
             }
+
             // Create instances
             if (bed.singleton)
             {
@@ -3089,6 +3128,7 @@ public class JobC extends Thread
                     result.append (");\n");
                 }
             }
+
             // Make connections
             if (s.connectionBindings != null)
             {
@@ -3183,7 +3223,7 @@ public class JobC extends Thread
         // Population update
         if (bed.needGlobalUpdate)
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
             if (kokkos) result.append ("  push_region (\"" + ns + "update()\");\n");
@@ -3370,7 +3410,7 @@ public class JobC extends Thread
         // Population updateDerivative
         if (bed.needGlobalUpdateDerivative)
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
             if (kokkos) result.append ("  push_region (\"" + ns + "updateDerivative()\");\n");
@@ -4097,7 +4137,7 @@ public class JobC extends Thread
         // Unit init
         if (bed.needLocalInit)
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
             s.setInit (1);
@@ -4133,7 +4173,6 @@ public class JobC extends Thread
             }
 
             // Initialize static objects
-            context.initialized.clear ();
             for (Variable v : bed.localInit)  // non-optimized list, so hopefully all variables are covered
             {
                 for (EquationEntry e : v.equations)
@@ -4353,7 +4392,7 @@ public class JobC extends Thread
         // Unit update
         if (bed.needLocalUpdate)
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
             if (kokkos) result.append ("  push_region (\"" + ns + "update()\");\n");
@@ -4390,7 +4429,7 @@ public class JobC extends Thread
         // Unit finalize
         if (bed.needLocalFinalize)
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append ("int " + ns + "finalize ()\n");
             result.append ("{\n");
 
@@ -4616,7 +4655,7 @@ public class JobC extends Thread
         // Unit updateDerivative
         if (bed.needLocalUpdateDerivative)
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
             if (kokkos) result.append ("  push_region (\"" + ns + "updateDerivative()\");\n");
@@ -4885,7 +4924,7 @@ public class JobC extends Thread
         // Unit getProject
         if (bed.hasProject)
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append ("void " + ns + "getProject (int i, MatrixFixed<" + T + ",3,1> & xyz)\n");
             result.append ("{\n");
 
@@ -5058,7 +5097,7 @@ public class JobC extends Thread
         // Unit getP
         if (bed.p != null  &&  s.connectionBindings != null)  // Only connections need to provide an accessor
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append (T + " " + ns + "getP ()\n");
             result.append ("{\n");
             if (! bed.p.hasAttribute ("constant"))
@@ -5085,7 +5124,7 @@ public class JobC extends Thread
         // Unit getXYZ
         if (bed.xyz != null  &&  s.connected > 0)  // Connection targets need to provide an accessor.
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append ("void " + ns + "getXYZ (MatrixFixed<" + T + ",3,1> & xyz)\n");
             result.append ("{\n");
             // $xyz is either stored, "temporary", or "constant"
@@ -5113,7 +5152,7 @@ public class JobC extends Thread
         // Unit events
         if (bed.eventTargets.size () > 0)
         {
-            bed.defined.clear ();
+            context.defined.clear ();
             result.append ("bool " + ns + "eventTest (int i)\n");
             result.append ("{\n");
             result.append ("  switch (i)\n");
@@ -5193,7 +5232,7 @@ public class JobC extends Thread
 
             if (bed.needLocalEventDelay)
             {
-                bed.defined.clear ();
+                context.defined.clear ();
                 result.append (T + " " + ns + "eventDelay (int i)\n");
                 result.append ("{\n");
                 result.append ("  switch (i)\n");
@@ -5351,8 +5390,8 @@ public class JobC extends Thread
                 // A connection *must* know the instances it connects, while a compartment
                 // cannot know those instances. Thus, one can never be converted to the other.
                 PrintStream err = Backend.err.get ();
-                if (target.connectionBindings == null) err.println ("Can't change $type from connection to compartment.");
-                else                                   err.println ("Can't change $type from compartment to connection.");
+                if (connectionTarget) err.println ("Can't change $type from compartment to connection.");
+                else                  err.println ("Can't change $type from connection to compartment.");
                 err.println ("\tsource part:\t"      + (source.container == null ? source.name : source.prefix ()));
                 err.println ("\tdestination part:\t" + (target.container == null ? target.name : target.prefix ()));
                 throw new Backend.AbortRun ();
@@ -5550,7 +5589,11 @@ public class JobC extends Thread
         // Initialize static objects, and dump dynamic objects needed by conditions
         for (EquationEntry e : v.equations)
         {
-            if (e.condition != null) prepareDynamicObjects (e.condition, context, init, pad);
+            if (e.condition != null)
+            {
+                prepareDynamicObjects1 (e.condition, context, init, pad);
+                prepareDynamicObjects2 (e.condition, context, init, pad);
+            }
         }
 
         // Write the conditional equations
@@ -5594,7 +5637,8 @@ public class JobC extends Thread
             }
             else
             {
-                prepareDynamicObjects (e.expression, context, init, pad);
+                prepareDynamicObjects1 (e.expression, context, init, pad);
+                prepareDynamicObjects2 (e.expression, context, init, pad);
                 context.result.append (padIf);
                 renderEquation (context, e);
             }
@@ -5668,7 +5712,13 @@ public class JobC extends Thread
             }
             else
             {
-                prepareDynamicObjects (defaultEquation.expression, context, init, pad);
+                prepareDynamicObjects1 (defaultEquation.expression, context, init, pad);
+                prepareDynamicObjects2 (defaultEquation.expression, context, init, pad);
+
+                // Special case -- Don't generate equation if this is a constructed string going straight to the variable.
+                // The following is only satisfied when this is a single unconditional equation.
+                if (defaultEquation.expression instanceof Add  &&  ((Add) defaultEquation.expression).name.equals (mangle (v))) return;
+
                 context.result.append (padIf);
                 renderEquation (context, defaultEquation);
             }
@@ -5750,7 +5800,7 @@ public class JobC extends Thread
 
     public void prepareStaticObjects (Operator op, RendererC context, String pad)
     {
-        final BackendDataC bed = context.bed;
+        BackendDataC bed = context.bed;
 
         Visitor visitor = new Visitor ()
         {
@@ -5766,7 +5816,6 @@ public class JobC extends Thread
                     Output o = (Output) op;
                     if (! o.hasColumnName)  // column name is generated
                     {
-                        BackendDataC bed = (BackendDataC) context.part.backendData;
                         if (context.global ? bed.needGlobalPath : bed.needLocalPath)
                         {
                             context.result.append (pad + "path (" + o.columnName + ");\n");
@@ -5777,10 +5826,6 @@ public class JobC extends Thread
                             context.result.append (pad + o.columnName + " = \"" + o.variableName + "\";\n");
                         }
                     }
-                    if (o.operands[0] instanceof Constant  &&  o.getKeywordFlag ("raw"))  // Apply "raw" attribute now, if set.
-                    {
-                        context.result.append (pad + o.name + "->raw = true;\n");
-                    }
                     return true;  // Continue to drill down, because I/O functions can be nested.
                 }
                 if (op instanceof Input)
@@ -5788,10 +5833,10 @@ public class JobC extends Thread
                     Input i = (Input) op;
                     if (   i.operands[0] instanceof Constant
                         && i.usesTime ()  &&  ! context.global  &&  ! fixedPoint  // In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
-                        && ! context.initialized.contains (i.name))
+                        && ! context.defined.contains (i.name))
                     {
                         // See comments in generateMainInitializers()
-                        context.initialized.add (i.name);
+                        context.defined.add (i.name);
 
                         // Read $t' as an lvalue, to ensure we get any newly-set frequency.
                         // However, can't do this if $t' is a constant. In that case, no variable exists.
@@ -5810,12 +5855,10 @@ public class JobC extends Thread
 
     /**
         Build complex sub-expressions into a single local variable that can be referenced by the equation.
+        Pass 1 -- Strings and matrix expressions.
     **/
-    public void prepareDynamicObjects (Operator op, RendererC context, boolean init, String pad)
+    public void prepareDynamicObjects1 (Operator op, RendererC context, boolean init, String pad)
     {
-        final BackendDataC bed = context.bed;
-
-        // Pass 1 -- Strings and matrix expressions
         Visitor visitor1 = new Visitor ()
         {
             public boolean visit (Operator op)
@@ -5851,7 +5894,10 @@ public class JobC extends Thread
                     Add a = (Add) op;
                     if (a.name != null)
                     {
-                        context.result.append (pad + "String " + a.name + ";\n");
+                        if (! (a.parent instanceof Variable)  ||  ! mangle ((Variable) a.parent).equals (a.name))
+                        {
+                            context.result.append (pad + "String " + a.name + ";\n");
+                        }
                         for (Operator o : flattenAdd (a))
                         {
                             context.result.append (pad + a.name + " += ");
@@ -5865,21 +5911,32 @@ public class JobC extends Thread
             }
         };
         op.visit (visitor1);
+    }
 
-        // Pass 2 -- I/O functions
+    /**
+        Build complex sub-expressions into a single local variable that can be referenced by the equation.
+        Pass 2 -- I/O functions.
+    **/
+    public void prepareDynamicObjects2 (Operator op, RendererC context, boolean init, String pad)
+    {
+        BackendDataC bed = context.bed;
+
         Visitor visitor2 = new Visitor ()
         {
             public boolean visit (Operator op)
             {
+                if (! (op instanceof Function)) return true;  // Everything we care about below is an IO function.
+
+                // If filename is given by a variable, then it could be used more than once,
+                // so we need to guard against repeats.
+                // If filename is an expression, each occurrence is unique.
+                // If filename is constant, we don't deal with it here.
                 Variable v = null;
-                if (op instanceof Function)
+                Function f = (Function) op;
+                if (f.operands.length > 0)
                 {
-                    Function f = (Function) op;
-                    if (f.operands.length > 0)
-                    {
-                        Operator operand0 = ((Function) op).operands[0];
-                        if (operand0 instanceof AccessVariable) v = ((AccessVariable) operand0).reference.variable;
-                    }
+                    Operator operand0 = ((Function) op).operands[0];
+                    if (operand0 instanceof AccessVariable) v = ((AccessVariable) operand0).reference.variable;
                 }
 
                 if (op instanceof ReadMatrix)
@@ -5889,8 +5946,8 @@ public class JobC extends Thread
                     {
                         if (v != null)
                         {
-                            if (bed.defined.contains (v)) return true;
-                            bed.defined.add (v);
+                            if (context.defined.contains (v)) return true;
+                            context.defined.add (v);
                         }
                         context.result.append (pad + "MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (" + r.fileName);
                         if (fixedPoint) context.result.append (", " + r.exponent);
@@ -5905,8 +5962,8 @@ public class JobC extends Thread
                     {
                         if (v != null)
                         {
-                            if (bed.defined.contains (v)) return true;
-                            bed.defined.add (v);
+                            if (context.defined.contains (v)) return true;
+                            context.defined.add (v);
                         }
                         context.result.append (pad + "Mfile<" + T + "> * " + m.name + " = MfileHelper<" + T + "> (" + m.fileName + ");\n");
                     }
@@ -5919,8 +5976,8 @@ public class JobC extends Thread
                     {
                         if (v != null)
                         {
-                            if (bed.defined.contains (v)) return true;
-                            bed.defined.add (v);
+                            if (context.defined.contains (v)) return true;
+                            context.defined.add (v);
                         }
                         context.result.append (pad + "InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (" + i.fileName);
                         if (fixedPoint) context.result.append (", " + i.exponent + ", " + i.exponentRow);
@@ -5950,8 +6007,8 @@ public class JobC extends Thread
                     {
                         if (v != null)
                         {
-                            if (bed.defined.contains (v)) return true;
-                            bed.defined.add (v);
+                            if (context.defined.contains (v)) return true;
+                            context.defined.add (v);
                         }
                         context.result.append (pad + "OutputHolder<" + T + "> * " + o.name + " = outputHelper<" + T + "> (" + o.fileName + ");\n");
                         if (o.getKeywordFlag ("raw"))
@@ -5968,8 +6025,8 @@ public class JobC extends Thread
                     {
                         if (v != null)
                         {
-                            if (bed.defined.contains (v)) return true;
-                            bed.defined.add (v);
+                            if (context.defined.contains (v)) return true;
+                            context.defined.add (v);
                         }
                         context.result.append (pad + "ImageInput<" + T + "> * " + r.name + " = imageInputHelper<" + T + "> (" + r.fileName + ");\n");
                     }
@@ -5981,10 +6038,10 @@ public class JobC extends Thread
 
                     // Use a slightly different logical structure here, because every draw() call
                     // should set its keyword parameters, even if the target has already been created.
-                    if (! (d.operands[0] instanceof Constant)  &&  (v == null  ||  ! bed.defined.contains (v)))
+                    if (! (d.operands[0] instanceof Constant)  &&  (v == null  ||  ! context.defined.contains (v)))
                     {
                         context.result.append (pad + "ImageOutput<" + T + "> * " + d.name + " = imageOutputHelper<" + T + "> (" + d.fileName + ");\n");
-                        if (v != null) bed.defined.add (v);
+                        if (v != null) context.defined.add (v);
                     }
 
                     boolean light     = d instanceof DrawLight;
@@ -6002,9 +6059,9 @@ public class JobC extends Thread
                         // The keyword section below will assign specific values.
                         if (light)
                         {
-                            if (! bed.defined.contains ("light"))
+                            if (! context.defined.contains ("light"))
                             {
-                                bed.defined.add ("light");
+                                context.defined.add ("light");
                                 context.result.append (pad + "Light * light;\n");
                             }
 
@@ -6024,17 +6081,17 @@ public class JobC extends Thread
                         }
                         else  // material must be true
                         {
-                            if (! bed.defined.contains ("material"))
+                            if (! context.defined.contains ("material"))
                             {
-                                bed.defined.add ("material");
+                                context.defined.add ("material");
                                 context.result.append (pad + "Material material;\n");
                             }
                         }
                         if (needModel)
                         {
-                            if (! bed.defined.contains ("model"))
+                            if (! context.defined.contains ("model"))
                             {
-                                bed.defined.add ("model");
+                                context.defined.add ("model");
                                 context.result.append (pad + "Matrix<" + T + ",4,4> model;\n");  // model is built in type T, then converted to float on call to draw routine
                             }
                         }
@@ -6271,7 +6328,7 @@ public class JobC extends Thread
         return T;
     }
 
-    public static String zero (String name, Variable v) throws Exception
+    public String zero (String name, Variable v) throws Exception
     {
         if (v.type instanceof Scalar) return name + " = 0";
         if (v.type instanceof Matrix) return "::clear (" + name + ")";  // Don't check for matrix pointer, because zero() should never be called for such variables.
@@ -6279,7 +6336,7 @@ public class JobC extends Thread
         throw new RuntimeException ("Variable was not assigned a type.");  // This indicates an error in the compiler or backend code.
     }
 
-    public static String clear (String name, Variable v, double value, RendererC context) throws Exception
+    public String clear (String name, Variable v, double value, RendererC context) throws Exception
     {
         String p = context.print (value, v.exponent);
         if (v.type instanceof Scalar) return name + " = " + p;
@@ -6288,7 +6345,7 @@ public class JobC extends Thread
         throw new RuntimeException ("Variable was not assigned a type.");
     }
 
-    public static String clearAccumulator (String name, Variable v, RendererC context) throws Exception
+    public String clearAccumulator (String name, Variable v, RendererC context) throws Exception
     {
         switch (v.assignment)
         {
@@ -6386,16 +6443,12 @@ public class JobC extends Thread
         }
         if (r.variable.name.equals ("$live"))
         {
-            if (r.variable.hasAttribute ("accessor"))
-            {
-                if (lvalue) return "unresolved";
-                return containers + "getLive ()";
-            }
-            else  // not "constant" or "accessor", so must be direct access
-            {
-                if (logical) return "(" + bed.getFlag (containers + "flags", false, bed.liveFlag) + ")";
-                else return "((" + bed.getFlag (containers + "flags", false, bed.liveFlag) + ") ? 1 : 0)";
-            }
+            if (lvalue) return "unresolved";
+            if (r.variable.hasAttribute ("accessor")) return containers + "getLive ()";
+
+            // Not "constant" or "accessor", so must be direct access.
+            if (logical) return  "(" + bed.getFlag (containers + "flags", false, bed.liveFlag) + ")";
+            else         return "((" + bed.getFlag (containers + "flags", false, bed.liveFlag) + ") ? 1 : 0)";
         }
         else if (r.variable.hasAttribute ("accessor"))
         {
