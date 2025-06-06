@@ -196,6 +196,15 @@ public abstract class Matrix extends Type
         return new MatrixDense (this).add (that);
     }
 
+    /**
+        Increments the element at (row,column) by the given value.
+        Convenience function that combines a get and set.
+    **/
+    public void add (int row, int column, double value)
+    {
+        set (row, column, get (row, column) + value);
+    }
+
     public Matrix subtract (Type that) throws EvaluationException
     {
         return new MatrixDense (this).subtract (that);

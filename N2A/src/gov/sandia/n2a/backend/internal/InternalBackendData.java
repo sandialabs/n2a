@@ -187,7 +187,7 @@ public class InternalBackendData
     {
         public EquationSet       container;
         public Event             event;             // For evaluating whether the event should be triggered. There may be several equivalent event() calls in the part, so this is just one representative of the group.
-        public int               valueIndex;        // position of bit array in valuesFloat
+        public int               valueIndex;        // Position of bit array in valuesFloat. For C backend, this is instead an index into the array of event targets for reverse lookup.
         public int               mask;              // an unsigned AND between this and the (int cast) entry from valuesFloat will indicate event active
         public int               edge         = RISE;
         public double            delay        = -1; // Default is no-care, which indicates to process event in next regularly scheduled cycle of the target part.

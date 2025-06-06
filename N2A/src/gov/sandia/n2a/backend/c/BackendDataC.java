@@ -703,4 +703,51 @@ public class BackendDataC
     {
         return flag + " &= ~((" + (global ? globalFlagType : localFlagType) + ") 0x1" + RendererC.printShift (shift) + ")";
     }
+
+    public void dump ()
+    {
+        dumpVariableList ("localUpdate                    ", localUpdate);
+        dumpVariableList ("localInit                      ", localInit);
+        dumpVariableList ("localMembers                   ", localMembers);
+        dumpVariableList ("localBufferedInternalDerivative", localBufferedInternalDerivative);
+        dumpVariableList ("localBufferedInternalUpdate    ", localBufferedInternalUpdate);
+        dumpVariableList ("localBufferedExternal          ", localBufferedExternal);
+        dumpVariableList ("localBufferedExternalWrite     ", localBufferedExternalWrite);
+        dumpVariableList ("localIntegrated                ", localIntegrated);
+
+        dumpVariableList ("globalUpdate                    ", globalUpdate);
+        dumpVariableList ("globalInit                      ", globalInit);
+        dumpVariableList ("globalMembers                   ", globalMembers);
+        dumpVariableList ("globalBufferedInternalDerivative", globalBufferedInternalDerivative);
+        dumpVariableList ("globalBufferedInternalUpdate    ", globalBufferedInternalUpdate);
+        dumpVariableList ("globalBufferedExternal          ", globalBufferedExternal);
+        dumpVariableList ("globalBufferedExternalWrite     ", globalBufferedExternalWrite);
+        dumpVariableList ("globalIntegrated                ", globalIntegrated);
+
+        dumpReferenceSet ("localReference", localReference);
+
+        System.out.println ("  eventReferences:");
+        for (Variable v : eventReferences) System.out.println ("    " + v.nameString () + " in " + v.container.name);
+
+        System.out.println ("  poll=" + poll);
+        System.out.println ("  populationCanBeInactive=" + populationCanBeInactive);
+        System.out.println ("  connectionCanBeInactive=" + connectionCanBeInactive);
+    }
+
+    public void dumpVariableList (String name, List<Variable> list)
+    {
+        System.out.print ("  " + name + ":");
+        for (Variable v : list) System.out.print (" " + v.nameString ());
+        System.out.println ();
+    }
+
+    public void dumpReferenceSet (String name, List<VariableReference> list)
+    {
+        System.out.println ("  " + name);
+        for (VariableReference r : list)
+        {
+            System.out.println ("    " + r.variable.nameString () + " in " + r.variable.container.name + " " + r.resolution.size ());
+            //for (Object o : r.resolution) System.out.println ("      " + o);
+        }
+    }
 }

@@ -88,7 +88,7 @@ inline void append (char * & p, T value)
     The output is intended only for human viewing, not accurate transfer of data.
     The code also needs to be compact, so the output isn't as nice as a fully-developed C library.
 
-    Since user code is falling a float function, we assume full float support is present, including exp() and log().
+    Since user code is calling a float function, we assume full float support is present, including exp() and log().
 
     @param value Must be a standard IEEE-754 float.
 **/
@@ -149,8 +149,8 @@ inline void append (char * & p, float value)
     }
     // else negative shift
     uint32_t integer = mantissa >> -shift;
-    if (exponent >= 0) mantissa <<= exponent;  // Effective exponent becomes 0. Equivalently, the lower 24 bits are all fractional.
-    else               mantissa >>= exponent;  // Ditto. "exponent" might be slightly negative due to small errors in decimal alignment above.
+    if (exponent >= 0) mantissa <<=  exponent;  // Effective exponent becomes 0. Equivalently, the lower 24 bits are all fractional.
+    else               mantissa >>= -exponent;  // Ditto. "exponent" might be slightly negative due to small errors in decimal alignment above.
     mantissa &= 0xFFFFFF;
     if (mantissa >= threshold)
     {
@@ -187,6 +187,9 @@ inline void append (char * & p, float value)
             }
             *p++ = '0' + digit;
         }
+
+        // Trim zeroes.
+        while (*(p-1) == '0') p--;
     }
 
     // Output decimal exponent.
@@ -377,12 +380,6 @@ struct String    // Note the initial capital letter. This name will not conflict
     }
 
     const char * c_str () const
-    {
-        if (memory) return memory;
-        return "";
-    }
-
-    const char * operator() () const
     {
         if (memory) return memory;
         return "";

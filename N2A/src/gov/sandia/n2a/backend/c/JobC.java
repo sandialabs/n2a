@@ -3079,9 +3079,9 @@ public class JobC extends Thread
         // Population init
         if (bed.needGlobalInit)
         {
-            context.defined.clear ();
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
+            context.defined.clear ();
             s.setInit (1);
 
             // Zero out members
@@ -3223,9 +3223,10 @@ public class JobC extends Thread
         // Population update
         if (bed.needGlobalUpdate)
         {
-            context.defined.clear ();
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
+            context.defined.clear ();
+
             if (kokkos) result.append ("  push_region (\"" + ns + "update()\");\n");
             for (Variable v : bed.globalBufferedInternalUpdate)
             {
@@ -3410,9 +3411,10 @@ public class JobC extends Thread
         // Population updateDerivative
         if (bed.needGlobalUpdateDerivative)
         {
-            context.defined.clear ();
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
+            context.defined.clear ();
+
             if (kokkos) result.append ("  push_region (\"" + ns + "updateDerivative()\");\n");
             for (Variable v : bed.globalBufferedInternalDerivative)
             {
@@ -4137,9 +4139,9 @@ public class JobC extends Thread
         // Unit init
         if (bed.needLocalInit)
         {
-            context.defined.clear ();
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
+            context.defined.clear ();
             s.setInit (1);
 
             for (Variable v : bed.localBufferedExternalWrite)
@@ -4392,9 +4394,10 @@ public class JobC extends Thread
         // Unit update
         if (bed.needLocalUpdate)
         {
-            context.defined.clear ();
             result.append ("void " + ns + "update ()\n");
             result.append ("{\n");
+            context.defined.clear ();
+
             if (kokkos) result.append ("  push_region (\"" + ns + "update()\");\n");
 
             for (Variable v : bed.localBufferedInternalUpdate)
@@ -4429,9 +4432,9 @@ public class JobC extends Thread
         // Unit finalize
         if (bed.needLocalFinalize)
         {
-            context.defined.clear ();
             result.append ("int " + ns + "finalize ()\n");
             result.append ("{\n");
+            context.defined.clear ();
 
             // contained populations
             for (EquationSet e : s.parts)
@@ -4655,9 +4658,10 @@ public class JobC extends Thread
         // Unit updateDerivative
         if (bed.needLocalUpdateDerivative)
         {
-            context.defined.clear ();
             result.append ("void " + ns + "updateDerivative ()\n");
             result.append ("{\n");
+            context.defined.clear ();
+
             if (kokkos) result.append ("  push_region (\"" + ns + "updateDerivative()\");\n");
             for (Variable v : bed.localBufferedInternalDerivative)
             {
@@ -4924,9 +4928,10 @@ public class JobC extends Thread
         // Unit getProject
         if (bed.hasProject)
         {
-            context.defined.clear ();
             result.append ("void " + ns + "getProject (int i, MatrixFixed<" + T + ",3,1> & xyz)\n");
             result.append ("{\n");
+            context.defined.clear ();
+            s.setConnect (1);
 
             // $project is evaluated similar to $p. The result is not stored.
 
@@ -4989,6 +4994,8 @@ public class JobC extends Thread
                 result.append ("      xyz[2] = 0;\n");
             }
             result.append ("  }\n");
+
+            s.setConnect (0);
             result.append ("}\n");
         }
 
@@ -5097,9 +5104,11 @@ public class JobC extends Thread
         // Unit getP
         if (bed.p != null  &&  s.connectionBindings != null)  // Only connections need to provide an accessor
         {
-            context.defined.clear ();
             result.append (T + " " + ns + "getP ()\n");
             result.append ("{\n");
+            context.defined.clear ();
+            s.setConnect (1);
+
             if (! bed.p.hasAttribute ("constant"))
             {
                 // Assemble a minimal set of expressions to evaluate $p
@@ -5117,6 +5126,8 @@ public class JobC extends Thread
                 }
             }
             result.append ("  return " + resolve (bed.p.reference, context, false) + ";\n");
+
+            s.setConnect (0);
             result.append ("}\n");
             result.append ("\n");
         }
@@ -5124,9 +5135,10 @@ public class JobC extends Thread
         // Unit getXYZ
         if (bed.xyz != null  &&  s.connected > 0)  // Connection targets need to provide an accessor.
         {
-            context.defined.clear ();
             result.append ("void " + ns + "getXYZ (MatrixFixed<" + T + ",3,1> & xyz)\n");
             result.append ("{\n");
+            context.defined.clear ();
+
             // $xyz is either stored, "temporary", or "constant"
             // If "temporary", then we compute it on the spot.
             // If "constant", then we use the static matrix created during variable analysis
@@ -5152,9 +5164,10 @@ public class JobC extends Thread
         // Unit events
         if (bed.eventTargets.size () > 0)
         {
-            context.defined.clear ();
             result.append ("bool " + ns + "eventTest (int i)\n");
             result.append ("{\n");
+            context.defined.clear ();
+
             result.append ("  switch (i)\n");
             result.append ("  {\n");
             for (EventTarget et : bed.eventTargets)
@@ -5232,9 +5245,10 @@ public class JobC extends Thread
 
             if (bed.needLocalEventDelay)
             {
-                context.defined.clear ();
                 result.append (T + " " + ns + "eventDelay (int i)\n");
                 result.append ("{\n");
+                context.defined.clear ();
+
                 result.append ("  switch (i)\n");
                 result.append ("  {\n");
                 for (EventTarget et : bed.eventTargets)
@@ -5637,8 +5651,8 @@ public class JobC extends Thread
             }
             else
             {
-                prepareDynamicObjects1 (e.expression, context, init, pad);
-                prepareDynamicObjects2 (e.expression, context, init, pad);
+                prepareDynamicObjects1 (e.expression, context, init, padIf);
+                prepareDynamicObjects2 (e.expression, context, init, padIf);
                 context.result.append (padIf);
                 renderEquation (context, e);
             }
@@ -5717,7 +5731,11 @@ public class JobC extends Thread
 
                 // Special case -- Don't generate equation if this is a constructed string going straight to the variable.
                 // The following is only satisfied when this is a single unconditional equation.
-                if (defaultEquation.expression instanceof Add  &&  ((Add) defaultEquation.expression).name.equals (mangle (v))) return;
+                if (defaultEquation.expression instanceof Add)
+                {
+                    Add a = (Add) defaultEquation.expression;
+                    if (a.name != null  &&  a.name.equals (mangle (v))) return;
+                }
 
                 context.result.append (padIf);
                 renderEquation (context, defaultEquation);
@@ -6526,7 +6544,7 @@ public class JobC extends Thread
                 }
                 current = s;
             }
-            else if (o instanceof ConnectionBinding)  // We are following a part reference (which means we are a connection)
+            else if (o instanceof ConnectionBinding)  // We are following a part reference, which implies we are a connection.
             {
                 ConnectionBinding c = (ConnectionBinding) o;
                 containers += mangle (c.alias) + "->";
@@ -6555,7 +6573,7 @@ public class JobC extends Thread
         BackendDataC bed = (BackendDataC) s.backendData;
         if (bed.pathToContainer != null  &&  ! global) base += mangle (bed.pathToContainer) + "->";
         base += "container";
-        if (global) return "((" + prefix (s.container) + " *) " + base + ")->";  // s.container should always be non-null. IE: we don't reference up to Wrapper. If we do, it is directly coded rather than coming here.
+        if (global) return "((" + prefix (s.container) + " *) " + base + ")->";  // Cast is needed for population member "container". s.container should always be non-null. IE: we don't reference up to Wrapper. If we do, it is directly coded rather than coming here.
         return base + "->";
     }
 

@@ -2746,15 +2746,14 @@ public class EquationSet implements Comparable<EquationSet>
             if ((v.hasUsers ()  ||  v.hasAttribute ("externalWrite"))  &&  ! emptyCombinerReference) continue;
 
             // Even if a $variable has no direct users, we must respect any statements about it.
-            // Exceptions:
+            // Exceptions ($variable gets removed anyway):
             // * $index -- if it was created constant by addSpecials()
             // * $t' -- if it is constant and matches constant $t' in container. This may have been created by findConstants().
+            //   This exception is no longer applied, because the C backend needs to know details about $t' for every part.
+            //   OTOH, the Internal backend has an adequate method for recognizing this case.
+            //   TODO: C backend should add user to $t', then restore code here to remove $t'.
             if (v.equations.size () > 0  &&  v.name.contains ("$")  &&  ! v.name.equals ("$index"))
             {
-                // Formerly, when constant $t' matching its container, it was removed.
-                // We no longer do this, because the C backend needs to know details about $t' for every part.
-                // OTOH, the Internal backend has an adequate method for recognizing this case.
-
                 if (v.name.startsWith ("$")) continue;
                 String[] pieces = v.name.split ("\\.");
                 if (pieces.length == 2  &&  endpointSpecials.contains (pieces[1])) continue;
@@ -3076,7 +3075,7 @@ public class EquationSet implements Comparable<EquationSet>
             for (EquationEntry e : p.equations)
             {
                 if (e.expression.isScalar ()  &&  e.expression.getDouble () >= 1) continue;
-                if (e.expression instanceof OperatorLogical  &&  p.hasAttribute ("initOnly")) continue;
+                if (e.expression instanceof OperatorLogical  &&  p.hasAny ("initOnly", "initOnlyTemporary")) continue;
 
                 // Now we have an equation that evaluates to something other than 1.
                 // If this occurs anywhere but connect, then $p is lethal.
@@ -4716,7 +4715,7 @@ public class EquationSet implements Comparable<EquationSet>
         public double init;
         public double connect;
         public double type;
-        // Don't really need $live, since it's not used as a phase indicator. It is user-accessible but not documented.
+        // Don't really need $live, because all our analysis is for $connect and $init.
         public Operator transform (Operator op)
         {
             if (op instanceof AccessVariable)
@@ -5119,7 +5118,7 @@ public class EquationSet implements Comparable<EquationSet>
             Variable min = find (new Variable (c.alias + ".$min", -1));
             if (max == null  &&  min == null) continue;
             if (c.endpoint.accountableConnections == null) c.endpoint.accountableConnections = new TreeSet<AccountableConnection> ();
-            c.endpoint.accountableConnections.add (new AccountableConnection (this, c.alias));  // Only adds if it is not already there.
+            c.endpoint.accountableConnections.add (new AccountableConnection (this, c.alias));  // Only add if not already there.
         }
     }
 
