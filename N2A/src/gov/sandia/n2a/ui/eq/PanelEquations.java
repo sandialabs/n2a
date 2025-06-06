@@ -94,7 +94,6 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.host.Host;
-import gov.sandia.n2a.host.Remote;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
@@ -1225,20 +1224,18 @@ public class PanelEquations extends JPanel
         mtp.selectTab ("Runs");
         NodeJob node = PanelRun.instance.addNewRun (job, true);
 
-        // Hack to allow local jobs to bypass the wait-for-host queue.
+        // Allow directly-started jobs to bypass the wait-for-host queue.
         // It would be better for all jobs to check for resources before starting.
-        // However, the time cost for the local check could be as long as the job itself
+        // However, the time cost for the check could be as long as the job itself
         // (for very simple models). There is some expectation that the user knows
-        // the state of their own system when they choose to hit the play button.
+        // the state of the target system when they choose to hit the play button.
         Backend backend = Backend.getBackend (job.get ("backend"));
+        if (backend instanceof InternalBackend) job.set ("localhost", "host");  // Use of Internal overrides host selection.
         String backendName = backend.getName ().toLowerCase ();
         Host h = Host.get (job);
-        boolean internal  = backend instanceof InternalBackend;
-        boolean localhost = ! (h instanceof Remote);
         boolean forbidden = h.config.get ("backend", backendName).equals ("0");
-        if (internal  ||  (localhost  &&  ! forbidden))  // use of Internal overrides host selection
+        if (! forbidden)
         {
-            job.set ("localhost", "host");  // In case it was "internal" but not "localhost", set host to correct value.
             backend.start (job);
             h.monitor (node);
             return;
