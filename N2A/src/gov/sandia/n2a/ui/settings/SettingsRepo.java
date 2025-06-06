@@ -24,6 +24,7 @@ import gov.sandia.n2a.ui.images.ImageUtil;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -153,7 +154,7 @@ public class SettingsRepo extends JScrollPane implements Settings
     // Details about the selected repository
     protected GitTable       gitTable;
     protected GitTableModel  gitModel;
-    protected JLabel         labelStatus;
+    protected StatusLabel    labelStatus;
     protected JButton        buttonRefresh;
     protected JButton        buttonPull;
     protected JButton        buttonPush;
@@ -544,7 +545,7 @@ public class SettingsRepo extends JScrollPane implements Settings
             }
         });
 
-        labelStatus = new JLabel ();
+        labelStatus = new StatusLabel ();
 
         fieldAuthor = new JTextField ();
         fieldAuthor.setColumns (30);
@@ -2208,12 +2209,8 @@ public class SettingsRepo extends JScrollPane implements Settings
         {
             buttonPush.setEnabled (current.behind == 0);
             String status = "";
-            if (current.ahead != 0) status = "Ahead " + current.ahead;
-            if (current.behind != 0)
-            {
-                if (! status.isEmpty ()) status += ", ";
-                status += "Behind " + current.behind;
-            }
+            if (current.behind != 0) status  = labelStatus.downArrow + current.behind + " ";
+            if (current.ahead  != 0) status += labelStatus.upArrow   + current.ahead  + " ";
             labelStatus.setText (status);
         }
 
@@ -2379,6 +2376,25 @@ public class SettingsRepo extends JScrollPane implements Settings
             };
             thread.setDaemon (true);
             thread.start ();
+        }
+    }
+
+    public class StatusLabel extends JLabel
+    {
+        String upArrow;
+        String downArrow;
+
+        public void updateUI ()
+        {
+            super.updateUI ();
+
+            Font font = getFont ();
+            font = font.deriveFont (Font.PLAIN, font.getSize2D () * 1.2f);
+            setFont (font);
+            if (font.canDisplayUpTo ("↑") < 0) upArrow = "↑";
+            else                               upArrow = "Ahead ";
+            if (font.canDisplayUpTo ("↓") < 0) downArrow = "↓";
+            else                               downArrow = "Behind ";
         }
     }
 
