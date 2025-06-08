@@ -783,7 +783,7 @@ public class SshFileSystemProvider extends FileSystemProvider
         }
 
         /**
-            Returns the raw number of director entries, without any filtering applied.
+            Returns the raw number of directory entries, without any filtering applied.
             This is mainly to help measure progress when processing through a directory.
         **/
         public int count ()

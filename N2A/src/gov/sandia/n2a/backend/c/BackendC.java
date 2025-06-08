@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.c;
 
 import java.nio.file.Path;
+import java.util.HashMap;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
@@ -14,6 +15,8 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class BackendC extends Backend
 {
+    protected static HashMap<Host,Object> locks = new HashMap<Host,Object> ();
+
     @Override
     public String getName ()
     {
@@ -54,5 +57,22 @@ public class BackendC extends Backend
         else                                   f = new CompilerGCC  .Factory (host, exePath);
         host.objects.put ("cxx", f);
         return f;
+    }
+
+    /**
+        @return An object suitable for synchronizing the rebuild of the C backend on a given host.
+    **/
+    public static Object getLock (Host host)
+    {
+        synchronized (locks)
+        {
+            Object result = locks.get (host);
+            if (result == null)
+            {
+                result = new Object ();
+                locks.put (host, result);
+            }
+            return result;
+        }
     }
 }

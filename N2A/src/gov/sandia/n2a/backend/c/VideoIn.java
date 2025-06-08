@@ -54,7 +54,7 @@ public class VideoIn extends NativeResource implements Runnable
         Host localhost = Host.get ("localhost");
         try
         {
-            synchronized (localhost)
+            synchronized (BackendC.getLock (localhost))
             {
                 if (localhost.objects.containsKey ("ffmpegJNI")) return;  // Only set after successful load of JNI DLLs.
 

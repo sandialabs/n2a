@@ -107,10 +107,6 @@ public abstract class Compiler
 
     public Path runCommand (List<String> command) throws Exception
     {
-        // Useful for debugging. The dumped command can be used directly in a terminal to diagnose stalled builds.
-        PrintStream ps = Backend.err.get ();
-        ps.println (String.join (" ", command));
-
         // Remove empty strings from command. This is a convenience to the caller,
         // allowing arguments to be conditionally omitted with the ternary operator.
         for (int i = command.size () - 1; i >= 0; i--)
@@ -119,8 +115,11 @@ public abstract class Compiler
             if (s.isEmpty ()) command.remove (i);
         }
 
-        Path out = localJobDir.resolve ("compile.out");
-        Path err = localJobDir.resolve ("compile.err");
+        String stem = output.getFileName ().toString ();
+        int pos = stem.lastIndexOf ('.');
+        if (pos > 0) stem = stem.substring (0, pos);
+        Path out = localJobDir.resolve (stem + ".out");
+        Path err = localJobDir.resolve (stem + ".err");
 
         AnyProcessBuilder b = host.build (command);
         b.redirectOutput (out);  // Should truncate existing files.
@@ -129,21 +128,40 @@ public abstract class Compiler
         {
             p.waitFor ();
 
+            PrintStream ps = Backend.err.get ();
+            String commandString = String.join (" ", command);  // Useful for debugging. The dumped command can be used directly in a terminal to diagnose stalled builds.
+            String errString = Host.streamToString (Files.newInputStream (err));
+
             if (p.exitValue () != 0)
             {
-                ps.println ("Failed to compile:");
-                ps.print (Host.streamToString (Files.newInputStream (err)));
-                ps.print (Host.streamToString (Files.newInputStream (out)));
+                String outString = Host.streamToString (Files.newInputStream (out));
+                synchronized (ps)
+                {
+                    ps.println (commandString);
+                    ps.println ("Failed to compile:");
+                    if (! errString.isBlank ()) ps.println (errString);
+                    if (! outString.isBlank ()) ps.println (outString);
+                }
                 Files.delete (out);
                 Files.delete (err);
                 throw new Backend.AbortRun ();
             }
 
-            String errString = Host.streamToString (Files.newInputStream (err));
-            if (! errString.isEmpty ())
+            if (errString.isEmpty ())
             {
-                ps.println ("Compiler says:");
-                ps.println (errString);
+                synchronized (ps)
+                {
+                    ps.println (commandString);
+                }
+            }
+            else
+            {
+                synchronized (ps)
+                {
+                    ps.println (commandString);
+                    ps.println ("Compiler says:");
+                    if (! errString.isBlank ()) ps.println (errString);
+                }
             }
             Files.delete (err);
         }

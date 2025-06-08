@@ -499,12 +499,61 @@ public class JobC extends Thread
         }
     }
 
+    /**
+        Utility class for running build jobs in parallel.
+        This is mainly to speed up remote connections, but helpful anywhere.
+    **/
+    public static abstract class ThreadTrap extends Thread
+    {
+        protected Exception error;
+        protected PrintStream err;
+
+        public abstract void doit () throws Exception;
+
+        public void run ()
+        {
+            try
+            {
+                Backend.err.set (err);  // This is thread local, so needs to be set here.
+                doit ();
+            }
+            catch (Exception e)
+            {
+                error = e;
+            }
+        }
+    }
+
+    public static class ThreadGroup
+    {
+        protected List<ThreadTrap> threads = new ArrayList<ThreadTrap> ();
+        protected Exception error;
+
+        public void start (ThreadTrap task)
+        {
+            threads.add (task);
+            task.err = Backend.err.get ();
+            task.setDaemon (true);
+            task.start ();
+        }
+
+        public void joinAndThrow () throws Exception
+        {
+            for (ThreadTrap task : threads)
+            {
+                task.join ();
+                if (task.error != null) error = task.error;
+            }
+            threads.clear ();  // So this object can be reused.
+            if (error != null) throw error;
+        }
+    }
+
     public void rebuildRuntime () throws Exception
     {
         // Prevent jobs from trying to rebuild runtime in parallel.
         // They could interfere with each other.
-        // This is the only process that synchronizes on Host.
-        synchronized (env)
+        synchronized (BackendC.getLock (env))
         {
             // Update runtime source files, if necessary
             boolean changed = false;
@@ -578,27 +627,36 @@ public class JobC extends Thread
                 sources.add ("NativeResource");
             }
 
+            ThreadGroup tg = new ThreadGroup ();
             for (String stem : sources)
             {
                 String objectName = objectName (stem);
                 Path object = runtimeDir.resolve (objectName);
                 if (Files.exists (object)) continue;
-                job.set ("Compiling " + objectName, "status");
 
-                Compiler c = factory.compiler (localJobDir);
-                if (shared) c.setShared ();
-                if (debug ) c.setDebug ();
-                if (gprof ) c.setProfiling ();
-                addIncludes (c);
-                c.addDefine ("n2a_T", T);
-                if (fixedPoint) c.addDefine ("n2a_FP");
-                if (tls) c.addDefine ("n2a_TLS");
-                c.addSource (runtimeDir.resolve (stem + ".cc"));
-                c.setOutput (object);
+                tg.start (new ThreadTrap ()
+                {
+                    public void doit () throws Exception
+                    {
+                        job.set ("Compiling " + objectName, "status");
 
-                Path out = c.compile ();
-                Files.delete (out);
+                        Compiler c = factory.compiler (localJobDir);
+                        if (shared) c.setShared ();
+                        if (debug ) c.setDebug ();
+                        if (gprof ) c.setProfiling ();
+                        addIncludes (c);
+                        c.addDefine ("n2a_T", T);
+                        if (fixedPoint) c.addDefine ("n2a_FP");
+                        if (tls) c.addDefine ("n2a_TLS");
+                        c.addSource (runtimeDir.resolve (stem + ".cc"));
+                        c.setOutput (object);
+
+                        Path out = c.compile ();
+                        Files.delete (out);
+                    }
+                });
             }
+            tg.joinAndThrow ();
 
             // Link the runtime objects into a single shared library.
             if (shared)
@@ -670,16 +728,35 @@ public class JobC extends Thread
 
     public static boolean unpackRuntime (Class<?> from, MNode job, Path runtimeDir, String prefix, String... names) throws Exception
     {
-        boolean changed = false;
+        // This code takes advantage of attribute caching in SshFileSystem
+        // while remaining general for any NIO FileSystem.
+
+        Map<String,Path> matches = new HashMap<String,Path> ();
+        for (String s : names) matches.put (s, null);
+
         Files.createDirectories (runtimeDir);
-        for (String s : names)
+        try (DirectoryStream<Path> dir = Files.newDirectoryStream (runtimeDir))
         {
+            for (Path f : dir)
+            {
+                String s = f.getFileName ().toString ();
+                if (matches.containsKey (s)) matches.put (s, f);
+            }
+        }
+
+        boolean changed = false;
+        for (Entry<String,Path> m : matches.entrySet ())
+        {
+            String s = m.getKey ();
+            Path   f = m.getValue ();
             if (job != null) job.set ("Unpacking " + s, "status");
+
+            long fileModified = 0;
+            if (f == null) f = runtimeDir.resolve (s);
+            else           fileModified = Files.getLastModifiedTime (f).toMillis ();
 
             URL url = from.getResource (prefix + s);
             long resourceModified = url.openConnection ().getLastModified ();
-            Path f = runtimeDir.resolve (s);
-            long fileModified = Host.lastModified (f);
             if (resourceModified > fileModified)
             {
                 changed = true;
