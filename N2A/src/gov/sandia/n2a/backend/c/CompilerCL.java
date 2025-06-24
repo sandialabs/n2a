@@ -190,6 +190,8 @@ public class CompilerCL extends Compiler
         settings.add ("/Gy");    // function-level linking
         settings.add ("/Gw");    // whole-program global data optimization
         // The linker option /OPT:REF removes unused sections. It is on by default, except when debug is enabled.
+
+        addDefine ("_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR");  // Work around version incompatibility introduced in VS2022.
     }
 
     public Path compile () throws Exception

@@ -34,7 +34,7 @@ the U.S. Government retains certain rights in this software.
 namespace n2a
 {
     // Utility function
-    /// Create all parent directories of given file.
+    // Create all parent directories of given file.
     void mkdirs (const String & file);
 
     // MNode class ID constants

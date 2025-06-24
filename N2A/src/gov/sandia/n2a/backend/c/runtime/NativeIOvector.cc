@@ -43,6 +43,12 @@ Java_gov_sandia_n2a_backend_c_NativeSimulator_finish (JNIEnv * env, jclass cls)
     finish ();
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_n2a_backend_c_NativeSimulator_releaseMemory (JNIEnv * env, jclass cls)
+{
+    releaseMemory ();
+}
+
 extern "C" JNIEXPORT jlong JNICALL
 Java_gov_sandia_n2a_backend_c_NativeIOvector_construct (JNIEnv * env, jclass cls, jobjectArray path)
 {

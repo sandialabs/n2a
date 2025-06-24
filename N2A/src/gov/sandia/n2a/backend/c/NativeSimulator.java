@@ -15,7 +15,8 @@ package gov.sandia.n2a.backend.c;
 **/
 public class NativeSimulator
 {
-    public static native void init   (String... args);
-    public static native void run    (double until);
-    public static native void finish ();
+    public static native void init          (String... args); // Prepares simulation. "args" should contain command-line arguments. WARNING: "args" acts exactly like Posix command line, so first entry is treated as program name, and generally ignored.
+    public static native void run           (double until);   // Steps the simulator until absolute sim-time reaches "until".
+    public static native void finish        ();               // Closes out the current simulation, but retains memory allocations for another simulation.
+    public static native void releaseMemory ();               // Finishes all cleanup.
 }
