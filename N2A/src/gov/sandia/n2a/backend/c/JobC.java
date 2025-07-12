@@ -83,7 +83,7 @@ public class JobC extends Thread
 
     public    MNode           job;
     protected EquationSet     digestedModel;
-    protected ExponentContext exponentContext;
+    public    ExponentContext exponentContext;
     protected MVolatile       params;
 
     public Host env;
@@ -5843,7 +5843,7 @@ public class JobC extends Thread
                     break;
                 case Variable.MULTIPLY:
                     // raw exponent = exponentV + exponentExpression
-                    // shift = raw - exponentV = expnentExpression
+                    // shift = raw - exponentV = exponentExpression
                     shift = e.expression.exponentNext;
                     if (shift != 0  &&  fixedPoint)
                     {
@@ -6480,17 +6480,18 @@ public class JobC extends Thread
     public String resolve (VariableReference r, RendererC context, boolean lvalue, String base, boolean logical)
     {
         if (r == null  ||  r.variable == null) return "unresolved";
+        Variable v = r.variable;
 
         // Because $live has some rather complex access rules, take special care to ensure
         // that it always returns false when either $connect or $init are true.
-        if (r.variable.name.equals ("$live")  &&  r.variable.container == context.part)
+        if (v.name.equals ("$live")  &&  v.container == context.part)
         {
             if (context.part.getConnect ()  ||  context.part.getInit ()) return "0";
         }
 
-        if (r.variable.hasAttribute ("constant")  &&  ! lvalue)  // A constant will always be an rvalue, unless it is being loaded into a local variable (special case for $t').
+        if (v.hasAttribute ("constant")  &&  ! lvalue)  // A constant will always be an rvalue, unless it is being loaded into a local variable (special case for $t').
         {
-            EquationEntry e = r.variable.equations.first ();
+            EquationEntry e = v.equations.first ();
             StringBuilder temp = context.result;
             StringBuilder result = new StringBuilder ();
             context.result = result;
@@ -6501,77 +6502,75 @@ public class JobC extends Thread
 
         String containers = resolveContainer (r, context, base);
 
-        if (r.variable.hasAttribute ("instance"))
+        if (v.hasAttribute ("instance"))
         {
             return stripDereference (containers);
         }
 
         String name = "";
-        BackendDataC bed = (BackendDataC) r.variable.container.backendData;  // NOT context.bed !
-        if (r.variable.hasAttribute ("preexistent"))
+        BackendDataC vbed = (BackendDataC) v.container.backendData;  // NOT context.bed !
+        if (v.hasAttribute ("preexistent"))
         {
-            String vname = r.variable.name;
-            if (! vname.startsWith ("$"))
+            if (! v.name.startsWith ("$"))
             {
-                return vname;  // most likely a local variable, for example "rc" in mapIndex()
+                return v.name;  // most likely a local variable, for example "rc" in mapIndex()
             }
             else
             {
-                int vorder = r.variable.order;
-                if (vname.equals ("$t"))
+                if (v.name.equals ("$t"))
                 {
-                    if (! lvalue  &&  vorder == 0)
+                    if (! lvalue  &&  v.order == 0)
                     {
                         name = SIMULATOR + "currentEvent->t";
                     }
                     // For lvalue, fall through to the main case below.
                     // Higher orders of $t should not be "preexistent". They are handled below.
                 }
-                else if (vname.equals ("$n"))
+                else if (v.name.equals ("$n"))
                 {
-                    if (! lvalue  &&  vorder == 0)
+                    if (! lvalue  &&  v.order == 0)
                     {
                         name = "n";
                     }
                 }
             }
         }
-        if (r.variable.name.equals ("$live"))
+        if (v.name.equals ("$live"))
         {
             if (lvalue) return "unresolved";
-            if (r.variable.hasAttribute ("accessor")) return containers + "getLive ()";
+            if (v.hasAttribute ("accessor")) return containers + "getLive ()";
 
             // Not "constant" or "accessor", so must be direct access.
-            if (logical) return  "(" + bed.getFlag (containers + "flags", false, bed.liveFlag) + ")";
-            else         return "((" + bed.getFlag (containers + "flags", false, bed.liveFlag) + ") ? 1 : 0)";
+            if (logical) return  "(" + vbed.getFlag (containers + "flags", false, vbed.liveFlag) + ")";
+            else         return "((" + vbed.getFlag (containers + "flags", false, vbed.liveFlag) + ") ? 1 : 0)";
         }
-        else if (r.variable.hasAttribute ("accessor"))
+        else if (v.hasAttribute ("accessor"))
         {
-            if (r.variable.name.equals ("$t")  &&  r.variable.order == 1  &&  ! lvalue)  // $t'
+            if (v.name.equals ("$t")  &&  v.order == 1  &&  ! lvalue)  // $t'
             {
                 return containers + "getDt ()";
             }
             return "unresolved";  // Only $live and $t' can have "accessor" attribute.
         }
-        if (r.variable.name.endsWith (".$count"))
+        if (v.name.endsWith (".$count"))
         {
             if (lvalue) return "unresolved";
-            String alias = r.variable.name.substring (0, r.variable.name.lastIndexOf ("."));
-            name = mangle (alias) + "->" + prefix (r.variable.container) + "_" + mangle (alias) + "_count";
+            String alias = v.name.substring (0, v.name.lastIndexOf ("."));
+            name = mangle (alias) + "->" + prefix (v.container) + "_" + mangle (alias) + "_count";
         }
         if (name.length () == 0)
         {
             // Write to buffered value, except during init phase.
-            if (lvalue  &&  ! context.part.getInit ()  &&  (bed.globalBuffered.contains (r.variable)  ||  bed.localBuffered.contains (r.variable)))
+            if (lvalue  &&  ! context.part.getInit ()  &&  (vbed.globalBuffered.contains (v)  ||  vbed.localBuffered.contains (v)))
             {
-                name = mangle ("next_", r.variable);
+                name = mangle ("next_", v);
             }
             else
             {
-                name = mangle (r.variable);
+                name = mangle (v);
             }
         }
-        if (r.variable.hasAttribute ("MatrixPointer")  &&  ! lvalue)
+        if (v.hasAttribute ("MatrixPointer")  &&  ! lvalue)
         {
             return "(* " + containers + name + ")";  // Actually stored as a pointer
         }
