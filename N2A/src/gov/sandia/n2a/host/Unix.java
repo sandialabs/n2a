@@ -54,7 +54,7 @@ public class Unix extends Host
             String line;
             while ((line = reader.readLine ()) != null)
             {
-                if (line.startsWith (jobDir)) return true;
+                if (line.contains (jobDir)) return true;
             }
         }
         return false;
