@@ -1042,6 +1042,11 @@ public abstract class Host
         }
     }
 
+    /**
+        @return Last modification as Unix time with millisecond resolution.
+        If the file doesn't exist, then 0. That allows comparisons where
+        non-existent and out-of-data have the same effect.
+    **/
     public static long lastModified (Path path)
     {
         try

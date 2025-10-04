@@ -13,12 +13,17 @@ import java.io.Writer;
 
 /**
     Simple JSON input/output for MNodes.
+
     This class has one minor limitation with respect to MNode: JSON nodes
     can have a value or children, but not both. To work around this, we treat
     a child key of "" (empty string) as holding the value of the node (but
     only when it has both a value and children). This means that "" can never
     be a proper child. This is such a rare case that it is a reasonable tradeoff
     to get richer representation of MNode.
+
+    The calls on this class are similar to Schema. However, this class doesn't
+    deal with a file magic string or schema versioning. Thus, it doesn't really
+    belong in the Schema hierarchy.
 **/
 public class JSON
 {
