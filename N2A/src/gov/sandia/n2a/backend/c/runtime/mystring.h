@@ -211,7 +211,7 @@ inline void append (char * & p, double value)
 /**
     A lightweight drop-in replacement for std::string.
     Avoids STL bloat (locales, exceptions ...) and only deals with single-byte characters.
-    This class only implements functions that are actually used by the runtime engine.
+    This class implements only functions that are actually used by the N2A C runtime engine.
 **/
 struct String    // Note the initial capital letter. This name will not conflict with std::string.
 {
@@ -277,7 +277,7 @@ struct String    // Note the initial capital letter. This name will not conflict
 
     ~String ()
     {
-        delete memory;  // Safe, even if "memory" is null.
+        delete[] memory;  // Safe, even if "memory" is null.
     }
 
     String & assign (const char * value, size_type n)
@@ -288,7 +288,7 @@ struct String    // Note the initial capital letter. This name will not conflict
             size_type requiredCapacity = n + 1;
             if (requiredCapacity > capacity_)
             {
-                delete memory;
+                delete[] memory;
                 capacity_ = requiredCapacity;
                 memory = new char[capacity_];
             }
@@ -313,7 +313,7 @@ struct String    // Note the initial capital letter. This name will not conflict
     {
         if (this != &that)
         {
-            delete memory;
+            delete[] memory;
             memory    = that.memory;
             top       = that.top;
             capacity_ = that.capacity_;
@@ -365,7 +365,7 @@ struct String    // Note the initial capital letter. This name will not conflict
         char * m = memory;
         char * a = temp;
         while (a <= end) *m++ = *a++;  // Copies both string and null terminator.
-        delete temp;
+        delete[] temp;
     }
 
     void resize (size_type n, char c = 0)
@@ -508,7 +508,7 @@ struct String    // Note the initial capital letter. This name will not conflict
 
             top = memory + length;
             *top = 0;
-            delete temp;
+            delete[] temp;
         }
         else
         {
@@ -911,7 +911,7 @@ inline std::vector<String> split (const String & source, const String & delimite
     int index           = 0;
     while (index < lengthSource)
     {
-        int next = source.find (delimiter);
+        int next = source.find (delimiter, index);
         if (next == String::npos) next = lengthSource;
         result.push_back (source.substr (index, next-index));
         index = next + lengthDelimiter;
