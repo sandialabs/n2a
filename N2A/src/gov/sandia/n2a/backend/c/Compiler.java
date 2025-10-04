@@ -23,6 +23,7 @@ public abstract class Compiler
 {
     protected Host               host;
     protected Path               localJobDir;
+    protected List<String>       settings    = new ArrayList<String> ();
     protected Map<String,String> defines     = new HashMap<String,String> ();
     protected List<Path>         includes    = new ArrayList<Path> ();
     protected List<Path>         sources     = new ArrayList<Path> ();
@@ -38,6 +39,16 @@ public abstract class Compiler
     {
         this.host        = host;
         this.localJobDir = localJobDir;
+    }
+
+    public void addSetting (String name)
+    {
+        settings.add (name);
+    }
+
+    public void removeSetting (String name)
+    {
+        settings.remove (name);
     }
 
     public void addDefine (String name)

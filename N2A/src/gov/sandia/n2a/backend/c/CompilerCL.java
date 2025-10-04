@@ -164,8 +164,7 @@ public class CompilerCL extends Compiler
         }
     }
 
-    protected Path         cl;
-    protected List<String> settings = new ArrayList<String> ();
+    protected Path cl;
 
     public CompilerCL (Host host, Path localJobDir, Path cl, Path MSVCroot, Path SDKroot, String version, String arch)
     {

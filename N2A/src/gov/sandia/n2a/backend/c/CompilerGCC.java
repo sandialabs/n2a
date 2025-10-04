@@ -117,10 +117,9 @@ public class CompilerGCC extends Compiler
         }
     }
 
-    protected Path         gcc;
-    protected List<String> settings = new ArrayList<String> ();
-    protected String       optimize = "-O3";
-    protected boolean      Darwin;
+    protected Path    gcc;
+    protected String  optimize = "-O3";
+    protected boolean Darwin;
 
     public CompilerGCC (Host host, Path localJobDir, Path gcc, boolean Darwin)
     {
