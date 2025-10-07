@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,6 +25,7 @@ import java.util.TreeSet;
 
 import javax.imageio.ImageIO;
 
+import com.jogamp.math.FloatUtil;
 import com.jogamp.opengl.DefaultGLCapabilitiesChooser;
 import com.jogamp.opengl.GL;
 import com.jogamp.opengl.GL2ES2;
@@ -33,7 +34,6 @@ import com.jogamp.opengl.GLCapabilities;
 import com.jogamp.opengl.GLDrawableFactory;
 import com.jogamp.opengl.GLProfile;
 import com.jogamp.opengl.GLUniformData;
-import com.jogamp.opengl.math.FloatUtil;
 import com.jogamp.opengl.util.GLArrayDataServer;
 import com.jogamp.opengl.util.PMVMatrix;
 import com.jogamp.opengl.util.awt.AWTGLReadBufferUtil;
@@ -422,7 +422,7 @@ public class Draw extends Function
                 gl.glClearColor (cv[0], cv[1], cv[2], cv[3]);
                 gl.glClear (GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT);
 
-                if (pv == null) pv = new PMVMatrix ();
+                if (pv == null) pv = new PMVMatrix (PMVMatrix.INVERSE_TRANSPOSED_MODELVIEW);
                 pv.glMatrixMode (PMVMatrix.GL_MODELVIEW);
                 if (view == null) pv.glLoadIdentity ();
                 else              pv.glLoadMatrixf (getMatrix (view), 0);
@@ -447,7 +447,8 @@ public class Draw extends Function
                     pv.glLoadMatrixf (getMatrix (projection), 0);
                 }
 
-                st.uniform (gl, new GLUniformData ("projectionMatrix", 4, 4, pv.glGetPMatrixf ()));
+                FloatBuffer P = pv.getP ().get (FloatBuffer.wrap (new float[16])).rewind ();
+                st.uniform (gl, new GLUniformData ("projectionMatrix", 4, 4, P));
                 // Each individual drawX() should set modelViewMatrix and normalMatrix from pv just before drawing.
 
                 if (lights == null) lights = new TreeMap<Integer,Light> ();
@@ -649,7 +650,7 @@ public class Draw extends Function
             P[1] = position[1];
             P[2] = position[2];
             P[3] = 1;
-            FloatBuffer Mv = H.pv.glGetMvMatrixf ();
+            float[] Mv = H.pv.getMv ().get (new float[16]);
             float[] temp = new float[4];
             FloatUtil.multMatrixVec (Mv, P, temp);
             P = new float[3];
@@ -662,7 +663,7 @@ public class Draw extends Function
             D[1] = direction[1];
             D[2] = direction[2];
             D[3] = 1;
-            FloatBuffer Mvit = H.pv.glGetMvitMatrixf ();
+            float[] Mvit = H.pv.getMvit ().get (new float[16]);
             FloatUtil.multMatrixVec (Mvit, D, temp);
             D = new float[3];
             float l = (float) Math.sqrt (temp[0] * temp[0] + temp[1] * temp[1] + temp[2] * temp[2]);

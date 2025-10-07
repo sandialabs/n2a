@@ -164,6 +164,7 @@ SHARED Matrix<int> glRotate2 (int angle, const MatrixFixed<int,3,1> & axis, int 
 SHARED Matrix<int> glRotate (int angle, int x, int y, int z, int exponent);
 SHARED Matrix<int> glScale (const MatrixFixed<int,3,1> & scales, int exponent);
 SHARED Matrix<int> glScale (int sx, int sy, int sz, int exponent);
+       Matrix<int> glScale (int s, int exponent) {return glScale (s, s, s, exponent);}
 SHARED Matrix<int> glTranslate (const MatrixFixed<int,3,1> & position, int exponent);
 SHARED Matrix<int> glTranslate (int x, int y, int z, int exponent);
 #else
@@ -174,6 +175,7 @@ template<class T> SHARED Matrix<T> glRotate (T angle, const MatrixFixed<T,3,1> &
 template<class T> SHARED Matrix<T> glRotate (T angle, T x, T y, T z);
 template<class T> SHARED Matrix<T> glScale (const MatrixFixed<T,3,1> & scales);
 template<class T> SHARED Matrix<T> glScale (T sx, T sy, T sz);
+template<class T>        Matrix<T> glScale (T s) {return glScale (s, s, s);}
 template<class T> SHARED Matrix<T> glTranslate (const MatrixFixed<T,3,1> & position);
 template<class T> SHARED Matrix<T> glTranslate (T x, T y, T z);
 #endif

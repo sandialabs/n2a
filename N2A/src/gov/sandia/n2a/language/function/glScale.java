@@ -1,5 +1,5 @@
 /*
-Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -66,12 +66,14 @@ public class glScale extends Function
         else
         {
             scale = new MatrixDense (3, 1);
-            double x = 0;
-            double y = 0;
-            double z = 0;
-            if (op0 != null) x = ((Scalar) op0).value;
-            if (operands.length > 1) y = ((Scalar) operands[1].eval (context)).value;
-            if (operands.length > 2) z = ((Scalar) operands[2].eval (context)).value;
+            double x = ((Scalar) op0).value;
+            double y = x;
+            double z = x;
+            if (operands.length > 2)
+            {
+                y = ((Scalar) operands[1].eval (context)).value;
+                z = ((Scalar) operands[2].eval (context)).value;
+            }
             scale.set (0, x);
             scale.set (1, y);
             scale.set (2, z);

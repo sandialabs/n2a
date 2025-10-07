@@ -470,7 +470,7 @@ public class Input extends Function
             }
         }
 
-        public double[] getSlice (int row)
+        public double[] getSlice (int row) throws IOException
         {
             Class<?> clz = data.getJavaType ();
             if (flat == null)
@@ -498,15 +498,21 @@ public class Input extends Function
                         if (clz == double.class) return (double[]) data.getData (anchor, size);  // Will have only a single element.
                         if (clz == float.class) floats = (float[]) data.getData (anchor, size);
                     }
-                    if (floats != null)
+                    if (floats == null)
+                    {
+                        throw new IOException ("Need code to handle numeric types other than double or float.");
+                    }
+                    else
                     {
                         double[] result = new double[columnCount];
                         for (int c = 0; c < columnCount; c++) result[c] = floats[c];
+                        return result;
                     }
                 }
                 catch (HdfException e)
                 {
                     flat = data.getDataFlat ();
+                    // and fall through to "flat" handling below ...
                 }
             }
 
@@ -519,6 +525,10 @@ public class Input extends Function
             else if (clz == float.class)
             {
                 for (int c = 0; c < columnCount; c++) result[c] = ((float[]) flat)[base + c];
+            }
+            else
+            {
+                throw new IOException ("Need code to handle numeric types other than double or float.");
             }
             return result;
         }

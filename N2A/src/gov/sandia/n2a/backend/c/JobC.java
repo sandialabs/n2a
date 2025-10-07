@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -6187,7 +6187,7 @@ public class JobC extends Thread
                             if (! context.defined.contains ("model"))
                             {
                                 context.defined.add ("model");
-                                context.result.append (pad + "Matrix<" + T + ",4,4> model;\n");  // model is built in type T, then converted to float on call to draw routine
+                                context.result.append (pad + "MatrixFixed<" + T + ",4,4> model;\n");  // model is built in type T, then converted to float on call to draw routine
                             }
                         }
                     }
@@ -6250,9 +6250,16 @@ public class JobC extends Thread
 
                                 // Vectors that require conversion to float
                                 case "position":
+                                    if (! light) continue;
+                                    if (value.isScalar ())
+                                    {
+                                        context.result.append (pad + "light->infinite = true;\n");
+                                        continue;
+                                    }
+                                    // else fall through ...
                                 case "direction":
                                     if (! light) continue;
-                                    context.result.append (pad + "setVector (light->" + key + ", ");
+                                    context.result.append (pad + "setVector<" + T + "> (light->" + key + ", ");
                                     value.render (context);
                                     if (fixedPoint) context.result.append (", " + value.exponent);
                                     context.result.append (");\n");
@@ -6291,13 +6298,13 @@ public class JobC extends Thread
                                 case "emission":
                                     if (light)
                                     {
-                                        context.result.append (pad + "setVector (light->" + key + ", ");
+                                        context.result.append (pad + "setVector<" + T + "> (light->" + key + ", ");
                                         value.render (context);
                                         context.result.append (");\n");
                                     }
                                     else if (material)
                                     {
-                                        context.result.append (pad + "setColor (material." + key + ", ");
+                                        context.result.append (pad + "setColor<" + T + "> (material." + key + ", ");
                                         value.render (context);
                                         context.result.append (", " + key.equals ("diffuse") + ");\n");
                                     }

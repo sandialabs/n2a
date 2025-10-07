@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -522,12 +522,19 @@ split (std::vector<GLfloat> & vertices, int v0, int v1)
 }
 
 #ifdef n2a_FP
+
 void
 setVector (float target[], const Matrix<int> & value, int exponent)
 {
     float conversion = powf (2, FP_MSB - exponent);
     for (int i = 0; i < 3; i++) target[i] = value[i] / conversion;
 }
+
+#else
+
+template SHARED void setVector (float target[], const Matrix<n2a_T> & value);
+template SHARED void setColor  (float target[], const Matrix<n2a_T> & color, bool withAlpha);
+
 #endif
 
 #endif

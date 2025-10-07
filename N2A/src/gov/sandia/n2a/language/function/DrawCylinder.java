@@ -1,11 +1,12 @@
 /*
-Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
+import java.nio.FloatBuffer;
 import java.util.Map.Entry;
 
 import com.jogamp.opengl.GL;
@@ -102,13 +103,15 @@ public class DrawCylinder extends Draw3D
         if (simulator.currentEvent == null) now = 0;
         else                                now = (float) simulator.currentEvent.t;
 
-        MatrixDense p1 = (MatrixDense)     operands[1].eval (context);
-        float       r1 = (float) ((Scalar) operands[2].eval (context)).value;
-        MatrixDense p2 = (MatrixDense)     operands[3].eval (context);
+        MatrixDense p1 = (MatrixDense) operands[1].eval (context);
+        MatrixDense p2 = (MatrixDense) operands[3].eval (context);
         if (p1.compareTo (p2) == 0) return new Scalar (0);
+
+        float r1 = (float) ((Scalar) operands[2].eval (context)).value;
         float r2 = r1;
         if (operands.length > 4) r2 = (float) ((Scalar) operands[4].eval (context)).value;
         if (r1 == 0  &&  r2 == 0) return new Scalar (0);
+
         if (p1.columns () > 1) p1 = p1.transpose ();
         if (p2.columns () > 1) p2 = p2.transpose ();
 
@@ -156,8 +159,8 @@ public class DrawCylinder extends Draw3D
         }
         else
         {
-            vertices.reset ();
-            indices.reset ();
+            vertices.clear ();
+            indices .clear ();
         }
 
         // Construct a local coordinate frame.
@@ -398,14 +401,16 @@ public class DrawCylinder extends Draw3D
             }
         }
 
-        st.uniform (gl, new GLUniformData ("modelViewMatrix", 4, 4, H.pv.glGetMvMatrixf ()));
-        st.uniform (gl, new GLUniformData ("normalMatrix",    4, 4, H.pv.glGetMvitMatrixf ()));
+        FloatBuffer Mv   = H.pv.getMv   ().get (FloatBuffer.wrap (new float[16])).rewind ();
+        FloatBuffer Mvit = H.pv.getMvit ().get (FloatBuffer.wrap (new float[16])).rewind ();
+        st.uniform (gl, new GLUniformData ("modelViewMatrix", 4, 4, Mv));
+        st.uniform (gl, new GLUniformData ("normalMatrix",    4, 4, Mvit));
 
         vertices.seal (true);
-        indices.seal (true);
+        indices .seal (true);
         vertices.enableBuffer (gl, true);
         indices .bindBuffer   (gl, true);
-        int count = indices.getElementCount ();
+        int count = indices.getElemCount ();
         gl.glDrawElements (GL.GL_TRIANGLES, count, GL.GL_UNSIGNED_INT, 0);
 
         return new Scalar (0);

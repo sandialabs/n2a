@@ -56,6 +56,9 @@ import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.SumSquares;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
+import gov.sandia.n2a.language.function.glRotate;
+import gov.sandia.n2a.language.function.glScale;
+import gov.sandia.n2a.language.function.glTranslate;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.Modulo;
 import gov.sandia.n2a.language.operator.Power;
@@ -367,6 +370,47 @@ public class RendererC extends Renderer
             if (g.operands.length > 0)
             {
                 g.operands[0].render (this);
+            }
+            result.append (")");
+            return true;
+        }
+        if (op instanceof glRotate)
+        {
+            glRotate r = (glRotate) op;
+            result.append ("glRotate<" + job.T + "> (");
+            r.operands[0].render (this);
+            for (int i = 1; i < r.operands.length; i++)
+            {
+                result.append (", ");
+                r.operands[i].render (this);
+            }
+            result.append (")");
+            return true;
+        }
+        if (op instanceof glScale)
+        {
+            glScale s = (glScale) op;
+            if (! (s.operands[0].getType () instanceof Matrix)) return super.render (op);
+            result.append ("glScale<" + job.T + "> (");
+            s.operands[0].render (this);
+            for (int i = 1; i < s.operands.length; i++)
+            {
+                result.append (", ");
+                s.operands[i].render (this);
+            }
+            result.append (")");
+            return true;
+        }
+        if (op instanceof glTranslate)
+        {
+            glTranslate t = (glTranslate) op;
+            if (! (t.operands[0].getType () instanceof Matrix)) return super.render (op);
+            result.append ("glTranslate<" + job.T + "> (");
+            t.operands[0].render (this);
+            for (int i = 1; i < t.operands.length; i++)
+            {
+                result.append (", ");
+                t.operands[i].render (this);
             }
             result.append (")");
             return true;

@@ -1,10 +1,12 @@
 /*
-Copyright 2023-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
+
+import java.nio.FloatBuffer;
 
 import com.jogamp.opengl.GL;
 import com.jogamp.opengl.GL2ES2;
@@ -100,13 +102,15 @@ public class DrawPlane extends Draw3D
         pv.glMatrixMode (PMVMatrix.GL_MODELVIEW);
         pv.glPushMatrix ();
         if (model != null)  pv.glMultMatrixf (getMatrix (model), 0);
-        st.uniform (gl, new GLUniformData ("modelViewMatrix", 4, 4, pv.glGetMvMatrixf ()));
-        st.uniform (gl, new GLUniformData ("normalMatrix",    4, 4, pv.glGetMvitMatrixf ()));
+        FloatBuffer Mv   = pv.getMv   ().get (FloatBuffer.wrap (new float[16])).rewind ();
+        FloatBuffer Mvit = pv.getMvit ().get (FloatBuffer.wrap (new float[16])).rewind ();
+        st.uniform (gl, new GLUniformData ("modelViewMatrix", 4, 4, Mv));
+        st.uniform (gl, new GLUniformData ("normalMatrix",    4, 4, Mvit));
         pv.glPopMatrix ();
 
         vertices.enableBuffer (gl, true);
         indices .bindBuffer   (gl, true);
-        int count = indices.getElementCount ();
+        int count = indices.getElemCount ();
         gl.glDrawElements (GL.GL_TRIANGLES, count, GL.GL_UNSIGNED_INT, 0);
         vertices.enableBuffer (gl, false);
         indices .bindBuffer   (gl, false);
