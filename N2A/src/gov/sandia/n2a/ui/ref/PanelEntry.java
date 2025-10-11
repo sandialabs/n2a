@@ -175,6 +175,7 @@ public class PanelEntry extends JPanel
         InputMap inputMap = table.getInputMap (WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
         inputMap.put (KeyStroke.getKeyStroke ("ctrl EQUALS"),       "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
         inputMap.put (KeyStroke.getKeyStroke ("ENTER"),             "startEditing");

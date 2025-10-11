@@ -212,6 +212,7 @@ public class SettingsRepo extends JScrollPane implements Settings
         inputMap.put (KeyStroke.getKeyStroke ("shift DOWN"),        "moveDown");
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
         inputMap.put (KeyStroke.getKeyStroke ("ctrl EQUALS"),       "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
         inputMap.put (KeyStroke.getKeyStroke ("SPACE"),             "startEditing");

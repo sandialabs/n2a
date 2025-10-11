@@ -916,6 +916,7 @@ public class GraphNode extends JPanel
             inputMap.put (KeyStroke.getKeyStroke ("ctrl V"),            "paste");
             inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl EQUALS"),       "add");
+            inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl 1"),            "addPart");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl 2"),            "addVariable");
             inputMap.put (KeyStroke.getKeyStroke ("ctrl 3"),            "addEquation");

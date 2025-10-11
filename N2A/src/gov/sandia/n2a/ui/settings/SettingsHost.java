@@ -89,11 +89,13 @@ public class SettingsHost implements Settings
             }
         };
         list.setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
-        list.setToolTipText ("Press Insert to create host. Press Delete to remove host.");
+        if (Host.isMac ()) list.setToolTipText ("Press Control+ to create host. Press Delete to remove host.");
+        else               list.setToolTipText ("Press Insert to create host. Press Delete to remove host.");
 
         InputMap inputMap = list.getInputMap ();
         inputMap.put (KeyStroke.getKeyStroke ("INSERT"),            "add");
         inputMap.put (KeyStroke.getKeyStroke ("ctrl EQUALS"),       "add");
+        inputMap.put (KeyStroke.getKeyStroke ("ctrl shift EQUALS"), "add");
         inputMap.put (KeyStroke.getKeyStroke ("DELETE"),            "delete");
         inputMap.put (KeyStroke.getKeyStroke ("BACK_SPACE"),        "delete");
 
