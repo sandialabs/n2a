@@ -43,9 +43,12 @@ public class Input extends Function
 {
     public boolean warningTime;
     public String  warningIO;              // Only one message per file name.
+
+    // TODO: Factor these into a generic backend object.
     public int     exponentRow = UNKNOWN;  // For C backend with integer math. The exponent used to convert row or time values into a floating-point number.
     public String  name;                   // For C backend, the name of the InputHolder object.
     public String  fileName;               // For C backend, the name of the string variable holding the file name, if any.
+    public String  hdf5path;               // For C backend, the name of the string variable holding the HDF5 path, if any.
 
     public static Factory factory ()
     {
@@ -475,6 +478,7 @@ public class Input extends Function
             Class<?> clz = data.getJavaType ();
             if (flat == null)
             {
+                /*  Read slice. Doesn't work in JHDF 0.10.0.
                 try
                 {
                     float[] floats = null;
@@ -486,7 +490,7 @@ public class Input extends Function
                         anchor[1] = 0;
                         size  [0] = 1;
                         size  [1] = columnCount;
-                        if (clz == double.class) return ((double[][]) data.getData (anchor, size))[0];
+                        if (clz == double.class) return ((double[][]) data.getData (anchor, size))[0];  // TODO: This is probably the wrong pattern of access to returned elements.
                         if (clz == float.class) floats = ((float[][]) data.getData (anchor, size))[0];
                     }
                     else
@@ -510,6 +514,7 @@ public class Input extends Function
                     }
                 }
                 catch (HdfException e)
+                */
                 {
                     flat = data.getDataFlat ();
                     // and fall through to "flat" handling below ...

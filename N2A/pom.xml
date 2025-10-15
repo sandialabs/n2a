@@ -196,6 +196,13 @@
             <version>2.16.0</version>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk18on -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.82</version>
+        </dependency>
+
         <!-- https://mvnrepository.com/artifact/org.jfree/jfreechart -->
         <dependency>
             <groupId>org.jfree</groupId>
@@ -360,7 +367,7 @@
 		<dependency>
 		    <groupId>io.jhdf</groupId>
 		    <artifactId>jhdf</artifactId>
-		    <version>0.8.4</version>
+		    <version>0.10.0</version>
 		</dependency>
     </dependencies>
 </project>

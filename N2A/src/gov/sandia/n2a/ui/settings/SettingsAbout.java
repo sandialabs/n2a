@@ -101,13 +101,13 @@ public class SettingsAbout extends JPanel implements Settings
         addLicense     (licenses, "JFreeChart",    loadResource ("jfreechart"));
         addLicense     (licenses, "JGit",          loadResource ("jgit"));
         addLicense     (licenses, "Apache SSHD",   loadResource ("apache-sshd"));
+        addLicense     (licenses, "Bouncy Castle", loadResource ("bouncy-castle"), true);
         addLicense     (licenses, "JavaEWAH",      loadResource ("JavaEWAH"));
         addLicense     (licenses, "OpenGL",        loadResource ("opengl"));
         addLicense     (licenses, "JOGL",          loadResource ("JOGL"));
         addLicense     (licenses, "miniz",         loadResource ("miniz"));
         addLicense     (licenses, "pugixml",       loadResource ("pugixml"));
         addLicense     (licenses, "SLF4J",         loadResource ("slf4j"));
-        addLicense     (licenses, "EdDSA",         loadResource ("eddsa"));
         addLicenseHTML (licenses, "Eclipse",       loadResource ("eclipse"));
 
         Lay.BLtg (this,
@@ -156,6 +156,11 @@ public class SettingsAbout extends JPanel implements Settings
 
     public void addLicense (JTabbedPane licenses, String name, String content)
     {
+        addLicense (licenses, name, content, false);
+    }
+
+    public void addLicense (JTabbedPane licenses, String name, String content, boolean lineWrap)
+    {
         JTextArea textArea = new JTextArea (content)
         {
             public void updateUI ()
@@ -167,6 +172,11 @@ public class SettingsAbout extends JPanel implements Settings
                 setFont (new Font (Font.MONOSPACED, Font.PLAIN, f.getSize ()));
             }
         };
+        if (lineWrap)
+        {
+            textArea.setLineWrap (true);
+            textArea.setWrapStyleWord (true);
+        }
         JScrollPane scrollPane = new JScrollPane (textArea);
         licenses.addTab (name, null, scrollPane, null);
     }
