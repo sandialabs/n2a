@@ -67,6 +67,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -94,6 +95,9 @@ public class JobC extends Thread
     protected Path        ffmpegLibDir;  // Where link libraries are found
     protected Path        ffmpegIncDir;
     protected Path        ffmpegBinDir;  // If non-null, then shared library dir should be added to path.
+    protected Path        hdf5LibDir;
+    protected Path        hdf5IncDir;
+    protected Path        hdf5BinDir;
     protected Path        jniIncDir;     // jni.h
     protected Path        jniIncMdDir;   // jni_md.h
     protected Set<String> glLibs;
@@ -274,7 +278,8 @@ public class JobC extends Thread
 
                 List<Path> libPath = new ArrayList<Path> ();
                 if (shared) libPath.add (runtimeDir);
-                if (ffmpegBinDir != null) libPath.add (ffmpegBinDir);  // This could be redundant with existing system path.
+                if (ffmpegBinDir != null) libPath.add (ffmpegBinDir);  // These could be redundant with existing system path.
+                if (hdf5BinDir   != null) libPath.add (hdf5BinDir);
 
                 Backend.copyExtraFiles (model, job);
                 env.submitJob (job, env.clobbersOut (), commands, libPath);
@@ -378,6 +383,42 @@ public class JobC extends Thread
         }
 
         // TODO: freetype
+
+        // HDF5
+        if (env.objects.containsKey ("hdf5LibDir"))
+        {
+            hdf5LibDir = (Path) env.objects.get ("hdf5LibDir");
+            hdf5IncDir = (Path) env.objects.get ("hdf5IncDir");
+            hdf5BinDir = (Path) env.objects.get ("hdf5BinDir");
+        }
+        else
+        {
+            String hdf5String = env.config.get ("backend", "c", "hdf5");
+            if (hdf5String.isBlank ())
+            {
+                for (String path : new String[] {"hdf5/lib", "/usr/lib64", "/usr/lib", "/usr/local/lib64", "/usr/local/lib"})
+                {
+                    hdf5LibDir = runtimeDir.resolve (path);
+                    if (contains (hdf5LibDir, prefix, "hdf5", suffix)) break;
+                    hdf5LibDir = null;
+                }
+            }
+            else
+            {
+                hdf5LibDir = runtimeDir.resolve (hdf5String);
+                if (! contains (hdf5LibDir, prefix, "hdf5", suffix)) hdf5LibDir = null;
+            }
+            if (hdf5LibDir != null)
+            {
+                Path hdf5Dir = hdf5LibDir.getParent ();
+                hdf5IncDir = hdf5Dir.resolve ("include");
+                if (factory.wrapperRequired ()) hdf5BinDir = hdf5Dir.resolve ("bin");  // Use of wrapper implies that shared library is treated same as a binary, rather than living in the lib directory.
+            }
+
+            env.objects.put ("hdf5LibDir", hdf5LibDir);
+            env.objects.put ("hdf5IncDir", hdf5IncDir);
+            env.objects.put ("hdf5BinDir", hdf5BinDir);
+        }
 
         // JNI
         if (env.objects.containsKey ("jniIncMdDir"))
@@ -571,7 +612,9 @@ public class JobC extends Thread
             }
             CompilerFactory factory = BackendC.getFactory (env);
             supportsUnicodeIdentifiers = factory.supportsUnicodeIdentifiers ();
-            String runtimeName = factory.prefixLibrary (shared) + runtimeName () + factory.suffixLibrary (shared);
+            String prefix = factory.prefixLibrary (shared);
+            String suffix = factory.suffixLibrary (shared);
+            String runtimeName = prefix + runtimeName () + suffix;
             Path runtimeLib = runtimeDir.resolve (runtimeName);
             for (ProvideOperator pf : extensions)
             {
@@ -587,12 +630,13 @@ public class JobC extends Thread
             if (changed)  // Delete all existing object files and runtime libs.
             {
                 runtimes.clear ();
+                String videoLib = prefix + "video" + suffix;
                 try (DirectoryStream<Path> list = Files.newDirectoryStream (runtimeDir))
                 {
                     for (Path file : list)
                     {
                         String fileName = file.getFileName ().toString ();
-                        if (fileName.endsWith (".o")  ||  fileName.contains ("runtime_"))  // The underscore after "runtime" is crucial.
+                        if (fileName.endsWith (".o")  ||  fileName.contains ("runtime_")  ||  fileName.equals (videoLib))  // The underscore after "runtime" is crucial.
                         {
                             job.set ("deleting " + file, "status");
                             Files.delete (file);
@@ -805,6 +849,13 @@ public class JobC extends Thread
             c.addInclude (ffmpegIncDir);
             c.addDefine ("HAVE_FFMPEG");
         }
+        if (hdf5IncDir != null)
+        {
+            c.addInclude (hdf5IncDir);
+            c.addDefine ("HAVE_HDF5");
+            c.addDefine ("H5_BUILT_AS_DYNAMIC_LIB");  // Always use shared version of the library, regardless of target type.
+            c.addDefine ("n2a_HDF_T", "NATIVE_" + T.toUpperCase ());  // Works for "float", "double" and "int". TODO: Might need special code for some types.
+        }
         if (jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
         {
             c.addInclude (jniIncMdDir);
@@ -837,6 +888,12 @@ public class JobC extends Thread
             c.addLibrary ("avcodec");
             c.addLibrary ("avformat");
             c.addLibrary ("avutil");
+        }
+        if (hdf5LibDir != null)
+        {
+            c.addLibraryDir (hdf5LibDir);
+            c.addLibrary ("hdf5_cpp");
+            c.addLibrary ("hdf5");
         }
         if (lib  &&  jni  ||  jniIncMdDir != null  &&  shared  &&  ! (env instanceof Remote))
         {
@@ -1911,6 +1968,9 @@ public class JobC extends Thread
                 if (op instanceof Function)
                 {
                     Function f = (Function) op;
+
+                    // Special handling for some function.
+                    Operator hdf5op = null;
                     if (f instanceof Output)  // Handle computed strings
                     {
                         Output o = (Output) f;
@@ -1952,42 +2012,57 @@ public class JobC extends Thread
                             }
                         }
                     }
-                    if (f instanceof Mfile) hasMfile = true;
+                    else if (f instanceof Input)  // Handle HDF5 path, if present.
+                    {
+                        Input i = (Input) f;
+                        hdf5op = i.getKeyword ("hdf5");
+                        if (hdf5op instanceof Add)
+                        {
+                            stringNames.put (hdf5op, i.hdf5path = "hdf5path" + stringNames.size ());
+                            ((Add) hdf5op).name = i.hdf5path;
+                        }
+                        else if (hdf5op instanceof AccessVariable)
+                        {
+                            AccessVariable av = (AccessVariable) hdf5op;
+                            i.hdf5path = resolve (av.reference, context, false);
+                        }
+                    }
+                    else if (f instanceof Mfile) hasMfile = true;
+
                     // Detect functions that need static handles
                     if (f.operands.length > 0)
                     {
                         Operator operand0 = f.operands[0];
                         if (operand0 instanceof Constant)
                         {
-                            Constant c = (Constant) operand0;
-                            if (c.value instanceof Text)
+                            String fileName = operand0.toString ();
+                            if (f instanceof ReadMatrix)
                             {
-                                String fileName = ((Text) c.value).value;
-                                if (f instanceof ReadMatrix)
+                                ReadMatrix r = (ReadMatrix) f;
+                                r.name = matrixNames.get (fileName);
+                                if (r.name == null)
                                 {
-                                    ReadMatrix r = (ReadMatrix) f;
-                                    r.name = matrixNames.get (fileName);
-                                    if (r.name == null)
-                                    {
-                                        r.name = "Matrix" + matrixNames.size ();
-                                        matrixNames.put (fileName, r.name);
-                                        mainMatrix.add (r);
-                                    }
+                                    r.name = "Matrix" + matrixNames.size ();
+                                    matrixNames.put (fileName, r.name);
+                                    mainMatrix.add (r);
                                 }
-                                else if (f instanceof Mfile)
+                            }
+                            else if (f instanceof Mfile)
+                            {
+                                Mfile m = (Mfile) f;
+                                m.name = mfileNames.get (fileName);
+                                if (m.name == null)
                                 {
-                                    Mfile m = (Mfile) f;
-                                    m.name = mfileNames.get (fileName);
-                                    if (m.name == null)
-                                    {
-                                        m.name = "Mfile" + mfileNames.size ();
-                                        mfileNames.put (fileName, m.name);
-                                        mainMfile.add (m);
-                                    }
+                                    m.name = "Mfile" + mfileNames.size ();
+                                    mfileNames.put (fileName, m.name);
+                                    mainMfile.add (m);
                                 }
-                                else if (f instanceof Input)
+                            }
+                            else if (f instanceof Input)
+                            {
+                                Input i = (Input) f;
+                                if (hdf5op == null)  // XSF case: file name alone identifies open file.
                                 {
-                                    Input i = (Input) f;
                                     i.name = inputNames.get (fileName);
                                     if (i.name == null)
                                     {
@@ -1996,38 +2071,69 @@ public class JobC extends Thread
                                         mainInput.add (i);
                                     }
                                 }
-                                else if (f instanceof Output)
+                                else  // HDF5 case: path inside container also needed to identify open file
                                 {
-                                    Output o = (Output) f;
-                                    o.name = outputNames.get (fileName);
-                                    if (o.name == null)
+                                    if (hdf5op instanceof Constant)  // Both file name and path are constant, so this can be a static object
                                     {
-                                        o.name = "Output" + outputNames.size ();
-                                        outputNames.put (fileName, o.name);
-                                        mainOutput.add (o);
+                                        String key = fileName + "|" + hdf5op.getString ();
+                                        i.name = inputNames.get (key);
+                                        if (i.name == null)
+                                        {
+                                            i.name = "Input" + inputNames.size ();
+                                            inputNames.put (key, i.name);
+                                            mainInput.add (i);
+                                        }
+                                    }
+                                    else if (hdf5op instanceof AccessVariable)  // Need one holder object per variable in a given equation set.
+                                    {
+                                        AccessVariable av = (AccessVariable) hdf5op;
+                                        Variable v = av.reference.variable;
+                                        i.name = inputNames.get (v);
+                                        if (i.name == null)
+                                        {
+                                            i.name = "Input" + inputNames.size ();
+                                            inputNames.put (v, i.name);
+                                        }
+                                    }
+                                    else  // Path is an expression.
+                                    {
+                                        // Since helper function will be called every time, we only need one holder variable per equation set.
+                                        i.name = "Input" + inputNames.size ();
+                                        inputNames.put (s, i.name);
                                     }
                                 }
-                                else if (f instanceof ReadImage)
+                            }
+                            else if (f instanceof Output)
+                            {
+                                Output o = (Output) f;
+                                o.name = outputNames.get (fileName);
+                                if (o.name == null)
                                 {
-                                    ReadImage r = (ReadImage) f;
-                                    r.name = imageInputNames.get (fileName);
-                                    if (r.name == null)
-                                    {
-                                        r.name = "Image" + imageInputNames.size ();
-                                        imageInputNames.put (fileName, r.name);
-                                        mainImageInput.add (r);
-                                    }
+                                    o.name = "Output" + outputNames.size ();
+                                    outputNames.put (fileName, o.name);
+                                    mainOutput.add (o);
                                 }
-                                else if (f instanceof Draw)
+                            }
+                            else if (f instanceof ReadImage)
+                            {
+                                ReadImage r = (ReadImage) f;
+                                r.name = imageInputNames.get (fileName);
+                                if (r.name == null)
                                 {
-                                    Draw d = (Draw) f;
-                                    d.name = imageOutputNames.get (fileName);
-                                    if (d.name == null)
-                                    {
-                                        d.name = "Draw" + imageOutputNames.size ();
-                                        imageOutputNames.put (fileName, d.name);
-                                        mainImageOutput.add (d);
-                                    }
+                                    r.name = "Image" + imageInputNames.size ();
+                                    imageInputNames.put (fileName, r.name);
+                                    mainImageInput.add (r);
+                                }
+                            }
+                            else if (f instanceof Draw)
+                            {
+                                Draw d = (Draw) f;
+                                d.name = imageOutputNames.get (fileName);
+                                if (d.name == null)
+                                {
+                                    d.name = "Draw" + imageOutputNames.size ();
+                                    imageOutputNames.put (fileName, d.name);
+                                    mainImageOutput.add (d);
                                 }
                             }
                         }
@@ -2196,7 +2302,8 @@ public class JobC extends Thread
         }
         for (Input i : mainInput)
         {
-            result.append (thread_local + "InputHolder<" + T + "> * " + i.name + ";\n");
+            String inputHolder =  i.getKeyword ("hdf5") == null ? "InputXSV" : "InputHDF5";
+            result.append (thread_local + inputHolder + "<" + T + "> * " + i.name + ";\n");
         }
         for (Output o : mainOutput)
         {
@@ -2241,7 +2348,10 @@ public class JobC extends Thread
         }
         for (Input i : mainInput)
         {
-            result.append ("  " + i.name + " = inputHelper<" + T + "> (\"" + i.operands[0].getString () + "\"");
+            Operator hdf5op = i.getKeyword ("hdf5");
+            String inputHelper =  hdf5op == null ? "xsvHelper" : "hdf5Helper";
+            result.append ("  " + i.name + " = " + inputHelper + "<" + T + "> (\"" + i.operands[0].getString () + "\"");
+            if (hdf5op != null) result.append (", \"" + hdf5op.getString () + "\"");
             if (fixedPoint) result.append (", " + i.exponent + ", " + i.exponentRow);
             result.append (");\n");
 
@@ -2253,6 +2363,8 @@ public class JobC extends Thread
             // Several different instances may disagree on epsilon.
             // We could make a compile-time estimate of the smallest dt, and use dt/1000 just once here.
             // This is similar to the current approach for estimating time exponent for fixed-point.
+
+            if (i.getKeywordFlag ("nwb")) result.append ("  " + i.name + "->nwb = true;\n");
         }
         for (Output o : mainOutput)
         {
@@ -5675,7 +5787,7 @@ public class JobC extends Thread
 
         // Select the default equation
         EquationEntry defaultEquation = null;
-        for (EquationEntry e : v.equations) if (e.ifString.isEmpty ()) defaultEquation = e;
+        for (EquationEntry e : v.equations) if (e.ifString.isBlank ()) defaultEquation = e;
 
         // Initialize static objects, and dump dynamic objects needed by conditions
         for (EquationEntry e : v.equations)
@@ -5925,12 +6037,15 @@ public class JobC extends Thread
                 }
                 if (op instanceof Input)
                 {
+                    // See comments in generateMainInitializers()
+                    // The only reason to process Input here is to set epsilon, since we can't really know it when
+                    // the global variable is initialized.
+                    // This can produce redundant code, where multiple parts set the same field.
                     Input i = (Input) op;
                     if (   i.operands[0] instanceof Constant
                         && i.usesTime ()  &&  ! context.global  &&  ! fixedPoint  // In the case of T==int, we don't need to set epsilon because it is already set to 1 by the constructor.
                         && ! context.defined.contains (i.name))
                     {
-                        // See comments in generateMainInitializers()
                         context.defined.add (i.name);
 
                         // Read $t' as an lvalue, to ensure we get any newly-set frequency.
@@ -6067,14 +6182,46 @@ public class JobC extends Thread
                 if (op instanceof Input)
                 {
                     Input i = (Input) op;
-                    if (! (i.operands[0] instanceof Constant))
+                    Operator op0 = i.operands[0];
+                    Operator hdf5op = i.getKeyword ("hdf5");
+                    boolean constantFilename = op0 instanceof Constant;
+                    boolean constantHDF5     =  hdf5op == null  ||  hdf5op instanceof Constant;
+                    if (! constantFilename  ||  ! constantHDF5)  // Source of input is dynamic in some way, so must process it here.
                     {
-                        if (v != null)
+                        // In addition to file name as a variable, we also need to consider HDF5 path as a variable.
+                        // This creates a more complex set of cases to check.
+                        Variable w = null;
+                        if (hdf5op instanceof AccessVariable) w = ((AccessVariable) hdf5op).reference.variable;
+                        if (v != null  &&  w != null)  // filename and hdf5 path are both variables
+                        {
+                            // Use the combination of variables as a filter.
+                            // TODO: May need to modify assignNames() to create a unique Input for each combination of specific variables.
+                            AbstractMap.SimpleEntry<Variable, Variable> entry = new AbstractMap.SimpleEntry<> (v, w);
+                            if (context.defined.contains (entry)) return true;
+                            context.defined.add (entry);
+                        }
+                        else if (v != null  &&  constantHDF5)
                         {
                             if (context.defined.contains (v)) return true;
                             context.defined.add (v);
                         }
-                        context.result.append (pad + "InputHolder<" + T + "> * " + i.name + " = inputHelper<" + T + "> (" + i.fileName);
+                        else if (w != null  &&  constantFilename)
+                        {
+                            if (context.defined.contains (w)) return true;
+                            context.defined.add (w);
+                        }
+                        // else at least one of {filename, hdf5 path} is an expression, so we don't filter for repeats.
+
+                        if (hdf5op == null)
+                        {
+                            context.result.append (pad + "InputXSV<" + T + "> * " + i.name + " = xsvHelper<" + T + "> (" + i.fileName);
+                        }
+                        else
+                        {
+                            context.result.append (pad + "InputHDF5<" + T + "> * " + i.name + " = hdf5Helper<" + T + "> (" + i.fileName);
+                        }
+                        if (hdf5op instanceof Constant) context.result.append (", \"" + hdf5op.getString () + "\"");
+                        else if (hdf5op != null)        context.result.append (", " + i.hdf5path);
                         if (fixedPoint) context.result.append (", " + i.exponent + ", " + i.exponentRow);
                         context.result.append (");\n");
 
@@ -6091,6 +6238,11 @@ public class JobC extends Thread
                                 if (T.equals ("float")) context.result.append ("f");
                                 context.result.append (";\n");
                             }
+                        }
+
+                        if (i.getKeywordFlag ("nwb"))
+                        {
+                            context.result.append (pad + i.name + "->nwb = true;\n");
                         }
                     }
                     return true;

@@ -25,8 +25,12 @@ the U.S. Government retains certain rights in this software.
 // memchr(), which is of course the logical thing to do. However, GCC 11+ barfs
 // up warnings when our scan limit exceeds the known (to it) size of the string.
 // We don't want to see this scary and useless warning.
+// GCC 11 also barfs on character manipulation in the append() functions below.
+// It thinks it knows the size of the buffer, but it doesn't really.
+// This software should be checked with Valgrind to ensure that no actual problems exist.
 #if __GNUC__ >= 11
 #  pragma GCC diagnostic ignored "-Wstringop-overread"
+#  pragma GCC diagnostic ignored "-Wstringop-overflow="
 #endif
 
 

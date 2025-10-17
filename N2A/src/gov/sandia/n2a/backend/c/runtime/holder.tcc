@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,6 +16,7 @@ the U.S. Government retains certain rights in this software.
 #include "myendian.h"
 
 #include <fstream>
+#include <sstream>
 #include <stdlib.h>
 #include <time.h>
 #include <sys/stat.h>
@@ -26,12 +27,10 @@ the U.S. Government retains certain rights in this software.
 #endif
 
 #ifdef HAVE_GL
-#  include <fstream>      // for loading shader programs
-#  include <sstream>      // ditto
 #  ifdef _WIN32
 #    include "wglext.h"   // WGL -- Windows-specific functions for creating GL context
 #  endif
-#define GL_FUNCTIONS1(X) \
+#  define GL_FUNCTIONS1(X) \
    X(PFNGLENABLEPROC,                   glEnable                   ) \
    X(PFNGLDISABLEPROC,                  glDisable                  ) \
    X(PFNGLBLENDFUNCPROC,                glBlendFunc                ) \
@@ -40,7 +39,7 @@ the U.S. Government retains certain rights in this software.
    X(PFNGLCLEARPROC,                    glClear                    ) \
    X(PFNGLDRAWELEMENTSPROC,             glDrawElements             ) \
    X(PFNGLREADPIXELSPROC,               glReadPixels               )
-#define GL_FUNCTIONS(X) \
+#  define GL_FUNCTIONS(X) \
    X(PFNGLGENVERTEXARRAYSPROC,          glGenVertexArrays          ) \
    X(PFNGLBINDVERTEXARRAYPROC,          glBindVertexArray          ) \
    X(PFNGLGENBUFFERSPROC,               glGenBuffers               ) \
@@ -79,7 +78,7 @@ the U.S. Government retains certain rights in this software.
 #endif
 
 
-// class Parameters ----------------------------------------------------------
+// Parameters ----------------------------------------------------------------
 
 template<class T>
 void
@@ -153,7 +152,7 @@ Parameters<T>::get (const String & name, const String & defaultValue) const
 }
 
 
-// class IteratorSkip --------------------------------------------------------
+// IteratorSkip --------------------------------------------------------------
 
 template<class T>
 IteratorSkip<T>::IteratorSkip (Matrix<T> * A)
@@ -198,7 +197,7 @@ IteratorSkip<T>::getNext ()
 }
 
 
-// class IteratorSparse ------------------------------------------------------
+// IteratorSparse ------------------------------------------------------------
 
 template<class T>
 IteratorSparse<T>::IteratorSparse (MatrixSparse<T> * A)
@@ -452,7 +451,7 @@ matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle)
 }
 
 
-// class ImageInput ----------------------------------------------------------
+// ImageInput ----------------------------------------------------------------
 
 inline String format (String & pattern, int index)
 {
@@ -697,7 +696,7 @@ imageInputHelper (const String & fileName, ImageInput<T> * oldHandle)
 }
 
 
-// class ImageOutput ---------------------------------------------------------
+// ImageOutput ---------------------------------------------------------------
 
 #ifndef n2a_FP
 // The fixed-point version of this function is implemented directly in holder.cc
@@ -1942,7 +1941,7 @@ imageOutputHelper (const String & fileName, ImageOutput<T> * oldHandle)
 }
 
 
-// class Mfile ---------------------------------------------------------------
+// Mfile ---------------------------------------------------------------------
 
 template<class T>
 Mfile<T>::Mfile (const String & fileName)
@@ -2066,29 +2065,16 @@ InputHolder<T>::InputHolder (const String & fileName)
     timeColumnSet    = false;
     time             = false;
     smooth           = false;
-    delimiter        = ' ';
-    delimiterSet     = false;
 #   ifdef n2a_FP
     epsilon          = 1;
 #   else
     epsilon          = (T) 1e-6;
 #   endif
-
-    if (fileName.empty ())
-    {
-        in = &std::cin;
-    }
-    else
-    {
-        in = new std::ifstream (fileName.c_str ());
-        if (! in->good ()) fprintf (stderr, "Failed to open input file: %s\n", fileName.c_str ());
-    }
 }
 
 template<class T>
 InputHolder<T>::~InputHolder ()
 {
-    if (in  &&  in != &std::cin) delete in;
     if (currentValues) delete[] currentValues;
     if (nextValues   ) delete[] nextValues;
     if (A)             delete A;
@@ -2214,8 +2200,181 @@ convertDate (const String & field, T defaultValue)
 }
 
 template<class T>
+T
+InputHolder<T>::get (T row, const String & column)
+{
+    getRow (row);
+    std::unordered_map<String,int>::const_iterator it = columnMap.find (column);
+    if (it == columnMap.end ()) return 0;
+
+#   ifdef n2a_FP
+    if (smooth  &&  row >= currentLine  &&  currentLine != -INFINITY  &&  nextLine != NAN)
+    {
+        // We don't need to know what exponent the line values have, as long as they match.
+        int b = ((int64_t) (row - currentLine) << FP_MSB) / (nextLine - currentLine);
+        int b1 = (1 << FP_MSB) - b;
+        return (int64_t) b * nextValues[it->second] + (int64_t) b1 * currentValues[it->second] >> FP_MSB;
+    }
+#   else
+    if (smooth  &&  row >= currentLine  &&  std::isfinite (currentLine)  &&  std::isfinite (nextLine))
+    {
+        T b = (row - currentLine) / (nextLine - currentLine);
+        return b * nextValues[it->second] + (1-b) * currentValues[it->second];
+    }
+#   endif
+
+    return currentValues[it->second];
+}
+
+template<class T>
+T
+InputHolder<T>::get (T row, T column)
+{
+    getRow (row);
+    int c = (int) round (column);
+    if (time  &&  c >= timeColumn) c++;  // time column is not included in raw index
+    if      (c < 0            ) c = 0;
+    else if (c >= currentCount) c = currentCount - 1;
+
+#   ifdef n2a_FP
+    if (smooth  &&  row >= currentLine  &&  currentLine != -INFINITY  &&  nextLine != NAN)
+    {
+        int b  = ((int64_t) (row - currentLine) << FP_MSB) / (nextLine - currentLine);
+        int b1 = (1 << FP_MSB) - b;
+        return (int64_t) b * nextValues[c] + (int64_t) b1 * currentValues[c] >> FP_MSB;
+    }
+#   else
+    if (smooth  &&  row >= currentLine  &&  std::isfinite (currentLine)  &&  std::isfinite (nextLine))
+    {
+        T b = (row - currentLine) / (nextLine - currentLine);
+        return b * nextValues[c] + (1-b) * currentValues[c];
+    }
+#   endif
+
+    return currentValues[c];
+}
+
+template<class T>
+Matrix<T>
+InputHolder<T>::get (T row)
+{
+    getRow (row);
+
+#   ifdef n2a_FP
+    if (smooth  &&  row >= currentLine  &&  currentLine != -INFINITY  &&  nextLine != NAN)
+    {
+        if (Alast == row) return *A;
+
+        // Create a new matrix
+        if (A) delete A;
+        int b  = ((int64_t) (row - currentLine) << FP_MSB) / (nextLine - currentLine);
+        int b1 = (1 << FP_MSB) - b;
+        if (currentCount > 1)
+        {
+            int columns = currentCount - 1;
+            A = new Matrix<T> (1, columns);
+            int from = 0;
+            for (int to = 0; to < columns; to++)
+            {
+                if (from == timeColumn) from++;
+                (*A)(0,to) = (int64_t) b * nextValues[from] + (int64_t) b1 * currentValues[from] >> FP_MSB;
+                from++;
+            }
+        }
+        else
+        {
+            A = new Matrix<T> (1, 1);
+            (*A)(0,0) = (int64_t) b * nextValues[0] + (int64_t) b1 * currentValues[0] >> FP_MSB;
+        }
+
+        Alast = row;
+        return *A;
+    }
+#   else
+    if (smooth  &&  row >= currentLine  &&  std::isfinite (currentLine)  &&  std::isfinite (nextLine))
+    {
+        if (Alast == row) return *A;
+
+        // Create a new matrix
+        if (A) delete A;
+        T b  = (row - currentLine) / (nextLine - currentLine);
+        T b1 = 1 - b;
+        if (currentCount > 1)
+        {
+            int columns = currentCount - 1;
+            A = new Matrix<T> (1, columns);
+            int from = 0;
+            for (int to = 0; to < columns; to++)
+            {
+                if (from == timeColumn) from++;
+                (*A)(0,to) = b * nextValues[from] + b1 * currentValues[from];
+                from++;
+            }
+        }
+        else
+        {
+            A = new Matrix<T> (1, 1);
+            (*A)(0,0) = b * nextValues[0] + b1 * currentValues[0];
+        }
+
+        Alast = row;
+        return *A;
+    }
+#   endif
+
+    if (Alast == currentLine) return *A;
+
+    // Create a new matrix
+    if (A) delete A;
+    if (time  &&  currentCount > 1)
+    {
+        int columns = currentCount - 1;
+        A = new Matrix<T> (1, columns);
+        int from = 0;
+        for (int to = 0; to < columns; to++)
+        {
+            if (from == timeColumn) from++;
+            (*A)(0,to) = currentValues[from++];
+        }
+    }
+    else
+    {
+        A = new Matrix<T> (currentValues, 0, 1, currentCount, currentCount, 1);
+    }
+    Alast = currentLine;
+    return *A;
+}
+
+
+// InputXSV ------------------------------------------------------------------
+
+template<class T>
+InputXSV<T>::InputXSV (const String & fileName)
+:   InputHolder<T> (fileName)
+{
+    delimiter    = ' ';
+    delimiterSet = false;
+
+    if (fileName.empty ())
+    {
+        in = &std::cin;
+    }
+    else
+    {
+        in = new std::ifstream (fileName.c_str ());
+        if (! in->good ()) fprintf (stderr, "Failed to open input file: %s\n", fileName.c_str ());
+    }
+}
+
+template<class T>
+InputXSV<T>::~InputXSV ()
+{
+    if (in  &&  in != &std::cin) delete in;
+}
+
+template<class T>
 void
-InputHolder<T>::getRow (T row)
+InputXSV<T>::getRow (T row)
 {
     while (true)
     {
@@ -2417,163 +2576,17 @@ InputHolder<T>::getRow (T row)
 }
 
 template<class T>
-T
-InputHolder<T>::get (T row, const String & column)
-{
-    getRow (row);
-    std::unordered_map<String,int>::const_iterator it = columnMap.find (column);
-    if (it == columnMap.end ()) return 0;
-
-#   ifdef n2a_FP
-    if (smooth  &&  row >= currentLine  &&  currentLine != -INFINITY  &&  nextLine != NAN)
-    {
-        // We don't need to know what exponent the line values have, as long as they match.
-        int b = ((int64_t) (row - currentLine) << FP_MSB) / (nextLine - currentLine);
-        int b1 = (1 << FP_MSB) - b;
-        return (int64_t) b * nextValues[it->second] + (int64_t) b1 * currentValues[it->second] >> FP_MSB;
-    }
-#   else
-    if (smooth  &&  row >= currentLine  &&  std::isfinite (currentLine)  &&  std::isfinite (nextLine))
-    {
-        T b = (row - currentLine) / (nextLine - currentLine);
-        return b * nextValues[it->second] + (1-b) * currentValues[it->second];
-    }
-#   endif
-
-    return currentValues[it->second];
-}
-
-template<class T>
-T
-InputHolder<T>::get (T row, T column)
-{
-    getRow (row);
-    int c = (int) round (column);
-    if (time  &&  c >= timeColumn) c++;  // time column is not included in raw index
-    if      (c < 0            ) c = 0;
-    else if (c >= currentCount) c = currentCount - 1;
-
-#   ifdef n2a_FP
-    if (smooth  &&  row >= currentLine  &&  currentLine != -INFINITY  &&  nextLine != NAN)
-    {
-        int b  = ((int64_t) (row - currentLine) << FP_MSB) / (nextLine - currentLine);
-        int b1 = (1 << FP_MSB) - b;
-        return (int64_t) b * nextValues[c] + (int64_t) b1 * currentValues[c] >> FP_MSB;
-    }
-#   else
-    if (smooth  &&  row >= currentLine  &&  std::isfinite (currentLine)  &&  std::isfinite (nextLine))
-    {
-        T b = (row - currentLine) / (nextLine - currentLine);
-        return b * nextValues[c] + (1-b) * currentValues[c];
-    }
-#   endif
-
-    return currentValues[c];
-}
-
-template<class T>
-Matrix<T>
-InputHolder<T>::get (T row)
-{
-    getRow (row);
-
-#   ifdef n2a_FP
-    if (smooth  &&  row >= currentLine  &&  currentLine != -INFINITY  &&  nextLine != NAN)
-    {
-        if (Alast == row) return *A;
-
-        // Create a new matrix
-        if (A) delete A;
-        int b  = ((int64_t) (row - currentLine) << FP_MSB) / (nextLine - currentLine);
-        int b1 = (1 << FP_MSB) - b;
-        if (currentCount > 1)
-        {
-            int columns = currentCount - 1;
-            A = new Matrix<T> (1, columns);
-            int from = 0;
-            for (int to = 0; to < columns; to++)
-            {
-                if (from == timeColumn) from++;
-                (*A)(0,to) = (int64_t) b * nextValues[from] + (int64_t) b1 * currentValues[from] >> FP_MSB;
-                from++;
-            }
-        }
-        else
-        {
-            A = new Matrix<T> (1, 1);
-            (*A)(0,0) = (int64_t) b * nextValues[0] + (int64_t) b1 * currentValues[0] >> FP_MSB;
-        }
-
-        Alast = row;
-        return *A;
-    }
-#   else
-    if (smooth  &&  row >= currentLine  &&  std::isfinite (currentLine)  &&  std::isfinite (nextLine))
-    {
-        if (Alast == row) return *A;
-
-        // Create a new matrix
-        if (A) delete A;
-        T b  = (row - currentLine) / (nextLine - currentLine);
-        T b1 = 1 - b;
-        if (currentCount > 1)
-        {
-            int columns = currentCount - 1;
-            A = new Matrix<T> (1, columns);
-            int from = 0;
-            for (int to = 0; to < columns; to++)
-            {
-                if (from == timeColumn) from++;
-                (*A)(0,to) = b * nextValues[from] + b1 * currentValues[from];
-                from++;
-            }
-        }
-        else
-        {
-            A = new Matrix<T> (1, 1);
-            (*A)(0,0) = b * nextValues[0] + b1 * currentValues[0];
-        }
-
-        Alast = row;
-        return *A;
-    }
-#   endif
-
-    if (Alast == currentLine) return *A;
-
-    // Create a new matrix
-    if (A) delete A;
-    if (time  &&  currentCount > 1)
-    {
-        int columns = currentCount - 1;
-        A = new Matrix<T> (1, columns);
-        int from = 0;
-        for (int to = 0; to < columns; to++)
-        {
-            if (from == timeColumn) from++;
-            (*A)(0,to) = currentValues[from++];
-        }
-    }
-    else
-    {
-        A = new Matrix<T> (currentValues, 0, 1, currentCount, currentCount, 1);
-    }
-    Alast = currentLine;
-    return *A;
-}
-
-template<class T>
-InputHolder<T> *
+InputXSV<T> *
 #ifdef n2a_FP
-inputHelper (const String & fileName, int exponent, int exponentRow, InputHolder<T> * oldHandle)
+xsvHelper (const String & fileName, int exponent, int exponentRow, InputXSV<T> * oldHandle)
 #else
-inputHelper (const String & fileName,                                InputHolder<T> * oldHandle)
+xsvHelper (const String & fileName,                                InputXSV<T> * oldHandle)
 #endif
 {
-    InputHolder<T> * handle = (InputHolder<T> *) SIMULATOR getHolder (fileName, oldHandle);
+    InputXSV<T> * handle = (InputXSV<T> *) SIMULATOR getHolder (fileName, oldHandle);
     if (! handle)
     {
-        handle = new InputHolder<T> (fileName);
+        handle = new InputXSV<T> (fileName);
         SIMULATOR holders.push_back (handle);
 #       ifdef n2a_FP
         handle->exponent    = exponent;
@@ -2582,6 +2595,282 @@ inputHelper (const String & fileName,                                InputHolder
     }
     return handle;
 }
+
+
+// InputHDF5 -----------------------------------------------------------------
+
+#ifdef HAVE_HDF5
+
+SubHolder::SubHolder (const String & fileName)
+:   file (fileName.c_str (), H5F_ACC_RDONLY)
+{
+    users = 0;
+}
+
+template<class T>
+InputHDF5<T>::InputHDF5 (const String & fileName, const String & path)
+:   InputHolder<T> (fileName),
+    path           (path)
+{
+    sub          = 0;
+    warning      = false;
+    nwb          = false;
+    rowCount     = 0;
+    startingTime = (T) 0;
+    period       = (T) 0;
+    timestamps   = 0;
+    lastRow      = 0;
+
+    lock_guard<mutex> lock (SubHolder::mutexFiles);
+    auto it = SubHolder::files.find (fileName);
+    if (it == SubHolder::files.end ())
+    {
+        try
+        {
+            sub = new SubHolder (fileName);
+            SubHolder::files[fileName] = sub;
+        }
+        catch (const H5::Exception & error)
+        {
+            fprintf (stderr, "Failed to open HDF5 file: %s\n", fileName.c_str ());
+        }
+    }
+    else
+    {
+        sub = it->second;
+    }
+    sub->users++;
+}
+
+template<class T>
+InputHDF5<T>::~InputHDF5 ()
+{
+    if (timestamps) delete[] timestamps;
+
+    if (! sub) return;
+    lock_guard<mutex> lock (SubHolder::mutexFiles);
+    sub->users--;
+    if (sub->users <= 0)
+    {
+        delete sub;
+        SubHolder::files.erase (fileName);
+    }
+}
+
+template<class T>
+void
+InputHDF5<T>::getRow (T requested)
+{
+    try
+    {
+        if (data.getId () == H5I_INVALID_HID)
+        {
+            if (! sub  ||  warning) return;  // In failed state.
+            H5::H5File & file = sub->file;
+
+            if (nwb)
+            {
+                H5::Group timeSeries = file.openGroup (path.c_str ());
+                data = timeSeries.openDataSet ("data");
+                if (timeSeries.nameExists ("timestamps"))  // Use explicit time stamps.
+                {
+                    H5::DataSet ts = timeSeries.openDataSet ("timestamps");
+                    H5::DataSpace fspace = ts.getSpace ();
+                    int rank = fspace.getSimpleExtentNdims ();  // NWB standard promises this is 1.
+                    std::vector<hsize_t> dims (rank);
+                    fspace.getSimpleExtentDims (dims.data ());
+                    int count = dims[0];
+                    for (int i = 1; i < rank; i++) count *= dims[i];  // Defensive, just in case this isn't really an NWB group.
+                    timestamps = new T[count];
+#                   ifdef n2a_FP
+                    std::vector<double> temp (count);
+                    ts.read (temp.data (), H5::PredType::NATIVE_DOUBLE);
+                    for (int i = 0; i < count; i++) tempstamps[i] = (T) (temp[i] * pow (2.0, -exponentRow));
+#                   else
+                    ts.read (timestamps, H5::PredType::n2a_HDF_T);
+#                   endif
+                }
+                else  // Use startingTime+N*period.
+                {
+                    H5::DataSet   starting_time = timeSeries   .openDataSet   ("starting_time");
+                    H5::Attribute rateAttribute = starting_time.openAttribute ("rate");
+                    double rate;
+                    rateAttribute.read (H5::PredType::NATIVE_DOUBLE, &rate);
+
+#                   ifdef n2a_FP
+                    double temp;
+                    starting_time.read (&temp, H5::PredType::NATIVE_DOUBLE);
+                    startingTime = (T) (pow (2.0, -exponentRow) * temp);
+                    period       = (T) (pow (2.0, -exponentRow) / rate);
+#                   else
+                    starting_time.read (&startingTime, H5::PredType::n2a_HDF_T);
+                    period = 1 / rate;
+#                   endif
+                }
+            }
+            else
+            {
+                data = file.openDataSet (path.c_str ());
+            }
+
+            H5::DataSpace fspace = data.getSpace ();
+            int rank = fspace.getSimpleExtentNdims ();
+            if (rank > 2)
+            {
+                fprintf (stderr, "TimeSeries data must be 1D or 2D: %s\n", path.c_str ());
+                warning = true;
+                return;
+            }
+            std::vector<hsize_t> dims (rank);
+            fspace.getSimpleExtentDims (dims.data ());
+            rowCount = dims[0];
+            if (rank == 2) columnCount = dims[1];
+            else           columnCount = 1;
+
+            if (time) currentLine = -INFINITY;
+            if (currentCount != columnCount)
+            {
+                delete[] currentValues;
+                currentValues = new T[columnCount];
+                currentCount = columnCount;
+                memset (&currentValues[0], 0, columnCount * sizeof (T));
+            }
+            nextCount = currentCount;
+            nextValues = new T[columnCount];
+            // nextLine is NAN, so nextValues won't be used. No need to clear them.
+        }
+
+        // Since HDF5 allows random access, we just need to determine the requested row,
+        // or rows that bracket the requested time.
+        int row = -2;
+        if (time)
+        {
+            if (period > 0)
+            {
+#               ifdef n2a_FP
+                row =              (requested - startingTime) / period;
+#               else
+                row = (int) floor ((requested - startingTime) / period);
+#               endif
+            }
+            else if (timestamps)
+            {
+                for (row = lastRow; row < rowCount; row++)
+                {
+                    if (requested >= timestamps[row] - epsilon) continue;
+                    // Now row points just past our desired current line.
+                    lastRow = row--;
+                    break;
+                }
+            }
+            // else TODO: need to specify time column
+        }
+        if (row == -2)
+        {
+#           ifdef n2a_FP
+            row =              requested;
+#           else
+            row = (int) floor (requested);
+#           endif
+        }
+
+        bool fetchCurrent = true;
+        if (smooth)
+        {
+            std::cerr << "smooth" << std::endl;
+            if (nextLine - epsilon <= requested  &&  nextLine + period > requested)  // nextLine is re-usable.
+            {
+                T * tempValues = currentValues;
+                currentLine   = nextLine;
+                currentValues = nextValues;
+                nextLine   = (T) NAN;
+                nextValues = tempValues;
+
+                fetchCurrent = false;
+            }
+
+            int nextRow = row + 1;
+            if (nextRow < rowCount)
+            {
+                if (period > 0)      nextLine = startingTime + nextRow * period;
+                else if (timestamps) nextLine = timestamps[nextRow];
+                else                 nextLine = nextRow;
+                // TODO: extract nextLine from time column, if available.
+                getSlab (row, nextValues);
+            }
+            else
+            {
+                nextLine = (T) NAN;
+            }
+        }
+
+        if (fetchCurrent  &&  row >= 0  &&  row < rowCount)
+        {
+            if (period > 0)      currentLine = startingTime + row * period;
+            else if (timestamps) currentLine = timestamps[row];
+            else                 currentLine = row;
+            // TODO: extract currentLine from time column, if available.
+            getSlab (row, currentValues);
+        }
+    }
+    catch (const H5::Exception & error)
+    {
+        std::stringstream ss;
+        ss << "Error while accessing HDF5:" << std::endl;
+        ss << "  " << fileName << std::endl;
+        ss << "  " << path << std::endl;
+        ss << "  " << error.getDetailMsg () << std::endl;
+        fprintf (stderr, "%s", ss.str ().c_str ());
+        warning = true;
+        return;
+    }
+}
+
+template<class T>
+void
+InputHDF5<T>::getSlab (T row, T * values)
+{
+    H5::DataSpace fspace = data.getSpace ();
+    int rank = fspace.getSimpleExtentNdims ();
+    std::vector<hsize_t> start (rank);
+    std::vector<hsize_t> count (rank);
+
+    start[0] = row;
+    count[0] = 1;
+    if (rank > 1)
+    {
+        start[1] = 0;
+        count[1] = columnCount;
+    }
+    fspace.selectHyperslab (H5S_SELECT_SET, count.data (), start.data ());
+    H5::DataSpace mspace (rank, count.data ());
+
+    data.read (values, H5::PredType::n2a_HDF_T, mspace, fspace);
+}
+
+template<class T>
+InputHDF5<T> *
+#ifdef n2a_FP
+hdf5Helper (const String & fileName, const String & path, int exponent, int exponentRow, InputHDF5<T> * oldHandle)
+#else
+hdf5Helper (const String & fileName, const String & path,                                InputHDF5<T> * oldHandle)
+#endif
+{
+    String key = fileName + "|" + path;
+    InputHDF5<T> * handle = (InputHDF5<T> *) SIMULATOR getHolder (key, oldHandle);
+    if (! handle)
+    {
+        handle = new InputHDF5<T> (fileName, path);
+        SIMULATOR holders.push_back (handle);
+#       ifdef n2a_FP
+        handle->exponent    = exponent;
+        handle->exponentRow = exponentRow;
+#       endif
+    }
+    return handle;
+}
+
+#endif  // HAVE_HDF5
 
 
 // OutputHolder --------------------------------------------------------------

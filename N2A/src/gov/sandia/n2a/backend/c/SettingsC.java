@@ -32,6 +32,7 @@ public class SettingsC extends SettingsBackend
 
     protected MTextField fieldCpp      = new MTextField (40);
     protected MTextField fieldFFmpeg   = new MTextField (40);
+    protected MTextField fieldHDF5     = new MTextField (40);
     protected MTextField fieldJNI      = new MTextField (40);
     protected MTextField fieldGL       = new MTextField (40);
     protected JButton    buttonRebuild = new JButton ("Rebuild Runtime");
@@ -76,6 +77,19 @@ public class SettingsC extends SettingsBackend
             }
         });
 
+        fieldHDF5.addChangeListener (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                Host h = (Host) list.getSelectedValue ();
+                h.objects.remove ("hdf5LibDir");
+                h.objects.remove ("hdf5IncDir");
+                h.objects.remove ("hdf5BinDir");
+                h.config.set ("", "backend", "c", "compilerChanged");
+                clearMessage (h);
+            }
+        });
+
         fieldJNI.addChangeListener (new ChangeListener ()
         {
             public void stateChanged (ChangeEvent e)
@@ -109,6 +123,7 @@ public class SettingsC extends SettingsBackend
                 h.objects.remove ("ffmpegLibDir");
                 h.objects.remove ("ffmpegIncDir");
                 h.objects.remove ("ffmpegBinDir");
+                h.objects.remove ("HDF5Dir");
                 h.objects.remove ("jniIncMdDir");
                 h.objects.remove ("jniIncDir");
                 h.objects.remove ("glLibs");
@@ -147,6 +162,7 @@ public class SettingsC extends SettingsBackend
     {
         fieldCpp   .bind (parent, "cxx",    "g++");
         fieldFFmpeg.bind (parent, "ffmpeg", "");
+        fieldHDF5  .bind (parent, "hdf5",   "");
         fieldJNI   .bind (parent, "jni_md", "");
         fieldGL    .bind (parent, "gl",     "");
 
@@ -162,6 +178,7 @@ public class SettingsC extends SettingsBackend
         return Lay.BxL (
             Lay.FL (new JLabel ("Compiler path"), fieldCpp),
             Lay.FL (new JLabel ("Directory that contains FFmpeg libraries"), fieldFFmpeg),
+            Lay.FL (new JLabel ("Top directory of HDF5 distribution"), fieldHDF5),
             Lay.FL (new JLabel ("Directory that contains jni_md.h"), fieldJNI),
             Lay.FL (new JLabel ("OpenGL link library"), fieldGL),
             Lay.FL (buttonRebuild),

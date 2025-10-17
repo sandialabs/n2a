@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -35,12 +35,18 @@ Store in subdirectory KHR:
 #  undef max
 #endif
 
+#ifdef HAVE_HDF5
+#  include <H5Cpp.h>
+#endif
+
 #ifdef HAVE_GL
 #  include "glcorearb.h"
 #endif
 
 #include <vector>
 #include <unordered_map>
+#include <map>
+#include <mutex>
 
 #include "shared.h"
 
@@ -50,9 +56,8 @@ Store in subdirectory KHR:
     These are primarily intended to override parameters within the model.
 **/
 template<class T>
-class SHARED Parameters
+struct SHARED Parameters
 {
-public:
     std::unordered_map<String,String> namedValues;
 
     void   parse (const String & line);
@@ -64,18 +69,16 @@ public:
     String get   (const String & name, const String & defaultValue = "") const;
 };
 
-class SHARED Holder
+struct SHARED Holder
 {
-public:
     String fileName;
     Holder (const String & fileName);
     virtual ~Holder ();
 };
 
 template<class T>
-class SHARED IteratorNonzero
+struct SHARED IteratorNonzero
 {
-public:
     int row;
     int column;
     T   value;
@@ -84,9 +87,8 @@ public:
 };
 
 template<class T>
-class SHARED IteratorSkip : public IteratorNonzero<T>
+struct SHARED IteratorSkip : public IteratorNonzero<T>
 {
-public:
     Matrix<T> * A;
     int nextRow;
     int nextColumn;
@@ -99,9 +101,8 @@ public:
 };
 
 template<class T>
-class SHARED IteratorSparse : public IteratorNonzero<T>
+struct SHARED IteratorSparse : public IteratorNonzero<T>
 {
-public:
     MatrixSparse<T> *                  A;
     int                                columns;
     typename std::map<int,T>::iterator it;
@@ -113,9 +114,8 @@ public:
 SHARED int convert (String input, int exponent);
 
 template<class T>
-class SHARED MatrixInput : public Holder
+struct SHARED MatrixInput : public Holder
 {
-public:
     MatrixAbstract<T> * A;  // Will be either Matrix or MatrixSparse, determined by matrixHelper when reading the file.
 
     MatrixInput (const String & fileName);
@@ -130,9 +130,8 @@ template<class T> SHARED MatrixInput<T> * matrixHelper (const String & fileName,
 template<class T> SHARED IteratorNonzero<T> * getIterator (MatrixAbstract<T> * A);  // Returns an object that iterates over nonzero elements of A.
 
 template<class T>
-class SHARED ImageInput : public Holder
+struct SHARED ImageInput : public Holder
 {
-public:
 #   ifdef HAVE_FFMPEG
     n2a::VideoIn * video;
 #   endif
@@ -157,9 +156,8 @@ template<class T> SHARED ImageInput<T> * imageInputHelper (const String & fileNa
 
 #ifdef HAVE_GL
 
-class LightLocation
+struct LightLocation
 {
-public:
     GLint infinite;
     GLint position;
     GLint direction;
@@ -175,9 +173,8 @@ public:
     LightLocation (GLuint program, int index);
 };
 
-class SHARED Light
+struct SHARED Light
 {
-public:
     bool  infinite;
     float position[3];
     float direction[3];
@@ -194,9 +191,8 @@ public:
     void setUniform (const LightLocation & l, const Matrix<float> & view);
 };
 
-class SHARED Material
+struct SHARED Material
 {
-public:
     float ambient[3];
     float diffuse[4];
     float emission[3];
@@ -237,9 +233,8 @@ template<int>     SHARED void setColor (float target[], const Matrix<int> & colo
 #endif
 
 template<class T>
-class SHARED ImageOutput : public Holder
+struct SHARED ImageOutput : public Holder
 {
-public:
     String path;    // prefix of fileName, not including suffix (format)
     String format;  // Name of format as recognized by supporting libraries. For video, can be set by keyword parameter. For image sequence, derived automatically from fileName suffix.
     bool   hold;    // Store a single frame rather than an image sequence.
@@ -334,9 +329,8 @@ public:
 template<class T> SHARED ImageOutput<T> * imageOutputHelper (const String & fileName, ImageOutput<T> * oldHandle = 0);
 
 template<class T>
-class SHARED Mfile : public Holder
+struct SHARED Mfile : public Holder
 {
-public:
     n2a::MDoc *                           doc;
     std::map<String,MatrixAbstract<T>*>   matrices;  // Could use unordered_map. Generally, there will be very few entries (like 1), so not sure which will cost the least.
     std::map<String,std::vector<String>*> childKeys;
@@ -360,10 +354,8 @@ template<typename... Args> std::vector<String> keyPath (const char * delimiter, 
 template<class T> SHARED T convertDate (const String & field, T defaultValue);
 
 template<class T>
-class SHARED InputHolder : public Holder
+struct SHARED InputHolder : public Holder
 {
-public:
-    std::istream *                 in;
     T                              currentLine;
     T *                            currentValues;
     int                            currentCount;
@@ -378,8 +370,6 @@ public:
     bool                           timeColumnSet;
     bool                           time;     ///< mode
     bool                           smooth;   ///< mode; when true, time must also be true
-    char                           delimiter;
-    bool                           delimiterSet;
     T                              epsilon;  ///< for time values
 #   ifdef n2a_FP
     int                            exponent;    ///< of value returned by get()
@@ -389,21 +379,94 @@ public:
     InputHolder (const String & fileName);
     virtual ~InputHolder ();
 
-    void      getRow (T row); ///< subroutine of get()
-    T         get    (T row, const String & column);
-    T         get    (T row, T column);
-    Matrix<T> get    (T row);
+    virtual void getRow (T row) = 0; ///< subroutine of get()
+    T            get    (T row, const String & column);
+    T            get    (T row, T column);
+    Matrix<T>    get    (T row);
 };
-#ifdef n2a_FP
-template<class T> SHARED InputHolder<T> * inputHelper (const String & fileName, int exponent, int exponentRow, InputHolder<T> * oldHandle = 0);
-#else
-template<class T> SHARED InputHolder<T> * inputHelper (const String & fileName,                                InputHolder<T> * oldHandle = 0);
-#endif
 
 template<class T>
-class SHARED OutputHolder : public Holder
+struct SHARED InputXSV : public InputHolder<T>
 {
-public:
+    // Need "using" for GCC, but not for MSVC.
+    using InputHolder<T>::currentLine;
+    using InputHolder<T>::currentValues;
+    using InputHolder<T>::currentCount;
+    using InputHolder<T>::nextLine;
+    using InputHolder<T>::nextValues;
+    using InputHolder<T>::nextCount;
+    using InputHolder<T>::A;
+    using InputHolder<T>::columnCount;
+    using InputHolder<T>::columnMap;
+    using InputHolder<T>::timeColumn;
+    using InputHolder<T>::timeColumnSet;
+    using InputHolder<T>::time;
+    using InputHolder<T>::epsilon;
+#   ifdef n2a_FP
+    using InputHolder<T>::exponent;
+    using InputHolder<T>::exponentRow;
+#   endif
+
+    std::istream * in;
+    char           delimiter;
+    bool           delimiterSet;
+
+    InputXSV (const String & fileName);
+    virtual ~InputXSV ();
+
+    virtual void getRow (T row);
+};
+#ifdef n2a_FP
+template<class T> SHARED InputXSV<T> * xsvHelper (const String & fileName, int exponent, int exponentRow, InputXSV<T> * oldHandle = 0);
+#else
+template<class T> SHARED InputXSV<T> * xsvHelper (const String & fileName,                                InputXSV<T> * oldHandle = 0);
+#endif
+
+#ifdef HAVE_HDF5
+
+struct SHARED SubHolder
+{
+    H5::H5File file;
+    int        users;
+
+    static std::map<String,SubHolder*> files;  ///< Keep track of all open HDF5 files in the app (regardless of which simulation they belong to). These can be shared by multiple InputHDF5 objects.
+    static std::mutex                  mutexFiles;
+
+    SubHolder (const String & fileName);
+};
+
+template<class T>
+struct SHARED InputHDF5 : public InputHolder<T>
+{
+    String      path;
+    SubHolder * sub;
+    H5::DataSet data;
+    bool        warning;
+    bool        nwb;
+    int         rowCount;
+    T           startingTime;
+    T           period;
+    T *         timestamps;  // If null, use startingTime+N*period. If non-null, treat this as time column.
+    int         lastRow;     // When using timestamps, where to start search.
+
+    InputHDF5 (const String & fileName, const String & path);
+    virtual ~InputHDF5 ();
+
+    virtual void getRow  (T row);
+    void         getSlab (T row, T * values);
+};
+
+#ifdef n2a_FP
+template<class T> SHARED InputHDF5<T> * hdf5Helper (const String & fileName, const String & path, int exponent, int exponentRow, InputHDF5<T> * oldHandle = 0);
+#else
+template<class T> SHARED InputHDF5<T> * hdf5Helper (const String & fileName, const String & path,                                InputHDF5<T> * oldHandle = 0);
+#endif
+
+#endif  // HAVE_HDF5
+
+template<class T>
+struct SHARED OutputHolder : public Holder
+{
     bool                                   raw;             ///< Indicates that column is an exact index.
     std::ostream *                         out;
     String                                 columnFileName;

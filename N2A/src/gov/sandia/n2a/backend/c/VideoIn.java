@@ -80,17 +80,41 @@ public class VideoIn extends NativeResource implements Runnable
                 catch (Exception e) {}
                 Backend.err.get ().println ("Checking C runtime");
                 t.rebuildRuntime ();  // also synchronized on localhost
+
+                // Link minimal library needed to support JNI video.
+                CompilerFactory factory = BackendC.getFactory (localhost);
+                String prefix = factory.prefixLibrary (true);
+                String suffix = factory.suffixLibrary (true);
+                Path videoLib = t.runtimeDir.resolve (prefix + "video" + suffix).toAbsolutePath ();
+                Path ffmpegLibDir = (Path) localhost.objects.get ("ffmpegLibDir");
+                boolean haveFFmpeg = ffmpegLibDir != null;
+                boolean haveJNI    = localhost.objects.get ("jniIncMdDir") != null;
+                if (! Files.exists (videoLib)  &&  haveFFmpeg  &&  haveJNI)
+                {
+                    Compiler c = factory.compiler (t.runtimeDir);
+                    c.setShared ();
+                    c.setOutput (videoLib);
+
+                    c.addObject (t.runtimeDir.resolve (t.objectName ("Image")));
+                    c.addObject (t.runtimeDir.resolve (t.objectName ("ImageFileFormat")));
+                    c.addObject (t.runtimeDir.resolve (t.objectName ("ImageFileFormatBMP")));
+                    c.addObject (t.runtimeDir.resolve (t.objectName ("PixelBuffer")));
+                    c.addObject (t.runtimeDir.resolve (t.objectName ("PixelFormat")));
+                    c.addObject (t.runtimeDir.resolve (t.objectName ("Video")));
+                    c.addObject (t.runtimeDir.resolve (t.objectName ("VideoFileFormatFFMPEG")));
+                    c.addObject (t.runtimeDir.resolve (t.objectName ("NativeResource")));
+                    c.addLibraryDir (ffmpegLibDir);
+                    c.addLibrary ("avcodec");
+                    c.addLibrary ("avformat");
+                    c.addLibrary ("avutil");
+
+                    Path out = c.linkLibrary ();
+                    Files.delete (out);
+                }
                 Backend.err.set (ps);
                 SettingsC.instance.setMessage (baos.toString ("UTF-8"));
 
                 // Load JNI libs
-                CompilerFactory factory = BackendC.getFactory (localhost);
-                String prefix = factory.prefixLibrary (true);
-                String suffix = factory.suffixLibrary (true);
-                String runtimeName = prefix + t.runtimeName () + suffix;
-                Path runtimePath = t.runtimeDir.resolve (runtimeName).toAbsolutePath ();
-
-                boolean haveFFmpeg = localhost.objects.get ("ffmpegLibDir") != null;
                 if (haveFFmpeg)
                 {
                     // This is super ugly because Java doesn't support setting a search path
@@ -136,7 +160,7 @@ public class VideoIn extends NativeResource implements Runnable
                 {
                     SettingsC.instance.addMessage ("FFmpeg is not available. Is the path correct?\n");
                 }
-                System.load (runtimePath.toAbsolutePath ().toString ());
+                System.load (videoLib.toAbsolutePath ().toString ());
                 localhost.objects.put ("JNI", true);  // Partial success. May be able to do image processing.
 
                 // Get suffixes. If this works, then FFmpeg support has been successfully loaded.

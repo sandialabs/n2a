@@ -12,7 +12,7 @@ the U.S. Government retains certain rights in this software.
 
 /**
     Matrices which provide cell values for the entire sheet.
-    In general, a cell with either be a number, a string or empty.
+    In general, a cell will either be a number, a string, or empty.
     We don't know ahead of time whether the matrix is dense or sparse, so the
     exact type of matrix is decided by the loader.
 **/
