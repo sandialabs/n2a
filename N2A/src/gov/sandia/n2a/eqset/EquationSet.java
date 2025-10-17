@@ -2045,7 +2045,7 @@ public class EquationSet implements Comparable<EquationSet>
             // (Endpoints implicitly always exist because they pass isSingleton() above.)
             // Basically, we forbid $p from existing. This is very conservative, but also
             // reasonable since there is no value in defining $p for a singleton connection.
-            if (OK  &&  find (new Variable ("$p")) != null) OK = false;
+            if (OK) OK = find (new Variable ("$p")) == null;
 
             if (OK)  // This connection passes all the tests.
             {
@@ -2054,20 +2054,25 @@ public class EquationSet implements Comparable<EquationSet>
                 // reach the endpoints directly. Then remove the connection bindings.
                 for (ConnectionBinding cb : connectionBindings)
                 {
-                    for (Object o : cb.variable.usedBy)
+                    List<Object> usedBy = new ArrayList<Object> (cb.variable.usedBy);  // Make a copy of the list, so we can modify while iterating through it.
+                    for (Object o : usedBy)
                     {
-                        if (o instanceof Variable)
-                        {
-                            Variable v = (Variable) o;
-                            v.removeDependencyOn (cb.variable);
+                        if (! (o instanceof Variable)) continue;
+                        Variable v = (Variable) o;
+                        v.removeDependencyOn (cb.variable);
 
-                            // Rewrite the resolution path.
-                            List<Object> resolution = v.reference.resolution;
-                            int index = resolution.indexOf (cb);
-                            resolution.set (index, container);
-                            resolution.add (index + 1, cb.endpoint);
-                            v.reference.removeLoops ();
-                        }
+                        // Rewrite the resolution path.
+                        List<Object> resolution = v.reference.resolution;
+                        int index = resolution.indexOf (cb);
+                        resolution.set (index, container);
+                        resolution.add (index + 1, cb.endpoint);
+                        v.reference.removeLoops ();
+
+                        // Change name.
+                        // Ideally, we would do this to all variables that reference the connection binding.
+                        // However, it is more difficult when they are not an immediate member of this connection part.
+                        if (v.container != this) continue;
+                        v.name = "$up." + cb.endpoint.name + "." + v.name.substring (cb.alias.length () + 1);
                     }
                     cb.endpoint.connected--;
                 }
@@ -2293,7 +2298,7 @@ public class EquationSet implements Comparable<EquationSet>
             for (Variable v : s.variables)
             {
                 // Adjust LHS references to work in this container.
-                boolean couldNeedMerge = false;
+                Variable v2 = null;  // Corresponding variable in this container.
                 if (v.reference.variable == v)  // internal reference, which for LHS is exactly same as self-reference
                 {
                     if (v.name.startsWith ("$"))
@@ -2301,51 +2306,80 @@ public class EquationSet implements Comparable<EquationSet>
                         if (! v.hasUsers ()  &&  s.source.child (v.nameString ()) == null) continue;  // Ignore automatically-added $variables that are not used.
 
                         // Check if this is a conflicting $variable.
-                        Variable d = find (v);
-                        if (d != null)  // Already exists in this container, so redirect any references in v's dependents to d.
+                        v2 = find (v);
+                        if (v2 != null)  // Already exists in this container, so redirect any references in v's dependents to d.
                         {
-                            redirector.redirect (v, d);  // Only does something if v has users.
+                            redirector.redirect (v, v2);  // Only does something if v has users.
                             continue;  // Don't process v further
                         }
                     }
                     else
                     {
                         v.name = prefix + "." + v.name;
+
+                        // The following checks for an existing down-reference in this container.
+                        // One way this can happen is if another variable that references s was flattened into this container first.
+                        for (Variable w : variables)  // Iterates over variables in this container.
+                        {
+                            if (w.reference.variable == v)
+                            {
+                                v2 = w;
+                                break;
+                            }
+                        }
                     }
                 }
                 else  // external reference
                 {
                     if (v.name.startsWith ("$up.")) v.name = v.name.substring (4);
                     else if (v.name.startsWith (name + ".")) v.name = v.name.substring (name.length () + 1);
+
                     List<Object> r = v.reference.resolution;
                     if (r.get (0) == EquationSet.this)
                     {
-                        couldNeedMerge = true;
                         r.remove (0);
+                        if (v.reference.variable.container == EquationSet.this) v2 = v.reference.variable; // v refers to (probably reduces to) a variable in this container.
                     }
                 }
 
-                if (couldNeedMerge)  // An external reference whose first resolution step is this container.
+                if (v2 != null)  // There is a matching variable, so must merge. The match is often the direct target of the reference.
                 {
-                    Variable v2 = find (v);
-                    if (v2 != null)  // There is a matching variable, so must merge. The match is often the direct target of the reference.
+                    // Since this is an external reference, some other variable depends on v as an external writer.
+                    // This user must be redirected appropriately.
+                    if (v2 == v.reference.variable)  // direct up-reference
                     {
-                        // Since this is an external reference, some other variable depends on v as an external writer.
-                        // This user must be redirected appropriately.
-                        if (v2 == v.reference.variable)  // direct up-reference
-                        {
-                            v2.removeDependencyOn (v);  // But don't replace with dependency from v2 to itself.
-                        }
-                        else  // Some other variable depends on v.
-                        {
-                            // v should only have one user.
-                            redirector.redirect (v, v2);
-                        }
-
-                        v2.flattenExpressions (v);
-                        continue;
+                        v2.removeDependencyOn (v);  // But don't replace with dependency from v2 to itself.
                     }
-                    // else fall through ...
+                    else  // Some other variable depends on v.
+                    {
+                        boolean down =  v == v2.reference.variable;  // v2 is a down-reference to v.
+                        redirector.redirect (v, v2);
+                        if (down) v2.removeDependencyOn (v2);  // Get rid of the self-reference created by collapsing the down-ref.
+                    }
+
+                    v2.flattenExpressions (v);
+
+                    // Check if v2 can stop being a reduction.
+                    // If so, that is better for optimization.
+                    if (v2.assignment != Variable.REPLACE)
+                    {
+                        // If there are no more external references, then v2 can become an ordinary variable.
+                        boolean hasReference = false;
+                        if (v2.uses != null)
+                        {
+                            for (Variable u : v2.uses.keySet ())
+                            {
+                                if (u.reference.variable == v2)
+                                {
+                                    hasReference = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (! hasReference) v2.uncombine ();
+                    }
+
+                    continue;
                 }
 
                 // A distinct variable that needs to be moved up.

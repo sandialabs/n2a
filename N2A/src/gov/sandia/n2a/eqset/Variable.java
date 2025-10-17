@@ -145,28 +145,7 @@ public class Variable implements Comparable<Variable>, Cloneable
                 else if (key.equals ("$meta")) metadata.merge (i);
                 // Ignore references, as they have no function in simulation.
             }
-
-            if (equations.isEmpty ())
-            {
-                EquationEntry e = null;
-                switch (assignment)
-                {
-                    case ADD:
-                        e = new EquationEntry ("0");
-                        break;
-                    case MULTIPLY:
-                    case DIVIDE:
-                        e = new EquationEntry ("1");
-                        break;
-                    case MIN:
-                        e = new EquationEntry ("∞");
-                        break;
-                    case MAX:
-                        e = new EquationEntry ("-∞");
-                        break;
-                }
-                if (e != null) add (e);
-            }
+            if (equations.isEmpty ()) addCombinerDefaultEquation ();
         }
         catch (ParseException e)
         {
@@ -180,6 +159,32 @@ public class Variable implements Comparable<Variable>, Cloneable
             e.message = "Unsupported function '" + e.message + "' in " + fullName ();
             throw e;
         }
+    }
+
+    public void addCombinerDefaultEquation ()
+    {
+        try
+        {
+            EquationEntry e = null;
+            switch (assignment)
+            {
+                case ADD:
+                    e = new EquationEntry ("0");
+                    break;
+                case MULTIPLY:
+                case DIVIDE:
+                    e = new EquationEntry ("1");
+                    break;
+                case MIN:
+                    e = new EquationEntry ("∞");
+                    break;
+                case MAX:
+                    e = new EquationEntry ("-∞");
+                    break;
+            }
+            if (e != null) add (e);
+        }
+        catch (Exception e) {}  // Because EquationEntry() can throw a parse error. However, that won't happen here, just need to silence the compiler.
     }
 
     public void parseLHS (String lhs)
@@ -549,6 +554,41 @@ public class Variable implements Comparable<Variable>, Cloneable
 
         addDependenciesOfReferences ();
         v.equations.clear ();
+    }
+
+    /**
+        Assuming this variable has no external writers, converts it to a REPLACE assignment
+        in a way that preserves the same behavior as a combiner.
+        Presumably this function is called before EquationSet.findExternal(), so we don't update tags.
+        Otherwise, "externalWrite" could be removed from this variable.
+    **/
+    public void uncombine ()
+    {
+        EquationEntry defaultEquation = null;
+        if (assignment == DIVIDE)
+        {
+            // Rewrite each equation to be 1/equation.
+            for (EquationEntry e : equations)
+            {
+                Divide d = new Divide ();
+                d.operand0 = new Constant (1);
+                d.operand1 = e.expression;
+                d.operand0.parent = d;
+                d.operand1.parent = d;
+                e.expression = d;
+
+                if (e.ifString.isBlank ()) defaultEquation = e;
+            }
+        }
+        else
+        {
+            for (EquationEntry e : equations) if (e.ifString.isBlank ()) defaultEquation = e;
+        }
+
+        // If there is no default equation, add one that fills in the start value for the given combiner.
+        if (defaultEquation == null) addCombinerDefaultEquation ();
+
+        assignment = REPLACE;
     }
 
     public boolean isEmptyCombiner ()
