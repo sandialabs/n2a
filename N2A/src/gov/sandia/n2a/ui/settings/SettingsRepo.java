@@ -363,7 +363,7 @@ public class SettingsRepo extends JScrollPane implements Settings
                         int count = repoModel.getRowCount ();
                         int row = 0;
                         for (; row < count; row++) if (repoModel.getValueAt (row, 4).equals ("base")) break;
-                        if (row < count) repoModel.setValueAt ("git@github.com:frothga/n2a-repo-base.git", row, 5);
+                        if (row < count) repoModel.setValueAt ("https://github.com/sandialabs/n2a-repo-base.git", row, 5);
                         AppData.state.clear ("Repos", "needUpstream");
                     }
 
