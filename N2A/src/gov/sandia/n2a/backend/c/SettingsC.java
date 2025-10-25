@@ -178,7 +178,7 @@ public class SettingsC extends SettingsBackend
         return Lay.BxL (
             Lay.FL (new JLabel ("Compiler path"), fieldCpp),
             Lay.FL (new JLabel ("Directory that contains FFmpeg libraries"), fieldFFmpeg),
-            Lay.FL (new JLabel ("Top directory of HDF5 distribution"), fieldHDF5),
+            Lay.FL (new JLabel ("Directory that contains HDF5 libraries"), fieldHDF5),
             Lay.FL (new JLabel ("Directory that contains jni_md.h"), fieldJNI),
             Lay.FL (new JLabel ("OpenGL link library"), fieldGL),
             Lay.FL (buttonRebuild),

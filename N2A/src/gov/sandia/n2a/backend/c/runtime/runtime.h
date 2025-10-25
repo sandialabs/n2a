@@ -9,7 +9,7 @@ the U.S. Government retains certain rights in this software.
 #define n2a_runtime_h
 
 
-#include "nosys.h"
+#include <nosys.h>
 #include "holder.h"
 #include "mystring.h"
 #include "KDTree.h"

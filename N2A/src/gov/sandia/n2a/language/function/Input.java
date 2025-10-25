@@ -48,7 +48,7 @@ public class Input extends Function
     public int     exponentRow = UNKNOWN;  // For C backend with integer math. The exponent used to convert row or time values into a floating-point number.
     public String  name;                   // For C backend, the name of the InputHolder object.
     public String  fileName;               // For C backend, the name of the string variable holding the file name, if any.
-    public String  hdf5path;               // For C backend, the name of the string variable holding the HDF5 path, if any.
+    public String  columnName;             // For S2 backend, the name of the variable holding the column index assigned by Host.
 
     public static Factory factory ()
     {
@@ -454,7 +454,7 @@ public class Input extends Function
                     else if (timestamps != null) nextLine = timestamps[nextRow];
                     else                         nextLine = nextRow;
                     // TODO: extract nextLine from time column, if available.
-                    nextValues = getSlice (row);
+                    nextValues = getSlice (nextRow);
                 }
                 else
                 {

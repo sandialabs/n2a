@@ -450,7 +450,32 @@ public class Output extends Function
             EquationSet container = v.container;
             if (container.connectionBindings == null)  // regular part
             {
-                dependOnIndex (v, container);
+                // Check if entire path back to root is singletons.
+                boolean allSingleton = true;
+                EquationSet p = container;
+                while (allSingleton  &&  p != null)
+                {
+                    allSingleton = p.isSingleton ();
+                    p = p.container;
+                }
+                if (allSingleton)  // Can assemble a constant name now.
+                {
+                    hasColumnName = true;
+                    if (operands.length < 3)
+                    {
+                        Operator[] newOperands = new Operator[3];
+                        for (int i = 0; i < operands.length; i++) newOperands[i] = operands[i];
+                        operands = newOperands;
+                    }
+                    String name = container.prefix ();
+                    if (! name.isEmpty ()) name += ".";
+                    name += variableName;
+                    operands[2] = new Constant (name);
+                }
+                else  // Must generate name at runtime.
+                {
+                    dependOnIndex (v, container);
+                }
             }
             else  // connection
             {

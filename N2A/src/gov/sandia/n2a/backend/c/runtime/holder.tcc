@@ -606,7 +606,7 @@ ImageInput<T>::get (String channelName, T now, bool step)
                 if (pattern.size ())
                 {
 #                   ifdef n2a_FP
-                    index = (int) (now / pow (2.0f, -Event<T>::exponent));
+                    index = (int) (now * pow (2.0f, Event<T>::exponent));
 #                   else
                     index = (int) now;
 #                   endif
@@ -2620,8 +2620,10 @@ InputHDF5<T>::InputHDF5 (const String & fileName, const String & path)
     period       = (T) 0;
     timestamps   = 0;
     lastRow      = 0;
+    start        = 0;
+    count        = 0;
 
-    lock_guard<mutex> lock (SubHolder::mutexFiles);
+    std::lock_guard<std::mutex> lock (SubHolder::mutexFiles);
     auto it = SubHolder::files.find (fileName);
     if (it == SubHolder::files.end ())
     {
@@ -2646,9 +2648,11 @@ template<class T>
 InputHDF5<T>::~InputHDF5 ()
 {
     if (timestamps) delete[] timestamps;
+    if (start)      delete[] start;
+    if (count)      delete[] count;
 
     if (! sub) return;
-    lock_guard<mutex> lock (SubHolder::mutexFiles);
+    std::lock_guard<std::mutex> lock (SubHolder::mutexFiles);
     sub->users--;
     if (sub->users <= 0)
     {
@@ -2663,6 +2667,8 @@ InputHDF5<T>::getRow (T requested)
 {
     try
     {
+        std::lock_guard<std::mutex> lock (sub->mutexFile);
+
         if (data.getId () == H5I_INVALID_HID)
         {
             if (! sub  ||  warning) return;  // In failed state.
@@ -2714,18 +2720,28 @@ InputHDF5<T>::getRow (T requested)
             }
 
             H5::DataSpace fspace = data.getSpace ();
-            int rank = fspace.getSimpleExtentNdims ();
+            rank = fspace.getSimpleExtentNdims ();
             if (rank > 2)
             {
                 fprintf (stderr, "TimeSeries data must be 1D or 2D: %s\n", path.c_str ());
                 warning = true;
                 return;
             }
+            start = new hsize_t[rank];
+            count = new hsize_t[rank];
             std::vector<hsize_t> dims (rank);
             fspace.getSimpleExtentDims (dims.data ());
             rowCount = dims[0];
-            if (rank == 2) columnCount = dims[1];
-            else           columnCount = 1;
+            if (rank == 2)
+            {
+                columnCount = dims[1];
+                start[1] = 0;
+                count[1] = columnCount;
+            }
+            else
+            {
+                columnCount = 1;
+            }
 
             if (time) currentLine = -INFINITY;
             if (currentCount != columnCount)
@@ -2777,7 +2793,6 @@ InputHDF5<T>::getRow (T requested)
         bool fetchCurrent = true;
         if (smooth)
         {
-            std::cerr << "smooth" << std::endl;
             if (nextLine - epsilon <= requested  &&  nextLine + period > requested)  // nextLine is re-usable.
             {
                 T * tempValues = currentValues;
@@ -2796,7 +2811,7 @@ InputHDF5<T>::getRow (T requested)
                 else if (timestamps) nextLine = timestamps[nextRow];
                 else                 nextLine = nextRow;
                 // TODO: extract nextLine from time column, if available.
-                getSlab (row, nextValues);
+                getSlab (nextRow, nextValues);
             }
             else
             {
@@ -2828,23 +2843,13 @@ InputHDF5<T>::getRow (T requested)
 
 template<class T>
 void
-InputHDF5<T>::getSlab (T row, T * values)
+InputHDF5<T>::getSlab (hsize_t row, T * values)
 {
-    H5::DataSpace fspace = data.getSpace ();
-    int rank = fspace.getSimpleExtentNdims ();
-    std::vector<hsize_t> start (rank);
-    std::vector<hsize_t> count (rank);
-
     start[0] = row;
     count[0] = 1;
-    if (rank > 1)
-    {
-        start[1] = 0;
-        count[1] = columnCount;
-    }
-    fspace.selectHyperslab (H5S_SELECT_SET, count.data (), start.data ());
-    H5::DataSpace mspace (rank, count.data ());
-
+    H5::DataSpace fspace = data.getSpace ();
+    fspace.selectHyperslab (H5S_SELECT_SET, count, start);
+    H5::DataSpace mspace (rank, count);
     data.read (values, H5::PredType::n2a_HDF_T, mspace, fspace);
 }
 
@@ -2941,7 +2946,7 @@ OutputHolder<T>::trace (T now)
         {
             columnMap["$t"] = 0;
 #           ifdef n2a_FP
-            columnValues.push_back ((float) t / pow (2.0f, -Event<T>::exponent));
+            columnValues.push_back ((float) t * pow (2.0f, Event<T>::exponent));
 #           else
             columnValues.push_back (t);
 #           endif
@@ -2950,7 +2955,7 @@ OutputHolder<T>::trace (T now)
         else
         {
 #           ifdef n2a_FP
-            columnValues[0] = (float) t / pow (2.0f, -Event<T>::exponent);
+            columnValues[0] = (float) t * pow (2.0f, Event<T>::exponent);
 #           else
             columnValues[0] = t;
 #           endif
@@ -3036,7 +3041,7 @@ OutputHolder<T>::trace (T now, const String & column, T value,                 c
     if      (valueFP ==  NAN)      value =  std::numeric_limits<float>::quiet_NaN ();
     else if (valueFP ==  INFINITY) value =  std::numeric_limits<float>::infinity ();
     else if (valueFP == -INFINITY) value = -std::numeric_limits<float>::infinity ();
-    else                           value = (float) valueFP / pow (2.0f, -exponent);
+    else                           value = (float) valueFP * pow (2.0f, exponent);
 #   endif
 
     int index = getColumnIndex (column);

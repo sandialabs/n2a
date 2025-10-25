@@ -216,6 +216,7 @@ public class CompilerGCC extends Compiler
         for (Path libraryDir : libraryDirs)
         {
             command.add ("-L" + host.quote (libraryDir));
+            command.add ("-Wl,-rpath=" + host.quote (libraryDir));
         }
 
         command.add ("-o");
@@ -259,6 +260,7 @@ public class CompilerGCC extends Compiler
             for (Path libraryDir : libraryDirs)
             {
                 command.add ("-L" + host.quote (libraryDir));
+                command.add ("-Wl,-rpath=" + host.quote (libraryDir));
             }
             command.add ("-o");
             command.add (host.quote (output));

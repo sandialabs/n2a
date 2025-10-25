@@ -18,7 +18,7 @@ Store in subdirectory KHR:
 #define n2a_holder_h
 
 
-#include "nosys.h"
+#include <nosys.h>
 #include "mystring.h"
 #include "matrix.h"
 #include "MNode.h"
@@ -314,13 +314,14 @@ struct SHARED ImageOutput : public Holder
     bool next3D (const Matrix<float> * model, const Material & material);  // Additional setup work done by 3D draw functions. Does both one-time initialization and per-frame initialization, as needed.
     GLuint getBuffer (String name, bool vertices);  // vertices==true indicates that this is a vertex array; vertices==false indicates that this is an index array
 #     ifdef n2a_FP
+      // These functions are written as float to force immediate type conversion at the point of call. Then we scale by exponent.
     T drawCube     (T now, const Material & material, const Matrix<float> & model,       int exponentP);
     T drawCylinder (T now, const Material & material, const MatrixFixed<float,3,1> & p1, int exponentP, float r1, int exponentR, const MatrixFixed<float,3,1> & p2, float r2 = -1, int cap1 = 0, int cap2 = 0, int steps = 6, int stepsCap = -1);
     T drawPlane    (T now, const Material & material, const Matrix<float> & model,       int exponentP);
     T drawSphere   (T now, const Material & material, const Matrix<float> & model,       int exponentP, int steps = 1);
 #     else
     T drawCube     (T now, const Material & material, const Matrix<float> & model);
-    T drawCylinder (T now, const Material & material, const MatrixFixed<float,3,1> & p1, float r1, const MatrixFixed<float,3,1> & p2, float r2 = -1, int cap1 = 0, int cap2 = 0, int steps = 6, int stepsCap = -1);
+    T drawCylinder (T now, const Material & material, const MatrixFixed<float,3,1> & p1,                float r1,                const MatrixFixed<float,3,1> & p2, float r2 = -1, int cap1 = 0, int cap2 = 0, int steps = 6, int stepsCap = -1);
     T drawPlane    (T now, const Material & material, const Matrix<float> & model);
     T drawSphere   (T now, const Material & material, const Matrix<float> & model, int steps = 1);
 #     endif
@@ -428,6 +429,7 @@ struct SHARED SubHolder
 {
     H5::H5File file;
     int        users;
+    std::mutex mutexFile;  ///< Serialize access to a given open file, since HDF5 is not thread-safe.
 
     static std::map<String,SubHolder*> files;  ///< Keep track of all open HDF5 files in the app (regardless of which simulation they belong to). These can be shared by multiple InputHDF5 objects.
     static std::mutex                  mutexFiles;
@@ -438,6 +440,18 @@ struct SHARED SubHolder
 template<class T>
 struct SHARED InputHDF5 : public InputHolder<T>
 {
+    using InputHolder<T>::fileName;
+    using InputHolder<T>::currentLine;
+    using InputHolder<T>::currentValues;
+    using InputHolder<T>::currentCount;
+    using InputHolder<T>::nextLine;
+    using InputHolder<T>::nextValues;
+    using InputHolder<T>::nextCount;
+    using InputHolder<T>::columnCount;
+    using InputHolder<T>::time;
+    using InputHolder<T>::smooth;
+    using InputHolder<T>::epsilon;
+
     String      path;
     SubHolder * sub;
     H5::DataSet data;
@@ -448,12 +462,15 @@ struct SHARED InputHDF5 : public InputHolder<T>
     T           period;
     T *         timestamps;  // If null, use startingTime+N*period. If non-null, treat this as time column.
     int         lastRow;     // When using timestamps, where to start search.
+    int         rank;
+    hsize_t *   start;       // For accessing data. This avoids recreating the object every time.
+    hsize_t *   count;       // ditto
 
     InputHDF5 (const String & fileName, const String & path);
     virtual ~InputHDF5 ();
 
     virtual void getRow  (T row);
-    void         getSlab (T row, T * values);
+    void         getSlab (hsize_t row, T * values);
 };
 
 #ifdef n2a_FP

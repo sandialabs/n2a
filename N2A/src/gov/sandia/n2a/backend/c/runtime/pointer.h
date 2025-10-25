@@ -18,7 +18,7 @@ for details.
 #define n2a_pointer_h
 
 
-#include "nosys.h"
+#include <nosys.h>  // Brackets, so it won't conflict with other C-based backend that may provide different nosys.h
 #include "mymath.h"
 
 #include <assert.h>

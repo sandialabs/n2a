@@ -121,6 +121,7 @@ public class Operator implements Cloneable
         In the fixed-point analysis implemented by Operator, all bits are fractional just like IEEE floats,
         but unlike IEEE float we keep track of the power of the least significant bit. That simplifies some calculations.
         This value is equivalent to the amount of shift needed to make the bit in position zero have power zero.
+        Positive values are left shift. Negative values are right shift.
         In the case of a simple integer, exponent is 0.
     **/
     public int exponent = UNKNOWN;

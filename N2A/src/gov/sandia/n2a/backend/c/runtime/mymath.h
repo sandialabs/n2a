@@ -74,7 +74,7 @@ namespace n2a
 
 #ifdef n2a_FP
 
-#include "nosys.h"
+#include <nosys.h>
 #include <stdint.h>
 
 #undef M_LOG2E

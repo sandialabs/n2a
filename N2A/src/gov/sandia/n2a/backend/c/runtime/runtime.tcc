@@ -706,7 +706,7 @@ T
 Part<T>::getDt ()
 {
 #   ifdef n2a_FP
-    return ((int64_t) 1 << -Event<int>::exponent) / 1000;  // 1ms step sizes, rather than 0.1ms like below. We are only promised (weakly) 10 bits below the decimal.
+    return ((int64_t) 1 << -Event<T>::exponent) / 1000;  // 1ms step sizes, rather than 0.1ms like below. We are only promised (weakly) 10 bits below the decimal.
 #   else
     return (T) 1e-4;
 #   endif
