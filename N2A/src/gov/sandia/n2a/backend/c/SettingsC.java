@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,6 +10,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Windows;
 import gov.sandia.n2a.ui.Lay;
+import gov.sandia.n2a.ui.MCheckBox;
 import gov.sandia.n2a.ui.MTextField;
 import gov.sandia.n2a.ui.settings.SettingsBackend;
 
@@ -17,6 +18,8 @@ import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.Arrays;
+import java.util.HashSet;
 
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -35,9 +38,12 @@ public class SettingsC extends SettingsBackend
     protected MTextField fieldHDF5     = new MTextField (40);
     protected MTextField fieldJNI      = new MTextField (40);
     protected MTextField fieldGL       = new MTextField (40);
+    protected MCheckBox  fieldShowCC   = new MCheckBox ("Show source files (.cc)");
     protected JButton    buttonRebuild = new JButton ("Rebuild Runtime");
     protected JLabel     labelMessages = new JLabel ("JNI support for video I/O:");
     protected JTextArea  textMessages;
+
+    protected HashSet<String> forbiddenSuffixes = new HashSet<String> (Arrays.asList ("bin", "exe", "lib", "dll", "a", "so", "o", "obj", "pdb", "mod", "exp"));
 
     @SuppressWarnings("serial")
     public SettingsC ()
@@ -113,6 +119,19 @@ public class SettingsC extends SettingsBackend
             }
         });
 
+        Host localhost = Host.get ();
+        MNode parent = localhost.config.child ("backend", "c");
+        fieldShowCC.bind (parent, "showCC", false);  // "showCC" applies to all hosts, so bind to "localhost".
+        fieldShowCC.addChangeListener (new ChangeListener ()
+        {
+            public void stateChanged (ChangeEvent e)
+            {
+                if (fieldShowCC.isSelected ()) forbiddenSuffixes.remove ("cc");
+                else                           forbiddenSuffixes.add    ("cc");
+            }
+        });
+        fieldShowCC.notifyChange ();
+
         buttonRebuild.setToolTipText ("<html>Removes all intermediate object files.<br>The C runtime will be fully rebuilt next time it is checked.<br>On Windows it is also necessary to restart the app.</html>");
         buttonRebuild.addActionListener (new ActionListener ()
         {
@@ -181,6 +200,7 @@ public class SettingsC extends SettingsBackend
             Lay.FL (new JLabel ("Directory that contains HDF5 libraries"), fieldHDF5),
             Lay.FL (new JLabel ("Directory that contains jni_md.h"), fieldJNI),
             Lay.FL (new JLabel ("OpenGL link library"), fieldGL),
+            Lay.FL (fieldShowCC),
             Lay.FL (buttonRebuild),
             Lay.FL (labelMessages),
             Lay.FL (textMessages)

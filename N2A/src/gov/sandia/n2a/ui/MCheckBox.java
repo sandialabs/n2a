@@ -1,5 +1,5 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -31,6 +31,16 @@ public class MCheckBox extends JCheckBox
     protected boolean              original;
     protected boolean              defaultValue;
     protected List<ChangeListener> listeners = new ArrayList<ChangeListener> ();
+
+    public MCheckBox ()
+    {
+        this (null, "", "", false);
+    }
+
+    public MCheckBox (String description)
+    {
+        this (null, "", description, false);
+    }
 
     public MCheckBox (MNode parent, String key, String description, boolean defaultValue)
     {

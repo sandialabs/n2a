@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,6 +8,7 @@ package gov.sandia.n2a.backend.c;
 
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
@@ -29,6 +30,12 @@ public class BackendC extends Backend
         Thread t = new JobC (job);
         t.setDaemon (true);
         t.start ();
+    }
+
+    @Override
+    public HashSet<String> forbiddenSuffixes ()
+    {
+        return SettingsC.instance.forbiddenSuffixes;
     }
 
     /**

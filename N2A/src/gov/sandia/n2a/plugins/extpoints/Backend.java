@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.HashSet;
 import java.util.List;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.host.Host;
@@ -370,5 +371,10 @@ public abstract class Backend implements ExtensionPoint
         }
         catch (Exception e) {}
         return 0;
+    }
+
+    public HashSet<String> forbiddenSuffixes ()
+    {
+        return null;  // nothing forbidden
     }
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -85,7 +85,7 @@ public class NodeJob extends NodeBase
     public static final ImageIcon iconLingering = ImageUtil.getImage ("lingering.png");
     public static final ImageIcon iconStopped   = ImageUtil.getImage ("stop.gif");
 
-    protected static HashSet<String> forbiddenSuffixes = new HashSet<String> (Arrays.asList ("bin", "exe", "aplx", "lib", "dll", "a", "so", "o", "obj", "pdb", "columns", "mod", "exp"));
+    protected static HashSet<String> forbiddenSuffixes = new HashSet<String> (Arrays.asList ("err", "out", "columns"));
     protected static HashSet<String> imageSuffixes     = new HashSet<String> (Arrays.asList (ImageIO.getReaderFileSuffixes ()));  // We don't expect to load image handling plugins after startup, so one-time initialization is fine.
     public    static HashSet<String> videoSuffixes     = new HashSet<String> (Arrays.asList ("mp4", "m4v", "mov", "qt", "avi", "flv", "mkv", "wmv", "asf", "webm", "h264", "mpeg", "mpg", "vob", "3gp"));  // Some typical video file suffixes. Others will be added from FFmpeg, if available.
 
@@ -515,10 +515,11 @@ public class NodeJob extends NodeBase
         // Scan local job dir
         boolean changed = false;
         MNode source = getSource ();
+        HashSet<String> otherForbiddenSuffixes = Backend.getBackend (source.get ("backend")).forbiddenSuffixes ();
         Path localJobDir = Host.getJobDir (Host.getLocalResourceDir (), source);
         try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (localJobDir))
         {
-            for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
+            for (Path file : dirStream) if (buildChild (file, existing, otherForbiddenSuffixes)) changed = true;
         }
         catch (IOException e) {}
         if (changed) applyChanges (tree, selected, existing);  // Update display immediately, before waiting on remote.
@@ -538,7 +539,7 @@ public class NodeJob extends NodeBase
                 Path remoteJobDir = Host.getJobDir (env.getResourceDir (), source);
                 try (DirectoryStream<Path> dirStream = Files.newDirectoryStream (remoteJobDir))
                 {
-                    for (Path file : dirStream) if (buildChild (file, existing)) changed = true;
+                    for (Path file : dirStream) if (buildChild (file, existing, otherForbiddenSuffixes)) changed = true;
                 }
             }
             catch (Exception e) {}
@@ -619,7 +620,7 @@ public class NodeJob extends NodeBase
         It must be different than any file already known to us, and it must be a file we
         actually want to show to the user.
     **/
-    public synchronized boolean buildChild (Path path, Map<String,NodeFile> existing)
+    public synchronized boolean buildChild (Path path, Map<String,NodeFile> existing, HashSet<String> otherForbiddenSuffixes)
     {
         String fileName = path.getFileName ().toString ();
         NodeFile oldNode = existing.get (fileName);
@@ -674,15 +675,16 @@ public class NodeJob extends NodeBase
             if (fileName.equals     ("model"   )) return false;  // ditto (old style)
             if (fileName.equals     ("started" )) return false;
             if (fileName.equals     ("finished")) return false;
-            if (fileName.startsWith ("compile.")) return false;  // Piped files for compilation process. These will get copied to appropriate places if necessary.
 
             String suffix = "";
             String[] pieces = fileName.split ("\\.");
             if (pieces.length > 1) suffix = pieces[pieces.length-1].toLowerCase ();
 
             if (forbiddenSuffixes.contains (suffix)) return false;
-            if      (fileName.endsWith ("out"))       newNode = new NodeOutput (path);
-            else if (fileName.endsWith ("err"))       newNode = new NodeError  (path);
+            if (otherForbiddenSuffixes != null  &&  otherForbiddenSuffixes.contains (suffix)) return false;
+            if      (fileName.equals ("out"))         newNode = new NodeOutput (path);
+            else if (fileName.equals ("err"))         newNode = new NodeError  (path);
+            else if (fileName.equals ("err1"))        newNode = new NodeError  (path);
             else if (imageSuffixes.contains (suffix)) newNode = new NodeImage  (path);
             else if (videoSuffixes.contains (suffix)) newNode = new NodeVideo  (path);
             else                                      newNode = new NodeFile   (path);
