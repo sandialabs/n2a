@@ -2685,13 +2685,13 @@ InputHDF5<T>::getRow (T requested)
                     int rank = fspace.getSimpleExtentNdims ();  // NWB standard promises this is 1.
                     std::vector<hsize_t> dims (rank);
                     fspace.getSimpleExtentDims (dims.data ());
-                    int count = dims[0];
-                    for (int i = 1; i < rank; i++) count *= dims[i];  // Defensive, just in case this isn't really an NWB group.
-                    timestamps = new T[count];
+                    int timeRows = dims[0];
+                    for (int i = 1; i < rank; i++) timeRows *= dims[i];  // Defensive, just in case this isn't really an NWB group.
+                    timestamps = new T[timeRows];
 #                   ifdef n2a_FP
-                    std::vector<double> temp (count);
+                    std::vector<double> temp (timeRows);
                     ts.read (temp.data (), H5::PredType::NATIVE_DOUBLE);
-                    for (int i = 0; i < count; i++) tempstamps[i] = (T) (temp[i] * pow (2.0, -exponentRow));
+                    for (int i = 0; i < timeRows; i++) tempstamps[i] = (T) (temp[i] * pow (2.0, -exponentRow));
 #                   else
                     ts.read (timestamps, H5::PredType::n2a_HDF_T);
 #                   endif
@@ -2707,7 +2707,7 @@ InputHDF5<T>::getRow (T requested)
                     double temp;
                     starting_time.read (&temp, H5::PredType::NATIVE_DOUBLE);
                     startingTime = (T) (pow (2.0, -exponentRow) * temp);
-                    period       = (T) (pow (2.0, -exponentRow) / rate);
+                    period       = (T) (pow (2.0, -exponentRow) / rate);  // (1/rate) * scale = scale/rate
 #                   else
                     starting_time.read (&startingTime, H5::PredType::n2a_HDF_T);
                     period = 1 / rate;
@@ -2850,7 +2850,16 @@ InputHDF5<T>::getSlab (hsize_t row, T * values)
     H5::DataSpace fspace = data.getSpace ();
     fspace.selectHyperslab (H5S_SELECT_SET, count, start);
     H5::DataSpace mspace (rank, count);
+
+#   ifdef n2a_FP
+    std::vector<double> temp (columnCount);
+    data.read (temp, H5::PredType::NATIVE_DOUBLE, mspace, fspace);
+    double conversion = pow (2.0, -exponent);
+    for (int i = 0; i < columnCount; i++) values[i] = (T) (temp[i] * conversion);
+    if (time  &&  ! nwb) values[timeColumn] = (T) (temp[timeColumn] * pow (2.0, -exponentRow))
+#   else
     data.read (values, H5::PredType::n2a_HDF_T, mspace, fspace);
+#   endif
 }
 
 template<class T>

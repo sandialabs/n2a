@@ -279,11 +279,7 @@ public class JobC extends Thread
                 // Set up paths to shared libraries.
                 // These could be redundant with existing system path or each other.
                 List<Path> libPath = new ArrayList<Path> ();
-                if (shared) libPath.add (runtimeDir);
-                if (ffmpegBinDir != null) libPath.add (ffmpegBinDir);
-                else                      libPath.add (ffmpegLibDir);
-                if (hdf5BinDir   != null) libPath.add (hdf5BinDir);
-                else                      libPath.add (hdf5LibDir);
+                addSharedLibraryPath (libPath);
 
                 Backend.copyExtraFiles (model, job);
                 env.submitJob (job, env.clobbersOut (), commands, libPath);
@@ -919,6 +915,21 @@ public class JobC extends Thread
         {
             c.addObject (runtimeDir.resolve (objectName ("profiling")));
             c.addLibrary ("dl");  // kokkos should only be set on Linux systems.
+        }
+    }
+
+    public void addSharedLibraryPath (List<Path> libPath)
+    {
+        if (shared) libPath.add (runtimeDir);
+        if (ffmpegLibDir != null)
+        {
+            if (ffmpegBinDir != null) libPath.add (ffmpegBinDir);
+            else                      libPath.add (ffmpegLibDir);
+        }
+        if (hdf5LibDir != null)
+        {
+            if (hdf5BinDir != null) libPath.add (hdf5BinDir);
+            else                    libPath.add (hdf5LibDir);
         }
     }
 

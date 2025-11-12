@@ -116,8 +116,8 @@ public class BackendDataC
     public boolean populationCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive population.
     public boolean connectionCanBeInactive; // Indicates that part satisfies all the compile-time conditions for an inactive connection instance.
 
-    public List<String> globalColumns = new ArrayList<String> ();
-    public List<String> localColumns  = new ArrayList<String> ();
+    public List<String> globalColumns = new ArrayList<String> ();  // see "localColumns"
+    public List<String> localColumns  = new ArrayList<String> ();  // Allocate C class members to store generated columns.
 
     public List<EventTarget> eventTargets    = new ArrayList<EventTarget> ();
     public List<EventSource> eventSources    = new ArrayList<EventSource> ();
