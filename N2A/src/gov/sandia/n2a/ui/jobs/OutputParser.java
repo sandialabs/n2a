@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -40,6 +40,7 @@ public class OutputParser
     public double       xmax = Double.NaN; // Note that "x" is always time.
     public double       ymin = Double.NaN;
     public double       ymax = Double.NaN;
+    public boolean      scatter;   // If true, don't connect dots. Also make no assumption about progress along X axis.
     public double       duration;  // Expected time when job is finished. If nonzero and xmax not specified, then set bounds of graph to [0,duration].
 
     public static Map<String,Color> HTMLcolors = new HashMap<String,Color> ();
@@ -221,7 +222,7 @@ public class OutputParser
                 }
 
                 colorName = n.get ("hue");  // Like "color", but expects default values for saturation and brightness.
-                if (! colorName.isEmpty ())
+                if (! colorName.isBlank ())
                 {
                     float hue = 0;
                     try {hue = Float.valueOf (colorName);}
@@ -230,7 +231,7 @@ public class OutputParser
                 }
 
                 String scale = n.get ("scale");
-                if (! scale.isEmpty ())
+                if (! scale.isBlank ())
                 {
                     c.scale = new UnitValue (scale);
                     if (c.scale.value == 0)    c.scale.value = 1;
@@ -272,6 +273,7 @@ public class OutputParser
                 if (columnFile != null)
                 {
                     MNode n = columnFile.child (i);
+                    scatter = n.getFlag ("scatter");
                     xmin = (float) n.getOrDefault (xmin, "xmin");
                     xmax = (float) n.getOrDefault (xmax, "xmax");
                     ymin = (float) n.getOrDefault (ymin, "ymin");

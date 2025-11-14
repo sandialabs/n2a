@@ -192,7 +192,7 @@ public class Output extends Function
         public void trace (double now, String column, float value, Map<String,Operator> mode, Instance context)
         {
             // Detect when time changes and dump any previously traced values.
-            if (now > t)
+            if (now != t)  // Compare not equal allows keyword "x" (if defined) to move backward as well as forward.
             {
                 writeTrace ();
                 t = now;
@@ -251,10 +251,13 @@ public class Output extends Function
                         switch (key)
                         {
                             case "raw":
+                            case "x":
                                 break;
                             case "timeScale":
+                            case "xscale":
                                 columnMode.set (val, 0, "scale");  // Set on time column.
                                 break;
+                            case "scatter":
                             case "xmax":
                             case "xmin":
                             case "ymax":
@@ -349,7 +352,7 @@ public class Output extends Function
 
         double now;
         if (simulator.currentEvent == null) now = 0;
-        else                                now = (float) simulator.currentEvent.t;
+        else                                now = evalKeyword (context, "x", simulator.currentEvent.t);
 
         if (result instanceof Matrix)
         {

@@ -2943,7 +2943,7 @@ void
 OutputHolder<T>::trace (T now)
 {
     // Detect when time changes and dump any previously traced values.
-    if (now > t)
+    if (now != t)  // Compare not equal allows keyword "x" (if defined) to move backward as well as forward.
     {
         writeTrace ();
         t = now;
@@ -3018,18 +3018,19 @@ OutputHolder<T>::setMode (int index, const char * mode, const char * lineSeparat
         String key;
         String value;
         split (hint, keySeparator, key, value);
-        if (key == "timeScale")
+        if (key == "timeScale"  ||  key == "xscale")
         {
             std::map<String,String> * c = columnMode[0];
             (*c)["scale"] = value;
         }
-        else if (key == "ymin"  ||  key == "ymax"  ||  key == "xmin"  ||  key == "xmax")
+        else if (key == "scatter"  ||  key == "ymin"  ||  key == "ymax"  ||  key == "xmin"  ||  key == "xmax")
         {
             std::map<String,String> * c = columnMode[0];
             (*c)[key] = value;
         }
         else
         {
+            if (key == "yscale") key = "scale";
             (*result)[key] = value;
         }
     }

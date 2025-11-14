@@ -345,18 +345,19 @@ public class EquationSet implements Comparable<EquationSet>
 
                         // Check for timeScale
                         EquationSet root = getRoot ();
-                        String timeScale = root.metadata.get ("watch", "timeScale");  // typically the horizontal axis
-                        String scale = "";                                            // typically the vertical axis
-                        if (v.order > 0  &&  ! timeScale.isEmpty ())
+                        String yscale = "";                                       // typically the vertical axis
+                        String xscale = root.metadata.get ("watch", "timeScale"); // typically the horizontal axis
+                        if (xscale.isBlank ()) xscale = root.metadata.get ("watch", "xscale");
+                        if (v.order > 0  &&  ! xscale.isEmpty ())
                         {
                             try
                             {
-                                UnitValue uv = new UnitValue (timeScale);
+                                UnitValue uv = new UnitValue (xscale);
                                 if (uv.value == 0) uv.value = 1;
                                 if (uv.unit == null) uv.unit = AbstractUnit.ONE;
                                 uv.unit = uv.unit.pow (-v.order);
                                 uv.value = Math.pow (uv.value, -v.order);
-                                scale = uv.bareUnit ();
+                                yscale = uv.bareUnit ();
                             }
                             catch (Exception ex) {}
                         }
@@ -368,10 +369,10 @@ public class EquationSet implements Comparable<EquationSet>
                         String expression = dummy + "=output(\"\",";
                         if (spike) expression += "1";
                         else       expression += v.nameString ();
-                        if (! timeScale.isEmpty ())
+                        if (! xscale.isBlank ())
                         {
-                            expression += ",\"\",timeScale=" + timeScale;
-                            if (! scale.isEmpty ()) expression += ",scale=" + scale;
+                            expression += ",\"\",xscale=" + xscale;
+                            if (! yscale.isEmpty ()) expression += ",yscale=" + yscale;
                         }
                         expression += ")";
                         if (spike) expression += "@" + v.nameString ();

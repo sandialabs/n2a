@@ -611,7 +611,11 @@ public class RendererC extends Renderer
         if (op instanceof Output)
         {
             Output o = (Output) op;
-            result.append (o.name + "->trace (" + job.SIMULATOR + "currentEvent->t, ");
+            result.append (o.name + "->trace (");
+            Operator x = o.getKeyword ("x");
+            if (x == null) result.append (job.SIMULATOR + "currentEvent->t");
+            else           x.render (this);
+            result.append (", ");
 
             if (o.hasColumnName)  // column name is explicit
             {
@@ -641,11 +645,14 @@ public class RendererC extends Renderer
                 boolean allConstant = true;
                 for (Entry<String,Operator> k : o.keywords.entrySet ())
                 {
+                    String key = k.getKey ();
+                    if (key.equals ("raw")  ||  key.equals ("x")) continue;
+
                     Operator kv = k.getValue ();
                     if (kv instanceof Constant)
                     {
                         Constant c = (Constant) kv;
-                        mode += "," + k.getKey () + "=";
+                        mode += "," + key + "=";
                         if (c.unitValue == null) mode += c.value;
                         else                     mode += c.unitValue;
                     }
@@ -665,12 +672,16 @@ public class RendererC extends Renderer
                     boolean commaNeeded = ! mode.isEmpty ();
                     for (Entry<String,Operator> k : o.keywords.entrySet ())
                     {
+                        String key = k.getKey ();
+                        if (key.equals ("raw")  ||  key.equals ("x")) continue;
+
                         if (commaNeeded) result.append ("+\",\"");
-                        result.append ("+\"" + k.getKey () + "=\"+");
+                        result.append ("+\"" + key + "=\"+");
                         Operator kv = k.getValue ();
                         if (kv instanceof Add)
                         {
                             Add a = (Add) kv;
+                            // TODO: "a" could be a numerical add rather than string add. Need to test and handle that case.
                             result.append (a.name);
                         }
                         else if (kv instanceof AccessVariable)

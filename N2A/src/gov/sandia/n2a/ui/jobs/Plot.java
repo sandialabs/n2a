@@ -8,6 +8,7 @@ package gov.sandia.n2a.ui.jobs;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,6 +30,7 @@ import org.jfree.data.general.DatasetChangeListener;
 import org.jfree.data.general.DatasetGroup;
 import org.jfree.data.xy.XYDataset;
 
+import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.ui.Utility;
 
 public class Plot extends OutputParser
@@ -229,17 +231,48 @@ public class Plot extends OutputParser
 
     public JFreeChart createChart ()
     {
-        JFreeChart chart = ChartFactory.createXYLineChart
-        (
-            null,                     // chart title
-            null,                     // x axis label
-            null,                     // y axis label
-            dataset0,                 // data
-            PlotOrientation.VERTICAL,
-            true,                     // include legend
-            true,                     // tooltips
-            false                     // urls
-        );
+        // Need to know what chart mode to operate in.
+        // This function is called before parse(), so we haven't yet read in the config file.
+        // In the name of speed. we only parse the config file here, and extract just the "scatter" flag.
+        Path jobDir = path.getParent ();
+        Path columnPath = jobDir.resolve (path.getFileName ().toString () + ".columns");
+        if (Files.isReadable (columnPath))
+        {
+            MDoc columnFile = new MDoc (columnPath);
+            // Assume that column 0 is time, and that it contains general flags for entire plot.
+            // This true for Internal, C, and any other backend that follows their example.
+            scatter = columnFile.getFlag ("0", "scatter");
+        }
+
+        JFreeChart chart;
+        if (scatter)
+        {
+            chart = ChartFactory.createScatterPlot
+            (
+                null,                     // chart title
+                null,                     // x axis label
+                null,                     // y axis label
+                dataset0,                 // data
+                PlotOrientation.VERTICAL,
+                true,                     // include legend
+                true,                     // tooltips
+                false                     // urls
+            );
+        }
+        else  // line plot
+        {
+            chart = ChartFactory.createXYLineChart
+            (
+                null,                     // chart title
+                null,                     // x axis label
+                null,                     // y axis label
+                dataset0,                 // data
+                PlotOrientation.VERTICAL,
+                true,                     // include legend
+                true,                     // tooltips
+                false                     // urls
+            );
+        }
 
         XYPlot plot = chart.getXYPlot ();
         plot.setBackgroundPaint     (Color.white);
@@ -370,7 +403,8 @@ public class Plot extends OutputParser
 
     public void styleSeries (XYLineAndShapeRenderer renderer, int i, Column column, int count, float shift)
     {
-        renderer.setSeriesShapesVisible (i, false);
+        renderer.setSeriesShapesVisible (i, scatter);
+        renderer.setDrawOutlines (false);  // Smaller shapes for scatter plot.
 
         Color c = column.color;
         // TODO: avoid assigning a color close to any that the user explicitly specified for some other plot line.

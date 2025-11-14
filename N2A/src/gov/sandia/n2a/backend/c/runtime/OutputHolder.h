@@ -161,18 +161,19 @@ public:
                 std::string key;
                 std::string value;
                 split (hint, "=", key, value);
-                if (key == "timeScale")
+                if (key == "timeScale"  ||  key == "xscale")
                 {
                     std::map<std::string,std::string> * c = columnMode[0];
                     (*c)["scale"] = value;
                 }
-                else if (key == "ymin"  ||  key == "ymax"  ||  key == "xmin"  ||  key == "xmax")
+                else if (key == "scatter"  ||  key == "ymin"  ||  key == "ymax"  ||  key == "xmin"  ||  key == "xmax")
                 {
                     std::map<std::string,std::string> * c = columnMode[0];
                     (*c)[key] = value;
                 }
                 else
                 {
+                    if (key == "yscale") key = "scale";
                     (*result)[key] = value;
                 }
             }

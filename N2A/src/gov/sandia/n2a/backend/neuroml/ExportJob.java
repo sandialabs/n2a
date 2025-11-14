@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -2840,12 +2840,14 @@ public class ExportJob extends XMLutility
                             display.type = "Display";
                             break;
                         case "timeScale":
+                        case "xscale":
                             display.timeScale = value;
                             display.type = "Display";
                             break;
 
                         // Line
                         case "scale":
+                        case "yscale":
                             scale = value;
                             break;
                         case "lineTimeScale":
