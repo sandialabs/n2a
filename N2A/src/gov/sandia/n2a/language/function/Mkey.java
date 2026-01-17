@@ -37,11 +37,11 @@ public class Mkey extends Mfile
 
     public Operator simplify (Variable from, boolean evalOnly)
     {
-        Operator k = getKeyword ("int");
+        Operator k = getKeyword ("number");
         if (k != null)
         {
             number =  k.getDouble () != 0;
-            keywords.remove ("int");
+            keywords.remove ("number");
         }
 
         return super.simplify (from, evalOnly);
