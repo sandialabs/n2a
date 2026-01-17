@@ -138,14 +138,14 @@ public class JobC extends Thread
     // Work around the initialization sequencing problem by delaying the call to holderHelper until main().
     // To do this, we need to stash variable names. This may seem redundant with the above maps,
     // but this is a more limited case.
-    protected List<Constant>   staticMatrix    = new ArrayList<Constant> ();  // constant matrices that should be statically initialized
-    protected List<ReadMatrix> mainMatrix      = new ArrayList<ReadMatrix> ();
-    protected List<Mfile>      mainMfile       = new ArrayList<Mfile> ();
-    protected List<Input>      mainInput       = new ArrayList<Input> ();
-    protected List<Output>     mainOutput      = new ArrayList<Output> ();
-    protected List<ReadImage>  mainImageInput  = new ArrayList<ReadImage> ();
-    protected List<Draw>       mainImageOutput = new ArrayList<Draw> ();
-    public    List<Operator>   mainExtension   = new ArrayList<Operator> ();  // Shared by all extension-provided operators.
+    protected List<Constant>         staticMatrix    = new ArrayList<Constant> ();  // constant matrices that should be statically initialized
+    protected List<ReadMatrix>       mainMatrix      = new ArrayList<ReadMatrix> ();
+    protected List<Mfile>            mainMfile       = new ArrayList<Mfile> ();
+    protected List<Input>            mainInput       = new ArrayList<Input> ();
+    protected HashMap<String,Output> mainOutput      = new HashMap<String,Output> ();
+    protected List<ReadImage>        mainImageInput  = new ArrayList<ReadImage> ();
+    protected List<Draw>             mainImageOutput = new ArrayList<Draw> ();
+    public    List<Operator>         mainExtension   = new ArrayList<Operator> ();  // Shared by all extension-provided operators.
 
     public JobC (MNode job)
     {
@@ -2111,7 +2111,13 @@ public class JobC extends Thread
                                 {
                                     o.name = "Output" + outputNames.size ();
                                     outputNames.put (fileName, o.name);
-                                    mainOutput.add (o);
+                                    mainOutput.put (fileName, o);
+                                }
+                                else  // Consolidate global flags.
+                                {
+                                    Output main = mainOutput.get (fileName);
+                                    Operator raw = o.getKeyword ("raw");
+                                    if (raw != null) main.addKeyword (fileName, raw);
                                 }
                             }
                             else if (f instanceof ReadImage)
@@ -2307,7 +2313,7 @@ public class JobC extends Thread
             String inputHolder =  i.getKeyword ("hdf5") == null ? "InputXSV" : "InputHDF5";
             result.append (thread_local + inputHolder + "<" + T + "> * " + i.name + ";\n");
         }
-        for (Output o : mainOutput)
+        for (Output o : mainOutput.values ())
         {
             result.append (thread_local + "OutputHolder<" + T + "> * " + o.name + ";\n");
         }
@@ -2368,7 +2374,7 @@ public class JobC extends Thread
 
             if (i.getKeywordFlag ("nwb")) result.append ("  " + i.name + "->nwb = true;\n");
         }
-        for (Output o : mainOutput)
+        for (Output o : mainOutput.values ())
         {
             result.append ("  " + o.name + " = outputHelper<" + T + "> (\"" + o.operands[0].getString () + "\");\n");
             if (o.getKeywordFlag ("raw")) result.append ("  " + o.name + "->raw = true;\n");
