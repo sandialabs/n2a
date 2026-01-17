@@ -44,6 +44,7 @@ Store in subdirectory KHR:
 #endif
 
 #include <vector>
+#include <list>
 #include <unordered_map>
 #include <map>
 #include <mutex>
@@ -355,14 +356,18 @@ template<typename... Args> std::vector<String> keyPath (const char * delimiter, 
 template<class T> SHARED T convertDate (const String & field, T defaultValue);
 
 template<class T>
+struct SHARED InputLine
+{
+    T              line;  ///< Can be either time or integer row number.
+    std::vector<T> values;
+};
+
+template<class T>
 struct SHARED InputHolder : public Holder
 {
-    T                              currentLine;
-    T *                            currentValues;
-    int                            currentCount;
-    T                              nextLine;
-    T *                            nextValues;
-    int                            nextCount;
+    std::mutex                     mutexLine;  ///< Threads are expected to agree on current line. However, only one thread should advance current line, so getRow() should include a critical section.
+    InputLine<T> *                 current;
+    InputLine<T> *                 next;
     Matrix<T> *                    A;
     T                              Alast;
     int                            columnCount;
@@ -390,12 +395,9 @@ template<class T>
 struct SHARED InputXSV : public InputHolder<T>
 {
     // Need "using" for GCC, but not for MSVC.
-    using InputHolder<T>::currentLine;
-    using InputHolder<T>::currentValues;
-    using InputHolder<T>::currentCount;
-    using InputHolder<T>::nextLine;
-    using InputHolder<T>::nextValues;
-    using InputHolder<T>::nextCount;
+    using InputHolder<T>::mutexLine;
+    using InputHolder<T>::current;
+    using InputHolder<T>::next;
     using InputHolder<T>::A;
     using InputHolder<T>::columnCount;
     using InputHolder<T>::columnMap;
@@ -408,14 +410,29 @@ struct SHARED InputXSV : public InputHolder<T>
     using InputHolder<T>::exponentRow;
 #   endif
 
-    std::istream * in;
-    char           delimiter;
-    bool           delimiterSet;
+    std::istream *            in;
+    char                      delimiter;
+    bool                      delimiterSet;
+    std::list<InputLine<T> *> buffer;
 
     InputXSV (const String & fileName);
     virtual ~InputXSV ();
 
     virtual void getRow (T row);
+
+    /**
+        Buffer extra data rows.
+        Called after getRow() has already established the current row.
+        Stops rows from leaving buffer, even if "current" moves ahead.
+        Rows remain buffered until release() is called.
+        @return The effective number of rows buffered.
+    **/
+    int readAhead (int rowCount);
+
+    /**
+        Allow rows that come before "current" to be dropped from buffer.
+    **/
+    void release ();
 };
 #ifdef n2a_FP
 template<class T> SHARED InputXSV<T> * xsvHelper (const String & fileName, int exponent, int exponentRow, InputXSV<T> * oldHandle = 0);
@@ -441,13 +458,12 @@ template<class T>
 struct SHARED InputHDF5 : public InputHolder<T>
 {
     using InputHolder<T>::fileName;
-    using InputHolder<T>::currentLine;
-    using InputHolder<T>::currentValues;
-    using InputHolder<T>::currentCount;
-    using InputHolder<T>::nextLine;
-    using InputHolder<T>::nextValues;
-    using InputHolder<T>::nextCount;
+    using InputHolder<T>::mutexLine;
+    using InputHolder<T>::current;
+    using InputHolder<T>::next;
     using InputHolder<T>::columnCount;
+    using InputHolder<T>::timeColumn;
+    using InputHolder<T>::timeColumnSet;
     using InputHolder<T>::time;
     using InputHolder<T>::smooth;
     using InputHolder<T>::epsilon;
@@ -470,7 +486,9 @@ struct SHARED InputHDF5 : public InputHolder<T>
     virtual ~InputHDF5 ();
 
     virtual void getRow  (T row);
-    void         getSlab (hsize_t row, T * values);
+    int          rowFromLine (T line);
+    T            lineFromRow (int row);
+    void         getSlab (hsize_t row, hsize_t rowCount, T * values);  ///< Fetch a single complete row.
 };
 
 #ifdef n2a_FP
@@ -484,6 +502,7 @@ template<class T> SHARED InputHDF5<T> * hdf5Helper (const String & fileName, con
 template<class T>
 struct SHARED OutputHolder : public Holder
 {
+    std::recursive_mutex                   mutexLine;       ///< Synchronize anything that changes content or structure.
     bool                                   raw;             ///< Indicates that column is an exact index.
     std::ostream *                         out;
     String                                 columnFileName;
