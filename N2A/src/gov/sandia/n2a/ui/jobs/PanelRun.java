@@ -25,6 +25,7 @@ import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.studies.Study;
 
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -905,7 +906,7 @@ public class PanelRun extends JPanel
                     // Otherwise, fall through ...
                 }
 
-                // Default is plain text
+                // Default is text (either plain or ANSI).
                 String contents = Host.fileToString (node.path);  // This will return empty string if node.path is a directory. This can happen for STACS output.
                 if (node instanceof NodeError)  // Special case for "err": show ANSI colors
                 {
@@ -918,44 +919,24 @@ public class PanelRun extends JPanel
                                 if (dt != displayThread) return;
                                 if (refresh)
                                 {
-                                    Caret c = displayANSI.getCaret ();
-                                    int dot = c.getDot ();
-                                    if (dot != displayANSI.getDocument ().getLength ())  // Not tracking end of text, so keep stable view.
-                                    {
-                                        int mark = c.getMark ();
-                                        Point magic = c.getMagicCaretPosition ();
-                                        if (magic == null) magic = new Point ();
-                                        Rectangle visible = displayPane.getViewport ().getViewRect ();
-                                        if (! visible.contains (magic))  // User has scrolled away from caret.
-                                        {
-                                            // Scroll takes precedence over caret, so move caret back into visible area.
-                                            Font f = displayANSI.getFont ();
-                                            FontMetrics fm = displayANSI.getFontMetrics (f);
-                                            int h = fm.getHeight ();
-                                            int w = fm.getMaxAdvance ();
-                                            if (w < 0) w = h / 2;
-                                            h += h / 2;
-                                            w += w / 2;
-                                            magic.x = Math.max (magic.x, visible.x == 0 ? 0 : visible.x + w);
-                                            magic.x = Math.min (magic.x, visible.x + visible.width - w);
-                                            magic.y = Math.max (magic.y, visible.y == 0 ? 0 : visible.y + h);
-                                            magic.y = Math.min (magic.y, visible.y + visible.height - h);
-                                            dot = mark = displayANSI.viewToModel2D (magic);
-                                        }
+                                    int         oldLength = displayANSI.getDocument ().getLength ();
+                                    int         lastLine  = displayANSI.lastLine;
+                                    Caret       c         = displayANSI.getCaret ();
+                                    int         dot       = c.getDot ();
+                                    JViewport   vp        = displayPane.getViewport ();
+                                    Dimension   size      = vp.getViewSize ();
+                                    Rectangle   visible   = vp.getViewRect ();
+                                    Font        f         = displayANSI.getFont ();
+                                    FontMetrics fm        = displayANSI.getFontMetrics (f);
+                                    int         margin    = fm.getHeight () / 2;
+                                    boolean     track     =  dot >= lastLine  &&  visible.y + visible.height >= size.height - margin;
 
-                                        displayANSI.setText (contents);
-                                        c.setDot (mark);
-                                        if (dot != mark) c.moveDot (dot);
-                                    }
-                                    else  // tracking end of text
-                                    {
-                                        displayANSI.setText (contents);
-                                    }
+                                    displayANSI.append (contents.substring (oldLength));
+                                    if (track) c.setDot (displayANSI.lastLine);
                                 }
                                 else
                                 {
-                                    displayANSI.setText (contents);
-                                    // Don't set caret. We want to track the end of output.
+                                    displayANSI.setText (contents);  // Also sets caret to end of text, which causes scrolling to end.
                                     displayChart.buttonBar.setVisible (false);
                                     displayPane.setViewportView (displayANSI);
                                 }
@@ -977,11 +958,12 @@ public class PanelRun extends JPanel
                                 {
                                     int oldLength = displayText.getText ().length ();
                                     displayText.append (finalContents.substring (oldLength));
+                                    // This code does not track end of text. Could be modified to do so, similar to ANSI case above.
                                 }
                                 else
                                 {
                                     displayText.setText (finalContents);
-                                    displayText.setCaretPosition (0);
+                                    displayText.setCaretPosition (0);  // For initial display, always start at top.
                                     displayChart.buttonBar.setVisible (false);
                                     displayPane.setViewportView (displayText);
                                 }

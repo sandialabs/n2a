@@ -130,6 +130,7 @@ public class CompilerGCC extends Compiler
         settings.add ("-std=c++11");
         settings.add ("-ffunction-sections");
         settings.add ("-fdata-sections");
+        settings.add ("-fdiagnostics-color=always");
     }
 
     public Path compile () throws Exception

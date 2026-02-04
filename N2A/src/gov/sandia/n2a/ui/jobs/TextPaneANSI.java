@@ -43,33 +43,61 @@ public class TextPaneANSI extends JTextPane
     public static final Color magenta100 = Color.getHSBColor (5f / 6, 1, 1);
     public static final Color standard[] = {Color.black, red50, green50, yellow50, blue50, magenta50, cyan50, gray75, gray50, red100, green100, yellow100, blue100, magenta100, cyan100, Color.white};
 
+    public    int                lastLine;  // Character position just after last newline. Set by setText() and append().
+    protected SimpleAttributeSet attributes = new SimpleAttributeSet ();
+    protected boolean            inEscape;
+    protected String             sequence;
+
     public void setText (String t)
     {
         super.setText ("");
+        attributes.removeAttributes (attributes);  // Clear the attributes.
+        inEscape = false;
+        sequence = "";
         append (t);
     }
 
     public void append (String t)
     {
         int count = t.length ();
-        SimpleAttributeSet attributes = new SimpleAttributeSet ();
         for (int b = 0; b < count; b++)
         {
-            int e = t.indexOf (27, b);
-            if (e < 0)
+            int e = b;
+            if (! inEscape)
             {
-                append (t.substring (b), attributes);
-                break;
+                e = t.indexOf (27, b);
+                if (e < 0)  // No more escapes in [b,end], so copy the rest of t.
+                {
+                    String nextBlock = t.substring (b);
+                    updateLastLine (nextBlock);
+                    append (nextBlock, attributes);
+                    break;
+                }
+                if (b < e)  // There is some text before escape.
+                {
+                    String nextBlock = t.substring (b, e);
+                    updateLastLine (nextBlock);
+                    append (nextBlock, attributes);
+                }
+                inEscape = true;
+                e++;
             }
-            if (b < e) append (t.substring (b, e), attributes);  // There is some text to append.
-            if (e >= count) break;  // no more text left
 
             // Find end of escape sequence.
-            e++;
-            b = t.indexOf ('m', e);
-            if (b < 0) break;  // escape sequence cut off by end of string
-            String sequence = t.substring (e, b);  // Does not include initial ESC or ending m.
-            if (sequence.startsWith ("["))
+            b = e;
+            while (b < count)
+            {
+                char c = t.charAt (b);
+                if (c >= 0x40  &&  c <= 0x7E  &&  c != '[') break;  // final byte. The test for '[' is not strictly correct, but it is never a terminator for any sequence we care about.
+                b++;
+            }
+            if (b >= count)  // Reached end of string without finding final byte.
+            {
+                sequence += t.substring (e);
+                break;  // escape sequence cut off by end of string
+            }
+            sequence += t.substring (e, b);  // Does not include initial ESC or final byte.
+            if (sequence.startsWith ("[")  &&  t.charAt (b) == 'm')
             {
                 String[] codes = sequence.substring (1).split (";");
                 for (int i = 0; i < codes.length; i++)
@@ -77,19 +105,24 @@ public class TextPaneANSI extends JTextPane
                     String code = codes[i];
                     switch (code)
                     {
+                        case "":
                         case "0":
                             attributes.removeAttributes (attributes);
                             break;
                         case "1":
+                        case "01":
                             attributes.addAttribute (StyleConstants.Bold, true);
                             break;
                         case "3":
+                        case "03":
                             attributes.addAttribute (StyleConstants.Italic, true);
                             break;
                         case "4":
+                        case "04":
                             attributes.addAttribute (StyleConstants.Underline, true);
                             break;
                         case "9":
+                        case "09":
                             attributes.addAttribute (StyleConstants.StrikeThrough, true);
                             break;
                         case "22":
@@ -193,7 +226,15 @@ public class TextPaneANSI extends JTextPane
                     }
                 }
             }
+            inEscape = false;
+            sequence = "";
         }
+    }
+
+    public void updateLastLine (String nextBlock)
+    {
+        int pos = nextBlock.lastIndexOf ('\n');
+        if (pos >= 0) lastLine = getDocument ().getLength () + pos + 1;
     }
 
     public Color interpretRGB (String[] codes, int i)
