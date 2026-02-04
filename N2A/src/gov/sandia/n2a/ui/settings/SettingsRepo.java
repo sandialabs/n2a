@@ -281,6 +281,8 @@ public class SettingsRepo extends JScrollPane implements Settings
 
         repoTable.setTransferHandler (new TransferHandler ()
         {
+            String repoReorder = "N2A repo reorder:";
+
             public boolean canImport (TransferSupport xfer)
             {
                 return xfer.isDataFlavorSupported (DataFlavor.stringFlavor);
@@ -299,44 +301,45 @@ public class SettingsRepo extends JScrollPane implements Settings
                     return false;
                 }
 
-                // Paste, or drop type other than MOVE --> Could be a Git remote URI
-                if (! xfer.isDrop ()  ||  xfer.getDropAction () != MOVE)
+                // Could be reordering of repository precedence
+                if (value.startsWith (repoReorder))
                 {
-                    // Must have the form of a Git URI
+                    value = value.substring (repoReorder.length ());
+                    int sourceRow = -1;
                     try
                     {
-                        new URIish (value);
+                        sourceRow = Integer.valueOf (value);
                     }
-                    catch (URISyntaxException e)
+                    catch (Exception e)
                     {
                         return false;
                     }
-
-                    // Must not already exist in list
-                    for (GitWrapper w : repoModel.gitRepos) if (value.equals (w.getURL ())) return false;
-
-                    // Clone new repo
-                    int row;
-                    if (xfer.isDrop ()) row = ((JTable.DropLocation) xfer.getDropLocation ()).getRow ();
-                    else                row = repoTable.getSelectedRow ();
-                    if (row < 0) row = repoModel.getRowCount ();
-                    repoModel.create (row, value);
+                    if (sourceRow < 0  ||  sourceRow >= repoModel.repos.size ()) return false;
+                    int destinationRow = ((JTable.DropLocation) xfer.getDropLocation ()).getRow ();
+                    repoModel.move (sourceRow, destinationRow);
                     return true;
                 }
 
-                // Drop of type MOVE --> Reordering of repository precedence
-                int sourceRow = -1;
+                // Could be a Git remote URI
                 try
                 {
-                    sourceRow = Integer.valueOf (value);
+                    // Must have the form of a Git URI
+                    new URIish (value);
                 }
-                catch (Exception e)
+                catch (URISyntaxException e)
                 {
                     return false;
                 }
-                if (sourceRow < 0  ||  sourceRow >= repoModel.repos.size ()) return false;
-                int destinationRow = ((JTable.DropLocation) xfer.getDropLocation ()).getRow ();
-                repoModel.move (sourceRow, destinationRow);
+
+                // Must not already exist in list
+                for (GitWrapper w : repoModel.gitRepos) if (value.equals (w.getURL ())) return false;
+
+                // Clone new repo
+                int row;
+                if (xfer.isDrop ()) row = ((JTable.DropLocation) xfer.getDropLocation ()).getRow ();
+                else                row = repoTable.getSelectedRow ();
+                if (row < 0) row = repoModel.getRowCount ();
+                repoModel.create (row, value);
                 return true;
             }
 
@@ -347,7 +350,7 @@ public class SettingsRepo extends JScrollPane implements Settings
 
             protected Transferable createTransferable (JComponent comp)
             {
-                return new StringSelection (String.valueOf (repoTable.getSelectedRow ()));
+                return new StringSelection (repoReorder + String.valueOf (repoTable.getSelectedRow ()));
             }
         });
 
