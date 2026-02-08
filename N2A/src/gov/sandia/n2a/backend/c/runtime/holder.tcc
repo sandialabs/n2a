@@ -2157,6 +2157,14 @@ convertDate (const String & field, T defaultValue)
                 }
                 valid = year > 12  &&  month <= 12;
             }
+
+            // Until we have better hints from user, assume 2-digit year should have century offset.
+            // TODO: fix Y2K bug ...
+            if (year < 100)
+            {
+                if (year > 50) year += 1900;
+                else           year += 2000;
+            }
         }
     }
 

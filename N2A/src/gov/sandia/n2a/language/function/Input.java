@@ -561,8 +561,19 @@ public class Input extends Function
         }
         else if (dateString.contains ("/"))  // Conventional date
         {
-            // TODO: add keyword parameter for correct date format, such as "mdy" or "ymd".
-            format = new SimpleDateFormat ("MM/dd/yyyy");
+            String pieces[] = dateString.split ("/");
+            if (pieces.length == 3)
+            {
+                if (pieces[2].length () > 2)
+                {
+                    format = new SimpleDateFormat ("MM/dd/yyyy");
+                }
+                else
+                {
+                    // TODO: add keyword parameter for correct date format, such as "mdy" or "ymd".
+                    format = new SimpleDateFormat ("MM/dd/yy");
+                }
+            }
         }
         if (format != null)
         {

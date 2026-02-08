@@ -57,10 +57,10 @@ public abstract class Matrix extends Type
         return get (row, 0);
     }
 
-    public static final int REPLICATE   = 0;  // truncates coordinates; a read out of bounds returns nearest element
-    public static final int ZEROS       = 1;  // truncates coordinates; a read out of bounds returns zero
+    public static final int REPLICATE   = 0;  // truncates coordinates; an out-of-bounds read returns nearest element
+    public static final int ZEROS       = 1;  // truncates coordinates; an out-of-bounds read returns zero
     public static final int UNITMAP     = 2;  // applies offset and scaling for unitmap()
-    public static final int INTERPOLATE = 3;  // interpolates non-integer coordinates; a read out of bounds extrapolates nearest elements
+    public static final int INTERPOLATE = 3;  // interpolates non-integer coordinates; an out-of-bounds read extrapolates nearest elements
 
     public double get (double row, double column, int mode)
     {
