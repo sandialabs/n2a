@@ -798,12 +798,12 @@ public class PanelRun extends JPanel
                 else  // NodeFile
                 {
                     // Step 1 -- Get data into local directory
-                    // TODO: manage and display files that are too big for memory, or even too big to store on local system
                     // There are three sizes of data:
                     //   small -- can load entirely into memory
                     //   big   -- too big for memory; must load/display in segments
                     //   huge  -- too big to store on local filesystem, for example a supercomputer job; must be downloaded/displayed in segments
                     // The current code only handles small files.
+                    // TODO: manage and display files that are too big for memory, or even too big to store on local system.
                     NodeJob nodeJob = (NodeJob) node.getParent ();
                     NodeFile nodeFile = (NodeFile) node;
                     MNode job = nodeJob.getSource ();
@@ -823,6 +823,12 @@ public class PanelRun extends JPanel
                         }
                         else
                         {
+                            synchronized (nodeFile)
+                            {
+                                if (nodeFile.thread != null  &&  nodeFile.thread.isAlive ()) return;  // Another thread is already doing the same task. More than one remote-copy thread can corrupt the local file.
+                                nodeFile.thread = this;
+                            }
+
                             ((Remote) env).enable ();  // The user explicitly selected the file, which implies permission to prompt for remote password.
                             Path remoteJobDir = Host.getJobDir (env.getResourceDir (), job);
                             Path remotePath   = remoteJobDir.resolve (fileName);
@@ -953,6 +959,7 @@ public class PanelRun extends JPanel
                                     }
                                 }
                             }
+                            synchronized (nodeFile) {nodeFile.thread = null;}  // Not strictly necessary, but allows threads to be garbage collected sooner.
                             if (! newData) return;
 
                             if (this != fastThread)
@@ -961,7 +968,7 @@ public class PanelRun extends JPanel
                                 synchronized (displayPane)
                                 {
                                     if (displayThread != fastThread) return;  // Another display process has already taken over.
-                                    displayThread = this;  // Slow thread takes the place of fast thread
+                                    displayThread = this;  // Slow thread takes the place of fast thread.
                                 }
                             }
                             // Fall through to create display ...

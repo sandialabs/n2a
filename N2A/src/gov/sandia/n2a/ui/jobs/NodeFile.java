@@ -24,6 +24,7 @@ public class NodeFile extends NodeBase
     protected int       priority;
     protected ImageIcon icon;
     protected boolean   found;  // Flag to indicate if associated file was found during last scan.
+    protected Thread    thread; // For remote hosts, the thread that is currently retrieving this file.
 
     public static final ImageIcon iconIn  = ImageUtil.getImage ("file_in.gif");
     public static final ImageIcon iconOut = ImageUtil.getImage ("file_out.gif");
