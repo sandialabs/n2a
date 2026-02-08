@@ -212,14 +212,8 @@ public class NodeJob extends NodeBase
             catch (IOException e) {}
         }
 
-        EventQueue.invokeLater (new Runnable ()
-        {
-            public void run ()
-            {
-                PanelRun panelRun = PanelRun.instance;
-                if (! panelRun.tree.isCollapsed (new TreePath (getPath ()))) build (panelRun.tree);
-            }
-        });
+        PanelRun panelRun = PanelRun.instance;
+        if (! panelRun.tree.isCollapsed (new TreePath (getPath ()))) build (panelRun.tree);
     }
 
     /**
@@ -456,7 +450,7 @@ public class NodeJob extends NodeBase
                     if (panelRun.displayNode == NodeJob.this)
                     {
                         panelRun.buttonStop.setEnabled (complete < 1  ||  complete == 3);
-                        panelRun.viewJob (true);
+                        panelRun.viewNode (true);
                     }
                     else if (panelRun.displayNode instanceof NodeFile  &&  panelRun.displayNode.getParent () == NodeJob.this)
                     {
@@ -468,7 +462,7 @@ public class NodeJob extends NodeBase
                         // interrupt the current thread.
                         if (complete >= 1  &&  complete != 3  ||  panelRun.displayThread == null  ||  ! panelRun.displayThread.isAlive ())
                         {
-                            panelRun.viewFile (true);
+                            panelRun.viewNode (true);
                         }
                     }
 
@@ -498,9 +492,6 @@ public class NodeJob extends NodeBase
     **/
     public synchronized void build (JTree tree)
     {
-        NodeBase selected = null;
-        TreePath path = tree.getLeadSelectionPath ();
-        if (path != null) selected = (NodeBase) path.getLastPathComponent ();
         TreeMap<String,NodeFile> existing = new TreeMap<String,NodeFile> ();
         if (children != null)
         {
@@ -522,7 +513,7 @@ public class NodeJob extends NodeBase
             for (Path file : dirStream) if (buildChild (file, existing, otherForbiddenSuffixes)) changed = true;
         }
         catch (IOException e) {}
-        if (changed) applyChanges (tree, selected, existing);  // Update display immediately, before waiting on remote.
+        if (changed) applyChanges (tree, existing);  // Update display immediately, before waiting on remote.
         changed = false;
 
         // Scan remote job dir. Because this is done second, remote files take lower precedence than local files.
@@ -555,64 +546,63 @@ public class NodeJob extends NodeBase
                 existing.remove (key);
             }
         }
-        if (changed) applyChanges (tree, selected, existing);
+        if (changed) applyChanges (tree, existing);
     }
 
-    public synchronized void applyChanges (JTree tree, NodeBase selected, Map<String,NodeFile> existing)
+    public synchronized void applyChanges (JTree tree, Map<String,NodeFile> existing)
     {
-        if (MainFrame.instance.tabs.getSelectedComponent () != PanelRun.instance)
-        {
-            tryToSelectOutput = false;
-            selected = null;
-            if (getChildCount () == 0) tree.collapsePath (new TreePath (getPath ()));
-        }
-
-        if (selected == null) return;
-        if (selected instanceof NodeFile)
-        {
-            NodeBase parent = (NodeBase) selected.getParent ();
-            if (parent != NodeJob.this) selected = null;
-            else if (! ((NodeFile) selected).found) selected = parent;
-        }
-
-        // Try to select an output file when it first appears for the newest job, but only if the job is still selected.
-        if (tryToSelectOutput  &&  selected == NodeJob.this  &&  selected == tree.getPathForRow (0).getLastPathComponent ())
-        {
-            NodeFile bestFile = null;
-            for (NodeFile nf : existing.values ())
-            {
-                if (nf.priority == 0) continue;
-                if (bestFile == null  ||  nf.priority > bestFile.priority)
-                {
-                    bestFile = nf;
-                }
-            }
-            if (bestFile != null)
-            {
-                selected = bestFile;
-                tryToSelectOutput = false;
-            }
-        }
-
-        final NodeBase finalSelected = selected;
-        Runnable update = new Runnable ()
+        EventQueue.invokeLater (new Runnable ()
         {
             public void run ()
             {
+                NodeBase selected = null;
+                TreePath path = tree.getLeadSelectionPath ();
+                if (path != null) selected = (NodeBase) path.getLastPathComponent ();
+
+                if (MainFrame.instance.tabs.getSelectedComponent () != PanelRun.instance)
+                {
+                    tryToSelectOutput = false;
+                    selected = null;
+                }
+
+                if (selected instanceof NodeFile)
+                {
+                    NodeBase parent = (NodeBase) selected.getParent ();
+                    if (parent != NodeJob.this) selected = null;
+                    else if (! ((NodeFile) selected).found) selected = parent;
+                }
+
+                // Try to select an output file when it first appears for the newest job, but only if the job is still selected.
+                if (tryToSelectOutput  &&  selected == NodeJob.this  &&  selected == tree.getPathForRow (0).getLastPathComponent ())
+                {
+                    NodeFile bestFile = null;
+                    for (NodeFile nf : existing.values ())
+                    {
+                        if (nf.priority == 0) continue;
+                        if (bestFile == null  ||  nf.priority > bestFile.priority) bestFile = nf;
+                    }
+                    if (bestFile != null)
+                    {
+                        selected = bestFile;
+                        tryToSelectOutput = false;
+                    }
+                }
+
                 removeAllChildren ();
                 for (NodeFile nf : existing.values ()) add (nf);
                 DefaultTreeModel model = (DefaultTreeModel) tree.getModel ();
                 model.nodeStructureChanged (NodeJob.this);
 
-                if (finalSelected != null)
+                if (existing.isEmpty ()) tree.collapsePath (new TreePath (getPath ()));
+
+                if (selected != null)
                 {
-                    TreePath selectedPath = new TreePath (finalSelected.getPath ());
+                    TreePath selectedPath = new TreePath (selected.getPath ());
                     tree.setSelectionPath (selectedPath);
                     tree.scrollPathToVisible (selectedPath);
                 }
             }
-        };
-        EventQueue.invokeLater (update);
+        });
     }
 
     /**
