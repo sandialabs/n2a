@@ -115,7 +115,7 @@ public class Spreadsheet extends Function implements NonzeroIterable
 
     public static class Sheet
     {
-        public Matrix numbers; // Dense matrix stores empty cells and strings as 0. Sparse matrix does not store them at all. 
+        public Matrix numbers; // Dense matrix stores empty cells and strings as 0. Sparse matrix does not store them at all.
         public Matrix strings; // 1-based indices into string collection. Empty cells and numbers are 0.
         public int    rows;
         public int    columns;
@@ -131,8 +131,6 @@ public class Spreadsheet extends Function implements NonzeroIterable
         protected int               ar;                                     // anchor row
         protected int               ac;                                     // anchor column
 
-        // May need to support merging spreadsheets, such that one overrides the other.
-        // Could take a list of files to load, in reverse precedence order.
         public Holder (Path path)
         {
             try (ZipFile archive = new ZipFile (path.toFile ()))
@@ -275,7 +273,8 @@ public class Spreadsheet extends Function implements NonzeroIterable
                                     S.set (ar, ac, strings.size ());
                                     fillS++;
                                     break;
-                                case "e": continue;
+                                case "e":
+                                    continue;
                                 default:  // All other types should be numeric. Includes "n", "b" and empty string (with default value "n").
                                     // Dates are stored by Excel internally as number of days since December 31, 1899.
                                     // Day 25569 is start of Unix epoch, January 1, 1970.
