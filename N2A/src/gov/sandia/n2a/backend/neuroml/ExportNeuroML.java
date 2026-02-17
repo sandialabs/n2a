@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -39,7 +39,7 @@ public class ExportNeuroML implements ExportModel
 
     public ExportJob process (MNode source, Path destination, boolean forBackend)
     {
-        if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMap ();
+        if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMapNeuroML ();
         if (PluginNeuroML.sequencer == null)
         {
             PluginNeuroML.sequencer = new Sequencer ();

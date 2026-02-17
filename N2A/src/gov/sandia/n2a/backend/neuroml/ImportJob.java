@@ -1,12 +1,13 @@
 /*
-Copyright 2017-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.neuroml;
 
-import gov.sandia.n2a.backend.neuroml.PartMap.NameMap;
+import gov.sandia.n2a.backend.PartMap.NameMap;
+import gov.sandia.n2a.backend.neuroml.PartMapNeuroML.NameMapNeuroML;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MNode;
@@ -72,7 +73,7 @@ import tech.units.indriya.unit.Units;
 
 public class ImportJob extends XMLutility
 {
-    PartMap                     partMap;
+    PartMapNeuroML              partMap;
     LinkedList<Path>            sources         = new LinkedList<Path> ();
     Set<Path>                   alreadyIncluded = new HashSet<Path> ();         // Similar to "sources", but keeps all history.
     MNode                       models          = new MVolatile ();
@@ -89,7 +90,7 @@ public class ImportJob extends XMLutility
     Map<String,TreeSet<String>> aliases         = new HashMap<String,TreeSet<String>> ();
     Map<String,Unit<?>>         dimensions      = new TreeMap<String,Unit<?>> ();  // Declared dimension names
 
-    public ImportJob (PartMap partMap)
+    public ImportJob (PartMapNeuroML partMap)
     {
         this.partMap = partMap;
 
@@ -648,8 +649,8 @@ public class ImportJob extends XMLutility
         String inherit;
         if (type.isEmpty ()) inherit = node.getNodeName ();
         else                 inherit = type;
-        NameMap nameMap = partMap.importMap (inherit);
-        inherit = nameMap.internal;
+        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (inherit);
+        inherit = nameMap.internalPart;
 
         MNode part = models.childOrCreate (modelName, id);  // Expect to always create this part rather than fetch an existing child.
         part.set (inherit, "$inherit");
@@ -675,8 +676,8 @@ public class ImportJob extends XMLutility
         while (container.child (id) != null) id = "Q10Parameters" + suffix++;  // This seems pointless, but the NeuroML XSD says the number of elements is unbounded.
 
         MNode part = container.childOrCreate (id);
-        NameMap nameMap = partMap.importMap ("baseQ10Settings");  // This isn't the correct name for use with ion channel, but it will still work.
-        String inherit = nameMap.internal;
+        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap ("baseQ10Settings");  // This isn't the correct name for use with ion channel, but it will still work.
+        String inherit = nameMap.internalPart;
         part.set (inherit, "$inherit");
         addDependency (part, inherit);
 
@@ -704,8 +705,8 @@ public class ImportJob extends XMLutility
         String inherit;
         if (type.isEmpty ()) inherit = node.getNodeName ();
         else                 inherit = type;
-        NameMap nameMap = partMap.importMap (inherit);
-        inherit = nameMap.internal;
+        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (inherit);
+        inherit = nameMap.internalPart;
         MNode part = container.childOrCreate (id);
         part.set (inherit, "$inherit");
         addDependency (part, inherit);
@@ -757,8 +758,8 @@ public class ImportJob extends XMLutility
         }
 
         MNode part = container.childOrCreate (id);
-        NameMap nameMap = partMap.importMap (node.getNodeName ());
-        part.set (nameMap.internal, "$inherit");
+        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (node.getNodeName ());
+        part.set (nameMap.internalPart, "$inherit");
 
         addAttributes (node, part, nameMap, "id");
 
@@ -809,8 +810,8 @@ public class ImportJob extends XMLutility
 
         String inherit = getAttribute (node, "type");
         MNode part = container.childOrCreate (name);
-        NameMap nameMap = partMap.importMap (inherit);
-        inherit = nameMap.internal;
+        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (inherit);
+        inherit = nameMap.internalPart;
         part.set (inherit, "$inherit");
         addDependency (part, inherit);
 
@@ -822,8 +823,8 @@ public class ImportJob extends XMLutility
     {
         String id = getAttribute (node, "id");
         MNode part = models.childOrCreate (modelName, id);
-        NameMap nameMap = partMap.importMap (node.getNodeName ());
-        part.set (nameMap.internal, "$inherit");
+        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (node.getNodeName ());
+        part.set (nameMap.internalPart, "$inherit");
 
         addAttributes (node, part, nameMap, "id");
 
@@ -1103,7 +1104,7 @@ public class ImportJob extends XMLutility
 
             // Ensure there is no name collision
             NameMap nameMap = partMap.importMap ("segment");
-            MNode parent = AppData.docs.child ("models", nameMap.internal);
+            MNode parent = AppData.docs.child ("models", nameMap.internalPart);
             String v = variable;
             int suffix = 2;
             while (parent.child (v) != null) v = variable + suffix++;
@@ -1213,7 +1214,7 @@ public class ImportJob extends XMLutility
 
             // Create a subpart with the given name
             MNode subpart = result.childOrCreate (id);
-            addAttributes (node, subpart, new NameMap (""), "id", "segment", "segmentGroup", "value", "ion");
+            addAttributes (node, subpart, new NameMapNeuroML (""), "id", "segment", "segmentGroup", "value", "ion");
             return result;
         }
 
@@ -1958,8 +1959,8 @@ public class ImportJob extends XMLutility
         MNode part = models.childOrCreate (modelName, id);
 
         String inherit = node.getNodeName ();
-        NameMap nameMap = partMap.importMap (inherit);
-        inherit = nameMap.internal;
+        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (inherit);
+        inherit = nameMap.internalPart;
         if (! inherit.isEmpty ())
         {
             part.set (inherit, "$inherit");
@@ -2307,8 +2308,8 @@ public class ImportJob extends XMLutility
             if (! A.isEmpty()) base.set (A, "A");
             base.set (B, "B");
 
-            NameMap nameMap = partMap.importMap (inherit);
-            inherit = nameMap.internal;
+            NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (inherit);
+            inherit = nameMap.internalPart;
 
             addAttributes (node, base, nameMap, "id", "synapse", "presynapticPopulation", "postsynapticPopulation", "component", "population");
 
@@ -2898,8 +2899,14 @@ public class ImportJob extends XMLutility
 
                 mode.merge (chartParameters);
                 chartParameters.clear ();
-                if (! scale    .isEmpty ()) mode.set (scale, "scale");
-                if (! color    .isEmpty ()) mode.set (color, "color");
+                if (! scale.isEmpty ()) mode.set (scale, "scale");
+                if (! color.isEmpty ())
+                {
+                    // Handle HTML color formats. Everything besides hex code should be quoted string.
+                    if (color.startsWith ("#")) color = "0x" + color.substring (1);
+                    else                        color = "\"" + color + "\"";
+                    mode.set (color, "color");
+                }
                 if (! timeScale.isEmpty ())
                 {
                     mode.set (timeScale, "lineTimeScale");
@@ -2932,12 +2939,7 @@ public class ImportJob extends XMLutility
                 if (! fileName.isEmpty ()) output += "\"" + fileName + "\",";
                 output += variable;
                 if (! id.isEmpty ()) output += ",\"" + id + "\"";
-                if (mode.size () > 0)
-                {
-                    String temp = "";
-                    for (MNode m : mode) temp += "," + m.key () + "=" + m.get ();
-                    output += ",\"" + temp.substring (1) + "\"";
-                }
+                for (MNode m : mode) output += "," + m.key () + "=" + m.get ();
                 output += ")";
                 if (! condition.isEmpty ()  &&  ! condition.equals (container.get ("$p")))
                 {
@@ -2983,17 +2985,17 @@ public class ImportJob extends XMLutility
 
         List<MNode> parents = collectParents (container);
         String inherit = typeFor (type, parents);
-        NameMap nameMap;
+        NameMapNeuroML nameMap;
         if (inherit.isEmpty ())
         {
-            nameMap = partMap.importMap (type);
-            inherit = nameMap.internal;
+            nameMap = (NameMapNeuroML) partMap.importMap (type);
+            inherit = nameMap.internalPart;
         }
         else
         {
             // Because typeFor() finds internal names, we need to retrieve a map from the opposite direction.
             // It will still map parameter names correctly for import.
-            nameMap = partMap.exportMap (inherit);
+            nameMap = (NameMapNeuroML) partMap.exportMap (inherit);
         }
         part.set (inherit, "$inherit");
         addDependency (part, inherit);
@@ -3081,7 +3083,7 @@ public class ImportJob extends XMLutility
         }
     }
 
-    public void addAttributes (Node node, MNode part, NameMap nameMap, String... forbidden)
+    public void addAttributes (Node node, MNode part, NameMapNeuroML nameMap, String... forbidden)
     {
         NamedNodeMap attributes = node.getAttributes ();
         int count = attributes.getLength ();
@@ -3165,7 +3167,7 @@ public class ImportJob extends XMLutility
         MNode base = models.child (modelName, name);
         if (base == null) base = AppData.docs.child ("models", name);
         else              base = findBasePart (base);
-        if (base == null) return new NameMap (name);
+        if (base == null) return new NameMapNeuroML (name);
         return partMap.exportMap (base);
     }
 
@@ -3377,7 +3379,7 @@ public class ImportJob extends XMLutility
                 if (models.child (modelName, inherit) == null)
                 {
                     part.set (inherit, "$meta", "backend", "lems", "extends");  // Remember the original "extends" value, because inherited backend.lems.part usually conflates several base types.
-                    inherit = nameMap.internal;
+                    inherit = nameMap.internalPart;
                 }
                 part.set (inherit, "$inherit");
                 addDependencyFromLEMS (part, inherit);
@@ -4145,10 +4147,10 @@ public class ImportJob extends XMLutility
             {
                 MPart mparent = new MPartRepo (parent);
 
-                NameMap nameMap = partMap.outward.get (parent.key ());
+                NameMapNeuroML nameMap = (NameMapNeuroML) partMap.outward.get (parent.key ());
                 if (nameMap == null)
                 {
-                    nameMap = new NameMap (mparent);
+                    nameMap = new NameMapNeuroML (mparent);
                     nameMap.inheritContainers (partMap);
                     nameMap.buildContainerMappings ();
                 }

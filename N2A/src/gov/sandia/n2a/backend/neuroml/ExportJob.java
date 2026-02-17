@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -39,12 +39,13 @@ import javax.xml.transform.stream.StreamResult;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
+import gov.sandia.n2a.backend.PartMap.NameMap;
 import gov.sandia.n2a.backend.internal.InstanceTemporaries;
 import gov.sandia.n2a.backend.internal.InternalBackend;
 import gov.sandia.n2a.backend.internal.InternalBackendData;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.backend.internal.Wrapper;
-import gov.sandia.n2a.backend.neuroml.PartMap.NameMap;
+import gov.sandia.n2a.backend.neuroml.PartMapNeuroML.NameMapNeuroML;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
@@ -90,11 +91,11 @@ import gov.sandia.n2a.ui.MainFrame;
 
 public class ExportJob extends XMLutility
 {
-    public PartMap     partMap;
-    public Sequencer   sequencer;
-    public Document    doc;
-    public String      modelName;
-    public EquationSet equations;
+    public PartMapNeuroML partMap;
+    public Sequencer      sequencer;
+    public Document       doc;
+    public String         modelName;
+    public EquationSet    equations;
 
     public List<Element>         elements       = new ArrayList<Element> ();
     public List<IonChannel>      channels       = new ArrayList<IonChannel> ();
@@ -116,7 +117,7 @@ public class ExportJob extends XMLutility
     public static Unit<?> um        = UCUM.parse ("um");            // micrometers, used for morphology
     public static double  baseRatio = Math.log (10) / Math.log (2); // log_2 (10), how many binary digits it takes to represent one decimal digit
 
-    public ExportJob (PartMap partMap, Sequencer sequencer)
+    public ExportJob (PartMapNeuroML partMap, Sequencer sequencer)
     {
         this.partMap   = partMap;
         this.sequencer = sequencer;
@@ -2173,7 +2174,7 @@ public class ExportJob extends XMLutility
                 if (nonuniform)
                 {
                     String type = channel.getTagName ();
-                    NameMap nameMap = partMap.importMap (type);
+                    NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (type);
                     for (Entry<String,String> e : variableParameters.entrySet ())
                     {
                         String key = e.getKey ();
@@ -2667,6 +2668,7 @@ public class ExportJob extends XMLutility
         public OutputLEMS (Output o)
         {
             operands     = o.operands;
+            keywords     = o.keywords;
             variableName = o.variableName;
         }
 
@@ -2815,13 +2817,13 @@ public class ExportJob extends XMLutility
             {
                 for (Entry<String,Operator> h : output.keywords.entrySet ())
                 {
-                    String key   = h.getKey ();
-                    String value = ((Constant) h.getValue ()).unitValue.toString ();
+                    String   key = h.getKey ();
+                    Constant c   = (Constant) h.getValue ();
+                    String value;
+                    if (c.unitValue == null) value = c.value.toString ();
+                    else                     value = c.unitValue.toString ();
                     switch (key)
                     {
-                        case "raw":
-                            break;
-
                         // Display
                         case "xmin":
                             display.xmin = value;
@@ -2849,26 +2851,30 @@ public class ExportJob extends XMLutility
                         case "scale":
                         case "yscale":
                             scale = value;
+                            display.type = "Display";
                             break;
                         case "lineTimeScale":
                             timeScale = value;
+                            display.type = "Display";
                             break;
                         case "color":
-                            color = value;
+                            if (c.unitValue == null) color = value;
+                            else                     color = "#" + Integer.toHexString ((int) c.unitValue.value);
+                            display.type = "Display";
                             break;
                     }
                 }
             }
             if (forBackend) display.type = "OutputFile";  // Force the choice in this case;
 
-            Display.Line line = display.newLine ();
+            Display.Line line = display.new Line ();
 
             AccessVariable av = (AccessVariable) output.operands[1];
             EquationSet container = av.reference.variable.container;
 
             String                     targetType = container.metadata.get ("backend", "lems", "extends");
             if (targetType.isEmpty ()) targetType = container.metadata.get ("backend", "lems", "part").split (",")[0];
-            NameMap nameMap = partMap.exportMap (container.source);
+            NameMapNeuroML nameMap = (NameMapNeuroML) partMap.exportMap (container.source);
             String name = nameMap.exportName (av.name, targetType);
 
             EquationSet p = container;
@@ -3044,11 +3050,6 @@ public class ExportJob extends XMLutility
                 }
                 catch (Exception e) {}
                 return name;
-            }
-
-            public Line newLine ()
-            {
-                return new Line ();
             }
 
             public class Line
@@ -3294,7 +3295,7 @@ public class ExportJob extends XMLutility
             rename.put ("$t", "t");
             if (! extension.isEmpty ())
             {
-                NameMap nameMap = partMap.importMap (extension);
+                NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (extension);
                 for (Entry<String,ArrayList<String>> e : nameMap.outward.entrySet ())
                 {
                     String key = e.getKey ();
@@ -3745,7 +3746,7 @@ public class ExportJob extends XMLutility
                                     MPart part = new MPartRepo (doc);
                                     MNode node = part.child (query);
                                     if (node == null) continue;
-                                    NameMap nameMap = partMap.exportMap (a.partName);
+                                    NameMapNeuroML nameMap = (NameMapNeuroML) partMap.exportMap (a.partName);
                                     String localName = node.get ();
                                     localName = new Variable.ParsedValue (localName).expression;
                                     localName = nameMap.exportName (localName, a.partExtends);
@@ -4110,7 +4111,7 @@ public class ExportJob extends XMLutility
         boolean inheritedOnly = true;
 
         String type = result.getTagName ();
-        NameMap nameMap = partMap.exportMap (part);
+        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.exportMap (part);
 
         for (MNode c : part)
         {

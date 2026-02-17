@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -17,9 +17,9 @@ import gov.sandia.n2a.plugins.ExtensionPoint;
 
 public class PluginNeuroML extends Plugin
 {
-    public static PartMap       partMap;  // initialize the first time an import or export runs
-    public static Sequencer     sequencer;
-    public static ExportNeuroML exporter = new ExportNeuroML ();
+    public static PartMapNeuroML partMap;  // initialize the first time an import or export runs
+    public static Sequencer      sequencer;
+    public static ExportNeuroML  exporter = new ExportNeuroML ();
 
     @Override
 	public String getName ()

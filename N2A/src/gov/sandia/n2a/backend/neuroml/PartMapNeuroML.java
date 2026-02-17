@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -10,11 +10,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import gov.sandia.n2a.backend.PartMap;
 import gov.sandia.n2a.backend.neuroml.Sequencer.SequencerElement;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
@@ -23,50 +23,44 @@ import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.operator.Negate;
 
-public class PartMap
+public class PartMapNeuroML extends PartMap
 {
-    public Map<String,NameMap> outward = new HashMap<String,NameMap> ();  // from internal part to NeuroML; one-to-one
-    public Map<String,NameMap> inward  = new HashMap<String,NameMap> ();  // from NeuroML part to internal; can have multiple keys for the same internal part
-
-    public static class NameMap
+    public static class NameMapNeuroML extends NameMap
     {
-        public String                        internal;
-        public List<String>                  neuroml    = new ArrayList<String> ();                 // All the NeuroML names mapped to the internal part. The first entry is the preferred name for export.
-        public Map<String,ArrayList<String>> outward    = new HashMap<String,ArrayList<String>> (); // from internal variable to NeuroML; First entry is the preferred name for export.
-        public Map<String,String>            inward     = new HashMap<String,String> ();            // from NeuroML variable to internal; several keys can map to the same value
-        public Map<String,String>            dimensions;                                            // Only non-null if this part has dimensionless (DL) fields. In that case, this maps from internal variable name to specified unit.
-        public Set<String>                   children   = new HashSet<String> ();                   // Subparts or parts named by a metadata "children" entry. Used to determine probable containment hierarchy.
-        public Set<NameMap>                  containers = new HashSet<NameMap> ();                  // Parts that may contain us.
-        public boolean                       inheritContainersDone;                                 // Indicates this map has already collated all the containers from its parents (via $inherit).
-        public NameMap                       visitedFrom;                                           // Name map entry which is currently doing a breadth-first scan to collect container variables.
+        public Map<String,String> dimensions;                           // Only non-null if this part has dimensionless (DL) fields. In that case, this maps from internal variable name to specified unit.
+        public Set<String>        children   = new HashSet<String> ();  // Subparts or parts named by a metadata "children" entry. Used to determine probable containment hierarchy.
+        public Set<NameMap>       containers = new HashSet<NameMap> (); // Parts that may contain us.
+        public boolean            inheritContainersDone;                // Indicates this map has already collated all the containers from its parents (via $inherit).
+        public NameMapNeuroML     visitedFrom;                          // Name map entry which is currently doing a breadth-first scan to collect container variables.
 
         /**
             Use this constructor to create a neutral (non-transforming) map on the fly.
         **/
-        public NameMap (String neuromlPartName)
+        public NameMapNeuroML (String neuromlPartName)
         {
-            internal = neuromlPartName;
-            neuroml.add (neuromlPartName);
+            super (neuromlPartName);
         }
 
-        public NameMap (MNode part)
+        public NameMapNeuroML (MNode part)
         {
-            build (part);
+            build ("lems", part);
         }
 
-        public void build (MNode part)
+        public void build (String backend, MNode part)
         {
-            internal = part.key ();
+            internalPart = part.key ();
             String pieces[] = part.get ("$meta", "backend", "lems", "part").split (",");
             for (String n : pieces)
             {
-                neuroml.add (n);
+                externalParts.add (n);
             }
-            if (neuroml.size () == 0) neuroml.add (internal);  // Simply a tagged part, with no name change.
+            if (externalParts.isEmpty ()) externalParts.add (internalPart);  // Simply a tagged part, with no name change.
 
             MNode metadata = part.child ("$meta", "backend", "lems", "children");
             if (metadata != null)
             {
+                System.out.println ("children " + children);
+                System.out.println ("containers " + containers);
                 for (MNode m : metadata)
                 {
                     children.add (m.get ().split (",")[0]);
@@ -139,7 +133,7 @@ public class PartMap
             front.addAll (containers);
             while (! front.isEmpty ())
             {
-                NameMap c = front.removeFirst ();
+                NameMapNeuroML c = (NameMapNeuroML) front.removeFirst ();
                 c.visitedFrom = this;
 
                 // Add any variables not already mapped
@@ -166,7 +160,7 @@ public class PartMap
                 // Breadth-first search
                 for (NameMap cc : c.containers)
                 {
-                    if (cc.visitedFrom != this) front.addLast (cc);
+                    if (((NameMapNeuroML) cc).visitedFrom != this) front.addLast (cc);
                 }
             }
         }
@@ -177,11 +171,11 @@ public class PartMap
             Why inherit? Because any part C that inherits from another part P can be contained
             in the same way as P. Thus, children inherit their parent's containers.
         **/
-        public void inheritContainers (PartMap partMap)
+        public void inheritContainers (PartMapNeuroML partMap)
         {
             if (inheritContainersDone) return;
             inheritContainersDone = true;
-            inheritContainers (partMap, internal);
+            inheritContainers (partMap, internalPart);
         }
 
         /**
@@ -194,7 +188,7 @@ public class PartMap
             containers. This function stays put at the current name mapping, while recursing up through
             the $inherit hierarchy, searching for parents.
         **/
-        public void inheritContainers (PartMap partMap, String partName)
+        public void inheritContainers (PartMapNeuroML partMap, String partName)
         {
             String inherit = AppData.docs.get ("models", partName, "$inherit");
             if (inherit.isEmpty ()) return;
@@ -202,7 +196,7 @@ public class PartMap
             for (String p : pieces)
             {
                 p = p.replace ("\"", "");
-                NameMap nameMap = partMap.outward.get (p);
+                NameMapNeuroML nameMap = (NameMapNeuroML) partMap.outward.get (p);
                 if (nameMap == null)
                 {
                     inheritContainers (partMap, p);
@@ -235,7 +229,7 @@ public class PartMap
 
             if (names.size () > 1  &&  ! neuromlPartName.isEmpty ())  // The export name is ambiguous, so try to pick one most relevant to the given part.
             {
-                if (internal.startsWith ("HHVariable"))  // rather inflexible hard coding
+                if (internalPart.startsWith ("HHVariable"))  // rather inflexible hard coding
                 {
                     if (neuromlPartName.contains ("Rate"))     return "r";
                     if (neuromlPartName.contains ("Time"))     return "t";
@@ -281,9 +275,9 @@ public class PartMap
 
         public void dump ()
         {
-            System.out.println (internal + " " + neuroml);
+            System.out.println (internalPart + " " + externalParts);
             System.out.print ("  containers = [");
-            for (NameMap c : containers) System.out.print (c.internal + ", ");  // leaves one bogus comma at end, but we don't really care
+            for (NameMap c : containers) System.out.print (c.internalPart + ", ");  // leaves one bogus comma at end, but we don't really care
             System.out.println ("]");
             for (Entry<String, ArrayList<String>> e : outward.entrySet ())
             {
@@ -292,9 +286,9 @@ public class PartMap
         }
     }
 
-    public PartMap ()
+    public PartMapNeuroML ()
     {
-        build ();
+        super ("lems");
     }
 
     /**
@@ -308,23 +302,23 @@ public class PartMap
         for (MNode c : AppData.docs.childOrEmpty ("models"))
         {
             if (c.child ("$meta", "backend", "lems", "part") == null) continue;  // Must directly declare a NeuroML part to be included.
-            NameMap map = new NameMap (new MPartRepo (c));  // Create map using fully-collated part, not just the immediate one.
-            outward.put (map.internal, map);
-            for (String n : map.neuroml) inward.put (n, map);
+            NameMapNeuroML map = new NameMapNeuroML (new MPartRepo (c));  // Create map using fully-collated part, not just the immediate one.
+            outward.put (map.internalPart, map);
+            for (String n : map.externalParts) inward.put (n, map);
         }
 
         // Determine which parts can be contained by other parts.
         for (NameMap map : outward.values ())
         {
-            for (String childName : map.children)
+            for (String childName : ((NameMapNeuroML) map).children)
             {
-                NameMap childMap = outward.get (childName);
+                NameMapNeuroML childMap = (NameMapNeuroML) outward.get (childName);
                 if (childMap != null) childMap.containers.add (map);
             }
         }
         // Child parts add name mappings for variables visible from their containers.
-        for (NameMap map : outward.values ()) map.inheritContainers (this);
-        for (NameMap map : outward.values ()) map.buildContainerMappings ();
+        for (NameMap map : outward.values ()) ((NameMapNeuroML) map).inheritContainers (this);
+        for (NameMap map : outward.values ()) ((NameMapNeuroML) map).buildContainerMappings ();
     }
 
     public NameMap exportMap (String internalPartName)
@@ -338,7 +332,7 @@ public class PartMap
         if (part != null) return exportMap (part);
 
         // Give up and return neutral map.
-        return new NameMap (internalPartName);
+        return new NameMapNeuroML (internalPartName);
     }
 
     /**
@@ -357,23 +351,13 @@ public class PartMap
             MNode parent = AppData.docs.child ("models", inherit);
             if (parent != null) return exportMap (parent);
         }
-        return new NameMap (key);
-    }
-
-    public String exportName (String internalPartName)
-    {
-        return exportMap (internalPartName).neuroml.get (0);
+        return new NameMapNeuroML (key);
     }
 
     public NameMap importMap (String neuromlPartName)
     {
         NameMap map = inward.get (neuromlPartName);
         if (map != null) return map;
-        return new NameMap (neuromlPartName);
-    }
-
-    public String importName (String neuromlPartName)
-    {
-        return importMap (neuromlPartName).internal;
+        return new NameMapNeuroML (neuromlPartName);
     }
 }
