@@ -1,4 +1,4 @@
-package gov.sandia.n2a.backend.glif;
+package gov.sandia.n2a.transfer;
 
 import java.io.BufferedReader;
 import java.io.IOException;
