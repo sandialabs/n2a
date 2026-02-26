@@ -59,8 +59,6 @@ public class PartMapNeuroML extends PartMap
             MNode metadata = part.child ("$meta", "backend", "lems", "children");
             if (metadata != null)
             {
-                System.out.println ("children " + children);
-                System.out.println ("containers " + containers);
                 for (MNode m : metadata)
                 {
                     children.add (m.get ().split (",")[0]);

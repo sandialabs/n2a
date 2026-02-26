@@ -1,0 +1,55 @@
+/*
+Copyright 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS,
+the U.S. Government retains certain rights in this software.
+*/
+
+package gov.sandia.n2a.backend.nest;
+
+import javax.swing.ImageIcon;
+
+import gov.sandia.n2a.plugins.Plugin;
+import gov.sandia.n2a.backend.PartMap;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+
+public class PluginNEST extends Plugin
+{
+    public static PartMap partMap;  // initialize the first time an import or export runs
+
+    @Override
+	public String getName ()
+	{
+		return "NEST Backend";
+	}
+
+    public String getVersion()
+    {
+        return "0.9";
+    }
+
+    public String getProvider ()
+    {
+        return "Sandia National Laboratories";
+    }
+
+	@Override
+	public ImageIcon getIcon ()
+	{
+		return null;
+	}
+
+	@Override
+	public String getDescription ()
+	{
+		return "Imports/exports NEST models";
+	}
+
+	@Override
+	public ExtensionPoint[] getExtensions ()
+	{
+        return new ExtensionPoint[]
+        {
+            new ImportNEST ()
+        };
+	}
+}

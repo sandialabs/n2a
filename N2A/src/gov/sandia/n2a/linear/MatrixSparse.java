@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -142,6 +142,32 @@ public class MatrixSparse extends Matrix
     public MatrixSparse clear (double initialValue)
     {
         return new MatrixSparse (rows (), columns (), initialValue);
+    }
+
+    public void removeRow (int row)
+    {
+        int columns = data.size ();
+        for (int c = 0; c < columns; c++)
+        {
+            HashMap<Integer,Double> column = data.get (c);
+            if (column == null) continue;
+
+            HashMap<Integer,Double> newColumn = new HashMap<Integer,Double> (column.size ());
+            for (Entry<Integer,Double> e : column.entrySet ())
+            {
+                int index = e.getKey ();
+                if (index == row) continue;  // Effectively deletes given row, by omitting it.
+                if (index > row) index--;    // All higher indices are decremented.
+                newColumn.put (index, e.getValue ());
+            }
+            data.set (c, newColumn);
+        }
+        rowCount--;
+    }
+
+    public void removeColumn (int column)
+    {
+        if (column < data.size ()) data.remove (column);
     }
 
     /**

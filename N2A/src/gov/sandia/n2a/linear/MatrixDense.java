@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -315,7 +315,7 @@ public class MatrixDense extends Matrix
 
     /**
         In-place removal of row. Causes all following rows to shift up,
-        and matrix to get smaller.
+        and the matrix to get smaller.
         Allocated memory block is unaffected. Thus, there will be wasted
         space at the end.
     **/
@@ -336,7 +336,7 @@ public class MatrixDense extends Matrix
 
     /**
         In-place removal of column. Causes all following columns to shift left,
-        and matrix to get smaller.
+        and the matrix to get smaller.
         Allocated memory block is unaffected. Thus, there will be wasted
         space at the end.
     **/

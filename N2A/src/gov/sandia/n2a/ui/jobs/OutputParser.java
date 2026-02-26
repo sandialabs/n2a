@@ -22,6 +22,7 @@ import java.util.Map;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.language.UnitValue;
+import gov.sandia.n2a.language.type.Scalar;
 import tech.units.indriya.AbstractUnit;
 
 public class OutputParser
@@ -150,20 +151,7 @@ public class OutputParser
                         float value = defaultValue;
                         if (! part.isEmpty ())
                         {
-                            try
-                            {
-                                value = Float.parseFloat (part);
-                            }
-                            catch (NumberFormatException e)
-                            {
-                                // parseFloat() does not detect "inf" correctly
-                                part = part.toLowerCase ();
-                                if (part.endsWith ("inf"))
-                                {
-                                    if (part.startsWith ("-")) value = Float.NEGATIVE_INFINITY;
-                                    else                       value = Float.POSITIVE_INFINITY;
-                                }
-                            }
+                            value = Scalar.parseFloat (part, 0);
                             c.textWidth = Math.max (c.textWidth, part.length ());
                         }
                         c.values.add (value);

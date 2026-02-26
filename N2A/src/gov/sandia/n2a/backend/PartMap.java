@@ -24,15 +24,15 @@ import gov.sandia.n2a.db.MPartRepo;
 public class PartMap
 {
     public String              backend;                                   // name of backend to which this map applies
-    public Map<String,NameMap> outward = new HashMap<String,NameMap> ();  // from internal part to backend; one-to-one
-    public Map<String,NameMap> inward  = new HashMap<String,NameMap> ();  // from backend part to internal; can have multiple keys for the same internal part
+    public Map<String,NameMap> outward = new HashMap<String,NameMap> ();  // from internal part to backend part; one-to-one
+    public Map<String,NameMap> inward  = new HashMap<String,NameMap> ();  // from backend part to internal part; can have multiple keys for the same internal part
 
     public static class NameMap
     {
         public String                        internalPart;
         public List<String>                  externalParts = new ArrayList<String> ();                 // All the backend names mapped to the internal part. The first entry is the preferred name for export.
-        public Map<String,ArrayList<String>> outward       = new HashMap<String,ArrayList<String>> (); // from internal variable to backend; First entry is the preferred name for export.
-        public Map<String,String>            inward        = new HashMap<String,String> ();            // from backend variable to internal; several keys can map to the same value
+        public Map<String,ArrayList<String>> outward       = new HashMap<String,ArrayList<String>> (); // from internal variable to backend variable; First entry is the preferred name for export.
+        public Map<String,String>            inward        = new HashMap<String,String> ();            // from backend variable to internal variable; several keys can map to the same value
 
         /**
             Use this constructor to create a neutral (non-transforming) map on the fly.
@@ -49,9 +49,11 @@ public class PartMap
         }
 
         /**
+            Creates a completely empty name map.
             Allow subclasses to have full control of construction.
+            Also useful to create a neutral map when the part name is unknown.
         **/
-        protected NameMap ()
+        public NameMap ()
         {
         }
 
@@ -99,6 +101,18 @@ public class PartMap
         }
     }
 
+    /**
+        Create an empty map.
+    **/
+    public PartMap ()
+    {
+    }
+
+    /**
+        Build a map for the given backend name.
+        Every part that has mappings of some sort for this backend will be included,
+        even if the part name itself is not mapped.
+    **/
     public PartMap (String backendName)
     {
         backend = backendName;
@@ -113,10 +127,10 @@ public class PartMap
     **/
     public void build ()
     {
-        for (MNode c : AppData.docs.childOrEmpty ("models"))
+        for (MNode model : AppData.docs.childOrEmpty ("models"))
         {
-            if (c.child ("$meta", "backend", backend, "part") == null) continue;  // Must directly declare a backend part to be included.
-            NameMap map = new NameMap (backend, new MPartRepo (c));  // Create map using fully-collated part, not just the immediate one.
+            if (model.child ("$meta", "backend", backend, "part") == null) continue;  // Must directly declare a backend part to be included.
+            NameMap map = new NameMap (backend, new MPartRepo (model));  // Create map using fully-collated part, not just the immediate one.
             outward.put (map.internalPart, map);
             for (String n : map.externalParts) inward.put (n, map);
         }
@@ -170,5 +184,11 @@ public class PartMap
     public String importName (String externalPartName)
     {
         return importMap (externalPartName).internalPart;
+    }
+
+    public void dump ()
+    {
+        System.out.println (backend);
+        for (NameMap map : outward.values ()) map.dump ();
     }
 }

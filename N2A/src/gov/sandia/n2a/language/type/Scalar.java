@@ -87,6 +87,27 @@ public class Scalar extends Type
         }
     }
 
+    public static float parseFloat (String a, float defaultValue)
+    {
+        try
+        {
+            return Float.parseFloat (a);
+        }
+        catch (NumberFormatException e)
+        {
+            a = a.trim ().toLowerCase ();
+            float negate = 1;
+            if (a.startsWith ("-"))
+            {
+                negate = -1;
+                a = a.substring (1);
+            }
+            if (a.endsWith ("inf")  ||  a.endsWith ("∞")) return negate * Float.POSITIVE_INFINITY;
+            if (a.endsWith ("nan")) return Float.NaN;
+            return defaultValue;
+        }
+    }
+
     public Type clear ()
     {
         return new Scalar (0);

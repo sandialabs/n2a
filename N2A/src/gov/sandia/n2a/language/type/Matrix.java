@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -59,8 +59,8 @@ public abstract class Matrix extends Type
 
     public static final int REPLICATE   = 0;  // truncates coordinates; an out-of-bounds read returns nearest element
     public static final int ZEROS       = 1;  // truncates coordinates; an out-of-bounds read returns zero
-    public static final int UNITMAP     = 2;  // applies offset and scaling for unitmap()
-    public static final int INTERPOLATE = 3;  // interpolates non-integer coordinates; an out-of-bounds read extrapolates nearest elements
+    public static final int INTERPOLATE = 2;  // interpolates non-integer coordinates; an out-of-bounds read extrapolates nearest elements
+    public static final int UNITMAP     = 3;  // like INTERPOLATE, but also applies offset and scaling for unitmap()
 
     public double get (double row, double column, int mode)
     {
@@ -163,6 +163,26 @@ public abstract class Matrix extends Type
     }
 
     public abstract Matrix clear (double initialValue);
+
+    /**
+        In-place removal of row. Causes all following rows to shift up,
+        and the matrix to get smaller.
+    **/
+    public void removeRow (int row)
+    {
+        // There is currently no way to resize a generic matrix.
+        throw new RuntimeException ("removeRow() not implemented for this matrix type");
+    }
+
+    /**
+        In-place removal of column. Causes all following columns to shift left,
+        and the matrix to get smaller.
+    **/
+    public void removeColumn (int column)
+    {
+        // There is currently no way to resize a generic matrix.
+        throw new RuntimeException ("removeColumn() not implemented for this matrix type");
+    }
 
     /**
         @return copy of this object with diagonal elements set to 1 and off-diagonals set to zero.
