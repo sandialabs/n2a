@@ -2174,7 +2174,7 @@ public class ExportJob extends XMLutility
                 if (nonuniform)
                 {
                     String type = channel.getTagName ();
-                    NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (type);
+                    NameMapNeuroML nameMap = partMap.importMap (type);
                     for (Entry<String,String> e : variableParameters.entrySet ())
                     {
                         String key = e.getKey ();
@@ -2874,7 +2874,7 @@ public class ExportJob extends XMLutility
 
             String                     targetType = container.metadata.get ("backend", "lems", "extends");
             if (targetType.isEmpty ()) targetType = container.metadata.get ("backend", "lems", "part").split (",")[0];
-            NameMapNeuroML nameMap = (NameMapNeuroML) partMap.exportMap (container.source);
+            NameMapNeuroML nameMap = partMap.exportMap (container.source);
             String name = nameMap.exportName (av.name, targetType);
 
             EquationSet p = container;
@@ -3295,7 +3295,7 @@ public class ExportJob extends XMLutility
             rename.put ("$t", "t");
             if (! extension.isEmpty ())
             {
-                NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (extension);
+                NameMapNeuroML nameMap = partMap.importMap (extension);
                 for (Entry<String,ArrayList<String>> e : nameMap.outward.entrySet ())
                 {
                     String key = e.getKey ();
@@ -3746,7 +3746,7 @@ public class ExportJob extends XMLutility
                                     MPart part = new MPartRepo (doc);
                                     MNode node = part.child (query);
                                     if (node == null) continue;
-                                    NameMapNeuroML nameMap = (NameMapNeuroML) partMap.exportMap (a.partName);
+                                    NameMapNeuroML nameMap = partMap.exportMap (a.partName);
                                     String localName = node.get ();
                                     localName = new Variable.ParsedValue (localName).expression;
                                     localName = nameMap.exportName (localName, a.partExtends);
@@ -4111,7 +4111,7 @@ public class ExportJob extends XMLutility
         boolean inheritedOnly = true;
 
         String type = result.getTagName ();
-        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.exportMap (part);
+        NameMapNeuroML nameMap = partMap.exportMap (part);
 
         for (MNode c : part)
         {

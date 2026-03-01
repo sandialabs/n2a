@@ -87,6 +87,97 @@ public class MPart extends MNode
     }
 
     /**
+        Processes the value of $inherit into an array of keys that can be used to retrieve the parts from DB.
+        Handles quoted strings and escapes.
+        @param inherit The value of $inherit, already retrieved from its node.
+    **/
+    public static String[] parseInherit (String inherit)
+    {
+        ArrayList<String> result = new ArrayList<String> ();
+
+        StringBuilder key = new StringBuilder ();
+        boolean escape = false;
+        boolean after  = false;  // after an escape ends
+        int last = inherit.length () - 1;
+        for (int i = 0; i <= last; i++)
+        {
+            char c = inherit.charAt (i);
+            switch (c)
+            {
+                case '"':
+                    if (escape)
+                    {
+                        // Look ahead for second quote
+                        if (i < last  &&  inherit.charAt (i+1) == '"')
+                        {
+                            i++;
+                        }
+                        else
+                        {
+                            escape = false;
+                            after  = true;
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        escape = true;
+                        continue;
+                    }
+                    break;
+                case ',':
+                    if (! escape)
+                    {
+                        String temp = key.toString ();
+                        if (! after) temp = temp.trim ();
+                        result.add (temp);
+                        key   = new StringBuilder ();
+                        after = false;
+                        continue;
+                    }
+                    break;
+                case ' ':
+                    if (! escape  &&  key.isEmpty ()) continue;  // Trim leading spaces.
+                    break;
+            }
+            if (! after) key.append (c);
+        }
+        if (! key.isEmpty ())
+        {
+            String temp = key.toString ();
+            if (! after) temp = temp.trim ();
+            result.add (temp);
+        }
+
+        return result.toArray (new String[result.size ()]);
+    }
+
+    /**
+        Extracts the first parent in the comma-separated list.
+        If the first parent or the entire list is empty, then returns an empty string.
+    **/
+    public static String parseInheritOne (String inherit)
+    {
+        if (inherit.isBlank ()) return "";
+        return parseInherit (inherit)[0];
+    }
+
+    /**
+        Processes an array of part keys into a single string suitable to store as value of $inherit.
+    **/
+    public static String encodeInherit (String keys[])
+    {
+        StringBuilder result = new StringBuilder ();
+        for (String key : keys)
+        {
+            if (! result.isEmpty ()) result.append (", ");
+            if (key.indexOf (',') >= 0  ||  key.indexOf ('"') >= 0) result.append ("\"" + key.replace ("\"", "\"\"") + "\"");
+            else                                                    result.append (key);
+        }
+        return result.toString ();
+    }
+
+    /**
         Convenience method for expand(LinkedList<MNode>).
     **/
     protected synchronized void expand ()
@@ -144,12 +235,11 @@ public class MPart extends MNode
         boolean changedName = false;  // Indicates that at least one name changed due to ID resolution. This lets us delay updating the field until all names are processed.
         boolean changedID   = false;
 
-        String[] parentNames = from.get ().split (",");
+        String[] parentNames = parseInherit (from.get ());
         List<String> IDs     = Arrays.asList (from.get ("$meta", "id").split (",", -1));  // -1 allows for unassigned ID in middle of list
         for (int i = 0; i < parentNames.length; i++)
         {
             String parentName = parentNames[i];
-            parentName = parentName.trim ().replace ("\"", "");
             MNode parentSource = models.child (parentName);
 
             String id = "";
@@ -198,10 +288,7 @@ public class MPart extends MNode
 
         if (changedName)
         {
-            StringBuilder value = new StringBuilder ();
-            value.append (parentNames[0]);
-            for (int i = 1; i < parentNames.length; i++) value.append (", " + parentNames[i]);
-            root.source.set (value.toString ());
+            root.source.set (encodeInherit (parentNames));
         }
         if (changedID)
         {
@@ -553,7 +640,7 @@ public class MPart extends MNode
     **/
     protected synchronized void setIDs ()
     {
-        String[] parentNames = get ().split (",");
+        String[] parentNames = parseInherit (get ());
         if (parentNames.length == 0)
         {
             clear ("$meta", "id");
@@ -564,7 +651,6 @@ public class MPart extends MNode
         for (int i = 0; i < parentNames.length; i++)
         {
             String parentName = parentNames[i];
-            parentName = parentName.trim ().replace ("\"", "");
             MNode parentSource = getRepo ().child (parentName);
             if (parentSource == null) newIDs.add ("");
             else                      newIDs.add (parentSource.get ("$meta", "id"));

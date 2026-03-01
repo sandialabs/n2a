@@ -420,12 +420,13 @@ public class ImportJob
                     }
                     catch (HdfInvalidPathException e) {}  // Absence of "node_id" indicates straight map.
 
-                    // Determine if we can use HDF data directly, or if we need to build sorted data tables.
-                    // If there is only a single model and a single group, then it is possible to build a single N2A part.
-                    // If the group indexing is zero-based and contiguous, then that single part can read HDF data directly based on $index.
-                    // If there are multiple parts or the indexing is not contiguous, then it is necessary to build sorted table(s).
-                    boolean canUseHDF = nodeTypes.child (populationName).size () == 1;  // Only one mathematical model.
-                    if (canUseHDF)
+                    // The tag "simple" means that one N2A part represents the entire population, and that node_id maps 1-to-1 with $index.
+                    // * Requires that there be only one model_template and one group.
+                    // * Requires that node_id be zero-based and contiguous (checked above).
+                    // * Requires that node_group_index be zero-based and contiguous (checked below).
+                    // If the population is not simple, then it is necessary to build sorted table(s), along with possibly more than one N2A part.
+                    boolean simple = nodeTypes.child (populationName).size () == 1;  // Only one mathematical model.
+                    if (simple)
                     {
                         // Contiguous node_group_index values imply that there is only one group.
                         try
@@ -444,7 +445,7 @@ public class ImportJob
                                 int index = (int) (i - offset[0]);
                                 if (chunk[index].longValueExact () != i)
                                 {
-                                    canUseHDF = false;
+                                    simple = false;
                                     break;
                                 }
                             }
@@ -453,7 +454,7 @@ public class ImportJob
                     }
 
                     // Generate model(s) and auxiliary files.
-                    if (canUseHDF)
+                    if (simple)
                     {
                         // Create a single part for the entire "population".
 
@@ -477,9 +478,13 @@ public class ImportJob
                         ImportSONATApart importer = backends.get (schema);
                         if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
 
-                        String partName = populationName + " " + model_template;
-                        model.set ("dir+\"/" + nodes_file + "\"",                                                   partName, "hdfFile");
-                        model.set ("table(hdfFile, $index, 0, hdf5=\"nodes/" + populationName + "/node_type_id\")", partName, "node_type_id");
+                        String partName = populationName;
+                        MNode part = model.childOrCreate (partName);
+
+                        String table    = "table(hdfFile, $index, 0, hdf5=\"nodes/" + populationName + "/node_type_id\")";
+                        part.set ("dir+\"/" + nodes_file + "\"", "hdfFile");
+                        part.set (table,                         "node_type_id");
+                        part.set ("",                            "$meta", "backend", "sonata", "simple");
 
                         List<String> groupColumnNames = null;
                         if (groupAttributes.isEmpty ())
@@ -490,10 +495,10 @@ public class ImportJob
                         {
                             Integer group_id = groupAttributes.keySet ().iterator ().next ();
                             groupColumnNames = groupAttributes.get (group_id).names;
-                            model.set ("\"nodes/" + populationName + "/" + group_id + "\"", partName, "groupPath");
+                            part.set ("\"nodes/" + populationName + "/" + group_id + "\"", "groupPath");
                         }
 
-                        importer.processPart (this, partName, "node", populationName, raw_model_template, groupColumnNames);
+                        importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
                     }
                     else
                     {
@@ -543,9 +548,17 @@ public class ImportJob
 
                     HashMap<Integer,GroupAttributes> groupAttributes = GroupAttributes.fromPopulation (population);
 
-                    boolean canUseHDF = edgeTypes.child (populationName).size () == 1;
-                    long count = 0;
-                    if (canUseHDF)
+                    Node source_node_id = population.getChild ("source_node_id");
+                    Node target_node_id = population.getChild ("target_node_id");
+                    String source_node_population = source_node_id.getAttribute ("node_population").getData ().toString ();
+                    String target_node_population = target_node_id.getAttribute ("node_population").getData ().toString ();
+                    boolean Asimple = model.getFlag (source_node_population, "$meta", "backend", "sonata", "simple");  // The part might not even exist, in which case the value is correctly false.
+                    boolean Bsimple = model.getFlag (target_node_population, "$meta", "backend", "sonata", "simple");
+
+                    long count = ((Dataset) source_node_id).getSize ();
+
+                    boolean simple = Asimple  &&  Bsimple  &&  edgeTypes.child (populationName).size () == 1;
+                    if (simple)
                     {
                         try
                         {
@@ -563,7 +576,7 @@ public class ImportJob
                                 int index = (int) (i - offset[0]);
                                 if (chunk[index].longValueExact () != i)
                                 {
-                                    canUseHDF = false;
+                                    simple = false;
                                     break;
                                 }
                             }
@@ -571,7 +584,7 @@ public class ImportJob
                         catch (HdfInvalidPathException error) {}
                     }
 
-                    if (canUseHDF)
+                    if (simple)
                     {
                         MNode modelTree = edgeTypes.child (populationName).iterator ().next ();
                         String raw_model_template = modelTree.key ();
@@ -581,9 +594,15 @@ public class ImportJob
                         ImportSONATApart importer = backends.get (schema);
                         if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
 
-                        String partName = populationName + " " + model_template;
-                        model.set ("dir+\"/" + edges_file + "\"",                                                   partName, "hdfFile");
-                        model.set ("table(hdfFile, $index, 0, hdf5=\"edges/" + populationName + "/edge_type_id\")", partName, "edge_type_id");
+                        String partName = populationName;
+                        if (model.child (partName) != null) partName += " edge";
+                        MNode part = model.childOrCreate (partName);
+
+                        String table = "table(hdfFile, $index, 0, hdf5=\"edges/" + populationName + "/edge_type_id\")";
+                        part.set ("dir+\"/" + edges_file + "\"", "hdfFile");
+                        part.set (table,                         "edge_type_id");
+                        part.set (source_node_population,        "A");
+                        part.set (target_node_population,        "B");
 
                         List<String> groupColumnNames = null;
                         if (groupAttributes.isEmpty ())
@@ -594,10 +613,10 @@ public class ImportJob
                         {
                             Integer group_id = groupAttributes.keySet ().iterator ().next ();
                             groupColumnNames = groupAttributes.get (group_id).names;
-                            model.set ("\"edges/" + populationName + "/" + group_id + "\"", partName, "groupPath");
+                            part.set ("\"edges/" + populationName + "/" + group_id + "\"", "groupPath");
                         }
 
-                        importer.processPart (this, partName, "edge", populationName, raw_model_template, groupColumnNames);
+                        importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
                     }
                     else
                     {
@@ -656,7 +675,8 @@ public class ImportJob
         // model_template is probably the empty string ("").
         MNode part = model.childOrCreate (populationName);
         part.set ("Spike Source", "$inherit");
-        part.set (count, "$n");
+        part.set (count,          "$n");
+        part.set ("",             "$meta", "backend", "sonata", "simple");
 
         // Attempt to determine a concrete input file and set it up as input.
         MNode inputs = config.childOrEmpty ("inputs");
@@ -670,21 +690,42 @@ public class ImportJob
         }
         if (input == null) return;
 
-        if (input.get ("input_type").equals ("spikes"))
+        String input_type = input.get ("input_type");
+        String module     = input.get ("module");
+        String input_file = input.get ("input_file");
+        switch (input_type)
         {
-            // "spike" files are sorted first by node_id, then by time (in ms).
-            // Columns are "timestamps" and "node_ids".
-            // Both N2A and NeuroML represent a spike array as a list of times.
-            // To make this work, convert the file into a sparse matrix with node_ids in the columns
-            // and timestamps in the rows. Each column should be terminated with infinity.
-            // That will make Spike Array stop incrementing its index. This allows varying-length columns.
-
-            // S2 TODO: special optimization to set up host-side spike sender?
-            //   alt: sparse representation that can be buffered in DRAM.
-
-            if (input.get ("module").equals ("h5"))  // Read spikes from HDF5 file.
+            case "spikes":
             {
-                //part.set ("table(hdfFile, $t/1ms, )", "fire");
+                // "spike" files are sorted first by node_id, then by time (in ms).
+                // Columns are "timestamps" and "node_ids".
+                // Both N2A and NeuroML represent a spike array as a list of times.
+                // To make this work, convert the file into a sparse matrix with node_ids in the columns
+                // and timestamps in the rows. Each column should be terminated with infinity.
+                // That will make Spike Array stop incrementing its index. This allows varying-length columns.
+                // (For a sparse matrix, the default value could be infinity, so no need to explicitly add element.)
+    
+                // S2 TODO: special optimization to set up host-side spike sender?
+                //   alt: sparse representation that can be buffered in DRAM.
+    
+                switch (module)
+                {
+                    case "h5":
+                    case "sonata":
+                        part.set ("dir+\"/" + input_file + "\"",       "hdfFile");
+                        part.set ("\"spikes/" + populationName + "\"", "inputPath");
+                        part.set ("matrix(hdfFile, hdf5=inputPath)",   "times");
+                        part.set ("$t>=times($index, index)*1ms",      "fire");
+                        break;
+                    case "csv":
+                        part.set ("dir+\"/" + input_file + "\"",  "spikesFile");
+                        part.set ("matrix(spikesFile)",           "times");
+                        part.set ("$t>=times($index, index)*1ms", "fire");
+                        break;
+                    default:
+                        throw new AbortRun ("Unrecognized input module: " + module);
+                }
+                break;
             }
         }
     }

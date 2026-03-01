@@ -18,6 +18,7 @@ import gov.sandia.n2a.backend.PartMap;
 import gov.sandia.n2a.backend.neuroml.Sequencer.SequencerElement;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.UnitValue;
@@ -27,11 +28,11 @@ public class PartMapNeuroML extends PartMap
 {
     public static class NameMapNeuroML extends NameMap
     {
-        public Map<String,String> dimensions;                           // Only non-null if this part has dimensionless (DL) fields. In that case, this maps from internal variable name to specified unit.
-        public Set<String>        children   = new HashSet<String> ();  // Subparts or parts named by a metadata "children" entry. Used to determine probable containment hierarchy.
-        public Set<NameMap>       containers = new HashSet<NameMap> (); // Parts that may contain us.
-        public boolean            inheritContainersDone;                // Indicates this map has already collated all the containers from its parents (via $inherit).
-        public NameMapNeuroML     visitedFrom;                          // Name map entry which is currently doing a breadth-first scan to collect container variables.
+        public Map<String,String>  dimensions;                                  // Only non-null if this part has dimensionless (DL) fields. In that case, this maps from internal variable name to specified unit.
+        public Set<String>         children   = new HashSet<String> ();         // Subparts or parts named by a metadata "children" entry. Used to determine probable containment hierarchy.
+        public Set<NameMapNeuroML> containers = new HashSet<NameMapNeuroML> (); // Parts that may contain us.
+        public boolean             inheritContainersDone;                       // Indicates this map has already collated all the containers from its parents (via $inherit).
+        public NameMapNeuroML      visitedFrom;                                 // Name map entry which is currently doing a breadth-first scan to collect container variables.
 
         /**
             Use this constructor to create a neutral (non-transforming) map on the fly.
@@ -127,11 +128,11 @@ public class PartMapNeuroML extends PartMap
         **/
         public void buildContainerMappings ()
         {
-            LinkedList<NameMap> front = new LinkedList<NameMap> ();
+            LinkedList<NameMapNeuroML> front = new LinkedList<NameMapNeuroML> ();
             front.addAll (containers);
             while (! front.isEmpty ())
             {
-                NameMapNeuroML c = (NameMapNeuroML) front.removeFirst ();
+                NameMapNeuroML c = front.removeFirst ();
                 c.visitedFrom = this;
 
                 // Add any variables not already mapped
@@ -156,9 +157,9 @@ public class PartMapNeuroML extends PartMap
                 }
 
                 // Breadth-first search
-                for (NameMap cc : c.containers)
+                for (NameMapNeuroML cc : c.containers)
                 {
-                    if (((NameMapNeuroML) cc).visitedFrom != this) front.addLast (cc);
+                    if (cc.visitedFrom != this) front.addLast (cc);
                 }
             }
         }
@@ -190,10 +191,9 @@ public class PartMapNeuroML extends PartMap
         {
             String inherit = AppData.docs.get ("models", partName, "$inherit");
             if (inherit.isEmpty ()) return;
-            String pieces[] = inherit.split (",");
+            String pieces[] = MPart.parseInherit (inherit);
             for (String p : pieces)
             {
-                p = p.replace ("\"", "");
                 NameMapNeuroML nameMap = (NameMapNeuroML) partMap.outward.get (p);
                 if (nameMap == null)
                 {
@@ -308,10 +308,11 @@ public class PartMapNeuroML extends PartMap
         // Determine which parts can be contained by other parts.
         for (NameMap map : outward.values ())
         {
-            for (String childName : ((NameMapNeuroML) map).children)
+            NameMapNeuroML mapNML = (NameMapNeuroML) map;
+            for (String childName : mapNML.children)
             {
                 NameMapNeuroML childMap = (NameMapNeuroML) outward.get (childName);
-                if (childMap != null) childMap.containers.add (map);
+                if (childMap != null) childMap.containers.add (mapNML);
             }
         }
         // Child parts add name mappings for variables visible from their containers.
@@ -319,10 +320,10 @@ public class PartMapNeuroML extends PartMap
         for (NameMap map : outward.values ()) ((NameMapNeuroML) map).buildContainerMappings ();
     }
 
-    public NameMap exportMap (String internalPartName)
+    public NameMapNeuroML exportMap (String internalPartName)
     {
         // Simple lookup.
-        NameMap map = outward.get (internalPartName);
+        NameMapNeuroML map = (NameMapNeuroML) outward.get (internalPartName);
         if (map != null) return map;
 
         // Attempt to follow inheritance hierarchy.
@@ -338,10 +339,10 @@ public class PartMapNeuroML extends PartMap
         has an entry in this part map, and return the associated name map.
         Assumes entire heritage resides in the main database.
     **/
-    public NameMap exportMap (MNode part)
+    public NameMapNeuroML exportMap (MNode part)
     {
         String key = part.key ();
-        NameMap map = outward.get (key);
+        NameMapNeuroML map = (NameMapNeuroML) outward.get (key);
         if (map != null) return map;
         String inherit = part.get ("$inherit").replace ("\"", "");  // Assume single inheritance
         if (! inherit.isEmpty ())
@@ -352,9 +353,9 @@ public class PartMapNeuroML extends PartMap
         return new NameMapNeuroML (key);
     }
 
-    public NameMap importMap (String neuromlPartName)
+    public NameMapNeuroML importMap (String neuromlPartName)
     {
-        NameMap map = inward.get (neuromlPartName);
+        NameMapNeuroML map = (NameMapNeuroML) inward.get (neuromlPartName);
         if (map != null) return map;
         return new NameMapNeuroML (neuromlPartName);
     }

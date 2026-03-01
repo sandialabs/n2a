@@ -649,7 +649,7 @@ public class ImportJob extends XMLutility
         String inherit;
         if (type.isEmpty ()) inherit = node.getNodeName ();
         else                 inherit = type;
-        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (inherit);
+        NameMapNeuroML nameMap = partMap.importMap (inherit);
         inherit = nameMap.internalPart;
 
         MNode part = models.childOrCreate (modelName, id);  // Expect to always create this part rather than fetch an existing child.
@@ -676,7 +676,7 @@ public class ImportJob extends XMLutility
         while (container.child (id) != null) id = "Q10Parameters" + suffix++;  // This seems pointless, but the NeuroML XSD says the number of elements is unbounded.
 
         MNode part = container.childOrCreate (id);
-        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap ("baseQ10Settings");  // This isn't the correct name for use with ion channel, but it will still work.
+        NameMapNeuroML nameMap = partMap.importMap ("baseQ10Settings");  // This isn't the correct name for use with ion channel, but it will still work.
         String inherit = nameMap.internalPart;
         part.set (inherit, "$inherit");
         addDependency (part, inherit);
@@ -705,7 +705,7 @@ public class ImportJob extends XMLutility
         String inherit;
         if (type.isEmpty ()) inherit = node.getNodeName ();
         else                 inherit = type;
-        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (inherit);
+        NameMapNeuroML nameMap = partMap.importMap (inherit);
         inherit = nameMap.internalPart;
         MNode part = container.childOrCreate (id);
         part.set (inherit, "$inherit");
@@ -758,7 +758,7 @@ public class ImportJob extends XMLutility
         }
 
         MNode part = container.childOrCreate (id);
-        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (node.getNodeName ());
+        NameMapNeuroML nameMap = partMap.importMap (node.getNodeName ());
         part.set (nameMap.internalPart, "$inherit");
 
         addAttributes (node, part, nameMap, "id");
@@ -810,7 +810,7 @@ public class ImportJob extends XMLutility
 
         String inherit = getAttribute (node, "type");
         MNode part = container.childOrCreate (name);
-        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (inherit);
+        NameMapNeuroML nameMap = partMap.importMap (inherit);
         inherit = nameMap.internalPart;
         part.set (inherit, "$inherit");
         addDependency (part, inherit);
@@ -823,7 +823,7 @@ public class ImportJob extends XMLutility
     {
         String id = getAttribute (node, "id");
         MNode part = models.childOrCreate (modelName, id);
-        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (node.getNodeName ());
+        NameMapNeuroML nameMap = partMap.importMap (node.getNodeName ());
         part.set (nameMap.internalPart, "$inherit");
 
         addAttributes (node, part, nameMap, "id");
@@ -1959,7 +1959,7 @@ public class ImportJob extends XMLutility
         MNode part = models.childOrCreate (modelName, id);
 
         String inherit = node.getNodeName ();
-        NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (inherit);
+        NameMapNeuroML nameMap = partMap.importMap (inherit);
         inherit = nameMap.internalPart;
         if (! inherit.isEmpty ())
         {
@@ -2308,7 +2308,7 @@ public class ImportJob extends XMLutility
             if (! A.isEmpty()) base.set (A, "A");
             base.set (B, "B");
 
-            NameMapNeuroML nameMap = (NameMapNeuroML) partMap.importMap (inherit);
+            NameMapNeuroML nameMap = partMap.importMap (inherit);
             inherit = nameMap.internalPart;
 
             addAttributes (node, base, nameMap, "id", "synapse", "presynapticPopulation", "postsynapticPopulation", "component", "population");
@@ -2988,14 +2988,14 @@ public class ImportJob extends XMLutility
         NameMapNeuroML nameMap;
         if (inherit.isEmpty ())
         {
-            nameMap = (NameMapNeuroML) partMap.importMap (type);
+            nameMap = partMap.importMap (type);
             inherit = nameMap.internalPart;
         }
         else
         {
             // Because typeFor() finds internal names, we need to retrieve a map from the opposite direction.
             // It will still map parameter names correctly for import.
-            nameMap = (NameMapNeuroML) partMap.exportMap (inherit);
+            nameMap = partMap.exportMap (inherit);
         }
         part.set (inherit, "$inherit");
         addDependency (part, inherit);
