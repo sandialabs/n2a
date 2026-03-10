@@ -118,7 +118,7 @@ public class ImportNEST implements ImportModel, ImportSONATApart
                 // Values are consolidated and streamed by a sparse iterator rather then being queried.
                 if (part.getFlag ("hdfFile"))
                 {
-                    String table = "table(hdfFile, A.$index, B.$index, \"" + key + "\", hdf5=groupPath";
+                    String table = "table(hdfFile, A.$index, B.$index, \"" + key + "\", hdf=groupPath";
                     if (dynamics_params) table += "+\"/dynamics_params\"";
                     table += ")" + one;
                     part.set (table, internalName);
@@ -218,7 +218,7 @@ public class ImportNEST implements ImportModel, ImportSONATApart
 
                 if (part.getFlag ("hdfFile"))
                 {
-                    String table = "table(hdfFile, $index, \"" + key + "\", hdf5=groupPath";
+                    String table = "table(hdfFile, $index, \"" + key + "\", hdf=groupPath";
                     if (dynamics_params) table += "+\"/dynamics_params\"";
                     table += ")" + one;
                     part.set (table, internalName);

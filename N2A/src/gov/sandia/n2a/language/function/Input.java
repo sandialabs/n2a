@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -36,6 +36,7 @@ import io.jhdf.HdfFile;
 import io.jhdf.api.Attribute;
 import io.jhdf.api.Dataset;
 import io.jhdf.api.Group;
+import io.jhdf.api.Node;
 import io.jhdf.exceptions.HdfException;
 import tech.units.indriya.AbstractUnit;
 
@@ -147,8 +148,9 @@ public class Input extends Function
     public static class HolderXSV extends Holder
     {
         public BufferedReader      stream;
-        public char                delimiter = ' ';            // Separator character. Allows switch between comma and space/tab.
-        public boolean             delimiterSet;               // Indicates that check for CSV has been performed. Avoids constant re-checking.
+        public char                delimiter = ' ';  // Separator character. Allows switch between comma and space/tab.
+        public boolean             delimiterSet;     // Indicates that check for CSV has been performed. Avoids constant re-checking.
+        public boolean             firstRow  = true;
 
         public HolderXSV (Simulator simulator, String path, boolean time) throws IOException
         {
@@ -156,6 +158,10 @@ public class Input extends Function
 
             if (path.isEmpty ()) stream = new BufferedReader (new InputStreamReader (System.in));  // not ideal; reading stdin should be reserved for headless operation
             else                 stream = Files.newBufferedReader (simulator.jobDir.resolve (path));
+
+            // Drain BOM from a UTF-8 file
+            stream.mark (1);
+            if (stream.read () != 65279) stream.reset ();
         }
 
         public void close ()
@@ -230,9 +236,9 @@ public class Input extends Function
                         columnCount = Math.max (columnCount, currentColumnCount);
 
                         // Decide whether this is a header row or a value row
-                        // This approach assumes that columns never start with white-space.
-                        if (! columns.get (0).isEmpty ())
+                        if (! columns.get (0).isEmpty ()  ||  firstRow)  // Only process rows that are likely to have column info.
                         {
+                            firstRow = false;
                             char firstCharacter = chars[0];
                             if (firstCharacter < '-'  ||  firstCharacter == '/'  ||  firstCharacter > '9')  // not a number, so must be column header
                             {
@@ -318,7 +324,7 @@ public class Input extends Function
         }
     }
 
-    public static class HolderHDF5 extends Holder
+    public static class HolderHDF extends Holder
     {
         protected String   fileName;
         protected Dataset  data;
@@ -334,9 +340,9 @@ public class Input extends Function
             public HdfFile file;
             public int     users;
         }
-        protected static HashMap<String,SubHolder> files = new HashMap<String,SubHolder> ();  // Keep track of all open HDF5 files in the app (regardless of which simulation they belong to). These can be shared by multiple HolderHDF5 objects.
+        protected static HashMap<String,SubHolder> files = new HashMap<String,SubHolder> ();  // Keep track of all open HDF files in the app (regardless of which simulation they belong to). These can be shared by multiple HolderHDF objects.
 
-        public HolderHDF5 (Simulator simulator, String fileName, String path, boolean nwb, boolean time) throws HdfException
+        public HolderHDF (Simulator simulator, String fileName, String path, boolean time) throws HdfException
         {
             super (simulator, time);
 
@@ -355,10 +361,11 @@ public class Input extends Function
             }
             HdfFile file = sub.file;
 
-            if (nwb)
+            Node node = file.getByPath (path);
+            if (node == null) throw new HdfException ("Can't find HDF object at: " + path);
+            if (node.isGroup ())  // Assume NWB
             {
-                Group timeSeries = (Group) file.getByPath (path);
-                if (timeSeries == null) throw new HdfException ("Can't find TimeSeries: " + path);
+                Group timeSeries = (Group) node;
 
                 data = (Dataset) timeSeries.getChild ("data");
 
@@ -377,9 +384,9 @@ public class Input extends Function
                     timestamps = (double[]) ts.getData ();
                 }
             }
-            else
+            else  // Assume Dataset
             {
-                data = (Dataset) file.getByPath (path);
+                data = (Dataset) node;
             }
 
             int[] dimensions = data.getDimensions ();
@@ -411,7 +418,7 @@ public class Input extends Function
 
         public void getRow (double requested) throws IOException
         {
-            // Since HDF5 allows random access, we just need to determine the requested row,
+            // Since HDF allows random access, we just need to determine the requested row,
             // or rows that bracket the requested time.
             int row = -2;
             if (time)
@@ -595,23 +602,15 @@ public class Input extends Function
         {
             boolean smooth =             evalKeywordFlag (context, "smooth");
             boolean time   = smooth  ||  evalKeywordFlag (context, "time");
-            String  hdf    = evalKeyword (context, "hdf5", "");
+            String  hdf    = evalKeyword (context, "hdf", "");
 
             String key = path;
-            if (! hdf.isBlank ()) key += "|" + hdf;  // Because multiple holders can share same HDF5 file.
+            if (! hdf.isBlank ()) key += "|" + hdf;  // Because multiple holders can share same HDF file.
             Object o = simulator.holders.get (key);
             if (o == null)  // Need to open new file.
             {
-                if (hdf.isBlank ())
-                {
-                    H = new HolderXSV (simulator, path, time);  // can throw IOException
-                }
-                else
-                {
-                    boolean nwb = evalKeywordFlag (context, "nwb");
-                    H = new HolderHDF5 (simulator, path, hdf, nwb, time);
-                }
-
+                if (hdf.isBlank ()) H = new HolderXSV (simulator, path,      time);  // can throw IOException
+                else                H = new HolderHDF (simulator, path, hdf, time);
                 simulator.holders.put (key, H);
             }
             else if (! (o instanceof Holder))  // Already exists, but is wrong type.

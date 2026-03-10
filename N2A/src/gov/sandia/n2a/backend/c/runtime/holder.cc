@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -164,14 +164,14 @@ template SHARED ImageInput  <n2a_T> * imageInputHelper (const String & fileName,
 template SHARED ImageOutput <n2a_T> * imageOutputHelper(const String & fileName,                                ImageOutput <n2a_T> * oldHandle);
 template SHARED n2a_T convertDate (const String & field, n2a_T defaultValue);
 
-#ifdef HAVE_HDF5
+#ifdef HAVE_HDF
 map<String,SubHolder*> SubHolder::files;
 mutex                  SubHolder::mutexFiles;
-template class InputHDF5<n2a_T>;
+template class InputHDF<n2a_T>;
 #  ifdef n2a_FP
-template SHARED InputHDF5 <n2a_T> * hdf5Helper (const String & fileName, const String & path, int exponent, int exponentRow, InputHDF5 <n2a_T> * oldHandle);
+template SHARED InputHDF <n2a_T> * hdfHelper (const String & fileName, const String & path, int exponent, int exponentRow, InputHDF <n2a_T> * oldHandle);
 #  else
-template SHARED InputHDF5 <n2a_T> * hdf5Helper (const String & fileName, const String & path,                                InputHDF5 <n2a_T> * oldHandle);
+template SHARED InputHDF <n2a_T> * hdfHelper (const String & fileName, const String & path,                                InputHDF <n2a_T> * oldHandle);
 #  endif
 #endif
 

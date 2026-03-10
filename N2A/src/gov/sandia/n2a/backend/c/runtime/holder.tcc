@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -2363,6 +2363,7 @@ InputXSV<T>::InputXSV (const String & fileName)
 {
     delimiter    = ' ';
     delimiterSet = false;
+    firstRow     = true;
 
     if (fileName.empty ())
     {
@@ -2395,12 +2396,10 @@ InputXSV<T>::getRow (T row)
         {
             String line;
             getline (*in, line);
+            int last = line.size () - 1;
+            if (last >= 0  &&  line[last] == '\r') line.resize (last--);  // Hack to handle CRLF line ending when c runtime fails to recognize it.
+            if (firstRow  &&  last >= 2  &&  (uint8_t) line[0] == 0xEF  &&  (uint8_t) line[1] == 0xBB  &&  (uint8_t) line[2] == 0xBF) line = line.substr (3);  // Skip BOM from UTF-8 file
             if (line.empty ()) continue;
-            if (line[line.size () - 1] == '\r')  // Hack to handle CRLF line ending when c runtime fails to recognize it.
-            {
-                line.resize (line.size () - 1);
-                if (line.empty ()) continue;
-            }
 
             if (! delimiterSet)
             {
@@ -2442,76 +2441,82 @@ InputXSV<T>::getRow (T row)
             columnCount = std::max (columnCount, tempCount);
 
             // Decide whether this is a header row or a value row
+            // * Always check the first row of the file.
+            // * Otherwise, only check rows that start with a non-number character.
             char firstCharacter = line[0];
-            if (firstCharacter < '-'  ||  firstCharacter == '/'  ||  firstCharacter > '9')  // not a number, so must be column header
+            if (firstCharacter != delimiter  ||  firstRow)
             {
-                // Add any column headers. Generally, these will only be new headers as of this cycle.
-                int index = 0;
-                int lineSize = line.size ();
-                inQuote = false;
-                String token;
-                token.reserve (lineSize / tempCount);
-                for (int i = 0; i < lineSize; i++)
+                firstRow = false;
+                if (firstCharacter < '-'  ||  firstCharacter == '/'  ||  firstCharacter > '9')
                 {
-                    char c = line[i];
-                    if (c == '\"')
+                    // Add any column headers. Generally, these will only be new headers as of this cycle.
+                    int index = 0;
+                    int lineSize = line.size ();
+                    inQuote = false;
+                    String token;
+                    token.reserve (lineSize / tempCount);
+                    for (int i = 0; i < lineSize; i++)
                     {
-                        if (inQuote  &&  i < lineSize - 1  &&  line[i+1] == '\"')
+                        char c = line[i];
+                        if (c == '\"')
                         {
-                            token += c;
-                            i++;
+                            if (inQuote  &&  i < lineSize - 1  &&  line[i+1] == '\"')
+                            {
+                                token += c;
+                                i++;
+                                continue;
+                            }
+                            inQuote = ! inQuote;
                             continue;
                         }
-                        inQuote = ! inQuote;
-                        continue;
-                    }
-                    if (c == delimiter  &&  ! inQuote)
-                    {
-                        token.trim ();
-                        if (! token.empty ()) columnMap.emplace (token, index);
-                        index++;  // Regardless of whether token is empty or not, we progress to the next column position.
-                        token.clear ();
-                        continue;
-                    }
-                    token += c;
-                }
-                token.trim ();
-                if (! token.empty ()) columnMap.emplace (token, index);
-
-                // Make column count accessible to other code before first row of data is read.
-                if (! A)
-                {
-                    if (time) current->line = -INFINITY;
-                    if (current->values.size () != columnCount)
-                    {
-                        current->values.resize (columnCount);
-                        memset (current->values.data (), 0, columnCount * sizeof (T));
-                    }
-                }
-
-                // Select time column
-                if (time  &&  ! timeColumnSet)
-                {
-                    int timeMatch = 0;
-                    for (auto it : columnMap)
-                    {
-                        int potentialMatch = 0;
-                        String header = it.first.toLowerCase ();
-                        if      (header == "t"   ) potentialMatch = 2;
-                        else if (header == "date") potentialMatch = 2;
-                        else if (header == "time") potentialMatch = 3;
-                        else if (header == "$t"  ) potentialMatch = 4;
-                        else if (header.find ("time") != String::npos) potentialMatch = 1;
-                        if (potentialMatch > timeMatch)
+                        if (c == delimiter  &&  ! inQuote)
                         {
-                            timeMatch = potentialMatch;
-                            timeColumn = it.second;
+                            token.trim ();
+                            if (! token.empty ()) columnMap.emplace (token, index);
+                            index++;  // We progress to the next column position, regardless of whether token is empty or not.
+                            token.clear ();
+                            continue;
+                        }
+                        token += c;
+                    }
+                    token.trim ();
+                    if (! token.empty ()) columnMap.emplace (token, index);  // More than one column name could refer to the same position. No need to prevent this, as it should be exceedingly rare.
+
+                    // Make column count accessible to other code before first row of data is read.
+                    if (! A)
+                    {
+                        if (time) current->line = -INFINITY;
+                        if (current->values.size () != columnCount)
+                        {
+                            current->values.resize (columnCount);
+                            memset (current->values.data (), 0, columnCount * sizeof (T));
                         }
                     }
-                    timeColumnSet = true;
-                }
 
-                continue;  // back to top of outer while loop, skipping any other processing below
+                    // Select time column
+                    if (time  &&  ! timeColumnSet)
+                    {
+                        int timeMatch = 0;
+                        for (auto it : columnMap)
+                        {
+                            int potentialMatch = 0;
+                            String header = it.first.toLowerCase ();
+                            if      (header == "t"   ) potentialMatch = 2;
+                            else if (header == "date") potentialMatch = 2;
+                            else if (header == "time") potentialMatch = 3;
+                            else if (header == "$t"  ) potentialMatch = 4;
+                            else if (header.find ("time") != String::npos) potentialMatch = 1;
+                            if (potentialMatch > timeMatch)
+                            {
+                                timeMatch = potentialMatch;
+                                timeColumn = it.second;
+                            }
+                        }
+                        timeColumnSet = true;
+                    }
+
+                    continue;  // back to top of outer while loop, skipping any other processing below
+                }
             }
 
             next->values.resize (columnCount);
@@ -2585,6 +2590,13 @@ InputXSV<T>::readAhead (int rowCount)
 }
 
 template<class T>
+void
+InputXSV<T>::release ()
+{
+    // TODO
+}
+
+template<class T>
 InputXSV<T> *
 #ifdef n2a_FP
 xsvHelper (const String & fileName, int exponent, int exponentRow, InputXSV<T> * oldHandle)
@@ -2606,9 +2618,9 @@ xsvHelper (const String & fileName,                                InputXSV<T> *
 }
 
 
-// InputHDF5 -----------------------------------------------------------------
+// InputHDF ------------------------------------------------------------------
 
-#ifdef HAVE_HDF5
+#ifdef HAVE_HDF
 
 SubHolder::SubHolder (const String & fileName)
 :   file (fileName.c_str (), H5F_ACC_RDONLY)
@@ -2617,7 +2629,7 @@ SubHolder::SubHolder (const String & fileName)
 }
 
 template<class T>
-InputHDF5<T>::InputHDF5 (const String & fileName, const String & path)
+InputHDF<T>::InputHDF (const String & fileName, const String & path)
 :   InputHolder<T> (fileName),
     path           (path)
 {
@@ -2632,29 +2644,45 @@ InputHDF5<T>::InputHDF5 (const String & fileName, const String & path)
     start        = 0;
     count        = 0;
 
-    std::lock_guard<std::mutex> lock (SubHolder::mutexFiles);
-    auto it = SubHolder::files.find (fileName);
-    if (it == SubHolder::files.end ())
     {
-        try
+        std::lock_guard<std::mutex> lock (SubHolder::mutexFiles);
+        auto it = SubHolder::files.find (fileName);
+        if (it == SubHolder::files.end ())
         {
-            sub = new SubHolder (fileName);
-            SubHolder::files[fileName] = sub;
+            try
+            {
+                sub = new SubHolder (fileName);
+                SubHolder::files[fileName] = sub;
+            }
+            catch (const H5::Exception & error)
+            {
+                fprintf (stderr, "Failed to open HDF file: %s\n", fileName.c_str ());
+            }
         }
-        catch (const H5::Exception & error)
+        else
         {
-            fprintf (stderr, "Failed to open HDF5 file: %s\n", fileName.c_str ());
+            sub = it->second;
         }
+        sub->users++;
     }
-    else
+
+    // Check for NWB
+    std::lock_guard<std::mutex> lock (sub->mutexFile);
+    try
     {
-        sub = it->second;
+        // If we can succeed at retrieving the path as a Group, then it is an NWB.
+        // This test is sufficient for the present. We may need to examine the structure more carefully to accomodate other cases, such as SONATA.
+        H5::Group timeSeries = sub->file.openGroup (path.c_str ());
+        nwb = true;
     }
-    sub->users++;
+    catch (const H5::Exception & error)
+    {
+        // "nwb" is already set to false.
+    }
 }
 
 template<class T>
-InputHDF5<T>::~InputHDF5 ()
+InputHDF<T>::~InputHDF ()
 {
     if (timestamps) delete[] timestamps;
     if (start)      delete[] start;
@@ -2679,7 +2707,7 @@ InputHDF5<T>::~InputHDF5 ()
 
 template<class T>
 void
-InputHDF5<T>::getRow (T requested)
+InputHDF<T>::getRow (T requested)
 {
     std::lock_guard<std::mutex> lock (mutexLine);
 
@@ -2732,7 +2760,7 @@ InputHDF5<T>::getRow (T requested)
 #                   endif
                 }
             }
-            else
+            else  // Regular dataset, not NWB
             {
                 data = file.openDataSet (path.c_str ());
             }
@@ -2771,7 +2799,7 @@ InputHDF5<T>::getRow (T requested)
             // next->line is NAN, so next->values won't be used. No need to clear them.
         }
 
-        // Since HDF5 allows random access, we just need to determine the requested row,
+        // Since HDF allows random access, we just need to determine the requested row,
         // or rows that bracket the requested time.
         int row = rowFromLine (requested);
 
@@ -2811,7 +2839,7 @@ InputHDF5<T>::getRow (T requested)
     catch (const H5::Exception & error)
     {
         std::stringstream ss;
-        ss << "Error while accessing HDF5:" << std::endl;
+        ss << "Error while accessing HDF:" << std::endl;
         ss << "  " << fileName << std::endl;
         ss << "  " << path << std::endl;
         ss << "  " << error.getDetailMsg () << std::endl;
@@ -2823,7 +2851,7 @@ InputHDF5<T>::getRow (T requested)
 
 template<class T>
 int
-InputHDF5<T>::rowFromLine (T line)
+InputHDF<T>::rowFromLine (T line)
 {
     if (time)
     {
@@ -2861,7 +2889,7 @@ InputHDF5<T>::rowFromLine (T line)
 
 template<class T>
 T
-InputHDF5<T>::lineFromRow (int row)
+InputHDF<T>::lineFromRow (int row)
 {
     if (time)
     {
@@ -2880,7 +2908,7 @@ InputHDF5<T>::lineFromRow (int row)
 
 template<class T>
 void
-InputHDF5<T>::getSlab (hsize_t row, hsize_t rowCount, T * values)
+InputHDF<T>::getSlab (hsize_t row, hsize_t rowCount, T * values)
 {
     std::lock_guard<std::mutex> lock (sub->mutexFile);
 
@@ -2910,18 +2938,18 @@ InputHDF5<T>::getSlab (hsize_t row, hsize_t rowCount, T * values)
 }
 
 template<class T>
-InputHDF5<T> *
+InputHDF<T> *
 #ifdef n2a_FP
-hdf5Helper (const String & fileName, const String & path, int exponent, int exponentRow, InputHDF5<T> * oldHandle)
+hdfHelper (const String & fileName, const String & path, int exponent, int exponentRow, InputHDF<T> * oldHandle)
 #else
-hdf5Helper (const String & fileName, const String & path,                                InputHDF5<T> * oldHandle)
+hdfHelper (const String & fileName, const String & path,                                InputHDF<T> * oldHandle)
 #endif
 {
     String key = fileName + "|" + path;
-    InputHDF5<T> * handle = (InputHDF5<T> *) SIMULATOR getHolder (key, oldHandle);
+    InputHDF<T> * handle = (InputHDF<T> *) SIMULATOR getHolder (key, oldHandle);
     if (! handle)
     {
-        handle = new InputHDF5<T> (fileName, path);
+        handle = new InputHDF<T> (fileName, path);
         SIMULATOR holders.push_back (handle);
 #       ifdef n2a_FP
         handle->exponent    = exponent;
@@ -2931,7 +2959,7 @@ hdf5Helper (const String & fileName, const String & path,                       
     return handle;
 }
 
-#endif  // HAVE_HDF5
+#endif  // HAVE_HDF
 
 
 // OutputHolder --------------------------------------------------------------

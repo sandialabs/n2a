@@ -8,6 +8,7 @@ package gov.sandia.n2a.language.function;
 
 import java.io.BufferedReader;
 import java.io.PrintStream;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -24,7 +26,6 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
-import org.w3c.dom.Node;
 
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.backend.neuroml.XMLutility;
@@ -34,6 +35,7 @@ import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.language.function.Input.HolderHDF.SubHolder;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Matrix.IteratorNonzero;
@@ -43,6 +45,12 @@ import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.linear.MatrixSparse;
 import gov.sandia.n2a.linear.MatrixSparse.IteratorSparse;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
+import io.jhdf.HdfFile;
+import io.jhdf.api.Attribute;
+import io.jhdf.api.Dataset;
+import io.jhdf.api.Group;
+import io.jhdf.exceptions.HdfException;
 import tech.units.indriya.AbstractUnit;
 
 public class Table extends Function implements NonzeroIterable
@@ -80,7 +88,7 @@ public class Table extends Function implements NonzeroIterable
     {
         for (int i = 0; i < operands.length; i++) operands[i].determineExponent (context);
 
-        if (getKeyword ("info") == null)  // normal mode. This includes "prefix" mode, but in that case we return a string, so don't care about exponent.
+        if (getKeyword ("info") == null)  // normal mode. This includes string mode. In that case we don't care about exponent.
         {
             int centerNew   = MSB / 2;
             int exponentNew = getExponentHint (0) - centerNew;
@@ -112,8 +120,550 @@ public class Table extends Function implements NonzeroIterable
     public Type getType ()
     {
         if (getKeyword ("info"  ) != null) return new Scalar ();
-        if (getKeyword ("prefix") != null) return new Text ();
+        if (getKeyword ("string") != null) return new Text ();
         return new Scalar ();
+    }
+
+    public static abstract class Holder
+    {
+        public void parse (String anchor)
+        {
+            throw new AbortRun ("anchor keyword is not supported for given file type");
+        }
+
+        public int getColumnsInRow ()
+        {
+            throw new AbortRun ("columnsInRow keyword is not supported for given file type");
+        }
+
+        public int getRowsInColumn ()
+        {
+            throw new AbortRun ("rowsInColumn keyword is not supported for given file type");
+        }
+
+        public abstract int             getColumns ();
+        public abstract int             getRows ();
+        public abstract int             getColumnIndex (String columnName);
+        public abstract int             getRowIndex (int columnIndex, Object columnValue);
+        public abstract double          getDouble (double row, double column);
+        public abstract String          getString (int    row, int    column);
+        public abstract IteratorNonzero getIteratorNonzero ();
+    }
+
+    public static class HolderHDF extends Holder implements AutoCloseable
+    {
+        protected String              fileName;
+        protected io.jhdf.api.Node    root;     // Can be either a Dataset or a Group.
+        protected boolean             isSonata;
+        protected int[]               dims;     // Size of data. Gets modified to always be 2D.
+        protected int                 dimCount; // Original length of "dims"
+        protected Map<String,Integer> rowMap;
+        protected Map<String,Integer> columnMap;
+        protected List<String>        headers;  // The inverse of columnMap
+
+        public static final int chunkSize = 1000000;
+
+        public HolderHDF (Simulator simulator, String fileName, String hdfPath)
+        {
+            this.fileName = fileName;
+            SubHolder sub;
+            synchronized (Input.HolderHDF.files)
+            {
+                sub = Input.HolderHDF.files.get (fileName);
+                if (sub == null)
+                {
+                    sub = new SubHolder ();
+                    sub.file = new HdfFile (simulator.jobDir.resolve (fileName));
+                    Input.HolderHDF.files.put (fileName, sub);
+                }
+                sub.users++;
+            }
+
+            Attribute magic = sub.file.getAttribute ("magic");
+            if (magic.getJavaType ().equals (Integer.class)) isSonata = ((Integer) magic.getData ()) == 2682;
+
+            root = sub.file.getByPath (hdfPath);
+            if (root.isGroup ())
+            {
+                // TODO: handle SONATA edge
+                dims      = new int [2];
+                columnMap = new TreeMap<String,Integer> ();
+                headers   = new ArrayList<String> ();
+                for (io.jhdf.api.Node node : (Group) root)
+                {
+                    if (node.isGroup ()) continue;
+                    int temp[] = ((Dataset) node).getDimensions ();
+                    if (dims[0] < temp[0]) dims[0] = temp[0];
+
+                    String columnName = node.getName ();
+                    columnMap.put (columnName, headers.size ());
+                    headers.add (columnName);
+                }
+                dims[1] = headers.size ();
+            }
+            else  // root is Dataset
+            {
+                dims = ((Dataset) root).getDimensions ();
+                if (dims.length == 1)
+                {
+                    int temp = dims[0];
+                    dims = new int[2];
+                    dims[0] = temp;
+                    dims[1] = 1;
+                }
+            }
+        }
+
+        public void close () throws Exception
+        {
+            synchronized (Input.HolderHDF.files)
+            {
+                SubHolder sub = Input.HolderHDF.files.get (fileName);
+                sub.users--;
+                if (sub.users <= 0)
+                {
+                    try {sub.file.close ();}
+                    catch (HdfException e) {}
+                    Input.HolderHDF.files.remove (fileName);
+                }
+            }
+        }
+
+        public int getColumns ()
+        {
+            return dims[1];
+        }
+
+        public int getRows ()
+        {
+            return dims[0];
+        }
+
+        public int getColumnIndex (String columnName)
+        {
+            Integer result = -1;
+            if (root.isGroup ())
+            {
+                result = columnMap.get (columnName);
+                if (result == null) return -1;
+            }
+            else
+            {
+                try {result = Integer.valueOf (columnName);}
+                catch (NumberFormatException e) {}
+            }
+            return result;
+        }
+
+        /**
+            Searches for value in given column.
+            Assumes that the number of rows is small enough that indexing in memory is practical.
+            For larger cases, really shouldn't be using the approach at all.
+        **/
+        public int getRowIndex (int columnIndex, Object columnValue)
+        {
+            if (columnIndex < 0  || columnIndex >= dims[1]) return -1;
+
+            Dataset columnData;
+            if (root.isGroup ())
+            {
+                String columnName = headers.get (columnIndex);
+                columnData = ((Group) root).getDatasetByPath (columnName);
+            }
+            else
+            {
+                columnData = (Dataset) root;
+            }
+            Class<?> type = columnData.getJavaType ();
+
+            if (rowMap == null)
+            {
+                rowMap = new HashMap<String,Integer> ();
+
+                long offset[] = new long[dimCount];
+                int  count [] = new int [dimCount];
+                offset[0] = 0;
+                count [0] = dims[0];
+                if (dimCount > 1)
+                {
+                    count[1] = 1;
+                    if (! root.isGroup ()) offset[1] = columnIndex;
+                }
+
+                Object result = columnData.getData (offset, count);
+                int i = 0;
+                if (type == double.class)
+                {
+                    for (double d : (double[]) result) rowMap.put (String.valueOf (d), i++);
+                }
+                else if (type == float.class)
+                {
+                    for (float f : (float[]) result) rowMap.put (String.valueOf (f), i++);
+                }
+                else if (type == int.class)
+                {
+                    for (int n : (int[]) result) rowMap.put (String.valueOf (n), i++);
+                }
+                else if (type == BigInteger.class)
+                {
+                    for (BigInteger n : (BigInteger[]) result) rowMap.put (n.toString (), i++);
+                }
+                else if (type == String.class)
+                {
+                    for (String s : (String[]) result) rowMap.put (s, i++);
+                }
+                else throw new AbortRun ("Need code to handle data type.");
+            }
+
+            Integer result = rowMap.get (columnValue.toString ());
+            if (result == null) return -1;
+            return result;
+        }
+
+        public double getDouble (double row, double column)
+        {
+            // Bracket the source rows for an interpolated or extrapolated value.
+            int r = (int) row;
+            int r1 = r + 1;
+            if (r1 < 0) r1 = 0;
+            if (r >= dims[0]) r = dims[0];
+            if      (r1 < r) r1 = r;
+            else if (r > r1) r = r1;
+
+            // Bracket source columns.
+            // Some of this may be meaningless for named columns. We don't worry about that.
+            int c = (int) column;
+            int c1 = c + 1;
+            if (c1 < 0) c1 = 0;
+            if (c >= dims[1]) c = dims[1];
+            if      (c1 < c) c1 = c;
+            else if (c > c1) c = c1;
+
+            Dataset columnData;
+            long offset[] = new long[dimCount];
+            int  count [] = new int [dimCount];
+            offset[0] = r;
+            count [0] =  r == r1 ? 1 : 2;
+            if (root.isGroup ())
+            {
+                String columnName = headers.get (c);
+                columnData = ((Group) root).getDatasetByPath (columnName);
+                c1 = c;  // Don't do interpolation for named columns. The result will only be surprising if the user requests a column that is out of range.
+            }
+            else  // root is a Dataset
+            {
+                columnData = (Dataset) root;
+                if (dimCount > 1)
+                {
+                    offset[1] = c;
+                    count [1] =  c == c1 ? 1 : 2;
+                }
+            }
+
+            Class<?> type = columnData.getJavaType ();
+            if (type != double.class  &&  type != float.class) throw new AbortRun ("Need code to handle numeric types other than double or float.");
+            Object block = columnData.getData (offset, count);
+
+            double d[][] = new double[2][2];
+            if (type == double.class)
+            {
+                if (dimCount == 1  ||  count[1] == 1)  // 1D
+                {
+                    double[] temp = (double[]) block;
+                    for (int i = 0; i < count[0]; i++) d[i][0] = temp[i];
+                }
+                else  // 2D
+                {
+                    double[][] temp = (double[][]) block;
+                    for (int i = 0; i < count[0]; i++)
+                    {
+                        for (int j = 0; j < count[1]; j++)
+                        {
+                            d[i][j] = temp[i][j];
+                        }
+                    }
+                }
+            }
+            else  // type == float.class
+            {
+                if (dimCount == 1  ||  count[1] == 1)
+                {
+                    float[] temp = (float[]) block;
+                    for (int i = 0; i < count[0]; i++) d[i][0] = temp[i];
+                }
+                else
+                {
+                    float[][] temp = (float[][]) block;
+                    for (int i = 0; i < count[0]; i++)
+                    {
+                        for (int j = 0; j < count[1]; j++)
+                        {
+                            d[i][j] = temp[i][j];
+                        }
+                    }
+                }
+            }
+
+            if (c == c1)
+            {
+                if (r == r1) return d[0][0];
+
+                double a = row - r;
+                double a1 = 1 - a;
+                return a1 * d[0][0] + a * d[1][0];
+            }
+            else
+            {
+                double b = column - c;
+                double b1 = 1 - b;
+                if (r == r1) return b1 * d[0][0] + b * d[0][1];
+
+                double a = row - r;
+                double a1 = 1 - a;
+                return a1 * (b1 * d[0][0] + b * d[0][1]) + a * (b1 * d[1][0] + b * d[1][1]);  // full bilinear interpolation
+            }
+        }
+
+        public String getString (int row, int column)
+        {
+            if (row < 0  ||  row >= dims[0]  ||  column < 0  ||  column >= dims[1]) return "";
+            long offset[] = new long[dimCount];
+            int  count [] = new int [dimCount];
+            offset[0] = row;
+            count [0] = 1;
+
+            Dataset columnData;
+            if (root.isGroup ())
+            {
+                String columnName = headers.get (column);
+                columnData = ((Group) root).getDatasetByPath (columnName);
+            }
+            else  // root is a Dataset
+            {
+                columnData = (Dataset) root;
+            }
+            Object result = columnData.getData (offset, count);
+            Class<?> type = columnData.getJavaType ();
+            if (type == String.class) return ((String[]) result)[0];
+            if (type == double.class) return String.valueOf (((double[]) result)[0]);
+            if (type == float .class) return String.valueOf (((float []) result)[0]);
+            throw new AbortRun ("Need code to handle numeric types other than double or float.");
+        }
+
+        public class IteratorNonzeroHDF implements IteratorNonzero
+        {
+            protected Class<?>   type   = ((Dataset) root).getJavaType ();
+            protected double[][] data;
+            protected long[]     offset = new long[2];
+            protected int[]      count  = new int [2];
+
+            protected double value;
+            protected long   row; // of "value"
+            protected long   column;
+
+            protected double nextValue;
+            protected long   nextRow;
+            protected long   nextColumn = -1;
+
+            public IteratorNonzeroHDF ()
+            {
+                if (type != double.class  &&  type != float.class  &&  type != int.class  &&  type != BigInteger.class) throw new AbortRun ("IteratorNonzeroHDF needs additional code to support data type.");
+                count[0] = Math.max (1, chunkSize / dims[1]);
+                count[1] = dims[1];
+                offset[0] = -count[0];  // Trigger load of first block.
+                offset[1] = 0;
+                getNext ();
+            }
+
+            protected void getNext ()
+            {
+                for (; nextRow < dims[0]; nextRow++)
+                {
+                    int nr = (int) (nextRow - offset[0]);  // next row relative to current block of data
+                    if (nr >= count[0])  // Out of data, so load another block.
+                    {
+                        offset[0] = nextRow;
+                        count[0] = Math.min (count[0], (int) (dims[0] - nextRow));  // Don't read past end of dataset.
+                        Object temp = ((Dataset) root).getData (offset, count);
+                        if (type == double.class)
+                        {
+                            data = (double[][]) temp;
+                        }
+                        else if (type == float.class)
+                        {
+                            data = new double[count[0]][count[1]];
+                            float[][] f = (float[][]) temp;
+                            for (int r = 0; r < count[0]; r++)
+                            {
+                                for (int c = 0; c < count[1]; c++) data[r][c] = f[r][c];
+                            }
+                        }
+                        else if (type == int.class)
+                        {
+                            data = new double[count[0]][count[1]];
+                            int[][] n = (int[][]) temp;
+                            for (int r = 0; r < count[0]; r++)
+                            {
+                                for (int c = 0; c < count[1]; c++) data[r][c] = n[r][c];
+                            }
+                        }
+                        else if (type == BigInteger.class)
+                        {
+                            data = new double[count[0]][count[1]];
+                            BigInteger[][] n = (BigInteger[][]) temp;
+                            for (int r = 0; r < count[0]; r++)
+                            {
+                                for (int c = 0; c < count[1]; c++) data[r][c] = n[r][c].doubleValue ();
+                            }
+                        }
+                    }
+
+                    while (true)
+                    {
+                        if (++nextColumn >= dims[1]) break;
+                        int nc = (int) (nextColumn - offset[1]);
+                        nextValue = data[nr][nc];
+                        if (nextValue != 0) return;
+                    }
+                    nextColumn = -1;
+                }
+            }
+
+            public boolean hasNext ()
+            {
+                return nextColumn >= 0;
+            }
+
+            public Double next ()
+            {
+                if (nextColumn < 0) return null;
+                value  = nextValue;
+                row    = nextRow;
+                column = nextColumn;
+                getNext ();
+                return value;
+            }
+
+            public int getRow ()
+            {
+                return (int) row;
+            }
+
+            public int getColumn ()
+            {
+                return (int) column;
+            }
+        }
+
+        public IteratorNonzero getIteratorNonzero ()
+        {
+            if (root.isGroup ()  &&  dimCount < 2) throw new AbortRun ("IteratorNonzero requires a 2D dataset");
+            return new IteratorNonzeroHDF ();
+        }
+
+        /**
+            Special iterator for SONATA edge data.
+        **/
+        public class IteratorEdge implements IteratorNonzero
+        {
+            protected Dataset      datasetAttribute;
+            protected Dataset      datasetSource;
+            protected Dataset      datasetTarget;
+            protected double[]     chunkAttribute;
+            protected BigInteger[] chunkSource;
+            protected BigInteger[] chunkTarget;
+            protected Class<?>     type;
+            protected long[]       offset = new long[1];
+            protected int[]        count  = new int [1];
+            protected long         row    = -1;
+            protected long         rowCount;
+            protected int          rr;  // row relative to start of chunk
+
+            public IteratorEdge (String attributeName)
+            {
+                // Prepare datasets
+                datasetAttribute = ((Group) root).getDatasetByPath (attributeName);
+                if (datasetAttribute == null) throw new AbortRun ("SONATA Edge group does not have attribute: " + attributeName);
+                type = datasetAttribute.getJavaType ();
+
+                Group edge = (Group) root;
+                if (edge.getName ().equals ("dynamics_params")) edge = edge.getParent ();
+                edge = edge.getParent ();  // The main edge group.
+                datasetSource = edge.getDatasetByPath ("source_node_id");
+                datasetTarget = edge.getDatasetByPath ("target_node_id");
+
+                count [0] =  chunkSize;
+                offset[0] = -chunkSize;  // Trigger load new data.
+            }
+
+            protected void getNext ()
+            {
+                row++;
+                if (row >= rowCount) return;
+                rr = (int) (row - offset[0]);  // row relative to current block of data
+                if (rr < count[0]) return;
+
+                // Out of data, so load another block.
+                rr = 0;
+                offset[0] = row;
+                count[0] = Math.min (count[0], (int) (rowCount - row));  // Don't read past end of dataset.
+
+                chunkSource = (BigInteger[]) datasetSource.getData (offset, count);
+                chunkTarget = (BigInteger[]) datasetTarget.getData (offset, count);
+
+                Object temp = datasetAttribute.getData (offset, count);
+                if (type == double.class)
+                {
+                    chunkAttribute = (double[]) temp;
+                }
+                else if (type == float.class)
+                {
+                    chunkAttribute = new double[count[0]];
+                    float[] f = (float[]) temp;
+                    for (int r = 0; r < count[0]; r++) chunkAttribute[r] = f[r];
+                }
+                else if (type == int.class)
+                {
+                    chunkAttribute = new double[count[0]];
+                    int[] n = (int[]) temp;
+                    for (int r = 0; r < count[0]; r++) chunkAttribute[r] = n[r];
+                }
+                else if (type == BigInteger.class)
+                {
+                    chunkAttribute = new double[count[0]];
+                    BigInteger[] n = (BigInteger[]) temp;
+                    for (int r = 0; r < count[0]; r++) chunkAttribute[r] = n[r].doubleValue ();
+                }
+            }
+
+            public boolean hasNext ()
+            {
+                return row + 1 < rowCount;
+            }
+
+            public Double next ()
+            {
+                getNext ();
+                if (row >= rowCount) return null;
+                return chunkAttribute[rr];
+            }
+
+            public int getRow ()
+            {
+                return chunkSource[rr].intValue ();
+            }
+
+            public int getColumn ()
+            {
+                return chunkTarget[rr].intValue ();
+            }
+        }
+
+        public IteratorEdge getIteratorEdge (String attribute)
+        {
+            if (! root.isGroup ()  ||  ! isSonata) throw new AbortRun ("IteratorEdge requires a SONATA edge group");
+            return new IteratorEdge (attribute);
+        }
     }
 
     public static class Sheet
@@ -126,7 +676,7 @@ public class Table extends Function implements NonzeroIterable
         public Map<String,Integer> columnMap; // from header text to index
     }
 
-    public static class Holder
+    public static class HolderSheet extends Holder
     {
         protected List<String>      strings = new ArrayList<String> ();     // collection of all strings that appear in the workbook
         protected Map<String,Sheet> wb      = new HashMap<String,Sheet> (); // workbook, a collection of worksheets
@@ -136,7 +686,7 @@ public class Table extends Function implements NonzeroIterable
         protected int               ar;                                     // anchor row
         protected int               ac;                                     // anchor column
 
-        public Holder (Path path)
+        public HolderSheet (Path path)
         {
             final double fillThreshold = 0.5;
 
@@ -153,7 +703,7 @@ public class Table extends Function implements NonzeroIterable
                 PrintStream err = Backend.err.get ();
                 err.println ("ERROR: Can't open table file: " + path);
                 e.printStackTrace (err);
-                throw new Backend.AbortRun ();
+                throw new AbortRun ();
             }
 
             // Try to process as XSV
@@ -252,7 +802,7 @@ public class Table extends Function implements NonzeroIterable
                     PrintStream err = Backend.err.get ();
                     err.println ("ERROR: Failed to parse CSV file: " + path);
                     e.printStackTrace (err);
-                    throw new Backend.AbortRun ();
+                    throw new AbortRun ();
                 }
                 ws.strings = new MatrixDense (ws.strings);
 
@@ -295,8 +845,8 @@ public class Table extends Function implements NonzeroIterable
                 String stylesPath        = "";
                 ZipEntry entry = archive.getEntry ("xl/_rels/workbook.xml.rels");
                 Document doc = builder.parse (archive.getInputStream (entry));
-                Node docElement = doc.getDocumentElement ();
-                for (Node rel = docElement.getFirstChild (); rel != null; rel = rel.getNextSibling ())
+                org.w3c.dom.Node docElement = doc.getDocumentElement ();
+                for (org.w3c.dom.Node rel = docElement.getFirstChild (); rel != null; rel = rel.getNextSibling ())
                 {
                     NamedNodeMap attr = rel.getAttributes ();
                     String Type = attr.getNamedItem ("Type").getTextContent ();
@@ -326,7 +876,7 @@ public class Table extends Function implements NonzeroIterable
                         docElement = doc.getDocumentElement ();
                         int uniqueCount = XMLutility.getAttribute (docElement, "uniqueCount", 0);
                         if (uniqueCount > 0) strings = new ArrayList<String> (uniqueCount);  // re-allocate array, now that we know the size
-                        for (Node si = docElement.getFirstChild (); si != null; si = si.getNextSibling ())
+                        for (org.w3c.dom.Node si = docElement.getFirstChild (); si != null; si = si.getNextSibling ())
                         {
                             strings.add (extractSI (si));
                         }
@@ -342,9 +892,9 @@ public class Table extends Function implements NonzeroIterable
                     {
                         doc = builder.parse (archive.getInputStream (entry));
                         docElement = doc.getDocumentElement ();
-                        Node cellXfs = XMLutility.getChild (docElement, "cellXfs");
+                        org.w3c.dom.Node cellXfs = XMLutility.getChild (docElement, "cellXfs");
                         int styleNumber = 0;
-                        for (Node xf = cellXfs.getFirstChild (); xf != null; xf = xf.getNextSibling ())
+                        for (org.w3c.dom.Node xf = cellXfs.getFirstChild (); xf != null; xf = xf.getNextSibling ())
                         {
                             int id = XMLutility.getAttribute (xf, "numFmtId", 0);
                             if (id >= 14  &&  id <= 22  ||  id >= 45  &&  id <= 47) dateStyles.add (styleNumber);
@@ -357,8 +907,8 @@ public class Table extends Function implements NonzeroIterable
                 entry = archive.getEntry ("xl/workbook.xml");
                 doc = builder.parse (archive.getInputStream (entry));
                 docElement = doc.getDocumentElement ();
-                Node sheets = XMLutility.getChild (docElement, "sheets");
-                for (Node sheet = sheets.getFirstChild (); sheet != null; sheet = sheet.getNextSibling ())
+                org.w3c.dom.Node sheets = XMLutility.getChild (docElement, "sheets");
+                for (org.w3c.dom.Node sheet = sheets.getFirstChild (); sheet != null; sheet = sheet.getNextSibling ())
                 {
                     String rid = XMLutility.getAttribute (sheet, "r:id");
                     String target = IDtarget.get (rid);
@@ -388,16 +938,16 @@ public class Table extends Function implements NonzeroIterable
                     entry = archive.getEntry (target);
                     Document worksheet = builder.parse (archive.getInputStream (entry));
                     docElement = worksheet.getDocumentElement ();
-                    Node sheetData = XMLutility.getChild (docElement, "sheetData");
-                    for (Node row = sheetData.getFirstChild (); row != null; row = row.getNextSibling ())
+                    org.w3c.dom.Node sheetData = XMLutility.getChild (docElement, "sheetData");
+                    for (org.w3c.dom.Node row = sheetData.getFirstChild (); row != null; row = row.getNextSibling ())
                     {
-                        for (Node c = row.getFirstChild (); c != null; c = c.getNextSibling ())
+                        for (org.w3c.dom.Node c = row.getFirstChild (); c != null; c = c.getNextSibling ())
                         {
                             parseA1 (XMLutility.getAttribute (c, "r"));
                             switch (XMLutility.getAttribute (c, "t"))
                             {
                                 case "s":  // indexed string
-                                    Node v = XMLutility.getChild (c, "v");
+                                    org.w3c.dom.Node v = XMLutility.getChild (c, "v");
                                     int index = Integer.valueOf (v.getTextContent ());
                                     String value = strings.get (index);
                                     if (value == null  ||  value.isEmpty ()) continue;
@@ -413,7 +963,7 @@ public class Table extends Function implements NonzeroIterable
                                     fillS++;
                                     break;
                                 case "inlineStr":
-                                    Node si = XMLutility.getChild (c, "si");
+                                    org.w3c.dom.Node si = XMLutility.getChild (c, "si");
                                     str = extractSI (si).trim ();
                                     if (str.isEmpty ()) continue;
                                     strings.add (str);
@@ -465,14 +1015,14 @@ public class Table extends Function implements NonzeroIterable
                 PrintStream err = Backend.err.get ();
                 err.println ("ERROR: Failed to parse spreadsheet file: " + path);
                 e.printStackTrace (err);
-                throw new Backend.AbortRun ();
+                throw new AbortRun ();
             }
         }
 
-        public static String extractSI (Node si)
+        public static String extractSI (org.w3c.dom.Node si)
         {
             String result = "";
-            for (Node n = si.getFirstChild (); n != null; n = n.getNextSibling ())
+            for (org.w3c.dom.Node n = si.getFirstChild (); n != null; n = n.getNextSibling ())
             {
                 switch (n.getNodeName ())
                 {
@@ -480,7 +1030,7 @@ public class Table extends Function implements NonzeroIterable
                         result += n.getTextContent ();
                         break;
                     case "r":  // rich text element
-                        for (Node m = n.getFirstChild (); m != null; m = m.getNextSibling ())
+                        for (org.w3c.dom.Node m = n.getFirstChild (); m != null; m = m.getNextSibling ())
                         {
                             if (m.getNodeName ().equals ("t")) result += m.getTextContent ();
                         }
@@ -521,7 +1071,7 @@ public class Table extends Function implements NonzeroIterable
             Sheet sheet = wb.get (sheetName);
             if (sheet == null) ws = first;
             else               ws = sheet;
-            ws.columnMap = null;  // A change of anchor also indicates a change column headers.
+            ws.columnMap = null;  // A change of anchor also indicates a change of column headers.
             parseA1 (coordinates);
         }
 
@@ -548,16 +1098,6 @@ public class Table extends Function implements NonzeroIterable
             if (ar > 0) ar--;  // Cell addresses are usually 1-based, so need to convert to 0-based.
         }
 
-        public int getRows ()
-        {
-            return Math.max (0, ws.rows - ar);
-        }
-
-        public int getColumns ()
-        {
-            return Math.max (0, ws.columns - ac);
-        }
-
         public int getRowsInColumn ()
         {
             int result = 0;
@@ -578,6 +1118,16 @@ public class Table extends Function implements NonzeroIterable
                 result++;
             }
             return result;
+        }
+
+        public int getRows ()
+        {
+            return Math.max (0, ws.rows - ar);
+        }
+
+        public int getColumns ()
+        {
+            return Math.max (0, ws.columns - ac);
         }
 
         /**
@@ -609,7 +1159,7 @@ public class Table extends Function implements NonzeroIterable
         {
             if (ws.index == null)
             {
-                if (ws.columnMap == null)  // No column headers, so use all rows.
+                if (ws.columnMap == null)  // No column headers, so use all rows. TODO: Need a better way to detect presence of column headers. This is unreliable in multiple ways.
                 {
                     ws.index = new Integer[ws.rows];
                     for (int i = 0; i < ws.rows; i++) ws.index[i] = i;
@@ -741,9 +1291,11 @@ public class Table extends Function implements NonzeroIterable
             return strings.get (index - 1);  // offset index back to zero-based
         }
 
-        public Set<String> worksheetNames ()
+        public IteratorNonzero getIteratorNonzero ()
         {
-            return wb.keySet ();
+            Matrix A = ws.numbers;
+            if (A instanceof MatrixSparse) return new IteratorSparse ((MatrixSparse) A, ar, ac);
+            return ((MatrixDense) A).getRegion (ar, ac).getIteratorNonzero ();
         }
     }
 
@@ -752,17 +1304,19 @@ public class Table extends Function implements NonzeroIterable
         Simulator simulator = Simulator.instance.get ();
         if (simulator == null) return null;  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
-        String path = ((Text) operands[0].eval (context)).value;
-        Object H = simulator.holders.get (path);
+        String fileName = ((Text) operands[0].eval (context)).value;
+        Object H = simulator.holders.get (fileName);
         if (H == null)
         {
-            H = new Holder (simulator.jobDir.resolve (path));
-            simulator.holders.put (path, H);
+            Type hdf = evalKeyword (context, "hdf");
+            if (hdf != null) H = new HolderHDF   (simulator, fileName, hdf.toString ());
+            else             H = new HolderSheet (simulator.jobDir.resolve (fileName));
+            simulator.holders.put (fileName, H);
         }
         else if (! (H instanceof Holder))
         {
             Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
-            throw new Backend.AbortRun ();
+            throw new AbortRun ();
         }
         return (Holder) H;
     }
@@ -796,7 +1350,7 @@ public class Table extends Function implements NonzeroIterable
         Type op2 = null;
         if (operands.length > 2) op2 = operands[2].eval (context);
 
-        Type prefix = evalKeyword (context, "prefix");
+        boolean isString = getKeywordFlag ("string");
         Operator key = getKeyword ("key");  // Assumed to be constant string, if it exists.
         if (key == null)
         {
@@ -817,19 +1371,19 @@ public class Table extends Function implements NonzeroIterable
 
         if (row < 0  ||  col < 0)
         {
-            if (prefix instanceof Text) return prefix;
+            if (isString) return new Text ();
             return new Scalar (0);
         }
         else
         {
-            if (prefix instanceof Text) return new Text (prefix + H.getString ((int) row, (int) col));
+            if (isString) return new Text (H.getString ((int) row, (int) col));
             return new Scalar (H.getDouble (row, col));
         }
     }
 
     public String toString ()
     {
-        return "spreadsheet";
+        return "table";
     }
 
     public Operator operandA ()
@@ -862,8 +1416,17 @@ public class Table extends Function implements NonzeroIterable
         Operator anchor = getKeyword ("anchor");
         if (anchor != null) H.parse (anchor.getString ());  // This is required to be constant, so we can simply retrieve the string.
 
-        Matrix A = H.ws.numbers;
-        if (A instanceof MatrixSparse) return new IteratorSparse ((MatrixSparse) A, H.ar, H.ac);
-        return ((MatrixDense) A).getRegion (H.ar, H.ac).getIteratorNonzero ();
+        if (H instanceof HolderHDF  &&  operands.length > 3)
+        {
+            @SuppressWarnings("resource")
+            HolderHDF HH = (HolderHDF) H;
+            if (HH.isSonata)  // SONATA edge
+            {
+                String attribute = operands[3].getString ();
+                return HH.getIteratorEdge (attribute);
+            }
+        }
+
+        return H.getIteratorNonzero ();
     }
 }

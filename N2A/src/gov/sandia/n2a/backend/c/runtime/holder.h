@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -35,7 +35,7 @@ Store in subdirectory KHR:
 #  undef max
 #endif
 
-#ifdef HAVE_HDF5
+#ifdef HAVE_HDF
 #  include <H5Cpp.h>
 #endif
 
@@ -413,6 +413,7 @@ struct SHARED InputXSV : public InputHolder<T>
     std::istream *            in;
     char                      delimiter;
     bool                      delimiterSet;
+    bool                      firstRow;
     std::list<InputLine<T> *> buffer;
 
     InputXSV (const String & fileName);
@@ -440,22 +441,22 @@ template<class T> SHARED InputXSV<T> * xsvHelper (const String & fileName, int e
 template<class T> SHARED InputXSV<T> * xsvHelper (const String & fileName,                                InputXSV<T> * oldHandle = 0);
 #endif
 
-#ifdef HAVE_HDF5
+#ifdef HAVE_HDF
 
 struct SHARED SubHolder
 {
     H5::H5File file;
     int        users;
-    std::mutex mutexFile;  ///< Serialize access to a given open file, since HDF5 is not thread-safe.
+    std::mutex mutexFile;  ///< Serialize access to a given open file, since HDF is not thread-safe.
 
-    static std::map<String,SubHolder*> files;  ///< Keep track of all open HDF5 files in the app (regardless of which simulation they belong to). These can be shared by multiple InputHDF5 objects.
+    static std::map<String,SubHolder*> files;  ///< Keep track of all open HDF files in the app (regardless of which simulation they belong to). These can be shared by multiple InputHDF objects.
     static std::mutex                  mutexFiles;
 
     SubHolder (const String & fileName);
 };
 
 template<class T>
-struct SHARED InputHDF5 : public InputHolder<T>
+struct SHARED InputHDF : public InputHolder<T>
 {
     using InputHolder<T>::fileName;
     using InputHolder<T>::mutexLine;
@@ -482,8 +483,8 @@ struct SHARED InputHDF5 : public InputHolder<T>
     hsize_t *   start;       // For accessing data. This avoids recreating the object every time.
     hsize_t *   count;       // ditto
 
-    InputHDF5 (const String & fileName, const String & path);
-    virtual ~InputHDF5 ();
+    InputHDF (const String & fileName, const String & path);
+    virtual ~InputHDF ();
 
     virtual void getRow  (T row);
     int          rowFromLine (T line);
@@ -492,12 +493,12 @@ struct SHARED InputHDF5 : public InputHolder<T>
 };
 
 #ifdef n2a_FP
-template<class T> SHARED InputHDF5<T> * hdf5Helper (const String & fileName, const String & path, int exponent, int exponentRow, InputHDF5<T> * oldHandle = 0);
+template<class T> SHARED InputHDF<T> * hdfHelper (const String & fileName, const String & path, int exponent, int exponentRow, InputHDF<T> * oldHandle = 0);
 #else
-template<class T> SHARED InputHDF5<T> * hdf5Helper (const String & fileName, const String & path,                                InputHDF5<T> * oldHandle = 0);
+template<class T> SHARED InputHDF<T> * hdfHelper (const String & fileName, const String & path,                                InputHDF<T> * oldHandle = 0);
 #endif
 
-#endif  // HAVE_HDF5
+#endif  // HAVE_HDF
 
 template<class T>
 struct SHARED OutputHolder : public Holder

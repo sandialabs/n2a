@@ -18,8 +18,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-
 import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -207,7 +205,7 @@ public class ImportJob
         for (MNode n : config.childOrEmpty ("networks", type + "s"))
         {
             Path typesPath = dir.resolve (n.get (type + "_types_file"));
-            Table.Holder H = new Table.Holder (typesPath);
+            Table.Holder H = new Table.HolderSheet (typesPath);
 
             int index_population      = H.getColumnIndex ("population");
             int index_type_id         = H.getColumnIndex (type + "_type_id");
@@ -225,7 +223,7 @@ public class ImportJob
             if (index_population < 0)
             {
                 // Our fallback assumption is that only one population is present,
-                // and that the paired HDF5 file names this population.
+                // and that the paired HDF file names this population.
                 Path hdfPath = dir.resolve (n.get (type + "s_file"));
                 try (HdfFile file = new HdfFile (hdfPath))
                 {
@@ -331,10 +329,9 @@ public class ImportJob
         public GroupAttributes (Group group)
         {
             Group dynamics_params = null;
-            for (Entry<String,Node> entry : group.getChildren ().entrySet ())
+            for (Node node : group)
             {
-                String name = entry.getKey ();
-                Node   node = entry.getValue ();
+                String name = node.getName ();
                 if (name.equals ("dynamics_params"))
                 {
                     dynamics_params = (Group) node;
@@ -345,11 +342,9 @@ public class ImportJob
             }
 
             if (dynamics_params == null) return;
-            for (Entry<String,Node> entry : dynamics_params.getChildren ().entrySet ())
+            for (Node node : dynamics_params)
             {
-                String name = entry.getKey ();
-                Node   node = entry.getValue ();
-                names   .add ("dynamics_params/" + name);
+                names   .add ("dynamics_params/" + node.getName ());
                 datasets.add ((Dataset) node);
             }
         }
@@ -357,13 +352,12 @@ public class ImportJob
         public static HashMap<Integer,GroupAttributes> fromPopulation (Group population)
         {
             HashMap<Integer,GroupAttributes> result = new HashMap<Integer,GroupAttributes> ();
-            for (Entry<String,Node> entry : population.getChildren ().entrySet ())
+            for (Node node : population)
             {
-                Node node = entry.getValue ();
                 if (! node.isGroup ()) continue;
 
                 int group_id = -1;
-                try {group_id = Integer.valueOf (entry.getKey ());}
+                try {group_id = Integer.valueOf (node.getName ());}
                 catch (NumberFormatException error) {}
                 if (group_id < 0) continue;
 
@@ -386,12 +380,11 @@ public class ImportJob
             try (HdfFile file = new HdfFile (nodesPath))
             {
                 Group nodes = (Group) file.getChild ("nodes");
-                for (Entry<String,Node> entry : nodes.getChildren ().entrySet ())
+                for (Node node : nodes)
                 {
-                    Node   node           = entry.getValue ();
                     if (! node.isGroup ()) continue;  // This should never happen.
                     Group  population     = (Group) node;
-                    String populationName = entry.getKey ();
+                    String populationName = node.getName ();
 
                     // Collect group column lists.
                     HashMap<Integer,GroupAttributes> groupAttributes = GroupAttributes.fromPopulation (population);
@@ -481,7 +474,7 @@ public class ImportJob
                         String partName = populationName;
                         MNode part = model.childOrCreate (partName);
 
-                        String table    = "table(hdfFile, $index, 0, hdf5=\"nodes/" + populationName + "/node_type_id\")";
+                        String table    = "table(hdfFile, $index, 0, hdf=\"nodes/" + populationName + "/node_type_id\")";
                         part.set ("dir+\"/" + nodes_file + "\"", "hdfFile");
                         part.set (table,                         "node_type_id");
                         part.set ("",                            "$meta", "backend", "sonata", "simple");
@@ -539,12 +532,11 @@ public class ImportJob
             try (HdfFile file = new HdfFile (edgesPath))
             {
                 Group edges = (Group) file.getChild ("edges");
-                for (Entry<String,Node> entry : edges.getChildren ().entrySet ())
+                for (Node edge : edges)
                 {
-                    Node   edge           = entry.getValue ();
                     if (! edge.isGroup ()) continue;  // This should never happen.
                     Group  population     = (Group) edge;
-                    String populationName = entry.getKey ();
+                    String populationName = edge.getName ();
 
                     HashMap<Integer,GroupAttributes> groupAttributes = GroupAttributes.fromPopulation (population);
 
@@ -598,7 +590,7 @@ public class ImportJob
                         if (model.child (partName) != null) partName += " edge";
                         MNode part = model.childOrCreate (partName);
 
-                        String table = "table(hdfFile, $index, 0, hdf5=\"edges/" + populationName + "/edge_type_id\")";
+                        String table = "table(hdfFile, $index, 0, hdf=\"edges/" + populationName + "/edge_type_id\")";
                         part.set ("dir+\"/" + edges_file + "\"", "hdfFile");
                         part.set (table,                         "edge_type_id");
                         part.set (source_node_population,        "A");
@@ -657,8 +649,8 @@ public class ImportJob
                             if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
 
                             String partName = populationName + " " + model_template;
-                            model.set ("dir+\"/" + nodes_file + "\"",                                                   partName, "hdfFile");
-                            model.set ("table(hdfFile, $index, 0, hdf5=\"nodes/" + populationName + "/node_type_id\")", partName, "node_type_id");
+                            model.set ("dir+\"/" + nodes_file + "\"",                                                  partName, "hdfFile");
+                            model.set ("table(hdfFile, $index, 0, hdf=\"nodes/" + populationName + "/node_type_id\")", partName, "node_type_id");
 
 
                             // TODO
@@ -714,7 +706,7 @@ public class ImportJob
                     case "sonata":
                         part.set ("dir+\"/" + input_file + "\"",       "hdfFile");
                         part.set ("\"spikes/" + populationName + "\"", "inputPath");
-                        part.set ("matrix(hdfFile, hdf5=inputPath)",   "times");
+                        part.set ("matrix(hdfFile, hdf=inputPath)",    "times");
                         part.set ("$t>=times($index, index)*1ms",      "fire");
                         break;
                     case "csv":

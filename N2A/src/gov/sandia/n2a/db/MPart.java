@@ -129,9 +129,9 @@ public class MPart extends MNode
                     if (! escape)
                     {
                         String temp = key.toString ();
-                        if (! after) temp = temp.trim ();
+                        if (! after) temp = temp.trim ();  // Trim trailing spaces.
                         result.add (temp);
-                        key   = new StringBuilder ();
+                        key.setLength (0);
                         after = false;
                         continue;
                     }

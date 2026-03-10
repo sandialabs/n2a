@@ -35,7 +35,7 @@ public class SettingsC extends SettingsBackend
 
     protected MTextField fieldCpp      = new MTextField (40);
     protected MTextField fieldFFmpeg   = new MTextField (40);
-    protected MTextField fieldHDF5     = new MTextField (40);
+    protected MTextField fieldHDF      = new MTextField (40);
     protected MTextField fieldJNI      = new MTextField (40);
     protected MTextField fieldGL       = new MTextField (40);
     protected MCheckBox  fieldShowCC   = new MCheckBox ("Show source files (.cc)");
@@ -83,14 +83,14 @@ public class SettingsC extends SettingsBackend
             }
         });
 
-        fieldHDF5.addChangeListener (new ChangeListener ()
+        fieldHDF.addChangeListener (new ChangeListener ()
         {
             public void stateChanged (ChangeEvent e)
             {
                 Host h = (Host) list.getSelectedValue ();
-                h.objects.remove ("hdf5LibDir");
-                h.objects.remove ("hdf5IncDir");
-                h.objects.remove ("hdf5BinDir");
+                h.objects.remove ("hdfLibDir");
+                h.objects.remove ("hdfIncDir");
+                h.objects.remove ("hdfBinDir");
                 h.config.set ("", "backend", "c", "compilerChanged");
                 clearMessage (h);
             }
@@ -142,7 +142,9 @@ public class SettingsC extends SettingsBackend
                 h.objects.remove ("ffmpegLibDir");
                 h.objects.remove ("ffmpegIncDir");
                 h.objects.remove ("ffmpegBinDir");
-                h.objects.remove ("HDF5Dir");
+                h.objects.remove ("hdfLibDir");
+                h.objects.remove ("hdfIncDir");
+                h.objects.remove ("hdfBinDir");
                 h.objects.remove ("jniIncMdDir");
                 h.objects.remove ("jniIncDir");
                 h.objects.remove ("glLibs");
@@ -181,7 +183,7 @@ public class SettingsC extends SettingsBackend
     {
         fieldCpp   .bind (parent, "cxx",    "g++");
         fieldFFmpeg.bind (parent, "ffmpeg", "");
-        fieldHDF5  .bind (parent, "hdf5",   "");
+        fieldHDF   .bind (parent, "hdf",    "");
         fieldJNI   .bind (parent, "jni_md", "");
         fieldGL    .bind (parent, "gl",     "");
 
@@ -197,7 +199,7 @@ public class SettingsC extends SettingsBackend
         return Lay.BxL (
             Lay.FL (new JLabel ("Compiler path"), fieldCpp),
             Lay.FL (new JLabel ("Directory that contains FFmpeg libraries"), fieldFFmpeg),
-            Lay.FL (new JLabel ("Directory that contains HDF5 libraries"), fieldHDF5),
+            Lay.FL (new JLabel ("Directory that contains HDF libraries"), fieldHDF),
             Lay.FL (new JLabel ("Directory that contains jni_md.h"), fieldJNI),
             Lay.FL (new JLabel ("OpenGL link library"), fieldGL),
             Lay.FL (fieldShowCC),
