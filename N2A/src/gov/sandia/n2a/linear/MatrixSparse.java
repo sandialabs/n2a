@@ -22,9 +22,9 @@ import gov.sandia.n2a.language.type.Text;
 
 public class MatrixSparse extends Matrix
 {
-    List<HashMap<Integer,Double>> data = new ArrayList<HashMap<Integer,Double>> ();
-    int    rowCount;  // Largest index seen in any column.
-    double emptyValue;
+    protected List<HashMap<Integer,Double>> data = new ArrayList<HashMap<Integer,Double>> ();
+    protected int    rowCount;  // Largest index seen in any column.
+    protected double emptyValue;
 
     public MatrixSparse ()
     {
@@ -139,6 +139,11 @@ public class MatrixSparse extends Matrix
         rowCount = Math.max (rowCount, row + 1);  // Any set() will stretch matrix, even if emptyValue. 
     }
 
+    public void setEmptyValue (double a)
+    {
+        emptyValue = a;
+    }
+
     public MatrixSparse clear (double initialValue)
     {
         return new MatrixSparse (rows (), columns (), initialValue);
@@ -185,6 +190,7 @@ public class MatrixSparse extends Matrix
 
     public boolean isZero ()
     {
+        // TODO: emptyValue is not necessarily zero. Should we check it?
         for (HashMap<Integer,Double> c : data)
         {
             for (Double d : c.values ())
@@ -269,20 +275,6 @@ public class MatrixSparse extends Matrix
             HashMap<Integer,Double> rows = data.get (c);
             if (rows == null) continue;
             for (Entry<Integer,Double> row : rows.entrySet ()) result.set (row.getKey (), c, -row.getValue ());
-        }
-        return result;
-    }
-
-    public MatrixSparse transpose ()
-    {
-        int w = columns ();
-        int h = rows ();
-        MatrixSparse result = new MatrixSparse (w, h, emptyValue);
-        for (int c = 0; c < w; c++)
-        {
-            HashMap<Integer,Double> rows = data.get (c);
-            if (rows == null) continue;
-            for (Entry<Integer,Double> row : rows.entrySet ()) result.set (c, row.getKey (), row.getValue ());
         }
         return result;
     }

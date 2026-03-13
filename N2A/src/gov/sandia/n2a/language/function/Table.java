@@ -30,30 +30,24 @@ import org.w3c.dom.NamedNodeMap;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.backend.neuroml.XMLutility;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
-import gov.sandia.n2a.eqset.EquationSet.NonzeroIterable;
-import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
-import gov.sandia.n2a.language.function.Input.HolderHDF.SubHolder;
+import gov.sandia.n2a.language.function.Input.SubHolderHDF;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
-import gov.sandia.n2a.language.type.Matrix.IteratorNonzero;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.linear.MatrixSparse;
-import gov.sandia.n2a.linear.MatrixSparse.IteratorSparse;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
-import io.jhdf.HdfFile;
 import io.jhdf.api.Attribute;
 import io.jhdf.api.Dataset;
 import io.jhdf.api.Group;
-import io.jhdf.exceptions.HdfException;
 import tech.units.indriya.AbstractUnit;
 
-public class Table extends Function implements NonzeroIterable
+public class Table extends Function
 {
     public String name;     // For C backend, the name of the holder object.
     public String fileName; // For C backend, the name of the string variable holding the file name, if any.
@@ -124,68 +118,89 @@ public class Table extends Function implements NonzeroIterable
         return new Scalar ();
     }
 
-    public static abstract class Holder
+    public static interface Holder
     {
-        public void parse (String anchor)
+        public default void parse (String anchor)
         {
             throw new AbortRun ("anchor keyword is not supported for given file type");
         }
 
-        public int getColumnsInRow ()
+        public default int getColumnsInRow ()
         {
             throw new AbortRun ("columnsInRow keyword is not supported for given file type");
         }
 
-        public int getRowsInColumn ()
+        public default int getRowsInColumn ()
         {
             throw new AbortRun ("rowsInColumn keyword is not supported for given file type");
         }
 
-        public abstract int             getColumns ();
-        public abstract int             getRows ();
-        public abstract int             getColumnIndex (String columnName);
-        public abstract int             getRowIndex (int columnIndex, Object columnValue);
-        public abstract double          getDouble (double row, double column);
-        public abstract String          getString (int    row, int    column);
-        public abstract IteratorNonzero getIteratorNonzero ();
+        public int    rows ();
+        public int    columns ();
+        public int    getColumnIndex (String columnName);
+        public int    getRowIndex (int columnIndex, Object columnValue);
+        public double getDouble (double row, double column);
+        public String getString (int    row, int    column);
     }
 
-    public static class HolderHDF extends Holder implements AutoCloseable
+    /**
+        Table-style access for HDF files.
+        Handles several general cases as well as specialty formats (SONATA, possibly NWB).
+        See also Input.HolderHDF. The access style is different enough that different classes are justified.
+    **/
+    public static class HolderHDF extends Matrix implements Holder, AutoCloseable
     {
-        protected String              fileName;
-        protected io.jhdf.api.Node    root;     // Can be either a Dataset or a Group.
-        protected boolean             isSonata;
-        protected int[]               dims;     // Size of data. Gets modified to always be 2D.
-        protected int                 dimCount; // Original length of "dims"
+        protected Path                filePath;
+        protected io.jhdf.api.Node    root;             // Can be either a Dataset or a Group.
+        protected Group               sonataPopulation; // Population node, for finding related resources. null if not a SONATA file.
+        protected boolean             sonataEdges;      // root is an attribute associated with a SONATA style sparse edge list.
+        protected boolean             sonataSpikes;     // root is a group that contains SONATA style input spikes.
+        protected int[]               dims;             // Size of data. Gets modified to always be 2D.
+        protected int                 dimCount;         // Original length of "dims"
         protected Map<String,Integer> rowMap;
         protected Map<String,Integer> columnMap;
-        protected List<String>        headers;  // The inverse of columnMap
+        protected List<String>        headers;          // The inverse of columnMap
+        protected Matrix              sonataRaster;     // Spike array, pre-loaded. Assumes that input spike pattern is relatively small, so can easily fit in memory.
 
         public static final int chunkSize = 1000000;
 
-        public HolderHDF (Simulator simulator, String fileName, String hdfPath)
+        /**
+            @param fileName To the HDF file. Not the same as the key for looking Holder. Specifically, the
+            holder key includes both HDF file path and path to resource inside HDF file. Here, we are only
+            interested in the actual path to file, so we can keep track of how many holders are using the file.
+            @param resource To the resource inside the HDF file.
+        **/
+        public HolderHDF (Path filePath, String resource)
         {
-            this.fileName = fileName;
-            SubHolder sub;
-            synchronized (Input.HolderHDF.files)
+            this.filePath = filePath;
+            SubHolderHDF sub = SubHolderHDF.allocate (filePath);
+            root = sub.file.getByPath (resource);
+
+            // Detect SONATA file.
+            Attribute magic = sub.file.getAttribute ("magic");
+            if (magic.getJavaType ().equals (Integer.class)  &&  (Integer) magic.getData () == 2682)
             {
-                sub = Input.HolderHDF.files.get (fileName);
-                if (sub == null)
+                List<io.jhdf.api.Node> parents = new ArrayList<io.jhdf.api.Node> ();
+                io.jhdf.api.Node p = root;
+                parents.add (p);
+                while (p != sub.file)
                 {
-                    sub = new SubHolder ();
-                    sub.file = new HdfFile (simulator.jobDir.resolve (fileName));
-                    Input.HolderHDF.files.put (fileName, sub);
+                    p = p.getParent ();
+                    parents.add (0, p);
                 }
-                sub.users++;
+                int parentCount = parents.size ();
+                if (parentCount > 2)
+                {
+                    sonataPopulation = (Group) parents.get (2);
+                    String groupName = parents.get (1).getName (); // Name of group that contains sonataPopulation.
+                    if      (groupName.equals ("spikes")) sonataSpikes = true;
+                    else if (groupName.equals ("edges" )) sonataEdges  = true;
+                }
             }
 
-            Attribute magic = sub.file.getAttribute ("magic");
-            if (magic.getJavaType ().equals (Integer.class)) isSonata = ((Integer) magic.getData ()) == 2682;
-
-            root = sub.file.getByPath (hdfPath);
             if (root.isGroup ())
             {
-                // TODO: handle SONATA edge
+                // TODO: handle NWB TimeSeries
                 dims      = new int [2];
                 columnMap = new TreeMap<String,Integer> ();
                 headers   = new ArrayList<String> ();
@@ -204,39 +219,31 @@ public class Table extends Function implements NonzeroIterable
             else  // root is Dataset
             {
                 dims = ((Dataset) root).getDimensions ();
-                if (dims.length == 1)
+                dimCount = dims.length;
+                if (dimCount == 1)
                 {
                     int temp = dims[0];
                     dims = new int[2];
                     dims[0] = temp;
                     dims[1] = 1;
                 }
+                if (sonataEdges) dims[1] = 2;  // Edges are 2D sparse.
             }
         }
 
         public void close () throws Exception
         {
-            synchronized (Input.HolderHDF.files)
-            {
-                SubHolder sub = Input.HolderHDF.files.get (fileName);
-                sub.users--;
-                if (sub.users <= 0)
-                {
-                    try {sub.file.close ();}
-                    catch (HdfException e) {}
-                    Input.HolderHDF.files.remove (fileName);
-                }
-            }
+            SubHolderHDF.release (filePath);
         }
 
-        public int getColumns ()
-        {
-            return dims[1];
-        }
-
-        public int getRows ()
+        public int rows ()
         {
             return dims[0];
+        }
+
+        public int columns ()
+        {
+            return dims[1];
         }
 
         public int getColumnIndex (String columnName)
@@ -322,6 +329,8 @@ public class Table extends Function implements NonzeroIterable
 
         public double getDouble (double row, double column)
         {
+            if (sonataEdges  ||  sonataSpikes)  throw new AbortRun ("Should access SONATA edges or spikes through matrix()");
+
             // Bracket the source rows for an interpolated or extrapolated value.
             int r = (int) row;
             int r1 = r + 1;
@@ -426,11 +435,14 @@ public class Table extends Function implements NonzeroIterable
 
         public String getString (int row, int column)
         {
+            if (sonataEdges  ||  sonataSpikes)  throw new AbortRun ("Should access SONATA edges or spikes through matrix()");
+
             if (row < 0  ||  row >= dims[0]  ||  column < 0  ||  column >= dims[1]) return "";
             long offset[] = new long[dimCount];
             int  count [] = new int [dimCount];
             offset[0] = row;
             count [0] = 1;
+            if (dimCount > 1) count[1] = 1;
 
             Dataset columnData;
             if (root.isGroup ())
@@ -441,6 +453,7 @@ public class Table extends Function implements NonzeroIterable
             else  // root is a Dataset
             {
                 columnData = (Dataset) root;
+                if (dimCount > 1) count[1] = column;
             }
             Object result = columnData.getData (offset, count);
             Class<?> type = columnData.getJavaType ();
@@ -448,6 +461,49 @@ public class Table extends Function implements NonzeroIterable
             if (type == double.class) return String.valueOf (((double[]) result)[0]);
             if (type == float .class) return String.valueOf (((float []) result)[0]);
             throw new AbortRun ("Need code to handle numeric types other than double or float.");
+        }
+
+        public double get (int row, int column)
+        {
+            return getDouble (row, column);
+        }
+
+        public void set (int row, int column, double a)
+        {
+            throw new AbortRun ("HolderHDF does not support set()");
+        }
+
+        /**
+            Utility for ReadMatrix().
+            It is the returned Matrix object that is stored in the simulator's holder list.
+            ReadMatrix() closes this HolderHDF upon return. If we return ourselves as the matrix,
+            we need to take out an extra SubHolderHDF allocation, to prevent the underlying file from being closed.
+            If we construct a specialty matrix, that matrix is responsible to call allocate() and release().
+
+            Cases:
+            * SONATA "spikes" list. "hdf" keyword points to the Group that holds the spike list (usually named after the population).
+            * SONATA "edges" list. "hdf" keyword points to the primary attribute being iterated.
+            * Any 1D or 2D dataset.
+            * Several parallel datasets under a group. Can either be SONATA attributes or any other data structured the same way.
+
+            For sparse iteration, several Matrix objects coordinate with each other to take advantage of knowledge about current row in the SONATA data.
+        **/
+        public Matrix getMatrix ()
+        {
+            if (sonataSpikes) return new MatrixSonataSpikesHDF (filePath, sonataPopulation);
+            if (sonataEdges)  return new MatrixSonataEdgesHDF  (filePath, sonataPopulation, (Dataset) root);
+
+            // * Any 1D or 2D dataset.
+            // * Several parallel datasets under a group. Can either be SONATA attributes or any other data structured the same way.
+            SubHolderHDF.allocate (filePath);  // This Table.HolderHDF object will be closed upon return. Since we are returning ourselves as the matrix, we need to take out an additional allocation.
+            return this;
+        }
+
+        public IteratorNonzero getIteratorNonzero ()
+        {
+            if (root.isGroup ()  ||  dimCount < 2) throw new AbortRun ("IteratorNonzero requires a 2D dataset");
+            // Also, we don't bother iterating over attribute columns, since it isn't a meaningful use case.
+            return new IteratorNonzeroHDF ();
         }
 
         public class IteratorNonzeroHDF implements IteratorNonzero
@@ -554,51 +610,163 @@ public class Table extends Function implements NonzeroIterable
                 return (int) column;
             }
         }
+    }
 
-        public IteratorNonzero getIteratorNonzero ()
+    /**
+        Special sparse matrix for SONATA edge lists, backed by HDF data.
+        This returns a sparse iterator that simply reads through source and target node IDs serially.
+        To support fast lookup of multiple attributes, we keep a static cache of recently iterated edges.
+        This hints the row needed to retrieve the attribute value.
+
+        This class only works when the edge group structure is simple. That is, only one value in edge_group_id,
+        and edge_group_index is zero-based contiguous. Anything else requires either more complex lookup
+        or separated tables. Such tables will probably be in CSV rather than HDF.
+    **/
+    public static class MatrixSonataEdgesHDF extends Matrix implements AutoCloseable
+    {
+        protected Path      filePath;
+        protected Dataset   datasetSource;
+        protected Dataset   datasetTarget;
+        protected Dataset   datasetAttribute;
+        protected double[]  chunkAttribute;
+        protected Class<?>  type;
+        protected long      rowCount;
+        protected long[]    offset     = {-HolderHDF.chunkSize};  // For chunkAttribute. The iterator below has its own copy for the source and target node IDs.
+        protected int[]     count      = { HolderHDF.chunkSize};
+        protected double    emptyValue = Double.POSITIVE_INFINITY;
+        protected SharedRow cached;
+
+        public static class SharedRow
         {
-            if (root.isGroup ()  &&  dimCount < 2) throw new AbortRun ("IteratorNonzero requires a 2D dataset");
-            return new IteratorNonzeroHDF ();
+            long row = -1;
+        }
+
+        public MatrixSonataEdgesHDF (Path filePath, Group population, Dataset attribute)
+        {
+            this.filePath = filePath;
+            SubHolderHDF.allocate (filePath);
+
+            // Set up to share current row between iterator and other attribute matrices.
+            // This is somewhat of an abuse of the Simulator.holder system, but it is a
+            // simple way to guarantee that these resources are simulator-specific and
+            // will be disposed at the end.
+            String key = "$HDFrow";  // Unlikely to ever be a file name.
+            Simulator simulator = Simulator.instance.get ();
+            @SuppressWarnings("unchecked")
+            Map<String,SharedRow> cache1 = (Map<String,SharedRow>) simulator.holders.get (key);
+            if (cache1 == null)
+            {
+                cache1 = new HashMap<String,SharedRow> ();
+                simulator.holders.put (key, cache1);
+            }
+            String populationName = population.getName ();
+            cached = cache1.get (populationName);
+            if (cached == null)
+            {
+                cached = new SharedRow ();
+                cache1.put (populationName, cached);
+            }
+
+            datasetSource    = population.getDatasetByPath ("source_node_id");
+            datasetTarget    = population.getDatasetByPath ("target_node_id");
+            datasetAttribute = attribute;
+            type             = attribute.getJavaType ();
+            rowCount         = attribute.getSize ();
+        }
+
+        public void close () throws Exception
+        {
+            SubHolderHDF.release (filePath);
+        }
+
+        public int rows ()
+        {
+            throw new AbortRun ("MatrixSonataEdgesHDF does not support rows()");
+        }
+
+        public int columns ()
+        {
+            throw new AbortRun ("MatrixSonataEdgesHDF does not support columns()");
         }
 
         /**
-            Special iterator for SONATA edge data.
+            Return attribute associated with the current iterator position.
         **/
+        public double get (int row, int column)
+        {
+            // Blindly assume that the shared row is correct.
+            // The alternative is to read back source and target IDs to verify they match row and column.
+            // This version assumes no retrograde movement through edges. If there are multiple threads
+            // moving the iterator, then it may be necessary to backtrack as many rows as there are threads (T).
+            // In this case, we need to more carefully manage chunkAttribute. Could hold on to the final T
+            // rows from the previous chunk in a separate buffer.
+
+            // There are two case for this get() function:
+            // * There is an associated iterator. -- chunkAttribute will be kept up to date by the iterator.
+            // * Otherwise -- We load chunkAttribute here. This should stay in sync with the iterator,
+            //                but that is not strictly necessary.
+            long r = cached.row;
+            if (r >= rowCount) return emptyValue;
+            int rr = (int) (r - offset[0]);  // row relative to current block of data
+            if (rr >= count[0])
+            {
+                // Out of data, so load another block.
+                rr = 0;
+                offset[0] = r;
+                count[0] = Math.min (count[0], (int) (rowCount - r));  // Don't read past end of dataset.
+                loadChunkAttribute ();
+            }
+            return chunkAttribute[rr];
+        }
+
+        public void set (int row, int column, double a)
+        {
+            throw new AbortRun ("MatrixSonataEdgesHDF does not support set()");
+        }
+
+        protected void loadChunkAttribute ()
+        {
+            Object temp = datasetAttribute.getData (offset, count);
+            if (type == double.class)
+            {
+                chunkAttribute = (double[]) temp;
+            }
+            else if (type == float.class)
+            {
+                chunkAttribute = new double[count[0]];
+                float[] f = (float[]) temp;
+                for (int r = 0; r < count[0]; r++) chunkAttribute[r] = f[r];
+            }
+            else if (type == int.class)
+            {
+                chunkAttribute = new double[count[0]];
+                int[] n = (int[]) temp;
+                for (int r = 0; r < count[0]; r++) chunkAttribute[r] = n[r];
+            }
+            else if (type == BigInteger.class)
+            {
+                chunkAttribute = new double[count[0]];
+                BigInteger[] n = (BigInteger[]) temp;
+                for (int r = 0; r < count[0]; r++) chunkAttribute[r] = n[r].doubleValue ();
+            }
+        }
+
         public class IteratorEdge implements IteratorNonzero
         {
-            protected Dataset      datasetAttribute;
-            protected Dataset      datasetSource;
-            protected Dataset      datasetTarget;
-            protected double[]     chunkAttribute;
             protected BigInteger[] chunkSource;
             protected BigInteger[] chunkTarget;
-            protected Class<?>     type;
-            protected long[]       offset = new long[1];
-            protected int[]        count  = new int [1];
-            protected long         row    = -1;
-            protected long         rowCount;
+            protected long         row = -1;
             protected int          rr;  // row relative to start of chunk
 
-            public IteratorEdge (String attributeName)
+            public IteratorEdge ()
             {
-                // Prepare datasets
-                datasetAttribute = ((Group) root).getDatasetByPath (attributeName);
-                if (datasetAttribute == null) throw new AbortRun ("SONATA Edge group does not have attribute: " + attributeName);
-                type = datasetAttribute.getJavaType ();
-
-                Group edge = (Group) root;
-                if (edge.getName ().equals ("dynamics_params")) edge = edge.getParent ();
-                edge = edge.getParent ();  // The main edge group.
-                datasetSource = edge.getDatasetByPath ("source_node_id");
-                datasetTarget = edge.getDatasetByPath ("target_node_id");
-
-                count [0] =  chunkSize;
-                offset[0] = -chunkSize;  // Trigger load new data.
+                cached.row = -1;  // Reset the shared row when an iterator goes into service. Hopefully there is only one iterator!
             }
 
             protected void getNext ()
             {
                 row++;
+                cached.row = row;
                 if (row >= rowCount) return;
                 rr = (int) (row - offset[0]);  // row relative to current block of data
                 if (rr < count[0]) return;
@@ -610,30 +778,7 @@ public class Table extends Function implements NonzeroIterable
 
                 chunkSource = (BigInteger[]) datasetSource.getData (offset, count);
                 chunkTarget = (BigInteger[]) datasetTarget.getData (offset, count);
-
-                Object temp = datasetAttribute.getData (offset, count);
-                if (type == double.class)
-                {
-                    chunkAttribute = (double[]) temp;
-                }
-                else if (type == float.class)
-                {
-                    chunkAttribute = new double[count[0]];
-                    float[] f = (float[]) temp;
-                    for (int r = 0; r < count[0]; r++) chunkAttribute[r] = f[r];
-                }
-                else if (type == int.class)
-                {
-                    chunkAttribute = new double[count[0]];
-                    int[] n = (int[]) temp;
-                    for (int r = 0; r < count[0]; r++) chunkAttribute[r] = n[r];
-                }
-                else if (type == BigInteger.class)
-                {
-                    chunkAttribute = new double[count[0]];
-                    BigInteger[] n = (BigInteger[]) temp;
-                    for (int r = 0; r < count[0]; r++) chunkAttribute[r] = n[r].doubleValue ();
-                }
+                loadChunkAttribute ();
             }
 
             public boolean hasNext ()
@@ -658,11 +803,107 @@ public class Table extends Function implements NonzeroIterable
                 return chunkTarget[rr].intValue ();
             }
         }
+    }
 
-        public IteratorEdge getIteratorEdge (String attribute)
+    /**
+        Special sparse matrix for SONATA spike rasters, backed by HDF data.
+        Does not bring in all data. Instead, this merely indexes the node_ids.
+        We require the datasets (node_ids, timestamps) to be sorted by node_id then by spike time.
+        If that is not satisfied, this class will fail.
+    **/
+    public static class MatrixSonataSpikesHDF extends Matrix implements AutoCloseable
+    {
+        protected Path    filePath;  // For releasing the HDF file when we are done.
+        protected Dataset datasetTime;
+        protected long[]  columnIDs;
+        protected long[]  columnPointers;
+        protected int     rows;  // Tallest column seen.
+        protected double  emptyValue = Double.POSITIVE_INFINITY;
+
+        public MatrixSonataSpikesHDF (Path filePath, Group population)
         {
-            if (! root.isGroup ()  ||  ! isSonata) throw new AbortRun ("IteratorEdge requires a SONATA edge group");
-            return new IteratorEdge (attribute);
+            SubHolderHDF.allocate (filePath);
+            datasetTime = population.getDatasetByPath ("timestamps");
+
+            // Scan node_ids and assemble index.
+            List<Long>   listIDs      = new ArrayList<Long> ();
+            List<Long>   listPointers = new ArrayList<Long> ();
+            Dataset      datasetID    = population.getDatasetByPath ("node_ids");
+            BigInteger[] chunkID      = null;
+            long[]       offset       = {0};
+            int[]        size         = {0};
+            long         lastID       = -1;
+            long         count        = datasetID.getSize ();
+            for (long i = 0; i < count; i++)
+            {
+                if (i % HolderHDF.chunkSize == 0)
+                {
+                    offset[0] = i;
+                    size[0] = (int) Math.min (HolderHDF.chunkSize, count - i);
+                    chunkID = (BigInteger[]) datasetID.getData (offset, size);
+                }
+                int  index = (int) (i - offset[0]);
+                long ID    = chunkID[index].longValue ();
+                if (ID != lastID)
+                {
+                    listIDs     .add (ID);
+                    listPointers.add (i);
+                    lastID = ID;
+                }
+            }
+            lastID++;
+            listIDs     .add (lastID);
+            listPointers.add (count);
+            int listSize = listIDs.size ();
+
+            columnPointers = new long[listSize];
+            for (int i = 0; i <= listSize; i++) columnPointers[i] = listPointers.get (i);
+            // (lastID - listSize + 1) is the number of skips in listIDs. 
+            if (lastID >= listSize)  // listIDs has skips.
+            {
+                columnIDs = new long[listSize];
+                for (int i = 0; i <= listSize; i++) columnIDs[i] = listIDs.get (i);
+            }
+            // else listIDs is zero-based contiguous. In that case, we can use direct lookup rather than a search.
+        }
+
+        public void close () throws Exception
+        {
+            SubHolderHDF.release (filePath);
+        }
+
+        public int rows ()
+        {
+            return rows;
+        }
+
+        public int columns ()
+        {
+            return columnPointers.length - 1;
+        }
+
+        public double get (int row, int column)
+        {
+            int c;
+            if (columnIDs == null)
+            {
+                c = column;
+            }
+            else
+            {
+                c = Arrays.binarySearch (columnIDs, column);
+                if (c < 0) return emptyValue;
+            }
+            if (c >= columnPointers.length) return emptyValue;
+            if (row >= (int) (columnPointers[c+1] - columnPointers[c])) return emptyValue;
+            long[] offset = {columnPointers[c] + row};
+            int[]  count  = {1};
+            return ((double[]) datasetTime.getData (offset, count))[0];  // This is rather slow. One possibility is to load the entire array of time value into memory.
+        }
+
+        public void set (int row, int column, double a)
+        {
+            throw new AbortRun ("MatrixSonataSpikesHDF does not support set()");
         }
     }
 
@@ -676,7 +917,7 @@ public class Table extends Function implements NonzeroIterable
         public Map<String,Integer> columnMap; // from header text to index
     }
 
-    public static class HolderSheet extends Holder
+    public static class HolderSheet implements Holder
     {
         protected List<String>      strings = new ArrayList<String> ();     // collection of all strings that appear in the workbook
         protected Map<String,Sheet> wb      = new HashMap<String,Sheet> (); // workbook, a collection of worksheets
@@ -1120,12 +1361,12 @@ public class Table extends Function implements NonzeroIterable
             return result;
         }
 
-        public int getRows ()
+        public int rows ()
         {
             return Math.max (0, ws.rows - ar);
         }
 
-        public int getColumns ()
+        public int columns ()
         {
             return Math.max (0, ws.columns - ac);
         }
@@ -1291,11 +1532,10 @@ public class Table extends Function implements NonzeroIterable
             return strings.get (index - 1);  // offset index back to zero-based
         }
 
-        public IteratorNonzero getIteratorNonzero ()
+        public Matrix getMatrix ()
         {
-            Matrix A = ws.numbers;
-            if (A instanceof MatrixSparse) return new IteratorSparse ((MatrixSparse) A, ar, ac);
-            return ((MatrixDense) A).getRegion (ar, ac).getIteratorNonzero ();
+            if (ar == 0  &&  ac == 0) return ws.numbers;
+            return ws.numbers.getRegion (ar, ac);
         }
     }
 
@@ -1305,13 +1545,18 @@ public class Table extends Function implements NonzeroIterable
         if (simulator == null) return null;  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
         String fileName = ((Text) operands[0].eval (context)).value;
-        Object H = simulator.holders.get (fileName);
+        String hdf      = evalKeyword (context, "hdf", "");
+
+        String key = fileName;
+        if (! hdf.isBlank ()) key += "|" + hdf;  // Because multiple holders can share same HDF file.
+
+        Object H = simulator.holders.get (key);
         if (H == null)
         {
-            Type hdf = evalKeyword (context, "hdf");
-            if (hdf != null) H = new HolderHDF   (simulator, fileName, hdf.toString ());
-            else             H = new HolderSheet (simulator.jobDir.resolve (fileName));
-            simulator.holders.put (fileName, H);
+            Path filePath = simulator.jobDir.resolve (fileName);
+            if (hdf.isBlank ()) H = new HolderSheet (filePath);
+            else                H = new HolderHDF   (filePath, hdf.toString ());
+            simulator.holders.put (key, H);
         }
         else if (! (H instanceof Holder))
         {
@@ -1326,107 +1571,67 @@ public class Table extends Function implements NonzeroIterable
         Holder H = open (context);
         if (H == null) return getType ();
 
-        Operator anchor = getKeyword ("anchor");
-        if (anchor != null) H.parse (anchor.eval (context).toString ());
-
-        Operator info = getKeyword ("info");
-        if (info != null)
+        // H.parse() determines the results of other H functions below, so this must be a critical section.
+        synchronized (H)
         {
-            switch (info.getString ())  // info must be a constant.
+            Operator anchor = getKeyword ("anchor");
+            if (anchor != null) H.parse (anchor.eval (context).toString ());
+
+            Operator info = getKeyword ("info");
+            if (info != null)
             {
-                case "columns":      return new Scalar (H.getColumns      ());
-                case "rows":         return new Scalar (H.getRows         ());
-                case "columnsInRow": return new Scalar (H.getColumnsInRow ());
-                case "rowsInColumn": return new Scalar (H.getRowsInColumn ());
+                switch (info.getString ())  // info must be a constant.
+                {
+                    case "columns":      return new Scalar (H.columns         ());
+                    case "rows":         return new Scalar (H.rows            ());
+                    case "columnsInRow": return new Scalar (H.getColumnsInRow ());
+                    case "rowsInColumn": return new Scalar (H.getRowsInColumn ());
+                }
+                return new Scalar (0);  // An invalid info keyword indicates that we can't trust the other function parameters, so don't fall through.
             }
-            return new Scalar (0);  // An invalid info keyword indicates that we can't trust the other function parameters, so don't fall through.
-        }
 
-        double row = 0;
-        double col = 0;
+            double row = 0;
+            double col = 0;
 
-        Type op1 = null;
-        if (operands.length > 1) op1 = operands[1].eval (context);
-        Type op2 = null;
-        if (operands.length > 2) op2 = operands[2].eval (context);
+            Type op1 = null;
+            if (operands.length > 1) op1 = operands[1].eval (context);
+            Type op2 = null;
+            if (operands.length > 2) op2 = operands[2].eval (context);
 
-        boolean isString = getKeywordFlag ("string");
-        Operator key = getKeyword ("key");  // Assumed to be constant string, if it exists.
-        if (key == null)
-        {
-            if (op1 instanceof Scalar) row = ((Scalar) op1).value;
-        }
-        else  // Look up value in index column specified by key.
-        {
-            int keyIndex = H.getColumnIndex (key.getString ());
-            if (keyIndex >= 0)
+            boolean isString = getKeywordFlag ("string");
+            Operator key = getKeyword ("key");  // Assumed to be constant string, if it exists.
+            if (key == null)
             {
-                if      (op1 instanceof Text)   row = H.getRowIndex (keyIndex, op1.toString ());
-                else if (op1 instanceof Scalar) row = H.getRowIndex (keyIndex, ((Scalar) op1).value);
+                if (op1 instanceof Scalar) row = ((Scalar) op1).value;
             }
-        }
+            else  // Look up value in index column specified by key.
+            {
+                int keyIndex = H.getColumnIndex (key.getString ());
+                if (keyIndex >= 0)
+                {
+                    if      (op1 instanceof Text)   row = H.getRowIndex (keyIndex, op1.toString ());
+                    else if (op1 instanceof Scalar) row = H.getRowIndex (keyIndex, ((Scalar) op1).value);
+                }
+            }
 
-        if      (op2 instanceof Text)   col = H.getColumnIndex (op2.toString ());
-        else if (op2 instanceof Scalar) col = ((Scalar) op2).value;
+            if      (op2 instanceof Text)   col = H.getColumnIndex (op2.toString ());
+            else if (op2 instanceof Scalar) col = ((Scalar) op2).value;
 
-        if (row < 0  ||  col < 0)
-        {
-            if (isString) return new Text ();
-            return new Scalar (0);
-        }
-        else
-        {
-            if (isString) return new Text (H.getString ((int) row, (int) col));
-            return new Scalar (H.getDouble (row, col));
+            if (row < 0  ||  col < 0)
+            {
+                if (isString) return new Text ();
+                return new Scalar (0);
+            }
+            else
+            {
+                if (isString) return new Text (H.getString ((int) row, (int) col));
+                return new Scalar (H.getDouble (row, col));
+            }
         }
     }
 
     public String toString ()
     {
         return "table";
-    }
-
-    public Operator operandA ()
-    {
-        if (operands.length > 1) return operands[1];
-        return null;
-    }
-
-    public Operator operandB ()
-    {
-        if (operands.length > 2) return operands[2];
-        return null;
-    }
-
-    public boolean hasCorrectForm ()
-    {
-        if (operands.length < 3) return false;
-        if (! (operands[0] instanceof Constant)) return false;
-        Operator anchor = getKeyword ("anchor");
-        if (anchor != null  &&  ! (anchor instanceof Constant)) return false;
-        // Could also check if op1 and op2 are numeric expressions, but not worth the effort.
-        return true;
-    }
-
-    public IteratorNonzero getIteratorNonzero (Instance context)
-    {
-        Holder H = open (context);
-        if (H == null) return null;
-
-        Operator anchor = getKeyword ("anchor");
-        if (anchor != null) H.parse (anchor.getString ());  // This is required to be constant, so we can simply retrieve the string.
-
-        if (H instanceof HolderHDF  &&  operands.length > 3)
-        {
-            @SuppressWarnings("resource")
-            HolderHDF HH = (HolderHDF) H;
-            if (HH.isSonata)  // SONATA edge
-            {
-                String attribute = operands[3].getString ();
-                return HH.getIteratorEdge (attribute);
-            }
-        }
-
-        return H.getIteratorNonzero ();
     }
 }

@@ -10,6 +10,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -324,9 +325,50 @@ public class Input extends Function
         }
     }
 
+    /**
+        Keep track of all open HDF files in the app (regardless of which simulation they belong to).
+        These may be shared by multiple HolderHDF objects.
+    **/
+    public static class SubHolderHDF
+    {
+        public HdfFile file;
+        public int     users;
+
+        protected static HashMap<Path,SubHolderHDF> files = new HashMap<Path,SubHolderHDF> ();
+
+        public static synchronized SubHolderHDF allocate (Path path)
+        {
+            SubHolderHDF result = files.get (path);
+            if (result == null)
+            {
+                result = new SubHolderHDF ();
+                result.file = new HdfFile (path);
+                files.put (path, result);
+            }
+            result.users++;
+            return result;
+        }
+
+        public static synchronized void release (Path path)
+        {
+            SubHolderHDF sub = files.get (path);
+            sub.users--;
+            if (sub.users <= 0)
+            {
+                try {sub.file.close ();}
+                catch (HdfException e) {}
+                files.remove (path);
+            }
+        }
+    }
+
+    /**
+        Streaming-style access to HDF files.
+        See also Table.HolderHDF. While these holders have a lot in common, it is simpler to keep them separate.
+    **/
     public static class HolderHDF extends Holder
     {
-        protected String   fileName;
+        protected Path     filePath;
         protected Dataset  data;
         protected Object   flat;        // If slicing is not allowed, this holds the full raw data.
         protected int      rowCount;
@@ -335,34 +377,22 @@ public class Input extends Function
         protected double[] timestamps;  // If null, use startingTime+N*period. If non-null, treat this as time column.
         protected int      lastRow;     // When using timestamps, where to start search.
 
-        public static class SubHolder
-        {
-            public HdfFile file;
-            public int     users;
-        }
-        protected static HashMap<String,SubHolder> files = new HashMap<String,SubHolder> ();  // Keep track of all open HDF files in the app (regardless of which simulation they belong to). These can be shared by multiple HolderHDF objects.
-
-        public HolderHDF (Simulator simulator, String fileName, String path, boolean time) throws HdfException
+        /**
+            @param fileName To the HDF file. Not the same as the key for looking Holder. Specifically, the
+            holder key includes both HDF file path and path to resource inside HDF file. Here, we are only
+            interested in the actual path to file, so we can keep track of how many holders are using the file.
+            @param resource To the resource inside the HDF file.
+        **/
+        public HolderHDF (Simulator simulator, String fileName, String resource, boolean time) throws HdfException
         {
             super (simulator, time);
 
-            this.fileName = fileName;
-            SubHolder sub;
-            synchronized (files)
-            {
-                sub = files.get (fileName);
-                if (sub == null)
-                {
-                    sub = new SubHolder ();
-                    sub.file = new HdfFile (simulator.jobDir.resolve (fileName));
-                    files.put (fileName, sub);
-                }
-                sub.users++;
-            }
+            filePath = simulator.jobDir.resolve (fileName);
+            SubHolderHDF sub = SubHolderHDF.allocate (filePath);
             HdfFile file = sub.file;
 
-            Node node = file.getByPath (path);
-            if (node == null) throw new HdfException ("Can't find HDF object at: " + path);
+            Node node = file.getByPath (resource);
+            if (node == null) throw new HdfException ("Can't find HDF object at: " + resource);
             if (node.isGroup ())  // Assume NWB
             {
                 Group timeSeries = (Group) node;
@@ -373,10 +403,10 @@ public class Input extends Function
                 if (ts == null)  // Use startingTime+N*period.
                 {
                     Dataset starting_time = (Dataset) timeSeries.getChild ("starting_time");
-                    if (starting_time == null) throw new HdfException ("At least one of 'starting_time' or 'timestamps' must be defined: " + path);
+                    if (starting_time == null) throw new HdfException ("At least one of 'starting_time' or 'timestamps' must be defined: " + resource);
                     startingTime = ((double[]) starting_time.getData ())[0];
                     Attribute rate = starting_time.getAttribute ("rate");
-                    if (rate == null) throw new HdfException ("'starting_time/rate' must be defined: " + path);
+                    if (rate == null) throw new HdfException ("'starting_time/rate' must be defined: " + resource);
                     period = 1 / (Float) rate.getData ();
                 }
                 else  // Use explicit time stamps.
@@ -391,7 +421,7 @@ public class Input extends Function
 
             int[] dimensions = data.getDimensions ();
             rowCount = dimensions[0];
-            if (dimensions.length > 2) throw new HdfException ("TimeSeries data must be 1D or 2D: " + path);
+            if (dimensions.length > 2) throw new HdfException ("TimeSeries data must be 1D or 2D: " + resource);
             if (dimensions.length == 2) columnCount = dimensions[1];
             else                        columnCount = 1;
 
@@ -403,17 +433,7 @@ public class Input extends Function
 
         public void close ()
         {
-            synchronized (files)
-            {
-                SubHolder sub = files.get (fileName);
-                sub.users--;
-                if (sub.users <= 0)
-                {
-                    try {sub.file.close ();}
-                    catch (HdfException e) {}
-                    files.remove (fileName);
-                }
-            }
+            SubHolderHDF.release (filePath);
         }
 
         public void getRow (double requested) throws IOException
@@ -485,27 +505,20 @@ public class Input extends Function
             Class<?> clz = data.getJavaType ();
             if (flat == null)
             {
-                /*  Read slice. Doesn't work in JHDF 0.10.0.
                 try
                 {
                     float[] floats = null;
                     if (columnCount > 1)
                     {
-                        long[] anchor = new long[2];
-                        int[]  size   = new int [2];
-                        anchor[0] = row;
-                        anchor[1] = 0;
-                        size  [0] = 1;
-                        size  [1] = columnCount;
-                        if (clz == double.class) return ((double[][]) data.getData (anchor, size))[0];  // TODO: This is probably the wrong pattern of access to returned elements.
+                        long[] anchor = {row, 0};
+                        int[]  size   = {1, columnCount};
+                        if (clz == double.class) return ((double[][]) data.getData (anchor, size))[0];
                         if (clz == float.class) floats = ((float[][]) data.getData (anchor, size))[0];
                     }
                     else
                     {
-                        long[] anchor = new long[1];
-                        int[]  size   = new int [1];
-                        anchor[0] = row;
-                        size  [0] = 1;
+                        long[] anchor = {row};
+                        int[]  size   = {1};
                         if (clz == double.class) return (double[]) data.getData (anchor, size);  // Will have only a single element.
                         if (clz == float.class) floats = (float[]) data.getData (anchor, size);
                     }
@@ -521,7 +534,6 @@ public class Input extends Function
                     }
                 }
                 catch (HdfException e)
-                */
                 {
                     flat = data.getDataFlat ();
                     // and fall through to "flat" handling below ...

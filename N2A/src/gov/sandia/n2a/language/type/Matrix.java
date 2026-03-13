@@ -17,6 +17,8 @@ import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.linear.MatrixSparse;
+import gov.sandia.n2a.linear.Region;
+import gov.sandia.n2a.linear.Transpose;
 
 public abstract class Matrix extends Type
 {
@@ -25,14 +27,20 @@ public abstract class Matrix extends Type
         double apply (double a);
     }
 
+    /**
+        Load matrix from file. Does triage on file type.
+        Some file types, like spreadsheets or HDF, require additional information like
+        anchor cell or path to dataset inside file. These are outside the scope of this
+        function. They are handled by ReadMatrix.
+    **/
     public static Matrix factory (Path path) throws EvaluationException
     {
         try (BufferedReader reader = Files.newBufferedReader (path))
         {
-            char buffer[] = new char[10];
-            reader.mark (buffer.length + 1);
-            reader.read (buffer);  // just assume buffer is filled completely
-            String line = new String (buffer);
+            char magic[] = new char[10];
+            reader.mark (magic.length + 1);
+            reader.read (magic);  // just assume buffer is filled completely
+            String line = new String (magic);
             reader.reset ();
 
             if (line.toLowerCase ().startsWith ("sparse")) return new MatrixSparse (reader);
@@ -157,12 +165,28 @@ public abstract class Matrix extends Type
         }
     }
 
+    /**
+        Sets the value to return whenever an element is undefined.
+        This is initially zero.
+        Only applies to matrices that are sparse in some way.
+    **/
+    public void setEmptyValue (double a)
+    {
+        // Base class is not sparse, so ignore here.
+    }
+
     public Type clear ()
     {
         return clear (0);
     }
 
-    public abstract Matrix clear (double initialValue);
+    /**
+        @return copy of this object with all elements set to zero.
+    **/
+    public Matrix clear (double initialValue)
+    {
+        return new MatrixDense (rows (), columns ());
+    }
 
     /**
         In-place removal of row. Causes all following rows to shift up,
@@ -187,7 +211,15 @@ public abstract class Matrix extends Type
     /**
         @return copy of this object with diagonal elements set to 1 and off-diagonals set to zero.
     **/
-    public abstract Matrix identity ();
+    public Matrix identity ()
+    {
+        int rows    = rows ();
+        int columns = columns ();
+        MatrixDense result = new MatrixDense (rows, columns);
+        int h = Math.min (rows, columns);
+        for (int r = 0; r < h; r++) result.set (r, r, 1);
+        return result;
+    }
 
     public boolean isZero ()
     {
@@ -615,9 +647,30 @@ public abstract class Matrix extends Type
         return result;
     }
 
+    public Matrix getColumn (int column)
+    {
+        return new Region (this, 0, column, rows () - 1, column);
+    }
+
+    public Matrix getRow (int row)
+    {
+        return new Region (this, row, 0, row, columns () - 1);
+    }
+
+    public Matrix getRegion (int firstRow, int firstColumn)
+    {
+        return new Region (this, firstRow, firstColumn, rows () - 1, columns () - 1);
+    }
+
+    public Matrix getRegion (int firstRow, int firstColumn, int lastRow, int lastColumn)
+    {
+        return new Region (this, firstRow, firstColumn, lastRow, lastColumn);
+    }
+
     public Matrix transpose ()
     {
-        return new MatrixDense (this).transpose ();
+        if (this instanceof Transpose) return ((Transpose) this).A;  // Two transpose are the same as none.
+        return new Transpose (this);
     }
 
     public Matrix visit (Visitor visitor)
@@ -860,8 +913,8 @@ public abstract class Matrix extends Type
     public static class IteratorSkip implements IteratorNonzero
     {
         protected Matrix A;
-        protected int rows; // cached value from A
-        protected int columns;
+        protected int    rows; // cached value from A
+        protected int    columns;
 
         protected double value;
         protected int    row = -1; // of value
@@ -873,8 +926,8 @@ public abstract class Matrix extends Type
 
         public IteratorSkip (Matrix A)
         {
-            this.A = A;
-            rows = A.rows ();
+            this.A  = A;
+            rows    = A.rows ();
             columns = A.columns ();
             getNext ();
         }

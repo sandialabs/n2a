@@ -1,11 +1,14 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.language.function;
 
+import java.io.BufferedReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.Function;
@@ -20,8 +23,9 @@ import tech.units.indriya.AbstractUnit;
 
 public class ReadMatrix extends Function
 {
-    public String name;     // For C backend, the name of the MatrixInput object.
-    public String fileName; // For C backend, the name of the string variable holding the file name, if any.
+    public    String name;     // For C backend, the name of the MatrixInput object.
+    public    String fileName; // For C backend, the name of the string variable holding the file name, if any.
+    protected String warningIO;
 
     public static Factory factory ()
     {
@@ -77,12 +81,64 @@ public class ReadMatrix extends Function
         Simulator simulator = Simulator.instance.get ();
         if (simulator == null) return null;  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
-        String path = ((Text) operands[0].eval (context)).value;
-        Object A = simulator.holders.get (path);
+        String fileName = ((Text) operands[0].eval (context)).value;
+        String hdf      = evalKeyword (context, "hdf", "");
+
+        String key = fileName;
+        if (! hdf.isBlank ()) key += "|" + hdf;  // Because multiple holders can share same HDF file.
+
+        Object A = simulator.holders.get (key);
         if (A == null)
         {
-            A = Matrix.factory (simulator.jobDir.resolve (path));
-            simulator.holders.put (path, A);
+            Path path = simulator.jobDir.resolve (fileName);
+
+            // For keyword tests (hdf, anchor) we assume that the keyword is only present if the file is really that type.
+            if (hdf.isBlank ())
+            {
+                Operator anchor = getKeyword ("anchor");
+                boolean isSheet = anchor != null  ||  fileName.toLowerCase ().endsWith (".csv");  // TODO: handle SONATA spike files in CSV format.
+                if (! isSheet)  // Probe file
+                {
+                    try (BufferedReader reader = Files.newBufferedReader (path))
+                    {
+                        char magic[] = new char[4];
+                        reader.read (magic);
+                        isSheet =  magic[0] == 'P'  &&  magic[1] == 'K'  &&  magic[2] == 3  &&  magic[3] == 4;
+                    }
+                    catch (Exception e) {}
+                }
+                if (isSheet)
+                {
+                    Table.HolderSheet H = new Table.HolderSheet (path);
+                    if (anchor != null) H.parse (anchor.eval (context).toString ());
+                    A = H.getMatrix ();
+                }
+
+                if (A == null) A = Matrix.factory (path);  // Simple matrix file.
+            }
+            else
+            {
+                try (Table.HolderHDF H = new Table.HolderHDF (path, hdf))
+                {
+                    A = H.getMatrix ();
+                    // H gets closed at the end of this block, but A is also a holder and AutoCloseable.
+                    // When holders are closed, the HDF resources will finally be released.
+                }
+                catch (Exception e) {}
+            }
+            if (A == null)
+            {
+                if (! key.equals (warningIO))
+                {
+                    Backend.err.get ().println ("WARNING: IO error on matrix(" + key + ")");
+                    warningIO = key;
+                }
+            }
+            else
+            {
+                ((Matrix) A).setEmptyValue (evalKeyword (context, "empty", 0.0));
+                simulator.holders.put (key, A);
+            }
         }
         else if (! (A instanceof Matrix))
         {

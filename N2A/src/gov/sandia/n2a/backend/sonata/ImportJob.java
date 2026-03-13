@@ -211,8 +211,8 @@ public class ImportJob
             int index_type_id         = H.getColumnIndex (type + "_type_id");
             int index_model_template  = H.getColumnIndex ("model_template");
             int index_dynamics_params = H.getColumnIndex ("dynamics_params");
-            int rows = H.getRows ();
-            int cols = H.getColumns ();
+            int rows                  = H.rows ();
+            int cols                  = H.columns ();
 
             String population      = "";
             String type_id         = "";
@@ -666,9 +666,9 @@ public class ImportJob
     {
         // model_template is probably the empty string ("").
         MNode part = model.childOrCreate (populationName);
-        part.set ("Spike Source", "$inherit");
-        part.set (count,          "$n");
-        part.set ("",             "$meta", "backend", "sonata", "simple");
+        part.set ("Spike Array", "$inherit");
+        part.set (count,         "$n");
+        part.set ("",            "$meta", "backend", "sonata", "simple");
 
         // Attempt to determine a concrete input file and set it up as input.
         MNode inputs = config.childOrEmpty ("inputs");
@@ -707,12 +707,12 @@ public class ImportJob
                         part.set ("dir+\"/" + input_file + "\"",       "hdfFile");
                         part.set ("\"spikes/" + populationName + "\"", "inputPath");
                         part.set ("matrix(hdfFile, hdf=inputPath)",    "times");
-                        part.set ("$t>=times($index, index)*1ms",      "fire");
+                        part.set ("$t>=times(index, $index)*1ms",      "fire");
                         break;
                     case "csv":
-                        part.set ("dir+\"/" + input_file + "\"",  "spikesFile");
-                        part.set ("matrix(spikesFile)",           "times");
-                        part.set ("$t>=times($index, index)*1ms", "fire");
+                        part.set ("dir+\"/" + input_file + "\"",                           "spikesFile");
+                        part.set ("matrix(spikesFile, sonata=\"" + populationName + "\")", "times");  // TODO: implement SONATA CSV spikes special matrix in ReadMatrix, similar to one in Table.
+                        part.set ("$t>=times(index, $index)*1ms",                          "fire");
                         break;
                     default:
                         throw new AbortRun ("Unrecognized input module: " + module);
