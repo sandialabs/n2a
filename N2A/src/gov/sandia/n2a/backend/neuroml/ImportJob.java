@@ -1182,33 +1182,40 @@ public class ImportJob extends XMLutility
         {
             MNode  properties = cell.childOrCreate ("$properties");
             String id         = getAttribute (node, "id");
-            String group      = getAttribute (node, "segmentGroup");
-            if (group.isEmpty ())
+            String groupName  = getAttribute (node, "segmentGroup");
+            int    segmentID  = -1;
+            if (groupName.isEmpty ())
             {
-                group = getAttribute (node, "segment");
-                if (group.isEmpty ())
+                groupName = getAttribute (node, "segment");
+                if (groupName.isEmpty ())
                 {
-                    group = "[all]";
+                    groupName = "[all]";
                 }
                 else
                 {
-                    int r = Integer.parseInt (group);
-                    group = "[" + group + "]";  // proper name will be assigned later, during post-processing
-                    if (cell.child ("$group", group) == null)
-                    {
-                        MNode groups = cell.childOrCreate ("$group");
-                        int c = groups.size ();
-                        G.set (r, c);
-                        groups.set (c, group, "$G");
-                        groupIndex.put (c, group);
-                    }
+                    segmentID = Integer.parseInt (groupName);
+                    groupName = "[" + groupName + "]";  // proper name will be assigned later, during post-processing
                 }
             }
+            else if (groupName.equals ("all"))  // "all" is the default value, but the user might specify it explicitly.
+            {
+                groupName = "[all]";
+            }
 
-            MNode result = properties.set (group, properties.size ());
-            MNode count = cell.child ("$group", group, "$properties");
-            if (count == null) cell.set ("1", "$group", group, "$properties");
-            else               count.set (count.getInt () + 1);
+            MNode groups = cell.childOrCreate ("$group");
+            MNode group  = groups.child (groupName);
+            if (group == null)
+            {
+                int c = groups.size ();
+                group = groups.childOrCreate (groupName);
+                group.set (c, "$G");
+                groupIndex.put (c, groupName);
+                if (segmentID >= 0) G.set (segmentID, c);
+            }
+
+            MNode result = properties.set (groupName, properties.size ());
+            MNode count  = group.childOrCreate ("$properties");
+            count.set (count.getInt () + 1);
 
             if (id.isEmpty ()) return result;
 
@@ -1344,6 +1351,41 @@ public class ImportJob extends XMLutility
                 }
             }
 
+            // Segment groups can be defined implicitly by properties, and morphology is optional.
+            // Thus it is possible for there to be segment groups but no segments.
+            // In this case, define a disconnected segment for each segment group.
+            MNode groups = cell.child ("$group");
+            if (groups != null  &&  segments.isEmpty ())
+            {
+                // Pass 1 -- Assign explicit segment indices.
+                for (MNode g : groups)
+                {
+                    String key = g.key ();
+                    if (! key.startsWith ("[")  ||  ! key.endsWith ("]")) continue;
+                    if (key.equals ("[all]")) continue;
+
+                    String segmentName = key.substring (1, key.length () -1);
+                    int    segmentID   = Integer.valueOf (segmentName);
+                    int    c           = g.getInt ("$G");
+                    segments.put (segmentID, new Segment (segmentID, segmentName));
+                    G.set (segmentID, c);
+                }
+
+                // Pass 2 -- Assign regular groups.
+                int segmentID = 0;
+                for (MNode g : groups)
+                {
+                    String key = g.key ();
+                    if (key.startsWith ("[")  &&  key.endsWith ("]")) continue;
+
+                    while (segments.containsKey (segmentID)) segmentID++;
+                    int c = g.getInt ("$G");
+                    segments.put (segmentID, new Segment (segmentID, key));
+                    G.set (segmentID, c);
+                    segmentID++;
+                }
+            }
+
             // Finalize segment structures
             for (Entry<Integer,Segment> e : segments.entrySet ())
             {
@@ -1355,7 +1397,6 @@ public class ImportJob extends XMLutility
                 }
             }
             for (Entry<Integer,Segment> e : segments.entrySet ()) e.getValue ().resolveProximal ();
-            MNode groups = cell.child ("$group");
             if (groups != null)
             {
                 for (MNode g : groups) applyPaths (g);
@@ -1368,11 +1409,11 @@ public class ImportJob extends XMLutility
                 int smallestID = Integer.MAX_VALUE;
                 for (Entry<Integer,Segment> e : segments.entrySet ())
                 {
-                    int ID = Integer.valueOf (e.getKey ());
+                    int ID = e.getKey ();
                     smallestID = Math.min (ID, smallestID);
                     G.set (ID, 0);
                 }
-                String name = segments.get (smallestID).name;  // Name the group after the first segment, if it has a name.
+                String name = segments.get (smallestID).name;  // Give group the name of the first segment, if it has a name.
                 if (name.isEmpty ()) name = "segments";
                 cell.set (0, "$group", name, "$G");
                 groups = cell.child ("$group");
@@ -1750,11 +1791,17 @@ public class ImportJob extends XMLutility
 
         String       neuroLexID         = "";
 
+        public Segment (int id, String name)
+        {
+            this.id   = id;
+            this.name = name;
+        }
+
         public Segment (Node node)
         {
-            id = Integer.parseInt (getAttribute (node, "id", "0"));
-            name       = getAttribute (node, "name");
-            neuroLexID = getAttribute (node, "neuroLexId");
+            id         = Integer.parseInt (getAttribute (node, "id", "0"));
+            name       =                   getAttribute (node, "name");
+            neuroLexID =                   getAttribute (node, "neuroLexId");
 
             for (Node child = node.getFirstChild (); child != null; child = child.getNextSibling ())
             {

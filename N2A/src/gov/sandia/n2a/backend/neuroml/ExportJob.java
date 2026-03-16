@@ -330,7 +330,7 @@ public class ExportJob extends XMLutility
             root = doc.createElement ("neuroml");
             root.setAttribute ("xmlns",              "http://www.neuroml.org/schema/neuroml2");
             root.setAttribute ("xmlns:xsi",          "http://www.w3.org/2001/XMLSchema-instance");
-            root.setAttribute ("xsi:schemaLocation", "http://www.neuroml.org/schema/neuroml2 ../Schemas/NeuroML2/NeuroML_v2beta4.xsd");
+            root.setAttribute ("xsi:schemaLocation", "http://www.neuroml.org/schema/neuroml2 ../Schemas/NeuroML2/NeuroML_v2.3.1.xsd");
             root.setAttribute ("id", modelName);
         }
         else
