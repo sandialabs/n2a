@@ -1,26 +1,29 @@
 /*
-Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.db;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.lang.ref.Cleaner;
+import java.net.URI;
+import java.net.URL;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
-
 import gov.sandia.n2a.ui.settings.SettingsRepo;
 
 /**
@@ -215,6 +218,47 @@ public class AppData
     {
         if (repos.size () > 0) return;
 
+        Path root = Paths.get (properties.get ("resourceDir")).toAbsolutePath ();
+        Path reposDir = root.resolve ("repos");
+
+        // Extract initial repos.
+        FileSystem fs = null;  // Would be nice to use try-with-resources, but we don't know if fs will even be opened.
+        try
+        {
+            URL source = AppData.class.getProtectionDomain ().getCodeSource ().getLocation ();
+            Path sourcePath = Paths.get (source.toURI ());
+            if (Files.isRegularFile (sourcePath))  // Assume regular file is JAR.
+            {
+                fs = FileSystems.newFileSystem (URI.create ("jar:" + source), Collections.emptyMap ());
+                sourcePath = fs.getPath ("/");  // Get root of JAR, as a Zip filesystem.
+            }
+            Path initial = sourcePath.resolve ("gov/sandia/n2a/db/initial");
+
+            Files.walkFileTree (initial, new SimpleFileVisitor<Path> ()
+            {
+                public FileVisitResult visitFile (final Path source, final BasicFileAttributes attrs) throws IOException
+                {
+                    Path relative = initial.relativize (source);
+                    if (relative.getNameCount () == 3)
+                    {
+                        Path destination = reposDir.resolve (relative.toString ());  // toString() is necessary to avoid mismatch when source is from Zip filesystem.
+                        Files.createDirectories (destination.getParent ());  // TODO: find a way to not repeat this for every file
+                        Files.copy (source, destination);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        }
+        catch (Exception e)
+        {
+            System.err.println ("Unable to load some or all of initial DB");
+            e.printStackTrace ();
+        }
+        try {if (fs != null) fs.close ();}
+        catch (IOException e) {}
+
+        // Configure repos
+
         repos.set (1,         "local", "visible");
         repos.set (1,         "local", "editable");
         repos.set (1,         "base",  "visible");
@@ -223,8 +267,6 @@ public class AppData
         state.set ("local",      "Repos", "primary");
         state.set ("",           "Repos", "needUpstream");
 
-        Path root = Paths.get (properties.get ("resourceDir")).toAbsolutePath ();
-        Path reposDir = root.resolve ("repos");
         Path baseDir  = reposDir.resolve ("base");
         Path localDir = reposDir.resolve ("local");
 
@@ -250,37 +292,6 @@ public class AppData
         referenceContainers.add (baseReferences);
         docs.link (new MFolder ("models",     modelContainers));
         docs.link (new MFolder ("references", referenceContainers));
-
-        try (ZipInputStream zip = new ZipInputStream (AppData.class.getResource ("initialDB.zip").openStream ()))
-        {
-            ZipEntry entry;
-            while ((entry = zip.getNextEntry ()) != null)
-            {
-                if (entry.isDirectory ()) continue;
-                String name = entry.getName ();
-                String[] pieces = name.split ("/");
-                if (pieces.length != 3) continue;
-                MDir dir = null;
-                if (pieces[0].equals ("local"))
-                {
-                    if (pieces[1].equals ("references")) dir = localReferences;
-                    else                                 dir = localModels;
-                }
-                else
-                {
-                    if (pieces[1].equals ("references")) dir = baseReferences;
-                    else                                 dir = baseModels;
-                }
-                MDoc doc = (MDoc) dir.childOrCreate (pieces[2]);
-                BufferedReader reader = new BufferedReader (new InputStreamReader (zip, "UTF-8"));
-                Schema.readAll (doc, reader);
-            }
-        }
-        catch (Exception e)
-        {
-            System.err.println ("Unable to load some or all of initial DB");
-            e.printStackTrace ();
-        }
     }
 
     // Utility for converting documents to latest schema.

@@ -1,0 +1,6 @@
+[submodule "N2A/src/gov/sandia/n2a/db/initial/local"]
+	path = N2A/src/gov/sandia/n2a/db/initial/local
+	url = https://github.com/sandialabs/n2a-repo-local.git
+[submodule "N2A/src/gov/sandia/n2a/db/initial/base"]
+	path = N2A/src/gov/sandia/n2a/db/initial/base
+	url = https://github.com/sandialabs/n2a-repo-base.git
