@@ -8,17 +8,12 @@ package gov.sandia.n2a.backend.neuroml;
 
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.extpoints.ImportModel;
-import gov.sandia.n2a.ui.CompoundEdit;
-import gov.sandia.n2a.ui.MainFrame;
-import gov.sandia.n2a.ui.UndoManager;
-import gov.sandia.n2a.ui.eq.undo.AddDoc;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class ImportNeuroML implements ImportModel
+public class ImportNeuroML extends ImportModel
 {
     @Override
     public String getName ()
@@ -27,7 +22,7 @@ public class ImportNeuroML implements ImportModel
     }
 
     @Override
-    public void process (Path source, String name)
+    public MNode extractModels (Path source, String name)
     {
         if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMapNeuroML ();
 
@@ -35,48 +30,10 @@ public class ImportNeuroML implements ImportModel
         job.process (source);
         job.postprocess ();
 
-        MNode mainModel = job.models.child (job.modelName);
-        job.models.clear (job.modelName);
-
-        UndoManager um = MainFrame.undoManager;
-        um.addEdit (new CompoundEdit ());
-        while (job.models.size () > 0) addModel (job.models.iterator ().next (), job.models, um);
-        // Save the best for last. That is, ensure that the main model is the one selected in the UI
-        // after all add operations are completed.
-        if (mainModel != null)
-        {
-            if (name == null) name = job.modelName;
-            um.apply (new AddDoc (name, mainModel));
-        }
-        um.endCompoundEdit ();
-    }
-
-    public void addModel (MNode m, MNode models, UndoManager um)
-    {
-        String key = m.key ();
-        models.clear (key);
-
-        // Scan for any models we may depend on, and add them first.
-        // This minimizes redundant equations. For example, the NeuroML core
-        // model files frequently repeat equations that should be inherited.
-        for (MNode c : m)
-        {
-            String inherit = "";
-            if (c.key ().equals ("$inherit"))
-            {
-                inherit = c.get ().replace ("\"", "");
-            }
-            else if (c.child ("$inherit") != null)
-            {
-                inherit = c.get ("$inherit").replace ("\"", "");
-            }
-            MNode d = models.child (inherit);
-            if (d != null) addModel (d, models, um);
-        }
-
-        AddDoc add = new AddDoc (key, m);
-        add.setSilent ();
-        um.apply (add);
+        if (name == null) name = job.modelName;
+        else              job.models.move (job.modelName, name);  // If they match, this does nothing.
+        job.models.set (name);
+        return job.models;
     }
 
     @Override

@@ -109,6 +109,7 @@ import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.MainTabbedPane;
 import gov.sandia.n2a.ui.UndoManager;
 import gov.sandia.n2a.ui.Undoable;
+import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.PanelEquationGraph.GraphPanel;
 import gov.sandia.n2a.ui.eq.tree.NodeAnnotation;
 import gov.sandia.n2a.ui.eq.tree.NodeBase;
@@ -1372,22 +1373,7 @@ public class PanelEquations extends JPanel
             // Do export
             Path path = fc.getSelectedFile ().toPath ();
             Export exporter = ((ExporterFilter) fc.getFileFilter ()).exporter;
-            Thread t = new Thread ()
-            {
-                public void run ()
-                {
-                    try
-                    {
-                        exporter.process (record, path);
-                    }
-                    catch (Exception error)
-                    {
-                        PanelModel.fileImportExportException ("Export", error);
-                    }
-                }
-            };
-            t.setDaemon (true);
-            t.start ();
+            Utility.exportFile (exporter, record, path);
         }
     };
 
@@ -1437,23 +1423,8 @@ public class PanelEquations extends JPanel
             if (result != JFileChooser.APPROVE_OPTION) return;
 
             // Do import
-            Thread t = new Thread ()
-            {
-                public void run ()
-                {
-                    try
-                    {
-                        Path path = fc.getSelectedFile ().toPath ();
-                        PanelModel.importFile (path);
-                    }
-                    catch (Exception error)
-                    {
-                        PanelModel.fileImportExportException ("Import", error);
-                    }
-                }
-            };
-            t.setDaemon (true);
-            t.start ();
+            Path path = fc.getSelectedFile ().toPath ();
+            Utility.importFile (path);
         }
     };
 

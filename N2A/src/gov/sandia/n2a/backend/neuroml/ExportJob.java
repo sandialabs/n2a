@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.neuroml;
 
 import java.io.BufferedWriter;
-import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -26,9 +25,6 @@ import javax.measure.IncommensurableException;
 import javax.measure.UnconvertibleException;
 import javax.measure.Unit;
 import javax.measure.UnitConverter;
-import javax.swing.JOptionPane;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
@@ -87,7 +83,6 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.linear.MatrixBoolean;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import gov.sandia.n2a.ui.MainFrame;
 
 public class ExportJob extends XMLutility
 {
@@ -123,74 +118,32 @@ public class ExportJob extends XMLutility
         this.sequencer = sequencer;
     }
 
-    public void process (MNode source, Path destination)
+    public void process (MNode source, Path destination) throws Exception
     {
-        ByteArrayOutputStream boas = new ByteArrayOutputStream ();
-        try {Backend.err.set (new PrintStream (boas, false, "UTF-8"));}
-        catch (Exception e) {}
-        boolean failed = false;
+        MPart mpart = new MPartRepo (source);
+        modelName = source.key ();
+        equations = new EquationSet (mpart);
+        makeExecutable (equations, true);
+        analyze (equations);
 
-        try
+        DocumentBuilderFactory factoryBuilder = DocumentBuilderFactory.newInstance ();
+        DocumentBuilder builder = factoryBuilder.newDocumentBuilder ();
+        doc = builder.newDocument ();
+
+        process (mpart);  // Convert top-level N2A part into top-level NeuroML elements
+
+        String name = destination.getFileName ().toString ();
+        if (! name.contains (".")) destination = destination.getParent ().resolve (name + "." + suffix);
+
+        DOMSource dom = new DOMSource (doc);
+        TransformerFactory factoryXform = TransformerFactory.newInstance ();
+        factoryXform.setAttribute ("indent-number", 4);
+        javax.xml.transform.Transformer xform = factoryXform.newTransformer ();
+        xform.setOutputProperty (OutputKeys.INDENT, "yes");
+        try (BufferedWriter writer = Files.newBufferedWriter (destination))
         {
-            MPart mpart = new MPartRepo (source);
-            modelName = source.key ();
-            equations = new EquationSet (mpart);
-            makeExecutable (equations, true);
-            analyze (equations);
-
-            DocumentBuilderFactory factoryBuilder = DocumentBuilderFactory.newInstance ();
-            DocumentBuilder builder = factoryBuilder.newDocumentBuilder ();
-            doc = builder.newDocument ();
-
-            process (mpart);  // Convert top-level N2A part into top-level NeuroML elements
-
-            String name = destination.getFileName ().toString ();
-            if (! name.contains (".")) destination = destination.getParent ().resolve (name + "." + suffix);
-
-            DOMSource dom = new DOMSource (doc);
-            TransformerFactory factoryXform = TransformerFactory.newInstance ();
-            factoryXform.setAttribute ("indent-number", 4);
-            javax.xml.transform.Transformer xform = factoryXform.newTransformer ();
-            xform.setOutputProperty (OutputKeys.INDENT, "yes");
-            try (BufferedWriter writer = Files.newBufferedWriter (destination))
-            {
-                StreamResult stream = new StreamResult (writer);
-                xform.transform (dom, stream);
-            }
-        }
-        catch (Exception e)
-        {
-            failed = true;
-            PrintStream ps = Backend.err.get ();
-            e.printStackTrace (ps);
-        }
-
-        PrintStream ps = Backend.err.get ();
-        if (ps != System.err) ps.close ();
-
-        String errors = "";
-        try {errors = boas.toString ("UTF-8");}
-        catch (Exception e2) {}
-
-        if (! errors.isEmpty ())
-        {
-            if (AppData.properties.getFlag ("headless"))
-            {
-                System.err.println ("Export completed with warnings");
-                System.err.println (errors);
-                return;
-            }
-
-            JTextArea textArea = new JTextArea (errors);
-            JScrollPane scrollPane = new JScrollPane (textArea);
-            scrollPane.setPreferredSize (new java.awt.Dimension (640, 480));
-            JOptionPane.showMessageDialog
-            (
-                MainFrame.instance,
-                scrollPane,
-                failed ? "Export failed" : "Export completed with warnings",
-                failed ? JOptionPane.ERROR_MESSAGE :  JOptionPane.WARNING_MESSAGE
-            );
+            StreamResult stream = new StreamResult (writer);
+            xform.transform (dom, stream);
         }
     }
 

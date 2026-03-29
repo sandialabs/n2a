@@ -6,16 +6,15 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.vensim;
 
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.plugins.extpoints.ImportModel;
-import gov.sandia.n2a.ui.MainFrame;
-import gov.sandia.n2a.ui.eq.undo.AddDoc;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class ImportVensim implements ImportModel
+public class ImportVensim extends ImportModel
 {
     @Override
     public String getName ()
@@ -24,15 +23,19 @@ public class ImportVensim implements ImportModel
     }
 
     @Override
-    public void process (Path source, String name)
+    public MNode extractModels (Path source, String name)
     {
         ImportJob job = new ImportJob ();
         job.process (source);
+
+        MNode result = new MVolatile ();
         if (job.model.size () > 0)
         {
             if (name == null) name = job.modelName;
-            MainFrame.undoManager.apply (new AddDoc (name, job.model));
+            result.set (job.model, name);
+            result.set (name);
         }
+        return result;
     }
 
     @Override

@@ -6,18 +6,16 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.transfer;
 
+import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.Schema;
 import gov.sandia.n2a.plugins.extpoints.ImportModel;
-import gov.sandia.n2a.ui.MainFrame;
-import gov.sandia.n2a.ui.eq.undo.AddDoc;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class ImportNative implements ImportModel
+public class ImportNative extends ImportModel
 {
     @Override
     public String getName ()
@@ -26,7 +24,7 @@ public class ImportNative implements ImportModel
     }
 
     @Override
-    public void process (Path source, String name)
+    public MNode extractModels (Path source, String name) throws IOException
     {
         if (name == null)
         {
@@ -36,12 +34,10 @@ public class ImportNative implements ImportModel
 
         try (BufferedReader reader = Files.newBufferedReader (source))
         {
-            MVolatile doc = new MVolatile ();
+            MNode result = new MVolatile (name, "");
+            MNode doc    = result.childOrCreate (name);
             Schema.readAll (doc, reader);
-            MainFrame.undoManager.apply (new AddDoc (name, doc));
-        }
-        catch (IOException e)
-        {
+            return result;
         }
     }
 

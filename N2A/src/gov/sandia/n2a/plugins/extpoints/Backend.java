@@ -7,8 +7,10 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.plugins.extpoints;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.DirectoryStream;
@@ -43,6 +45,45 @@ public abstract class Backend implements ExtensionPoint
             return System.err;
         }
     };
+
+    public static class Capture extends PrintStream
+    {
+        public Capture (ByteArrayOutputStream out) throws UnsupportedEncodingException
+        {
+            super (out, false, "UTF-8");
+        }
+
+        /**
+            Retrieves the captured string.
+        **/
+        public String get ()
+        {
+            try {return ((ByteArrayOutputStream) out).toString ("UTF-8");}
+            catch (UnsupportedEncodingException e) {return "";}  // Will never happen.
+        }
+
+        /**
+            Creates a new Capture stream and attaches it to err.
+        **/
+        public static void attach ()
+        {
+            try {err.set (new Capture (new ByteArrayOutputStream ()));}
+            catch (UnsupportedEncodingException e) {}  // "UTF-8" will definitely be supported, so this exception will never happen. Just silencing it so simplify calling code.
+        }
+
+        /**
+            Retrieves the captured string and detaches the stream from err.
+        **/
+        public static String finish ()
+        {
+            PrintStream ps = err.get ();
+            if (! (ps instanceof Capture)) return "";
+            String result = ((Capture) ps).get ();
+            ps.close ();
+            err.set (System.err);
+            return result;
+        }
+    }
 
     /**
         Stop the simulation but don't dump a stack trace.

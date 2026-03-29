@@ -8,9 +8,7 @@ package gov.sandia.n2a.backend.sonata;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,11 +16,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.swing.JOptionPane;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-
-import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.JSON;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
@@ -30,11 +23,9 @@ import gov.sandia.n2a.language.function.Table;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
-import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.plugins.extpoints.Import;
 import gov.sandia.n2a.plugins.extpoints.ImportModel;
-import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.eq.undo.AddDoc;
 import io.jhdf.HdfFile;
 import io.jhdf.api.Dataset;
@@ -57,7 +48,7 @@ public class ImportJob
     protected String                       target_simulator;
     protected Map<String,ImportSONATApart> backends      = new HashMap<String,ImportSONATApart> ();
 
-    public void process (Path source)
+    public void process (Path source) throws IOException
     {
         dir       = source.getParent ();
         modelName = dir.getFileName ().toString ();
@@ -66,11 +57,6 @@ public class ImportJob
         modelName = AddDoc.uniqueName (modelName);
         model = models.childOrCreate (modelName);
         model.set ("\"" + dir + "\"", "dir");
-
-        ByteArrayOutputStream boas = new ByteArrayOutputStream ();
-        try {Backend.err.set (new PrintStream (boas, false, "UTF-8"));}
-        catch (Exception e) {}
-        boolean failed = false;
 
         // Build table of backends that support SONATA.
         for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Import.class))
@@ -81,62 +67,25 @@ public class ImportJob
             backends.put (name, (ImportSONATApart) ext);
         }
 
-        try
+        try (BufferedReader reader = Files.newBufferedReader (source))
         {
-            try (BufferedReader reader = Files.newBufferedReader (source))
-            {
-                json.read (config, reader);
-            }
-
-            target_simulator = config.get ("target_simulator").toLowerCase ();
-            model.set (target_simulator, "$meta", "backend");  // TODO: may need to map some strings.
-
-            substituteStrings ();
-            collectTypes (nodeTypes, nodeTypeIndex, "node", dir.resolve (config.get ("components", "point_neuron_models_dir")));
-            collectTypes (edgeTypes, nodeTypeIndex, "edge", dir.resolve (config.get ("components", "synaptic_models_dir")));
-            generateModel ();
-            generateTables (nodeTypes);
-            generateTables (edgeTypes);
-        }
-        catch (IOException e)
-        {
-            failed = true;
-            PrintStream ps = Backend.err.get ();
-            e.printStackTrace (ps);
+            json.read (config, reader);
+            substituteStrings (config);
+            include ("network");
+            include ("simulation");
         }
 
-        PrintStream ps = Backend.err.get ();
-        if (ps != System.err) ps.close ();
+        target_simulator = config.get ("target_simulator").toLowerCase ();
+        model.set (target_simulator, "$meta", "backend");  // TODO: may need to map some strings.
 
-        String headline = failed ? "Import failed" : "Import completed with warnings";
-
-        String errors = "";
-        try {errors = boas.toString ("UTF-8");}
-        catch (Exception e2) {}
-
-        if (! errors.isEmpty ())
-        {
-            if (AppData.properties.getFlag ("headless"))
-            {
-                System.err.println (headline);
-                System.err.println (errors);
-                return;
-            }
-
-            JTextArea textArea = new JTextArea (errors);
-            JScrollPane scrollPane = new JScrollPane (textArea);
-            scrollPane.setPreferredSize (new java.awt.Dimension (640, 480));
-            JOptionPane.showMessageDialog
-            (
-                MainFrame.instance,
-                scrollPane,
-                headline,
-                failed ? JOptionPane.ERROR_MESSAGE :  JOptionPane.WARNING_MESSAGE
-            );
-        }
+        collectTypes (nodeTypes, nodeTypeIndex, "node", dir.resolve (config.get ("components", "point_neuron_models_dir")));
+        collectTypes (edgeTypes, nodeTypeIndex, "edge", dir.resolve (config.get ("components", "synaptic_models_dir")));
+        generateModel ();
+        generateTables (nodeTypes);
+        generateTables (edgeTypes);
     }
 
-    public void substituteStrings ()
+    public static void substituteStrings (MNode config)
     {
         // SONATA naively imitates the appearance of string macros, without using a proper grammar for them.
         // This routine attempts to work around the resulting ambiguity by doing longest substitution first.
@@ -200,6 +149,20 @@ public class ImportJob
         });
     }
 
+    public void include (String key) throws IOException
+    {
+        String fileName = config.get (key);
+        if (fileName.isBlank ()) return;
+
+        try (BufferedReader reader = Files.newBufferedReader (dir.resolve (fileName)))
+        {
+            MVolatile temp = new MVolatile ();
+            json.read (temp, reader);
+            substituteStrings (temp);  // Each include file has its own manifest.
+            config.merge (temp);
+        }
+    }
+
     public void collectTypes (MNode collection, Map<String,Map<Long,String>> index, String type, Path modelsDir) throws IOException
     {
         for (MNode n : config.childOrEmpty ("networks", type + "s"))
@@ -236,10 +199,10 @@ public class ImportJob
             {
                 // Extract the core values.
                 // We assume that each model_template has only one model_type, so we do not use model_type to distinguish parts.
-                if (index_population      >= 0) population      = H.getString (r, index_population);
-                if (index_type_id         >= 0) type_id         = H.getString (r, index_type_id);
-                if (index_model_template  >= 0) model_template  = H.getString (r, index_model_template);
-                if (index_dynamics_params >= 0) dynamics_params = H.getString (r, index_dynamics_params);
+                if (index_population      >= 0) population      = getString (H, r, index_population);
+                if (index_type_id         >= 0) type_id         = getString (H, r, index_type_id);
+                if (index_model_template  >= 0) model_template  = getString (H, r, index_model_template);
+                if (index_dynamics_params >= 0) dynamics_params = getString (H, r, index_dynamics_params);
 
                 if (! model_template.contains (":")) model_template = target_simulator + ":" + model_template;
 
@@ -261,7 +224,7 @@ public class ImportJob
                 }
 
                 // Load dynamics_params
-                if (dynamics_params.isBlank ()) continue;
+                if (dynamics_params.isEmpty ()) continue;
                 Path modelPath = modelsDir.resolve (dynamics_params);
                 try (BufferedReader reader = Files.newBufferedReader (modelPath))
                 {
@@ -319,6 +282,13 @@ public class ImportJob
                 model_template.set (result, "");
             }
         }
+    }
+
+    public String getString (Table.Holder H, int row, int column)
+    {
+        String result = H.getString (row, column).trim ();
+        if (result.equals ("NULL")) return "";
+        return result;
     }
 
     public static class GroupAttributes
@@ -745,6 +715,7 @@ public class ImportJob
                         first = false;
                         writer.write (a.key ());
                     }
+                    writer.write ("\n");
 
                     // Write data
                     for (MNode t : model_template)
@@ -757,6 +728,7 @@ public class ImportJob
                             first = false;
                             writer.write (t.get (a.key ()));
                         }
+                        writer.write ("\n");
                     }
                 }
             }

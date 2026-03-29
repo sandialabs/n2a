@@ -20,6 +20,7 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.UndoManager;
+import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.search.NameEditor;
 import gov.sandia.n2a.ui.eq.search.NodeBase;
 import gov.sandia.n2a.ui.eq.search.NodeCategory;
@@ -298,23 +299,7 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
                     {
                         @SuppressWarnings("unchecked")
                         List<File> files = (List<File>) xferable.getTransferData (DataFlavor.javaFileListFlavor);
-                        Exception error = null;
-                        um.addEdit (new CompoundEdit ());  // in case there is more than one file
-                        // Ideally this would be on a separate thread, but since we are modifying a compound edit,
-                        // we need to stay on EDT.
-                        for (File file : files)
-                        {
-                            try
-                            {
-                                PanelModel.importFile (file.toPath ());
-                            }
-                            catch (Exception e)
-                            {
-                                error = e;
-                            }
-                        }
-                        um.endCompoundEdit ();
-                        if (error != null) PanelModel.fileImportExportException ("Import", error);
+                        Utility.importFiles (files);
                         return true;
                     }
                     else if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))

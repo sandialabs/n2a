@@ -88,7 +88,7 @@ public class MPart extends MNode
 
     /**
         Processes the value of $inherit into an array of keys that can be used to retrieve the parts from DB.
-        Handles quoted strings and escapes.
+        Handles quoted strings and escapes. In particular, a key can safely contain both quote and comma characters.
         @param inherit The value of $inherit, already retrieved from its node.
     **/
     public static String[] parseInherit (String inherit)
@@ -164,6 +164,7 @@ public class MPart extends MNode
 
     /**
         Processes an array of part keys into a single string suitable to store as value of $inherit.
+        Safely escapes both quote and comma characters.
     **/
     public static String encodeInherit (String keys[])
     {

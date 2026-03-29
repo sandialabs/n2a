@@ -26,7 +26,7 @@ import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.plugins.extpoints.ImportModel;
 
-public class ImportNEST implements ImportModel, ImportSONATApart
+public class ImportNEST extends ImportModel implements ImportSONATApart
 {
     @Override
     public String getName ()
@@ -35,8 +35,9 @@ public class ImportNEST implements ImportModel, ImportSONATApart
     }
 
     @Override
-    public void process (Path source, String name) throws Exception
+    public MNode extractModels (Path source, String name) throws Exception
     {
+        throw new Exception ("Not implemented");
     }
 
     @Override

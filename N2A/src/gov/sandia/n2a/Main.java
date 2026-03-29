@@ -25,8 +25,8 @@ import gov.sandia.n2a.plugins.extpoints.ExportModel;
 import gov.sandia.n2a.plugins.extpoints.Service;
 import gov.sandia.n2a.plugins.extpoints.ShutdownHook;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.PanelEquations;
-import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
 import gov.sandia.n2a.ui.jobs.OutputParser.Column;
@@ -113,7 +113,7 @@ public class Main
         // Set global application properties.
         AppData.properties.set ("Neurons to Algorithms", "name");
         AppData.properties.set ("N2A",                   "abbreviation");
-        AppData.properties.set ("1.2",                   "version");
+        AppData.properties.set ("1.3",                   "version");
         AppData.properties.set (! headless.isEmpty (),   "headless");
         AppData.checkInitialDB ();
         Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
@@ -448,7 +448,8 @@ public class Main
 
         try
         {
-            PanelModel.importFile (path, format, name);
+            Backend.err.set (System.err);
+            Utility.importFile (path, format, name);
         }
         catch (Exception e)
         {
@@ -504,6 +505,7 @@ public class Main
 
         try
         {
+            Backend.err.set (System.err);
             Files.createDirectories (path.getParent ());
             exporter.process (record, path);
         }

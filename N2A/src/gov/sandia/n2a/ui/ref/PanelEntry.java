@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -16,7 +16,7 @@ import gov.sandia.n2a.plugins.extpoints.Export;
 import gov.sandia.n2a.plugins.extpoints.Import;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.ref.undo.AddTag;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
@@ -434,17 +434,17 @@ public class PanelEntry extends JPanel
             }
         });
 
-        buttonExport = new JButton (ImageUtil.getImage ("export.gif"));
-        buttonExport.setMargin (new Insets (2, 2, 2, 2));
-        buttonExport.setFocusable (false);
-        buttonExport.setToolTipText ("Export");
-        buttonExport.addActionListener (listenerExport);
-
         buttonImport = new JButton (ImageUtil.getImage ("import.gif"));
         buttonImport.setMargin (new Insets (2, 2, 2, 2));
         buttonImport.setFocusable (false);
         buttonImport.setToolTipText ("Import");
         buttonImport.addActionListener (listenerImport);
+
+        buttonExport = new JButton (ImageUtil.getImage ("export.gif"));
+        buttonExport.setMargin (new Insets (2, 2, 2, 2));
+        buttonExport.setFocusable (false);
+        buttonExport.setToolTipText ("Export");
+        buttonExport.addActionListener (listenerExport);
 
         Lay.BLtg (this,
             "N", Lay.WL ("L",
@@ -453,8 +453,8 @@ public class PanelEntry extends JPanel
                 buttonAddTag,
                 buttonDeleteTag,
                 Box.createHorizontalStrut (15),
-                buttonExport,
                 buttonImport,
+                buttonExport,
                 "hgap=5,vgap=1"
             ),
             "C", scrollPane
@@ -567,22 +567,7 @@ public class PanelEntry extends JPanel
             // Do export
             Path path = fc.getSelectedFile ().toPath ();
             ExporterFilter filter = (ExporterFilter) fc.getFileFilter ();
-            Thread t = new Thread ()
-            {
-                public void run ()
-                {
-                    try
-                    {
-                        filter.exporter.process (model.record, path);
-                    }
-                    catch (Exception error)
-                    {
-                        PanelModel.fileImportExportException ("Export", error);
-                    }
-                }
-            };
-            t.setDaemon (true);
-            t.start ();
+            Utility.exportFile (filter.exporter, model.record, path);
         }
     };
 
@@ -633,23 +618,8 @@ public class PanelEntry extends JPanel
             if (result != JFileChooser.APPROVE_OPTION) return;
 
             // Do import
-            Thread t = new Thread ()
-            {
-                public void run ()
-                {
-                    try
-                    {
-                        Path path = fc.getSelectedFile ().toPath ();
-                        PanelModel.importFile (path);  // This works for references too.
-                    }
-                    catch (Exception error)
-                    {
-                        PanelModel.fileImportExportException ("Import", error);
-                    }
-                }
-            };
-            t.setDaemon (true);
-            t.start ();
+            Path path = fc.getSelectedFile ().toPath ();
+            Utility.importFile (path);
         }
     };
 

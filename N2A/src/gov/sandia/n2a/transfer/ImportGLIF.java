@@ -14,10 +14,8 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.plugins.extpoints.ImportModel;
-import gov.sandia.n2a.ui.MainFrame;
-import gov.sandia.n2a.ui.eq.undo.AddDoc;
 
-public class ImportGLIF implements ImportModel
+public class ImportGLIF extends ImportModel
 {
     @Override
     public String getName ()
@@ -26,7 +24,7 @@ public class ImportGLIF implements ImportModel
     }
 
     @Override
-    public void process (Path source, String name) throws Exception
+    public MNode extractModels (Path source, String name) throws Exception
     {
         String filename = source.getFileName ().toString ();
         int lastDot = filename.lastIndexOf ('.');
@@ -56,12 +54,14 @@ public class ImportGLIF implements ImportModel
                 if (e != null) parseMetadata (new InputStreamReader (archive.getInputStream (e)), model);
             }
         }
-        if (model.isEmpty ()) return;  // TODO: throw an informative exception.
+        if (model.isEmpty ()) throw new Exception ("No model found in file.");
 
         // Save the model.
         if (name == null  ||  name.isBlank ()) name = model.get ("$meta", "specimen").split (";")[0];
         if (                  name.isBlank ()) name = filename;
-        MainFrame.undoManager.apply (new AddDoc (name, model));
+        MNode result = new MVolatile (name, "");
+        result.set (model, name);
+        return result;
     }
 
     @Override

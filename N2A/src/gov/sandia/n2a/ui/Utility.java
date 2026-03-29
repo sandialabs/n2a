@@ -1,5 +1,5 @@
 /*
-Copyright 2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2023-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -8,17 +8,33 @@ package gov.sandia.n2a.ui;
 
 import java.awt.AlphaComposite;
 import java.awt.Color;
+import java.awt.EventQueue;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
+import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Base64;
+import java.util.List;
 
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
+import javax.swing.JOptionPane;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.plugins.ExtensionPoint;
+import gov.sandia.n2a.plugins.PluginManager;
+import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Export;
+import gov.sandia.n2a.plugins.extpoints.Import;
 
 public class Utility
 {
@@ -219,5 +235,172 @@ public class Utility
         if (h < 0.5f)      return n2;
         if (h < twothirds) return n1 + (n2 - n1) * (twothirds - h) * 6.0f;
         return n1;
+    }
+
+    /**
+        Import based only on file name and contents.
+    **/
+    public static void importFile (Path path)
+    {
+        Thread t = new Thread ()
+        {
+            public void run ()
+            {
+                Exception error = null;
+                Backend.Capture.attach ();
+                try
+                {
+                    importFile (path, null, null);
+                }
+                catch (Exception e)
+                {
+                    error = e;
+                }
+                fileImportExportException ("Import", error);
+            }
+        };
+        t.setDaemon (true);
+        t.start ();
+    }
+
+    /**
+        Imports multiple files.
+    **/
+    public static void importFiles (List<File> files)
+    {
+        Thread t = new Thread ()
+        {
+            public void run ()
+            {
+                Exception error = null;
+                Backend.Capture.attach ();
+                UndoManager um = MainFrame.undoManager;
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        um.addEdit (new CompoundEdit ());  // in case there is more than one file
+                    }
+                });
+                for (File file : files)
+                {
+                    try
+                    {
+                        importFile (file.toPath (), null, null);
+                    }
+                    catch (Exception e)
+                    {
+                        error = e;
+                    }
+                }
+                EventQueue.invokeLater (new Runnable ()
+                {
+                    public void run ()
+                    {
+                        um.endCompoundEdit ();
+                    }
+                });
+                fileImportExportException ("Import", error);
+            }
+        };
+        t.setDaemon (true);
+        t.start ();
+    }
+
+    /**
+        Import with hints.
+        Can be called from CLI (headless) or from GUI.
+        Threading and Backend.err should be configured by caller.
+        The Import class checks whether it is headless or UI.
+        If UI, the Import class creates Undoable transactions for UI update.
+        @param format Name of the format, as given by Import.getName()
+        @param name Suggested name for resulting DB record.
+    **/
+    public static void importFile (Path path, String format, String name) throws Exception
+    {
+        Import bestImporter = null;
+        float  bestP        = 0;
+        for (ExtensionPoint exp : PluginManager.getExtensionsForPoint (Import.class))
+        {
+            Import imp = (Import) exp;
+            if (format != null  &&  imp.getName ().equalsIgnoreCase (format))
+            {
+                bestImporter = imp;
+                break;
+            }
+            float P = imp.matches (path);
+            if (P > bestP)
+            {
+                bestP        = P;
+                bestImporter = (Import) exp;
+            }
+        }
+        if (bestImporter != null) bestImporter.process (path, name);
+    }
+
+    /**
+        Import based only on file name and contents.
+    **/
+    public static void exportFile (Export exporter, MNode document, Path path)
+    {
+        Thread t = new Thread ()
+        {
+            public void run ()
+            {
+                Exception error = null;
+                Backend.Capture.attach ();
+                try
+                {
+                    exporter.process (document, path);
+                }
+                catch (Exception e)
+                {
+                    error = e;
+                }
+                fileImportExportException ("Export", error);
+            }
+        };
+        t.setDaemon (true);
+        t.start ();
+    }
+
+    /**
+        Report an import error to the user via UI and crashdump file.
+        If Backend.err currently maps to a string printer, its contents is assumed to be
+        warnings associated with the current operation. Removes the string printer from err.
+        @param error A exception that was thrown during the process. May be null if no
+        exception was thrown.
+    **/
+    public static void fileImportExportException (String direction, Exception error)
+    {
+        // Collect strings and determine level of success/failure.
+        if (error != null) error.printStackTrace (Backend.err.get ());  // Backend.err should always be a Capture at this point.
+        String message = Backend.Capture.finish ();
+        if (message.isEmpty ()) return;  // Nothing to report
+
+        Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
+        try (BufferedWriter writer = Files.newBufferedWriter (resourceDir.resolve ("crashdump")))
+        {
+            writer.write (message);
+        }
+        catch (IOException e) {}
+
+        EventQueue.invokeLater (new Runnable ()
+        {
+            public void run ()
+            {
+                boolean failed =  error != null;
+                JTextArea textArea = new JTextArea (message);
+                JScrollPane scrollPane = new JScrollPane (textArea);
+                scrollPane.setPreferredSize (new java.awt.Dimension (640, 480));
+                JOptionPane.showMessageDialog
+                (
+                    MainFrame.instance,
+                    scrollPane,
+                    direction + (failed ? " failed" : " completed with warnings"),
+                    failed ? JOptionPane.ERROR_MESSAGE :  JOptionPane.WARNING_MESSAGE
+                );
+            }
+        });
     }
 }

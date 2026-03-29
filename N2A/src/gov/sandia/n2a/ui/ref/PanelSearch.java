@@ -20,7 +20,7 @@ import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.SafeTextTransferHandler;
 import gov.sandia.n2a.ui.UndoManager;
-import gov.sandia.n2a.ui.eq.PanelModel;
+import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.ref.undo.AddEntry;
 import gov.sandia.n2a.ui.ref.undo.DeleteEntry;
 import gov.sandia.n2a.ui.settings.SettingsRepo;
@@ -191,27 +191,14 @@ public class PanelSearch extends JPanel
                     {
                         @SuppressWarnings("unchecked")
                         List<File> files = (List<File>) xferable.getTransferData (DataFlavor.javaFileListFlavor);
-                        Exception error = null;
-                        um.addEdit (new CompoundEdit ());  // in case there is more than one file
-                        // Ideally this would be on a separate thread, but since we are modifying a compound edit,
-                        // we need to stay on EDT.
-                        for (File file : files)
-                        {
-                            try
-                            {
-                                PanelModel.importFile (file.toPath ());
-                            }
-                            catch (Exception e)
-                            {
-                                error = e;
-                            }
-                        }
-                        um.endCompoundEdit ();
-                        if (error != null) PanelModel.fileImportExportException ("Import", error);
+                        Utility.importFiles (files);
                         return true;
                     }
-                    else if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))
+                    else if (xfer.isDataFlavorSupported (DataFlavor.stringFlavor))  // Bibliography stored in a string.
                     {
+                        // This import is fast enough that we can do it on EDT.
+                        // Errors are silently ignored. The user is never told that an import failed or why.
+
                         String dataString = (String) xferable.getTransferData (DataFlavor.stringFlavor);
                         BufferedReader reader = new BufferedReader (new StringReader (dataString));
                         reader.mark (dataString.length () + 1);

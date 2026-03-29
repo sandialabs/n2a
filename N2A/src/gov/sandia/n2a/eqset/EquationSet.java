@@ -4150,8 +4150,11 @@ public class EquationSet implements Comparable<EquationSet>
             if (v.hasAny ("state", "constant", "initOnly", "readOnly", "instance", "reference", "accessor", "preexistent", "externalRead", "externalWrite", "cycle", "dummy")) continue;
 
             // A general requirement is that v not depend on its own current value.
-            // * Must not have a cycle that leads back to self. This will be handled by cycle breaking below.
-            // * Must have an equation that will always fire during update. (Otherwise, default comes from previous value.)
+            // 1) Must have an equation that will always fire during update. Otherwise, the default could come from
+            //    previous value, necessitating that we store the variable.
+            // 2) Must not have a cycle that leads back to self.
+            // Requirement 1 is enforced by the code immediately below.
+            // Requirement 2 is enforced later below by cycle breaking.
             if (! v.hasAttribute ("temporary"))
             {
                 // See findInitOnly() for similar code.

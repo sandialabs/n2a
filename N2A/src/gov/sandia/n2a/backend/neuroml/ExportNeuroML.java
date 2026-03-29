@@ -32,12 +32,12 @@ public class ExportNeuroML implements ExportModel
     }
 
     @Override
-    public void process (MNode source, Path destination)
+    public void process (MNode source, Path destination) throws Exception
     {
         process (source, destination, false);
     }
 
-    public ExportJob process (MNode source, Path destination, boolean forBackend)
+    public ExportJob process (MNode source, Path destination, boolean forBackend) throws Exception
     {
         if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMapNeuroML ();
         if (PluginNeuroML.sequencer == null)

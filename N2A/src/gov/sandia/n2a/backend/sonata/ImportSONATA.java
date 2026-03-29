@@ -15,12 +15,8 @@ import gov.sandia.n2a.db.JSON;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.plugins.extpoints.ImportModel;
-import gov.sandia.n2a.ui.CompoundEdit;
-import gov.sandia.n2a.ui.MainFrame;
-import gov.sandia.n2a.ui.UndoManager;
-import gov.sandia.n2a.ui.eq.undo.AddDoc;
 
-public class ImportSONATA implements ImportModel
+public class ImportSONATA extends ImportModel
 {
     @Override
     public String getName ()
@@ -29,24 +25,12 @@ public class ImportSONATA implements ImportModel
     }
 
     @Override
-    public void process (Path source, String name) throws Exception
+    public MNode extractModels (Path source, String name) throws Exception
     {
         ImportJob job = new ImportJob ();
         job.process (source);
-
-        MNode mainModel = job.models.child (job.modelName);
-        job.models.clear (job.modelName);
-
-        UndoManager um = MainFrame.undoManager;
-        um.addEdit (new CompoundEdit ());
-        for (MNode m : job.models)
-        {
-            AddDoc add = new AddDoc (m.key (), m);
-            add.setSilent ();
-            um.apply (add);
-        }
-        if (mainModel != null) um.apply (new AddDoc (job.modelName, mainModel));
-        um.endCompoundEdit ();
+        job.models.set (job.modelName);
+        return job.models;
     }
 
     @Override
@@ -65,6 +49,12 @@ public class ImportSONATA implements ImportModel
                 MVolatile config = new MVolatile ();
                 JSON json = new JSON ();
                 json.read (config, reader);
+
+                // For a config that includes other configs, look for the two major keys.
+                if (config.child ("network")          != null) result += 0.5;
+                if (config.child ("simulation")       != null) result += 0.5;
+
+                // For a self-contained config, look for the most important sections.
                 if (config.child ("networks")         != null) result += 0.5;
                 if (config.child ("components")       != null) result += 0.2;
                 if (config.child ("manifest")         != null) result += 0.1;
