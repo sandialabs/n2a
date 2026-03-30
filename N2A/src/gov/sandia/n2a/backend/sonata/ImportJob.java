@@ -16,6 +16,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+
 import gov.sandia.n2a.db.JSON;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
@@ -35,16 +37,17 @@ import io.jhdf.exceptions.HdfInvalidPathException;
 
 public class ImportJob
 {
-    protected MNode                        models        = new MVolatile ();
+    public    MNode                        models        = new MVolatile ();
     protected String                       modelName     = "";
     public    MNode                        model;                                                   // The main model, inside "models", referenced by "modelName".
-    protected Path                         dir;                                                     // Working directory, where config file is found.
+    public    Path                         dir;                                                     // Working directory, where config file is found.
     protected JSON                         json          = new JSON ();                             // We read a lot of JSON files.
-    protected MNode                        config        = new MVolatile ();                        // The top-level config file for this SONATA model.
+    public    MNode                        config        = new MVolatile ();                        // The top-level config file for this SONATA model.
     public    MNode                        nodeTypes     = new MVolatile ();                        // {node name}/{model template}/{type id}/tree
     public    MNode                        edgeTypes     = new MVolatile ();                        // {edge name}/{model template}/{type id}/tree
-    protected Map<String,Map<Long,String>> nodeTypeIndex = new HashMap<String,Map<Long,String>> (); // from node_type_id to model_template
-    protected Map<String,Map<Long,String>> edgeTypeIndex = new HashMap<String,Map<Long,String>> (); // from edge_type_id to model_template
+    protected Map<String,Map<Long,String>> nodeTypeIndex = new HashMap<String,Map<Long,String>> (); // from (population, node_type_id) to model_template
+    protected Map<String,Map<Long,String>> edgeTypeIndex = new HashMap<String,Map<Long,String>> (); // from (population, edge_type_id) to model_template
+    protected Map<String,String>           templates     = new HashMap<String,String> ();           // from raw model_template name to part name in context of a population. Actual part name will either have a prefix or container for the population.
     protected String                       target_simulator;
     protected Map<String,ImportSONATApart> backends      = new HashMap<String,ImportSONATApart> ();
 
@@ -64,6 +67,10 @@ public class ImportJob
             if (! (ext instanceof ImportSONATApart)) continue;
             ImportModel im = (ImportModel) ext;
             String name = im.getName ().toLowerCase ();
+            switch (name)
+            {
+                case "neuroml": name = "nml"; break;  // Even though the backend key is "lems", the importer is named "NeuroML".
+            }
             backends.put (name, (ImportSONATApart) ext);
         }
 
@@ -80,6 +87,7 @@ public class ImportJob
 
         collectTypes (nodeTypes, nodeTypeIndex, "node", dir.resolve (config.get ("components", "point_neuron_models_dir")));
         collectTypes (edgeTypes, nodeTypeIndex, "edge", dir.resolve (config.get ("components", "synaptic_models_dir")));
+        prepareModels ();
         generateModel ();
         generateTables (nodeTypes);
         generateTables (edgeTypes);
@@ -165,6 +173,7 @@ public class ImportJob
 
     public void collectTypes (MNode collection, Map<String,Map<Long,String>> index, String type, Path modelsDir) throws IOException
     {
+        // Collect the types.
         for (MNode n : config.childOrEmpty ("networks", type + "s"))
         {
             Path typesPath = dir.resolve (n.get (type + "_types_file"));
@@ -235,10 +244,13 @@ public class ImportJob
             }
         }
 
+        // Create union of parameter names and identify constants.
         for (MNode population : collection)
         {
             for (MNode model_template : population)
             {
+                templates.put (model_template.key (), "");  // Part name will be filled in later. This just collects all the templates.
+
                 // Step 1 -- Create a union of model attributes.
                 MNode result = new MVolatile ();
                 for (MNode m : model_template) result.merge (m);
@@ -289,6 +301,21 @@ public class ImportJob
         String result = H.getString (row, column).trim ();
         if (result.equals ("NULL")) return "";
         return result;
+    }
+
+    public void prepareModels ()
+    {
+        for (Entry<String,String> t : templates.entrySet ())
+        {
+            String key = t.getKey ();
+            String pieces[] = key.split (":", 2);
+            String schema         = pieces[0];
+            String model_template = pieces[1];
+            ImportSONATApart importer = backends.get (schema);
+            String partName = model_template;
+            if (importer != null) partName = importer.prepare (this, model_template);
+            t.setValue (partName);
+        }
     }
 
     public static class GroupAttributes

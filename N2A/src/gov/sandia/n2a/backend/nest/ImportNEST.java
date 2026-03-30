@@ -41,6 +41,18 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
     }
 
     @Override
+    public float matches (Path source)
+    {
+        return 0;
+    }
+
+    @Override
+    public boolean accept (Path source)
+    {
+        return false;
+    }
+
+    @Override
     public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, String partName, String population, String model_template, List<String> instanceAttributes)
     {
         if (PluginNEST.partMap == null) PluginNEST.partMap = new PartMap ("nest");
@@ -291,17 +303,5 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
             else          table += ")" + one;
             part.set (table, internalName);
         }
-    }
-
-    @Override
-    public float matches (Path source)
-    {
-        return 0;
-    }
-
-    @Override
-    public boolean accept (Path source)
-    {
-        return false;
     }
 }

@@ -14,6 +14,17 @@ import java.util.List;
 public interface ImportSONATApart
 {
     /**
+        Ensures that the given model template name is in the DB, ready for use.
+        @param model_template The template name itself, without schema identifier.
+        @return A suitable part name, when combined with other strings that
+        distinguish population and group.
+    **/
+    public default String prepare (ImportJob job, String model_template)
+    {
+        return model_template;
+    }
+
+    /**
         Adds a part to main model.
 
         @param job A reference to the complete job object, in case we need something from it.
