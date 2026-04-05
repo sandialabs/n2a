@@ -95,8 +95,9 @@ public class ReadMatrix extends Function
             // For keyword tests (hdf, anchor) we assume that the keyword is only present if the file is really that type.
             if (hdf.isBlank ())
             {
+                // TODO: handle SONATA spike files in CSV format. Simplest approach is to do it in Matrix.factory(), but need a way to avoid repeating the XSV file parser.
                 Operator anchor = getKeyword ("anchor");
-                boolean isSheet = anchor != null  ||  fileName.toLowerCase ().endsWith (".csv");  // TODO: handle SONATA spike files in CSV format.
+                boolean isSheet = anchor != null  ||  fileName.toLowerCase ().endsWith (".csv");
                 if (! isSheet)  // Probe file
                 {
                     try (BufferedReader reader = Files.newBufferedReader (path))

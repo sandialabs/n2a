@@ -16,6 +16,7 @@ import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -33,6 +34,7 @@ import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.plugins.extpoints.Export;
 import gov.sandia.n2a.plugins.extpoints.Import;
 
@@ -374,7 +376,9 @@ public class Utility
     public static void fileImportExportException (String direction, Exception error)
     {
         // Collect strings and determine level of success/failure.
-        if (error != null) error.printStackTrace (Backend.err.get ());  // Backend.err should always be a Capture at this point.
+        PrintStream ps = Backend.err.get ();  // Backend.err should always be a Capture at this point.
+        if      (error instanceof AbortRun) ps.println (error.getLocalizedMessage ());
+        else if (error != null)             error.printStackTrace (ps);
         String message = Backend.Capture.finish ();
         if (message.isEmpty ()) return;  // Nothing to report
 

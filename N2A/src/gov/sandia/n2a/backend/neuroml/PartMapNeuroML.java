@@ -53,7 +53,7 @@ public class PartMapNeuroML extends PartMap
             String pieces[] = part.get ("$meta", "backend", "lems", "part").split (",");
             for (String n : pieces)
             {
-                externalParts.add (n);
+                if (! n.isBlank ()) externalParts.add (n);
             }
             if (externalParts.isEmpty ()) externalParts.add (internalPart);  // Simply a tagged part, with no name change.
 

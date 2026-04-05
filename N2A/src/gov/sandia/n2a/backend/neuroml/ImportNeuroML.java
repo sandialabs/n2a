@@ -6,6 +6,7 @@ the U.S. Government retains certain rights in this software.
 
 package gov.sandia.n2a.backend.neuroml;
 
+import gov.sandia.n2a.backend.sonata.ImportSONATA;
 import gov.sandia.n2a.backend.sonata.ImportSONATApart;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MDir;
@@ -100,6 +101,9 @@ public class ImportNeuroML extends ImportModel implements ImportSONATApart
         if (existing == null)
         {
             cell.set ("SONATA", "$meta", "gui", "category");  // There could be a lot of cell types from the Allen atlas. Putting models in the SONATA group will reduce clutter in main list.
+            // TODO: Allen models exported from NEURON currently don't have proper connections between 4 main compartments (soma, axon, dend, apic).
+            // If connections are missing, and if there are 4 compartments with these names, then add basic connections.
+            // Should be suitable for mapping to an SWC file. Individual connections should be contingent on the existence of a line in the SWC.
             job.models.set (cell, key);  // Auxiliary models will be added at end of import.
         }
         return key;
@@ -108,5 +112,7 @@ public class ImportNeuroML extends ImportModel implements ImportSONATApart
     @Override
     public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, String partName, String population, String model_template, List<String> instanceAttributes)
     {
+        if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMapNeuroML ();
+        ImportSONATA.processPart ("lems", PluginNeuroML.partMap, job, partName, population, model_template, instanceAttributes);
     }
 }

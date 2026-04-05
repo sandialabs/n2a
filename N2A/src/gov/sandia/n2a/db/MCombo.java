@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.db;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NavigableMap;
@@ -30,6 +31,12 @@ public class MCombo extends MNode implements MNodeListener
     {
         this.name = name;
         init (containers);
+    }
+
+    public MCombo (String name, MNode... containers)
+    {
+        this.name = name;
+        init (Arrays.asList (containers));
     }
 
     public synchronized void init (List<MNode> containers)

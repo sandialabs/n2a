@@ -1,5 +1,5 @@
 /*
-Copyright 2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2024-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -25,21 +25,16 @@ public class MPartRepo extends MPart
     protected MNode repo;
 
     /**
-        Creates MPart tree with the default "models" repo.
+        Creates MPart tree with implicit "models" repo or explicit list of repos.
+        @param containers If several are specified, they are put into a combination structure,
+        where the first one listed takes the highest precedence.
     **/
-    public MPartRepo (MNode source)
+    public MPartRepo (MNode source, MNode... containers)
     {
         super (null, null, source);
-        build (AppData.docs.childOrCreate ("models"));
-    }
-
-    /**
-        Creates MPart tree with explicit repo.
-    **/
-    public MPartRepo (MNode source, MNode repo)
-    {
-        super (null, null, source);
-        build (repo);
+        if      (containers.length == 0) build (AppData.docs.childOrCreate ("models"));
+        else if (containers.length == 1) build (containers[0]);
+        else                             build (new MCombo (null, containers));
     }
 
     /**

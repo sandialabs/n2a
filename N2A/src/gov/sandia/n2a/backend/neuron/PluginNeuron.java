@@ -9,10 +9,13 @@ package gov.sandia.n2a.backend.neuron;
 import javax.swing.ImageIcon;
 
 import gov.sandia.n2a.plugins.Plugin;
+import gov.sandia.n2a.backend.PartMap;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 
 public class PluginNeuron extends Plugin
 {
+    public static PartMap partMap;  // initialize the first time an import or export runs
+
     @Override
 	public String getName ()
 	{
@@ -46,7 +49,8 @@ public class PluginNeuron extends Plugin
 	{
         return new ExtensionPoint[]
         {
-            new BackendNeuron ()
+            new BackendNeuron (),
+            new ImportNeuron ()
         };
 	}
 }

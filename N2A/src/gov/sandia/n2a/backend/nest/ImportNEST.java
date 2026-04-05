@@ -15,6 +15,7 @@ import java.util.Set;
 
 import gov.sandia.n2a.backend.PartMap;
 import gov.sandia.n2a.backend.PartMap.NameMap;
+import gov.sandia.n2a.backend.sonata.ImportSONATA;
 import gov.sandia.n2a.backend.sonata.ImportSONATApart;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
@@ -68,7 +69,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
 
         if (isSynapse)
         {
-            // For now, make the simple assumption that the nueron class supports exactly one synapse type.
+            // For now, make the simple assumption that the neuron class supports exactly one synapse type.
             // TODO: handle arbitrary variety of synapse targets.
             String Binherit = MPart.parseInheritOne (Bpart.get ("$inherit"));
             MNode BbasePart = new MPartRepo (AppData.docs.childOrEmpty ("models", Binherit));
@@ -243,21 +244,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
                 }
             }
 
-            // Post-process $xyz
-            MNode x = part.child ("x");
-            MNode y = part.child ("y");
-            MNode z = part.child ("z");
-            if (x != null  ||  y != null  ||  z != null)
-            {
-                String xyz = "[";
-                xyz +=  x == null ? "0" : "x";  // Effectively, treating variable "x" as a temporary that just reads input.
-                xyz += ";";
-                xyz +=  y == null ? "0" : "y";
-                xyz += ";";
-                xyz +=  z == null ? "0" : "z";
-                xyz += "]";
-                part.set (xyz, "$xyz");
-            }
+            ImportSONATA.processXYZ (part);
         }
     }
 
@@ -276,6 +263,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
             String value = attribute.get ();
             if (isString)
             {
+                if (value.isBlank ()) return;
                 value = "\"" + value + "\"";
             }
             else

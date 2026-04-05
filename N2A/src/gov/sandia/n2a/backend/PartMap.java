@@ -63,7 +63,7 @@ public class PartMap
             String externalPartNames[] = part.get ("$meta", "backend", backend, "part").split (",");
             for (String name : externalPartNames)
             {
-                externalParts.add (name);
+                if (! name.isBlank ()) externalParts.add (name);
             }
             if (externalParts.isEmpty ()) externalParts.add (internalPart);  // Simply a tagged part, with no name change.
 

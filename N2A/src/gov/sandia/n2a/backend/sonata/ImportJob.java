@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
 import gov.sandia.n2a.db.JSON;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
@@ -41,25 +40,29 @@ public class ImportJob
     protected String                       modelName     = "";
     public    MNode                        model;                                                   // The main model, inside "models", referenced by "modelName".
     public    Path                         dir;                                                     // Working directory, where config file is found.
+    public    Path                         n2aDir;                                                  // Directory under working directory where we store our own resources (results of conversion).
     protected JSON                         json          = new JSON ();                             // We read a lot of JSON files.
     public    MNode                        config        = new MVolatile ();                        // The top-level config file for this SONATA model.
     public    MNode                        nodeTypes     = new MVolatile ();                        // {node name}/{model template}/{type id}/tree
     public    MNode                        edgeTypes     = new MVolatile ();                        // {edge name}/{model template}/{type id}/tree
     protected Map<String,Map<Long,String>> nodeTypeIndex = new HashMap<String,Map<Long,String>> (); // from (population, node_type_id) to model_template
     protected Map<String,Map<Long,String>> edgeTypeIndex = new HashMap<String,Map<Long,String>> (); // from (population, edge_type_id) to model_template
-    protected Map<String,String>           templates     = new HashMap<String,String> ();           // from raw model_template name to part name in context of a population. Actual part name will either have a prefix or container for the population.
     protected String                       target_simulator;
     protected Map<String,ImportSONATApart> backends      = new HashMap<String,ImportSONATApart> ();
+
+    public static final long chunkSize = 1000000;  // Size for partial reads of table. Prevents memory depletion.
 
     public void process (Path source) throws IOException
     {
         dir       = source.getParent ();
+        n2aDir    = dir.resolve ("n2a");
         modelName = dir.getFileName ().toString ();
         int index = modelName.lastIndexOf ('.');
         if (index > 0) modelName = modelName.substring (0, index);
         modelName = AddDoc.uniqueName (modelName);
         model = models.childOrCreate (modelName);
         model.set ("\"" + dir + "\"", "dir");
+        Files.createDirectories (n2aDir);
 
         // Build table of backends that support SONATA.
         for (ExtensionPoint ext : PluginManager.getExtensionsForPoint (Import.class))
@@ -70,6 +73,7 @@ public class ImportJob
             switch (name)
             {
                 case "neuroml": name = "nml"; break;  // Even though the backend key is "lems", the importer is named "NeuroML".
+                case "neuron":  name = "nrn"; break;
             }
             backends.put (name, (ImportSONATApart) ext);
         }
@@ -87,7 +91,6 @@ public class ImportJob
 
         collectTypes (nodeTypes, nodeTypeIndex, "node", dir.resolve (config.get ("components", "point_neuron_models_dir")));
         collectTypes (edgeTypes, nodeTypeIndex, "edge", dir.resolve (config.get ("components", "synaptic_models_dir")));
-        prepareModels ();
         generateModel ();
         generateTables (nodeTypes);
         generateTables (edgeTypes);
@@ -226,7 +229,7 @@ public class ImportJob
                 // Stash everything besides dynamics_params.
                 for (int c = 0; c < cols; c++)
                 {
-                    if (c == index_population  ||  c == index_type_id  ||  c == index_model_template  ||  c == index_dynamics_params) continue;
+                    if (c == index_population  ||  c == index_model_template  ||  c == index_dynamics_params) continue;
                     String key   = H.getString (0, c);
                     String value = H.getString (r, c);
                     collection.set (value, population, model_template, type_id, key);
@@ -243,17 +246,48 @@ public class ImportJob
                 }
             }
         }
+        collection.visit (new Visitor ()
+        {
+            public boolean visit (MNode node)
+            {
+                // Here we are setting values, whereas the getString() function guards against "NULL" in keys.
+                if (node.get ().equals ("NULL")) node.set ("");
+                return true;
+            }
+        });
 
         // Create union of parameter names and identify constants.
+        Map<String,String> templates = new HashMap<String,String> ();  // From raw model_template name to imported part name, if there is an import.
         for (MNode population : collection)
         {
             for (MNode model_template : population)
             {
                 templates.put (model_template.key (), "");  // Part name will be filled in later. This just collects all the templates.
 
+                // Step 0 -- Expand path-name attributes
+                String prefixMorphology        = config.get ("components", "morphologies_dir");
+                String prefixElectrophysiology = config.get ("components", "");  // TODO: What is the right key? Found "fit" files in shared_components/biophysical_neuron_templates/json
+                for (MNode group : model_template)
+                {
+                    MNode attribute = group.child ("morphology");
+                    if (attribute != null  &&  ! prefixMorphology.isBlank ())
+                    {
+                        String value = attribute.get ();
+                        if (! value.isBlank ()) attribute.set (prefixMorphology + "/" + value);
+                    }
+
+                    attribute = group.child ("electrophysiology");
+                    if (attribute != null  &&  ! prefixElectrophysiology.isBlank ())
+                    {
+                        String value = attribute.get ();
+                        if (! value.isBlank ()) attribute.set (prefixElectrophysiology + "/" + value);
+                    }
+                }
+
                 // Step 1 -- Create a union of model attributes.
                 MNode result = new MVolatile ();
                 for (MNode m : model_template) result.merge (m);
+                result.clear ("model_type");  // Don't include this column in attributes applied to parts. Other key attributes (such as model_template itself) are removed above, but this is left in individual trees for ease of access.
 
                 // Step 2 -- Find attributes that are constant.
                 result.visit (new Visitor ()
@@ -294,17 +328,9 @@ public class ImportJob
                 model_template.set (result, "");
             }
         }
-    }
 
-    public String getString (Table.Holder H, int row, int column)
-    {
-        String result = H.getString (row, column).trim ();
-        if (result.equals ("NULL")) return "";
-        return result;
-    }
-
-    public void prepareModels ()
-    {
+        // Import model_template items that reference model files rather than parameter files.
+        // Convert model_template name to imported part name.
         for (Entry<String,String> t : templates.entrySet ())
         {
             String key = t.getKey ();
@@ -314,17 +340,112 @@ public class ImportJob
             ImportSONATApart importer = backends.get (schema);
             String partName = model_template;
             if (importer != null) partName = importer.prepare (this, model_template);
-            t.setValue (partName);
+            t.setValue (schema + ":" + partName);
+        }
+
+        // Apply name remaps to model_templates and populationIndex.
+        for (MNode population : collection)
+        {
+            Map<Long,String> populationIndex = index.get (population.key ());
+            for (MNode model_template : population)
+            {
+                String key = model_template.key ();
+                String mappedName = templates.get (key);
+                if (mappedName.isBlank ()) continue;
+
+                population.move (key, mappedName);  // This assumes that mappedName never appears in the population's original model_template names. Otherwise, another part with get overwritten.
+                model_template = population.child (mappedName);
+
+                for (MNode n : model_template)
+                {
+                    key = n.key ();
+                    if (key.isEmpty ()) continue;  // Skip the union-constants node created above.
+                    Long node_type_id = Long.valueOf (key);
+                    populationIndex.put (node_type_id, mappedName);
+                }
+            }
         }
     }
 
+    public String getString (Table.Holder H, int row, int column)
+    {
+        String result = H.getString (row, column).trim ();
+        if (result.equals ("NULL")) return "";
+        return result;
+    }
+
+    /**
+        Manages one attribute column, and returns its value as a double.
+    **/
+    public static class Attribute
+    {
+        public Dataset  dataset;
+        public Class<?> type;
+        public double[] chunk;
+
+        public Attribute (Dataset dataset)
+        {
+            this.dataset = dataset;
+            type = dataset.getJavaType ();
+        }
+
+        /**
+            Retrieves the next chunk of data and converts to double.
+            The caller is responsible for managing when this is done, and the size of the block.
+        **/
+        public void read (long index, int count)
+        {
+            long offset[] = {index};
+            int  size  [] = {count};
+            Object temp = dataset.getData (offset, size);
+            if (type == double.class)
+            {
+                chunk = (double[]) temp;
+            }
+            else if (type == float.class)
+            {
+                float[] t = (float[]) temp;
+                chunk = new double[count];
+                for (int i = 0; i < count; i++) chunk[i] = t[i];
+            }
+            else if (type == long.class)
+            {
+                long[] t = (long[]) temp;
+                chunk = new double[count];
+                for (int i = 0; i < count; i++) chunk[i] = t[i];
+            }
+            else if (type == int.class)
+            {
+                int[] t = (int[]) temp;
+                chunk = new double[count];
+                for (int i = 0; i < count; i++) chunk[i] = t[i];
+            }
+            else if (type == BigInteger.class)
+            {
+                BigInteger[] t = (BigInteger[]) temp;
+                chunk = new double[count];
+                for (int i = 0; i < count; i++) chunk[i] = t[i].doubleValue ();
+            }
+            else throw new AbortRun ("Unsupported data type in attribute.");
+        }
+    }
+
+    /**
+        A flat list of all datasets associated with a population group.
+        These have the same length, and each one is like a column in a table of attributes for the group.
+    **/
     public static class GroupAttributes
     {
-        public List<String>  names    = new ArrayList<String> ();
-        public List<Dataset> datasets = new ArrayList<Dataset> ();
+        public int             id;  // Of the group that contains these attributes.
+        public List<String>    names   = new ArrayList<String> ();
+        public List<Attribute> columns = new ArrayList<Attribute> ();
+        public long            rows;
+        public long            offset;
 
-        public GroupAttributes (Group group)
+        public GroupAttributes (int id, Group group)
         {
+            this.id = id;
+
             Group dynamics_params = null;
             for (Node node : group)
             {
@@ -334,16 +455,34 @@ public class ImportJob
                     dynamics_params = (Group) node;
                     continue;
                 }
-                names   .add (name);
-                datasets.add ((Dataset) node);
+                names.add (name);
+                Dataset d = (Dataset) node;
+                columns.add (new Attribute (d));
+                if (rows == 0) rows = d.getSize ();
             }
 
             if (dynamics_params == null) return;
             for (Node node : dynamics_params)
             {
-                names   .add ("dynamics_params/" + node.getName ());
-                datasets.add ((Dataset) node);
+                names.add ("dynamics_params/" + node.getName ());
+                Dataset d = (Dataset) node;
+                columns.add (new Attribute (d));
+                if (rows == 0) rows = d.getSize ();
             }
+        }
+
+        /**
+            Retrieve chunks of data for all columns.
+            @param index Absolute position (current row) in columns.
+            This function assumes that index increase monotonically and never skips a row.
+            If either of those assumptions are violated, a more general approach is needed.
+        **/
+        public void read (long index)
+        {
+            if (index % chunkSize != 0) return;
+            offset = index;
+            int count = (int) Math.min (chunkSize, rows - index);
+            for (Attribute a : columns) a.read (index, count);
         }
 
         public static HashMap<Integer,GroupAttributes> fromPopulation (Group population)
@@ -358,15 +497,14 @@ public class ImportJob
                 catch (NumberFormatException error) {}
                 if (group_id < 0) continue;
 
-                result.put (group_id, new GroupAttributes ((Group) node));
+                result.put (group_id, new GroupAttributes (group_id, (Group) node));
             }
             return result;
         }
     }
 
-    public void generateModel ()
+    public void generateModel () throws IOException
     {
-        long chunkSize = 1000000;  // Size for partial reads of table. Prevents memory depletion.
         long offset[] = new long[1];
         int  size  [] = new int [1];
 
@@ -384,7 +522,7 @@ public class ImportJob
                     String populationName = node.getName ();
 
                     // Collect group column lists.
-                    HashMap<Integer,GroupAttributes> groupAttributes = GroupAttributes.fromPopulation (population);
+                    HashMap<Integer,GroupAttributes> attributeGroups = GroupAttributes.fromPopulation (population);
 
                     // Determine if we need a map from node_id to $index.
                     long count = 0;
@@ -447,60 +585,62 @@ public class ImportJob
                     if (simple)
                     {
                         // Create a single part for the entire "population".
+                        String partName = populationName;
+                        MNode  part     = model.childOrCreate (partName);
+                        part.set ("",                            "$meta", "backend", "sonata", "simple");
+                        part.set ("dir+\"/" + nodes_file + "\"", "hdfFile");
 
                         MNode modelTree = nodeTypes.child (populationName).iterator ().next ();  // Retrieve first (and only) model.
-
-                        // Handle input population
-                        // We expect all model_types under the same model_template to match.
-                        // However, this is not guaranteed by the SONATA specification.
-                        String model_type = modelTree.iterator ().next ().get ("model_type");
-                        if (model_type.equals ("virtual"))
+                        GroupAttributes groupAttributes = null;
+                        if (! attributeGroups.isEmpty ())
                         {
-                            connectInput (populationName, count);
-                            continue;
+                            groupAttributes = attributeGroups.values ().iterator ().next ();  // Retrieve the first (and only) attribute group.
+                            part.set ("\"nodes/" + populationName + "/" + groupAttributes.id + "\"", "groupPath");
                         }
 
-                        // Handle regular population
-                        String raw_model_template = modelTree.key ();
-                        String pieces[] = raw_model_template.split (":", 2);
-                        String schema         = pieces[0];
-                        String model_template = pieces[1];
-                        ImportSONATApart importer = backends.get (schema);
-                        if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
-
-                        String partName = populationName;
-                        MNode part = model.childOrCreate (partName);
-
-                        String table    = "table(hdfFile, $index, 0, hdf=\"nodes/" + populationName + "/node_type_id\")";
-                        part.set ("dir+\"/" + nodes_file + "\"", "hdfFile");
-                        part.set (table,                         "node_type_id");
-                        part.set ("",                            "$meta", "backend", "sonata", "simple");
-
-                        List<String> groupColumnNames = null;
-                        if (groupAttributes.isEmpty ())
+                        // We expect all model_types under the same model_template to match.
+                        // However, this is not guaranteed by the SONATA specification.
+                        String model_type = modelTree.iterator ().next ().get ("model_type");  // Retrieve first type row under the current model template, and get its model_type field.
+                        if (model_type.equals ("virtual"))
                         {
-                            groupColumnNames = new ArrayList<String> ();
+                            // Handle input population
+                            // model_template is probably the empty string ("").
+                            connectInput (part, populationName, count, groupAttributes);
                         }
                         else
                         {
-                            Integer group_id = groupAttributes.keySet ().iterator ().next ();
-                            groupColumnNames = groupAttributes.get (group_id).names;
-                            part.set ("\"nodes/" + populationName + "/" + group_id + "\"", "groupPath");
-                        }
+                            // Handle regular population
+                            part.set ("table(hdfFile, $index, 0, hdf=\"nodes/" + populationName + "/node_type_id\")", "node_type_id");
 
-                        importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
+                            String raw_model_template = modelTree.key ();
+                            String pieces[] = raw_model_template.split (":", 2);
+                            String schema   = pieces[0];
+                            ImportSONATApart importer = backends.get (schema);
+                            if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
+
+                            List<String> groupColumnNames;  // The columns associated with the group.
+                            if (groupAttributes == null) groupColumnNames = new ArrayList<String> ();
+                            else                         groupColumnNames = groupAttributes.names;
+
+                            importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
+                        }
                     }
                     else
                     {
-                        // TODO: Process each node individually, sorting them into proper N2A parts.
-                        // Create files: "{population} {model_type} {group_id}.csv"
-                        // Keep a map from said combinations (the string name) to open files.
-                        /*
-                        Dataset node_type_id     = population.getDatasetByPath ("node_type_id");
-                        Dataset node_group_id    = population.getDatasetByPath ("node_group_id");
-                        Dataset node_group_index = population.getDatasetByPath ("node_group_index");
+                        // Process each node individually, sorting them into proper N2A parts.
+                        // Part names are: "{population} {model_template} {group_id}"
+                        // One configuration file per part, named: "{part name}.csv"
+                        // The config file holds all data associated with each instance. That includes
+                        // "node_" attributes and also attributes from each column in the specific group.
+
+                        Map<Long,String>           populationTypeIndex = nodeTypeIndex.get (populationName);
+                        Map<String,BufferedWriter> writers             = new HashMap<String,BufferedWriter> ();
+
+                        Dataset datasetType  = population.getDatasetByPath ("node_type_id");
+                        Dataset datasetGroup = population.getDatasetByPath ("node_group_id");
+                        Dataset datasetIndex = population.getDatasetByPath ("node_group_index");
                         BigInteger chunkType [] = null;
-                        Integer    chunkGroup[] = null;
+                        long       chunkGroup[] = null;
                         BigInteger chunkIndex[] = null;
                         for (long i = 0; i < count; i++)
                         {
@@ -508,15 +648,74 @@ public class ImportJob
                             {
                                 offset[0] = i;
                                 size[0] = (int) Math.min (chunkSize, count - i);
-                                chunkType  = (BigInteger[]) node_type_id    .getData (offset, size);
-                                chunkGroup = (Integer   []) node_group_id   .getData (offset, size);
-                                chunkIndex = (BigInteger[]) node_group_index.getData (offset, size);
+                                chunkType  = (BigInteger[]) datasetType .getData (offset, size);
+                                chunkGroup = (long      []) datasetGroup.getData (offset, size);
+                                chunkIndex = (BigInteger[]) datasetIndex.getData (offset, size);
+                            }
+                            int index = (int) (i - offset[0]);
+                            long node_type_id     = chunkType [index].longValue ();
+                            long node_group_id    = chunkGroup[index];
+                            long node_group_index = chunkIndex[index].longValue ();
+
+                            String raw_model_template = populationTypeIndex.get (node_type_id);
+                            MNode modelTree = nodeTypes.child (populationName, raw_model_template);
+                            GroupAttributes groupAttributes = null;
+                            if (! attributeGroups.isEmpty ())
+                            {
+                                groupAttributes = attributeGroups.get (node_group_id);
                             }
 
-                            String instanceFile
-                            // TODO
+                            String pieces[] = raw_model_template.split (":", 2);
+                            String schema         = pieces[0];
+                            String model_template = pieces[1];
+                            ImportSONATApart importer = backends.get (schema);
+                            if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
+
+                            String partName = populationName + " " + model_template + " " + node_group_id;  // TODO: use simpler name if there is only one model_template and/or only one node_group_id.
+                            BufferedWriter writer = writers.get (partName);
+                            if (writer == null)
+                            {
+                                writer = Files.newBufferedWriter (n2aDir.resolve (partName + " instances.csv"));
+                                writers.put (partName, writer);
+
+                                writer.write ("node_type_id");
+                                if (groupAttributes != null)
+                                {
+                                    for (String name : groupAttributes.names) writer.write (" " + name);
+                                }
+                                writer.write ("\n");
+
+                                MNode part = model.childOrCreate (partName);
+
+                                String model_type = modelTree.get (node_type_id, "model_type");
+                                if (model_type.equals ("virtual"))
+                                {
+                                    // This assumes only one source of info for input spikes, with populationName as the node_set.
+                                    // The specification does not clearly promise this, unless "node_set" is equal to population.
+                                    connectInput (part, populationName, count, groupAttributes);
+                                }
+                                else
+                                {
+                                    List<String> groupColumnNames;
+                                    if (groupAttributes == null) groupColumnNames = new ArrayList<String> ();
+                                    else                         groupColumnNames = groupAttributes.names;
+
+                                    importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
+                                }
+                            }
+
+                            // Add all columns to part info file.
+                            writer.write (Long.toString (node_type_id));
+                            if (groupAttributes != null)
+                            {
+                                groupAttributes.read (node_group_index);
+                                int index2 = (int) (node_group_index - groupAttributes.offset);
+                                for (Attribute a : groupAttributes.columns) writer.write (" " + a.chunk[index2]);
+                            }
+                            writer.write ("\n");
                         }
-                        */
+
+                        for (BufferedWriter w : writers.values ()) w.close ();
                     }
                 }
             }
@@ -659,21 +858,25 @@ public class ImportJob
         }
     }
 
-    public void connectInput (String populationName, long count)
+    /**
+        Construct an input population.
+        This is similar to the job of ImportSONATApart.processPart().
+        @param part Already created.
+        @param node_set Name as understood by the "inputs" section of the configuration file.
+        @param count Size of population.
+        @param groupAttributes Non-null if there are group attributes associated with this population.
+    **/
+    public void connectInput (MNode part, String node_set, long count, GroupAttributes groupAttributes)
     {
-        // model_template is probably the empty string ("").
-        MNode part = model.childOrCreate (populationName);
         part.set ("Spike Array", "$inherit");
         part.set (count,         "$n");
-        part.set ("",            "$meta", "backend", "sonata", "simple");
 
         // Attempt to determine a concrete input file and set it up as input.
         MNode inputs = config.childOrEmpty ("inputs");
         MNode input = null;
         for (MNode i : inputs)
         {
-            String node_set = i.get ("node_set");
-            if (! node_set.equals (populationName)) continue;
+            if (! i.get ("node_set").equals (node_set)) continue;
             input = i;
             break;
         }
@@ -701,15 +904,15 @@ public class ImportJob
                 {
                     case "h5":
                     case "sonata":
-                        part.set ("dir+\"/" + input_file + "\"",       "hdfFile");
-                        part.set ("\"spikes/" + populationName + "\"", "inputPath");
-                        part.set ("matrix(hdfFile, hdf=inputPath)",    "times");
-                        part.set ("$t>=times(index, $index)*1ms",      "fire");
+                        part.set ("dir+\"/" + input_file + "\"",    "hdfFile");
+                        part.set ("\"spikes/" + node_set + "\"",    "inputPath");
+                        part.set ("matrix(hdfFile, hdf=inputPath)", "times");
+                        part.set ("$t>=times(index, $index)*1ms",   "fire");
                         break;
                     case "csv":
-                        part.set ("dir+\"/" + input_file + "\"",                           "spikesFile");
-                        part.set ("matrix(spikesFile, sonata=\"" + populationName + "\")", "times");  // TODO: implement SONATA CSV spikes special matrix in ReadMatrix, similar to one in Table.
-                        part.set ("$t>=times(index, $index)*1ms",                          "fire");
+                        part.set ("dir+\"/" + input_file + "\"",                     "spikesFile");
+                        part.set ("matrix(spikesFile, sonata=\"" + node_set + "\")", "times");  // TODO: implement SONATA CSV spikes special matrix in ReadMatrix, similar to one in Table.
+                        part.set ("$t>=times(index, $index)*1ms",                    "fire");
                         break;
                     default:
                         throw new AbortRun ("Unrecognized input module: " + module);
@@ -717,19 +920,38 @@ public class ImportJob
                 break;
             }
         }
+
+        if (groupAttributes == null) return;
+        for (String name : groupAttributes.names)
+        {
+            boolean dynamics_params = name.startsWith ("dynamics_params/");
+            if (dynamics_params) name = name.substring (16);
+
+            if (part.getFlag ("hdfFile"))
+            {
+                String table = "table(hdfFile, $index, \"" + name + "\", hdf=groupPath";
+                if (dynamics_params) table += "+\"/dynamics_params\"";
+                table += ")";
+                part.set (table, name);
+            }
+            else
+            {
+                part.set ("dir+\"/n2a/" + part.key () + " instances.csv\"", "instanceFile");
+                part.set ("table(instanceFile, $index, \"" + name + "\")", name);
+            }
+        }
+        ImportSONATA.processXYZ (part);
     }
 
     public void generateTables (MNode collection) throws IOException
     {
-        Path n2aDir = dir.resolve ("n2a");
-        Files.createDirectories (n2aDir);
-
         for (MNode population : collection)
         {
             String populationName = population.key ();
             for (MNode model_template : population)
             {
                 String modelName = model_template.key ().split (":", 2)[1];
+                // TODO: sometimes modelName is empty. Do we still need to emit a file? What are parameters used for in that case?
                 Path typesPath = n2aDir.resolve (populationName + " " + modelName + " types.csv");  // TODO: this code assumes that node population names and edge population names never overlap. The SONATA guide does not promise this.
                 try (BufferedWriter writer = Files.newBufferedWriter (typesPath))
                 {
