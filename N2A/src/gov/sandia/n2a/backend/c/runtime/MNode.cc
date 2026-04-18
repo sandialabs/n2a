@@ -2894,4 +2894,321 @@ n2a::Schema2::write (MNode & node, std::ostream & writer, const String & indent)
 }
 
 
+// class JSON ----------------------------------------------------------------
+
+void
+n2a::JSON::read (MNode & node, std::istream & reader)
+{
+    String number;
+    bool inNumber = false;
+    while (true)
+    {
+        int i = reader.get ();
+        if (i < 0) break;
+        char c = (char) i;
+
+        if (inNumber)
+        {
+            // We don't check if these characters actually satisfy the grammar for number.
+            // JSON doesn't support infinity or nan.
+            if (c >= '0'  &&  c <= '9'  ||  c == '-'  ||  c == '+'  ||  c == '.'  ||  c == 'E'  ||  c == 'e')
+            {
+                number += c;
+                continue;
+            }
+            else
+            {
+                reader.unget ();
+                node.set (number);
+                break;
+            }
+        }
+
+        if (c == ' '  ||  c == '\t'  ||  c == '\r'  ||  c == '\n') continue;  // consume white space
+        if (c == '{')
+        {
+            readChildren (node, reader);
+        }
+        else if (c == '[')  // start of array
+        {
+            readArray (node, reader);
+        }
+        else if (c == '"')  // string value
+        {
+            node.set (extractString (reader));
+        }
+        else if (c == 't')  // true
+        {
+            char buffer[3];
+            reader.read (buffer, 3);
+            if (reader.fail ()) throw "Incomplete token";
+            node.set (true);
+        }
+        else if (c == 'f')  // false
+        {
+            char buffer[4];
+            reader.read (buffer, 4);
+            if (reader.fail ()) throw "Incomplete token";
+            node.set (false);
+        }
+        else if (c == 'n')  // null
+        {
+            char buffer[3];
+            reader.read (buffer, 3);
+            if (reader.fail ()) throw "Incomplete token";
+            node.set (nullptr);
+        }
+        else  // Only remaining type is number
+        {
+            inNumber = true;
+            number += c;
+            continue;
+        }
+        break;
+    }
+}
+
+void
+n2a::JSON::readChildren (MNode & node, std::istream & reader)
+{
+    int state = 0;  // looking for: 0=key, 1=colon, 2=comma
+    String key = "";
+    while (true)
+    {
+        int i = reader.get ();
+        if (i < 0) break;
+        char c = (char) i;
+        if (c == ' '  ||  c == '\t'  ||  c == '\r'  ||  c == '\n') continue;  // consume white space
+        if (c == '}') break;  // This could appear prematurely. We exit anyway.
+
+        switch (state)
+        {
+            case 0:
+            {
+                if (c != '"') throw "Expected string";
+                key = extractString (reader);
+                state = 1;
+                break;
+            }
+            case 1:
+            {
+                if (c != ':') throw "Expected colon";
+                MNode & child = node.childOrCreate (key);
+                read (child, reader);
+                state = 2;
+                break;
+            }
+            case 2:
+            {
+                if (c != ',') throw "Expected comma or closing brace";  // The case of reaching the closing brace is covered above.
+                key = "";
+                state = 0;
+                break;
+            }
+        }
+    }
+
+    // If there is a child with key "", convert it into node value.
+    MNode & child = node.child ("");
+    if (&child != &MNode::none)
+    {
+        node.set (child.get ());
+        node.clear ("");
+    }
+}
+
+void
+n2a::JSON::readArray (MNode & node, std::istream & reader)
+{
+    int key = 0;
+    while (true)
+    {
+        int i = reader.get ();
+        if (i < 0) break;
+        char c = (char) i;
+        if (c == ' '  ||  c == '\t'  ||  c == '\r'  ||  c == '\n') continue;  // consume white space
+        if (c == ']') break;  // This could appear prematurely. We exit anyway.
+
+        if (c == ',')
+        {
+            key++;
+            continue;
+        }
+
+        // We just read the first character of an element.
+        reader.unget ();
+        MNode & child = node.childOrCreate (key);  // TODO: does automatic string conversion work here? If not, is it worth implementing?
+        read (child, reader);
+    }
+}
+
+/**
+    This is the start point for writing a JSON file.
+    It can write either the value or children of node, depending on what is present.
+    The children can either be a list or object.
+**/
+void
+n2a::JSON::write (MNode & node, std::ostream & writer)
+{
+    writeValue (node, writer, "");
+}
+
+void
+n2a::JSON::write (MNode & node, std::ostream & writer, const String & indent)
+{
+    writer << indent << escape (node.key ());
+    writer << ": ";
+    writeValue (node, writer, indent);
+}
+
+void
+n2a::JSON::writeValue (MNode & node, std::ostream & writer, const String & indent)
+{
+    if (node.empty ())  // No children
+    {
+        if (node.data ()) writer << convertValue (node);
+        else              writer << "null";
+    }
+    else  // children
+    {
+        // Determine if this is an object or an array
+        // An array has keys 0, 1, 2, ...
+        // with no breaks in the sequence and no other kind of key.
+        // A node that contains an array must not have a value.
+        bool isArray = ! node.data ();
+        if (isArray)
+        {
+            int i = 0;
+            for (MNode & c : node)
+            {
+                if (c.key () == String (i++)) continue;
+                isArray = false;
+                break;
+            }
+        }
+
+        String indent2 = indent + tab;
+        if (isArray)
+        {
+            writer << "[\n";
+            bool first = true;
+            for (MNode & c : node)  // if this node has no children, nothing at all is written
+            {
+                if (! first) writer << ",\n";   // Just use Unix line endings. Most text editors will work
+                writer << indent2;
+                writeValue (c, writer, indent2);
+                first = false;
+            }
+            writer << "\n" << indent << "]";
+        }
+        else  // object
+        {
+            writer << "{\n";
+            if (node.data ()) writer << indent2 << "\"\": " << convertValue (node) << ",\n";  // Save node value as a fake child.
+            writeChildren (node, writer, indent2);
+            writer << "\n" << indent << "}";
+        }
+    }
+}
+
+void
+n2a::JSON::writeChildren (MNode & node, std::ostream & writer, const String & indent)
+{
+    bool first = true;
+    for (MNode & c : node)  // if this node has no children, nothing at all is written
+    {
+        if (! first) writer << ",\n";   // Just use Unix line endings. Most text editors will work
+        write (c, writer, indent);
+        first = false;
+    }
+}
+
+String
+n2a::JSON::convertValue (MNode & node)
+{
+    String value = node.get ();
+
+    // If value is a number, then output without quotes.
+    // This is somewhat of a waste of compute cycles, but produces nicer output in JSON.
+    const char * start = value.c_str ();
+    char * end;
+    strtod (start, &end);
+    int length = end - start;
+    if (length == value.size ()) return value;
+
+    // Output as quoted string.
+    return escape (value);
+}
+
+String
+n2a::JSON::escape (const String & value)
+{
+    String result;
+    result.reserve (value.size ());
+    result += '"';
+    for (auto c : value)
+    {
+        switch (c)
+        {
+            case '/':  result += "\\/";  break;
+            case '\\': result += "\\\\"; break;
+            case '"':  result += "\\\""; break;
+            case '\b': result += "\\b";  break;
+            case '\f': result += "\\f";  break;
+            case '\n': result += "\\n";  break;
+            case '\r': result += "\\r";  break;
+            case '\t': result += "\\t";  break;
+            default:   result += c;
+        }
+    }
+    result += '"';
+    return result;
+}
+
+String
+n2a::JSON::extractString (std::istream & reader)
+{
+    String result;
+    bool inEscape = false;
+    while (true)
+    {
+        int i = reader.get ();
+        if (i < 0) break;
+        char c = (char) i;
+        if (inEscape)
+        {
+            switch (c)
+            {
+                case 'b': result += "\b"; break;
+                case 'f': result += "\f"; break;
+                case 'n': result += "\n"; break;
+                case 'r': result += "\r"; break;
+                case 't': result += "\t"; break;
+                case 'u':
+                    char buffer[4];
+                    reader.read (buffer, 4);
+                    if (reader.fail ()) throw "Short read on hex string";
+                    result += (char) strtol (buffer, 0, 16);
+                    break;
+                default:  result += c;  // Quote mark and both slashes. Could also allow malformed strings.
+            }
+            inEscape = false;
+        }
+        else if (c == '\\')
+        {
+            inEscape = true;
+        }
+        else if (c == '"')
+        {
+            break;
+        }
+        else
+        {
+            result += c;
+        }
+    }
+    return result;
+}
+
+
 #endif

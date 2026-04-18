@@ -124,7 +124,7 @@ public class JSON
     **/
     public void readChildren (MNode node, BufferedReader reader) throws IOException
     {
-        int state = 0;  // looking for: 0=key, 1=colon, 3=comma
+        int state = 0;  // looking for: 0=key, 1=colon, 2=comma
         String key = "";
         while (true)
         {

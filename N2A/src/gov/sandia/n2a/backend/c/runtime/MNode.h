@@ -1323,6 +1323,65 @@ namespace n2a
         void getNextLine ();
     };
 
+    class JSON
+    {
+    public:
+        String tab = "  ";
+
+        /**
+            Obtain either the value or children of the current node.
+            This is the start point for reading a JSON file.
+        **/
+        void read (MNode & node, std::istream & reader);
+
+        /**
+            Starting with reader just after the curly brace, consume the key-values in this JSON object.
+            Ends with the reader just after the closing curly brace.
+        **/
+        void readChildren (MNode & node, std::istream & reader);
+
+        /**
+            Starting with reader just after the square brace, consume array values.
+            Ends with the reader just after the closing square brace.
+            In this case, we only read children values, not keys. Keys will be
+            created automatically as integers 0, 1, 2, ...
+        **/
+        void readArray (MNode & node, std::istream & reader);
+
+        /**
+            This is the start point for writing a JSON file.
+            It can write either the value or children of node, depending on what is present.
+            The children can either be a list or object.
+        **/
+        void write (MNode & node, std::ostream & writer);
+
+        void write (MNode & node, std::ostream & writer, const String & indent);
+
+        /**
+            Picking up just after key and colon, this writes the value for a node.
+            @param indent Leading space in front of the key for which we are writing the value.
+            We will calculate further indent for children if needed.
+        **/
+        void writeValue (MNode & node, std::ostream & writer, const String & indent);
+
+        void writeChildren (MNode & node, std::ostream & writer, const String & indent);
+
+        static String convertValue (MNode & node);
+
+        /**
+            Given an arbitrary string, convert to a JSON string, complete with opening and closing quote marks.
+        **/
+        static String escape (const String & value);
+
+        /**
+            Starting just after a quote mark has been extracted from reader, consumes
+            characters until the quote closes. Leaves reader positioned just after the
+            closing quote. Returns the extracted string with escapes converted back into
+            regular characters.
+        **/
+        static String extractString (std::istream & reader);
+    };
+
     // Utility functions
     SHARED std::ostream & operator<< (std::ostream & out, MNode & value);
     SHARED char * strdup (const char * from);  ///< This function is not always available (not standard C), so we just provide our own.
