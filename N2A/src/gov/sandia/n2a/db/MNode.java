@@ -779,7 +779,7 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         /**
             If a child is deleted while the iterator is running, this could return null.
             If a child is added, it will not be included.
-            Implicitly, if the current child is moved (renamed), then it won't appear again in the iteration.
+            If the current child is moved (renamed), then it could potentially appear again in the iteration.
             In general, the caller is free to modify the returned value without any harm to the iteration.
             There will not be a concurrent modification exception, and the iteration order won't be impacted.
             Derived MNode classes should use IteratorWrapper or equivalent to maintain these guarantees to the caller.
@@ -797,6 +797,12 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
         }
     }
 
+    /**
+        Returns an iterator that allows concurrent modification.
+        Specifically, the set of keys is captured in a separate data structure.
+        These keys will be iterated even if a child has been moved or deleted.
+        Thus the iterator might sometimes return null, or return the same child again.
+    **/
     public Iterator<MNode> iterator ()
     {
         return new MNode.IteratorWrapper (new ArrayList<String> ());

@@ -491,7 +491,7 @@ public class Table extends Function
         public Matrix getMatrix ()
         {
             if (sonataSpikes) return new MatrixSonataSpikesHDF (filePath, sonataPopulation);
-            if (sonataEdges)  return new MatrixSonataEdgesHDF  (filePath, sonataPopulation, (Dataset) root);
+            if (sonataEdges)  return new MatrixSonataEdgesHDF  (filePath, sonataPopulation, root == sonataPopulation ? null : (Dataset) root);
 
             // * Any 1D or 2D dataset.
             // * Several parallel datasets under a group. Can either be SONATA attributes or any other data structured the same way.
@@ -633,7 +633,7 @@ public class Table extends Function
         protected long      rowCount;
         protected long[]    offset     = {-HolderHDF.chunkSize};  // For chunkAttribute. The iterator below has its own copy for the source and target node IDs.
         protected int[]     count      = { HolderHDF.chunkSize};
-        protected double    emptyValue = Double.POSITIVE_INFINITY;
+        protected double    emptyValue = 0;
         protected SharedRow cached;
 
         public static class SharedRow
@@ -670,8 +670,11 @@ public class Table extends Function
             datasetSource    = population.getDatasetByPath ("source_node_id");
             datasetTarget    = population.getDatasetByPath ("target_node_id");
             datasetAttribute = attribute;
-            type             = attribute.getJavaType ();
-            rowCount         = attribute.getSize ();
+            if (attribute != null)
+            {
+                type     = attribute.getJavaType ();
+                rowCount = attribute.getSize ();
+            }
         }
 
         public void close () throws Exception
@@ -705,6 +708,7 @@ public class Table extends Function
             // * There is an associated iterator. -- chunkAttribute will be kept up to date by the iterator.
             // * Otherwise -- We load chunkAttribute here. This should stay in sync with the iterator,
             //                but that is not strictly necessary.
+            if (datasetAttribute == null) return 1;  // If attribute is absent, we assume boolean matrix. In that case, always return 1, because this function should only be called for existent elements.
             long r = cached.row;
             if (r >= rowCount) return emptyValue;
             int rr = (int) (r - offset[0]);  // row relative to current block of data
@@ -778,7 +782,7 @@ public class Table extends Function
 
                 chunkSource = (BigInteger[]) datasetSource.getData (offset, count);
                 chunkTarget = (BigInteger[]) datasetTarget.getData (offset, count);
-                loadChunkAttribute ();
+                if (datasetAttribute != null) loadChunkAttribute ();
             }
 
             public boolean hasNext ()
@@ -790,6 +794,7 @@ public class Table extends Function
             {
                 getNext ();
                 if (row >= rowCount) return null;
+                if (datasetAttribute == null) return 1.0;  // Since we iterate only existing elements, always return true.
                 return chunkAttribute[rr];
             }
 
@@ -904,6 +909,11 @@ public class Table extends Function
         public void set (int row, int column, double a)
         {
             throw new AbortRun ("MatrixSonataSpikesHDF does not support set()");
+        }
+
+        public void setEmptyValue (double a)
+        {
+            emptyValue = a;
         }
     }
 

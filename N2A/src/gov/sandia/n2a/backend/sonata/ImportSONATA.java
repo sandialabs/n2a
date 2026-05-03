@@ -99,21 +99,36 @@ public class ImportSONATA extends ImportModel
     **/
     public static void processPart (String backend, PartMap partMap, ImportJob job, String partName, String population, String model_template, List<String> instanceAttributes)
     {
-        int pos = model_template.indexOf (':');
-        String externalPartName = pos < 0 ? model_template : model_template.substring (pos + 1);
-        if (externalPartName.isBlank ()) throw new AbortRun (population + " model_template is missing.");
-
-        NameMap map = partMap.importMap (externalPartName);
-        //partMap.dump ();
-        MCombo repo = new MCombo (null, job.models, AppData.docs.child ("models"));
-        MNode basePart = new MPartRepo (repo.childOrEmpty (map.internalPart), repo);
-
         MNode part = job.model.childOrCreate (partName);
-        part.set (map.internalPart, "$inherit");
-
         String B = part.get ("B");
         MNode Bpart = job.model.child (B);
         boolean isSynapse =  Bpart != null;
+
+        int pos = model_template.indexOf (':');
+        String externalPartName = pos < 0 ? model_template : model_template.substring (pos + 1);
+        if (externalPartName.isBlank ())
+        {
+            // Hack to work around older, poorly-constructed models.
+            try
+            {
+                MNode types = isSynapse ? job.edgeTypes : job.nodeTypes;
+                externalPartName = types.child (population, model_template).iterator ().next ().get ("level_of_detail");  // Multiple opportunities to throw an exception here.
+            }
+            catch (Exception e)
+            {
+                throw new AbortRun (population + " model_template is missing.");
+            }
+        }
+
+        // Part maps apply only to the immediate part, not its children.
+        // Child parts should have their own mappings.
+        // TODO: If any part attribute or instance attribute references deep structure, we
+        // use the map for the most immediate sub-part, rather than the map for "externalPartName".
+
+        NameMap map = partMap.importMap (externalPartName);
+        part.set (map.internalPart, "$inherit");
+        MCombo repo = new MCombo (null, job.models, AppData.docs.child ("models"));
+        MNode basePart = new MPartRepo (repo.childOrEmpty (map.internalPart), repo);
 
         // Apply direct attributes.
         String type_id;
@@ -135,11 +150,18 @@ public class ImportSONATA extends ImportModel
                 boolean isString = node.getFlag ("$tring");
                 if (! isString  &&  ! node.isEmpty ()) return true;  // Descend past interior nodes. Only leaves contain attributes.
 
-                String keyPath      = node.keyPathString (partAttributes);
-                String internalName = map.importName (keyPath);
+                String  keyPath[] = node.keyPath (partAttributes);
+                int     lastIndex = keyPath.length - 1;
+                NameMap subMap    = map;
+                if (lastIndex > 0)
+                {
+                    String subPartName = keyPath[lastIndex-1];
+                    subMap = partMap.exportMap (subPartName);
+                }
+                keyPath[lastIndex] = subMap.importName (keyPath[lastIndex]);
 
                 // Retrieve units
-                String unit = UnitValue.safeUnit (basePart.get (internalName, "$meta", "backend", backend, "unit"));
+                String unit = UnitValue.safeUnit (basePart.childOrEmpty (keyPath).get ("$meta", "backend", backend, "unit"));
                 String one  = unit.isBlank () ? "" : "*1" + unit;
 
                 // Apply value
@@ -156,17 +178,15 @@ public class ImportSONATA extends ImportModel
                         UnitValue uv = new UnitValue (value);
                         if (uv.unit == null) value += unit;  // Only tack on default unit if value does not explicitly state one.
                     }
-                    part.set (value, internalName);
+                    part.set (value, keyPath);
                 }
                 else  // Value is undefined, so emit table lookup.
                 {
-                    part.set ("dir+\"/n2a/" + population + " " + externalPartName + " types.csv\"", "typeFile");  // This value may be set several times, but that does no harm.
-
-                    String table = "table(typeFile, " + type_id + ", \"" + keyPath + "\"";
+                    String table = "table(typeFile, " + type_id + ", \"" + node.keyPathString (partAttributes) + "\"";
                     table += ", key=\"" + type_id + "\"";
                     if (isString) table += ", string=1)";  // Force return value to be string.
                     else          table += ")" + one;
-                    part.set (table, internalName);
+                    part.set (table, keyPath);
                 }
 
                 return false;  // Don't descend past a leaf node. The only thing to be found there is "$tring".
@@ -178,26 +198,40 @@ public class ImportSONATA extends ImportModel
         {
             boolean dynamics_params = key.startsWith ("dynamics_params/");
             if (dynamics_params) key = key.substring (16);
-            String internalName = map.importName (key);  // We assume that all instance values are legit model parameters.
 
-            String unit = UnitValue.safeUnit (basePart.get (internalName, "$meta", "backend", backend, "unit"));
+            String  keyPath[] = key.split ("\\.");
+            int     lastIndex = keyPath.length - 1;
+            NameMap subMap    = map;
+            if (lastIndex > 0)
+            {
+                String subPartName = keyPath[lastIndex-1];
+                subMap = partMap.exportMap (subPartName);
+            }
+            keyPath[lastIndex] = subMap.importName (keyPath[lastIndex]);
+
+            String unit = UnitValue.safeUnit (basePart.childOrEmpty (keyPath).get ("$meta", "backend", backend, "unit"));
             String one  = unit.isBlank () ? "" : "*1" + unit;
 
             if (isSynapse)
             {
                 // Values are consolidated and streamed by a sparse iterator rather then being queried.
+
+                String M = "M" + keyPath[lastIndex];
+                part.set (M + "(A.$index, B.$index)" + one, keyPath);
+
+                String temp = "matrix(";
                 if (part.getFlag ("hdfFile"))
                 {
-                    String table = "table(hdfFile, A.$index, B.$index, \"" + key + "\", hdf=groupPath";
-                    if (dynamics_params) table += "+\"/dynamics_params\"";
-                    table += ")" + one;
-                    part.set (table, internalName);
+                    temp += "hdfFile, hdf=groupPath+\"";
+                    if (dynamics_params) temp += "/dynamics_params";
+                    temp += "/" + key + "\")";
                 }
                 else
                 {
-                    part.set ("dir+\"/n2a/" + partName + " instances.csv\"", "instanceFile");
-                    part.set ("table(instanceFile, A.$index, B.$index, \"" + key + "\")" + one, internalName);
+                    temp += "instanceFile, sonata=\"" + key + "\")";
                 }
+                keyPath[lastIndex] = M;
+                part.set (temp, keyPath);
             }
             else  // neuron
             {
@@ -206,12 +240,11 @@ public class ImportSONATA extends ImportModel
                     String table = "table(hdfFile, $index, \"" + key + "\", hdf=groupPath";
                     if (dynamics_params) table += "+\"/dynamics_params\"";
                     table += ")" + one;
-                    part.set (table, internalName);
+                    part.set (table, keyPath);
                 }
                 else
                 {
-                    part.set ("dir+\"/n2a/" + partName + " instances.csv\"", "instanceFile");
-                    part.set ("table(instanceFile, $index, \"" + key + "\")" + one, internalName);
+                    part.set ("table(instanceFile, $index, \"" + key + "\")" + one, keyPath);
                 }
             }
         }

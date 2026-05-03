@@ -17,7 +17,10 @@ public interface ImportSONATApart
         Ensures that the given model template name is in the DB, ready for use.
         @param model_template The template name itself, without schema identifier.
         @return A suitable part name, when combined with other strings that
-        distinguish population and group.
+        distinguish population and group. This will either be the actual DB key,
+        or a name that the backend knows how to map to a DB part. In practice,
+        this name will be passed through the backend's PartMap, and will either
+        get mapped or treated as neutral.
     **/
     public default String prepare (ImportJob job, String model_template)
     {

@@ -25,6 +25,15 @@ public class MPartRepo extends MPart
     protected MNode repo;
 
     /**
+        Creates MPart tree with explicit combo repository.
+    **/
+    public MPartRepo (MNode source, MCombo repo)
+    {
+        super (null, null, source);
+        build (repo);
+    }
+
+    /**
         Creates MPart tree with implicit "models" repo or explicit list of repos.
         @param containers If several are specified, they are put into a combination structure,
         where the first one listed takes the highest precedence.

@@ -10,16 +10,25 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.ByteChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+
+import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.JSON;
+import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
+import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.language.function.Table;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.plugins.ExtensionPoint;
@@ -39,6 +48,7 @@ public class ImportJob
     public    MNode                        models        = new MVolatile ();
     protected String                       modelName     = "";
     public    MNode                        model;                                                   // The main model, inside "models", referenced by "modelName".
+    public    Map<String,Integer>          modelCount    = new HashMap<String,Integer> ();          // Number of model_template uses in "nodeTypes" and "edgeTypes". Used to cull entries from "models" that get eliminated by folding.
     public    Path                         dir;                                                     // Working directory, where config file is found.
     public    Path                         n2aDir;                                                  // Directory under working directory where we store our own resources (results of conversion).
     protected JSON                         json          = new JSON ();                             // We read a lot of JSON files.
@@ -69,12 +79,7 @@ public class ImportJob
         {
             if (! (ext instanceof ImportSONATApart)) continue;
             ImportModel im = (ImportModel) ext;
-            String name = im.getName ().toLowerCase ();
-            switch (name)
-            {
-                case "neuroml": name = "nml"; break;  // Even though the backend key is "lems", the importer is named "NeuroML".
-                case "neuron":  name = "nrn"; break;
-            }
+            String name = backendSchema (im.getName ());
             backends.put (name, (ImportSONATApart) ext);
         }
 
@@ -88,12 +93,32 @@ public class ImportJob
 
         target_simulator = config.get ("target_simulator").toLowerCase ();
         model.set (target_simulator, "$meta", "backend");  // TODO: may need to map some strings.
+        target_simulator = backendSchema (target_simulator);
 
         collectTypes (nodeTypes, nodeTypeIndex, "node", dir.resolve (config.get ("components", "point_neuron_models_dir")));
-        collectTypes (edgeTypes, nodeTypeIndex, "edge", dir.resolve (config.get ("components", "synaptic_models_dir")));
+        collectTypes (edgeTypes, edgeTypeIndex, "edge", dir.resolve (config.get ("components", "synaptic_models_dir")));
         generateModel ();
         generateTables (nodeTypes);
         generateTables (edgeTypes);
+
+        for (Entry<String,Integer> e : modelCount.entrySet ())
+        {
+            if (e.getValue () < 1) models.clear (e.getKey ());
+        }
+    }
+
+    /**
+        Takes a backend or simulator name and outputs the corresponding SONATA schema code.
+    **/
+    public static String backendSchema (String name)
+    {
+        name = name.toLowerCase ();
+        switch (name)
+        {
+            case "neuroml": return "nml";  // Even though the backend key is "lems", the importer is named "NeuroML".
+            case "neuron":  return "nrn";
+        }
+        return name;
     }
 
     public static void substituteStrings (MNode config)
@@ -341,27 +366,169 @@ public class ImportJob
             String partName = model_template;
             if (importer != null) partName = importer.prepare (this, model_template);
             t.setValue (schema + ":" + partName);
+            // Keep a separate count of references to imported parts, rather than storing the count in the part itself.
+            // This simplifies the task of comparing structure below.
+            if (models.child (partName) != null)
+            {
+                Integer count = modelCount.get (partName);
+                if (count == null) count = 0;
+                modelCount.put (partName, count + 1);
+            }
         }
 
-        // Apply name remaps to model_templates and populationIndex.
+        // Apply name re-maps to model_templates.
+        for (MNode population : collection)
+        {
+            for (MNode model_template : population)
+            {
+                String key = model_template.key ();
+                String mappedName = templates.get (key);
+                // This assumes that mappedName never appears in the population's original model_template names.
+                // Otherwise, another part will get overwritten.
+                if (! mappedName.isBlank ()) population.move (key, mappedName);
+            }
+        }
+
+        // Fold models with the same structure.
+        for (MNode population : collection)
+        {
+            System.err.println ("population: " + population.key ());
+            // Collate all models. This ensures that comparisons are on actual model structure,
+            // not just the collection of local overrides.
+            Map<String,MNode> collated = new HashMap<String,MNode> ();
+            MCombo repo = new MCombo (null, models, AppData.docs.child ("models"));
+            for (MNode model_template : population)
+            {
+                String key      = model_template.key ();
+                String pieces[] = key.split (":", 2);
+                if (pieces.length < 2) continue;
+                String name     = pieces[1];
+                MNode  source   = models.child (name);  // We're only interested in new models that are part of this import.
+                if (source == null) continue;
+                collated.put (name, new MPartRepo (source, repo));
+                System.err.println ("  collated: " + name);
+            }
+
+            for (MNode model_template1 : population)
+            {
+                if (model_template1 == null) continue;  // Because a node could have been removed after this iteration started.
+                String key1     = model_template1.key ();
+                String pieces[] = key1.split (":", 2);
+                if (pieces.length < 2) continue;
+                String name1    = pieces[1];
+                MNode collated1 = collated.get (name1);
+                if (collated1 == null) continue;
+                MNode structure1 = model_template1.child ("");
+
+                for (MNode model_template2 : population)
+                {
+                    // We only want to compare unique combinations of models, so need to ensure no backtracking.
+                    // The models are iterated in M order, so we simply check the key until the inner loop passes the outer loop.
+                    // This involves n^2 key compares, but only n^2/2 model compares.
+                    String key2 = model_template2.key ();
+                    if (MNode.compare (key2, key1) <= 0) continue;
+                    System.err.println ("  comparing: " + key1 + " : " + key2);
+
+                    pieces          = key2.split (":", 2);
+                    if (pieces.length < 2) continue;
+                    String name2    = pieces[1];
+                    MNode collated2 = collated.get (name2);
+                    if (collated2 == null) continue;
+                    if (! collated2.structureEquals (collated1)) continue;
+                    MNode structure2 = model_template2.child ("");
+                    System.err.println ("  got both structures");
+
+                    // Compare values.
+                    MNode diff1 = new MVolatile ();
+                    diff1.merge        (collated1);
+                    diff1.uniqueValues (collated2);
+                    MNode diff2 = new MVolatile ();
+                    diff2.merge        (collated2);
+                    diff2.uniqueValues (collated1);
+
+                    // Update structure trees.
+                    diff1.visit (new Visitor ()
+                    {
+                        public boolean visit (MNode node)
+                        {
+                            String key       = node.key ();
+                            String keypath[] = node.keyPath ();
+
+                            if (key.equals ("$meta"))  // Don't represent any differences in metadata. TODO: could something like "poll" be important?
+                            {
+                                diff1.clear (keypath);
+                                diff2.clear (keypath);
+                                return false;
+                            }
+                            // TODO: Should we also try to detect equations, as opposed to parameters? This would indicate that the models should not be merged.
+                            if (! node.data ()) return true;  // Skip inner nodes. Note that it could be undefined only in collated1, in which case we would still want to process the value from collated2. However, this case is unlikely.
+
+                            String value1 = node.get ();
+                            String value2 = diff2.get (keypath);
+                            boolean isString = false;
+                            if (structure1.data (keypath))  // node has an associated constant in structure1
+                            {
+                                value1 = structure1.get (keypath);  // Constant overrides model value.
+                                diff1.set (value1);
+                                if (structure1.child (keypath).getFlag ("$tring")) isString = true;
+                            }
+                            if (structure2.data (keypath))  // node has an associated constant in structure2
+                            {
+                                value2 = structure2.get (keypath);
+                                diff2.set (value2);
+                                if (structure2.child (keypath).getFlag ("$tring")) isString = true;
+                            }
+                            if (! isString)
+                            {
+                                try {Double.valueOf (value1);}
+                                catch (NumberFormatException e) {isString = true;}
+                                try {Double.valueOf (value2);}
+                                catch (NumberFormatException e) {isString = true;}
+                            }
+                            MNode snode = structure1.set (null, keypath);  // Attribute should no longer be constant, since it varies between model_template1 and 2.
+                            if (isString) snode.set ("", "$tring");
+
+                            return true;
+                        }
+                    });
+
+                    // Update node_type trees for model_template1.
+                    for (MNode n : model_template1)
+                    {
+                        if (n.key ().isEmpty ()) continue;  // Skip the structure node.
+                        n.mergeUnder (diff1);
+                    }
+
+                    // Update node_type trees for model_template2, and merge into model_template1.
+                    for (MNode n : model_template2)
+                    {
+                        String nkey = n.key ();
+                        if (nkey.isEmpty ()) continue;
+                        n.mergeUnder (diff2);
+                        model_template1.set (n, nkey);
+                    }
+
+                    // Delete model_template2
+                    population.clear (key2);
+                    Integer count = modelCount.get (name2);
+                    modelCount.put (name2, count - 1);
+                }
+            }
+        }
+
+        // Build populationIndex.
         for (MNode population : collection)
         {
             Map<Long,String> populationIndex = index.get (population.key ());
             for (MNode model_template : population)
             {
-                String key = model_template.key ();
-                String mappedName = templates.get (key);
-                if (mappedName.isBlank ()) continue;
-
-                population.move (key, mappedName);  // This assumes that mappedName never appears in the population's original model_template names. Otherwise, another part with get overwritten.
-                model_template = population.child (mappedName);
-
+                String templateName = model_template.key ();
                 for (MNode n : model_template)
                 {
-                    key = n.key ();
-                    if (key.isEmpty ()) continue;  // Skip the union-constants node created above.
+                    String key = n.key ();
+                    if (key.isEmpty ()) continue;  // Skip the structure node.
                     Long node_type_id = Long.valueOf (key);
-                    populationIndex.put (node_type_id, mappedName);
+                    populationIndex.put (node_type_id, templateName);
                 }
             }
         }
@@ -393,41 +560,119 @@ public class ImportJob
             Retrieves the next chunk of data and converts to double.
             The caller is responsible for managing when this is done, and the size of the block.
         **/
-        public void read (long index, int count)
+        public void read (long position, int count)
         {
-            long offset[] = {index};
-            int  size  [] = {count};
-            Object temp = dataset.getData (offset, size);
-            if (type == double.class)
-            {
-                chunk = (double[]) temp;
-            }
-            else if (type == float.class)
-            {
-                float[] t = (float[]) temp;
-                chunk = new double[count];
-                for (int i = 0; i < count; i++) chunk[i] = t[i];
-            }
-            else if (type == long.class)
-            {
-                long[] t = (long[]) temp;
-                chunk = new double[count];
-                for (int i = 0; i < count; i++) chunk[i] = t[i];
-            }
-            else if (type == int.class)
-            {
-                int[] t = (int[]) temp;
-                chunk = new double[count];
-                for (int i = 0; i < count; i++) chunk[i] = t[i];
-            }
-            else if (type == BigInteger.class)
-            {
-                BigInteger[] t = (BigInteger[]) temp;
-                chunk = new double[count];
-                for (int i = 0; i < count; i++) chunk[i] = t[i].doubleValue ();
-            }
-            else throw new AbortRun ("Unsupported data type in attribute.");
+            chunk = readDouble (dataset, position, count);
         }
+    }
+
+    public static double[] readDouble (Dataset dataset, long position, int count)
+    {
+        long offset[] = {position};
+        int  size  [] = {count};
+        Object temp = dataset.getData (offset, size);
+        Class<?> type = dataset.getJavaType ();
+        if (type == double.class)
+        {
+            return (double[]) temp;
+        }
+        if (type == float.class)
+        {
+            float[] t = (float[]) temp;
+            double[] result = new double[count];
+            for (int i = 0; i < count; i++) result[i] = t[i];
+            return result;
+        }
+        if (type == long.class)
+        {
+            long[] t = (long[]) temp;
+            double[] result = new double[count];
+            for (int i = 0; i < count; i++) result[i] = t[i];
+            return result;
+        }
+        else if (type == int.class)
+        {
+            int[] t = (int[]) temp;
+            double[] result = new double[count];
+            for (int i = 0; i < count; i++) result[i] = t[i];
+            return result;
+        }
+        else if (type == BigInteger.class)
+        {
+            BigInteger[] t = (BigInteger[]) temp;
+            double[] result = new double[count];
+            for (int i = 0; i < count; i++) result[i] = t[i].doubleValue ();
+            return result;
+        }
+        else throw new AbortRun ("Unhandled data type");
+    }
+
+    public static long[] readLong (Dataset dataset, long position, int count)
+    {
+        long offset[] = {position};
+        int  size  [] = {count};
+        Object temp = dataset.getData (offset, size);
+        Class<?> type = dataset.getJavaType ();
+        if (type == long.class)
+        {
+            return (long[]) temp;
+        }
+        if (type == BigInteger.class)
+        {
+            BigInteger[] t = (BigInteger[]) temp;
+            long[] result = new long[count];
+            for (int i = 0; i < count; i++) result[i] = t[i].longValueExact ();
+            return result;
+        }
+        if (type == int.class)
+        {
+            int[] t = (int[]) temp;
+            long[] result = new long[count];
+            for (int i = 0; i < count; i++) result[i] = t[i];
+            return result;
+        }
+        if (type == short.class)
+        {
+            short[] t = (short[]) temp;
+            long[] result = new long[count];
+            for (int i = 0; i < count; i++) result[i] = t[i];
+            return result;
+        }
+        throw new AbortRun ("Unhandled integer type");
+    }
+
+    public static int[] readInt (Dataset dataset, long position, int count)
+    {
+        long offset[] = {position};
+        int  size  [] = {count};
+        Object temp = dataset.getData (offset, size);
+        Class<?> type = dataset.getJavaType ();
+        if (type == int.class)
+        {
+            return (int[]) temp;
+        }
+        if (type == BigInteger.class)
+        {
+            BigInteger[] t = (BigInteger[]) temp;
+            int[] result = new int[count];
+            for (int i = 0; i < count; i++) result[i] = t[i].intValueExact ();
+            return result;
+        }
+        if (type == long.class)
+        {
+            long[] t = (long[]) temp;
+            int[] result = new int[count];
+            for (int i = 0; i < count; i++) result[i] = (int) t[i];
+            return result;
+        }
+        if (type == short.class)
+        {
+            short[] t = (short[]) temp;
+            int[] result = new int[count];
+            for (int i = 0; i < count; i++) result[i] = t[i];
+            return result;
+        }
+        throw new AbortRun ("Unhandled integer type");
     }
 
     /**
@@ -505,8 +750,8 @@ public class ImportJob
 
     public void generateModel () throws IOException
     {
-        long offset[] = new long[1];
-        int  size  [] = new int [1];
+        List<String>      codeToPart = new ArrayList<String> ();      // For non-simple populations, this maps from integer code to N2A part name.
+        Map<String,Short> partToCode = new HashMap<String,Short> ();  // Reverse lookup for "codeToPart".
 
         for (MNode n : config.childOrEmpty ("networks", "nodes"))
         {
@@ -523,24 +768,26 @@ public class ImportJob
 
                     // Collect group column lists.
                     HashMap<Integer,GroupAttributes> attributeGroups = GroupAttributes.fromPopulation (population);
+                    boolean multiGroup = attributeGroups.size () > 1;  // Notice that the negative case includes zero groups.
 
                     // Determine if we need a map from node_id to $index.
                     long count = 0;
                     try
                     {
                         Dataset node_id = population.getDatasetByPath ("node_id");
-                        BigInteger chunk[] = null;
+                        long chunk[] = null;
+                        long offset = 0;
                         count = node_id.getSize ();
                         for (long i = 0; i < count; i++)
                         {
                             if (i % chunkSize == 0)
                             {
-                                offset[0] = i;
-                                size[0] = (int) Math.min (chunkSize, count - i);
-                                chunk = (BigInteger[]) node_id.getData (offset, size);
+                                offset = i;
+                                int size = (int) Math.min (chunkSize, count - i);
+                                chunk = readLong (node_id, offset, size);
                             }
-                            int index = (int) (i - offset[0]);
-                            if (chunk[index].longValueExact () != i)
+                            int ir = (int) (i - offset);
+                            if (chunk[ir] != i)
                             {
                                 throw new AbortRun ("For now, SONATA import only handles zero-based contiguous node_id values.");
                             }
@@ -553,25 +800,28 @@ public class ImportJob
                     // * Requires that node_id be zero-based and contiguous (checked above).
                     // * Requires that node_group_index be zero-based and contiguous (checked below).
                     // If the population is not simple, then it is necessary to build sorted table(s), along with possibly more than one N2A part.
-                    boolean simple = nodeTypes.child (populationName).size () == 1;  // Only one mathematical model.
+                    boolean multiTemplate = nodeTypes.child (populationName).size () > 1;
+                    boolean simple = ! multiTemplate  &&  ! multiGroup;  // Only one mathematical model.
                     if (simple)
                     {
-                        // Contiguous node_group_index values imply that there is only one group.
+                        // One would hope that the node_group_index values are sorted in ascending order,
+                        // but the specification does not promise this.
                         try
                         {
                             Dataset node_group_index = population.getDatasetByPath ("node_group_index");
-                            BigInteger chunk[] = null;
+                            long chunk[] = null;
+                            long offset = 0;
                             count = node_group_index.getSize ();
                             for (long i = 0; i < count; i++)
                             {
                                 if (i % chunkSize == 0)
                                 {
-                                    offset[0] = i;
-                                    size[0] = (int) Math.min (chunkSize, count - i);
-                                    chunk = (BigInteger[]) node_group_index.getData (offset, size);
+                                    offset = i;
+                                    int size = (int) Math.min (chunkSize, count - i);
+                                    chunk = readLong (node_group_index, offset, size);
                                 }
-                                int index = (int) (i - offset[0]);
-                                if (chunk[index].longValueExact () != i)
+                                int ir = (int) (i - offset);
+                                if (chunk[ir] != i)
                                 {
                                     simple = false;
                                     break;
@@ -591,6 +841,7 @@ public class ImportJob
                         part.set ("dir+\"/" + nodes_file + "\"", "hdfFile");
 
                         MNode modelTree = nodeTypes.child (populationName).iterator ().next ();  // Retrieve first (and only) model.
+                        boolean multiType = modelTree.size () > 2;  // Includes key "", which holds the merged attributes.
                         GroupAttributes groupAttributes = null;
                         if (! attributeGroups.isEmpty ())
                         {
@@ -610,13 +861,19 @@ public class ImportJob
                         else
                         {
                             // Handle regular population
-                            part.set ("table(hdfFile, $index, 0, hdf=\"nodes/" + populationName + "/node_type_id\")", "node_type_id");
 
                             String raw_model_template = modelTree.key ();
                             String pieces[] = raw_model_template.split (":", 2);
-                            String schema   = pieces[0];
+                            String schema         = pieces[0];
+                            String model_template = pieces[1];
                             ImportSONATApart importer = backends.get (schema);
                             if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
+
+                            if (multiType)
+                            {
+                                part.set ("table(hdfFile, $index, 0, hdf=\"nodes/" + populationName + "/node_type_id\")", "node_type_id");
+                                part.set ("dir+\"/n2a/" + populationName + " " + model_template + " types.csv\"",         "typeFile");
+                            }
 
                             List<String> groupColumnNames;  // The columns associated with the group.
                             if (groupAttributes == null) groupColumnNames = new ArrayList<String> ();
@@ -629,93 +886,154 @@ public class ImportJob
                     {
                         // Process each node individually, sorting them into proper N2A parts.
                         // Part names are: "{population} {model_template} {group_id}"
-                        // One configuration file per part, named: "{part name}.csv"
+
+                        // There is one configuration file per part, named: "{part name} instances.csv"
                         // The config file holds all data associated with each instance. That includes
                         // "node_" attributes and also attributes from each column in the specific group.
 
-                        Map<Long,String>           populationTypeIndex = nodeTypeIndex.get (populationName);
-                        Map<String,BufferedWriter> writers             = new HashMap<String,BufferedWriter> ();
+                        // An file named "{part name}.index" (not CSV) contains a mapping from node_id
+                        // to N2A part, along with the $index value within the part. These are stored in
+                        // raw binary format, with fixed-size records: {16-bit index into table of parts}{32-bit $index}
+                        // The table of parts is temporary, local to this conversion process.
 
-                        Dataset datasetType  = population.getDatasetByPath ("node_type_id");
-                        Dataset datasetGroup = population.getDatasetByPath ("node_group_id");
-                        Dataset datasetIndex = population.getDatasetByPath ("node_group_index");
-                        BigInteger chunkType [] = null;
-                        long       chunkGroup[] = null;
-                        BigInteger chunkIndex[] = null;
-                        for (long i = 0; i < count; i++)
+                        class InstanceWriter
                         {
-                            if (i % chunkSize == 0)
-                            {
-                                offset[0] = i;
-                                size[0] = (int) Math.min (chunkSize, count - i);
-                                chunkType  = (BigInteger[]) datasetType .getData (offset, size);
-                                chunkGroup = (long      []) datasetGroup.getData (offset, size);
-                                chunkIndex = (BigInteger[]) datasetIndex.getData (offset, size);
-                            }
-                            int index = (int) (i - offset[0]);
-                            long node_type_id     = chunkType [index].longValue ();
-                            long node_group_id    = chunkGroup[index];
-                            long node_group_index = chunkIndex[index].longValue ();
-
-                            String raw_model_template = populationTypeIndex.get (node_type_id);
-                            MNode modelTree = nodeTypes.child (populationName, raw_model_template);
-                            GroupAttributes groupAttributes = null;
-                            if (! attributeGroups.isEmpty ())
-                            {
-                                groupAttributes = attributeGroups.get (node_group_id);
-                            }
-
-                            String pieces[] = raw_model_template.split (":", 2);
-                            String schema         = pieces[0];
-                            String model_template = pieces[1];
-                            ImportSONATApart importer = backends.get (schema);
-                            if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
-
-                            String partName = populationName + " " + model_template + " " + node_group_id;  // TODO: use simpler name if there is only one model_template and/or only one node_group_id.
-                            BufferedWriter writer = writers.get (partName);
-                            if (writer == null)
-                            {
-                                writer = Files.newBufferedWriter (n2aDir.resolve (partName + " instances.csv"));
-                                writers.put (partName, writer);
-
-                                writer.write ("node_type_id");
-                                if (groupAttributes != null)
-                                {
-                                    for (String name : groupAttributes.names) writer.write (" " + name);
-                                }
-                                writer.write ("\n");
-
-                                MNode part = model.childOrCreate (partName);
-
-                                String model_type = modelTree.get (node_type_id, "model_type");
-                                if (model_type.equals ("virtual"))
-                                {
-                                    // This assumes only one source of info for input spikes, with populationName as the node_set.
-                                    // The specification does not clearly promise this, unless "node_set" is equal to population.
-                                    connectInput (part, populationName, count, groupAttributes);
-                                }
-                                else
-                                {
-                                    List<String> groupColumnNames;
-                                    if (groupAttributes == null) groupColumnNames = new ArrayList<String> ();
-                                    else                         groupColumnNames = groupAttributes.names;
-
-                                    importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
-                                }
-                            }
-
-                            // Add all columns to part info file.
-                            writer.write (Long.toString (node_type_id));
-                            if (groupAttributes != null)
-                            {
-                                groupAttributes.read (node_group_index);
-                                int index2 = (int) (node_group_index - groupAttributes.offset);
-                                for (Attribute a : groupAttributes.columns) writer.write (" " + a.chunk[index2]);
-                            }
-                            writer.write ("\n");
+                            BufferedWriter writer;
+                            int            count;
                         }
+                        Map<String,InstanceWriter> writers      = new HashMap<String,InstanceWriter> ();
+                        ByteChannel                indexChannel = null;
+                        try
+                        {
+                            indexChannel = Files.newByteChannel (n2aDir.resolve (populationName + ".index"), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                            ByteBuffer indexBuffer = ByteBuffer.allocate (6);  // For one record in index
+                            indexBuffer.order (ByteOrder.nativeOrder ());
 
-                        for (BufferedWriter w : writers.values ()) w.close ();
+                            Map<Long,String> populationTypeIndex = nodeTypeIndex.get (populationName);
+
+                            Dataset datasetType  = population.getDatasetByPath ("node_type_id");
+                            Dataset datasetGroup = population.getDatasetByPath ("node_group_id");
+                            Dataset datasetIndex = population.getDatasetByPath ("node_group_index");
+                            long chunkType [] = null;
+                            long chunkGroup[] = null;
+                            long chunkIndex[] = null;
+                            long offset = 0;
+                            for (long i = 0; i < count; i++)
+                            {
+                                if (i % chunkSize == 0)
+                                {
+                                    offset = i;
+                                    int size = (int) Math.min (chunkSize, count - i);
+                                    chunkType  = readLong (datasetType,  offset, size);
+                                    chunkGroup = readLong (datasetGroup, offset, size);
+                                    chunkIndex = readLong (datasetIndex, offset, size);
+                                }
+                                int ir = (int) (i - offset);
+                                long node_type_id     = chunkType [ir];
+                                long node_group_id    = chunkGroup[ir];
+                                long node_group_index = chunkIndex[ir];
+
+                                String raw_model_template = populationTypeIndex.get (node_type_id);
+                                MNode modelTree = nodeTypes.child (populationName, raw_model_template);
+                                boolean multiType = modelTree.size () > 2;
+                                GroupAttributes attributes = null;
+                                if (! attributeGroups.isEmpty ()) attributes = attributeGroups.get ((int) node_group_id);
+
+                                String pieces[] = raw_model_template.split (":", 2);
+                                String schema         = pieces[0];
+                                String model_template = pieces[1];
+                                ImportSONATApart importer = backends.get (schema);
+                                if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
+
+                                String partName = populationName;
+                                if (multiTemplate) partName += " " + model_template;
+                                if (multiGroup)    partName += " " + node_group_id;
+                                InstanceWriter iw = writers.get (partName);
+                                if (iw == null)
+                                {
+                                    iw = new InstanceWriter ();
+                                    iw.writer = Files.newBufferedWriter (n2aDir.resolve (partName + " instances.csv"));
+                                    writers.put (partName, iw);
+
+                                    boolean first = true;
+                                    if (multiType)
+                                    {
+                                        iw.writer.write ("node_type_id");
+                                        first = false;
+                                    }
+                                    if (attributes != null)
+                                    {
+                                        for (String name : attributes.names)
+                                        {
+                                            if (! first) iw.writer.write (" ");
+                                            first = false;
+                                            iw.writer.write (name);
+                                        }
+                                    }
+                                    if (! first) iw.writer.write ("\n");
+
+                                    MNode part = model.childOrCreate (partName);
+                                    partToCode.put (partName, (short) codeToPart.size ());
+                                    codeToPart.add (partName);
+                                    part.set ("dir+\"/n2a/" + partName + " instances.csv\"", "instanceFile");
+
+                                    String model_type = modelTree.get (node_type_id, "model_type");
+                                    if (model_type.equals ("virtual"))
+                                    {
+                                        // This assumes only one source of info for input spikes, with populationName as the node_set.
+                                        // The specification does not clearly promise this, unless "node_set" is equal to population.
+                                        connectInput (part, populationName, count, attributes);
+                                    }
+                                    else
+                                    {
+                                        if (multiType)
+                                        {
+                                            part.set ("table(instanceFile, $index, \"node_type_id\")",                        "node_type_id");
+                                            part.set ("dir+\"/n2a/" + populationName + " " + model_template + " types.csv\"", "typeFile");
+                                        }
+
+                                        List<String> groupColumnNames;
+                                        if (attributes == null) groupColumnNames = new ArrayList<String> ();
+                                        else                    groupColumnNames = attributes.names;
+
+                                        importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
+                                    }
+                                }
+
+                                // Add all columns to part info file.
+                                boolean first = true;
+                                if (multiType)
+                                {
+                                    iw.writer.write (Long.toString (node_type_id));
+                                    first = false;
+                                }
+                                if (attributes != null)
+                                {
+                                    attributes.read (node_group_index);
+                                    int index = (int) (node_group_index - attributes.offset);
+                                    for (Attribute a : attributes.columns)
+                                    {
+                                        if (! first) iw.writer.write (" ");
+                                        first = false;
+                                        iw.writer.write (String.valueOf (a.chunk[index]));
+                                    }
+                                }
+                                if (! first) iw.writer.write ("\n");
+
+                                // Write node_id mapping to index file.
+                                short code = partToCode.get (partName);
+                                indexBuffer.rewind ();
+                                indexBuffer.putShort (code);
+                                indexBuffer.putInt (iw.count++);
+                                indexBuffer.rewind ();
+                                indexChannel.write (indexBuffer);
+                            }
+                        }
+                        finally
+                        {
+                            for (InstanceWriter iw : writers.values ()) iw.writer.close ();
+                            if (indexChannel != null) indexChannel.close ();
+                        }
                     }
                 }
             }
@@ -735,123 +1053,242 @@ public class ImportJob
                     String populationName = edge.getName ();
 
                     HashMap<Integer,GroupAttributes> groupAttributes = GroupAttributes.fromPopulation (population);
+                    boolean multiGroup = groupAttributes.size () > 1;
 
-                    Node source_node_id = population.getChild ("source_node_id");
-                    Node target_node_id = population.getChild ("target_node_id");
-                    String source_node_population = source_node_id.getAttribute ("node_population").getData ().toString ();
-                    String target_node_population = target_node_id.getAttribute ("node_population").getData ().toString ();
+                    Dataset datasetSource = (Dataset) population.getChild ("source_node_id");
+                    Dataset datasetTarget = (Dataset) population.getChild ("target_node_id");
+                    String source_node_population = datasetSource.getAttribute ("node_population").getData ().toString ();
+                    String target_node_population = datasetTarget.getAttribute ("node_population").getData ().toString ();
                     boolean Asimple = model.getFlag (source_node_population, "$meta", "backend", "sonata", "simple");  // The part might not even exist, in which case the value is correctly false.
                     boolean Bsimple = model.getFlag (target_node_population, "$meta", "backend", "sonata", "simple");
 
-                    long count = ((Dataset) source_node_id).getSize ();
+                    long count = datasetSource.getSize ();
 
-                    boolean simple = Asimple  &&  Bsimple  &&  edgeTypes.child (populationName).size () == 1;
-                    if (simple)
-                    {
-                        try
-                        {
-                            Dataset edge_group_index = population.getDatasetByPath ("edge_group_index");
-                            BigInteger chunk[] = null;
-                            count = edge_group_index.getSize ();
-                            for (long i = 0; i < count; i++)
-                            {
-                                if (i % chunkSize == 0)
-                                {
-                                    offset[0] = i;
-                                    size[0] = (int) Math.min (chunkSize, count - i);
-                                    chunk = (BigInteger[]) edge_group_index.getData (offset, size);
-                                }
-                                int index = (int) (i - offset[0]);
-                                if (chunk[index].longValueExact () != i)
-                                {
-                                    simple = false;
-                                    break;
-                                }
-                            }
-                        }
-                        catch (HdfInvalidPathException error) {}
-                    }
+                    // N2A edges (connections) are distinguished by (source part, target part, edge population, edge model_template, edge group)
+                    // Usually there would be just one connection between any (source, target).
+                    // However, the SONATA format allows multiple models connecting the same pair of parts.
+                    // A "simple" edge is one that only needs a single N2A connection part.
+                    // Implicitly, it can load directly from the HDF file.
+                    // To be simple, there must be only one model_template and one group in the edge population.
+                    // Also, the source and target populations must be simple (only one N2A part, with direct mapping from $index).
+                    boolean multiTemplate = edgeTypes.child (populationName).size () > 1;
+                    boolean simple = Asimple  &&  Bsimple  &&  ! multiTemplate  &&  ! multiGroup;
+                    // No need to check mapping from position in edge lists to position in group attributes.
+                    // If the edge structure is simple, then we can always use edge_group_index while iterating through connections.
 
                     if (simple)
                     {
                         MNode modelTree = edgeTypes.child (populationName).iterator ().next ();
+                        boolean multiType = modelTree.size () > 2;
                         String raw_model_template = modelTree.key ();
                         String pieces[] = raw_model_template.split (":", 2);
-                        String schema         = pieces[0];
-                        String model_template = pieces[1];
+                        String schema = pieces[0];
                         ImportSONATApart importer = backends.get (schema);
                         if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
 
                         String partName = populationName;
-                        if (model.child (partName) != null) partName += " edge";
+                        if (model.child (partName) != null) partName += " edge";  // In case there is a name collision with nodes. There should never be a name collision with another edge.
                         MNode part = model.childOrCreate (partName);
 
-                        String table = "table(hdfFile, $index, 0, hdf=\"edges/" + populationName + "/edge_type_id\")";
-                        part.set ("dir+\"/" + edges_file + "\"", "hdfFile");
-                        part.set (table,                         "edge_type_id");
-                        part.set (source_node_population,        "A");
-                        part.set (target_node_population,        "B");
+                        part.set ("dir+\"/" + edges_file + "\"",                           "hdfFile");
+                        part.set (source_node_population,                                  "A");
+                        part.set (target_node_population,                                  "B");
+                        part.set ("Medge(A.$index, B.$index)!=0@$connect",                 "$p");
+                        part.set ("matrix(hdfFile, hdf=\"edges/" + populationName + "\")", "Medge");
+                        if (multiType)
+                        {
+                            part.set ("matrix(hdfFile, hdf=\"edges/" + populationName + "/edge_type_id\")", "Medge_type_id");
+                            part.set ("Medge_type_id(A.$index, B.$index)",                                  "edge_type_id");
+                        }
 
-                        List<String> groupColumnNames = null;
-                        if (groupAttributes.isEmpty ())
-                        {
-                            groupColumnNames = new ArrayList<String> ();
-                        }
-                        else
-                        {
-                            Integer group_id = groupAttributes.keySet ().iterator ().next ();
-                            groupColumnNames = groupAttributes.get (group_id).names;
-                            part.set ("\"edges/" + populationName + "/" + group_id + "\"", "groupPath");
-                        }
+                        List<String> groupColumnNames;
+                        if (groupAttributes.isEmpty ()) groupColumnNames = new ArrayList<String> ();
+                        else                            groupColumnNames = groupAttributes.values ().iterator ().next ().names;
 
                         importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
                     }
                     else
                     {
-                        /*
-                        Map<Long,String> populationIndex = edgeTypeIndex.get (populationName);
+                        // Process each edge individually, sorting them into proper N2A connection parts.
+                        // Part names are: "{population name} {model_template} {group_id}"
+                        // Note that edge population implies source and target, so no need to include source or target names.
 
-                        Dataset edge_type_id     = population.getDatasetByPath ("edge_type_id");
-                        Dataset edge_group_id    = population.getDatasetByPath ("edge_group_id");
-                        Dataset edge_group_index = population.getDatasetByPath ("edge_group_index");
-                        Dataset source_node_id   = population.getDatasetByPath ("source_node_id");
-                        Dataset target_node_id   = population.getDatasetByPath ("target_node_id");
-                        BigInteger chunkType  [] = null;
-                        Integer    chunkGroup [] = null;
-                        BigInteger chunkIndex [] = null;
-                        BigInteger chunkSource[] = null;
-                        BigInteger chunkTarget[] = null;
-                        count = edge_type_id.getSize ();
-                        for (long i = 0; i < count; i++)
+                        Map<String,BufferedWriter> writers  = new HashMap<String,BufferedWriter> ();
+                        SeekableByteChannel        channelA = null;
+                        SeekableByteChannel        channelB = null;
+                        try
                         {
-                            if (i % chunkSize == 0)
+                            if (! Asimple) channelA = Files.newByteChannel (n2aDir.resolve (source_node_population + ".index"));
+                            if (! Bsimple)
                             {
-                                offset[0] = i;
-                                size[0] = (int) Math.min (chunkSize, count - i);
-                                chunkType   = (BigInteger[]) edge_type_id    .getData (offset, size);
-                                chunkGroup  = (Integer   []) edge_group_id   .getData (offset, size);
-                                chunkIndex  = (BigInteger[]) edge_group_index.getData (offset, size);
-                                chunkSource = (BigInteger[]) source_node_id  .getData (offset, size);
-                                chunkTarget = (BigInteger[]) target_node_id  .getData (offset, size);
+                                if (source_node_population.equals (target_node_population)) channelB = channelA;  // Asimple must also be false, since they are the same population.
+                                else                                                        channelB = Files.newByteChannel (n2aDir.resolve (target_node_population + ".index"));
                             }
-                            int ir = (int) (i - offset[0]);  // relative index
+                            ByteBuffer indexBuffer = ByteBuffer.allocate (6);  // For one record in index
+                            indexBuffer.order (ByteOrder.nativeOrder ());
+                            class IndexReader
+                            {
+                                String partName;
+                                long   index;
+                                void read (SeekableByteChannel channel, long node_id) throws IOException
+                                {
+                                    channel.position (node_id * 6);  // code (2 bytes) + index (4 bytes)
+                                    indexBuffer.rewind ();
+                                    channel.read (indexBuffer);
+                                    indexBuffer.rewind ();
+                                    short code = indexBuffer.getShort ();
+                                    index      = indexBuffer.getInt ();
+                                    partName = codeToPart.get (code);
+                                }
+                            }
+                            IndexReader indexReader = new IndexReader ();
 
-                            long type_id = chunkType[ir].longValue ();
-                            String raw_model_template = populationIndex.get (type_id);
-                            String pieces[] = raw_model_template.split (":", 2);
-                            String schema         = pieces[0];
-                            String model_template = pieces[1];
-                            ImportSONATApart importer = backends.get (schema);
-                            if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
+                            Map<Long,String> populationTypeIndex = edgeTypeIndex.get (populationName);
 
-                            String partName = populationName + " " + model_template;
-                            model.set ("dir+\"/" + nodes_file + "\"",                                                  partName, "hdfFile");
-                            model.set ("table(hdfFile, $index, 0, hdf=\"nodes/" + populationName + "/node_type_id\")", partName, "node_type_id");
+                            Dataset datasetType  = population.getDatasetByPath ("edge_type_id");
+                            Dataset datasetGroup = population.getDatasetByPath ("edge_group_id");
+                            Dataset datasetIndex = population.getDatasetByPath ("edge_group_index");
+                            long chunkType  [] = null;
+                            long chunkGroup [] = null;
+                            long chunkIndex [] = null;
+                            long chunkSource[] = null;
+                            long chunkTarget[] = null;
+                            long offset = 0;
+                            count = datasetType.getSize ();
+                            for (long i = 0; i < count; i++)
+                            {
+                                if (i % chunkSize == 0)
+                                {
+                                    offset = i;
+                                    int size = (int) Math.min (chunkSize, count - i);
+                                    chunkType   = readLong (datasetType,   offset, size);
+                                    chunkGroup  = readLong (datasetGroup,  offset, size);
+                                    chunkIndex  = readLong (datasetIndex,  offset, size);
+                                    chunkSource = readLong (datasetSource, offset, size);
+                                    chunkTarget = readLong (datasetTarget, offset, size);
+                                }
+                                int ir = (int) (i - offset);  // relative index
+                                long edge_type_id     = chunkType  [ir];
+                                long edge_group_id    = chunkGroup [ir];
+                                long edge_group_index = chunkIndex [ir];
+                                long source_node_id   = chunkSource[ir];
+                                long target_node_id   = chunkTarget[ir];
 
+                                String raw_model_template = populationTypeIndex.get (edge_type_id);
+                                MNode modelTree = edgeTypes.child (populationName, raw_model_template);
+                                boolean multiType = modelTree.size () > 2;
+                                GroupAttributes attributes = null;
+                                if (! groupAttributes.isEmpty ()) attributes = groupAttributes.get ((int) edge_group_id);
 
-                            // TODO
+                                String pieces[] = raw_model_template.split (":", 2);
+                                String schema         = pieces[0];
+                                String model_template = pieces[1];
+                                ImportSONATApart importer = backends.get (schema);
+                                if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
+
+                                // Translate source and target node IDs to N2A part/$index
+                                String partA;
+                                String partB;
+                                long indexA;
+                                long indexB;
+                                if (Asimple)
+                                {
+                                    partA  = source_node_population;
+                                    indexA = source_node_id;
+                                }
+                                else
+                                {
+                                    indexReader.read (channelA, source_node_id);
+                                    partA  = indexReader.partName;
+                                    indexA = indexReader.index;
+                                }
+                                if (Bsimple)
+                                {
+                                    partB  = target_node_population;
+                                    indexB = target_node_id;
+                                }
+                                else
+                                {
+                                    indexReader.read (channelB, target_node_id);
+                                    partB  = indexReader.partName;
+                                    indexB = indexReader.index;
+                                }
+
+                                String partName = populationName;
+                                if (multiTemplate) partName += " " + model_template;
+                                if (multiGroup)    partName += " " + edge_group_id;
+                                // At this point, the edge is mathematically unique, but could apply to several different combinations
+                                // of source and target N2A parts. If we encounter an edge part already defined, we make it unique
+                                // by including specific endpoint part names.
+                                if (model.child (partName) != null)
+                                {
+                                    partName += " " + partA;
+                                    partName += " " + partB;
+                                }
+                                BufferedWriter writer = writers.get (partName);
+                                if (writer == null)
+                                {
+                                    writer = Files.newBufferedWriter (n2aDir.resolve (partName + " instances.csv"));
+                                    writers.put (partName, writer);
+
+                                    writer.write ("source_node_id target_node_id");
+                                    if (multiType) writer.write (" node_type_id");
+                                    if (attributes != null)
+                                    {
+                                        for (String name : attributes.names) writer.write (" " + name);
+                                    }
+                                    writer.write ("\n");
+
+                                    MNode part = model.childOrCreate (partName);
+                                    part.set ("dir+\"/n2a/" + partName + " instances.csv\"", "instanceFile");
+                                    part.set (partA,                                         "A");
+                                    part.set (partB,                                         "B");
+                                    part.set ("Medge(A.$index, B.$index)!=0@$connect",       "$p");
+                                    part.set ("matrix(instanceFile, sonata=\"\")",           "Medge");
+                                    if (multiType)
+                                    {
+                                        part.set ("matrix(instanceFile, sonata=\"edge_type_id\")", "Medge_type_id");
+                                        part.set ("Medge_type_id(A.$index, B.$index)",             "edge_type_id");
+                                    }
+
+                                    List<String> groupColumnNames;
+                                    if (attributes == null) groupColumnNames = new ArrayList<String> ();
+                                    else                    groupColumnNames = attributes.names;
+                                    if (groupAttributes.isEmpty ())
+                                    {
+                                        groupColumnNames = new ArrayList<String> ();
+                                    }
+                                    else
+                                    {
+                                        Integer group_id = groupAttributes.keySet ().iterator ().next ();
+                                        groupColumnNames = groupAttributes.get (group_id).names;
+                                        part.set ("\"edges/" + populationName + "/" + group_id + "\"", "groupPath");
+                                    }
+
+                                    System.out.println ("edge processPart: " + populationName + " |" + raw_model_template + "|");
+                                    importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
+                                }
+
+                                // Add all columns to part info file.
+                                writer.write (Long.toString (indexA) + " " + Long.toString (indexB));
+                                if (multiType) writer.write (" " + Long.toString (edge_type_id));
+                                if (attributes != null)
+                                {
+                                    attributes.read (edge_group_index);
+                                    int index = (int) (edge_group_index - attributes.offset);
+                                    for (Attribute a : attributes.columns) writer.write (" " + a.chunk[index]);
+                                }
+                                writer.write ("\n");
+                            }
+
+                            // TODO: sort individual instance files by A.$index, then by B.$index (for fast load on S2)
                         }
-                        */
+                        finally
+                        {
+                            for (BufferedWriter w : writers.values ()) w.close ();
+                            if (channelA != null) channelA.close ();
+                            if (channelB != null) channelB.close ();
+                        }
                     }
                 }
             }

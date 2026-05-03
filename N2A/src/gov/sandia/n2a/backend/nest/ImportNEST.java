@@ -127,21 +127,20 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
                 String unit = UnitValue.safeUnit (basePart.get (internalName, "$meta", "backend", "nest", "unit"));
                 String one  = unit.isBlank () ? "" : "*1" + unit;
 
-                // TODO: table() with third positional parameter acts as sparse matrix with more than one attributes (basically, a sparse tensor)
-                // TODO: table() has a special SONATA mode (automatically detected) that treats edge group attributes as a sparse tensor.
-                // Values are consolidated and streamed by a sparse iterator rather then being queried.
+                String temp = "matrix(";
                 if (part.getFlag ("hdfFile"))
                 {
-                    String table = "table(hdfFile, A.$index, B.$index, \"" + key + "\", hdf=groupPath";
-                    if (dynamics_params) table += "+\"/dynamics_params\"";
-                    table += ")" + one;
-                    part.set (table, internalName);
+                    temp += "hdfFile, hdf=groupPath+\"";
+                    if (dynamics_params) temp += "/dynamics_params";
+                    temp += "/" + key + "\")";
                 }
                 else
                 {
-                    part.set ("dir+\"/n2a/" + partName + " instances.csv\"", "instanceFile");
-                    part.set ("table(instanceFile, A.$index, B.$index, \"" + key + "\")" + one, internalName);
+                    temp += "instanceFile, sonata=\"" + key + "\")";
                 }
+                String M = "M" + internalName;
+                part.set (temp,                             M);
+                part.set (M + "(A.$index, B.$index)" + one, internalName);
             }
         }
         else  // neuron
@@ -239,7 +238,6 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
                 }
                 else
                 {
-                    part.set ("dir+\"/n2a/" + partName + " instances.csv\"", "instanceFile");
                     part.set ("table(instanceFile, $index, \"" + key + "\")" + one, internalName);
                 }
             }
