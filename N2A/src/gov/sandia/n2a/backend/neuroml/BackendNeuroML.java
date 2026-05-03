@@ -17,6 +17,7 @@ import java.util.Map;
 
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Host.AnyProcess;
 import gov.sandia.n2a.host.Host.AnyProcessBuilder;
@@ -62,7 +63,7 @@ public class BackendNeuroML extends Backend
                 job.set (System.currentTimeMillis (), "started");
 
                 // Export the model to NeuroML
-                String inherit = job.get ("$inherit").replace ("\"", "");
+                String inherit = MPart.parseInheritOne (job.get ("$inherit"));
                 MNode doc = AppData.docs.child ("models", inherit);  // doc is the NON-collated model. We ignore the collated model stored in the job dir, because ExportJob will do its own collation.
 
                 Host env = Host.get (job);

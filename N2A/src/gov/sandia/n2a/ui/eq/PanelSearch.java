@@ -831,9 +831,8 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
         if (! result.isEmpty ()) return result;
 
         // No local definition, so check parents.
-        for (String inherit : doc.get ("$inherit").split (","))
+        for (String inherit : MPart.parseInherit (doc.get ("$inherit")))
         {
-            inherit = inherit.trim ().replace ("\"", "");
             result = getCategory (inherit);
             if (! result.isEmpty ()) return result;
         }
@@ -1062,10 +1061,9 @@ public class PanelSearch extends JPanel implements TreeSelectionListener
 
         public void process (MNode part, int depth)
         {
-            String[] inherits = part.get ("$inherit").split (",");
+            String[] inherits = MPart.parseInherit (part.get ("$inherit"));
             for (String inherit : inherits)
             {
-                inherit = inherit.trim ().replace ("\"", "");
                 if (inherit.isEmpty ()) continue;
                 Integer d = ancestors.get (inherit);
                 if (d == null)

@@ -360,12 +360,12 @@ public class ImportJob extends XMLutility
             A.merge (spikeSource);
             A.set (spikeSource.key (), "$meta", "backend", "lems", "id");
 
-            removeDependency (spikeSource, spikeSource.get ("$inherit").replace ("\"", ""));
+            removeDependency (spikeSource, MPart.parseInheritOne (spikeSource.get ("$inherit")));
             spikeSource.clear ();
             spikeSource.merge (fused);
-            addDependency (spikeSource, spikeSource.get ("$inherit").replace ("\"", ""));
+            addDependency (spikeSource, MPart.parseInheritOne (spikeSource.get ("$inherit")));
             A = spikeSource.child ("A");
-            addDependency (A, A.get ("$inherit").replace ("\"", ""));  // Don't do addDependencyFromConnection(), because we've already injected the part.
+            addDependency (A, MPart.parseInheritOne (A.get ("$inherit")));  // Don't do addDependencyFromConnection(), because we've already injected the part.
 
             if (synapse.getInt ("$count") == 0  &&  synapse.child ("$lems") == null) kill.add (synapseName);
         }
@@ -449,7 +449,7 @@ public class ImportJob extends XMLutility
             dependentInherit = dependent.get ();
             if (isChildrenType)
             {
-                String[] children = dependentInherit.split (",");
+                String[] children = MPart.parseInherit (dependentInherit);
                 dependentInherit = children[0];
                 if (children.length > 1) childrenExternalName = children[1];
             }
@@ -483,7 +483,7 @@ public class ImportJob extends XMLutility
                     if (key.equals ("$connected")) continue;
                     if (key.equals ("$lems"     )) continue;
                     if (key.equals ("$lemsUses" )) continue;
-                    if (key.equals ("$inherit")  &&  c.get ().replace ("\"", "").equals (inherit)) continue;  // Inheriting our own name is characteristic of being a proxy.
+                    if (key.equals ("$inherit")  &&  MPart.parseInheritOne (c.get ()).equals (inherit)) continue;  // Inheriting our own name is characteristic of being a proxy.
                     proxy = false;  // key is something other than our temporary special keys, so not shallow
                     break;
                 }
@@ -620,9 +620,7 @@ public class ImportJob extends XMLutility
                     sourceNames[sourceIndex] = inherit;
                     sourceIDs.set (sourceIndex, id);
 
-                    inherit = sourceNames[0];
-                    for (int i = 1; i < sourceNames.length; i++) inherit += "," + sourceNames[i];
-                    dependent.set (inherit, "$inherit");
+                    dependent.set (MPart.encodeInherit (sourceNames), "$inherit");
 
                     id = sourceIDs.get (0);
                     for (int i = 1; i < sourceIDs.size (); i++) id += "," + sourceIDs.get (0);
@@ -1269,7 +1267,7 @@ public class ImportJob extends XMLutility
 
         public void variableParameter (Node node, MNode subpart, String parameter, String segmentGroup)
         {
-            String inherit = subpart.get ("$inherit").replace ("\"", "");
+            String inherit = MPart.parseInheritOne (subpart.get ("$inherit"));
             NameMap nameMap = exportMap (inherit);  // could also do importMap() on lems.part
             parameter = nameMap.importName (parameter);
 
@@ -1623,11 +1621,11 @@ public class ImportJob extends XMLutility
                 addDependency (part, inheritSegment);
                 for (MNode property : part)
                 {
-                    String inherit = property.get ("$inherit").replace ("\"", "");
+                    String inherit = MPart.parseInheritOne (property.get ("$inherit"));
                     if (! inherit.isEmpty ()) addDependency (property, inherit);
                     for (MNode m : property)
                     {
-                        inherit = m.get ("$inherit").replace ("\"", "");
+                        inherit = MPart.parseInheritOne (m.get ("$inherit"));
                         if (inherit.isEmpty ()) continue;
                         addDependency (m, inherit);
                     }
@@ -1659,7 +1657,7 @@ public class ImportJob extends XMLutility
                 // Link ion currents to concentration models
                 for (MNode v : part)
                 {
-                    String inherit = v.get ("$inherit").replace ("\"", "");
+                    String inherit = MPart.parseInheritOne (v.get ("$inherit"));
                     String species = models.get (modelName, inherit, "$meta", "species");
                     if (species.isEmpty ()) continue;
                     if (part.child (species) == null) continue;  // Don't add connection if the user has not provided the concentration model.
@@ -2043,7 +2041,7 @@ public class ImportJob extends XMLutility
     public void compoundInput (Node node)
     {
         MNode part = genericPart (node, models.child (modelName));
-        String inherit = part.get ("$inherit").replace ("\"", "");
+        String inherit = MPart.parseInheritOne (part.get ("$inherit"));
         part.clear ("$inherit");
         if (! inherit.isEmpty ()) removeDependency (part, inherit);
         part.set ("compoundInput", "$meta", "backend", "lems", "part");
@@ -2061,7 +2059,7 @@ public class ImportJob extends XMLutility
         // In particular, don't record any dependencies, either for the part itself
         // or its connections.
         MNode part = genericPart (node, models.child (modelName));
-        String inherit  = part.get ("$inherit").replace ("\"", "");
+        String inherit  = MPart.parseInheritOne (part.get ("$inherit"));
         part.clear ("$inherit");
         if (! inherit.isEmpty ()) removeDependency (part, inherit);
         part.set ("doubleSynapse", "$meta", "backend", "lems", "part");
@@ -2535,7 +2533,7 @@ public class ImportJob extends XMLutility
 
                 // ID is the row in the segment*group matrix.
                 // We must find the column associated with it, so we can map to a group part.
-                String cellID = network.get (endpoint, "$inherit").replace ("\"", "");
+                String cellID = MPart.parseInheritOne (network.get (endpoint, "$inherit"));
                 Cell cell = cells.get (cellID);
                 if (cell == null) return;  // This could be a point cell, rather than multi-compartment.
                 MatrixBoolean M = cell.M;
@@ -2740,7 +2738,7 @@ public class ImportJob extends XMLutility
                 MNode part = network.child (name);
                 boolean noID = part.getFlag ("$noID");  // part name was synthesized
                 part.clear ("$noID");
-                String inherit = part.get ("$inherit").replace ("\"", "");
+                String inherit = MPart.parseInheritOne (part.get ("$inherit"));
                 MNode sourcePart = models.child (modelName, inherit);
                 if (sourcePart.getInt ("$count") <= 1)  // We are the only user, so can directly embed input. That's the current arrangement.
                 {
@@ -3174,11 +3172,8 @@ public class ImportJob extends XMLutility
     {
         List<MNode> result = new ArrayList<MNode> ();
 
-        String childInherit = child.get ("$inherit");
-        String[] inherits = childInherit.split (",");
-        for (String inherit : inherits)
+        for (String inherit : MPart.parseInherit (child.get ("$inherit")))
         {
-            inherit = inherit.replace ("\"", "");
             if (inherit.isEmpty ()) continue;
             MNode parent = models.child (modelName, inherit);
             if (parent == child) parent = null;  // Prevent infinite loop on proxies.
@@ -3196,7 +3191,7 @@ public class ImportJob extends XMLutility
      **/
     public MNode findBasePart (MNode part)
     {
-        String inherit = part.get ("$inherit").replace ("\"", "");
+        String inherit = MPart.parseInheritOne (part.get ("$inherit"));
 
         MNode result = models.child (modelName, inherit);
         if (result == part) result = null;  // Prevent infinite loop on proxies.
@@ -3227,7 +3222,7 @@ public class ImportJob extends XMLutility
         {
             // TODO: for lookup of direct child, may need to map node name in context of parent.
             // This is only necessary if the subpart has a different internal name.
-            String type = parent.get (nodeName, "$inherit").replace ("\"", "");  // Assumes single inheritance
+            String type = MPart.parseInheritOne (parent.get (nodeName, "$inherit"));  // Assumes single inheritance
             if (! type.isEmpty ()) return type;
             MNode c = parent.child ("$meta", "backend", "lems", "children", nodeName);
             if (c != null) return c.getOrDefault (nodeName).split (",")[0];
@@ -4356,7 +4351,7 @@ public class ImportJob extends XMLutility
                 // The assumption is that "current" is a population, thus inherit points to a call.
                 if (next == null)
                 {
-                    String inherit = current.get ("$inherit").replace ("\"", "");
+                    String inherit = MPart.parseInheritOne (current.get ("$inherit"));
                     MNode parent = models.child (modelName, inherit);
                     if (parent != null  &&  parent.get ("$meta", "backend", "lems", "part").equals ("cell"))
                     {
@@ -4415,7 +4410,7 @@ public class ImportJob extends XMLutility
                 // Check for a folded part
                 if (next == null)
                 {
-                    String inherit = current.get ("$inherit").replaceAll ("\"", "");
+                    String inherit = MPart.parseInheritOne (current.get ("$inherit"));
                     if (p.partName.equals (inherit)) next = current;  // When an ionChannel gets folded into a channelPopulation, and made into a standalone part, the standalone part is named after the embedded ionChannel.
                 }
 
@@ -4432,7 +4427,7 @@ public class ImportJob extends XMLutility
                         if (c == current) continue;
                         if (! c.get ("B").equals (key)) continue;
                         // Now we have a part that appears to name current as a connection target.
-                        String inherit = c.get ("$inherit").replace ("\"", "");
+                        String inherit = MPart.parseInheritOne (c.get ("$inherit"));
                         if (p.partName.equals (inherit))
                         {
                             p.up = "B";

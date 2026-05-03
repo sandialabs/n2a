@@ -12,6 +12,7 @@ import gov.sandia.n2a.db.MDir;
 import gov.sandia.n2a.db.MDoc;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.eqset.Variable.ParsedValue;
 import gov.sandia.n2a.host.Host;
 import gov.sandia.n2a.host.Remote;
@@ -1476,7 +1477,7 @@ public class PanelRun extends JPanel
     public NodeJob addNewRun (MNode run, boolean takeFocus)
     {
         NodeJob node = new NodeJob (run, true);
-        node.inherit = run.getOrDefault (node.key, "$inherit").split (",", 2)[0].replace ("\"", "");
+        node.inherit = MPart.parseInheritOne (run.getOrDefault (node.key, "$inherit"));
         node.setUserObject (node.inherit);
 
         // In case node is inserted by background process, we need to preserve current view position.

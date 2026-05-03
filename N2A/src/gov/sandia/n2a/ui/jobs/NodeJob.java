@@ -222,7 +222,7 @@ public class NodeJob extends NodeBase
     public synchronized void distribute ()
     {
         MNode source = getSource ();
-        inherit = source.getOrDefault (key, "$inherit").split (",", 2)[0].replace ("\"", "");
+        inherit = MPart.parseInheritOne (source.getOrDefault (key, "$inherit"));
         setUserObject (inherit);
 
         // Lightweight evaluation of local "finished" file.
@@ -772,10 +772,8 @@ public class NodeJob extends NodeBase
 
     public static void addInherits (MNode n, MVolatile snapshot)
     {
-        String inherits = n.get ("$inherit");
-        for (String inherit : inherits.split (","))
+        for (String inherit : MPart.parseInherit (n.get ("$inherit")))
         {
-            inherit = inherit.trim ().replace ("\"", "");
             if (snapshot.child (inherit) != null) continue;
             MNode p = AppData.docs.child ("models", inherit);
             if (p == null) continue;

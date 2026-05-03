@@ -278,7 +278,7 @@ public class JobSTACS extends Thread
             for (MNode c : s.source)
             {
                 if (! MPart.isPart (c)) continue;
-                String inherit = c.get ("$inherit").trim ();
+                String inherit = MPart.parseInheritOne (c.get ("$inherit"));
                 if (inherit.startsWith ("Plasticity")) modtype = "12";  // STDP
                 if (inherit.equals     ("Spinapse"))   modtype = "11";
             }
@@ -571,9 +571,8 @@ public class JobSTACS extends Thread
         // In the case of triangle inheritance, this implementation is inefficient because
         // it could examine the same part several times. However, the usual case is single
         // inheritance, so we won't worry about that.
-        for (String inherit : part.get ("$inherit").split (","))
+        for (String inherit : MPart.parseInherit (part.get ("$inherit")))
         {
-            inherit = inherit.replace ("\"", "");
             if (inherit.isEmpty ()) continue;
             MNode parent = AppData.docs.child ("models", inherit);
             if (parent == null) continue;

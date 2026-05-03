@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.db.MPartRepo;
 
 /**
@@ -160,7 +161,7 @@ public class PartMap
         String key = part.key ();
         NameMap map = outward.get (key);
         if (map != null) return map;
-        String inherit = part.get ("$inherit").replace ("\"", "");  // Assume single inheritance
+        String inherit = MPart.parseInheritOne (part.get ("$inherit"));  // Assume single inheritance
         if (! inherit.isEmpty ())
         {
             MNode parent = AppData.docs.child ("models", inherit);

@@ -435,7 +435,7 @@ public class ExportJob extends XMLutility
                 if (population != null) DL = population.cell.DL;  // It's possible for the B side to not be connected.
 
                 String type = p.get ("$meta", "backend", "lems", "part");
-                String inherit = p.get ("$inherit").replace ("\"", "");
+                String inherit = MPart.parseInheritOne (p.get ("$inherit"));
                 if (type.contains ("Synapse"))
                 {
                     Element result = addElement ("projection", networkElements);
@@ -1045,7 +1045,7 @@ public class ExportJob extends XMLutility
 
         public void determineID ()
         {
-            String inherit = source.get ("$inherit").replace ("\"", "");
+            String inherit = MPart.parseInheritOne (source.get ("$inherit"));
             if (inherit.startsWith (modelName))
             {
                 id = inherit.substring (modelName.length ()).trim ();
@@ -1316,7 +1316,7 @@ public class ExportJob extends XMLutility
             id = source.get ("$meta", "backend", "lems", "id");
             if (id.isEmpty ())
             {
-                String inherit = source.get ("$inherit").replace ("\"", "");
+                String inherit = MPart.parseInheritOne (source.get ("$inherit"));
                 if (inherit.startsWith (modelName)) id = inherit.substring (modelName.length ()).trim ();
             }
             if (id.isEmpty ()) id = "N2A_Cell" + cells.size ();  // Can't be source.key(), because that is most likely reserved for population id. If this is at top level, then id will be replaced with key elsewhere.
@@ -2171,7 +2171,7 @@ public class ExportJob extends XMLutility
             {
                 String  ion      = source.key ();  // Concentration models are always named after their ion.
                 String  type     = source.get ("$meta", "backend", "lems", "part").split (",")[0];
-                String  inherit  = source.get ("$inherit").replace ("\"", "");
+                String  inherit  = MPart.parseInheritOne (source.get ("$inherit"));
                 NameMap nameMap  = partMap.exportMap (inherit);
                 String  inside0  = nameMap.importName ("initialConcentration");
                 String  outside0 = nameMap.importName ("initialExtConcentration");
@@ -2223,12 +2223,12 @@ public class ExportJob extends XMLutility
         public IonChannel (MPart source)
         {
             this.source = source;
-            inherit = source.get ("$inherit").replace ("\"", "");
+            inherit = MPart.parseInheritOne (source.get ("$inherit"));
 
             // Scan children for an included Potential
             for (MNode c : source)
             {
-                potentialInherit = c.get ("$inherit").replace ("\"", "");  // potential will always have single inheritance
+                potentialInherit = MPart.parseInheritOne (c.get ("$inherit"));  // potential will always have single inheritance
                 if (potentialInherit.startsWith ("Potential "))
                 {
                     potential = c;
@@ -2859,7 +2859,7 @@ public class ExportJob extends XMLutility
                         String id = p.source.get ("$meta", "backend", "lems", "id");
                         if (id.isEmpty ())
                         {
-                            id = p.source.get ("$inherit").replace ("\"", "");
+                            id = MPart.parseInheritOne (p.source.get ("$inherit"));
                             if (id.startsWith (modelName)) id = id.substring (modelName.length ()).trim ();
                         }
                         prefix += "/" + id;
@@ -3072,10 +3072,9 @@ public class ExportJob extends XMLutility
     **/
     public void addComponentTypeDependencies (MNode source)
     {
-        String[] inherits = source.get ("$inherit").split (",");
+        String[] inherits = MPart.parseInherit (source.get ("$inherit"));
         for (String inherit : inherits)
         {
-            inherit = inherit.replace ("\"", "");
             MNode part = AppData.docs.child ("models", inherit);
             if (part == null) continue;
             if (! part.get ("$meta", "backend", "lems", "part").isEmpty ()) continue;  // Don't add base parts.
@@ -3821,10 +3820,8 @@ public class ExportJob extends XMLutility
         public void inheritRequirements (String inherit, List<NamedDimensionalType> list)
         {
             if (inherit.isEmpty ()) return;  // Just to save a little work. The code below will tolerate an empty string.
-            String[] inherits = inherit.split (",");
-            for (String i : inherits)
+            for (String i : MPart.parseInherit (inherit))
             {
-                i = i.replace ("\"", "").trim ();
                 MNode parent = AppData.docs.child ("models", i);
                 if (parent != null)
                 {

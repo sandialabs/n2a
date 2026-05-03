@@ -73,7 +73,7 @@ public class PartMapNeuroML extends PartMap
                 String inherit = c.get ("$inherit");
                 if (! inherit.isEmpty ())
                 {
-                    inherit = inherit.replace ("\"", "");
+                    inherit = MPart.parseInheritOne (inherit);
                     children.add (inherit);
                     continue;  // This is a subpart, so we are done with it.
                 }
@@ -344,7 +344,7 @@ public class PartMapNeuroML extends PartMap
         String key = part.key ();
         NameMapNeuroML map = (NameMapNeuroML) outward.get (key);
         if (map != null) return map;
-        String inherit = part.get ("$inherit").replace ("\"", "");  // Assume single inheritance
+        String inherit = MPart.parseInheritOne (part.get ("$inherit"));  // Assume single inheritance
         if (! inherit.isEmpty ())
         {
             MNode parent = AppData.docs.child ("models", inherit);
