@@ -118,6 +118,12 @@ public class Utility
         return new ImageIcon (combined);
     }
 
+    /**
+        Returns a color with maximum possible saturation, given the lightness level.
+        The lightness is treated as a perceptual value in [0,1].
+        To maximize color contrast on either a full-white or full-black background,
+        use lightness 0.5.
+    **/
     public static Color hueWithTrueLightness (float h, float l)
     {
         float[] hsl = new float[3];
@@ -132,9 +138,9 @@ public class Utility
             rgb[i] *= l / y;
             max = Math.max (max, rgb[i]);
         }
-        if (max > 1)
+        if (max > 1)  // Can't reach full lightness, because some primaries (particularly G) are brighter than others.
         {
-            for (int i = 0; i < 3; i++) rgb[i] *= 1 / max;
+            for (int i = 0; i < 3; i++) rgb[i] /= max;
         }
 
         return new Color (rgb[0], rgb[1], rgb[2]);

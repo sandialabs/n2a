@@ -20,28 +20,23 @@ import javax.swing.text.StyledEditorKit;
 import javax.swing.text.View;
 import javax.swing.text.ViewFactory;
 
+import gov.sandia.n2a.ui.Utility;
+
 /**
     Allows user to set text that contains ANSI escape sequences and get colored output.
 **/
 @SuppressWarnings("serial")
 public class TextPaneANSI extends JTextPane
 {
-    public static final Color gray50     = Color.getHSBColor (0,      0, 0.5f);
-    public static final Color gray75     = Color.getHSBColor (0,      0, 0.75f);
-    public static final Color red50      = Color.getHSBColor (0,      1, 0.5f);
-    public static final Color yellow50   = Color.getHSBColor (1f / 6, 1, 0.5f);
-    public static final Color green50    = Color.getHSBColor (2f / 6, 1, 0.5f);
-    public static final Color cyan50     = Color.getHSBColor (3f / 6, 1, 0.5f);
-    public static final Color blue50     = Color.getHSBColor (4f / 6, 1, 0.5f);
-    public static final Color magenta50  = Color.getHSBColor (5f / 6, 1, 0.5f);
-    public static final Color yellow80   = Color.getHSBColor (1f / 6, 1, 0.8f);
-    public static final Color red100     = Color.getHSBColor (0,      1, 1);
-    public static final Color yellow100  = Color.getHSBColor (1f / 6, 1, 1);
-    public static final Color green100   = Color.getHSBColor (2f / 6, 1, 1);
-    public static final Color cyan100    = Color.getHSBColor (3f / 6, 1, 1);
-    public static final Color blue100    = Color.getHSBColor (4f / 6, 1, 1);
-    public static final Color magenta100 = Color.getHSBColor (5f / 6, 1, 1);
-    public static final Color standard[] = {Color.black, red50, green50, yellow50, blue50, magenta50, cyan50, gray75, gray50, red100, green100, yellow100, blue100, magenta100, cyan100, Color.white};
+    public static final Color gray50     = new Color (128, 128, 128);
+    public static final Color gray75     = new Color (192, 192, 192);
+    public static final Color red50      = Utility.hueWithTrueLightness (0,        0.5f);
+    public static final Color yellow70   = new Color (160, 160, 0);  // Difficult to make yellow look good on white background.
+    public static final Color green50    = Utility.hueWithTrueLightness (2f   / 6, 0.5f);
+    public static final Color cyan50     = Utility.hueWithTrueLightness (3f   / 6, 0.5f);
+    public static final Color blue50     = Utility.hueWithTrueLightness (4f   / 6, 0.5f);
+    public static final Color magenta50  = Utility.hueWithTrueLightness (5f   / 6, 0.5f);
+    public static final Color standard[] = {Color.black, red50, green50, yellow70, blue50, magenta50, cyan50, gray75, gray50, Color.red, Color.green, Color.yellow, Color.blue, Color.magenta, Color.cyan, Color.white};
 
     public    int                lastLine;  // Character position just after last newline. Set by setText() and append().
     protected SimpleAttributeSet attributes = new SimpleAttributeSet ();
@@ -138,28 +133,14 @@ public class TextPaneANSI extends JTextPane
                             attributes.removeAttribute (StyleConstants.StrikeThrough);
                             break;
                         case "30":
-                            attributes.addAttribute (StyleConstants.Foreground, Color.black);
-                            break;
                         case "31":
-                            attributes.addAttribute (StyleConstants.Foreground, Color.red);
-                            break;
                         case "32":
-                            attributes.addAttribute (StyleConstants.Foreground, Color.green);
-                            break;
                         case "33":
-                            attributes.addAttribute (StyleConstants.Foreground, yellow80);
-                            break;
                         case "34":
-                            attributes.addAttribute (StyleConstants.Foreground, Color.blue);
-                            break;
                         case "35":
-                            attributes.addAttribute (StyleConstants.Foreground, Color.magenta);
-                            break;
                         case "36":
-                            attributes.addAttribute (StyleConstants.Foreground, Color.cyan);
-                            break;
                         case "37":
-                            attributes.addAttribute (StyleConstants.Foreground, Color.white);
+                            attributes.addAttribute (StyleConstants.Foreground, standard[Integer.valueOf (code) - 30]);
                             break;
                         case "38":
                             i++;
@@ -181,28 +162,14 @@ public class TextPaneANSI extends JTextPane
                             attributes.removeAttribute (StyleConstants.Foreground);
                             break;
                         case "40":
-                            attributes.addAttribute (StyleConstants.Background, Color.black);
-                            break;
                         case "41":
-                            attributes.addAttribute (StyleConstants.Background, Color.red);
-                            break;
                         case "42":
-                            attributes.addAttribute (StyleConstants.Background, Color.green);
-                            break;
                         case "43":
-                            attributes.addAttribute (StyleConstants.Background, Color.yellow);
-                            break;
                         case "44":
-                            attributes.addAttribute (StyleConstants.Background, Color.blue);
-                            break;
                         case "45":
-                            attributes.addAttribute (StyleConstants.Background, Color.magenta);
-                            break;
                         case "46":
-                            attributes.addAttribute (StyleConstants.Background, Color.cyan);
-                            break;
                         case "47":
-                            attributes.addAttribute (StyleConstants.Background, Color.white);
+                            attributes.addAttribute (StyleConstants.Background, standard[Integer.valueOf (code) - 40]);
                             break;
                         case "48":
                             i++;
@@ -222,6 +189,26 @@ public class TextPaneANSI extends JTextPane
                             break;
                         case "49":
                             attributes.removeAttribute (StyleConstants.Background);
+                            break;
+                        case "90":
+                        case "91":
+                        case "92":
+                        case "93":
+                        case "94":
+                        case "95":
+                        case "96":
+                        case "97":
+                            attributes.addAttribute (StyleConstants.Foreground, standard[Integer.valueOf (code) - 90 + 8]);  // +8 for "bright" values
+                            break;
+                        case "100":
+                        case "101":
+                        case "102":
+                        case "103":
+                        case "104":
+                        case "105":
+                        case "106":
+                        case "107":
+                            attributes.addAttribute (StyleConstants.Background, standard[Integer.valueOf (code) - 100 + 8]);
                             break;
                     }
                 }
@@ -249,7 +236,11 @@ public class TextPaneANSI extends JTextPane
     {
         int c = Integer.valueOf (code);
         if (c < 16) return standard[c];
-        if (c >= 232) return Color.getHSBColor (0, 0, (c - 232) / 32f);
+        if (c >= 232)
+        {
+            c = (int) Math.round ((c - 231) * 10.2);
+            return new Color (c, c, c);
+        }
 
         c -= 16;
         int r = c / 36;
