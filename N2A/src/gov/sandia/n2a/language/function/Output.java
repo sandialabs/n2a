@@ -303,15 +303,7 @@ public class Output extends Function
                     {
                         out.print ("\t");
                         String h = headers[i];
-                        if (h.contains ("\t")  ||  h.contains (" ")  ||  h.contains (",")  ||  h.contains ("\""))  // Delimiters are forbidden inside naked headers, so quote.
-                        {
-                            h = h.replaceAll ("\"", "\"\"");  // Replace " with "". At least MS Excel is known to convert "" back to " on reading a CSV.
-                            out.print ("\"" + h + "\"");
-                        }
-                        else
-                        {
-                            out.print (h);
-                        }
+                        out.print (escape (h));
                     }
                     out.println ();
                 }
@@ -330,6 +322,21 @@ public class Output extends Function
             out.println ();
 
             traceReceived = false;
+        }
+
+        /**
+            If a string contains forbidden characters, convert it to quoted form.
+            Any character than can be used as a column separator (space, tab, comma) is forbidden.
+            The double-quote character is also forbidden, since it is used to quote text.
+        **/
+        public static String escape (String value)
+        {
+            if (value.contains ("\t")  ||  value.contains (" ")  ||  value.contains (",")  ||  value.contains ("\""))
+            {
+                value = value.replaceAll ("\"", "\"\"");  // Replace " with "". At least MS Excel is known to convert "" back to " on reading a CSV.
+                return "\"" + value + "\"";
+            }
+            return value;
         }
     }
 

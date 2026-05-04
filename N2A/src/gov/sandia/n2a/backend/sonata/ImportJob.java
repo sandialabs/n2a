@@ -29,6 +29,8 @@ import gov.sandia.n2a.db.MCombo;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.db.MPartRepo;
+import gov.sandia.n2a.language.UnitValue;
+import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Table;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.plugins.ExtensionPoint;
@@ -392,7 +394,6 @@ public class ImportJob
         // Fold models with the same structure.
         for (MNode population : collection)
         {
-            System.err.println ("population: " + population.key ());
             // Collate all models. This ensures that comparisons are on actual model structure,
             // not just the collection of local overrides.
             Map<String,MNode> collated = new HashMap<String,MNode> ();
@@ -406,7 +407,6 @@ public class ImportJob
                 MNode  source   = models.child (name);  // We're only interested in new models that are part of this import.
                 if (source == null) continue;
                 collated.put (name, new MPartRepo (source, repo));
-                System.err.println ("  collated: " + name);
             }
 
             for (MNode model_template1 : population)
@@ -427,7 +427,6 @@ public class ImportJob
                     // This involves n^2 key compares, but only n^2/2 model compares.
                     String key2 = model_template2.key ();
                     if (MNode.compare (key2, key1) <= 0) continue;
-                    System.err.println ("  comparing: " + key1 + " : " + key2);
 
                     pieces          = key2.split (":", 2);
                     if (pieces.length < 2) continue;
@@ -436,7 +435,6 @@ public class ImportJob
                     if (collated2 == null) continue;
                     if (! collated2.structureEquals (collated1)) continue;
                     MNode structure2 = model_template2.child ("");
-                    System.err.println ("  got both structures");
 
                     // Compare values.
                     MNode diff1 = new MVolatile ();
@@ -446,13 +444,19 @@ public class ImportJob
                     diff2.merge        (collated2);
                     diff2.uniqueValues (collated1);
 
+                    // Check for constants that differ between structure1 and structure2.
+                    MNode diffC = new MVolatile ();
+                    diffC.merge   (structure2);  // copy of structure2
+                    diffC.changes (structure1);  // diffC nodes are defined only when structure1 is a constant (defined) and different that structure2
+                    diff1.merge   (diffC);       // Augment diff1 with constants from structure1. The code below will fill in the corresponding value in diff2, the distribute it to all node types.
+
                     // Update structure trees.
                     diff1.visit (new Visitor ()
                     {
-                        public boolean visit (MNode node)
+                        public boolean visit (MNode node1)
                         {
-                            String key       = node.key ();
-                            String keypath[] = node.keyPath ();
+                            String key       = node1.key ();
+                            String keypath[] = node1.keyPath ();
 
                             if (key.equals ("$meta"))  // Don't represent any differences in metadata. TODO: could something like "poll" be important?
                             {
@@ -461,32 +465,30 @@ public class ImportJob
                                 return false;
                             }
                             // TODO: Should we also try to detect equations, as opposed to parameters? This would indicate that the models should not be merged.
-                            if (! node.data ()) return true;  // Skip inner nodes. Note that it could be undefined only in collated1, in which case we would still want to process the value from collated2. However, this case is unlikely.
+                            if (! node1.data ()) return true;  // Skip inner nodes. Note that it could be undefined only in collated1, in which case we would still want to process the value from collated2. However, this case is unlikely.
 
-                            String value1 = node.get ();
-                            String value2 = diff2.get (keypath);
+                            MNode node2 = diff2.child (keypath);
+                            if (node2 == null) node2 = diff2.set (null, keypath);  // Probably because diff1 gained a node from a constant in structure1 that didn't match structure2. This will get resolved below.
                             boolean isString = false;
                             if (structure1.data (keypath))  // node has an associated constant in structure1
                             {
-                                value1 = structure1.get (keypath);  // Constant overrides model value.
-                                diff1.set (value1);
+                                node1.set (structure1.get (keypath));  // Constant overrides model value.
                                 if (structure1.child (keypath).getFlag ("$tring")) isString = true;
                             }
                             if (structure2.data (keypath))  // node has an associated constant in structure2
                             {
-                                value2 = structure2.get (keypath);
-                                diff2.set (value2);
+                                node2.set (structure2.get (keypath));
                                 if (structure2.child (keypath).getFlag ("$tring")) isString = true;
                             }
                             if (! isString)
                             {
-                                try {Double.valueOf (value1);}
-                                catch (NumberFormatException e) {isString = true;}
-                                try {Double.valueOf (value2);}
-                                catch (NumberFormatException e) {isString = true;}
+                                // This is coming from a difference in models, so there may be units with the numbers.
+                                // Need to convert units.
+                                if (checkString (node1)) isString = true;
+                                if (checkString (node2)) isString = true;
                             }
                             MNode snode = structure1.set (null, keypath);  // Attribute should no longer be constant, since it varies between model_template1 and 2.
-                            if (isString) snode.set ("", "$tring");
+                            if (isString) snode.set (null, "$tring");
 
                             return true;
                         }
@@ -539,6 +541,17 @@ public class ImportJob
         String result = H.getString (row, column).trim ();
         if (result.equals ("NULL")) return "";
         return result;
+    }
+
+    public boolean checkString (MNode node)
+    {
+        String value = node.get ().trim ();
+        if (UnitValue.findUnits (value) < value.length ()) return true;  // Some part of value does not match a number with units, so must be treated as string.
+
+        // TODO: Number, possibly with units, so consider conversion.
+        //UnitValue uv = new UnitValue (value);
+
+        return false;
     }
 
     /**
@@ -1265,7 +1278,6 @@ public class ImportJob
                                         part.set ("\"edges/" + populationName + "/" + group_id + "\"", "groupPath");
                                     }
 
-                                    System.out.println ("edge processPart: " + populationName + " |" + raw_model_template + "|");
                                     importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
                                 }
 
@@ -1394,26 +1406,49 @@ public class ImportJob
                 {
                     // Write header
                     MNode partAttributes = model_template.childOrEmpty ("");
-                    boolean first = true;
-                    for (MNode a : partAttributes)
+                    partAttributes.visit (new Visitor ()
                     {
-                        if (! first) writer.write (" ");
-                        first = false;
-                        writer.write (a.key ());
-                    }
+                        boolean first = true;
+                        public boolean visit (MNode node)
+                        {
+                            boolean isString = node.getFlag ("$tring");
+                            if (! isString  &&  ! node.isEmpty ()) return true;  // Don't output inner nodes, but do descend.
+                            if (node.data ()) return false;  // Node is constant, so it has already been embedded in model.
+                            try
+                            {
+                                if (! first) writer.write (" ");
+                                first = false;
+                                writer.write (node.keyPathString (partAttributes));
+                            }
+                            catch (IOException e) {}  // If the file goes bad, we will find out soon enough below.
+                            return false;  // This should be a leaf node, so don't descend. (Prevents us from visiting $tring node.)
+                        }
+                    });
                     writer.write ("\n");
 
                     // Write data
                     for (MNode t : model_template)
                     {
                         if (t == partAttributes) continue;
-                        first = true;
-                        for (MNode a : partAttributes)
+                        partAttributes.visit (new Visitor ()
                         {
-                            if (! first) writer.write (" ");
-                            first = false;
-                            writer.write (t.get (a.key ()));
-                        }
+                            boolean first = true;
+                            public boolean visit (MNode node)
+                            {
+                                boolean isString = node.getFlag ("$tring");
+                                if (! isString  &&  ! node.isEmpty ()) return true;
+                                if (node.data ()) return false;
+                                try
+                                {
+                                    if (! first) writer.write (" ");
+                                    first = false;
+                                    String keyPath[] = node.keyPath (partAttributes);
+                                    writer.write (Output.Holder.escape (t.get (keyPath)));
+                                }
+                                catch (IOException e) {}
+                                return false;
+                            }
+                        });
                         writer.write ("\n");
                     }
                 }
