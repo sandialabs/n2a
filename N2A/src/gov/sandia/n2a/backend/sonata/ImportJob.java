@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import javax.measure.Unit;
+
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.db.JSON;
 import gov.sandia.n2a.db.MCombo;
@@ -462,6 +464,9 @@ public class ImportJob
                 if (collated1 == null) continue;
                 MNode  structure1 = model_template1.child ("structure");
 
+                ImportSONATApart importer = backends.get (model_template1.get ("schema"));
+                String unitPath[] = importer.unitPath ();
+
                 for (MNode model_template2 : population)
                 {
                     // We only want to compare unique combinations of models, so need to ensure no backtracking.
@@ -523,8 +528,8 @@ public class ImportJob
                             {
                                 // This is coming from a difference in models, so there may be units with the numbers.
                                 // Need to convert units.
-                                if (checkString (node1)) isString = true;
-                                if (checkString (node2)) isString = true;
+                                if (checkString (unitPath, collated1, node1)) isString = true;
+                                if (checkString (unitPath, collated1, node2)) isString = true;
                             }
                             MNode snode = structure1.set (null, keypath);  // Attribute should no longer be constant, since it varies between model_template1 and 2.
                             if (isString) snode.set (null, "$tring");
@@ -583,13 +588,33 @@ public class ImportJob
         return result;
     }
 
-    public boolean checkString (MNode node)
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public boolean checkString (String[] unitPath, MNode collated, MNode node)
     {
         String value = node.get ().trim ();
-        if (UnitValue.findUnits (value) < value.length ()) return true;  // Some part of value does not match a number with units, so must be treated as string.
+        int pos = UnitValue.findUnits (value);
+        if (pos == 0) return true;  // Does not start with a number, so definitely a string.
+        if (pos == value.length ()) return false;  // All number, so no further work is required.
 
-        // TODO: Number, possibly with units, so consider conversion.
-        //UnitValue uv = new UnitValue (value);
+        // "value" is a number followed a string that might be a unit.
+        UnitValue uv = new UnitValue (value);
+        if (uv.unit == null) return true;  // The suffix is not a unit, so treat as string.
+
+        // "value" is a number with units. Convert to a unit-less value.
+        Unit<?> targetUnit = null;
+        String targetUnitString = "";
+        if (unitPath != null)
+        {
+            String keyPath[] = node.keyPath ();
+            targetUnitString = collated.child (keyPath).childOrEmpty ("$meta", "backend").get (unitPath);
+        }
+        if (! targetUnitString.isBlank ())
+        {
+            try {targetUnit = UnitValue.UCUM.parse (targetUnitString);}
+            catch (Exception e) {}
+        }
+        if (targetUnit == null) targetUnit = uv.unit.getSystemUnit ();  // If no unit specified (or malformed) then convert to base SI.
+        node.set (uv.unit.getConverterTo ((Unit) targetUnit).convert (uv.value));
 
         return false;
     }

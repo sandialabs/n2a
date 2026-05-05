@@ -53,6 +53,12 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
     }
 
     @Override
+    public String[] unitPath ()
+    {
+        return new String[] {"nest", "unit"};
+    }
+
+    @Override
     public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, String partName, String population, String template, List<String> instanceAttributes)
     {
         if (PluginNEST.partMap == null) PluginNEST.partMap = new PartMap ("nest");

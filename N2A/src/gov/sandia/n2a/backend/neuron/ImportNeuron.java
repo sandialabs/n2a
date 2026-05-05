@@ -41,6 +41,12 @@ public class ImportNeuron extends ImportModel implements ImportSONATApart
     }
 
     @Override
+    public String[] unitPath ()
+    {
+        return new String[] {"neuron", "unit"};
+    }
+
+    @Override
     public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, String partName, String population, String template, List<String> instanceAttributes)
     {
         if (PluginNeuron.partMap == null) PluginNeuron.partMap = new PartMap ("neuron");

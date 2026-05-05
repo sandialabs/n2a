@@ -27,6 +27,16 @@ public interface ImportSONATApart
     }
 
     /**
+        Gives the path from a parameter to metadata specifying units that this backend requires.
+        If this backend does not have required units, then the return value is null.
+        {"$meta", "backend"} is assumed, so these should not be included in the path.
+    **/
+    public default String[] unitPath ()
+    {
+        return null;
+    }
+
+    /**
         Adds a part to main model.
 
         @param job A reference to the complete ImportJob object, in case we need something from it.
