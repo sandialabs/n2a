@@ -15,12 +15,11 @@ public interface ImportSONATApart
 {
     /**
         Ensures that the given model template name is in the DB, ready for use.
-        @param model_template The template name itself, without schema identifier.
-        @return A suitable part name, when combined with other strings that
-        distinguish population and group. This will either be the actual DB key,
-        or a name that the backend knows how to map to a DB part. In practice,
-        this name will be passed through the backend's PartMap, and will either
-        get mapped or treated as neutral.
+        @param model_template The template name without schema identifier.
+        @return A suitable external name for the part, usually the same as model_template.
+        The importer will later map this to an internal part name.
+        In the case of a newly-imported part, this will also be the internal name, which
+        the part map will treat as neutral.
     **/
     public default String prepare (ImportJob job, String model_template)
     {
@@ -30,13 +29,12 @@ public interface ImportSONATApart
     /**
         Adds a part to main model.
 
-        @param job A reference to the complete job object, in case we need something from it.
+        @param job A reference to the complete ImportJob object, in case we need something from it.
         @param partName The subpart that this function is creating/filling in.
-        @param population Name of SONATA population.
-        @param model_template Raw name. May still have schema name. Used to look up config entries.
-        After the schema name is stripped, this should be useful as a backend-specific external part name.
+        @param population Name of SONATA population, used as key into types structure.
+        @param template Internal name of model, used as key into types structure. External SONATA model_template name can be retrieved from sub-key "template".
         @param instanceAttributes A flat collection of attribute names found in the SONATA "group" associated
         with this part. These values vary with instance.
     **/
-    public void processPart (ImportJob job, String partName, String population, String model_template, List<String> instanceAttributes);
+    public void processPart (ImportJob job, String partName, String population, String template, List<String> instanceAttributes);
 }

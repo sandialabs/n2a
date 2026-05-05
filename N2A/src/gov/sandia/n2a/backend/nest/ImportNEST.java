@@ -24,7 +24,6 @@ import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.plugins.extpoints.Backend;
-import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.plugins.extpoints.ImportModel;
 
 public class ImportNEST extends ImportModel implements ImportSONATApart
@@ -54,7 +53,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
     }
 
     @Override
-    public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, String partName, String population, String model_template, List<String> instanceAttributes)
+    public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, String partName, String population, String template, List<String> instanceAttributes)
     {
         if (PluginNEST.partMap == null) PluginNEST.partMap = new PartMap ("nest");
 
@@ -62,10 +61,6 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
         String B = part.get ("B");
         MNode Bpart = job.model.child (B);
         boolean isSynapse =  Bpart != null;
-
-        int pos = model_template.indexOf (':');
-        String externalPartName = pos < 0 ? model_template : model_template.substring (pos + 1);
-        if (externalPartName.isBlank ()) throw new AbortRun (population + " model_template is missing.");
 
         if (isSynapse)
         {
@@ -77,22 +72,23 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
 
             NameMap map = PluginNEST.partMap.exportMap (synapseClass); // synapseClass is an internal name, so using exportMap(). Synapse names are neutral because NEST doesn't really describe them separately. However, parameter names are mapped.
             MNode basePart = new MPartRepo (AppData.docs.child ("models", synapseClass));
-            part.set (synapseClass,   "$inherit");
-            part.set (population,     "$meta", "backend", "sonata", "population");     // Currently, population is not directly represented in the model structure, just in the part name. Need this info for synapses.
-            part.set (model_template, "$meta", "backend", "sonata", "model_template"); // ditto
+            part.set (synapseClass, "$inherit");
+            part.set (population,   "$meta", "backend", "sonata", "population");     // Currently, population is not directly represented in the model structure, just in the part name. Need this info for synapses.
+            part.set (template,     "$meta", "backend", "sonata", "model_template"); // ditto
 
             // Direct attributes
-            MNode partAttributes = job.edgeTypes.child (population, model_template, "");
+            MNode partAttributes = job.edgeTypes.child (population, template, "structure");
             partAttributes.visit (new Visitor ()
             {
                 public boolean visit (MNode node)
                 {
                     boolean isString = node.getFlag ("$tring");
                     if (! isString  &&  ! node.isEmpty ()) return true;  // Descend past interior nodes. Only leaves contain attributes.
+                    if (node.key ().equals ("edge_type_id")) return false;  // Skip type_id. It is added directly by the main import job.
 
                     String keyPath      = node.keyPathString (partAttributes);
                     String internalName = map.importName (keyPath);
-                    applyAttribute (node, keyPath, internalName, "edge_type_id", false, false, basePart, part);
+                    applyAttribute (node, keyPath, internalName, "edge_type_id", false, basePart, part);
                     return false;  // Don't descend past a leaf node. The only thing to be found there is "$tring".
                 }
             });
@@ -101,7 +97,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
             boolean receptor_type  = part.child ("receptor_type") != null;
             String Bpopulation     = Bpart.get ("$meta", "backend", "sonata", "population");
             String Bmodel_template = Bpart.get ("$meta", "backend", "sonata", "model_template");
-            MNode Battributes = job.nodeTypes.child (Bpopulation, Bmodel_template, "");
+            MNode Battributes = job.nodeTypes.child (Bpopulation, Bmodel_template, "structure");
             for (MNode b : BbasePart.childOrEmpty ("$meta", "backend", "nest", "ports", synapseClass))  // Iterate through the attributes associated with this port.
             {
                 String Bkey       = b.key ();
@@ -114,7 +110,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
                 Bkey = "\"" + Bkey;
                 if (receptor_type) Bkey += ".\"+(receptor_type-1)";
                 else               Bkey += "\"";
-                applyAttribute (Battribute, Bkey, internalName, "node_type_id", false, true, basePart, part);
+                applyAttribute (Battribute, Bkey, internalName, "node_type_id", true, basePart, part);
             }
 
             // Instance values
@@ -145,11 +141,11 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
         }
         else  // neuron
         {
-            NameMap map = PluginNEST.partMap.importMap (externalPartName);
+            NameMap map = PluginNEST.partMap.importMap (template);
             MNode basePart = new MPartRepo (AppData.docs.child ("models", map.internalPart));
             part.set (map.internalPart, "$inherit");
             part.set (population,       "$meta", "backend", "sonata", "population");     // Currently, population is not directly represented in the model structure, just in the part name. Need this info for synapses.
-            part.set (model_template,   "$meta", "backend", "sonata", "model_template"); // ditto
+            part.set (template,         "$meta", "backend", "sonata", "model_template"); // ditto
 
             // Build mapping from attribute to child model.
             // (This work gets repeated every time a given part is used. However, it should not present a big cost.)
@@ -174,7 +170,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
             }
 
             // Apply parameter table and constants
-            MNode partAttributes = job.nodeTypes.child (population, model_template, "");
+            MNode partAttributes = job.nodeTypes.child (population, template, "structure");
             partAttributes.visit (new Visitor ()
             {
                 public boolean visit (MNode node)
@@ -182,6 +178,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
                     boolean isString = node.getFlag ("$tring");
                     if (! isString  &&  ! node.isEmpty ()) return true;
                     String key     = node.key ();
+                    if (key.equals ("node_type_id")) return false;
                     String keyPath = node.keyPathString (partAttributes);
 
                     // Handle children
@@ -214,7 +211,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
                     }
 
                     String internalName = m.importName (keyPath);
-                    applyAttribute (node, columnName, internalName, "node_type_id", isCollection, false, b, p);
+                    applyAttribute (node, columnName, internalName, "node_type_id", false, b, p);
                     return false;  // Don't descend past a leaf node. The only thing to be found there is "$tring".
                 }
             });
@@ -246,7 +243,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
         }
     }
 
-    public void applyAttribute (MNode attribute, String columnName, String internalName, String type_id, boolean subpart, boolean indirect, MNode basePart, MNode part)
+    public void applyAttribute (MNode attribute, String columnName, String internalName, String type_id, boolean indirect, MNode basePart, MNode part)
     {
         boolean isString = attribute.getFlag ("$tring");
 
@@ -273,14 +270,6 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
         }
         else  // Value is undefined, so emit table lookup.
         {
-            if (! indirect  &&  ! subpart)
-            {
-                String population     = part.get ("$meta", "backend", "sonata", "population");
-                String model_template = part.get ("$meta", "backend", "sonata", "model_template");
-                String modelName = model_template.split (":", 2)[1];
-                part.set ("dir+\"/n2a/" + population + " " + modelName + " types.csv\"", "typeFile");
-            }
-
             String table = "table(";
             if (indirect) table += "B.typeFile, B." + type_id + ", "   + columnName;
             else          table += "typeFile, "     + type_id + ", \"" + columnName + "\"";

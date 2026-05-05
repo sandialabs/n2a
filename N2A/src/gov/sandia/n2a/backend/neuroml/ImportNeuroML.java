@@ -97,22 +97,22 @@ public class ImportNeuroML extends ImportModel implements ImportSONATApart
         // We blindly assume that Allen-assigned cell names are always unique in this DB.
         // That can be false if there are several different versions (say, cells at different GLIF levels).
         // To cope with that, we may need some systematic way to assign suffixes to distinguish different versions of the same model.
-        MNode existing = AppData.docs.child ("models", key);
-        if (existing == null)
+        if (AppData.docs.child ("models", key) == null)
         {
             cell.set ("SONATA", "$meta", "gui", "category");  // There could be a lot of cell types from the Allen atlas. Putting models in the SONATA group will reduce clutter in main list.
             // TODO: Allen models exported from NEURON currently don't have proper connections between 4 main compartments (soma, axon, dend, apic).
             // If connections are missing, and if there are 4 compartments with these names, then add basic connections.
             // Should be suitable for mapping to an SWC file. Individual connections should be contingent on the existence of a line in the SWC.
             job.models.set (cell, key);  // Auxiliary models will be added at end of import.
+            // TODO: What about our own auxiliary models? They should also be appended, if they exist.
         }
         return key;
     }
 
     @Override
-    public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, String partName, String population, String model_template, List<String> instanceAttributes)
+    public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, String partName, String population, String template, List<String> instanceAttributes)
     {
         if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMapNeuroML ();
-        ImportSONATA.processPart ("lems", PluginNeuroML.partMap, job, partName, population, model_template, instanceAttributes);
+        ImportSONATA.processPart ("lems", PluginNeuroML.partMap, job, partName, population, template, instanceAttributes);
     }
 }

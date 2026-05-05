@@ -55,12 +55,30 @@ public class ImportJob
     public    Path                         n2aDir;                                                  // Directory under working directory where we store our own resources (results of conversion).
     protected JSON                         json          = new JSON ();                             // We read a lot of JSON files.
     public    MNode                        config        = new MVolatile ();                        // The top-level config file for this SONATA model.
-    public    MNode                        nodeTypes     = new MVolatile ();                        // {node name}/{model template}/{type id}/tree
-    public    MNode                        edgeTypes     = new MVolatile ();                        // {edge name}/{model template}/{type id}/tree
     protected Map<String,Map<Long,String>> nodeTypeIndex = new HashMap<String,Map<Long,String>> (); // from (population, node_type_id) to model_template
     protected Map<String,Map<Long,String>> edgeTypeIndex = new HashMap<String,Map<Long,String>> (); // from (population, edge_type_id) to model_template
     protected String                       target_simulator;
     protected Map<String,ImportSONATApart> backends      = new HashMap<String,ImportSONATApart> ();
+
+    /*
+        Structure for nodeTypes and edgeTypes:
+        {population name}
+            {model template name} -- Key is the internal (imported) name of the model.
+                schema={model_template schema identifier, used to retrieve backend}
+                template={model_template name without schema, interpreted by backend}
+                structure
+                    arbitrary tree structure, matching the structure of model parameters
+                    inner nodes are always undefined
+                    leaf nodes are the union of parameters the appear in any "node type"
+                    leaf nodes are defined if constant across all node types, otherwise undefined
+                        "$tring" -- identifies that a leaf node should be handled as string rather than number
+                            Notice that effectively it is no longer a leaf node, but code specifically works around this.
+                types
+                    {type id}
+                        arbitrary tree structure, matching the structure of model parameters
+    */
+    public MNode nodeTypes = new MVolatile ();
+    public MNode edgeTypes = new MVolatile ();
 
     public static final long chunkSize = 1000000;  // Size for partial reads of table. Prevents memory depletion.
 
@@ -204,6 +222,7 @@ public class ImportJob
     public void collectTypes (MNode collection, Map<String,Map<Long,String>> index, String type, Path modelsDir) throws IOException
     {
         // Collect the types.
+        Map<String,String> templates = new HashMap<String,String> ();  // From raw model_template name to imported part name, if there is an import.
         for (MNode n : config.childOrEmpty ("networks", type + "s"))
         {
             Path typesPath = dir.resolve (n.get (type + "_types_file"));
@@ -213,6 +232,7 @@ public class ImportJob
             int index_type_id         = H.getColumnIndex (type + "_type_id");
             int index_model_template  = H.getColumnIndex ("model_template");
             int index_dynamics_params = H.getColumnIndex ("dynamics_params");
+            int index_model_type      = H.getColumnIndex ("model_type");
             int rows                  = H.rows ();
             int cols                  = H.columns ();
 
@@ -220,6 +240,7 @@ public class ImportJob
             String type_id         = "";
             String model_template  = "";
             String dynamics_params = "";
+            String model_type      = "";
 
             // Verify that "population" column is actually present. Fall back if it isn't.
             if (index_population < 0)
@@ -242,8 +263,59 @@ public class ImportJob
                 if (index_type_id         >= 0) type_id         = getString (H, r, index_type_id);
                 if (index_model_template  >= 0) model_template  = getString (H, r, index_model_template);
                 if (index_dynamics_params >= 0) dynamics_params = getString (H, r, index_dynamics_params);
+                if (index_model_type      >= 0) model_type      = getString (H, r, index_model_type);
 
-                if (! model_template.contains (":")) model_template = target_simulator + ":" + model_template;
+                // Load dynamics_params
+                MNode params = new MVolatile ();
+                if (! dynamics_params.isEmpty ())
+                {
+                    Path modelPath = modelsDir.resolve (dynamics_params);
+                    try (BufferedReader reader = Files.newBufferedReader (modelPath))
+                    {
+                        json.read (params, reader);
+                    }
+                }
+
+                // Hack to work around older, poorly-constructed models.
+                if (model_template.isBlank ())
+                {
+                    String level_of_detail = params.get ("level_of_detail");
+                    if (level_of_detail.equals ("instanteneous")) level_of_detail = "instantaneous";  // Fix misspelling.
+                    if (level_of_detail.equals ("instantaneous"))
+                    {
+                        // This will be interpreted in the context of the target_simulator.
+                        // It should have a mapping to some synapse part.
+                        model_template = "instantaneous";
+                    }
+                    else if (! model_type.equals ("virtual"))
+                    {
+                        model_template = level_of_detail;
+                        if (model_template.isBlank ()) throw new AbortRun (population + " model_template is missing.");
+                    }
+                    // else The entire population is (presumably) virtual. The part is named after the population, without appending model_template.
+                }
+
+                // Convert model_template name to imported part name.
+                String schema       = target_simulator;
+                String externalName = model_template;
+                String pieces[] = model_template.split (":", 2);
+                if (pieces.length > 1)
+                {
+                    schema       = pieces[0];
+                    externalName = pieces[1];
+                }
+                if (templates.containsKey (model_template))
+                {
+                    externalName = templates.get (model_template);
+                }
+                else
+                {
+                    // Import model_template items that reference model files rather than parameter files.
+                    ImportSONATApart importer = backends.get (schema);
+                    if (importer != null) externalName = importer.prepare (this, externalName);
+                    templates.put (model_template, externalName);
+                }
+                collection.set (schema, population, externalName, "schema");
 
                 Map<Long,String> populationIndex = index.get (population);
                 if (populationIndex == null)
@@ -251,7 +323,7 @@ public class ImportJob
                     populationIndex = new HashMap<Long,String> ();
                     index.put (population, populationIndex);
                 }
-                populationIndex.put (Long.valueOf (type_id), model_template);
+                populationIndex.put (Long.valueOf (type_id), externalName);
 
                 // Stash everything besides dynamics_params.
                 for (int c = 0; c < cols; c++)
@@ -259,17 +331,13 @@ public class ImportJob
                     if (c == index_population  ||  c == index_model_template  ||  c == index_dynamics_params) continue;
                     String key   = H.getString (0, c);
                     String value = H.getString (r, c);
-                    collection.set (value, population, model_template, type_id, key);
+                    collection.set (value, population, externalName, "types", type_id, key);
                 }
 
-                // Load dynamics_params
-                if (dynamics_params.isEmpty ()) continue;
-                Path modelPath = modelsDir.resolve (dynamics_params);
-                try (BufferedReader reader = Files.newBufferedReader (modelPath))
+                // Stash dynamics_params. These can override values set above.
+                if (! dynamics_params.isEmpty ())
                 {
-                    MNode params = new MVolatile ();
-                    json.read (params, reader);
-                    collection.childOrCreate (population, model_template, type_id).merge (params);
+                    collection.childOrCreate (population, externalName, "types", type_id).merge (params);
                 }
             }
         }
@@ -283,27 +351,44 @@ public class ImportJob
             }
         });
 
-        // Create union of parameter names and identify constants.
-        Map<String,String> templates = new HashMap<String,String> ();  // From raw model_template name to imported part name, if there is an import.
+        // Count references to newly-imported models.
+        // It's simpler to do this as a separate step, because we need to know how many populations contain the model.
         for (MNode population : collection)
         {
             for (MNode model_template : population)
             {
-                templates.put (model_template.key (), "");  // Part name will be filled in later. This just collects all the templates.
+                // Keep a separate count of references to imported parts, rather than storing the count in the part itself.
+                // This simplifies the task of comparing structure below.
+                String partName = model_template.key ();
+                if (models.child (partName) != null)
+                {
+                    Integer count = modelCount.get (partName);
+                    if (count == null) count = 0;
+                    modelCount.put (partName, count + 1);
+                }
+            }
+        }
+
+        // Create union of parameter names and identify constants.
+        for (MNode population : collection)
+        {
+            for (MNode model_template : population)
+            {
+                MNode node_types = model_template.child ("types");
 
                 // Step 0 -- Expand path-name attributes
                 String prefixMorphology        = config.get ("components", "morphologies_dir");
                 String prefixElectrophysiology = config.get ("components", "");  // TODO: What is the right key? Found "fit" files in shared_components/biophysical_neuron_templates/json
-                for (MNode group : model_template)
+                for (MNode nt : node_types)
                 {
-                    MNode attribute = group.child ("morphology");
+                    MNode attribute = nt.child ("morphology");
                     if (attribute != null  &&  ! prefixMorphology.isBlank ())
                     {
                         String value = attribute.get ();
                         if (! value.isBlank ()) attribute.set (prefixMorphology + "/" + value);
                     }
 
-                    attribute = group.child ("electrophysiology");
+                    attribute = nt.child ("electrophysiology");
                     if (attribute != null  &&  ! prefixElectrophysiology.isBlank ())
                     {
                         String value = attribute.get ();
@@ -312,28 +397,28 @@ public class ImportJob
                 }
 
                 // Step 1 -- Create a union of model attributes.
-                MNode result = new MVolatile ();
-                for (MNode m : model_template) result.merge (m);
-                result.clear ("model_type");  // Don't include this column in attributes applied to parts. Other key attributes (such as model_template itself) are removed above, but this is left in individual trees for ease of access.
+                MNode structure = model_template.childOrCreate ("structure");
+                for (MNode nt : node_types) structure.merge (nt);
+                structure.clear ("model_type");  // Don't include this column in attributes applied to parts. Other key attributes (such as model_template itself) are removed above, but this is left in individual trees for ease of access.
 
                 // Step 2 -- Find attributes that are constant.
-                result.visit (new Visitor ()
+                structure.visit (new Visitor ()
                 {
                     public boolean visit (MNode node)
                     {
-                        if (node == result) return true;  // Skip root.
+                        if (node == structure) return true;  // Skip root.
                         if (! node.data ()) return true;  // Skip interior nodes. (When importing JSON, interior nodes have undefined value.)
 
-                        String keypath[] = node.keyPath ();
-                        String constant = node.get ();
+                        String keypath[] = node.keyPath (structure);
+                        String constant  = node.get ();
 
                         boolean isString = false;
                         try {Double.valueOf (constant);}
                         catch (NumberFormatException e) {isString = true;}
 
-                        for (MNode m : model_template)
+                        for (MNode nt : node_types)
                         {
-                            String value = m.get (keypath);
+                            String value = nt.get (keypath);
                             if (! value.equals (constant))
                             {
                                 node.set (null);  // Set value to undefined. Indicates that this value varies from type to type.
@@ -351,43 +436,6 @@ public class ImportJob
                         return true;
                     }
                 });
-
-                model_template.set (result, "");
-            }
-        }
-
-        // Import model_template items that reference model files rather than parameter files.
-        // Convert model_template name to imported part name.
-        for (Entry<String,String> t : templates.entrySet ())
-        {
-            String key = t.getKey ();
-            String pieces[] = key.split (":", 2);
-            String schema         = pieces[0];
-            String model_template = pieces[1];
-            ImportSONATApart importer = backends.get (schema);
-            String partName = model_template;
-            if (importer != null) partName = importer.prepare (this, model_template);
-            t.setValue (schema + ":" + partName);
-            // Keep a separate count of references to imported parts, rather than storing the count in the part itself.
-            // This simplifies the task of comparing structure below.
-            if (models.child (partName) != null)
-            {
-                Integer count = modelCount.get (partName);
-                if (count == null) count = 0;
-                modelCount.put (partName, count + 1);
-            }
-        }
-
-        // Apply name re-maps to model_templates.
-        for (MNode population : collection)
-        {
-            for (MNode model_template : population)
-            {
-                String key = model_template.key ();
-                String mappedName = templates.get (key);
-                // This assumes that mappedName never appears in the population's original model_template names.
-                // Otherwise, another part will get overwritten.
-                if (! mappedName.isBlank ()) population.move (key, mappedName);
             }
         }
 
@@ -400,25 +448,19 @@ public class ImportJob
             MCombo repo = new MCombo (null, models, AppData.docs.child ("models"));
             for (MNode model_template : population)
             {
-                String key      = model_template.key ();
-                String pieces[] = key.split (":", 2);
-                if (pieces.length < 2) continue;
-                String name     = pieces[1];
-                MNode  source   = models.child (name);  // We're only interested in new models that are part of this import.
+                String partName = model_template.key ();
+                MNode  source   = models.child (partName);  // We're only interested in new models that are part of this import.
                 if (source == null) continue;
-                collated.put (name, new MPartRepo (source, repo));
+                collated.put (partName, new MPartRepo (source, repo));
             }
 
             for (MNode model_template1 : population)
             {
                 if (model_template1 == null) continue;  // Because a node could have been removed after this iteration started.
-                String key1     = model_template1.key ();
-                String pieces[] = key1.split (":", 2);
-                if (pieces.length < 2) continue;
-                String name1    = pieces[1];
-                MNode collated1 = collated.get (name1);
+                String key1       = model_template1.key ();
+                MNode  collated1  = collated.get (key1);
                 if (collated1 == null) continue;
-                MNode structure1 = model_template1.child ("");
+                MNode  structure1 = model_template1.child ("structure");
 
                 for (MNode model_template2 : population)
                 {
@@ -428,13 +470,10 @@ public class ImportJob
                     String key2 = model_template2.key ();
                     if (MNode.compare (key2, key1) <= 0) continue;
 
-                    pieces          = key2.split (":", 2);
-                    if (pieces.length < 2) continue;
-                    String name2    = pieces[1];
-                    MNode collated2 = collated.get (name2);
+                    MNode collated2  = collated.get (key2);
                     if (collated2 == null) continue;
                     if (! collated2.structureEquals (collated1)) continue;
-                    MNode structure2 = model_template2.child ("");
+                    MNode structure2 = model_template2.child ("structure");
 
                     // Compare values.
                     MNode diff1 = new MVolatile ();
@@ -495,25 +534,27 @@ public class ImportJob
                     });
 
                     // Update node_type trees for model_template1.
-                    for (MNode n : model_template1)
+                    MNode types1 = model_template1.child ("types");
+                    for (MNode n : types1)
                     {
                         if (n.key ().isEmpty ()) continue;  // Skip the structure node.
                         n.mergeUnder (diff1);
                     }
 
                     // Update node_type trees for model_template2, and merge into model_template1.
-                    for (MNode n : model_template2)
+                    MNode types2 = model_template2.child ("types");
+                    for (MNode n : types2)
                     {
                         String nkey = n.key ();
                         if (nkey.isEmpty ()) continue;
                         n.mergeUnder (diff2);
-                        model_template1.set (n, nkey);
+                        types1.set (n, nkey);  // Copy node type from model_template2 to 1.
                     }
 
                     // Delete model_template2
                     population.clear (key2);
-                    Integer count = modelCount.get (name2);
-                    modelCount.put (name2, count - 1);
+                    Integer count = modelCount.get (key2);  // This must exist, because only newly-created models reach this point.
+                    modelCount.put (key2, count - 1);
                 }
             }
         }
@@ -525,10 +566,9 @@ public class ImportJob
             for (MNode model_template : population)
             {
                 String templateName = model_template.key ();
-                for (MNode n : model_template)
+                for (MNode n : model_template.child ("types"))
                 {
                     String key = n.key ();
-                    if (key.isEmpty ()) continue;  // Skip the structure node.
                     Long node_type_id = Long.valueOf (key);
                     populationIndex.put (node_type_id, templateName);
                 }
@@ -854,45 +894,44 @@ public class ImportJob
                         part.set ("dir+\"/" + nodes_file + "\"", "hdfFile");
 
                         MNode modelTree = nodeTypes.child (populationName).iterator ().next ();  // Retrieve first (and only) model.
-                        boolean multiType = modelTree.size () > 2;  // Includes key "", which holds the merged attributes.
-                        GroupAttributes groupAttributes = null;
+                        MNode modelTypes = modelTree.child ("types");
+                        boolean multiType = modelTypes.size () > 1;
+                        GroupAttributes attributes = null;
                         if (! attributeGroups.isEmpty ())
                         {
-                            groupAttributes = attributeGroups.values ().iterator ().next ();  // Retrieve the first (and only) attribute group.
-                            part.set ("\"nodes/" + populationName + "/" + groupAttributes.id + "\"", "groupPath");
+                            attributes = attributeGroups.values ().iterator ().next ();  // Retrieve the first (and only) attribute group.
+                            part.set ("\"nodes/" + populationName + "/" + attributes.id + "\"", "groupPath");
                         }
 
                         // We expect all model_types under the same model_template to match.
                         // However, this is not guaranteed by the SONATA specification.
-                        String model_type = modelTree.iterator ().next ().get ("model_type");  // Retrieve first type row under the current model template, and get its model_type field.
+                        String model_type = modelTypes.iterator ().next ().get ("model_type");  // Retrieve first type row under the current model template, and get its model_type field.
                         if (model_type.equals ("virtual"))
                         {
                             // Handle input population
                             // model_template is probably the empty string ("").
-                            connectInput (part, populationName, count, groupAttributes);
+                            connectInput (part, populationName, count, attributes);
                         }
                         else
                         {
                             // Handle regular population
 
-                            String raw_model_template = modelTree.key ();
-                            String pieces[] = raw_model_template.split (":", 2);
-                            String schema         = pieces[0];
-                            String model_template = pieces[1];
+                            String template = modelTree.key ();
+                            String schema   = modelTree.get ("schema");
                             ImportSONATApart importer = backends.get (schema);
                             if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
 
-                            if (multiType)
+                            if (multiType)  // Parameters are not constant, so we must look them up.
                             {
                                 part.set ("table(hdfFile, $index, 0, hdf=\"nodes/" + populationName + "/node_type_id\")", "node_type_id");
-                                part.set ("dir+\"/n2a/" + populationName + " " + model_template + " types.csv\"",         "typeFile");
+                                part.set ("dir+\"/n2a/" + populationName + " types.csv\"",                                "typeFile");
                             }
 
                             List<String> groupColumnNames;  // The columns associated with the group.
-                            if (groupAttributes == null) groupColumnNames = new ArrayList<String> ();
-                            else                         groupColumnNames = groupAttributes.names;
+                            if (attributes == null) groupColumnNames = new ArrayList<String> ();
+                            else                    groupColumnNames = attributes.names;
 
-                            importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
+                            importer.processPart (this, partName, populationName, template, groupColumnNames);
                         }
                     }
                     else
@@ -946,20 +985,19 @@ public class ImportJob
                                 long node_group_id    = chunkGroup[ir];
                                 long node_group_index = chunkIndex[ir];
 
-                                String raw_model_template = populationTypeIndex.get (node_type_id);
-                                MNode modelTree = nodeTypes.child (populationName, raw_model_template);
-                                boolean multiType = modelTree.size () > 2;
+                                String templateName = populationTypeIndex.get (node_type_id);
+                                MNode modelTree = nodeTypes.child (populationName, templateName);
+                                MNode modelTypes = modelTree.child ("types");
+                                boolean multiType = modelTypes.size () > 1;
                                 GroupAttributes attributes = null;
                                 if (! attributeGroups.isEmpty ()) attributes = attributeGroups.get ((int) node_group_id);
 
-                                String pieces[] = raw_model_template.split (":", 2);
-                                String schema         = pieces[0];
-                                String model_template = pieces[1];
+                                String schema = modelTree.get ("schema");
                                 ImportSONATApart importer = backends.get (schema);
                                 if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
 
                                 String partName = populationName;
-                                if (multiTemplate) partName += " " + model_template;
+                                if (multiTemplate) partName += " " + templateName;
                                 if (multiGroup)    partName += " " + node_group_id;
                                 InstanceWriter iw = writers.get (partName);
                                 if (iw == null)
@@ -989,6 +1027,7 @@ public class ImportJob
                                     partToCode.put (partName, (short) codeToPart.size ());
                                     codeToPart.add (partName);
                                     part.set ("dir+\"/n2a/" + partName + " instances.csv\"", "instanceFile");
+                                    if (attributes != null) part.set ("\"nodes/" + populationName + "/" + attributes.id + "\"", "groupPath");
 
                                     String model_type = modelTree.get (node_type_id, "model_type");
                                     if (model_type.equals ("virtual"))
@@ -1001,15 +1040,15 @@ public class ImportJob
                                     {
                                         if (multiType)
                                         {
-                                            part.set ("table(instanceFile, $index, \"node_type_id\")",                        "node_type_id");
-                                            part.set ("dir+\"/n2a/" + populationName + " " + model_template + " types.csv\"", "typeFile");
+                                            part.set ("table(instanceFile, $index, \"node_type_id\")",                      "node_type_id");
+                                            part.set ("dir+\"/n2a/" + populationName + " " + templateName + " types.csv\"", "typeFile");
                                         }
 
                                         List<String> groupColumnNames;
                                         if (attributes == null) groupColumnNames = new ArrayList<String> ();
                                         else                    groupColumnNames = attributes.names;
 
-                                        importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
+                                        importer.processPart (this, partName, populationName, templateName, groupColumnNames);
                                     }
                                 }
 
@@ -1091,11 +1130,11 @@ public class ImportJob
 
                     if (simple)
                     {
-                        MNode modelTree = edgeTypes.child (populationName).iterator ().next ();
-                        boolean multiType = modelTree.size () > 2;
-                        String raw_model_template = modelTree.key ();
-                        String pieces[] = raw_model_template.split (":", 2);
-                        String schema = pieces[0];
+                        MNode   modelTree    = edgeTypes.child (populationName).iterator ().next ();
+                        MNode   modelTypes   = modelTree.child ("types");
+                        boolean multiType    = modelTypes.size () > 1;
+                        String  templateName = modelTree.key ();
+                        String  schema       = modelTree.get ("schema");
                         ImportSONATApart importer = backends.get (schema);
                         if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
 
@@ -1112,13 +1151,22 @@ public class ImportJob
                         {
                             part.set ("matrix(hdfFile, hdf=\"edges/" + populationName + "/edge_type_id\")", "Medge_type_id");
                             part.set ("Medge_type_id(A.$index, B.$index)",                                  "edge_type_id");
+                            part.set ("dir+\"/n2a/" + populationName + " types.csv\"",                      "typeFile");
                         }
 
                         List<String> groupColumnNames;
-                        if (groupAttributes.isEmpty ()) groupColumnNames = new ArrayList<String> ();
-                        else                            groupColumnNames = groupAttributes.values ().iterator ().next ().names;
+                        if (groupAttributes.isEmpty ())
+                        {
+                            groupColumnNames = new ArrayList<String> ();
+                        }
+                        else
+                        {
+                            GroupAttributes attributes = groupAttributes.values ().iterator ().next ();
+                            groupColumnNames = attributes.names;
+                            part.set ("\"edges/" + populationName + "/" + attributes.id + "\"", "groupPath");
+                        }
 
-                        importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
+                        importer.processPart (this, partName, populationName, templateName, groupColumnNames);
                     }
                     else
                     {
@@ -1187,15 +1235,14 @@ public class ImportJob
                                 long source_node_id   = chunkSource[ir];
                                 long target_node_id   = chunkTarget[ir];
 
-                                String raw_model_template = populationTypeIndex.get (edge_type_id);
-                                MNode modelTree = edgeTypes.child (populationName, raw_model_template);
-                                boolean multiType = modelTree.size () > 2;
+                                String templateName = populationTypeIndex.get (edge_type_id);
+                                MNode modelTree = edgeTypes.child (populationName, templateName);
+                                MNode modelTypes = modelTree.child ("types");
+                                boolean multiType = modelTypes.size () > 1;
                                 GroupAttributes attributes = null;
                                 if (! groupAttributes.isEmpty ()) attributes = groupAttributes.get ((int) edge_group_id);
 
-                                String pieces[] = raw_model_template.split (":", 2);
-                                String schema         = pieces[0];
-                                String model_template = pieces[1];
+                                String schema = modelTree.get ("schema");
                                 ImportSONATApart importer = backends.get (schema);
                                 if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
 
@@ -1228,7 +1275,7 @@ public class ImportJob
                                 }
 
                                 String partName = populationName;
-                                if (multiTemplate) partName += " " + model_template;
+                                if (multiTemplate) partName += " " + templateName;
                                 if (multiGroup)    partName += " " + edge_group_id;
                                 // At this point, the edge is mathematically unique, but could apply to several different combinations
                                 // of source and target N2A parts. If we encounter an edge part already defined, we make it unique
@@ -1260,25 +1307,23 @@ public class ImportJob
                                     part.set ("matrix(instanceFile, sonata=\"\")",           "Medge");
                                     if (multiType)
                                     {
-                                        part.set ("matrix(instanceFile, sonata=\"edge_type_id\")", "Medge_type_id");
-                                        part.set ("Medge_type_id(A.$index, B.$index)",             "edge_type_id");
+                                        part.set ("matrix(instanceFile, sonata=\"edge_type_id\")",                      "Medge_type_id");
+                                        part.set ("Medge_type_id(A.$index, B.$index)",                                  "edge_type_id");
+                                        part.set ("dir+\"/n2a/" + populationName + " " + templateName + " types.csv\"", "typeFile");
                                     }
 
                                     List<String> groupColumnNames;
-                                    if (attributes == null) groupColumnNames = new ArrayList<String> ();
-                                    else                    groupColumnNames = attributes.names;
-                                    if (groupAttributes.isEmpty ())
+                                    if (attributes == null)
                                     {
                                         groupColumnNames = new ArrayList<String> ();
                                     }
                                     else
                                     {
-                                        Integer group_id = groupAttributes.keySet ().iterator ().next ();
-                                        groupColumnNames = groupAttributes.get (group_id).names;
-                                        part.set ("\"edges/" + populationName + "/" + group_id + "\"", "groupPath");
+                                        groupColumnNames = attributes.names;
+                                        part.set ("\"edges/" + populationName + "/" + attributes.id + "\"", "groupPath");  // attributes.id == edge_group_id
                                     }
 
-                                    importer.processPart (this, partName, populationName, raw_model_template, groupColumnNames);
+                                    importer.processPart (this, partName, populationName, templateName, groupColumnNames);
                                 }
 
                                 // Add all columns to part info file.
@@ -1397,15 +1442,17 @@ public class ImportJob
         for (MNode population : collection)
         {
             String populationName = population.key ();
+            boolean multiTemplate = population.size () > 1;
             for (MNode model_template : population)
             {
-                String modelName = model_template.key ().split (":", 2)[1];
-                // TODO: sometimes modelName is empty. Do we still need to emit a file? What are parameters used for in that case?
-                Path typesPath = n2aDir.resolve (populationName + " " + modelName + " types.csv");  // TODO: this code assumes that node population names and edge population names never overlap. The SONATA guide does not promise this.
-                try (BufferedWriter writer = Files.newBufferedWriter (typesPath))
+                // TODO: this code assumes that node population names and edge population names never overlap. The SONATA guide does not promise this.
+                String fileName = populationName;
+                if (multiTemplate) fileName += " " + model_template.key ();
+                fileName += " types.csv";
+                try (BufferedWriter writer = Files.newBufferedWriter (n2aDir.resolve (fileName)))
                 {
                     // Write header
-                    MNode partAttributes = model_template.childOrEmpty ("");
+                    MNode partAttributes = model_template.childOrEmpty ("structure");
                     partAttributes.visit (new Visitor ()
                     {
                         boolean first = true;
@@ -1427,9 +1474,8 @@ public class ImportJob
                     writer.write ("\n");
 
                     // Write data
-                    for (MNode t : model_template)
+                    for (MNode t : model_template.child ("types"))
                     {
-                        if (t == partAttributes) continue;
                         partAttributes.visit (new Visitor ()
                         {
                             boolean first = true;

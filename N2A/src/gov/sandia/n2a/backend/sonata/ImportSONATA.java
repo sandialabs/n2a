@@ -23,7 +23,6 @@ import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.db.MNode.Visitor;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.plugins.extpoints.ImportModel;
-import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 
 public class ImportSONATA extends ImportModel
 {
@@ -91,66 +90,52 @@ public class ImportSONATA extends ImportModel
 
     /**
         Generic procedure that other backends can use to implement their processPart().
-        @param job sonata.ImportJob instance
-        @param partName Of the specific neuron sub-population
-        @param population That contains the sub-population
-        @param model_template Name of the neuron class
+        @param backend Caller's name
+        @param partMap Caller's part map
+        @param job A reference to the complete ImportJob object, in case we need something from it.
+        @param partName The subpart that this function is creating/filling in.
+        @param population Name of SONATA population, used as key into types structure.
+        @param template Internal name of model, used as key into types structure. External SONATA model_template name can be retrieved from sub-key "template".
         @param instanceAttributes Names of columns (HDF datasets) in the group associated with the sub-population
     **/
-    public static void processPart (String backend, PartMap partMap, ImportJob job, String partName, String population, String model_template, List<String> instanceAttributes)
+    public static void processPart (String backend, PartMap partMap, ImportJob job, String partName, String population, String template, List<String> instanceAttributes)
     {
         MNode part = job.model.childOrCreate (partName);
         String B = part.get ("B");
         MNode Bpart = job.model.child (B);
         boolean isSynapse =  Bpart != null;
 
-        int pos = model_template.indexOf (':');
-        String externalPartName = pos < 0 ? model_template : model_template.substring (pos + 1);
-        if (externalPartName.isBlank ())
+        String type_id;
+        MNode modelTree;
+        if (isSynapse)
         {
-            // Hack to work around older, poorly-constructed models.
-            try
-            {
-                MNode types = isSynapse ? job.edgeTypes : job.nodeTypes;
-                externalPartName = types.child (population, model_template).iterator ().next ().get ("level_of_detail");  // Multiple opportunities to throw an exception here.
-            }
-            catch (Exception e)
-            {
-                throw new AbortRun (population + " model_template is missing.");
-            }
+            type_id = "edge_type_id";
+            modelTree = job.edgeTypes.child (population, template);
         }
+        else
+        {
+            type_id = "node_type_id";
+            modelTree = job.nodeTypes.child (population, template);
+        }
+        MNode structure = modelTree.child ("structure");
 
         // Part maps apply only to the immediate part, not its children.
         // Child parts should have their own mappings.
-        // TODO: If any part attribute or instance attribute references deep structure, we
-        // use the map for the most immediate sub-part, rather than the map for "externalPartName".
-
-        NameMap map = partMap.importMap (externalPartName);
+        NameMap map = partMap.importMap (template);
         part.set (map.internalPart, "$inherit");
         MCombo repo = new MCombo (null, job.models, AppData.docs.child ("models"));
         MNode basePart = new MPartRepo (repo.childOrEmpty (map.internalPart), repo);
 
         // Apply direct attributes.
-        String type_id;
-        MNode partAttributes;
-        if (isSynapse)
-        {
-            type_id = "edge_type_id";
-            partAttributes = job.edgeTypes.child (population, model_template, "");
-        }
-        else
-        {
-            type_id = "node_type_id";
-            partAttributes = job.nodeTypes.child (population, model_template, "");
-        }
-        partAttributes.visit (new Visitor ()
+        structure.visit (new Visitor ()
         {
             public boolean visit (MNode node)
             {
                 boolean isString = node.getFlag ("$tring");
                 if (! isString  &&  ! node.isEmpty ()) return true;  // Descend past interior nodes. Only leaves contain attributes.
+                if (node.key ().equals (type_id)) return false;  // Skip type_id. It is added directly by the main import job.
 
-                String  keyPath[] = node.keyPath (partAttributes);
+                String  keyPath[] = node.keyPath (structure);
                 int     lastIndex = keyPath.length - 1;
                 NameMap subMap    = map;
                 if (lastIndex > 0)
@@ -182,7 +167,7 @@ public class ImportSONATA extends ImportModel
                 }
                 else  // Value is undefined, so emit table lookup.
                 {
-                    String table = "table(typeFile, " + type_id + ", \"" + node.keyPathString (partAttributes) + "\"";
+                    String table = "table(typeFile, " + type_id + ", \"" + node.keyPathString (structure) + "\"";
                     table += ", key=\"" + type_id + "\"";
                     if (isString) table += ", string=1)";  // Force return value to be string.
                     else          table += ")" + one;
