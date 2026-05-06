@@ -79,8 +79,6 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
             NameMap map = PluginNEST.partMap.exportMap (synapseClass); // synapseClass is an internal name, so using exportMap(). Synapse names are neutral because NEST doesn't really describe them separately. However, parameter names are mapped.
             MNode basePart = new MPartRepo (AppData.docs.child ("models", synapseClass));
             part.set (synapseClass, "$inherit");
-            part.set (population,   "$meta", "backend", "sonata", "population");     // Currently, population is not directly represented in the model structure, just in the part name. Need this info for synapses.
-            part.set (template,     "$meta", "backend", "sonata", "model_template"); // ditto
 
             // Direct attributes
             MNode partAttributes = job.edgeTypes.child (population, template, "structure");
@@ -100,10 +98,10 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
             });
 
             // Indirect attributes from target neuron (B)
-            boolean receptor_type  = part.child ("receptor_type") != null;
-            String Bpopulation     = Bpart.get ("$meta", "backend", "sonata", "population");
-            String Bmodel_template = Bpart.get ("$meta", "backend", "sonata", "model_template");
-            MNode Battributes = job.nodeTypes.child (Bpopulation, Bmodel_template, "structure");
+            boolean receptor_type = part.child ("receptor_type") != null;
+            String Bpopulation    = Bpart.get ("$meta", "backend", "sonata", "population");
+            String Btemplate      = Bpart.get ("$meta", "backend", "sonata", "template");
+            MNode Battributes = job.nodeTypes.child (Bpopulation, Btemplate, "structure");
             for (MNode b : BbasePart.childOrEmpty ("$meta", "backend", "nest", "ports", synapseClass))  // Iterate through the attributes associated with this port.
             {
                 String Bkey       = b.key ();
@@ -150,8 +148,6 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
             NameMap map = PluginNEST.partMap.importMap (template);
             MNode basePart = new MPartRepo (AppData.docs.child ("models", map.internalPart));
             part.set (map.internalPart, "$inherit");
-            part.set (population,       "$meta", "backend", "sonata", "population");     // Currently, population is not directly represented in the model structure, just in the part name. Need this info for synapses.
-            part.set (template,         "$meta", "backend", "sonata", "model_template"); // ditto
 
             // Build mapping from attribute to child model.
             // (This work gets repeated every time a given part is used. However, it should not present a big cost.)

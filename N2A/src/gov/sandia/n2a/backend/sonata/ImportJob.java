@@ -913,20 +913,25 @@ public class ImportJob
                     if (simple)
                     {
                         // Create a single part for the entire "population".
+
+                        MNode   modelTree    = nodeTypes.child (populationName).iterator ().next ();  // Retrieve first (and only) model.
+                        String  templateName = modelTree.key ();
+                        MNode   modelTypes   = modelTree.child ("types");
+                        boolean multiType    = modelTypes.size () > 1;
+                        GroupAttributes attributes = null;
+                        if (! attributeGroups.isEmpty ()) attributes = attributeGroups.values ().iterator ().next ();  // Retrieve the first (and only) attribute group.
+
                         String partName = populationName;
                         MNode  part     = model.childOrCreate (partName);
-                        part.set ("",                            "$meta", "backend", "sonata", "simple");
-                        part.set ("dir+\"/" + nodes_file + "\"", "hdfFile");
+                        partToCode.put (partName, (short) codeToPart.size ());
+                        codeToPart.add (partName);
 
-                        MNode modelTree = nodeTypes.child (populationName).iterator ().next ();  // Retrieve first (and only) model.
-                        MNode modelTypes = modelTree.child ("types");
-                        boolean multiType = modelTypes.size () > 1;
-                        GroupAttributes attributes = null;
-                        if (! attributeGroups.isEmpty ())
-                        {
-                            attributes = attributeGroups.values ().iterator ().next ();  // Retrieve the first (and only) attribute group.
-                            part.set ("\"nodes/" + populationName + "/" + attributes.id + "\"", "groupPath");
-                        }
+                        MNode meta = part.childOrCreate ("$meta", "backend", "sonata");
+                        meta.set ("",                            "simple");
+                        meta.set (populationName,                "population");  // Currently, population is not directly represented in the model structure, just in the part name. Need this info for synapses.
+                        meta.set (templateName,                  "template");    // ditto
+                        part.set ("dir+\"/" + nodes_file + "\"", "hdfFile");
+                        if (attributes != null) part.set ("\"nodes/" + populationName + "/" + attributes.id + "\"", "groupPath");
 
                         // We expect all model_types under the same model_template to match.
                         // However, this is not guaranteed by the SONATA specification.
@@ -941,8 +946,7 @@ public class ImportJob
                         {
                             // Handle regular population
 
-                            String template = modelTree.key ();
-                            String schema   = modelTree.get ("schema");
+                            String schema = modelTree.get ("schema");
                             ImportSONATApart importer = backends.get (schema);
                             if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
 
@@ -956,7 +960,7 @@ public class ImportJob
                             if (attributes == null) groupColumnNames = new ArrayList<String> ();
                             else                    groupColumnNames = attributes.names;
 
-                            importer.processPart (this, partName, populationName, template, groupColumnNames);
+                            importer.processPart (this, partName, populationName, templateName, groupColumnNames);
                         }
                     }
                     else
@@ -1010,10 +1014,10 @@ public class ImportJob
                                 long node_group_id    = chunkGroup[ir];
                                 long node_group_index = chunkIndex[ir];
 
-                                String templateName = populationTypeIndex.get (node_type_id);
-                                MNode modelTree = nodeTypes.child (populationName, templateName);
-                                MNode modelTypes = modelTree.child ("types");
-                                boolean multiType = modelTypes.size () > 1;
+                                String  templateName = populationTypeIndex.get (node_type_id);
+                                MNode   modelTree    = nodeTypes.child (populationName, templateName);
+                                MNode   modelTypes   = modelTree.child ("types");
+                                boolean multiType    = modelTypes.size () > 1;
                                 GroupAttributes attributes = null;
                                 if (! attributeGroups.isEmpty ()) attributes = attributeGroups.get ((int) node_group_id);
 
@@ -1051,6 +1055,10 @@ public class ImportJob
                                     MNode part = model.childOrCreate (partName);
                                     partToCode.put (partName, (short) codeToPart.size ());
                                     codeToPart.add (partName);
+
+                                    MNode meta = part.childOrCreate ("$meta", "backend", "sonata");
+                                    meta.set (populationName,                                "population");
+                                    meta.set (templateName,                                  "template");
                                     part.set ("dir+\"/n2a/" + partName + " instances.csv\"", "instanceFile");
                                     if (attributes != null) part.set ("\"nodes/" + populationName + "/" + attributes.id + "\"", "groupPath");
 
@@ -1196,8 +1204,7 @@ public class ImportJob
                     else
                     {
                         // Process each edge individually, sorting them into proper N2A connection parts.
-                        // Part names are: "{population name} {model_template} {group_id}"
-                        // Note that edge population implies source and target, so no need to include source or target names.
+                        // Part names are: "{population name} {source model_template} {target model_template} {optional integer}"
 
                         Map<String,BufferedWriter> writers  = new HashMap<String,BufferedWriter> ();
                         SeekableByteChannel        channelA = null;
@@ -1300,16 +1307,10 @@ public class ImportJob
                                 }
 
                                 String partName = populationName;
+                                partName += " " + partA;
+                                partName += " " + partB;
                                 if (multiTemplate) partName += " " + templateName;
                                 if (multiGroup)    partName += " " + edge_group_id;
-                                // At this point, the edge is mathematically unique, but could apply to several different combinations
-                                // of source and target N2A parts. If we encounter an edge part already defined, we make it unique
-                                // by including specific endpoint part names.
-                                if (model.child (partName) != null)
-                                {
-                                    partName += " " + partA;
-                                    partName += " " + partB;
-                                }
                                 BufferedWriter writer = writers.get (partName);
                                 if (writer == null)
                                 {
@@ -1370,6 +1371,25 @@ public class ImportJob
                             for (BufferedWriter w : writers.values ()) w.close ();
                             if (channelA != null) channelA.close ();
                             if (channelB != null) channelB.close ();
+                        }
+
+                        // Simplify names.
+                        for (String partName : writers.keySet ())
+                        {
+                            MNode part = model.child (partName);
+                            String templateA = model.get (part.get ("A"), "$meta", "backend", "sonata", "template");
+                            String templateB = model.get (part.get ("B"), "$meta", "backend", "sonata", "template");
+                            String simpleName = populationName + " " + templateA + " " + templateB;
+                            String stem = simpleName;
+                            int suffix = 2;
+                            while (model.child (simpleName) != null) simpleName = stem + " " + suffix++;
+
+                            part.set ("dir+\"/n2a/" + simpleName + " instances.csv\"", "instanceFile");
+                            model.move (partName, simpleName);
+
+                            Path instances       = n2aDir.resolve (partName   + " instances.csv");
+                            Path simpleInstances = n2aDir.resolve (simpleName + " instances.csv");
+                            Files.move (instances, simpleInstances);
                         }
                     }
                 }
