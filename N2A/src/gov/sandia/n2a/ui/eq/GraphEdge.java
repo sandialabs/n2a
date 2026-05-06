@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -483,7 +483,7 @@ public class GraphEdge
                 // Determine text box. Need text height to locate arrowhead, so might as well calculate it all now.
                 double ew = fm.stringWidth (nameTo);
                 double eh = fm.getHeight ();
-                labelTo = new Vector2 (x - ew / 2, Cbounds.y - 3 * eh - 2 * arrowheadLengthScaled);
+                labelTo = new Vector2 (x - ew / 2, Cbounds.y - 2.5 * eh - 2 * arrowheadLengthScaled);
 
                 textBoxTo = new Rectangle ();
                 textBoxTo.x      = (int) labelTo.x - padNameSide;

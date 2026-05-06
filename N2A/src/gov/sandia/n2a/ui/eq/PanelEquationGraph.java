@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -543,7 +543,7 @@ public class PanelEquationGraph extends JScrollPane
                 // For now, a very simple layout. Arrange in a grid with some space between nodes.
                 int columns = (int) Math.sqrt (needLayout.size ());  // Truncate, so more rows than columns.
                 final int xgap = (int) Math.round (8 * em);
-                final int ygap = (int) Math.round (5 * em);
+                final int ygap = (int) Math.round (5.5 * em);
                 int x = 0;
                 int y = 0;
                 int h = 0;
