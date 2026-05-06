@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -358,14 +358,20 @@ public class NodePart extends NodeContainer
             }
             else if (n instanceof NodePart)  // Part names never contain a tick mark, so no need for extra test to filter it out.
             {
-                // Descend into child part.
-                if (upFrom != null  &&  upFrom != from.getParent ())
+                NodePart np = (NodePart) n;
+
+                // Record (and later visualize) paths that just pass through this part.
+                // * The path must be deep enough to qualify and a transit.
+                // * There should not be a connection binding between the same pair of child nodes. Otherwise, visualization will have redundant edges.
+                if (upFrom != null  &&  upFrom != from.getParent ()  &&  (upFrom.connectionBindings == null  ||  ! upFrom.connectionBindings.containsValue (np)))
                 {
                     if (upFrom.transitConnections == null) upFrom.transitConnections = new HashSet<NodePart> ();
                     // If there are multiple climbing connections to the same target, one will overwrite the others.
-                    upFrom.transitConnections.add ((NodePart) n);
+                    upFrom.transitConnections.add (np);
                 }
-                return ((NodePart) n).resolveName (from, null, nextName);
+
+                // Descend into child part.
+                return np.resolveName (from, null, nextName);
             }
         }
         // Treat undefined $variables as local. This will not include $up, because that case is eliminated above.

@@ -110,9 +110,9 @@ public class ImportNeuroML extends ImportModel implements ImportSONATApart
     }
 
     @Override
-    public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, String partName, String population, String template, List<String> instanceAttributes)
+    public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, MNode part, List<String> instanceAttributes)
     {
         if (PluginNeuroML.partMap == null) PluginNeuroML.partMap = new PartMapNeuroML ();
-        ImportSONATA.processPart ("lems", PluginNeuroML.partMap, job, partName, population, template, instanceAttributes);
+        ImportSONATA.processPart ("lems", PluginNeuroML.partMap, job, part, instanceAttributes);
     }
 }

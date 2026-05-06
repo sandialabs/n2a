@@ -59,14 +59,15 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
     }
 
     @Override
-    public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, String partName, String population, String template, List<String> instanceAttributes)
+    public void processPart (gov.sandia.n2a.backend.sonata.ImportJob job, MNode part, List<String> instanceAttributes)
     {
         if (PluginNEST.partMap == null) PluginNEST.partMap = new PartMap ("nest");
 
-        MNode part = job.model.childOrCreate (partName);
-        String B = part.get ("B");
-        MNode Bpart = job.model.child (B);
-        boolean isSynapse =  Bpart != null;
+        String  population = part.get ("$meta", "backend", "sonata", "population");
+        String  template   = part.get ("$meta", "backend", "sonata", "template");
+        String  B          = part.get ("B");
+        MNode   Bpart      = B.isBlank () ? null : job.model.child (B.split ("\\."));
+        boolean isSynapse  = Bpart != null;
 
         if (isSynapse)
         {

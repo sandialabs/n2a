@@ -16,6 +16,7 @@ import java.nio.channels.ByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -928,8 +929,8 @@ public class ImportJob
 
                         MNode meta = part.childOrCreate ("$meta", "backend", "sonata");
                         meta.set ("",                            "simple");
-                        meta.set (populationName,                "population");  // Currently, population is not directly represented in the model structure, just in the part name. Need this info for synapses.
-                        meta.set (templateName,                  "template");    // ditto
+                        meta.set (populationName,                "population");
+                        meta.set (templateName,                  "template");
                         part.set ("dir+\"/" + nodes_file + "\"", "hdfFile");
                         if (attributes != null) part.set ("\"nodes/" + populationName + "/" + attributes.id + "\"", "groupPath");
 
@@ -960,7 +961,7 @@ public class ImportJob
                             if (attributes == null) groupColumnNames = new ArrayList<String> ();
                             else                    groupColumnNames = attributes.names;
 
-                            importer.processPart (this, partName, populationName, templateName, groupColumnNames);
+                            importer.processPart (this, part, groupColumnNames);
                         }
                     }
                     else
@@ -1025,14 +1026,16 @@ public class ImportJob
                                 ImportSONATApart importer = backends.get (schema);
                                 if (importer == null) throw new AbortRun ("No suitable importer found for schema: " + schema);
 
-                                String partName = populationName;
+                                String partName = "";
                                 if (multiTemplate) partName += " " + templateName;
                                 if (multiGroup)    partName += " " + node_group_id;
+                                partName = partName.substring (1);
                                 InstanceWriter iw = writers.get (partName);
                                 if (iw == null)
                                 {
+                                    String fileName = populationName + " " + partName + " instances.csv";
                                     iw = new InstanceWriter ();
-                                    iw.writer = Files.newBufferedWriter (n2aDir.resolve (partName + " instances.csv"));
+                                    iw.writer = Files.newBufferedWriter (n2aDir.resolve (fileName));
                                     writers.put (partName, iw);
 
                                     boolean first = true;
@@ -1052,14 +1055,14 @@ public class ImportJob
                                     }
                                     if (! first) iw.writer.write ("\n");
 
-                                    MNode part = model.childOrCreate (partName);
+                                    MNode part = model.childOrCreate (populationName, partName);
                                     partToCode.put (partName, (short) codeToPart.size ());
                                     codeToPart.add (partName);
 
                                     MNode meta = part.childOrCreate ("$meta", "backend", "sonata");
-                                    meta.set (populationName,                                "population");
-                                    meta.set (templateName,                                  "template");
-                                    part.set ("dir+\"/n2a/" + partName + " instances.csv\"", "instanceFile");
+                                    meta.set (populationName,                  "population");
+                                    meta.set (templateName,                    "template");
+                                    part.set ("dir+\"/n2a/" + fileName + "\"", "instanceFile");
                                     if (attributes != null) part.set ("\"nodes/" + populationName + "/" + attributes.id + "\"", "groupPath");
 
                                     String model_type = modelTree.get (node_type_id, "model_type");
@@ -1081,7 +1084,7 @@ public class ImportJob
                                         if (attributes == null) groupColumnNames = new ArrayList<String> ();
                                         else                    groupColumnNames = attributes.names;
 
-                                        importer.processPart (this, partName, populationName, templateName, groupColumnNames);
+                                        importer.processPart (this, part, groupColumnNames);
                                     }
                                 }
 
@@ -1175,6 +1178,10 @@ public class ImportJob
                         if (model.child (partName) != null) partName += " edge";  // In case there is a name collision with nodes. There should never be a name collision with another edge.
                         MNode part = model.childOrCreate (partName);
 
+                        MNode meta = part.childOrCreate ("$meta", "backend", "sonata");
+                        meta.set ("",                                                      "simple");
+                        meta.set (populationName,                                          "population");
+                        meta.set (templateName,                                            "template");
                         part.set ("dir+\"/" + edges_file + "\"",                           "hdfFile");
                         part.set (source_node_population,                                  "A");
                         part.set (target_node_population,                                  "B");
@@ -1199,7 +1206,7 @@ public class ImportJob
                             part.set ("\"edges/" + populationName + "/" + attributes.id + "\"", "groupPath");
                         }
 
-                        importer.processPart (this, partName, populationName, templateName, groupColumnNames);
+                        importer.processPart (this, part, groupColumnNames);
                     }
                     else
                     {
@@ -1231,7 +1238,7 @@ public class ImportJob
                                     indexBuffer.rewind ();
                                     short code = indexBuffer.getShort ();
                                     index      = indexBuffer.getInt ();
-                                    partName = codeToPart.get (code);
+                                    partName   = codeToPart.get (code);
                                 }
                             }
                             IndexReader indexReader = new IndexReader ();
@@ -1267,10 +1274,10 @@ public class ImportJob
                                 long source_node_id   = chunkSource[ir];
                                 long target_node_id   = chunkTarget[ir];
 
-                                String templateName = populationTypeIndex.get (edge_type_id);
-                                MNode modelTree = edgeTypes.child (populationName, templateName);
-                                MNode modelTypes = modelTree.child ("types");
-                                boolean multiType = modelTypes.size () > 1;
+                                String  templateName = populationTypeIndex.get (edge_type_id);
+                                MNode   modelTree    = edgeTypes.child (populationName, templateName);
+                                MNode   modelTypes   = modelTree.child ("types");
+                                boolean multiType    = modelTypes.size () > 1;
                                 GroupAttributes attributes = null;
                                 if (! groupAttributes.isEmpty ()) attributes = groupAttributes.get ((int) edge_group_id);
 
@@ -1306,15 +1313,14 @@ public class ImportJob
                                     indexB = indexReader.index;
                                 }
 
-                                String partName = populationName;
-                                partName += " " + partA;
-                                partName += " " + partB;
+                                String partName = partA + " " + partB;
                                 if (multiTemplate) partName += " " + templateName;
                                 if (multiGroup)    partName += " " + edge_group_id;
                                 BufferedWriter writer = writers.get (partName);
                                 if (writer == null)
                                 {
-                                    writer = Files.newBufferedWriter (n2aDir.resolve (partName + " instances.csv"));
+                                    String fileName = populationName + " " + partName + " instances.csv";
+                                    writer = Files.newBufferedWriter (n2aDir.resolve (fileName));
                                     writers.put (partName, writer);
 
                                     writer.write ("source_node_id target_node_id");
@@ -1325,12 +1331,29 @@ public class ImportJob
                                     }
                                     writer.write ("\n");
 
-                                    MNode part = model.childOrCreate (partName);
-                                    part.set ("dir+\"/n2a/" + partName + " instances.csv\"", "instanceFile");
-                                    part.set (partA,                                         "A");
-                                    part.set (partB,                                         "B");
-                                    part.set ("Medge(A.$index, B.$index)!=0@$connect",       "$p");
-                                    part.set ("matrix(instanceFile, sonata=\"\")",           "Medge");
+                                    MNode outer = model.child (populationName);
+                                    if (outer == null)
+                                    {
+                                        model.set (source_node_population, populationName, "A");
+                                        model.set (target_node_population, populationName, "B");
+                                    }
+
+                                    String connectionA;
+                                    if (Asimple) connectionA = partA;
+                                    else         connectionA = source_node_population + "." + partA;
+                                    String connectionB;
+                                    if (Bsimple) connectionB = partB;
+                                    else         connectionB = target_node_population + "." + partB;
+
+                                    MNode part = model.childOrCreate (populationName, partName);
+                                    MNode meta = part.childOrCreate ("$meta", "backend", "sonata");
+                                    meta.set (populationName,                          "population");
+                                    meta.set (templateName,                            "template");
+                                    part.set ("dir+\"/n2a/" + fileName + "\"",         "instanceFile");
+                                    part.set (connectionA,                             "A");
+                                    part.set (connectionB,                             "B");
+                                    part.set ("Medge(A.$index, B.$index)!=0@$connect", "$p");
+                                    part.set ("matrix(instanceFile, sonata=\"\")",     "Medge");
                                     if (multiType)
                                     {
                                         part.set ("matrix(instanceFile, sonata=\"edge_type_id\")",                      "Medge_type_id");
@@ -1349,7 +1372,7 @@ public class ImportJob
                                         part.set ("\"edges/" + populationName + "/" + attributes.id + "\"", "groupPath");  // attributes.id == edge_group_id
                                     }
 
-                                    importer.processPart (this, partName, populationName, templateName, groupColumnNames);
+                                    importer.processPart (this, part, groupColumnNames);
                                 }
 
                                 // Add all columns to part info file.
@@ -1376,20 +1399,27 @@ public class ImportJob
                         // Simplify names.
                         for (String partName : writers.keySet ())
                         {
-                            MNode part = model.child (partName);
-                            String templateA = model.get (part.get ("A"), "$meta", "backend", "sonata", "template");
-                            String templateB = model.get (part.get ("B"), "$meta", "backend", "sonata", "template");
-                            String simpleName = populationName + " " + templateA + " " + templateB;
+                            MNode outer = model.child (populationName);
+                            MNode part  = outer.child (partName);
+                            String templateA = part.get ("A");
+                            String templateB = part.get ("B");
+                            if (templateA.contains (".")) templateA = templateA.split ("\\.", 2)[1];
+                            if (templateB.contains (".")) templateB = templateB.split ("\\.", 2)[1];
+                            String simpleName = templateA + " " + templateB;
+
                             String stem = simpleName;
                             int suffix = 2;
-                            while (model.child (simpleName) != null) simpleName = stem + " " + suffix++;
+                            while (outer.child (simpleName) != null) simpleName = stem + " " + suffix++;
 
-                            part.set ("dir+\"/n2a/" + simpleName + " instances.csv\"", "instanceFile");
-                            model.move (partName, simpleName);
+                            outer.move (partName, simpleName);
 
-                            Path instances       = n2aDir.resolve (partName   + " instances.csv");
-                            Path simpleInstances = n2aDir.resolve (simpleName + " instances.csv");
-                            Files.move (instances, simpleInstances);
+                            String fileName       = populationName + " " + partName   + " instances.csv";
+                            String simpleFileName = populationName + " " + simpleName + " instances.csv";
+                            part.set ("dir+\"/n2a/" + simpleFileName + "\"", "instanceFile");
+
+                            Path path       = n2aDir.resolve (fileName);
+                            Path simplePath = n2aDir.resolve (simpleFileName);
+                            Files.move (path, simplePath, StandardCopyOption.REPLACE_EXISTING);
                         }
                     }
                 }

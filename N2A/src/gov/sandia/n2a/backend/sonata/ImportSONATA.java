@@ -92,18 +92,17 @@ public class ImportSONATA extends ImportModel
         Generic procedure that other backends can use to implement their processPart().
         @param backend Caller's name
         @param partMap Caller's part map
-        @param job A reference to the complete ImportJob object, in case we need something from it.
-        @param partName The subpart that this function is creating/filling in.
-        @param population Name of SONATA population, used as key into types structure.
-        @param template Internal name of model, used as key into types structure. External SONATA model_template name can be retrieved from sub-key "template".
+        @param job A reference to the ImportJob object, in case we need something from it.
+        @param part The sub-part that this function is creating/filling in.
         @param instanceAttributes Names of columns (HDF datasets) in the group associated with the sub-population
     **/
-    public static void processPart (String backend, PartMap partMap, ImportJob job, String partName, String population, String template, List<String> instanceAttributes)
+    public static void processPart (String backend, PartMap partMap, ImportJob job, MNode part, List<String> instanceAttributes)
     {
-        MNode part = job.model.childOrCreate (partName);
-        String B = part.get ("B");
-        MNode Bpart = job.model.child (B);
-        boolean isSynapse =  Bpart != null;
+        String  population = part.get ("$meta", "backend", "sonata", "population");
+        String  template   = part.get ("$meta", "backend", "sonata", "template");
+        String  B          = part.get ("B");
+        MNode   Bpart      = B.isBlank () ? null : job.model.child (B.split ("\\."));
+        boolean isSynapse  = Bpart != null;
 
         String type_id;
         MNode modelTree;

@@ -8,6 +8,8 @@ package gov.sandia.n2a.backend.sonata;
 
 import java.util.List;
 
+import gov.sandia.n2a.db.MNode;
+
 /**
     A mixin for ImportModel that provides SONATA-specific processing.
 **/
@@ -40,11 +42,9 @@ public interface ImportSONATApart
         Adds a part to main model.
 
         @param job A reference to the complete ImportJob object, in case we need something from it.
-        @param partName The subpart that this function is creating/filling in.
-        @param population Name of SONATA population, used as key into types structure.
-        @param template Internal name of model, used as key into types structure. External SONATA model_template name can be retrieved from sub-key "template".
+        @param part The sub-part that this function is creating/filling in.
         @param instanceAttributes A flat collection of attribute names found in the SONATA "group" associated
         with this part. These values vary with instance.
     **/
-    public void processPart (ImportJob job, String partName, String population, String template, List<String> instanceAttributes);
+    public void processPart (ImportJob job, MNode part, List<String> instanceAttributes);
 }
