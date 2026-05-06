@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -206,7 +206,7 @@ public class JobC extends Thread
                 }
             }
 
-            String e = model.get ("$meta", "backend", "all", "event");
+            String e = Backend.get ("c", model.childOrEmpty ("$meta"), "event");
             switch (e)
             {
                 case "before":
@@ -1745,8 +1745,8 @@ public class JobC extends Thread
             Variable dt = digestedModel.find (new Variable ("$t", 1));
             result.append ("  Event<" + T + ">::exponent = " + dt.exponent + ";\n");
         }
-        String integrator = digestedModel.metadata.getOrDefault ("Euler", "backend", "all", "integrator");
-        if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";
+        String integrator = Backend.get ("c", digestedModel.metadata, "integrator");
+        if (integrator.equalsIgnoreCase ("RungeKutta")) integrator = "RungeKutta";  // This case can correct capitalization.
         else                                            integrator = "Euler";
         if (tls)
         {
@@ -4252,7 +4252,7 @@ public class JobC extends Thread
             result.append ("void " + ns + "die ()\n");
             result.append ("{\n");
 
-            if (s.metadata.getFlag ("backend", "all", "fastExit"))
+            if (Backend.getFlag ("c", s.metadata, "fastExit"))
             {
                 result.append ("  " + SIMULATOR + "stop = true;\n");
             }

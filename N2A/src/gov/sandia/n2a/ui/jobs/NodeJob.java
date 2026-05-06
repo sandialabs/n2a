@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -285,7 +285,7 @@ public class NodeJob extends NodeBase
         String temp = model.get ("$meta", "backend");
         if (! temp.isEmpty ()) job.set (temp, "backend");
 
-        temp = model.get ("$meta", "backend", "all", "progress");
+        temp = model.get ("$meta", "backend", "*", "progress");
         if (! temp.isEmpty ()) job.set (temp, "progress");
 
         temp = model.get ("$meta", "duration");

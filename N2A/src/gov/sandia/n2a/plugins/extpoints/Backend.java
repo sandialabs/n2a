@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -417,5 +417,31 @@ public abstract class Backend implements ExtensionPoint
     public HashSet<String> forbiddenSuffixes ()
     {
         return null;  // nothing forbidden
+    }
+
+    /**
+        Retrieve a backend configuration key, using the "*" node as backup.
+        @param backendName It is often easier to pass a hard-coded backend name
+        than to hold a specific Backend object. That's why this is a static function
+        and this string is passed.
+        @param meta The $meta node that contains the desired key.
+        @param keys Path to the node, starting under ("$meta, "backend", {backendName}).
+    **/
+    public static String get (String backendName, MNode meta, String... keys)
+    {
+        MNode self = meta.childOrEmpty ("backend", backendName).child (keys);
+        if (self != null) return self.get ();
+        return meta.childOrEmpty ("backend", "*").get (keys);
+    }
+
+    /**
+        Retrieve a backend configuration key as a boolean, using the "*" node as backup.
+        See get() for details.
+    **/
+    public static boolean getFlag (String backendName, MNode meta, String... keys)
+    {
+        MNode self = meta.childOrEmpty ("backend", backendName).child (keys);
+        if (self != null) return self.getFlag ();
+        return meta.childOrEmpty ("backend", "*").getFlag (keys);
     }
 }

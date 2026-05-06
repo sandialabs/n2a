@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -107,7 +107,7 @@ public class InternalBackend extends Backend
                 job.set (seed, "seed");
 
                 simulator = new Simulator (new Wrapper (digestedModel), seed, localJobDir);
-                String e = model.get ("$meta", "backend", "all", "event");
+                String e = Backend.get ("internal", model.childOrEmpty ("$meta"), "event");
                 switch (e)
                 {
                     case "before":

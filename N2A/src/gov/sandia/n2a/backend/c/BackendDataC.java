@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -552,7 +552,9 @@ public class BackendDataC
         trackInstances = s.connected > 0  ||  s.needInstanceTracking  ||  canResize;
         canGrow        = s.canGrow ();
         canGrowOrDie   = s.lethalP  ||  s.lethalType  ||  canGrow;
-        boolean Euler  = s.getRoot ().metadata.getOrDefault ("Euler", "backend", "all", "integrator").equals ("Euler");
+
+        String  integrator = Backend.get ("c", s.getRoot ().metadata, "integrator");
+        boolean Euler      = integrator.isBlank ()  ||  integrator.equals ("Euler");
 
         if (! canResize  &&  canGrowOrDie  &&  n != null  &&  n.hasUsers ())
         {

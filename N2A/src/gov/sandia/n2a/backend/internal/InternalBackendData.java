@@ -1,5 +1,5 @@
 /*
-Copyright 2015-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2015-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -740,7 +740,7 @@ public class InternalBackendData
             countLocalObject += s.connectionBindings.size ();
         }
 
-        fastExit = s.metadata.getFlag ("backend", "all", "fastExit");
+        fastExit = Backend.getFlag ("internal", s.metadata, "fastExit");
 
         populationCanBeInactive = true;
         connectionCanBeInactive =  s.connectionBindings != null;
