@@ -9,12 +9,12 @@ package gov.sandia.n2a.linear;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.nio.file.FileSystem;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
-
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
@@ -59,6 +59,37 @@ public class MatrixSparse extends Matrix
     public MatrixSparse (BufferedReader reader)
     {
         load (reader);
+    }
+
+    /**
+        Loads a CSR matrix from the given NPZ file.
+        @param npz A Zip FileSytem opened on the NPZ file.
+        @param stem If the NPZ file contains only the sparse matrix, then it will use standard names
+        for the various arrays. However, it may be useful to put other matrices in the NPZ file.
+        This parameter puts a prefix in front of the standard CSR files.
+    **/
+    public MatrixSparse (FileSystem archive, String stem) throws EvaluationException
+    {
+        Matrix D       = new MatrixDense (archive, stem + "data");
+        Matrix indices = new MatrixDense (archive, stem + "indices");
+        Matrix indptr  = new MatrixDense (archive, stem + "indptr");
+        Matrix shape   = new MatrixDense (archive, stem + "shape");
+
+        if (shape.rows () > 2) throw new EvaluationException ("Only 2D sparse matrices are supported.");
+        rowCount     = (int) shape.get (0);
+        int colCount = (int) shape.get (1);
+        for (int c = 0; c < colCount; c++) data.add (null);
+
+        for (int r = 0; r < rowCount; r++)
+        {
+            int i   = (int) indptr.get (r);
+            int end = (int) indptr.get (r + 1);
+            for (; i < end; i++)
+            {
+                int c = (int) indices.get (i);
+                set (r, c, D.get (i));
+            }
+        }
     }
 
     public MatrixSparse (Text that) throws EvaluationException

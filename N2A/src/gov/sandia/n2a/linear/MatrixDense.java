@@ -7,11 +7,21 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.linear;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.file.FileSystem;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
-
+import gov.sandia.n2a.db.JSON;
+import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.type.Matrix;
@@ -107,6 +117,35 @@ public class MatrixDense extends Matrix
     public MatrixDense (BufferedReader reader) throws EvaluationException
     {
         load (reader);
+    }
+
+    /**
+        Loads first matrix in the given NPZ file.
+        @param npz A Zip FileSytem opened on the NPZ file.
+    **/
+    public MatrixDense (FileSystem npz) throws EvaluationException
+    {
+        try
+        {
+            Path root = npz.getRootDirectories ().iterator ().next ();  // Get the first and only root directory.
+            Path first = Files.newDirectoryStream (root).iterator ().next ();
+            loadNPY (first);
+        }
+        catch (IOException e)
+        {
+            throw new EvaluationException (e.getMessage ());
+        }
+    }
+
+    /**
+        Loads the given NPY file.
+        @param npz A Zip FileSytem opened on the NPZ file.
+        @param stem The name of the specific matrix file, minus the suffix.
+        For example, if the full filename is "matrix.npy", then stem is "matrix".
+    **/
+    public MatrixDense (FileSystem npz, String stem) throws EvaluationException
+    {
+        loadNPY (npz.getPath (stem + ".npy"));
     }
 
     public MatrixDense (Text that) throws EvaluationException
@@ -233,6 +272,142 @@ public class MatrixDense extends Matrix
         catch (IOException error)
         {
             throw new EvaluationException ("Failed to convert input to matrix");
+        }
+    }
+
+    public void loadNPY (Path path) throws EvaluationException
+    {
+        try (SeekableByteChannel channel = Files.newByteChannel (path))
+        {
+            // Read file identifier.
+            channel.position (6);  // Skip magic string.
+            ByteBuffer version = ByteBuffer.allocate (2);
+            channel.read (version);
+            int major = version.get (0);
+            //int minor = version.get (1);
+
+            // Read content description.
+            int headerLength;
+            if (major >= 2)
+            {
+                ByteBuffer size = ByteBuffer.allocate (4);
+                channel.read (size);
+                size.rewind ();
+                size.order (ByteOrder.LITTLE_ENDIAN);
+                headerLength = size.getInt ();
+            }
+            else
+            {
+                ByteBuffer size = ByteBuffer.allocate (2);
+                channel.read (size);
+                size.rewind ();
+                size.order (ByteOrder.LITTLE_ENDIAN);
+                headerLength = size.getShort ();
+            }
+
+            MNode header = new MVolatile ();
+            byte headerArray[] = new byte[headerLength];
+            ByteBuffer headerBuffer = ByteBuffer.wrap (headerArray);
+            channel.read (headerBuffer);
+            ByteArrayInputStream headerStream = new ByteArrayInputStream (headerArray);
+            new JSON ().read (header, new InputStreamReader (headerStream));
+
+            MNode shape = header.childOrEmpty ("shape");
+            rows    = shape.getOrDefault (1, 0);
+            columns = shape.getOrDefault (1, 1);
+            if (header.getFlag ("fortran_order"))
+            {
+                strideR = 1;
+                strideC = rows;
+            }
+            else
+            {
+                strideR = columns;
+                strideC = 1;
+            }
+            int count = rows * columns;
+            String  descr = header.get ("descr");
+            if (descr.isBlank ()) throw new EvaluationException ("NumPy matrix file is missing the 'descr' key: " + path);
+            boolean le    = descr.charAt (0) == '<';  // little-endian; '>' = big-ending; '|' = not applicable
+            String  type  = descr.substring (1);  // includes type and size
+            int     size  = 1;
+            if (descr.length () > 2) size = descr.charAt (2) - '0';
+
+            // Read data
+            data = new double[count];
+            ByteBuffer buffer = ByteBuffer.allocate (count * size);
+            channel.read (buffer);
+            buffer.rewind ();
+            if (le) buffer.order (ByteOrder.LITTLE_ENDIAN);
+            switch (type)
+            {
+                case "f8":
+                {
+                    buffer.asDoubleBuffer ().get (data);
+                    break;
+                }
+                case "f4":
+                {
+                    for (int i = 0; i < count; i++) data[i] = buffer.getFloat ();
+                    break;
+                }
+                case "i8":
+                {
+                    for (int i = 0; i < count; i++) data[i] = buffer.getLong ();
+                    break;
+                }
+                case "i4":
+                {
+                    for (int i = 0; i < count; i++) data[i] = buffer.getInt ();
+                    break;
+                }
+                case "i2":
+                {
+                    for (int i = 0; i < count; i++) data[i] = buffer.getShort ();
+                    break;
+                }
+                case "i1":
+                {
+                    for (int i = 0; i < count; i++) data[i] = buffer.get ();
+                    break;
+                }
+                case "u4":
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        long value = buffer.getInt ();
+                        if (value < 0) value = 0x100000000l + value;
+                        data[i] = value;
+                    }
+                    break;
+                }
+                case "u2":
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        int value = buffer.getShort ();
+                        if (value < 0) value = 0x10000 + value;
+                        data[i] = value;
+                    }
+                    break;
+                }
+                case "u1":
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        int value = buffer.get ();
+                        if (value < 0) value = 0x100 + value;
+                        data[i] = value;
+                    }
+                    break;
+                }
+                default:
+                    throw new EvaluationException ("Unhandled type in NumPy matrix: " + type);
+            }
+        }
+        catch (IOException e)
+        {
+            throw new EvaluationException ("Exception reading NumPy matrix: " + e.getMessage ());
         }
     }
 

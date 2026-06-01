@@ -9,8 +9,11 @@ package gov.sandia.n2a.language.type;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.Iterator;
 
 import gov.sandia.n2a.language.EvaluationException;
@@ -35,23 +38,60 @@ public abstract class Matrix extends Type
     **/
     public static Matrix factory (Path path) throws EvaluationException
     {
+        if (path.getFileName ().toString ().toLowerCase ().endsWith (".npz"))  // This is a NumPy matrix archive.
+        {
+            try (FileSystem fs = FileSystems.newFileSystem (path, Collections.emptyMap ()))
+            {
+                // Most likely, the archive contains a single sparse matrix in CSR format.
+                Path root = fs.getRootDirectories ().iterator ().next ();  // Get the first and only root directory.
+                if (   Files.exists (root.resolve ("data.npy"))
+                    && Files.exists (root.resolve ("indices.npy"))
+                    && Files.exists (root.resolve ("indptr.npy"))
+                    && Files.exists (root.resolve ("shape.npy")))
+                {
+                    // "_is_array.npy" contains a single boolean. Not sure of semantics of "is array".
+                    // "format.npy" contains a string. We assume "csr".
+                    return new MatrixSparse (fs, "");
+                }
+
+                // As a fallback, process the first matrix in the file.
+                Path first = Files.newDirectoryStream (root).iterator ().next ();
+                String name = first.getFileName ().toString ();
+                int pos = name.lastIndexOf ('.');
+                if (pos >= 0) name = name.substring (0, pos);
+                return new MatrixDense (fs, name);
+            }
+            catch (Exception exception)
+            {
+                throw new EvaluationException ("Can't open matrix file: " + exception.getMessage ());
+            }
+        }
+
         try (BufferedReader reader = Files.newBufferedReader (path))
         {
-            char magic[] = new char[10];
-            reader.mark (magic.length + 1);
-            reader.read (magic);  // just assume buffer is filled completely
-            String line = new String (magic);
-            reader.reset ();
-
-            if (line.toLowerCase ().startsWith ("sparse")) return new MatrixSparse (reader);
-            // Could do further triage on file format, and call various appropriate versions of MatrixDense.load directly.
-            // TODO: import Matlab format.
-            return new MatrixDense (reader);
+            return factory (reader);
         }
         catch (IOException exception)
         {
             throw new EvaluationException ("Can't open matrix file");
         }
+    }
+
+    /**
+        Read a matrix in our own human-readable serialized form.
+    **/
+    public static Matrix factory (BufferedReader reader) throws IOException
+    {
+        char magic[] = new char[10];
+        reader.mark (magic.length + 1);
+        reader.read (magic);  // just assume buffer is filled completely
+        String line = new String (magic);
+        reader.reset ();
+
+        if (line.toLowerCase ().startsWith ("sparse")) return new MatrixSparse (reader);
+        // Could do further triage on file format, and call various appropriate versions of MatrixDense.load directly.
+        // TODO: import Matlab format.
+        return new MatrixDense (reader);
     }
 
     public abstract int rows ();

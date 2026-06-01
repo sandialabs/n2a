@@ -21,6 +21,14 @@ import java.io.Writer;
     be a proper child. This is such a rare case that it is a reasonable tradeoff
     to get richer representation of MNode.
 
+    The parser implemented here has a few extensions to let it handle Python dictionaries:
+    * Treats single quote as valid start character for a string. In that case, a
+      double quote can appear inside the string.
+    * Treats parentheses as start character for an array. Tuples get read in as a map
+      from position index (zero-based) to value.
+    * true and false can start with capital letters.
+    The writer is strictly JSON compliant.
+
     The calls on this class are similar to Schema. However, this class doesn't
     deal with a file magic string or schema versioning. Thus, it doesn't really
     belong in the Schema hierarchy.
@@ -77,15 +85,19 @@ public class JSON
             {
                 readChildren (node, reader);
             }
-            else if (c == '[')  // start of array
+            else if (c == '[')  // Start of array, for proper JSON.
             {
-                readArray (node, reader);
+                readArray (node, reader, ']');
             }
-            else if (c == '"')  // string value
+            else if (c == '(')  // Also start of array, for Python tuples.
             {
-                node.set (extractString (reader));
+                readArray (node, reader, ')');
             }
-            else if (c == 't')  // true
+            else if (c == '"'  ||  c == '\'')  // string value
+            {
+                node.set (extractString (reader, c));
+            }
+            else if (c == 't'  ||  c == 'T')  // true
             {
                 char[] buffer = new char[3];
                 int count = reader.read (buffer);
@@ -93,7 +105,7 @@ public class JSON
                 if (node instanceof MVolatile) ((MVolatile) node).setObject (true);
                 else                           node.set (true);
             }
-            else if (c == 'f')  // false
+            else if (c == 'f'  ||  c == 'F')  // false
             {
                 char[] buffer = new char[4];
                 int count = reader.read (buffer);
@@ -137,8 +149,8 @@ public class JSON
             switch (state)
             {
                 case 0:
-                    if (c != '"') throw new IOException ("Expected string");
-                    key = extractString (reader);
+                    if (c != '"'  &&  c != '\'') throw new IOException ("Expected string");
+                    key = extractString (reader, c);
                     state = 1;
                     break;
                 case 1:
@@ -170,7 +182,7 @@ public class JSON
         In this case, we only read children values, not keys. Keys will be
         created automatically as integers 0, 1, 2, ...
     **/
-    public void readArray (MNode node, BufferedReader reader) throws IOException
+    public void readArray (MNode node, BufferedReader reader, char delimiter) throws IOException
     {
         int key = 0;
         while (true)
@@ -180,7 +192,7 @@ public class JSON
             if (i < 0) break;
             char c = (char) i;
             if (c == ' '  ||  c == '\t'  ||  c == '\r'  ||  c == '\n') continue;  // consume white space
-            if (c == ']') break;  // This could appear prematurely. We exit anyway.
+            if (c == delimiter) break;  // This could appear prematurely. We exit anyway.
 
             if (c == ',')
             {
@@ -323,7 +335,7 @@ public class JSON
         closing quote. Returns the extracted string with escapes converted back into
         regular characters.
     **/
-    public static String extractString (Reader reader) throws IOException
+    public static String extractString (Reader reader, char delimiter) throws IOException
     {
         StringBuilder result = new StringBuilder ();
         boolean inEscape = false;
@@ -356,7 +368,7 @@ public class JSON
             {
                 inEscape = true;
             }
-            else if (c == '"')
+            else if (c == delimiter)
             {
                 break;
             }

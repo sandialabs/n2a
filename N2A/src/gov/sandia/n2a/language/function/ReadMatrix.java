@@ -7,8 +7,12 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
 import gov.sandia.n2a.language.Function;
@@ -18,6 +22,7 @@ import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.linear.MatrixDense;
+import gov.sandia.n2a.linear.MatrixSparse;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import tech.units.indriya.AbstractUnit;
 
@@ -83,21 +88,59 @@ public class ReadMatrix extends Function
 
         String fileName = ((Text) operands[0].eval (context)).value;
         String hdf      = evalKeyword (context, "hdf", "");
+        String npy      = evalKeyword (context, "npy", "");
+        String csr      = evalKeyword (context, "csr", "");
+
+        boolean isHDF = ! hdf.isBlank ();  // User asserts that this is an HDF file, so we take their word for it.
+        boolean isNPY = ! npy.isBlank ();
+        boolean isCSR = ! csr.isBlank ();
 
         String key = fileName;
-        if (! hdf.isBlank ()) key += "|" + hdf;  // Because multiple holders can share same HDF file.
+        if      (isHDF) key += "|" + hdf;  // Because multiple holders can share same HDF file.
+        else if (isNPY) key += "|" + npy;
+        else if (isCSR) key += "|" + csr;
 
         Object A = simulator.holders.get (key);
         if (A == null)
         {
             Path path = simulator.jobDir.resolve (fileName);
+            String lowerFN = fileName.toLowerCase ();
 
-            // For keyword tests (hdf, anchor) we assume that the keyword is only present if the file is really that type.
-            if (hdf.isBlank ())
+            // For keyword tests (hdf, anchor, npy, csr) we assume that the keyword is only present if the file is really that type.
+            if (isHDF)
+            {
+                try (Table.HolderHDF H = new Table.HolderHDF (path, hdf))
+                {
+                    A = H.getMatrix ();
+                    // H gets closed at the end of this block, but A is also a holder and AutoCloseable.
+                    // When holders are closed, the HDF resources will finally be released.
+                }
+                catch (Exception e) {}
+            }
+            else if (isNPY  ||  isCSR  ||  lowerFN.endsWith (".npz"))
+            {
+                try (FileSystem fs = FileSystems.newFileSystem (path, Collections.emptyMap ()))
+                {
+                    if (isCSR)  // Complex format, requiring input of multiple tables.
+                    {
+                        A = new MatrixSparse (fs, csr);
+                    }
+                    else if (isNPY)
+                    {
+                        A = new MatrixDense (fs, npy);
+                    }
+                    else
+                    {
+                        A = new MatrixDense (fs);
+                    }
+                }
+                catch (IOException e) {}
+            }
+            else  // Everything else: spreadsheet, CSV, or plain-text
             {
                 // TODO: handle SONATA spike files in CSV format. Simplest approach is to do it in Matrix.factory(), but need a way to avoid repeating the XSV file parser.
                 Operator anchor = getKeyword ("anchor");
-                boolean isSheet = anchor != null  ||  fileName.toLowerCase ().endsWith (".csv");
+                boolean isSheet = anchor != null  ||  lowerFN.endsWith (".csv");
                 if (! isSheet)  // Probe file
                 {
                     try (BufferedReader reader = Files.newBufferedReader (path))
@@ -117,16 +160,8 @@ public class ReadMatrix extends Function
 
                 if (A == null) A = Matrix.factory (path);  // Simple matrix file.
             }
-            else
-            {
-                try (Table.HolderHDF H = new Table.HolderHDF (path, hdf))
-                {
-                    A = H.getMatrix ();
-                    // H gets closed at the end of this block, but A is also a holder and AutoCloseable.
-                    // When holders are closed, the HDF resources will finally be released.
-                }
-                catch (Exception e) {}
-            }
+
+            // Done reading. Now what did we get?
             if (A == null)
             {
                 if (! key.equals (warningIO))
