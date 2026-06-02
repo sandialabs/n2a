@@ -57,15 +57,14 @@ public class InternalBackend extends Backend
         return  s != null  &&  s.isAlive ();
     }
 
-    @SuppressWarnings("removal")
     @Override
     public void kill (MNode job, boolean force)
     {
         SimulationThread s = getThread (job);
         if (s == null) return;
         if (s.simulator == null) return;
-        if (force) s.stop ();
-        else       s.simulator.stop = true;
+        s.simulator.stop = true;
+        if (force) s.interrupt ();
     }
 
     public class SimulationThread extends Thread

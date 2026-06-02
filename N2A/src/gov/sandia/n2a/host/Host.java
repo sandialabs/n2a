@@ -207,7 +207,6 @@ public abstract class Host
         return get (job.getOrDefault ("localhost", "host"));
     }
 
-    @SuppressWarnings("resource")
     public static Host get (Path path)
     {
         if (path instanceof SshPath)

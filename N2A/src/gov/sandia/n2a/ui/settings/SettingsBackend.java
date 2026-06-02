@@ -68,7 +68,6 @@ public abstract class SettingsBackend implements Settings, ChangeListener
         return icon;  // Can be null, if we fail to load the image.
     }
 
-    @SuppressWarnings("serial")
     @Override
     public Component getPanel ()
     {

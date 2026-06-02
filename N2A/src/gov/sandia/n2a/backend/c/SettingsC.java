@@ -45,7 +45,6 @@ public class SettingsC extends SettingsBackend
 
     protected HashSet<String> forbiddenSuffixes = new HashSet<String> (Arrays.asList ("bin", "exe", "lib", "dll", "a", "so", "o", "obj", "pdb", "mod", "exp"));
 
-    @SuppressWarnings("serial")
     public SettingsC ()
     {
         instance = this;
