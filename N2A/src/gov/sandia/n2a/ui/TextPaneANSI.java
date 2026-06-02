@@ -1,10 +1,10 @@
 /*
-Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
-package gov.sandia.n2a.ui.jobs;
+package gov.sandia.n2a.ui;
 
 import java.awt.Color;
 
@@ -19,8 +19,6 @@ import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledEditorKit;
 import javax.swing.text.View;
 import javax.swing.text.ViewFactory;
-
-import gov.sandia.n2a.ui.Utility;
 
 /**
     Allows user to set text that contains ANSI escape sequences and get colored output.

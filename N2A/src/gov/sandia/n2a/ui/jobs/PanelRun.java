@@ -20,6 +20,7 @@ import gov.sandia.n2a.host.Host.CopyProgress;
 import gov.sandia.n2a.host.SshFileSystemProvider.SshDirectoryStream;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MainFrame;
+import gov.sandia.n2a.ui.TextPaneANSI;
 import gov.sandia.n2a.ui.eq.PanelModel;
 import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;

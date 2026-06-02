@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2020-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -12,6 +12,7 @@ import gov.sandia.n2a.host.Windows;
 import gov.sandia.n2a.ui.Lay;
 import gov.sandia.n2a.ui.MCheckBox;
 import gov.sandia.n2a.ui.MTextField;
+import gov.sandia.n2a.ui.TextPaneANSI;
 import gov.sandia.n2a.ui.settings.SettingsBackend;
 
 import java.awt.EventQueue;
@@ -24,7 +25,6 @@ import java.util.HashSet;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JTextArea;
 import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -33,15 +33,15 @@ public class SettingsC extends SettingsBackend
 {
     public static SettingsC instance;
 
-    protected MTextField fieldCpp      = new MTextField (40);
-    protected MTextField fieldFFmpeg   = new MTextField (40);
-    protected MTextField fieldHDF      = new MTextField (40);
-    protected MTextField fieldJNI      = new MTextField (40);
-    protected MTextField fieldGL       = new MTextField (40);
-    protected MCheckBox  fieldShowCC   = new MCheckBox ("Show source files (.cc)");
-    protected JButton    buttonRebuild = new JButton ("Rebuild Runtime");
-    protected JLabel     labelMessages = new JLabel ("JNI support for video I/O:");
-    protected JTextArea  textMessages;
+    protected MTextField   fieldCpp      = new MTextField (40);
+    protected MTextField   fieldFFmpeg   = new MTextField (40);
+    protected MTextField   fieldHDF      = new MTextField (40);
+    protected MTextField   fieldJNI      = new MTextField (40);
+    protected MTextField   fieldGL       = new MTextField (40);
+    protected MCheckBox    fieldShowCC   = new MCheckBox ("Show source files (.cc)");
+    protected JButton      buttonRebuild = new JButton ("Rebuild Runtime");
+    protected JLabel       labelMessages = new JLabel ("JNI support for video I/O:");
+    protected TextPaneANSI textMessages;
 
     protected HashSet<String> forbiddenSuffixes = new HashSet<String> (Arrays.asList ("bin", "exe", "lib", "dll", "a", "so", "o", "obj", "pdb", "mod", "exp"));
 
@@ -152,7 +152,7 @@ public class SettingsC extends SettingsBackend
             }
         });
 
-        textMessages = new JTextArea ("")
+        textMessages = new TextPaneANSI ()
         {
             public void updateUI ()
             {
@@ -225,7 +225,7 @@ public class SettingsC extends SettingsBackend
         {
             public void run ()
             {
-                textMessages.setText (textMessages.getText () + message);
+                textMessages.append (message);
             }
         });
     }
