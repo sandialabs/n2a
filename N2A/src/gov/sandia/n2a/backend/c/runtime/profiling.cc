@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 
 #include <string>
 #include <iostream>
+#include <cstdint>
 
 
 using namespace std;

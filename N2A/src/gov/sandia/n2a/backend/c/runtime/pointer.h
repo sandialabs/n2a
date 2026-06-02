@@ -188,6 +188,8 @@ namespace n2a
 	   This is primarily an internal function, but it is OK for client
 	   code to call.
 	**/
+#   pragma GCC diagnostic push
+#   pragma GCC diagnostic ignored "-Wfree-nonheap-object"  // GCC thinks that free(memory-1) goes into unallocated space.
 	void detach ()
 	{
 	  if (metaData < 0)
@@ -203,6 +205,7 @@ namespace n2a
 	  memory = 0;
 	  metaData = 0;
 	}
+#   pragma GCC diagnostic pop
 
   protected:
 	/**

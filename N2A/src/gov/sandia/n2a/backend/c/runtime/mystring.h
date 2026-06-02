@@ -11,6 +11,7 @@ the U.S. Government retains certain rights in this software.
 #include <cstring>
 #include <stdio.h>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <vector>
 #include <cmath>
